@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>jot - 笔记</title>
+</head>
+<body>
+<div id="app">
+    <!-- 左侧导航栏 -->
+    <aside id="sidebar">
+        <!-- 搜索模块 -->
+        <div class="search-module">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="搜索笔记..." />
+                <button id="searchBtn" class="search-btn">搜索</button>
+            </div>
+        </div>
+
+        <!-- 笔记模块 -->
+        <div class="notes-module">
+            <div class="notes-header">
+                <h3 class="notes-title">笔记</h3>
+                <button id="newNoteBtn" class="new-note-btn" title="新建笔记">+</button>
+            </div>
+            <div class="notes-list" id="notesList">
+                <!-- 笔记缩略卡片由 JS 动态渲染 -->
+            </div>
+        </div>
+
+        <!-- 底部操作栏 -->
+        <div class="sidebar-footer">
+            <button id="settingsBtn" class="sidebar-footer-btn" title="设置">
+                <span class="footer-icon">⚙️</span>
+                <span class="footer-text">设置</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- 右侧主内容区 -->
+    <main id="mainContent">
+        <!-- 视图 1: 卡片网格视图（默认） -->
+        <div id="viewGrid" class="view active">
+            <div class="view-header">
+                <h2 class="view-title" id="viewTitle">所有笔记</h2>
+                <div class="view-controls">
+                    <button id="gridViewBtn" class="view-toggle-btn active" title="网格视图">▦</button>
+                    <button id="listViewBtn" class="view-toggle-btn" title="列表视图">☰</button>
+                </div>
+            </div>
+            <div class="card-grid" id="cardGrid">
+                <!-- 卡片由 JS 动态渲染 -->
+            </div>
+        </div>
+
+        <!-- 视图 2: 笔记编辑器（模态框） -->
+        <div id="viewEditor" class="view">
+            <div class="editor-overlay" id="editorOverlay">
+                <div class="editor-panel">
+                    <div class="editor-header">
+                        <h3 id="editorTitle">新建笔记</h3>
+                        <button class="editor-close-btn" id="editorCloseBtn">✕</button>
+                    </div>
+                    <div class="editor-body">
+                        <input type="text" id="editorNoteTitle" class="editor-input" placeholder="笔记标题" />
+                        <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
+                        <div class="editor-section">
+                            <label class="editor-label">颜色</label>
+                            <div class="color-picker" id="colorPicker">
+                                <!-- 颜色选项由 JS 动态渲染 -->
+                            </div>
+                        </div>
+                        <div class="editor-section">
+                            <label class="editor-label">标签</label>
+                            <div class="tag-selector" id="tagSelector">
+                                <!-- 标签选项由 JS 动态渲染 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="editor-footer">
+                        <button class="btn btn-cancel" id="editorCancelBtn">取消</button>
+                        <button class="btn btn-save" id="editorSaveBtn">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图 3: 搜索列表页 -->
+        <div id="viewSearch" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="searchBackBtn">← 返回</button>
+                <h2 class="view-title">搜索结果</h2>
+                <div class="view-controls">
+                    <span class="result-count" id="resultCount">找到 0 条结果</span>
+                </div>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- 搜索结果由 JS 动态渲染 -->
+            </div>
+        </div>
+
+        <!-- 视图 4: 设置页面 -->
+        <div id="viewSettings" class="view">
+            <div class="view-header">
+                <h2 class="view-title">设置</h2>
+            </div>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <h3 class="settings-section-title">标签管理</h3>
+                    <div class="tag-management" id="tagManagement">
+                        <div class="tag-list" id="tagList">
+                            <!-- 标签列表由 JS 动态渲染 -->
+                        </div>
+                        <div class="tag-add-form">
+                            <input type="text" id="newTagName" class="settings-input" placeholder="新标签名称" />
+                            <input type="color" id="newTagColor" class="settings-color-input" value="#6366f1" />
+                            <button class="btn btn-save btn-sm" id="addTagBtn">添加</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3 class="settings-section-title">回收站</h3>
+                    <button class="btn btn-link" id="trashEntryBtn">查看回收站 →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图 5: 回收站页面 -->
+        <div id="viewTrash" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="trashBackBtn">← 返回</button>
+                <h2 class="view-title">回收站</h2>
+            </div>
+            <div class="trash-list" id="trashList">
+                <!-- 回收站笔记由 JS 动态渲染 -->
+            </div>
+        </div>
+    </main>
+</div>
+<script src="./src/main.js" type="module"></script>
+</body>
+</html>
