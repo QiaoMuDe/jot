@@ -24,9 +24,9 @@
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
-                    <div class="dropdown-item" data-action="settings">设置</div>
                     <div class="dropdown-item" data-action="data">数据管理</div>
                     <div class="dropdown-item" data-action="trash">回收站</div>
+                    <div class="dropdown-item" data-action="settings">设置</div>
                 </div>
             </div>
         </div>
@@ -151,9 +151,9 @@
                                 </div>
                                 <div class="font-family-dropdown" id="themeDropdown">
                                     <div class="font-family-options" id="themeOptions">
-                                        <div class="font-family-option selected" data-theme-value="default">🌙 默认</div>
-                                        <div class="font-family-option" data-theme-value="light">☀️ 浅色</div>
-                                        <div class="font-family-option" data-theme-value="dark">🌑 深色</div>
+                                        <div class="font-family-option selected" data-theme-value="default">默认</div>
+                                        <div class="font-family-option" data-theme-value="light">浅色</div>
+                                        <div class="font-family-option" data-theme-value="dark">深色</div>
                                     </div>
                                 </div>
                             </div>
@@ -275,6 +275,12 @@
             </div>
         </div>
     </main>
+
+    <!-- 浮动操作按钮 -->
+    <div id="fabGroup" class="fab-group">
+        <button id="backToTopBtn" class="fab fab-top" title="回到顶部">↑</button>
+        <button id="fabNewNote" class="fab fab-add" title="新建笔记">+</button>
+    </div>
 
     <!-- 撤销 Toast -->
         <div id="undoToast" class="undo-toast">

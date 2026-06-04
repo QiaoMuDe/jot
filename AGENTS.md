@@ -36,8 +36,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~2270 行
-│   │   ├── style.css                   # 组件样式 ~1655 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~2480 行
+│   │   ├── style.css                   # 组件样式 ~1796 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -482,7 +482,6 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ### 中期优化
 2. **全文搜索**：引入 SQLite FTS5，替代 `LIKE %keyword%` 模糊搜索
-3. **主题切换**：支持暗色模式
 
 ### 架构层面
 4. **前端框架**（可选）：若功能持续增长，可引入 Vue/React 管理复杂状态
@@ -497,6 +496,10 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **排序设置**：设置页支持按更新时间/创建时间/名称排序
 - ✅ **分页大小设置**：设置页支持 20/40/60/80/100 分页档位
 - ✅ **Go 内部包重构**：database/fontutil/models/services 移至 internal/ 目录
+- ✅ **主题系统**：默认/浅色/深色三个主题，CSS 变量体系统一，`data-theme` 属性切换，设置页下拉菜单选择
+- ✅ **标签选中态视觉优化**：未选中标签压暗去饱和，选中亮色 + ✓ 前缀 + 脉冲动画 + 外发光
+- ✅ **悬浮操作按钮**：右下角 `+`（新建）和 `↑`（回到顶部），`↑` 滚动超过 300px 时淡入
+- ✅ **滚动条美化**：主内容区滚动显示/停止 1s 淡出，6px 半透明灰条，三主题独立配色；textarea `flex:1` 独占滚动，编者面板高度固定 85vh
 
 ---
 
@@ -510,7 +513,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 29 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置 + 4 个排序/分页设置）|
 | **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
-| **前端代码量** | ~1650 行 JS + ~1060 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~2480 行 JS + ~1796 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -518,7 +521,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=首页 2=设置 3=数据管理 4=回收站；输入框内数字键不触发 |
+| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=首页 2=数据管理 3=回收站 4=设置；输入框内数字键不触发 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + JSON 导入导出（使用原生保存对话框）|
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，用户选择保存位置 |
@@ -526,7 +529,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `data/jot.db`，也可指定路径参数；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
-| **更多菜单** | 含设置/数据管理/回收站三个选项，`min-width: 120px` |
+| **更多菜单** | 含数据管理/回收站/设置三个选项（设置在底），`min-width: 120px` |
 | **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/` |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
@@ -542,6 +545,13 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **PgDn 逻辑** | 已到底时直接调用 `loadMoreNotes()` 加载下一页（不走 scroll 事件）；未到底时设置 `_keyboardScroll` 标志阻止 scroll 监听器误触发 |
 | **ESC 逻辑** | 批量模式→退出批量；搜索视图→清空回首页；设置/数据管理/回收站→直接回首页 |
 | **Sort & PageSize** | 后端 `GetAll`/`GetByTag` 接受 `sortBy` 参数动态 ORDER BY，新增 4 个绑定方法：`GetSortOrder`/`SetSortOrder`/`GetPageSize`/`SetPageSize` |
+| **主题系统** | 三个主题：default（暖灰）、light（亮白蓝强调）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `app.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。前端无持久化（靠后端 Setting 表）|
+| **标签交互优化** | 编辑器标签点击态改为 DOM 类切换（`active`/`clicked`），不再整个重渲染 `renderTagSelector`。选中 → `filter:none + opacity:1 + ✓前缀 + box-shadow`；未选中 → `filter:saturate(0.25) brightness(0.65) + opacity:0.55`；点击脉冲动画 0.25s |
+| **编辑器滚动结构** | `.editor-panel` 固定 `height: 85vh`，`.editor-body` 做 flex 布局分配（无滚动），`.editor-textarea` 设为 `flex:1; overflow-y:auto` 独占滚动。textarea 不自带滚动高度（无 `rows`/`min-height` 限制，用 `flex:1; min-height:0` 填满空间）。Editor scrollbar 6px 半透明灰独立主题色 |
+| **悬浮按钮 FAB** | 右下角 `position: fixed`，z-index:100。`+`（`#fabNewNote`）始终可见，accent 圆底白字 44px；`↑`（`#backToTopBtn`）默认隐藏，主内容 scrollTop>300 淡入。hover scale(1.08)，active scale(0.95)。距右下角 28px，间距 12px，`+` 在下 |
+| **右键菜单滚动锁定** | `showContextMenu` 设 `#mainContent overflow:hidden`，`hideContextMenu` 清空还原。配合 `scrollbar-gutter: stable` 防止宽度抖动 |
+| **主内容区滚动条** | 滚动时显示 `var(--scrollbar-thumb)`，停止 1s 后淡出（`.scrolling` 类 0.3s transition）。三主题独立配色（default `rgba(0,0,0,0.18)`、light `rgba(0,0,0,0.14)`、dark `rgba(255,255,255,0.18)`），hover 加深。8px 宽，track 极淡底色 |
+| **标签重名提示** | 设置页添加标签时，先在前端 `state.tags` 中查重，已存在则弹出 Toast「该标签已存在」3s 自动消失 |
 
 ---
 

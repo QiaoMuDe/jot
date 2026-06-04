@@ -126,6 +126,10 @@ const els = {
     batchCount: $('batchCount'),
     batchDeleteBtn: $('batchDeleteBtn'),
     batchCancelBtn: $('batchCancelBtn'),
+
+    // 浮动操作按钮
+    fabNewNote: $('fabNewNote'),
+    backToTopBtn: $('backToTopBtn'),
 };
 
 /* ===== 工具函数 ===== */
@@ -552,6 +556,7 @@ async function copyNote(id) {
  */
 let undoToastTimer = null;
 let undoNoteId = null;
+let toastTimer = null;
 
 function showUndoToast(msg, noteIds) {
     // 清除之前的定时器
@@ -573,6 +578,22 @@ function showUndoToast(msg, noteIds) {
         undoNoteId = null;
         undoToastTimer = null;
     }, 5000);
+}
+
+/**
+ * 通用 Toast 提示（自动 3 秒消失）
+ * @param {string} msg - 提示内容
+ */
+function showToast(msg) {
+    // 复用 undo-toast 的 UI，隐藏撤销按钮
+    if (toastTimer) clearTimeout(toastTimer);
+    els.undoToastMsg.textContent = msg;
+    els.undoToastBtn.style.display = 'none';
+    els.undoToast.classList.add('active');
+    toastTimer = setTimeout(() => {
+        els.undoToast.classList.remove('active');
+        toastTimer = null;
+    }, 3000);
 }
 
 /**
@@ -710,6 +731,13 @@ async function createTag() {
     const color = els.newTagColor.value;
     if (!name) return;
 
+    // 检查标签名是否已存在
+    if (state.tags && state.tags.some(tag => tag.name === name)) {
+        showToast('该标签已存在');
+        els.newTagName.value = '';
+        return;
+    }
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateTag) {
             await window.go.main.App.CreateTag(name, color);
@@ -718,6 +746,7 @@ async function createTag() {
         }
     } catch (err) {
         console.error('创建标签失败:', err);
+        showToast('创建标签失败');
     }
     els.newTagName.value = '';
     await loadTags();
@@ -860,7 +889,7 @@ function applyTheme(themeName) {
     document.documentElement.setAttribute('data-theme', themeName);
     // 更新下拉菜单显示
     if (els.themeDisplay) {
-        const themeLabels = { default: '🌙 默认', light: '☀️ 浅色', dark: '🌑 深色' };
+        const themeLabels = { default: '默认', light: '浅色', dark: '深色' };
         els.themeDisplay.textContent = themeLabels[themeName] || '默认';
     }
     // 更新选中状态
@@ -1620,7 +1649,7 @@ function renderTagSelector(readOnly) {
         <div class="tag-chip ${state.selectedTags.includes(tag.id) ? 'active' : ''}"
              style="background-color: ${tag.color || '#6366f1'}"
              data-tag-id="${tag.id}"
-             onclick="window.toggleEditorTag(${tag.id})">
+             onclick="window.toggleEditorTag(${tag.id}, this)">
             ${escapeHtml(tag.name)}
         </div>
         `
@@ -1777,6 +1806,8 @@ async function openEditor(noteId, readOnly) {
 
     // 加载标签并渲染标签选择器（等待标签加载完毕再显示编辑器，避免闪烁）
     await loadTagsForEditor(isReadOnly);
+    // 锁定主内容区滚动，隐藏滚动条槽位
+    els.mainContent.style.overflow = 'hidden';
     // 显示编辑器
     els.viewEditor.classList.add('active');
 }
@@ -1794,6 +1825,8 @@ function onEditorInput() {
  */
 function closeEditor() {
     els.viewEditor.classList.remove('active');
+    // 恢复主内容区滚动
+    els.mainContent.style.overflow = '';
     // 清理事件监听
     els.editorNoteTitle.removeEventListener('input', onEditorInput);
     els.editorNoteContent.removeEventListener('input', onEditorInput);
@@ -1919,14 +1952,18 @@ window.deleteNote = async function (id) {
 /**
  * 切换编辑器中选择的标签
  */
-window.toggleEditorTag = function (tagId) {
+window.toggleEditorTag = function (tagId, el) {
     const idx = state.selectedTags.indexOf(tagId);
     if (idx > -1) {
         state.selectedTags.splice(idx, 1);
+        el.classList.remove('active');
     } else {
         state.selectedTags.push(tagId);
+        el.classList.add('active');
     }
-    renderTagSelector();
+    // 点击脉冲动画
+    el.classList.add('clicked');
+    setTimeout(() => el.classList.remove('clicked'), 250);
 };
 
 /**
@@ -2077,6 +2114,16 @@ function initEventListeners() {
     // 新建笔记
     els.newNoteBtn.addEventListener('click', () => {
         openEditor(null);
+    });
+
+    // 浮动新建按钮
+    els.fabNewNote.addEventListener('click', () => {
+        openEditor(null);
+    });
+
+    // 回到顶部
+    els.backToTopBtn.addEventListener('click', () => {
+        els.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
     // 更多菜单按钮
@@ -2300,15 +2347,15 @@ function handleKeyboardNavigation(e) {
                 return;
             case '2':
                 e.preventDefault();
-                switchView('settings');
+                switchView('data');
                 return;
             case '3':
                 e.preventDefault();
-                switchView('data');
+                switchView('trash');
                 return;
             case '4':
                 e.preventDefault();
-                switchView('trash');
+                switchView('settings');
                 return;
         }
     }
@@ -2380,7 +2427,8 @@ function initScrollLoading() {
 /* ===== 滚动条自动显隐 ===== */
 
 /**
- * 给滚动容器绑定 scroll 事件：滚动时显示滑块，停止 1 秒后淡出
+ * 给滚动容器绑定 scroll 事件：滚动时显示滑块，停止 1 秒后淡出；
+ * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
     const containers = [els.mainContent, els.searchResults, els.trashList].filter(Boolean);
@@ -2394,6 +2442,13 @@ function initScrollbarAutoHide() {
             }, 1000);
         });
     });
+    // 主内容区滚动时控制 "↑" 按钮显隐（阈值 300px）
+    if (els.mainContent) {
+        els.mainContent.addEventListener('scroll', () => {
+            const scrollY = els.mainContent.scrollTop;
+            els.backToTopBtn.classList.toggle('visible', scrollY > 300);
+        });
+    }
 }
 
 /* ===== 初始化 ===== */
