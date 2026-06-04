@@ -33,8 +33,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，双栏布局结构
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~890 行
-│   │   ├── style.css                   # 组件样式 ~970 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~984 行
+│   │   ├── style.css                   # 组件样式 ~840 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -85,8 +85,11 @@ jot/                                    # 项目根目录
 | **按标签筛选** | 通过标签 ID 查询笔记 | `note_service.go:GetByTag()` | 标签ID/分页参数 | 笔记列表+总数 |
 | **前端卡片渲染** | 卡片网格/列表展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
 | **前端编辑器** | 笔记编辑模态框 | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
-| **前端搜索交互** | 搜索框 → 调用后端 → 展示结果 | `frontend/src/main.js` | 关键词 | 搜索结果列表 |
+| **前端搜索交互** | 输入框 250ms 防抖自动搜索，支持标题/内容/标签 | `frontend/src/main.js` | 关键词 | 搜索结果列表 |
 | **前端导航切换** | 网格/搜索/设置/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
+| **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
+| **前端只读查看** | 左击笔记打开只读查看器，标题/内容 readonly，无保存按钮 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
+| **标签搜索** | 点击标签 chip 触发按标签名搜索 | `frontend/src/main.js:searchByTag()` | 标签名 | 搜索结果列表 |
 
 ### 2.3 模块分层图
 
@@ -229,8 +232,8 @@ graph TD
 #### 4.2.2 笔记搜索流程
 
 ```
-用户在左侧搜索框输入关键词 → 回车/点击搜索
-  → searchNotes(keyword)
+用户在搜索框输入文字 → 250ms 防抖
+  → searchNotes(keyword, 'input')
     → 前端调用 SearchNotes(kw, 1, 100)
       → app.go:SearchNotes()
         → noteService.Search(keyword, page, pageSize)
@@ -242,11 +245,41 @@ graph TD
     → 接收 PaginatedResult.Items
     → renderSearchResults(results, keyword)
       → 关键词高亮 (highlightText)
-      → 渲染搜索结果列表
+      → 渲染搜索结果列表（含可点击标签）
     → switchView('search')                  // 切换到搜索列表视图
+
+清空搜索框 → 返回网格视图
+
+点击标签 chip → searchByTag(tagName)
+  → 设置搜索框值 → searchNotes(tagName, 'tag')
 ```
 
-#### 4.2.3 笔记软删除与回收站流程
+#### 4.2.3 笔记查看与右键菜单流程
+
+```
+左击笔记卡片/搜索结果
+  → window.viewNote(id)
+    → openEditor(id, true)
+      → 标题输入框 readonly
+      → 内容文本域 readonly
+      → 标签仅展示（不可切换）
+      → 隐藏"保存"/"取消"按钮
+      → 标题显示"查看笔记"
+
+右键笔记卡片/搜索结果
+  → window.showContextMenu(event, noteId)
+    → 阻止默认右键菜单
+    → 定位菜单到鼠标位置
+    → 菜单项：查看 / 编辑 / 置顶(取消置顶) / 删除
+  → 点击菜单项 → window.handleContextAction(action)
+    → 'view': 打开只读查看
+    → 'edit': 打开编辑器(编辑模式)
+    → 'pin': 切换置顶
+    → 'delete': 确认后删除
+  → 点击页面其他区域 → 关闭菜单
+```
+
+#### 4.2.4 笔记软删除与回收站流程
 
 ```
 用户点击卡片上的 "✕" 删除按钮
@@ -400,11 +433,15 @@ graph TD
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` |
 | **绑定方法数** | 17 个（11 个 Note 相关 + 6 个 Tag 相关） |
 | **前端视图** | 5 个：卡片网格、编辑器（模态框）、搜索结果、设置、回收站 |
-| **前端代码量** | ~890 行 JS + ~970 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~984 行 JS + ~840 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore）|
 | **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
+| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索 |
+| **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单 |
+| **布局** | topbar（品牌/搜索框/新建+视图切换+设置），主内容区（卡片网格/搜索/设置/回收站视图）|
+| **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
 | **Spec 位置** | `.trae/specs/add-card-note-app/`（含 spec.md / tasks.md / checklist.md） |
 
 ---
