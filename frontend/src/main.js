@@ -6,10 +6,9 @@ const state = {
     notes: [],
     tags: [],
     trashNotes: [],
-    currentView: 'grid',       // grid | search | settings | trash
+    currentView: 'grid',       // grid | search | settings | data | trash
     editingNoteId: null,        // null = 新建, number = 编辑
     selectedTags: [],
-    isGridView: true,
     searchKeyword: '',
     searchSource: 'input',      // 'input' | 'tag' — 搜索触发来源
 };
@@ -21,12 +20,15 @@ const els = {
     // 侧边栏
     searchInput: $('searchInput'),
     newNoteBtn: $('newNoteBtn'),
-    settingsBtn: $('settingsBtn'),
+    // 更多菜单
+    moreMenuBtn: $('moreMenuBtn'),
+    moreMenu: $('moreMenu'),
 
     // 视图
     viewGrid: $('viewGrid'),
     viewSearch: $('viewSearch'),
     viewSettings: $('viewSettings'),
+    viewData: $('viewData'),
     viewTrash: $('viewTrash'),
     viewEditor: $('viewEditor'),
 
@@ -52,18 +54,28 @@ const els = {
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
-    trashEntryBtn: $('trashEntryBtn'),
-
     // 回收站
     trashList: $('trashList'),
     trashBackBtn: $('trashBackBtn'),
+    restoreAllBtn: $('restoreAllBtn'),
+    emptyTrashBtn: $('emptyTrashBtn'),
+
+    // 数据管理
+    dataBackBtn: $('dataBackBtn'),
+    settingsBackBtn: $('settingsBackBtn'),
+    exportDataBtn: $('exportDataBtn'),
+    importDataBtn: $('importDataBtn'),
+    importResult: $('importResult'),
+    dataContent: $('dataContent'),
+    statTotalNotes: $('statTotalNotes'),
+    statTotalTags: $('statTotalTags'),
+    statTrashedNotes: $('statTrashedNotes'),
 
     // 右键菜单
     contextMenu: $('contextMenu'),
 
-    // 视图切换
-    gridViewBtn: $('gridViewBtn'),
-    listViewBtn: $('listViewBtn'),
+    // 主内容区（用于网格视图滚动）
+    mainContent: $('mainContent'),
 };
 
 /* ===== 工具函数 ===== */
@@ -147,6 +159,10 @@ function switchView(view) {
         case 'settings':
             els.viewSettings.classList.add('active');
             loadTags();
+            break;
+        case 'data':
+            els.viewData.classList.add('active');
+            loadDataStats();
             break;
         case 'trash':
             els.viewTrash.classList.add('active');
@@ -422,6 +438,42 @@ async function restoreNote(id) {
 }
 
 /**
+ * 全部恢复回收站笔记
+ */
+async function restoreAllNotes() {
+    if (!confirm('确定要恢复回收站中的所有笔记吗？')) return;
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreAllNotes) {
+            await window.go.main.App.RestoreAllNotes();
+        } else {
+            console.warn('RestoreAllNotes 未绑定');
+        }
+    } catch (err) {
+        console.error('全部恢复失败:', err);
+    }
+    await loadTrashNotes();
+    await loadNotes();
+}
+
+/**
+ * 清空回收站（永久删除所有）
+ */
+async function emptyTrash() {
+    if (!confirm('确定要永久清空回收站中的所有笔记吗？此操作不可撤销。')) return;
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.EmptyTrash) {
+            await window.go.main.App.EmptyTrash();
+        } else {
+            console.warn('EmptyTrash 未绑定');
+        }
+    } catch (err) {
+        console.error('清空回收站失败:', err);
+    }
+    await loadTrashNotes();
+    await loadNotes();
+}
+
+/**
  * 永久删除笔记
  */
 async function permanentDeleteNote(id) {
@@ -436,6 +488,132 @@ async function permanentDeleteNote(id) {
         console.error('永久删除失败:', err);
     }
     await loadTrashNotes();
+}
+
+/* ===== 数据管理函数 ===== */
+
+/**
+ * 加载数据统计概览
+ */
+async function loadDataStats() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
+            const stats = await window.go.main.App.GetDataStats();
+            if (stats) {
+                els.statTotalNotes.textContent = stats.total_notes;
+                els.statTotalTags.textContent = stats.total_tags;
+                els.statTrashedNotes.textContent = stats.trashed_notes;
+            }
+        } else {
+            console.warn('GetDataStats 未绑定');
+            // 显示模拟数据
+            els.statTotalNotes.textContent = state.notes.length;
+            els.statTotalTags.textContent = state.tags.length;
+        }
+    } catch (err) {
+        console.error('加载统计数据失败:', err);
+    }
+}
+
+/**
+ * 导出笔记数据
+ */
+async function exportData() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ExportDataWithDialog) {
+            const msg = await window.go.main.App.ExportDataWithDialog();
+            if (msg && msg !== '已取消') {
+                showImportResult({ success_count: 0, fail_count: 0, skipped_count: 0, message: msg });
+            }
+        } else {
+            console.warn('ExportDataWithDialog 未绑定');
+            // 降级：前端导出并下载
+            const mockExport = state.notes.map(n => ({
+                title: n.title,
+                content: n.content,
+                pinned: n.pinned,
+                tags: (n.tags || []).map(t => ({ name: t.name, color: t.color })),
+                created_at: n.created_at,
+                updated_at: n.updated_at,
+            }));
+            const jsonStr = JSON.stringify(mockExport, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `jot-notes-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    } catch (err) {
+        console.error('导出数据失败:', err);
+        showImportResult({ success_count: 0, fail_count: 0, skipped_count: 0, message: '导出失败：' + err.message });
+    }
+}
+
+/**
+ * 导入笔记数据
+ */
+async function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.ImportData) {
+                const result = await window.go.main.App.ImportData(text);
+                if (result) {
+                    showImportResult(result);
+                }
+            } else {
+                console.warn('ImportData 未绑定');
+                alert('导入功能需要在后端绑定时可用');
+            }
+        } catch (err) {
+            console.error('导入数据失败:', err);
+            showImportResult({ success_count: 0, fail_count: 0, message: '导入失败：' + err.message });
+        }
+    });
+    input.click();
+}
+
+/**
+ * 显示导入结果
+ */
+function showImportResult(result) {
+    const el = els.importResult;
+    el.style.display = 'block';
+
+    // 导出成功消息
+    if (result.message && result.success_count === 0 && result.fail_count === 0 && !result.skipped_count) {
+        el.className = 'import-result success';
+        el.textContent = result.message;
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
+        return;
+    }
+
+    if (result.fail_count > 0 && result.success_count === 0) {
+        el.className = 'import-result error';
+        el.textContent = result.message || '导入失败';
+    } else {
+        el.className = 'import-result success';
+        let text = `导入完成：成功 ${result.success_count} 条`;
+        if (result.skipped_count > 0) {
+            text += `，跳过 ${result.skipped_count} 条（已存在）`;
+        }
+        if (result.fail_count > 0) {
+            text += `，失败 ${result.fail_count} 条`;
+        }
+        el.textContent = text;
+    }
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
 }
 
 /* ===== 渲染函数 ===== */
@@ -731,7 +909,7 @@ window.showContextMenu = function (event, noteId) {
     const note = state.notes.find((n) => n.id === noteId);
     const pinItem = menu.querySelector('[data-action="pin"]');
     if (pinItem && note) {
-        pinItem.textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
+        pinItem.textContent = note.pinned ? '取消置顶' : '置顶';
     }
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
@@ -851,9 +1029,25 @@ function initEventListeners() {
         openEditor(null);
     });
 
-    // 设置按钮
-    els.settingsBtn.addEventListener('click', () => {
-        switchView('settings');
+    // 更多菜单按钮
+    els.moreMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        els.moreMenu.classList.toggle('active');
+    });
+    // 更多菜单项点击
+    els.moreMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.dropdown-item');
+        if (item && item.dataset.action) {
+            els.moreMenu.classList.remove('active');
+            if (item.dataset.action === 'settings') {
+                switchView('settings');
+            } else if (item.dataset.action === 'data') {
+                switchView('data');
+            } else if (item.dataset.action === 'trash') {
+                switchView('trash');
+                loadTrashNotes();
+            }
+        }
     });
 
     // 点击品牌名返回所有笔记
@@ -861,20 +1055,6 @@ function initEventListeners() {
         state.searchKeyword = '';
         els.searchInput.value = '';
         switchView('grid');
-    });
-
-    // 视图切换
-    els.gridViewBtn.addEventListener('click', () => {
-        state.isGridView = true;
-        els.gridViewBtn.classList.add('active');
-        els.listViewBtn.classList.remove('active');
-        els.cardGrid.classList.remove('list-view');
-    });
-    els.listViewBtn.addEventListener('click', () => {
-        state.isGridView = false;
-        els.listViewBtn.classList.add('active');
-        els.gridViewBtn.classList.remove('active');
-        els.cardGrid.classList.add('list-view');
     });
 
     // 编辑器
@@ -898,16 +1078,26 @@ function initEventListeners() {
         if (e.key === 'Enter') createTag();
     });
 
-    // 回收站入口
-    els.trashEntryBtn.addEventListener('click', () => {
-        switchView('trash');
-    });
+    // 回收站按钮
     els.trashBackBtn.addEventListener('click', () => {
-        switchView('settings');
+        switchView('grid');
+    });
+    els.restoreAllBtn.addEventListener('click', restoreAllNotes);
+    els.emptyTrashBtn.addEventListener('click', emptyTrash);
+
+    // 数据管理按钮
+    els.dataBackBtn.addEventListener('click', () => {
+        switchView('grid');
+    });
+    els.exportDataBtn.addEventListener('click', exportData);
+    els.importDataBtn.addEventListener('click', importData);
+    els.settingsBackBtn.addEventListener('click', () => {
+        switchView('grid');
     });
 
     // 右键菜单：点击其他区域关闭
     document.addEventListener('click', hideContextMenu);
+    document.addEventListener('click', () => els.moreMenu.classList.remove('active'));
     // 右键菜单项点击
     els.contextMenu.addEventListener('click', (e) => {
         const item = e.target.closest('.context-menu-item');
@@ -918,6 +1108,9 @@ function initEventListeners() {
     });
     // 右键菜单内阻止冒泡，避免触发 document.click 关闭
     els.contextMenu.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // 键盘快捷键导航
+    document.addEventListener('keydown', handleKeyboardNavigation);
 }
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
@@ -969,6 +1162,77 @@ function getMockTags() {
         { id: 2, name: '设计', color: '#8b5cf6' },
         { id: 3, name: '待办', color: '#f59e0b' },
     ];
+}
+
+/* ===== 键盘快捷键导航 ===== */
+
+/**
+ * 获取当前视图的可滚动容器
+ */
+function getScrollContainer() {
+    switch (state.currentView) {
+        case 'grid':
+            return els.mainContent;
+        case 'search':
+            return els.searchResults;
+        case 'data':
+            return els.dataContent;
+        case 'trash':
+            return els.trashList;
+        default:
+            return null;
+    }
+}
+
+/**
+ * 处理键盘快捷键（Ctrl+Home/End, PgUp/PgDn）
+ */
+function handleKeyboardNavigation(e) {
+    const container = getScrollContainer();
+
+    // Ctrl+F: 聚焦搜索输入框
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        els.searchInput.focus();
+        els.searchInput.select();
+        return;
+    }
+
+    // Ctrl+N: 打开新建笔记（编辑器未打开时）
+    if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (!els.viewEditor.classList.contains('active')) {
+            openEditor(null);
+        }
+        return;
+    }
+
+    if (!container) return;
+
+    // Ctrl+Home: 滚动到顶部
+    if (e.ctrlKey && e.key === 'Home') {
+        e.preventDefault();
+        container.scrollTop = 0;
+        return;
+    }
+    // Ctrl+End: 滚动到底部
+    if (e.ctrlKey && e.key === 'End') {
+        e.preventDefault();
+        container.scrollTop = container.scrollHeight;
+        return;
+    }
+    // PgUp: 向上翻一页
+    if (e.key === 'PageUp') {
+        e.preventDefault();
+        container.scrollTop -= container.clientHeight;
+        return;
+    }
+    // PgDn: 向下翻一页
+    if (e.key === 'PageDown') {
+        e.preventDefault();
+        container.scrollTop += container.clientHeight;
+        return;
+    }
 }
 
 /* ===== 初始化 ===== */

@@ -5,6 +5,10 @@ import (
 	"jot/database"
 	"jot/models"
 	"jot/services"
+	"os"
+	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -108,6 +112,16 @@ func (a *App) RestoreNote(id uint) error {
 	return a.noteService.Restore(id)
 }
 
+// RestoreAllNotes 批量恢复回收站中所有笔记
+func (a *App) RestoreAllNotes() error {
+	return a.noteService.RestoreAll()
+}
+
+// EmptyTrash 永久清空回收站中所有笔记
+func (a *App) EmptyTrash() error {
+	return a.noteService.EmptyTrash()
+}
+
 // GetNotesByTag 按标签分页获取笔记
 func (a *App) GetNotesByTag(tagID uint, page, pageSize int) (*services.PaginatedResult, error) {
 	notes, total, err := a.noteService.GetByTag(tagID, page, pageSize)
@@ -120,6 +134,61 @@ func (a *App) GetNotesByTag(tagID uint, page, pageSize int) (*services.Paginated
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// GetDataStats 获取数据统计概览
+func (a *App) GetDataStats() (*services.DataStats, error) {
+	stats, err := a.noteService.GetStats()
+	if err != nil {
+		return nil, err
+	}
+	tagCount, err := a.tagService.Count()
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalTags = tagCount
+	return stats, nil
+}
+
+// ExportData 导出所有笔记为 JSON 字符串
+func (a *App) ExportData() (string, error) {
+	data, err := a.noteService.ExportAll()
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ImportData 从 JSON 字符串导入笔记
+func (a *App) ImportData(jsonData string) (*services.ImportResult, error) {
+	return a.noteService.ImportFromJSON([]byte(jsonData))
+}
+
+// ExportDataWithDialog 弹出保存对话框，将笔记导出到用户选择的位置
+func (a *App) ExportDataWithDialog() (string, error) {
+	data, err := a.noteService.ExportAll()
+	if err != nil {
+		return "", err
+	}
+
+	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "导出笔记",
+		DefaultFilename: "jot-notes-" + time.Now().Format("2006-01-02") + ".json",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "已取消", nil
+	}
+
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return "", err
+	}
+	return "导出成功：" + filePath, nil
 }
 
 // ==================== Tag 相关绑定方法 ====================

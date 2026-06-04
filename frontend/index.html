@@ -18,9 +18,14 @@
         </div>
         <div class="topbar-actions">
             <button id="newNoteBtn" class="topbar-btn" title="新建笔记">+</button>
-            <button id="gridViewBtn" class="topbar-btn active" title="网格视图">▦</button>
-            <button id="listViewBtn" class="topbar-btn" title="列表视图">☰</button>
-            <button id="settingsBtn" class="topbar-btn" title="设置">⚙️</button>
+            <div class="topbar-dropdown">
+                <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
+                <div id="moreMenu" class="dropdown-menu">
+                    <div class="dropdown-item" data-action="settings">设置</div>
+                    <div class="dropdown-item" data-action="data">数据管理</div>
+                    <div class="dropdown-item" data-action="trash">回收站</div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -76,6 +81,7 @@
         <!-- 视图 4: 设置页面 -->
         <div id="viewSettings" class="view">
             <div class="view-header">
+                <button class="back-btn" id="settingsBackBtn">← 返回</button>
                 <h2 class="view-title">设置</h2>
             </div>
             <div class="settings-content">
@@ -92,18 +98,68 @@
                         </div>
                     </div>
                 </div>
-                <div class="settings-section">
-                    <h3 class="settings-section-title">回收站</h3>
-                    <button class="btn btn-link" id="trashEntryBtn">查看回收站 →</button>
-                </div>
             </div>
         </div>
 
-        <!-- 视图 5: 回收站页面 -->
+        <!-- 视图 5: 数据管理页面 -->
+        <div id="viewData" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="dataBackBtn">← 返回</button>
+                <h2 class="view-title">数据管理</h2>
+                <div class="view-controls"></div>
+            </div>
+            <div class="data-content" id="dataContent">
+                <!-- 统计卡片 -->
+                <div class="data-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">📄</div>
+                        <div class="stat-body">
+                            <div class="stat-value" id="statTotalNotes">0</div>
+                            <div class="stat-label">笔记总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🏷️</div>
+                        <div class="stat-body">
+                            <div class="stat-value" id="statTotalTags">0</div>
+                            <div class="stat-label">标签总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🗑️</div>
+                        <div class="stat-body">
+                            <div class="stat-value" id="statTrashedNotes">0</div>
+                            <div class="stat-label">回收站</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 操作区域 -->
+                <div class="data-actions">
+                    <button class="data-action-btn" id="exportDataBtn">
+                        <span class="dab-icon">⬇️</span>
+                        <span class="dab-text">导出数据</span>
+                        <span class="dab-desc">将所有笔记导出为 JSON 文件保存到本地</span>
+                    </button>
+                    <button class="data-action-btn" id="importDataBtn">
+                        <span class="dab-icon">⬆️</span>
+                        <span class="dab-text">导入数据</span>
+                        <span class="dab-desc">从本地的 JSON 文件恢复笔记</span>
+                    </button>
+                </div>
+                <!-- 导入结果提示 -->
+                <div id="importResult" class="import-result" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- 视图 6: 回收站页面 -->
         <div id="viewTrash" class="view">
             <div class="view-header">
                 <button class="back-btn" id="trashBackBtn">← 返回</button>
                 <h2 class="view-title">回收站</h2>
+                <div class="view-controls">
+                    <button class="btn btn-sm btn-restore" id="restoreAllBtn">全部恢复</button>
+                    <button class="btn btn-sm btn-perm-delete" id="emptyTrashBtn">全部清空</button>
+                </div>
             </div>
             <div class="trash-list" id="trashList">
                 <!-- 回收站笔记由 JS 动态渲染 -->
@@ -113,12 +169,12 @@
 
     <!-- 右键菜单 -->
     <div id="contextMenu" class="context-menu">
-        <div class="context-menu-item" data-action="view">👁 查看</div>
-        <div class="context-menu-item" data-action="edit">✎ 编辑</div>
+        <div class="context-menu-item" data-action="view">查看</div>
+        <div class="context-menu-item" data-action="edit">编辑</div>
         <div class="context-menu-divider"></div>
-        <div class="context-menu-item" data-action="pin">📌 置顶</div>
+        <div class="context-menu-item" data-action="pin">置顶</div>
         <div class="context-menu-divider"></div>
-        <div class="context-menu-item danger" data-action="delete">✕ 删除</div>
+        <div class="context-menu-item danger" data-action="delete">删除</div>
     </div>
 </div>
 <script src="./src/main.js" type="module"></script>

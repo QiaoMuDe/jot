@@ -13,7 +13,15 @@ export function DeleteNote(arg1:number):Promise<void>;
 
 export function DeleteTag(arg1:number):Promise<void>;
 
+export function EmptyTrash():Promise<void>;
+
+export function ExportData():Promise<string>;
+
+export function ExportDataWithDialog():Promise<string>;
+
 export function GetAllTags():Promise<Array<models.Tag>>;
+
+export function GetDataStats():Promise<services.DataStats>;
 
 export function GetNote(arg1:number):Promise<models.Note>;
 
@@ -23,9 +31,13 @@ export function GetNotesByTag(arg1:number,arg2:number,arg3:number):Promise<servi
 
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
+export function ImportData(arg1:string):Promise<services.ImportResult>;
+
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
+
+export function RestoreAllNotes():Promise<void>;
 
 export function RestoreNote(arg1:number):Promise<void>;
 

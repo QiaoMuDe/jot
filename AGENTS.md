@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-03
+> 生成日期: 2026-06-04
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 17 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 22 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -25,16 +25,16 @@ jot/                                    # 项目根目录
 │   └── tag.go                          # Tag 实体（标签）
 │
 ├── services/                           # 【业务逻辑层】Service 模式封装
-│   ├── note_service.go                 # 笔记 CRUD + 搜索 + 置顶 + 回收站
-│   ├── tag_service.go                  # 标签管理 + 笔记标签关联
-│   └── types.go                        # 通用类型（PaginatedResult）
+│   ├── note_service.go                 # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出
+│   ├── tag_service.go                  # 标签管理 + 笔记标签关联 + 标签计数
+│   └── types.go                        # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
-│   ├── index.html                      # 入口 HTML，双栏布局结构
+│   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~984 行
-│   │   ├── style.css                   # 组件样式 ~840 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~1300 行
+│   │   ├── style.css                   # 组件样式 ~960 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -43,10 +43,15 @@ jot/                                    # 项目根目录
 │   │       └── models.ts              # Go 模型的 TS 类型
 │   └── dist/                           # Vite 构建产物（前端编译输出）
 │
-└── .trae/specs/add-card-note-app/      # 项目 Spec 文档
-    ├── spec.md                         # 需求规格说明
-    ├── tasks.md                        # 任务分解
-    └── checklist.md                    # 验收清单
+└── .trae/specs/                        # 项目 Spec 文档目录
+    ├── add-card-note-app/              # 初始需求规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    └── add-data-management/            # 数据管理功能规格
+        ├── spec.md
+        ├── tasks.md
+        └── checklist.md
 ```
 
 ### 目录规范评价
@@ -68,8 +73,8 @@ jot/                                    # 项目根目录
 |----------|----------|----------|----------|
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
 | **数据模型层** | Note/Tag 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go` | GORM |
-| **分页结构** | 通用分页返回格式 | `services/types.go` | 无外部依赖 |
-| **Wails 绑定层** | Go API → JS Bridge，序列化/反序列化 | `app.go` | Wails v2 binding 机制 |
+| **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
+| **Wails 绑定层** | Go API → JS Bridge，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x |
 
 ### 2.2 业务核心模块
@@ -80,16 +85,21 @@ jot/                                    # 项目根目录
 | **笔记搜索** | 标题+内容 LIKE 模糊搜索 | `note_service.go:Search()` | 关键词/分页参数 | 笔记列表+总数 |
 | **笔记置顶** | 切换置顶状态 | `note_service.go:TogglePin()` | 笔记 ID | 更新后的笔记 |
 | **回收站** | 软删除/查看/恢复/永久删除 | `note_service.go:Delete/GetTrash/Restore/PermanentDelete` | 笔记 ID | 操作结果 |
+| **批量回收站操作** | 全部恢复/全部清空 | `note_service.go:RestoreAll/EmptyTrash` | — | 操作结果 |
 | **标签管理** | 标签 CRUD | `services/tag_service.go` | 名称/颜色/ID | Tag 对象 |
 | **笔记标签关联** | 为笔记添加/移除标签 | `tag_service.go:AddTagToNote/RemoveTagFromNote` | 笔记ID+标签ID | 操作结果 |
 | **按标签筛选** | 通过标签 ID 查询笔记 | `note_service.go:GetByTag()` | 标签ID/分页参数 | 笔记列表+总数 |
-| **前端卡片渲染** | 卡片网格/列表展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
-| **前端编辑器** | 笔记编辑模态框 | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
+| **数据统计** | 统计笔记总数/回收站数/标签数 | `note_service.go:GetStats()` + `tag_service.go:Count()` | — | DataStats 对象 |
+| **数据导出** | JSON 格式导出所有笔记 | `note_service.go:ExportAll()` + `app.go:ExportDataWithDialog()` | — | JSON 文件（通过 SaveDialog）|
+| **数据导入** | 从 JSON 文件导入笔记（跳过同名） | `note_service.go:ImportFromJSON()` | JSON 字节数组 | ImportResult 对象 |
+| **前端卡片渲染** | 卡片网格展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
+| **前端编辑器** | 笔记编辑模态框（含标签选择/颜色选择） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端搜索交互** | 输入框 250ms 防抖自动搜索，支持标题/内容/标签 | `frontend/src/main.js` | 关键词 | 搜索结果列表 |
-| **前端导航切换** | 网格/搜索/设置/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
+| **前端导航切换** | 网格/搜索/设置/数据管理/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
-| **前端只读查看** | 左击笔记打开只读查看器，标题/内容 readonly，无保存按钮 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
+| **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 触发按标签名搜索 | `frontend/src/main.js:searchByTag()` | 标签名 | 搜索结果列表 |
+| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp/PgDn 滚动 / Ctrl+Home/End | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 
 ### 2.3 模块分层图
 
@@ -97,23 +107,25 @@ jot/                                    # 项目根目录
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend                          │
 │  (main.js / style.css / index.html)                  │
-│   ├─ 视图渲染 (卡片/搜索/设置/回收站)                   │
-│   ├─ 交互逻辑 (事件绑定/状态管理)                       │
+│   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站)          │
+│   ├─ 交互逻辑 (事件绑定/状态管理)                      │
 │   └─ Wails Bridge (window.go.main.App.*)              │
 └────────────────────────┬────────────────────────────┘
                          │ Wails Binding (JSON 序列化)
 ┌────────────────────────▼────────────────────────────┐
 │              App 层 (app.go)                         │
-│  17 个绑定方法：CreateNote / SearchNotes / ...        │
-│  (薄封装层：直接委托给 Service)                        │
+│  22 个绑定方法（CRUD/搜索/置顶/回收站/统计/导入导出）    │
+│  (含 runtime.SaveFileDialog 原生对话框调用)            │
 └────────────────────────┬────────────────────────────┘
                          │
               ┌──────────┼──────────┐
               ▼          ▼          ▼
     ┌─────────────┐ ┌──────────┐ ┌──────────────┐
-    │ NoteService │ │TagService│ │  Paginated   │
-    │ (CRUD/搜索/ │ │(CRUD/关联)│ │  Result      │
-    │  置顶/回收站) │ │          │ │  (通用类型)   │
+    │ NoteService │ │TagService│ │    Types     │
+    │ (CRUD/搜索/ │ │(CRUD/关联)│ │ Paginated    │
+    │  置顶/回收站 │ │          │ │ DataStats    │
+    │  统计/导入   │ │          │ │ Import       │
+    │  导出)      │ │          │ │ Result 等    │
     └──────┬──────┘ └─────┬────┘ └──────────────┘
            │              │
            └──────┬───────┘
@@ -141,6 +153,7 @@ jot/                                    # 项目根目录
 | `app.go` | `database` | 编译依赖 | 调用 `database.InitDB()` 获取 `*gorm.DB` 实例 |
 | `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` 实例 |
 | `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` 类型 |
+| `app.go` | `runtime` | 编译依赖 | `runtime.SaveFileDialog` 原生保存对话框 |
 | `services` | `models` | 编译依赖 | 操作 Note/Tag 结构体 |
 | `services` | GORM | 编译依赖 | `*gorm.DB` 数据库操作 |
 | `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{})` |
@@ -157,25 +170,27 @@ graph TD
         B --> C[database/db.go]
         B --> D[services/note_service.go]
         B --> E[services/tag_service.go]
-        C --> F[models/note.go]
-        C --> G[models/tag.go]
-        D --> F
+        B --> F[services/types.go]
+        C --> G[models/note.go]
+        C --> H[models/tag.go]
         D --> G
-        E --> F
+        D --> H
         E --> G
-        C --> H[glebarez/sqlite]
-        D --> I[GORM]
-        E --> I
+        E --> H
+        C --> I[glebarez/sqlite]
+        D --> J[GORM]
+        E --> J
+        B -.-> K[runtime.SaveFileDialog]
     end
 
     subgraph Frontend
-        J[index.html] --> K[main.js]
-        K --> L[style.css]
-        K --> M[app.css]
-        K --> N[wailsjs/go/main/App.js]
+        L[index.html] --> M[main.js]
+        M --> N[style.css]
+        M --> O[app.css]
+        M --> P[wailsjs/go/main/App.js]
     end
 
-    B -.->|Wails Binding| N
+    B -.->|Wails Binding| P
 ```
 
 ### 3.3 依赖问题分析
@@ -185,7 +200,7 @@ graph TD
 | **循环依赖** | 无。所有依赖为单向 `main → app → services → models`，无循环 | ✅ 无问题 |
 | **过度依赖** | 无。每个 Service 仅依赖 `*gorm.DB` 和自身模型 | ✅ 无问题 |
 | **依赖缺失** | 无。`go.sum` 中所有传递依赖完整 | ✅ 无问题 |
-| **隐式依赖** | 前端 `main.js` 中 `window.go` 对象依赖 Wails 运行时注入，本地开发/独立预览时不可用 | ⚠️ 有降级处理（Mock 数据） |
+| **隐式依赖** | 前端 `window.go` 对象依赖 Wails 运行时注入，本地开发/独立预览时不可用 | ⚠️ 有降级处理（Mock 数据） |
 | **编译期依赖 vs 运行时依赖** | `wailsjs/` 目录需在修改 `app.go` 后重新生成 | ⚠️ 需手动执行 `wails generate module` |
 
 ---
@@ -198,18 +213,18 @@ graph TD
 |----------|----------|------|----------|
 | **Service Layer 模式** | `services/` 包 | 将业务逻辑从 controller（app.go）中抽离，封装为独立 Service 结构体 | `NoteService` / `TagService` |
 | **依赖注入 (DI)** | `app.go` | Service 依赖的 `*gorm.DB` 通过构造函数注入 | `NewNoteService(db)` / `NewTagService(db)` |
-| **Repository 模式** | `services/` 包内嵌 GORM | Service 内部直接使用 GORM 作为数据访问层，未额外封装 Repository | `s.db.Create()` / `s.db.Where()` |
+| **Repository 模式** | `services/` 包内嵌 GORM | Service 内部直接使用 GORM 作为数据访问层 | `s.db.Create()` / `s.db.Where()` |
 | **单例模式 (应用级)** | App 结构体 | Wails 运行时保证 App 实例唯一 | `NewApp()` 在 `main()` 中仅调用一次 |
 | **MVC 变体** | 整体架构 | Model(models) - View(frontend) - Controller(app.go + services) 分层 | 见分层图 |
-| **模板方法** | 未使用 | Service 方法均为独立实现，无模板方法继承 | — |
 | **降级策略 (Fallback)** | `frontend/main.js` | 后端未绑定时自动使用 Mock 数据 | `if (!window.go.main.App.GetNotes) { state.notes = getMockNotes(); }` |
+| **Wails Runtime 集成** | `app.go` | 通过 runtime 包调用原生桌面功能 | `runtime.SaveFileDialog()` 弹出系统保存对话框 |
 
 ### 4.2 核心业务逻辑流程
 
 #### 4.2.1 笔记创建流程
 
 ```
-用户点击 "+" 按钮
+用户点击 "+" 按钮 / Ctrl+N
   → openEditor(null)          // 打开空编辑器模态框
     → 用户填写标题/内容/选择颜色/选择标签
     → 点击"保存"按钮
@@ -225,13 +240,13 @@ graph TD
         → closeEditor()                     // 关闭模态框
         → loadNotes()                       // 重新加载笔记列表
           → GetNotes(1, 100)                // 分页查询
-          → renderNotesList()               // 渲染左侧缩略列表
           → renderCardGrid()                // 渲染右侧卡片网格
 ```
 
 #### 4.2.2 笔记搜索流程
 
 ```
+Ctrl+F / 用户点击搜索框 → 输入框聚焦
 用户在搜索框输入文字 → 250ms 防抖
   → searchNotes(keyword, 'input')
     → 前端调用 SearchNotes(kw, 1, 100)
@@ -293,14 +308,56 @@ graph TD
         → loadNotes()                           // 刷新列表
     → [取消] 无操作
 
-用户进入回收站
+用户进入回收站（通过顶部 ☰ → 回收站）
   → switchView('trash')
     → loadTrashNotes()
       → GetTrashNotes(1, 100)
         → GORM: Unscoped().Where("deleted_at IS NOT NULL")
-  → 渲染回收站列表（含"恢复"和"永久删除"按钮）
-    → 恢复: RestoreNote(id) → GORM: Update("deleted_at", nil)
-    → 永久删除: PermanentDeleteNote(id) → GORM: Unscoped().Delete()
+  → 渲染回收站列表（含"全部恢复"和"全部清空"按钮）
+    → 恢复单个: RestoreNote(id) → GORM: Update("deleted_at", nil)
+    → 永久删除单个: PermanentDeleteNote(id) → GORM: Unscoped().Delete()
+    → 全部恢复: RestoreAll() → GORM: Update 所有回收站笔记
+    → 全部清空: EmptyTrash() → GORM: Unscoped().Delete 所有回收站笔记
+```
+
+#### 4.2.5 数据导出流程
+
+```
+用户进入数据管理页面（通过顶部 ☰ → 数据管理）
+  → loadDataStats()
+    → GetDataStats()
+      → noteService.GetStats() + tagService.Count()
+    → 渲染统计卡片（笔记总数/标签总数/回收站数）
+
+用户点击「导出数据」
+  → window.go.main.App.ExportDataWithDialog()
+    → app.go:ExportDataWithDialog()
+      → noteService.ExportAll()
+        → 查询所有未删除笔记并组装 JSON
+      → runtime.SaveFileDialog()              // 弹出原生保存对话框
+      → os.WriteFile(path, jsonData, 0644)    // 写入用户选择路径
+    → 返回 "导出成功：/path/to/file.json"
+```
+
+#### 4.2.6 数据导入流程
+
+```
+用户点击「导入数据」
+  → 前端 <input type="file"> 弹出文件选择器
+  → 选择 .json 文件后读取内容
+  → window.go.main.App.ImportData(jsonString)
+    → app.go:ImportData()
+      → noteService.ImportFromJSON([]byte)
+        → json.Unmarshal([]ExportNoteItem)
+        → 遍历每个条目:
+          → 检查标题为空? → fail++
+          → 检查同名笔记已存在? → skip++
+          → db.Create(&note) 失败? → fail++
+          → 处理标签：查找或创建后关联
+          → success++
+    → 返回 ImportResult{success, fail, skipped, message}
+  → showImportResult()
+    → 显示 "导入完成：成功 X 条，跳过 Y 条（已存在），失败 Z 条"
 ```
 
 ### 4.3 代码质量分析
@@ -311,7 +368,7 @@ graph TD
 | **注释覆盖** | 良好 | 所有公开方法和关键函数均有 `//` 行注释说明，JS 函数有 JSDoc 风格注释 |
 | **硬编码** | 轻量 | 数据库路径 `data/jot.db` 硬编码在 `app.go:NewApp()`；Mock 数据硬编码在 JS 中 |
 | **冗余代码** | 无 | 无明显重复代码，Service 间职责分离清晰 |
-| **错误处理** | 中等 | Go 层完整处理 GORM 错误（ErrRecordNotFound），JS 层有 try/catch 包裹后端调用；但前端错误反馈仅 console.error，没有用户可见的错误提示 |
+| **错误处理** | 中等 | Go 层完整处理 GORM 错误（ErrRecordNotFound），JS 层有 try/catch 包裹后端调用；前端有导入结果 Toast 提示 |
 | **安全性** | 基础 | Go 层使用了参数化查询（GORM 防 SQL 注入），JS 层有 `escapeHtml()` 防 XSS；但无输入长度/格式校验 |
 
 ---
@@ -378,8 +435,8 @@ graph TD
 | 层级 | 处理方式 | 不足 |
 |------|----------|------|
 | **Go Service 层** | GORM 错误处理完整（ErrRecordNotFound），返回 `error` | 缺少自定义错误类型，错误信息不够结构化 |
-| **Go App 层** | 透传 Service 层 error 到 Wails | 无额外的错误包装/日志记录 |
-| **JS 前端** | `try/catch` 包裹后端调用，console.error 输出 | 用户无感知（无 Toast/通知），Mock 数据降级可能掩盖真实问题 |
+| **Go App 层** | 透传 Service 层 error 到 Wails；导出使用 runtime.SaveFileDialog | 无额外的错误包装/日志记录 |
+| **JS 前端** | `try/catch` 包裹后端调用，console.error 输出；导入结果有 Toast 显示 | 其他场景仍缺少用户可见的错误提示 |
 | **数据库初始化** | Panic 策略（InitDB 失败直接 panic） | ✅ 数据库不可用是致命错误，panic 合理 |
 
 ### 6.4 安全分析
@@ -388,7 +445,7 @@ graph TD
 |------|------|------|
 | **SQL 注入** | ✅ 安全 | 全部使用 GORM 参数化查询或 `?` 占位符 |
 | **XSS** | ✅ 防护 | `escapeHtml()` 对用户输入做 HTML 转义后渲染 |
-| **文件路径** | ✅ 安全 | 数据库路径硬编码 `data/jot.db`，无用户输入路径 |
+| **文件路径** | ✅ 安全 | 数据库路径硬编码 `data/jot.db`；导出路径由 `runtime.SaveFileDialog` 提供 |
 | **输入校验** | ⚠️ 基础 | 仅检查空标题，无长度/格式限制 |
 
 ---
@@ -401,6 +458,8 @@ graph TD
 4. **前后端松耦合**：前端通过 Wails Binding 调用后端，无直接依赖
 5. **降级友好**：前端内置 Mock 数据，后端未绑定时仍可独立预览 UI
 6. **组件化渲染**：前端渲染函数独立，数据驱动 DOM 更新
+7. **原生桌面体验**：通过 Wails runtime 集成系统保存对话框（SaveFileDialog）
+8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn/Ctrl+Home/Ctrl+End 等快捷键
 
 ---
 
@@ -413,13 +472,12 @@ graph TD
 
 ### 中期优化
 4. **全文搜索**：引入 SQLite FTS5，替代 `LIKE %keyword%` 模糊搜索
-5. **数据导入导出**：支持 Markdown/JSON 格式的导入导出
-6. **主题切换**：支持暗色模式
+5. **主题切换**：支持暗色模式
 
 ### 架构层面
-7. **前端框架**（可选）：若功能持续增长，可引入 Vue/React 管理复杂状态
-8. **单元测试**：补充 Service 层的 `_test.go` 测试文件
-9. **配置外部化**：数据库路径、窗口大小等配置从硬编码改为配置文件
+6. **前端框架**（可选）：若功能持续增长，可引入 Vue/React 管理复杂状态
+7. **单元测试**：补充 Service 层的 `_test.go` 测试文件
+8. **配置外部化**：数据库路径、窗口大小等配置从硬编码改为配置文件
 
 ---
 
@@ -431,19 +489,26 @@ graph TD
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`data/jot.db`），免 CGO 纯 Go 驱动 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` |
-| **绑定方法数** | 17 个（11 个 Note 相关 + 6 个 Tag 相关） |
-| **前端视图** | 5 个：卡片网格、编辑器（模态框）、搜索结果、设置、回收站 |
-| **前端代码量** | ~984 行 JS + ~840 行 CSS + 46 行 CSS 全局样式 |
+| **绑定方法数** | 22 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理） |
+| **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
+| **前端代码量** | ~1300 行 JS + ~960 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
-| **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore）|
+| **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
 | **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
-| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索 |
-| **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单 |
-| **布局** | topbar（品牌/搜索框/新建+视图切换+设置），主内容区（卡片网格/搜索/设置/回收站视图）|
+| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
+| **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
+| **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）|
+| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻 / Ctrl+Home 顶部 / Ctrl+End 底部 |
+| **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
+| **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + JSON 导入导出（使用原生保存对话框）|
+| **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，用户选择保存位置 |
+| **导入** | 前端 `<input type="file">` 选择 JSON，后端 `ImportFromJSON` 解析并跳过同名笔记 |
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`（含 spec.md / tasks.md / checklist.md） |
+| **右键菜单** | 纯文字无图标，`min-width: 120px` |
+| **更多菜单** | 含设置/数据管理/回收站三个选项，`min-width: 120px` |
+| **Spec 位置** | `.trae/specs/add-card-note-app/` 和 `.trae/specs/add-data-management/` |
 
 ---
 
-> **报告结束** | 已完成项目记忆建立，后续可基于此报告回答项目相关问题。
+> **报告结束** | 已完成项目记忆更新（2026-06-04），后续可基于此报告回答项目相关问题。

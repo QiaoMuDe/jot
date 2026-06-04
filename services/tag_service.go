@@ -74,6 +74,15 @@ func (s *TagService) GetAll() ([]models.Tag, error) {
 	return tags, nil
 }
 
+// Count 获取标签总数
+func (s *TagService) Count() (int64, error) {
+	var total int64
+	if err := s.db.Model(&models.Tag{}).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 // AddTagToNote 为指定笔记添加一个标签（多对多关联）
 func (s *TagService) AddTagToNote(noteID, tagID uint) error {
 	note, err := s.getNoteByID(noteID)

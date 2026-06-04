@@ -128,6 +128,42 @@ export namespace models {
 
 export namespace services {
 	
+	export class DataStats {
+	    total_notes: number;
+	    trashed_notes: number;
+	    pinned_notes: number;
+	    total_tags: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_notes = source["total_notes"];
+	        this.trashed_notes = source["trashed_notes"];
+	        this.pinned_notes = source["pinned_notes"];
+	        this.total_tags = source["total_tags"];
+	    }
+	}
+	export class ImportResult {
+	    success_count: number;
+	    fail_count: number;
+	    skipped_count: number;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success_count = source["success_count"];
+	        this.fail_count = source["fail_count"];
+	        this.skipped_count = source["skipped_count"];
+	        this.message = source["message"];
+	    }
+	}
 	export class PaginatedResult {
 	    items: any;
 	    total: number;

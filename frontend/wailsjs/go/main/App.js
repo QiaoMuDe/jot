@@ -22,8 +22,24 @@ export function DeleteTag(arg1) {
   return window['go']['main']['App']['DeleteTag'](arg1);
 }
 
+export function EmptyTrash() {
+  return window['go']['main']['App']['EmptyTrash']();
+}
+
+export function ExportData() {
+  return window['go']['main']['App']['ExportData']();
+}
+
+export function ExportDataWithDialog() {
+  return window['go']['main']['App']['ExportDataWithDialog']();
+}
+
 export function GetAllTags() {
   return window['go']['main']['App']['GetAllTags']();
+}
+
+export function GetDataStats() {
+  return window['go']['main']['App']['GetDataStats']();
 }
 
 export function GetNote(arg1) {
@@ -42,12 +58,20 @@ export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
 
+export function ImportData(arg1) {
+  return window['go']['main']['App']['ImportData'](arg1);
+}
+
 export function PermanentDeleteNote(arg1) {
   return window['go']['main']['App']['PermanentDeleteNote'](arg1);
 }
 
 export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
+}
+
+export function RestoreAllNotes() {
+  return window['go']['main']['App']['RestoreAllNotes']();
 }
 
 export function RestoreNote(arg1) {
