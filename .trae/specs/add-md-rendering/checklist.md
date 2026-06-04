@@ -1,0 +1,7 @@
+- [x] 查看模式显示 Markdown 渲染 HTML，而非纯文本 textarea
+- [x] 编辑模式 textarea 不变，内容不丢失
+- [x] 空内容显示「暂无内容」占位
+- [x] 代码块使用 highlight.js 自动着色
+- [x] 三个主题下 `.md-rendered` 样式正常
+- [x] Vite 打包后 marked + highlight.js 内联在产物中，无 CDN 请求
+- [x] AGENTS.md 记忆更新

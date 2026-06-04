@@ -55,7 +55,15 @@ jot/                                    # 项目根目录
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
-    └── add-font-settings/              # 字体设置功能规格
+    ├── add-font-settings/              # 字体设置功能规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    ├── add-quick-note-mode/          # 快速笔记模式规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    └── add-md-rendering/             # Markdown 渲染查看规格
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -82,7 +90,8 @@ jot/                                    # 项目根目录
 | **数据模型层** | Note/Tag/Setting 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
-| **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x |
+| **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
+| **前端构建流程** | `wails build` 自动执行 `npm run build`（Vite）→ `frontend/dist/`，再嵌入 Go 二进制 | `go:embed all:frontend/dist` | 前端构建和后端编译都由 `wails build` 一条命令完成 |
 | **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
 | **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
 
@@ -501,6 +510,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **悬浮操作按钮**：右下角 `+`（新建）和 `↑`（回到顶部），`↑` 滚动超过 300px 时淡入
 - ✅ **滚动条美化**：主内容区滚动显示/停止 1s 淡出，6px 半透明灰条，三主题独立配色；textarea `flex:1` 独占滚动，编者面板高度固定 85vh
 - ✅ **快速笔记模式**：设置页 iOS 风格开关，启用后启动自动全屏编辑，保存/取消后回到网格首页
+- ✅ **Markdown 渲染查看**：查看模式使用 marked + highlight.js 渲染 Markdown 为 HTML，代码块语法高亮，编辑模式不变
 
 ---
 
@@ -514,7 +524,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 29 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置 + 4 个排序/分页设置）|
 | **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
-| **前端代码量** | ~2480 行 JS + ~1796 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~2500 行 JS + ~1860 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -554,6 +564,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **主内容区滚动条** | 滚动时显示 `var(--scrollbar-thumb)`，停止 1s 后淡出（`.scrolling` 类 0.3s transition）。三主题独立配色（default `rgba(0,0,0,0.18)`、light `rgba(0,0,0,0.14)`、dark `rgba(255,255,255,0.18)`），hover 加深。8px 宽，track 极淡底色 |
 | **标签重名提示** | 设置页添加标签时，先在前端 `state.tags` 中查重，已存在则弹出 Toast「该标签已存在」3s 自动消失 |
 | **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时自动 `openEditor(null)` + `toggleEditorFullscreen()`；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
+| **Markdown 渲染查看** | 查看模式（只读）将 textarea 替换为 `.md-rendered` div，使用 `marked` 渲染 Markdown 为 HTML。代码块通过 `highlight.js` 着色（注册 JS/Python/CSS/HTML/Bash/JSON）。npm 本地安装（无 CDN），Vite 打包内联。编辑模式 textarea 不变。`.md-rendered` 样式覆盖 h1-h6/列表/引用/代码块/表格/图片/链接，三主题适配 |
 
 ---
 

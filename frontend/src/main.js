@@ -1,5 +1,40 @@
 import './style.css';
 import './app.css';
+import { marked } from 'marked';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import python from 'highlight.js/lib/languages/python';
+import css from 'highlight.js/lib/languages/css';
+import html from 'highlight.js/lib/languages/xml';
+import bash from 'highlight.js/lib/languages/bash';
+import json from 'highlight.js/lib/languages/json';
+import 'highlight.js/styles/github.css';
+
+// 注册常用语言
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('py', python);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('html', html);
+hljs.registerLanguage('xml', html);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('json', json);
+
+// 配置 marked 使用 hljs 高亮代码块
+marked.setOptions({
+    highlight: function (code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            try {
+                return hljs.highlight(code, { language: lang }).value;
+            } catch (e) { }
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true,
+});
 
 /* ===== 应用状态 ===== */
 const state = {
@@ -59,6 +94,7 @@ const els = {
     editorFullscreenBtn: $('editorFullscreenBtn'),
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
+    mdRendered: $('mdRendered'),
 
     // 设置
     tagList: $('tagList'),
@@ -1790,11 +1826,24 @@ async function openEditor(noteId, readOnly) {
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
 
-    // 查看模式：显示最近编辑时间
+    // 查看模式：显示最近编辑时间 + Markdown 渲染
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
+        // 渲染 Markdown
+        const content = noteData.content || '';
+        if (content.trim()) {
+            els.mdRendered.innerHTML = marked.parse(content);
+        } else {
+            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+        }
+        // 隐藏 textarea，显示渲染视图
+        els.editorNoteContent.style.display = 'none';
+        els.mdRendered.style.display = 'block';
     } else {
         els.editorEditTime.textContent = '';
+        // 确保 textarea 可见，渲染视图隐藏
+        els.editorNoteContent.style.display = '';
+        els.mdRendered.style.display = 'none';
     }
 
     // 字数统计
@@ -1864,6 +1913,10 @@ function closeEditor() {
     state.selectedTags = [];
     // 字数归零
     els.editorWordCount.textContent = '';
+    // 重置 Markdown 渲染/编辑显示状态
+    els.editorNoteContent.style.display = '';
+    els.mdRendered.style.display = 'none';
+    els.mdRendered.innerHTML = '';
 }
 
 /**

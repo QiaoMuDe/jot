@@ -1,2 +1,0 @@
-测试wails的窗口API，任务栏API
-
