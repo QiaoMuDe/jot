@@ -10,7 +10,6 @@
     <!-- 顶部导航栏 -->
     <header id="topbar">
         <div class="topbar-brand">
-            <span class="brand-icon">📝</span>
             <span class="brand-name">Jot</span>
         </div>
         <div class="topbar-search">
@@ -41,14 +40,19 @@
         <!-- 视图 2: 笔记编辑器（模态框） -->
         <div id="viewEditor" class="view">
             <div class="editor-overlay" id="editorOverlay">
-                <div class="editor-panel">
+                <div class="editor-panel" id="editorPanel">
                     <div class="editor-header">
                         <h3 id="editorTitle">新建笔记</h3>
-                        <button class="editor-close-btn" id="editorCloseBtn">✕</button>
+                        <div class="editor-header-actions">
+                            <button class="editor-close-btn" id="editorCloseBtn">✕</button>
+                        </div>
                     </div>
                     <div class="editor-body">
                         <input type="text" id="editorNoteTitle" class="editor-input" placeholder="笔记标题" />
-                        <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
+                        <div class="editor-content-wrapper">
+                            <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
+                            <button class="btn-copy-note" id="editorCopyBtn" title="复制内容">复制</button>
+                        </div>
                         <div class="editor-section">
                             <label class="editor-label">标签</label>
                             <div class="tag-selector" id="tagSelector">
@@ -57,8 +61,12 @@
                         </div>
                     </div>
                     <div class="editor-footer">
-                        <button class="btn btn-cancel" id="editorCancelBtn">取消</button>
-                        <button class="btn btn-save" id="editorSaveBtn">保存</button>
+                        <span class="word-count" id="editorWordCount"></span>
+                        <span class="auto-save-indicator" id="autoSaveIndicator"></span>
+                        <div class="editor-footer-btns">
+                            <button class="btn btn-cancel" id="editorCancelBtn">取消</button>
+                            <button class="btn btn-save" id="editorSaveBtn">保存</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -167,15 +175,23 @@
         </div>
     </main>
 
-    <!-- 右键菜单 -->
-    <div id="contextMenu" class="context-menu">
-        <div class="context-menu-item" data-action="view">查看</div>
-        <div class="context-menu-item" data-action="edit">编辑</div>
-        <div class="context-menu-divider"></div>
-        <div class="context-menu-item" data-action="pin">置顶</div>
-        <div class="context-menu-divider"></div>
-        <div class="context-menu-item danger" data-action="delete">删除</div>
-    </div>
+    <!-- 撤销 Toast -->
+        <div id="undoToast" class="undo-toast">
+            <span class="undo-toast-msg" id="undoToastMsg"></span>
+            <button class="undo-toast-btn" id="undoToastBtn">撤销</button>
+        </div>
+
+        <!-- 右键菜单 -->
+        <div id="contextMenu" class="context-menu">
+            <div class="context-menu-item" data-action="copy">复制</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="view">查看</div>
+            <div class="context-menu-item" data-action="edit">编辑</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="pin">置顶</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item danger" data-action="delete">删除</div>
+        </div>
 </div>
 <script src="./src/main.js" type="module"></script>
 </body>

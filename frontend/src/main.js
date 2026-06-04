@@ -31,6 +31,7 @@ const els = {
     viewData: $('viewData'),
     viewTrash: $('viewTrash'),
     viewEditor: $('viewEditor'),
+    editorPanel: $('editorPanel'),
 
     cardGrid: $('cardGrid'),
 
@@ -70,6 +71,16 @@ const els = {
     statTotalNotes: $('statTotalNotes'),
     statTotalTags: $('statTotalTags'),
     statTrashedNotes: $('statTrashedNotes'),
+
+    // 字数统计
+    editorWordCount: $('editorWordCount'),
+    autoSaveIndicator: $('autoSaveIndicator'),
+    editorCopyBtn: $('editorCopyBtn'),
+
+    // 撤销 Toast
+    undoToast: $('undoToast'),
+    undoToastMsg: $('undoToastMsg'),
+    undoToastBtn: $('undoToastBtn'),
 
     // 右键菜单
     contextMenu: $('contextMenu'),
@@ -277,10 +288,9 @@ async function updateNote(id) {
 }
 
 /**
- * 删除笔记
+ * 删除笔记（软删除，显示撤销 Toast）
  */
 async function deleteNote(id) {
-    if (!confirm('确定要删除这条笔记吗？')) return;
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteNote) {
             await window.go.main.App.DeleteNote(id);
@@ -290,7 +300,79 @@ async function deleteNote(id) {
         }
     } catch (err) {
         console.error('删除笔记失败:', err);
+        return;
     }
+    await loadNotes();
+    showUndoToast('笔记已删除', id);
+}
+
+/**
+ * 复制笔记内容到剪贴板
+ */
+async function copyNote(id) {
+    const note = state.notes.find((n) => n.id === id);
+    if (!note) return;
+    const text = (note.title ? note.title + '\n\n' : '') + (note.content || '');
+    try {
+        await navigator.clipboard.writeText(text);
+        showUndoToast('已复制到剪贴板');
+    } catch (err) {
+        console.error('复制失败:', err);
+        showUndoToast('复制失败');
+    }
+}
+
+/**
+ * 显示撤销 Toast
+ * @param {string} msg - 提示信息
+ * @param {number} [noteId] - 可撤销的笔记 ID（不传则为纯提示）
+ */
+let undoToastTimer = null;
+let undoNoteId = null;
+
+function showUndoToast(msg, noteId) {
+    // 清除之前的定时器
+    if (undoToastTimer) {
+        clearTimeout(undoToastTimer);
+        undoToastTimer = null;
+    }
+
+    els.undoToastMsg.textContent = msg;
+    undoNoteId = noteId || null;
+
+    // 有可撤销的笔记 ID 时显示按钮，否则隐藏
+    els.undoToastBtn.style.display = noteId ? '' : 'none';
+    els.undoToast.classList.add('active');
+
+    // 5 秒后自动消失
+    undoToastTimer = setTimeout(() => {
+        els.undoToast.classList.remove('active');
+        undoNoteId = null;
+        undoToastTimer = null;
+    }, 5000);
+}
+
+/**
+ * 撤销删除
+ */
+async function undoDelete() {
+    if (undoNoteId == null) return;
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreNote) {
+            await window.go.main.App.RestoreNote(undoNoteId);
+        } else {
+            console.warn('RestoreNote 未绑定');
+        }
+    } catch (err) {
+        console.error('撤销删除失败:', err);
+    }
+    // 关闭 Toast
+    els.undoToast.classList.remove('active');
+    if (undoToastTimer) {
+        clearTimeout(undoToastTimer);
+        undoToastTimer = null;
+    }
+    undoNoteId = null;
     await loadNotes();
 }
 
@@ -804,8 +886,61 @@ function renderTrashList() {
 
 /* ===== 编辑器函数 ===== */
 
+let autoSaveTimer = null;
+
 /**
- * 打开编辑器（新建、编辑或只读查看）
+ * 更新字数统计
+ */
+function updateWordCount() {
+    const title = els.editorNoteTitle.value || '';
+    const content = els.editorNoteContent.value || '';
+    const text = title + content;
+    const charCount = text.length;
+    const wordCount = text.replace(/[\s]/g, '').length;
+    els.editorWordCount.textContent = `字数：${wordCount} ｜ 字符：${charCount}`;
+}
+
+/**
+ * 启动自动保存（3 秒防抖）
+ */
+function startAutoSave() {
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+    }
+    // 新创建的笔记（无 ID）不自动保存
+    if (!state.editingNoteId) return;
+    autoSaveTimer = setTimeout(async () => {
+        const title = els.editorNoteTitle.value.trim();
+        if (!title) return;
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
+                await window.go.main.App.UpdateNote(
+                    state.editingNoteId,
+                    title,
+                    els.editorNoteContent.value || ''
+                );
+                // 显示自动保存成功指示
+                els.autoSaveIndicator.textContent = '已保存 ✓';
+                els.autoSaveIndicator.className = 'auto-save-indicator active saved';
+                setTimeout(() => {
+                    els.autoSaveIndicator.className = 'auto-save-indicator';
+                }, 2000);
+            }
+        } catch (err) {
+            console.error('自动保存失败:', err);
+            els.autoSaveIndicator.textContent = '保存失败';
+            els.autoSaveIndicator.className = 'auto-save-indicator active';
+            setTimeout(() => {
+                els.autoSaveIndicator.className = 'auto-save-indicator';
+            }, 2000);
+        }
+        autoSaveTimer = null;
+    }, 3000);
+}
+
+/**
+ * 打开编辑器（新建/编辑/查看）
  * @param {number|null} noteId - 笔记 ID，null 表示新建
  * @param {boolean} readOnly - 是否为只读查看模式
  */
@@ -829,18 +964,60 @@ function openEditor(noteId, readOnly) {
         els.editorNoteContent.value = '';
     }
 
-    // 只读模式：禁用输入，隐藏保存/取消按钮
+    // 只读模式：禁用输入，隐藏保存/取消按钮，显示复制按钮
     els.editorNoteTitle.readOnly = isReadOnly;
     els.editorNoteContent.readOnly = isReadOnly;
     els.editorNoteTitle.classList.toggle('editor-input-readonly', isReadOnly);
     els.editorNoteContent.classList.toggle('editor-textarea-readonly', isReadOnly);
     els.editorSaveBtn.style.display = isReadOnly ? 'none' : '';
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
+    els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
+
+    // 字数统计
+    updateWordCount();
+    // 重置自动保存指示器
+    els.autoSaveIndicator.className = 'auto-save-indicator';
+    els.autoSaveIndicator.textContent = '';
+    // 非只读模式下监听输入变化
+    if (!isReadOnly) {
+        els.editorNoteTitle.addEventListener('input', onEditorInput);
+        els.editorNoteContent.addEventListener('input', onEditorInput);
+    } else {
+        els.editorNoteTitle.removeEventListener('input', onEditorInput);
+        els.editorNoteContent.removeEventListener('input', onEditorInput);
+    }
 
     // 加载标签并渲染标签选择器
     loadTagsForEditor(isReadOnly);
     // 显示编辑器
     els.viewEditor.classList.add('active');
+}
+
+/**
+ * 编辑器输入事件处理：更新字数 + 触发自动保存
+ */
+function onEditorInput() {
+    updateWordCount();
+    startAutoSave();
+}
+
+/**
+ * 关闭编辑器
+ */
+function closeEditor() {
+    els.viewEditor.classList.remove('active');
+    // 清理事件监听
+    els.editorNoteTitle.removeEventListener('input', onEditorInput);
+    els.editorNoteContent.removeEventListener('input', onEditorInput);
+    // 清除自动保存定时器
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = null;
+    }
+    state.editingNoteId = null;
+    state.selectedTags = [];
+    // 字数归零
+    els.editorWordCount.textContent = '';
 }
 
 /**
@@ -860,15 +1037,6 @@ async function loadTagsForEditor(readOnly) {
         state.tags = [];
     }
     renderTagSelector(readOnly);
-}
-
-/**
- * 关闭编辑器
- */
-function closeEditor() {
-    els.viewEditor.classList.remove('active');
-    state.editingNoteId = null;
-    state.selectedTags = [];
 }
 
 /* ===== 右键菜单函数 ===== */
@@ -935,6 +1103,9 @@ window.handleContextAction = function (action) {
             break;
         case 'delete':
             window.deleteNote(id);
+            break;
+        case 'copy':
+            copyNote(id);
             break;
     }
 };
@@ -1091,6 +1262,21 @@ function initEventListeners() {
     });
     els.exportDataBtn.addEventListener('click', exportData);
     els.importDataBtn.addEventListener('click', importData);
+
+    // 撤销 Toast
+    els.undoToastBtn.addEventListener('click', undoDelete);
+
+    // 编辑器复制按钮
+    els.editorCopyBtn.addEventListener('click', () => {
+        const title = els.editorNoteTitle.value || '';
+        const content = els.editorNoteContent.value || '';
+        const text = (title ? title + '\n\n' : '') + content;
+        navigator.clipboard.writeText(text).then(() => {
+            showUndoToast('已复制到剪贴板');
+        }).catch(() => {
+            showUndoToast('复制失败');
+        });
+    });
     els.settingsBackBtn.addEventListener('click', () => {
         switchView('grid');
     });
