@@ -834,6 +834,8 @@
   flex: 1;
   overflow-y: auto;
   max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .settings-section {
@@ -1136,6 +1138,9 @@
 .data-content {
   flex: 1;
   overflow-y: auto;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .data-stats {
@@ -1289,6 +1294,9 @@
 .trash-list {
   flex: 1;
   overflow-y: auto;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .trash-item {

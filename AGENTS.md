@@ -473,7 +473,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 5. **降级友好**：前端内置 Mock 数据，后端未绑定时仍可独立预览 UI
 6. **组件化渲染**：前端渲染函数独立，数据驱动 DOM 更新
 7. **原生桌面体验**：通过 Wails runtime 集成系统保存对话框（SaveFileDialog）
-8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn/Ctrl+Home/Ctrl+End 等快捷键
+8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn/Ctrl+Home/Ctrl+End 及数字键 1-4 快捷导航
 
 ---
 
@@ -504,15 +504,15 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 25 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置）|
 | **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
-| **前端代码量** | ~1550 行 JS + ~1020 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~1580 行 JS + ~1026 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
 | **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
-| **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）|
-| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻 / Ctrl+Home 顶部 / Ctrl+End 底部 |
+| **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
+| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻 / Ctrl+Home 顶部 / Ctrl+End 底部 / 数字键 1=首页 2=设置 3=数据管理 4=回收站 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + JSON 导入导出（使用原生保存对话框）|
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，用户选择保存位置 |
@@ -525,6 +525,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
 | **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |
+| **view-header 统一** | 设置/数据管理/回收站三个功能页的 view-header 均为 `← 返回` + 居中标题 + `view-controls` 结构，保证标题位置一致 |
+| **内容区居中** | 设置页 `settings-content` 为 `max-width: 600px` + 居中；数据管理 `data-content` 和回收站 `trash-list` 为 `max-width: 680px` + 居中 |
+| **数字键导航** | 键盘快捷键扩展：`1`=首页(清空搜索)、`2`=设置、`3`=数据管理、`4`=回收站；输入框内不触发 |
 
 ---
 

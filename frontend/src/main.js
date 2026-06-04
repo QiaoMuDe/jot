@@ -1842,6 +1842,30 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
+    // 数字键快捷导航（仅在非输入框内生效）
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest('input, textarea')) {
+        switch (e.key) {
+            case '1':
+                e.preventDefault();
+                state.searchKeyword = '';
+                els.searchInput.value = '';
+                switchView('grid');
+                return;
+            case '2':
+                e.preventDefault();
+                switchView('settings');
+                return;
+            case '3':
+                e.preventDefault();
+                switchView('data');
+                return;
+            case '4':
+                e.preventDefault();
+                switchView('trash');
+                return;
+        }
+    }
+
     if (!container) return;
 
     // Ctrl+Home: 滚动到顶部
