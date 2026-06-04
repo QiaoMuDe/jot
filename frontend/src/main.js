@@ -1,17 +1,6 @@
 import './style.css';
 import './app.css';
 
-/* ===== 预设颜色方案 ===== */
-const COLORS = [
-    { name: '白色', value: '#ffffff' },
-    { name: '黄色', value: '#fef3c7' },
-    { name: '绿色', value: '#d1fae5' },
-    { name: '蓝色', value: '#dbeafe' },
-    { name: '紫色', value: '#ede9fe' },
-    { name: '粉色', value: '#fce7f3' },
-    { name: '橙色', value: '#ffedd5' },
-];
-
 /* ===== 应用状态 ===== */
 const state = {
     notes: [],
@@ -19,10 +8,10 @@ const state = {
     trashNotes: [],
     currentView: 'grid',       // grid | search | settings | trash
     editingNoteId: null,        // null = 新建, number = 编辑
-    selectedColor: '#ffffff',
     selectedTags: [],
     isGridView: true,
     searchKeyword: '',
+    searchSource: 'input',      // 'input' | 'tag' — 搜索触发来源
 };
 
 /* ===== DOM 引用 ===== */
@@ -30,9 +19,7 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
     // 侧边栏
-    notesList: $('notesList'),
     searchInput: $('searchInput'),
-    searchBtn: $('searchBtn'),
     newNoteBtn: $('newNoteBtn'),
     settingsBtn: $('settingsBtn'),
 
@@ -44,9 +31,6 @@ const els = {
     viewEditor: $('viewEditor'),
 
     cardGrid: $('cardGrid'),
-    viewTitle: $('viewTitle'),
-    gridViewBtn: $('gridViewBtn'),
-    listViewBtn: $('listViewBtn'),
 
     // 搜索
     searchResults: $('searchResults'),
@@ -58,7 +42,6 @@ const els = {
     editorTitle: $('editorTitle'),
     editorNoteTitle: $('editorNoteTitle'),
     editorNoteContent: $('editorNoteContent'),
-    colorPicker: $('colorPicker'),
     tagSelector: $('tagSelector'),
     editorCloseBtn: $('editorCloseBtn'),
     editorCancelBtn: $('editorCancelBtn'),
@@ -74,6 +57,13 @@ const els = {
     // 回收站
     trashList: $('trashList'),
     trashBackBtn: $('trashBackBtn'),
+
+    // 右键菜单
+    contextMenu: $('contextMenu'),
+
+    // 视图切换
+    gridViewBtn: $('gridViewBtn'),
+    listViewBtn: $('listViewBtn'),
 };
 
 /* ===== 工具函数 ===== */
@@ -120,6 +110,17 @@ function getSummary(text, maxLen = 100) {
     return cleaned.length > maxLen ? cleaned.slice(0, maxLen) + '...' : cleaned;
 }
 
+/**
+ * 防抖工具函数
+ */
+function debounce(fn, delay) {
+    let timer;
+    return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+
 /* ===== 视图切换 ===== */
 
 /**
@@ -133,12 +134,12 @@ function switchView(view) {
 
     state.currentView = view;
 
+    // 新建按钮仅在笔记网格视图显示
+    els.newNoteBtn.style.display = view === 'grid' ? 'flex' : 'none';
+
     switch (view) {
         case 'grid':
             els.viewGrid.classList.add('active');
-            els.viewTitle.textContent = state.searchKeyword
-                ? `搜索: "${state.searchKeyword}"`
-                : '所有笔记';
             break;
         case 'search':
             els.viewSearch.classList.add('active');
@@ -166,13 +167,18 @@ async function loadNotes() {
             state.notes = (result && result.items) || [];
         } else {
             console.warn('GetNotes 未绑定，使用模拟数据');
-            state.notes = getMockNotes();
+            if (!mockNotes) {
+                mockNotes = getMockNotes();
+            }
+            state.notes = mockNotes;
         }
     } catch (err) {
         console.error('加载笔记失败:', err);
-        state.notes = getMockNotes();
+        if (!mockNotes) {
+            mockNotes = getMockNotes();
+        }
+        state.notes = mockNotes;
     }
-    renderNotesList();
     renderCardGrid();
 }
 
@@ -186,7 +192,7 @@ async function createNote() {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
-            const note = await window.go.main.App.CreateNote(title, content, state.selectedColor);
+            const note = await window.go.main.App.CreateNote(title, content);
             // 为笔记添加标签
             if (note && note.id && state.selectedTags.length > 0) {
                 for (const tagId of state.selectedTags) {
@@ -203,7 +209,6 @@ async function createNote() {
                 id: Date.now(),
                 title: title,
                 content: content,
-                color: state.selectedColor,
                 pinned: false,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -227,7 +232,7 @@ async function updateNote(id) {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
-            await window.go.main.App.UpdateNote(id, title, content, state.selectedColor);
+            await window.go.main.App.UpdateNote(id, title, content);
             // 更新笔记标签：先移除所有，再添加选中的
             const note = await window.go.main.App.GetNote(id);
             if (note && note.tags) {
@@ -240,11 +245,10 @@ async function updateNote(id) {
             }
         } else {
             console.warn('UpdateNote 未绑定，模拟更新');
-            const note = state.notes.find((n) => n.id === id);
+            const note = mockNotes.find((n) => n.id === id);
             if (note) {
                 note.title = title;
                 note.content = content;
-                note.color = state.selectedColor;
                 note.updated_at = new Date().toISOString();
                 note.tags = state.tags.filter((t) => state.selectedTags.includes(t.id));
             }
@@ -266,7 +270,7 @@ async function deleteNote(id) {
             await window.go.main.App.DeleteNote(id);
         } else {
             console.warn('DeleteNote 未绑定，模拟删除');
-            state.notes = state.notes.filter((n) => n.id !== id);
+            mockNotes = mockNotes.filter((n) => n.id !== id);
         }
     } catch (err) {
         console.error('删除笔记失败:', err);
@@ -277,7 +281,7 @@ async function deleteNote(id) {
 /**
  * 搜索笔记
  */
-async function searchNotes(keyword) {
+async function searchNotes(keyword, source) {
     const kw = keyword.trim();
     if (!kw) {
         switchView('grid');
@@ -285,6 +289,7 @@ async function searchNotes(keyword) {
     }
 
     state.searchKeyword = kw;
+    state.searchSource = source || 'input';
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.SearchNotes) {
@@ -333,7 +338,7 @@ async function loadTags() {
             state.tags = tags || [];
         } else {
             console.warn('GetAllTags 未绑定');
-            state.tags = [];
+            state.tags = getMockTags();
         }
     } catch (err) {
         console.error('加载标签失败:', err);
@@ -436,40 +441,6 @@ async function permanentDeleteNote(id) {
 /* ===== 渲染函数 ===== */
 
 /**
- * 渲染左侧笔记缩略列表
- */
-function renderNotesList() {
-    const sorted = [...state.notes].sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
-    });
-
-    if (sorted.length === 0) {
-        els.notesList.innerHTML = `
-            <div style="padding: 20px 12px; text-align: center; color: rgba(255,255,255,0.3); font-size: 12px;">
-                暂无笔记，点击 "+" 新建
-            </div>
-        `;
-        return;
-    }
-
-    els.notesList.innerHTML = sorted
-        .map(
-            (note) => `
-        <div class="note-thumb" data-id="${note.id}" onclick="window.openNote(${note.id})">
-            <div class="thumb-color-indicator" style="background-color: ${note.color || '#ffffff'}"></div>
-            <div class="thumb-content">
-                <div class="thumb-title">${note.pinned ? '📌 ' : ''}${escapeHtml(note.title || '无标题')}</div>
-                <div class="thumb-preview">${escapeHtml(getSummary(note.content, 80))}</div>
-            </div>
-        </div>
-        `
-        )
-        .join('');
-}
-
-/**
  * 渲染卡片网格/列表
  */
 function renderCardGrid() {
@@ -493,9 +464,8 @@ function renderCardGrid() {
     els.cardGrid.innerHTML = sorted
         .map(
             (note) => `
-        <div class="note-card" onclick="window.openNote(${note.id})">
+        <div class="note-card" onclick="window.viewNote(${note.id})" oncontextmenu="event.preventDefault(); window.showContextMenu(event, ${note.id})">
             ${note.pinned ? '<div class="card-pin-badge">📌</div>' : ''}
-            <div class="card-color-bar" style="background-color: ${note.color || '#ffffff'}"></div>
             <div class="card-body">
                 <div class="card-title">${escapeHtml(note.title || '无标题')}</div>
                 <div class="card-content">${escapeHtml(getSummary(note.content, 200))}</div>
@@ -505,18 +475,16 @@ function renderCardGrid() {
                     ${(note.tags || [])
                         .map(
                             (tag) =>
-                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}">${escapeHtml(tag.name)}</span>`
+                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')">${escapeHtml(tag.name)}</span>`
                         )
                         .join('')}
                 </div>
                 <span class="card-time">${formatTime(note.updated_at || note.created_at)}</span>
             </div>
             <div class="card-actions" onclick="event.stopPropagation()">
-                <button class="card-action-btn" onclick="window.openNote(${note.id})" title="编辑">✎</button>
-                <button class="card-action-btn" onclick="window.togglePin(${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
+                <button class="card-action-btn" onclick="event.stopPropagation(); window.togglePin(${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
                     ${note.pinned ? '★' : '☆'}
                 </button>
-                <button class="card-action-btn delete" onclick="window.deleteNote(${note.id})" title="删除">✕</button>
             </div>
         </div>
         `
@@ -544,10 +512,16 @@ function renderSearchResults(results, keyword) {
     els.searchResults.innerHTML = results
         .map(
             (note) => `
-        <div class="search-result-item" onclick="window.openNote(${note.id})">
+        <div class="search-result-item" onclick="window.viewNote(${note.id})" oncontextmenu="event.preventDefault(); window.showContextMenu(event, ${note.id})">
             <div class="result-title">${highlightText(escapeHtml(note.title || '无标题'), keyword)}</div>
             <div class="result-snippet">${highlightText(escapeHtml(getSummary(note.content, 150)), keyword)}</div>
             <div class="result-time">${formatTime(note.updated_at || note.created_at)}</div>
+            ${(note.tags || []).length > 0 ? `
+            <div class="result-tags">
+                ${(note.tags || []).map(tag =>
+                    `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')">${escapeHtml(tag.name)}</span>`
+                ).join('')}
+            </div>` : ''}
         </div>
         `
         )
@@ -577,10 +551,29 @@ function renderTagList() {
 
 /**
  * 渲染编辑器中的标签选择器
+ * @param {boolean} readOnly - 是否为只读模式（仅展示，不可切换）
  */
-function renderTagSelector() {
+function renderTagSelector(readOnly) {
     if (state.tags.length === 0) {
-        els.tagSelector.innerHTML = '<div style="color: #94a3b8; font-size: 12px;">暂无可用标签，请先在设置页添加</div>';
+        const msg = readOnly
+            ? '<div style="color: #94a3b8; font-size: 12px;">暂无标签</div>'
+            : '<div style="color: #94a3b8; font-size: 12px;">暂无可用标签，请先在设置页添加</div>';
+        els.tagSelector.innerHTML = msg;
+        return;
+    }
+
+    if (readOnly) {
+        // 只读模式：仅展示标签，不可切换
+        els.tagSelector.innerHTML = state.tags
+            .map(
+                (tag) => `
+            <span class="card-tag" style="background-color: ${tag.color || '#6366f1'}; cursor: default;"
+                  data-tag-id="${tag.id}">
+                ${escapeHtml(tag.name)}
+            </span>
+            `
+            )
+            .join('');
         return;
     }
 
@@ -634,20 +627,22 @@ function renderTrashList() {
 /* ===== 编辑器函数 ===== */
 
 /**
- * 打开编辑器（新建或编辑）
+ * 打开编辑器（新建、编辑或只读查看）
+ * @param {number|null} noteId - 笔记 ID，null 表示新建
+ * @param {boolean} readOnly - 是否为只读查看模式
  */
-function openEditor(noteId) {
+function openEditor(noteId, readOnly) {
     state.editingNoteId = noteId || null;
-    state.selectedColor = '#ffffff';
     state.selectedTags = [];
+
+    const isReadOnly = readOnly && noteId != null;
 
     if (noteId) {
         const note = state.notes.find((n) => n.id === noteId);
         if (note) {
-            els.editorTitle.textContent = '编辑笔记';
+            els.editorTitle.textContent = isReadOnly ? '查看笔记' : '编辑笔记';
             els.editorNoteTitle.value = note.title || '';
             els.editorNoteContent.value = note.content || '';
-            state.selectedColor = note.color || '#ffffff';
             state.selectedTags = (note.tags || []).map((t) => t.id);
         }
     } else {
@@ -656,48 +651,37 @@ function openEditor(noteId) {
         els.editorNoteContent.value = '';
     }
 
-    // 渲染颜色选择器
-    renderColorPicker();
+    // 只读模式：禁用输入，隐藏保存/取消按钮
+    els.editorNoteTitle.readOnly = isReadOnly;
+    els.editorNoteContent.readOnly = isReadOnly;
+    els.editorNoteTitle.classList.toggle('editor-input-readonly', isReadOnly);
+    els.editorNoteContent.classList.toggle('editor-textarea-readonly', isReadOnly);
+    els.editorSaveBtn.style.display = isReadOnly ? 'none' : '';
+    els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
+
     // 加载标签并渲染标签选择器
-    loadTagsForEditor();
+    loadTagsForEditor(isReadOnly);
     // 显示编辑器
     els.viewEditor.classList.add('active');
 }
 
 /**
  * 加载标签并渲染编辑器标签选择器
+ * @param {boolean} readOnly - 是否为只读模式（标签不可切换）
  */
-async function loadTagsForEditor() {
+async function loadTagsForEditor(readOnly) {
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllTags) {
             const tags = await window.go.main.App.GetAllTags();
             state.tags = tags || [];
         } else {
-            state.tags = [];
+            state.tags = getMockTags();
         }
     } catch (err) {
         console.error('加载标签失败:', err);
         state.tags = [];
     }
-    renderTagSelector();
-}
-
-/**
- * 渲染颜色选择器
- */
-function renderColorPicker() {
-    els.colorPicker.innerHTML = COLORS
-        .map(
-            (c) => `
-        <div class="color-option ${c.value === state.selectedColor ? 'active' : ''} ${c.value === '#ffffff' ? 'active-white' : ''}"
-             style="background-color: ${c.value}"
-             data-color="${c.value}"
-             title="${c.name}"
-             onclick="window.selectEditorColor('${c.value}')">
-        </div>
-        `
-        )
-        .join('');
+    renderTagSelector(readOnly);
 }
 
 /**
@@ -706,17 +690,75 @@ function renderColorPicker() {
 function closeEditor() {
     els.viewEditor.classList.remove('active');
     state.editingNoteId = null;
-    state.selectedColor = '#ffffff';
     state.selectedTags = [];
+}
+
+/* ===== 右键菜单函数 ===== */
+
+let contextMenuNoteId = null;
+
+/**
+ * 隐藏右键菜单
+ */
+function hideContextMenu() {
+    els.contextMenu.classList.remove('active');
+    contextMenuNoteId = null;
 }
 
 /* ===== 全局暴露给 onclick 的函数 ===== */
 
 /**
- * 打开/查看笔记
+ * 打开笔记（编辑模式）
  */
 window.openNote = function (id) {
-    openEditor(id);
+    openEditor(id, false);
+};
+
+/**
+ * 查看笔记（只读模式）
+ */
+window.viewNote = function (id) {
+    openEditor(id, true);
+};
+
+/**
+ * 显示右键菜单
+ */
+window.showContextMenu = function (event, noteId) {
+    contextMenuNoteId = noteId;
+    const menu = els.contextMenu;
+    // 更新置顶选项文本
+    const note = state.notes.find((n) => n.id === noteId);
+    const pinItem = menu.querySelector('[data-action="pin"]');
+    if (pinItem && note) {
+        pinItem.textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
+    }
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.classList.add('active');
+};
+
+/**
+ * 处理右键菜单点击
+ */
+window.handleContextAction = function (action) {
+    const id = contextMenuNoteId;
+    hideContextMenu();
+    if (id == null) return;
+    switch (action) {
+        case 'view':
+            window.viewNote(id);
+            break;
+        case 'edit':
+            window.openNote(id);
+            break;
+        case 'pin':
+            window.togglePin(id);
+            break;
+        case 'delete':
+            window.deleteNote(id);
+            break;
+    }
 };
 
 /**
@@ -731,14 +773,6 @@ window.togglePin = async function (id) {
  */
 window.deleteNote = async function (id) {
     await deleteNote(id);
-};
-
-/**
- * 选择编辑器中颜色
- */
-window.selectEditorColor = function (color) {
-    state.selectedColor = color;
-    renderColorPicker();
 };
 
 /**
@@ -775,6 +809,14 @@ window.deleteTag = async function (id) {
     await deleteTag(id);
 };
 
+/**
+ * 按标签搜索（全局）
+ */
+window.searchByTag = function (tagName) {
+    els.searchInput.value = tagName;
+    searchNotes(tagName, 'tag');
+};
+
 /* ===== HTML 转义 ===== */
 
 function escapeHtml(text) {
@@ -788,14 +830,16 @@ function escapeHtml(text) {
 
 function initEventListeners() {
     // 搜索
-    els.searchBtn.addEventListener('click', () => {
-        searchNotes(els.searchInput.value);
-    });
-    els.searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            searchNotes(els.searchInput.value);
+    // 输入框自动搜索（防抖 250ms）
+    els.searchInput.addEventListener('input', debounce(function () {
+        const kw = this.value.trim();
+        if (kw) {
+            searchNotes(kw, 'input');
+        } else {
+            state.searchKeyword = '';
+            switchView('grid');
         }
-    });
+    }, 250));
     els.searchBackBtn.addEventListener('click', () => {
         els.searchInput.value = '';
         state.searchKeyword = '';
@@ -810,6 +854,13 @@ function initEventListeners() {
     // 设置按钮
     els.settingsBtn.addEventListener('click', () => {
         switchView('settings');
+    });
+
+    // 点击品牌名返回所有笔记
+    document.querySelector('.topbar-brand')?.addEventListener('click', () => {
+        state.searchKeyword = '';
+        els.searchInput.value = '';
+        switchView('grid');
     });
 
     // 视图切换
@@ -854,9 +905,25 @@ function initEventListeners() {
     els.trashBackBtn.addEventListener('click', () => {
         switchView('settings');
     });
+
+    // 右键菜单：点击其他区域关闭
+    document.addEventListener('click', hideContextMenu);
+    // 右键菜单项点击
+    els.contextMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.context-menu-item');
+        if (item && item.dataset.action) {
+            e.stopPropagation();
+            window.handleContextAction(item.dataset.action);
+        }
+    });
+    // 右键菜单内阻止冒泡，避免触发 document.click 关闭
+    els.contextMenu.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
+
+// Mock 数据的可变副本，确保修改可持久化
+let mockNotes = null;
 
 function getMockNotes() {
     return [
@@ -864,7 +931,6 @@ function getMockNotes() {
             id: 1,
             title: '欢迎使用 jot',
             content: '这是一条示例笔记。你可以在这里记录你的想法、灵感、待办事项等。\n\n点击左侧 "+" 按钮创建新笔记，或点击笔记进行编辑。',
-            color: '#fef3c7',
             pinned: true,
             created_at: new Date(Date.now() - 3600000).toISOString(),
             updated_at: new Date(Date.now() - 1800000).toISOString(),
@@ -876,7 +942,6 @@ function getMockNotes() {
             id: 2,
             title: '设计思路',
             content: 'jot 是一款简洁的笔记应用，采用双栏布局设计。\n左侧导航栏包含搜索、笔记列表和设置。\n右侧主内容区展示笔记卡片网格。',
-            color: '#dbeafe',
             pinned: false,
             created_at: new Date(Date.now() - 86400000).toISOString(),
             updated_at: new Date(Date.now() - 43200000).toISOString(),
@@ -888,7 +953,6 @@ function getMockNotes() {
             id: 3,
             title: '待办事项',
             content: '- 实现后端 CRUD\n- 实现前端布局\n- 联调测试',
-            color: '#d1fae5',
             pinned: false,
             created_at: new Date(Date.now() - 172800000).toISOString(),
             updated_at: new Date(Date.now() - 86400000).toISOString(),
@@ -899,11 +963,18 @@ function getMockNotes() {
     ];
 }
 
+function getMockTags() {
+    return [
+        { id: 1, name: '入门', color: '#6366f1' },
+        { id: 2, name: '设计', color: '#8b5cf6' },
+        { id: 3, name: '待办', color: '#f59e0b' },
+    ];
+}
+
 /* ===== 初始化 ===== */
 
 async function init() {
     initEventListeners();
-    state.selectedColor = '#ffffff';
     state.selectedTags = [];
     await loadNotes();
     await loadTags();

@@ -6,8 +6,8 @@ export function AddTagToNote(arg1, arg2) {
   return window['go']['main']['App']['AddTagToNote'](arg1, arg2);
 }
 
-export function CreateNote(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3);
+export function CreateNote(arg1, arg2) {
+  return window['go']['main']['App']['CreateNote'](arg1, arg2);
 }
 
 export function CreateTag(arg1, arg2) {
@@ -62,8 +62,8 @@ export function TogglePinNote(arg1) {
   return window['go']['main']['App']['TogglePinNote'](arg1);
 }
 
-export function UpdateNote(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['UpdateNote'](arg1, arg2, arg3, arg4);
+export function UpdateNote(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateNote'](arg1, arg2, arg3);
 }
 
 export function UpdateTag(arg1, arg2, arg3) {

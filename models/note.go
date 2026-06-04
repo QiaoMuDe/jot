@@ -11,7 +11,6 @@ type Note struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	Title     string         `gorm:"size:200" json:"title"`
 	Content   string         `gorm:"type:text" json:"content"`
-	Color     string         `gorm:"size:20;default:'#ffffff'" json:"color"`
 	Pinned    bool           `gorm:"default:false" json:"pinned"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

@@ -32,13 +32,13 @@ func (a *App) startup(ctx context.Context) {
 // ==================== Note 相关绑定方法 ====================
 
 // CreateNote 创建一条新笔记
-func (a *App) CreateNote(title, content, color string) (*models.Note, error) {
-	return a.noteService.Create(title, content, color)
+func (a *App) CreateNote(title, content string) (*models.Note, error) {
+	return a.noteService.Create(title, content)
 }
 
-// UpdateNote 更新指定笔记的标题、内容和颜色
-func (a *App) UpdateNote(id uint, title, content, color string) (*models.Note, error) {
-	return a.noteService.Update(id, title, content, color)
+// UpdateNote 更新指定笔记的标题和内容
+func (a *App) UpdateNote(id uint, title, content string) (*models.Note, error) {
+	return a.noteService.Update(id, title, content)
 }
 
 // DeleteNote 软删除指定笔记（移入回收站）

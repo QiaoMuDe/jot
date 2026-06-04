@@ -23,13 +23,17 @@ body {
 
 #app {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     overflow: hidden;
 }
 
-/* 滚动条全局样式 */
+/* ===== 滚动条：全局隐藏，仅在交互时微弱显示 ===== */
+
+/* WebKit (Chrome / Edge / WebView2) */
 ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -37,10 +41,29 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: transparent;
     border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* 浅色背景区域：hover 时极淡灰色滑块 */
+.card-grid:hover::-webkit-scrollbar-thumb,
+.search-results:hover::-webkit-scrollbar-thumb,
+.trash-list:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.card-grid::-webkit-scrollbar-thumb:hover,
+.search-results::-webkit-scrollbar-thumb:hover,
+.trash-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
 }

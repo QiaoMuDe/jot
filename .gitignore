@@ -1,3 +1,7 @@
-build/bin
+*.exe
+*.db
+*.log
 node_modules
+build/bin
 frontend/dist
+data/

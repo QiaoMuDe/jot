@@ -18,14 +18,10 @@ func NewNoteService(db *gorm.DB) *NoteService {
 }
 
 // Create 创建一条新笔记，返回创建后的笔记对象
-func (s *NoteService) Create(title, content, color string) (*models.Note, error) {
-	if color == "" {
-		color = "#ffffff"
-	}
+func (s *NoteService) Create(title, content string) (*models.Note, error) {
 	note := models.Note{
 		Title:   title,
 		Content: content,
-		Color:   color,
 	}
 	if err := s.db.Create(&note).Error; err != nil {
 		return nil, err
@@ -33,8 +29,8 @@ func (s *NoteService) Create(title, content, color string) (*models.Note, error)
 	return &note, nil
 }
 
-// Update 更新指定 ID 的笔记的标题、内容和颜色，返回更新后的笔记对象
-func (s *NoteService) Update(id uint, title, content, color string) (*models.Note, error) {
+// Update 更新指定 ID 的笔记的标题和内容，返回更新后的笔记对象
+func (s *NoteService) Update(id uint, title, content string) (*models.Note, error) {
 	note, err := s.GetByID(id)
 	if err != nil {
 		return nil, err
@@ -44,9 +40,6 @@ func (s *NoteService) Update(id uint, title, content, color string) (*models.Not
 	}
 	if content != "" {
 		note.Content = content
-	}
-	if color != "" {
-		note.Color = color
 	}
 	if err := s.db.Save(note).Error; err != nil {
 		return nil, err
@@ -118,9 +111,15 @@ func (s *NoteService) Search(keyword string, page, pageSize int) ([]models.Note,
 	var total int64
 
 	likePattern := "%" + keyword + "%"
+	tagSubquery := s.db.Table("note_tags").
+		Select("note_id").
+		Joins("JOIN tags ON tags.id = note_tags.tag_id").
+		Where("tags.name LIKE ?", likePattern)
+
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL").
-		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
+			Or("id IN (?)", tagSubquery))
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

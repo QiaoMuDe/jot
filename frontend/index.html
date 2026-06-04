@@ -7,48 +7,27 @@
 </head>
 <body>
 <div id="app">
-    <!-- 左侧导航栏 -->
-    <aside id="sidebar">
-        <!-- 搜索模块 -->
-        <div class="search-module">
-            <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="searchInput" class="search-input" placeholder="搜索笔记..." />
-                <button id="searchBtn" class="search-btn">搜索</button>
-            </div>
+    <!-- 顶部导航栏 -->
+    <header id="topbar">
+        <div class="topbar-brand">
+            <span class="brand-icon">📝</span>
+            <span class="brand-name">Jot</span>
         </div>
-
-        <!-- 笔记模块 -->
-        <div class="notes-module">
-            <div class="notes-header">
-                <h3 class="notes-title">笔记</h3>
-                <button id="newNoteBtn" class="new-note-btn" title="新建笔记">+</button>
-            </div>
-            <div class="notes-list" id="notesList">
-                <!-- 笔记缩略卡片由 JS 动态渲染 -->
-            </div>
+        <div class="topbar-search">
+            <input type="text" id="searchInput" class="topbar-search-input" placeholder="搜索笔记..." />
         </div>
-
-        <!-- 底部操作栏 -->
-        <div class="sidebar-footer">
-            <button id="settingsBtn" class="sidebar-footer-btn" title="设置">
-                <span class="footer-icon">⚙️</span>
-                <span class="footer-text">设置</span>
-            </button>
+        <div class="topbar-actions">
+            <button id="newNoteBtn" class="topbar-btn" title="新建笔记">+</button>
+            <button id="gridViewBtn" class="topbar-btn active" title="网格视图">▦</button>
+            <button id="listViewBtn" class="topbar-btn" title="列表视图">☰</button>
+            <button id="settingsBtn" class="topbar-btn" title="设置">⚙️</button>
         </div>
-    </aside>
+    </header>
 
-    <!-- 右侧主内容区 -->
+    <!-- 主内容区 -->
     <main id="mainContent">
         <!-- 视图 1: 卡片网格视图（默认） -->
         <div id="viewGrid" class="view active">
-            <div class="view-header">
-                <h2 class="view-title" id="viewTitle">所有笔记</h2>
-                <div class="view-controls">
-                    <button id="gridViewBtn" class="view-toggle-btn active" title="网格视图">▦</button>
-                    <button id="listViewBtn" class="view-toggle-btn" title="列表视图">☰</button>
-                </div>
-            </div>
             <div class="card-grid" id="cardGrid">
                 <!-- 卡片由 JS 动态渲染 -->
             </div>
@@ -65,12 +44,6 @@
                     <div class="editor-body">
                         <input type="text" id="editorNoteTitle" class="editor-input" placeholder="笔记标题" />
                         <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
-                        <div class="editor-section">
-                            <label class="editor-label">颜色</label>
-                            <div class="color-picker" id="colorPicker">
-                                <!-- 颜色选项由 JS 动态渲染 -->
-                            </div>
-                        </div>
                         <div class="editor-section">
                             <label class="editor-label">标签</label>
                             <div class="tag-selector" id="tagSelector">
@@ -137,6 +110,16 @@
             </div>
         </div>
     </main>
+
+    <!-- 右键菜单 -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" data-action="view">👁 查看</div>
+        <div class="context-menu-item" data-action="edit">✎ 编辑</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="pin">📌 置顶</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" data-action="delete">✕ 删除</div>
+    </div>
 </div>
 <script src="./src/main.js" type="module"></script>
 </body>
