@@ -1,0 +1,264 @@
+/* ==========================================================================
+   Section C: Card Grid (.card-grid + .note-card + .card-* + .card-pin-badge)
+   ========================================================================== */
+
+/* ---- Card Grid ---- */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    flex: 1;
+    align-content: start;
+    padding-bottom: 16px;
+}
+
+/* ---- Note Card ---- */
+.note-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: all var(--transition);
+    cursor: pointer;
+    position: relative;
+    border: 1px solid transparent;
+}
+
+.note-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: var(--border);
+}
+
+/* ---- Card Body ---- */
+.card-body {
+    padding: 16px 16px 0;
+}
+
+/* ---- Card Title ---- */
+.card-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-family: var(--font-family);
+}
+
+/* ---- Card Content ---- */
+.card-content {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+/* ---- Card Footer ---- */
+.card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px 12px;
+}
+
+/* ---- Card Tags ---- */
+.card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.card-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: #fff;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity var(--transition);
+}
+
+.card-tag:hover {
+    opacity: 0.85;
+}
+
+/* ---- Card Time ---- */
+.card-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* ---- Card Actions ---- */
+.card-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: none;
+    gap: 4px;
+}
+
+.note-card:hover .card-actions {
+    display: flex;
+}
+
+/* Always show in batch mode */
+.note-card.batch-mode .card-actions {
+    display: flex;
+}
+
+/* ---- Card Action Button ---- */
+.card-action-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    font-family: inherit;
+}
+
+.card-action-btn:hover {
+    background: var(--hover-bg);
+    color: var(--accent);
+    border-color: var(--accent-light);
+}
+
+/* ---- Card Pin Badge ---- */
+.card-pin-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 11px;
+    color: var(--accent);
+    opacity: 0.7;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+/* ---- Selected State ---- */
+.note-card.selected {
+    box-shadow: 0 0 0 2px var(--accent), 0 4px 12px rgba(217, 119, 6, 0.15);
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    background: var(--accent-lighter);
+}
+
+/* ==========================================================================
+   Section D: Batch Bar (.batch-bar + .batch-checkbox + selected state)
+   ========================================================================== */
+
+/* ---- Batch Bar ---- */
+.batch-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px;
+    background: var(--topbar-bg, var(--bg));
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+    animation: batchSlideDown 150ms ease;
+}
+
+@keyframes batchSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ---- Batch Bar Info ---- */
+.batch-bar-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* ---- Batch Bar Actions ---- */
+.batch-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ---- Batch Button ---- */
+.batch-btn {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.batch-btn:hover {
+    background: var(--border);
+}
+
+.batch-btn.btn-danger {
+    background: #fef2f2;
+    color: var(--danger);
+    border-color: #fecaca;
+}
+
+.batch-btn.btn-danger:hover {
+    background: #fee2e2;
+}
+
+/* ---- Batch Cancel Button ---- */
+.batch-cancel {
+    background: transparent;
+    color: var(--text-muted);
+    border-color: transparent;
+}
+
+.batch-cancel:hover {
+    color: var(--text-secondary);
+    background: var(--hover-bg);
+}
+
+/* ---- Batch Checkbox ---- */
+.batch-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    margin: 0;
+    flex-shrink: 0;
+    display: none;
+}
+
+/* Show checkbox in batch mode */
+.note-card.batch-mode .batch-checkbox {
+    display: block;
+}
+
+/* Hide action buttons in batch mode */
+.note-card.batch-mode .card-action-btn {
+    display: none !important;
+}

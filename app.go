@@ -117,6 +117,11 @@ func (a *App) BatchDeleteNotes(ids []uint) error {
 	return a.noteService.BatchDelete(ids)
 }
 
+// BatchRestoreNotes 批量从回收站恢复笔记
+func (a *App) BatchRestoreNotes(ids []uint) error {
+	return a.noteService.BatchRestore(ids)
+}
+
 // BatchAddTagToNotes 批量添加标签到笔记
 func (a *App) BatchAddTagToNotes(noteIDs []uint, tagID uint) error {
 	return a.tagService.BatchAddTagToNotes(noteIDs, tagID)

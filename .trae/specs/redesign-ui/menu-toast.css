@@ -1,0 +1,101 @@
+/* ============================================================
+   Section J: Context Menu
+   ============================================================ */
+.context-menu {
+  position: fixed;
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  min-width: 120px;
+  z-index: 2000;
+  display: none;
+  border: 1px solid var(--border);
+}
+
+.context-menu.active {
+  display: block;
+}
+
+.context-menu-item {
+  display: block;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.1s;
+  font-family: inherit;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.context-menu-item:hover {
+  background: var(--hover-bg);
+}
+
+.context-menu-item.danger {
+  color: var(--danger);
+}
+
+.context-menu-item.danger:hover {
+  background: #fef2f2;
+  color: var(--danger);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--divider);
+  margin: 4px 6px;
+}
+
+/* ============================================================
+   Section K: Undo Toast
+   ============================================================ */
+.undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #2D2A24;
+  color: #F7F5F0;
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  box-shadow: var(--shadow-xl);
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.undo-toast.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.undo-toast-msg {
+  white-space: nowrap;
+}
+
+.undo-toast-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.undo-toast-btn:hover {
+  background: rgba(217, 119, 6, 0.15);
+}

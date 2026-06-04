@@ -9,6 +9,8 @@ export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>
 
 export function BatchDeleteNotes(arg1:Array<number>):Promise<void>;
 
+export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
+
 export function CreateNote(arg1:string,arg2:string):Promise<models.Note>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;

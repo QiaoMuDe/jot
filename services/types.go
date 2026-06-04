@@ -18,12 +18,12 @@ type DataStats struct {
 
 // ExportNoteItem 导出笔记的结构
 type ExportNoteItem struct {
-	Title     string        `json:"title"`
-	Content   string        `json:"content"`
-	Pinned    bool          `json:"pinned"`
-	Tags      []ExportTag   `json:"tags,omitempty"`
-	CreatedAt string        `json:"created_at"`
-	UpdatedAt string        `json:"updated_at"`
+	Title     string      `json:"title"`
+	Content   string      `json:"content"`
+	Pinned    bool        `json:"pinned"`
+	Tags      []ExportTag `json:"tags,omitempty"`
+	CreatedAt string      `json:"created_at"`
+	UpdatedAt string      `json:"updated_at"`
 }
 
 // ExportTag 导出标签的结构
