@@ -69,6 +69,12 @@ const els = {
     fontFamilyDisplay: $('fontFamilyDisplay'),
     fontFamilyDropdown: $('fontFamilyDropdown'),
     fontFamilySearch: $('fontFamilySearch'),
+    // 主题设置
+    themeSelect: $('themeSelect'),
+    themeTrigger: $('themeTrigger'),
+    themeDisplay: $('themeDisplay'),
+    themeDropdown: $('themeDropdown'),
+    themeOptions: $('themeOptions'),
     // 分页设置
     pageSizeControl: $('pageSizeControl'),
     pageSizeIndicator: $('pageSizeIndicator'),
@@ -222,6 +228,7 @@ function switchView(view) {
         case 'settings':
             els.viewSettings.classList.add('active');
             loadFontSettings();
+            loadThemeSetting();
             loadSortSettings();
             loadPageSizeSetting();
             loadTags();
@@ -841,6 +848,120 @@ async function saveFontSetting(key, value) {
     } else {
         localStorage.setItem('jot_' + key, value);
     }
+}
+
+/* ===== 主题设置函数 ===== */
+
+/**
+ * 应用指定主题
+ * @param {string} themeName - 'default' | 'light' | 'dark'
+ */
+function applyTheme(themeName) {
+    document.documentElement.setAttribute('data-theme', themeName);
+    // 更新下拉菜单显示
+    if (els.themeDisplay) {
+        const themeLabels = { default: '🌙 默认', light: '☀️ 浅色', dark: '🌑 深色' };
+        els.themeDisplay.textContent = themeLabels[themeName] || '默认';
+    }
+    // 更新选中状态
+    if (els.themeOptions) {
+        els.themeOptions.querySelectorAll('.font-family-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.themeValue === themeName);
+        });
+    }
+}
+
+/**
+ * 获取当前主题名称
+ */
+function getCurrentTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'default';
+}
+
+/**
+ * 从后端加载已保存的主题设置并应用
+ */
+async function loadThemeSetting() {
+    let theme = 'default';
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+        const saved = await window.go.main.App.GetSetting('theme');
+        if (saved) theme = saved;
+    } else {
+        theme = localStorage.getItem('jot_theme') || 'default';
+    }
+    applyTheme(theme);
+}
+
+/**
+ * 保存主题设置到后端
+ */
+async function saveThemeSetting(themeName) {
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+        try {
+            await window.go.main.App.SetSetting('theme', themeName);
+        } catch (err) {
+            console.error('保存主题设置失败:', err);
+            localStorage.setItem('jot_theme', themeName);
+        }
+    } else {
+        localStorage.setItem('jot_theme', themeName);
+    }
+}
+
+/**
+ * 关闭主题下拉菜单
+ */
+function closeThemeDropdown() {
+    if (els.themeDropdown) {
+        els.themeDropdown.classList.remove('open');
+    }
+    if (els.themeTrigger) {
+        els.themeTrigger.classList.remove('open');
+    }
+}
+
+/**
+ * 初始化主题设置下拉菜单事件
+ */
+function initThemeSettings() {
+    if (!els.themeTrigger) return;
+
+    // 打开/关闭主题下拉菜单
+    els.themeTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = els.themeDropdown.classList.contains('open');
+        closeThemeDropdown();
+        if (!isOpen) {
+            els.themeDropdown.classList.add('open');
+            els.themeTrigger.classList.add('open');
+        }
+    });
+
+    // 点击选项切换主题
+    els.themeOptions.addEventListener('click', (e) => {
+        const option = e.target.closest('.font-family-option');
+        if (!option) return;
+        const theme = option.dataset.themeValue;
+        if (!theme) return;
+        applyTheme(theme);
+        saveThemeSetting(theme);
+        closeThemeDropdown();
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#themeSelect')) {
+            closeThemeDropdown();
+        }
+    });
+
+    // Escape 键关闭
+    els.themeDropdown.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeThemeDropdown();
+            els.themeTrigger.focus();
+        }
+    });
 }
 
 /**
@@ -1600,7 +1721,7 @@ function startAutoSave() {
  * @param {number|null} noteId - 笔记 ID，null 表示新建
  * @param {boolean} readOnly - 是否为只读查看模式
  */
-function openEditor(noteId, readOnly) {
+async function openEditor(noteId, readOnly) {
     state.editingNoteId = noteId || null;
     state.selectedTags = [];
 
@@ -1654,8 +1775,8 @@ function openEditor(noteId, readOnly) {
         els.editorNoteContent.removeEventListener('input', onEditorInput);
     }
 
-    // 加载标签并渲染标签选择器
-    loadTagsForEditor(isReadOnly);
+    // 加载标签并渲染标签选择器（等待标签加载完毕再显示编辑器，避免闪烁）
+    await loadTagsForEditor(isReadOnly);
     // 显示编辑器
     els.viewEditor.classList.add('active');
 }
@@ -1716,6 +1837,8 @@ let contextMenuNoteId = null;
 function hideContextMenu() {
     els.contextMenu.classList.remove('active');
     contextMenuNoteId = null;
+    // 恢复主内容区滚动
+    els.mainContent.style.overflow = '';
 }
 
 /* ===== 全局暴露给 onclick 的函数 ===== */
@@ -1749,6 +1872,8 @@ window.showContextMenu = function (event, noteId) {
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
     menu.classList.add('active');
+    // 锁定主内容区滚动，防止菜单打开时误滚动
+    els.mainContent.style.overflow = 'hidden';
 };
 
 /**
@@ -2252,13 +2377,35 @@ function initScrollLoading() {
     });
 }
 
+/* ===== 滚动条自动显隐 ===== */
+
+/**
+ * 给滚动容器绑定 scroll 事件：滚动时显示滑块，停止 1 秒后淡出
+ */
+function initScrollbarAutoHide() {
+    const containers = [els.mainContent, els.searchResults, els.trashList].filter(Boolean);
+    containers.forEach((container) => {
+        let timer = null;
+        container.addEventListener('scroll', () => {
+            container.classList.add('scrolling');
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                container.classList.remove('scrolling');
+            }, 1000);
+        });
+    });
+}
+
 /* ===== 初始化 ===== */
 
 async function init() {
     initEventListeners();
     initFontSettings();
+    initThemeSettings();
     initScrollLoading();
+    initScrollbarAutoHide();
     state.selectedTags = [];
+    await loadThemeSetting();
     await loadFontSettings();
     await initSortSettings();
     await loadNotes();

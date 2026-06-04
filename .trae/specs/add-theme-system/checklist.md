@@ -1,0 +1,26 @@
+# 主题系统 - 验证清单
+
+- [x] `app.css` 中 `:root` 已包含所有 CSS 变量（含新增的 `--accent-rgb`, `--danger-bg`, `--success-bg` 等）
+- [x] `app.css` 中 `[data-theme="light"]` 主题覆盖块定义完整
+- [x] `app.css` 中 `[data-theme="dark"]` 主题覆盖块定义完整
+- [x] `app.css` 中 `:root` 与 Default 主题值一致，作为 fallback
+- [x] `app.css` 滚动条硬编码颜色已替换为 `--scrollbar-thumb` / `--scrollbar-thumb-hover`
+- [x] `style.css` 中 `.btn-danger` / `.batch-btn.btn-danger` 硬编码颜色已替换为变量
+- [x] `style.css` 中 `.btn-perm-delete` 系列已替换为变量
+- [x] `style.css` 中 `.import-result.success` / `.import-result.error` 已替换为变量
+- [x] `style.css` 中 `.undo-toast` 已使用 `--toast-bg` / `--toast-text`
+- [x] `style.css` 中 `.editor-overlay` 已使用 `--overlay-bg`
+- [x] `style.css` 中 `.confirm-dialog-overlay` 已使用 `--overlay-bg`
+- [x] `style.css` 中 `.note-card.selected` 已使用 `rgba(var(--accent-rgb), ...)`
+- [x] `style.css` 中 `.loading-spinner` fallback 已移除
+- [x] `style.css` 中 `.segmented-control` fallback 已移除
+- [x] `style.css` 中 `.context-menu-item.danger:hover` 已替换
+- [x] `style.css` 中 `.undo-toast-btn:hover` 已替换为 `rgba(var(--accent-rgb), ...)`
+- [x] `style.css` 中 `.tag-delete-btn` / `.tag-delete-btn:hover` 已替换为 `var(--tag-delete-*)`
+- [x] `index.html` 中已添加「主题设置」section 和下拉菜单 DOM
+- [x] `main.js` 中已实现 `applyTheme()` / `loadThemeSetting()` / `saveThemeSetting()`
+- [x] `main.js` 在 `init()` 启动时加载已保存的主题
+- [x] `main.js` 在 `switchView('settings')` 时更新主题选择器 UI
+- [x] 三个主题切换后颜色正确、无视觉断裂
+- [x] 主题偏好跨会话持久化（Setting 表 + localStorage fallback）
+- [x] 无遗漏的硬编码颜色值

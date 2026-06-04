@@ -51,6 +51,88 @@
 
     /* 过渡 */
     --transition: 150ms ease-out;
+
+    /* 主题系统 - 新增变量 */
+    --accent-rgb: 217, 119, 6;
+    --danger-bg: #fef2f2;
+    --danger-border: #fecaca;
+    --success-bg: #ecfdf5;
+    --success-border: #a7f3d0;
+    --success-text: #065f46;
+    --overlay-bg: rgba(45, 42, 36, 0.4);
+    --toast-bg: #2D2A24;
+    --toast-text: #F7F5F0;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+    --scrollbar-track: rgba(0, 0, 0, 0.04);
+    --tag-delete-bg: rgba(0, 0, 0, 0.2);
+    --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 亮色主题 ===== */
+[data-theme="light"] {
+    --bg: #FAFAFA;
+    --card-bg: #FFFFFF;
+    --text-primary: #1A1A1A;
+    --text-secondary: #8C8C8C;
+    --text-muted: #B0B0B0;
+    --accent: #2563EB;
+    --accent-rgb: 37, 99, 235;
+    --accent-light: #DBEAFE;
+    --accent-lighter: #EFF6FF;
+    --accent-dark: #1D4ED8;
+    --border: #EEEEEE;
+    --divider: #F0F0F0;
+    --danger: #DC2626;
+    --hover-bg: #F5F5F5;
+    --topbar-bg: #FFFFFF;
+    --input-bg: #F5F5F5;
+    --overlay-bg: rgba(0, 0, 0, 0.25);
+    --toast-bg: #1A1A1A;
+    --toast-text: #FFFFFF;
+    --danger-bg: #FEF2F2;
+    --danger-border: #FECACA;
+    --success-bg: #F0FDF4;
+    --success-border: #BBF7D0;
+    --success-text: #166534;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.14);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.26);
+    --scrollbar-track: rgba(0, 0, 0, 0.03);
+    --tag-delete-bg: rgba(0, 0, 0, 0.2);
+    --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 暗色主题 ===== */
+[data-theme="dark"] {
+    --bg: #0D0D0D;
+    --card-bg: #1A1A1A;
+    --text-primary: #E8E8E8;
+    --text-secondary: #9E9E9E;
+    --text-muted: #6B6B6B;
+    --accent: #F59E0B;
+    --accent-rgb: 245, 158, 11;
+    --accent-light: #92400E;
+    --accent-lighter: #78350F;
+    --accent-dark: #FBBF24;
+    --border: #2A2A2A;
+    --divider: #2A2A2A;
+    --danger: #F87171;
+    --hover-bg: #252525;
+    --topbar-bg: #141414;
+    --input-bg: #252525;
+    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --toast-bg: #2D2A24;
+    --toast-text: #F7F5F0;
+    --danger-bg: rgba(248, 113, 113, 0.1);
+    --danger-border: rgba(248, 113, 113, 0.25);
+    --success-bg: rgba(52, 211, 153, 0.1);
+    --success-border: rgba(52, 211, 153, 0.25);
+    --success-text: #6EE7B7;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-track: rgba(255, 255, 255, 0.04);
+    --tag-delete-bg: rgba(255, 255, 255, 0.25);
+    --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
 }
 
 * {
@@ -84,12 +166,12 @@ body {
     overflow: hidden;
 }
 
-/* ===== 滚动条：全局隐藏，仅在交互时微弱显示 ===== */
+/* ===== 滚动条：柔和融入背景 ===== */
 
 /* WebKit (Chrome / Edge / WebView2) */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -97,29 +179,50 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-corner {
     background: transparent;
 }
 
-/* 浅色背景区域：hover 时极淡灰色滑块 */
-.card-grid:hover::-webkit-scrollbar-thumb,
-.search-results:hover::-webkit-scrollbar-thumb,
-.trash-list:hover::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.08);
+/* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
+#mainContent::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb,
+.trash-list::-webkit-scrollbar-thumb {
+    background: transparent;
+    transition: background 0.4s ease;
 }
 
-.card-grid::-webkit-scrollbar-thumb:hover,
-.search-results::-webkit-scrollbar-thumb:hover,
-.trash-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.18);
+#mainContent.scrolling::-webkit-scrollbar-thumb,
+.search-results.scrolling::-webkit-scrollbar-thumb,
+.trash-list.scrolling::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+#mainContent:hover::-webkit-scrollbar-thumb,
+.search-results:hover::-webkit-scrollbar-thumb,
+.trash-list:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 给 track 加一层极淡底色，让滚动条区域有存在感 */
+#mainContent::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track,
+.trash-list::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
 }
 
 /* Firefox */
-* {
+#mainContent,
+.search-results,
+.trash-list {
     scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
+    scrollbar-color: transparent var(--scrollbar-track);
+}
+
+#mainContent.scrolling,
+.search-results.scrolling,
+.trash-list.scrolling {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
