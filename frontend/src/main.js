@@ -57,6 +57,13 @@ const els = {
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
+    // 字体设置
+    fontFamilyTrigger: $('fontFamilyTrigger'),
+    fontFamilyDisplay: $('fontFamilyDisplay'),
+    fontFamilyDropdown: $('fontFamilyDropdown'),
+    fontFamilySearch: $('fontFamilySearch'),
+    fontSizePresets: $('fontSizePresets'),
+    fontSizeInput: $('fontSizeInput'),
     // 回收站
     trashList: $('trashList'),
     trashBackBtn: $('trashBackBtn'),
@@ -193,6 +200,7 @@ function switchView(view) {
             break;
         case 'settings':
             els.viewSettings.classList.add('active');
+            loadFontSettings();
             loadTags();
             break;
         case 'data':
@@ -522,6 +530,267 @@ async function createTag() {
     }
     els.newTagName.value = '';
     await loadTags();
+}
+
+/* ===== 字体设置函数 ===== */
+
+/**
+ * 加载已保存的字体设置并应用到页面
+ */
+async function loadFontSettings() {
+    let fontFamily = 'DM Sans';
+    let fontSize = 16;
+
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+        const savedFamily = await window.go.main.App.GetSetting('font_family');
+        if (savedFamily) fontFamily = savedFamily;
+        const savedSize = await window.go.main.App.GetSetting('font_size');
+        if (savedSize) fontSize = parseInt(savedSize, 10);
+    } else {
+        // 从 localStorage 回退
+        fontFamily = localStorage.getItem('jot_font_family') || 'DM Sans';
+        fontSize = parseInt(localStorage.getItem('jot_font_size') || '16', 10);
+    }
+
+    applyFontFamily(fontFamily);
+    applyFontSize(fontSize);
+    updateFontSettingsUI(fontFamily, fontSize);
+}
+
+/**
+ * 更新字体设置的 UI 状态
+ */
+function updateFontSettingsUI(fontFamily, fontSize) {
+    // 更新字体族显示
+    els.fontFamilyDisplay.textContent = fontFamily;
+
+    // 更新大小预设高亮
+    els.fontSizePresets.querySelectorAll('.font-size-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.size, 10) === fontSize);
+    });
+
+    // 更新自定义输入框
+    els.fontSizeInput.value = fontSize;
+
+    // 渲染字体族下拉选项
+    renderFontFamilyOptions(fontFamily);
+}
+
+// 缓存全量字体列表，供搜索过滤使用
+let fontFamilyList = [];
+
+/**
+ * 渲染字体族下拉选项（支持过滤）
+ */
+async function renderFontFamilyOptions(selectedFont, filterText) {
+    // 首次调用时获取字体列表并缓存
+    if (fontFamilyList.length === 0) {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSystemFonts) {
+            fontFamilyList = await window.go.main.App.GetSystemFonts();
+        } else {
+            fontFamilyList = [
+                'DM Sans', 'Arial', 'Helvetica', 'Verdana', 'Georgia',
+                'Times New Roman', 'Courier New', 'Segoe UI', 'Microsoft YaHei',
+                'PingFang SC', 'Noto Sans SC',
+            ];
+        }
+        fontFamilyList = [...new Set(fontFamilyList)];
+    }
+
+    // 按过滤条件筛选
+    const kw = (filterText || '').toLowerCase();
+    const filtered = kw ? fontFamilyList.filter(f => f.toLowerCase().includes(kw)) : fontFamilyList;
+
+    // 获取或创建选项容器
+    let container = els.fontFamilyDropdown.querySelector('.font-family-options');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'font-family-options';
+        els.fontFamilyDropdown.appendChild(container);
+    }
+
+    container.innerHTML = filtered.map(font => `
+        <div class="font-family-option${font === selectedFont ? ' selected' : ''}"
+             data-font="${font}"
+             style="font-family: ${font}">
+            ${highlightMatch(font, kw)}
+        </div>
+    `).join('') || '<div class="font-family-option disabled" style="font-style:italic">无匹配字体</div>';
+}
+
+/**
+ * 高亮匹配文本
+ */
+function highlightMatch(text, keyword) {
+    if (!keyword) return text;
+    const idx = text.toLowerCase().indexOf(keyword);
+    if (idx < 0) return text;
+    return text.slice(0, idx) + '<strong style="font-weight:700">' + text.slice(idx, idx + keyword.length) + '</strong>' + text.slice(idx + keyword.length);
+}
+
+/**
+ * 应用字体族
+ */
+function applyFontFamily(fontFamily) {
+    document.documentElement.style.setProperty('--font-family', `${fontFamily}, system-ui, -apple-system, sans-serif`);
+    els.fontFamilyDisplay.textContent = fontFamily;
+}
+
+/**
+ * 应用字体大小
+ */
+function applyFontSize(size) {
+    document.documentElement.style.setProperty('--font-size-base', `${size}px`);
+}
+
+/**
+ * 保存字体设置到后端
+ */
+async function saveFontSetting(key, value) {
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+        try {
+            await window.go.main.App.SetSetting(key, value);
+        } catch (err) {
+            console.error('保存字体设置失败:', err);
+            localStorage.setItem('jot_' + key, value);
+        }
+    } else {
+        localStorage.setItem('jot_' + key, value);
+    }
+}
+
+/**
+ * 初始化字体设置下拉菜单事件
+ */
+function initFontSettings() {
+    // 打开/关闭字体下拉菜单
+    els.fontFamilyTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = els.fontFamilyDropdown.classList.contains('open');
+        closeFontFamilyDropdown();
+        if (!isOpen) {
+            els.fontFamilyDropdown.classList.add('open');
+            els.fontFamilyTrigger.classList.add('open');
+            // 聚焦搜索框并清空搜索
+            els.fontFamilySearch.value = '';
+            els.fontFamilySearch.focus();
+            renderFontFamilyOptions(getCurrentFontFamily(), '');
+            // 滚动选项容器到顶部
+            const container = els.fontFamilyDropdown.querySelector('.font-family-options');
+            if (container) container.scrollTop = 0;
+        }
+    });
+
+    // 搜索输入实时过滤
+    let searchTimer = null;
+    els.fontFamilySearch.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            renderFontFamilyOptions(getCurrentFontFamily(), els.fontFamilySearch.value);
+        }, 100);
+    });
+
+    // 搜索框键盘导航
+    els.fontFamilySearch.addEventListener('keydown', (e) => {
+        const container = els.fontFamilyDropdown.querySelector('.font-family-options');
+        if (!container) return;
+        const items = container.querySelectorAll('.font-family-option:not(.disabled)');
+        const currentIndex = Array.from(items).findIndex(item => item.classList.contains('highlighted'));
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                items.forEach(item => item.classList.remove('highlighted'));
+                const nextIndex = Math.min(currentIndex + 1, items.length - 1);
+                if (items[nextIndex]) {
+                    items[nextIndex].classList.add('highlighted');
+                    items[nextIndex].scrollIntoView({ block: 'nearest' });
+                }
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                items.forEach(item => item.classList.remove('highlighted'));
+                const prevIndex = Math.max(currentIndex - 1, 0);
+                if (items[prevIndex]) {
+                    items[prevIndex].classList.add('highlighted');
+                    items[prevIndex].scrollIntoView({ block: 'nearest' });
+                }
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (currentIndex >= 0 && items[currentIndex]) {
+                    items[currentIndex].click();
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                closeFontFamilyDropdown();
+                break;
+        }
+    });
+
+    // 点击选项
+    els.fontFamilyDropdown.addEventListener('click', (e) => {
+        const option = e.target.closest('.font-family-option');
+        if (!option || option.classList.contains('disabled')) return;
+        const font = option.dataset.font;
+        applyFontFamily(font);
+        updateFontSettingsUI(font, getCurrentFontSize());
+        saveFontSetting('font_family', font);
+        closeFontFamilyDropdown();
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.font-family-select')) {
+            closeFontFamilyDropdown();
+        }
+    });
+
+    // 字体大小预设
+    els.fontSizePresets.addEventListener('click', (e) => {
+        const btn = e.target.closest('.font-size-btn');
+        if (!btn) return;
+        const size = parseInt(btn.dataset.size, 10);
+        applyFontSize(size);
+        updateFontSettingsUI(getCurrentFontFamily(), size);
+        saveFontSetting('font_size', String(size));
+    });
+
+    // 自定义字体大小输入
+    els.fontSizeInput.addEventListener('change', () => {
+        const size = parseInt(els.fontSizeInput.value, 10);
+        if (isNaN(size) || size < 10 || size > 32) {
+            els.fontSizeInput.value = getCurrentFontSize();
+            return;
+        }
+        applyFontSize(size);
+        updateFontSettingsUI(getCurrentFontFamily(), size);
+        saveFontSetting('font_size', String(size));
+    });
+}
+
+/**
+ * 关闭字体族下拉菜单
+ */
+function closeFontFamilyDropdown() {
+    els.fontFamilyDropdown.classList.remove('open');
+    els.fontFamilyTrigger.classList.remove('open');
+}
+
+/**
+ * 获取当前字体族
+ */
+function getCurrentFontFamily() {
+    return els.fontFamilyDisplay.textContent;
+}
+
+/**
+ * 获取当前字体大小
+ */
+function getCurrentFontSize() {
+    const size = document.documentElement.style.getPropertyValue('--font-size-base');
+    return parseInt(size, 10) || 16;
 }
 
 /**
@@ -1605,7 +1874,9 @@ function handleKeyboardNavigation(e) {
 
 async function init() {
     initEventListeners();
+    initFontSettings();
     state.selectedTags = [];
+    await loadFontSettings();
     await loadNotes();
     await loadTags();
 }

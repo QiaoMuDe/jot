@@ -103,6 +103,41 @@
                 <h2 class="view-title">设置</h2>
             </div>
             <div class="settings-content">
+                <!-- 字体设置 -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">字体设置</h3>
+                    <div class="font-settings">
+                        <div class="font-setting-row">
+                            <label class="font-setting-label">字体</label>
+                            <div class="font-family-select" id="fontFamilySelect">
+                                <div class="font-family-trigger" id="fontFamilyTrigger">
+                                    <span id="fontFamilyDisplay">DM Sans</span>
+                                    <span class="font-family-arrow">▼</span>
+                                </div>
+                                <div class="font-family-dropdown" id="fontFamilyDropdown">
+                                    <input type="text" class="font-family-search" id="fontFamilySearch" placeholder="搜索字体..." />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="font-setting-row">
+                            <label class="font-setting-label">大小</label>
+                            <div class="font-size-controls">
+                                <div class="font-size-presets" id="fontSizePresets">
+                                    <button class="font-size-btn" data-size="12">小</button>
+                                    <button class="font-size-btn" data-size="14">偏小</button>
+                                    <button class="font-size-btn active" data-size="16">默认</button>
+                                    <button class="font-size-btn" data-size="18">大</button>
+                                    <button class="font-size-btn" data-size="20">特大</button>
+                                </div>
+                                <div class="font-size-custom">
+                                    <input type="number" id="fontSizeInput" class="font-size-input" min="10" max="32" placeholder="16" />
+                                    <span class="font-size-unit">px</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 标签管理 -->
                 <div class="settings-section">
                     <h3 class="settings-section-title">标签管理</h3>
                     <div class="tag-management" id="tagManagement">

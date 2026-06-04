@@ -33,10 +33,11 @@
 
     /* 字体 */
     --font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-    --font-heading: 600 18px/1.3 var(--font-family);
-    --font-card-title: 500 15px/1.4 var(--font-family);
-    --font-body: 400 14px/1.6 var(--font-family);
-    --font-small: 400 12px/1.5 var(--font-family);
+    --font-size-base: 16px;
+    --font-heading: 600 1.125rem/1.3 var(--font-family);
+    --font-card-title: 500 0.938rem/1.4 var(--font-family);
+    --font-body: 400 0.875rem/1.6 var(--font-family);
+    --font-small: 400 0.75rem/1.5 var(--font-family);
 
     /* 间距 */
     --space-1: 4px;
@@ -61,13 +62,14 @@
 html {
     height: 100%;
     background-color: var(--bg);
+    font-size: var(--font-size-base);
 }
 
 body {
     margin: 0;
     height: 100%;
     font-family: var(--font-family);
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1.6;
     color: var(--text-primary);
     background-color: var(--bg);

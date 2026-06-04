@@ -35,6 +35,10 @@ export function GetNotes(arg1:number,arg2:number):Promise<services.PaginatedResu
 
 export function GetNotesByTag(arg1:number,arg2:number,arg3:number):Promise<services.PaginatedResult>;
 
+export function GetSetting(arg1:string):Promise<string>;
+
+export function GetSystemFonts():Promise<Array<string>>;
+
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
 export function ImportData(arg1:string):Promise<services.ImportResult>;
@@ -48,6 +52,8 @@ export function RestoreAllNotes():Promise<void>;
 export function RestoreNote(arg1:number):Promise<void>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number):Promise<services.PaginatedResult>;
+
+export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 

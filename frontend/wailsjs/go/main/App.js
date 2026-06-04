@@ -66,6 +66,14 @@ export function GetNotesByTag(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetNotesByTag'](arg1, arg2, arg3);
 }
 
+export function GetSetting(arg1) {
+  return window['go']['main']['App']['GetSetting'](arg1);
+}
+
+export function GetSystemFonts() {
+  return window['go']['main']['App']['GetSystemFonts']();
+}
+
 export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
@@ -92,6 +100,10 @@ export function RestoreNote(arg1) {
 
 export function SearchNotes(arg1, arg2, arg3) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3);
+}
+
+export function SetSetting(arg1, arg2) {
+  return window['go']['main']['App']['SetSetting'](arg1, arg2);
 }
 
 export function TogglePinNote(arg1) {

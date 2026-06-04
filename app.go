@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"jot/database"
+	"jot/fontutil"
 	"jot/models"
 	"jot/services"
 	"os"
@@ -13,17 +14,19 @@ import (
 
 // App struct
 type App struct {
-	ctx         context.Context
-	noteService *services.NoteService
-	tagService  *services.TagService
+	ctx            context.Context
+	noteService    *services.NoteService
+	tagService     *services.TagService
+	settingService *services.SettingService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	db := database.InitDB("data/jot.db")
 	return &App{
-		noteService: services.NewNoteService(db),
-		tagService:  services.NewTagService(db),
+		noteService:    services.NewNoteService(db),
+		tagService:     services.NewTagService(db),
+		settingService: services.NewSettingService(db),
 	}
 }
 
@@ -236,4 +239,21 @@ func (a *App) AddTagToNote(noteID, tagID uint) error {
 // RemoveTagFromNote 为指定笔记移除标签
 func (a *App) RemoveTagFromNote(noteID, tagID uint) error {
 	return a.tagService.RemoveTagFromNote(noteID, tagID)
+}
+
+// ==================== Setting 相关绑定方法 ====================
+
+// GetSetting 获取指定 key 的配置值
+func (a *App) GetSetting(key string) string {
+	return a.settingService.Get(key)
+}
+
+// SetSetting 设置指定 key 的配置值
+func (a *App) SetSetting(key, value string) error {
+	return a.settingService.Set(key, value)
+}
+
+// GetSystemFonts 获取系统已安装的字体族列表
+func (a *App) GetSystemFonts() []string {
+	return fontutil.GetFonts()
 }

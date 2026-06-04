@@ -11,30 +11,35 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 22 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 25 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
 ├── AGENTS.md                           # 本报告文件
+│
+├── fontutil/                           # 【字体工具】Windows GDI 系统字体枚举
+│   └── fonts_windows.go               # EnumFontFamiliesW API 封装
 │
 ├── database/                           # 【数据层】数据库连接与初始化
 │   └── db.go                           # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）
 │
 ├── models/                             # 【数据模型层】GORM 实体定义
 │   ├── note.go                         # Note 实体（笔记）
-│   └── tag.go                          # Tag 实体（标签）
+│   ├── tag.go                          # Tag 实体（标签）
+│   └── setting.go                      # Setting 实体（KV 配置）
 │
 ├── services/                           # 【业务逻辑层】Service 模式封装
 │   ├── note_service.go                 # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出
 │   ├── tag_service.go                  # 标签管理 + 笔记标签关联 + 标签计数
+│   ├── setting_service.go              # 配置读写
 │   └── types.go                        # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~1300 行
-│   │   ├── style.css                   # 组件样式 ~960 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~1550 行
+│   │   ├── style.css                   # 组件样式 ~1020 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -48,7 +53,11 @@ jot/                                    # 项目根目录
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
-    └── add-data-management/            # 数据管理功能规格
+    ├── add-data-management/            # 数据管理功能规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    └── add-font-settings/              # 字体设置功能规格
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -72,10 +81,12 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应文件 | 核心依赖 |
 |----------|----------|----------|----------|
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
-| **数据模型层** | Note/Tag 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go` | GORM |
+| **数据模型层** | Note/Tag/Setting 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x |
+| **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
+| **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
 
 ### 2.2 业务核心模块
 
@@ -100,6 +111,7 @@ jot/                                    # 项目根目录
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 触发按标签名搜索 | `frontend/src/main.js:searchByTag()` | 标签名 | 搜索结果列表 |
 | **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp/PgDn 滚动 / Ctrl+Home/End | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
+| **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
 
 ### 2.3 模块分层图
 
@@ -151,13 +163,15 @@ jot/                                    # 项目根目录
 | 依赖方 | 被依赖方 | 依赖类型 | 依赖详情 |
 |--------|----------|----------|----------|
 | `app.go` | `database` | 编译依赖 | 调用 `database.InitDB()` 获取 `*gorm.DB` 实例 |
-| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` 实例 |
-| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` 类型 |
+| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` / `SettingService` 实例 |
+| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` / `*models.Setting` 类型 |
 | `app.go` | `runtime` | 编译依赖 | `runtime.SaveFileDialog` 原生保存对话框 |
-| `services` | `models` | 编译依赖 | 操作 Note/Tag 结构体 |
+| `app.go` | `fontutil` | 编译依赖 | `fontutil.GetFonts()` 枚举系统字体 |
+| `services` | `models` | 编译依赖 | 操作 Note/Tag/Setting 结构体 |
 | `services` | GORM | 编译依赖 | `*gorm.DB` 数据库操作 |
-| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{})` |
+| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{})` |
 | `database` | glebarez/sqlite | 编译依赖 | 纯 Go SQLite 驱动 |
+| `fontutil` | gdi32/user32 | 运行时依赖 | syscall 调用 Windows GDI API |
 | `frontend/main.js` | `wailsjs/go/main/App.js` | 运行时调用 | `window.go.main.App.*` 调用后端 API |
 | `frontend/wailsjs` | `app.go` | 构建时生成 | `wails generate module` 自动生成 |
 
@@ -466,9 +480,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 ## 八、待优化点
 
 ### 优先优化
-1. **错误提示**：前端应增加用户可见的 Toast/消息通知，而非仅 console.error
-2. **滚动加载**：笔记列表改为滚动加载/分页，避免全量渲染
-3. **Vite 升级**：Vite 3 → Vite 5/6，获取更好的构建性能和生态支持
+1. **滚动加载**：笔记列表改为滚动加载/分页，避免全量渲染
+2. **Vite 升级**：Vite 3 → Vite 5/6，获取更好的构建性能和生态支持
 
 ### 中期优化
 4. **全文搜索**：引入 SQLite FTS5，替代 `LIKE %keyword%` 模糊搜索
@@ -488,10 +501,10 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **项目名** | Jot（卡片式笔记桌面应用） |
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`data/jot.db`），免 CGO 纯 Go 驱动 |
-| **后端结构** | `main.go → app.go → services/ → models/` + `database/` |
-| **绑定方法数** | 22 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理） |
+| **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
+| **绑定方法数** | 25 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置）|
 | **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
-| **前端代码量** | ~1300 行 JS + ~960 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~1550 行 JS + ~1020 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -507,7 +520,11 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含设置/数据管理/回收站三个选项，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/` 和 `.trae/specs/add-data-management/` |
+| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/` |
+| **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义 |
+| **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
+| **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
+| **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |
 
 ---
 
