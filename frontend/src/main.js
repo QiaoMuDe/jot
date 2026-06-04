@@ -56,6 +56,7 @@ const els = {
     editorNoteContent: $('editorNoteContent'),
     tagSelector: $('tagSelector'),
     editorCloseBtn: $('editorCloseBtn'),
+    editorFullscreenBtn: $('editorFullscreenBtn'),
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
 
@@ -1823,6 +1824,19 @@ function onEditorInput() {
 /**
  * 关闭编辑器
  */
+/**
+ * 切换编辑器全屏模式
+ */
+function toggleEditorFullscreen() {
+    const panel = els.editorPanel;
+    const btn = els.editorFullscreenBtn;
+    panel.classList.toggle('fullscreen');
+    const isFullscreen = panel.classList.contains('fullscreen');
+    btn.textContent = isFullscreen ? '⤡' : '⛶';
+    btn.title = isFullscreen ? '退出全屏' : '全屏编辑';
+    btn.classList.toggle('fullscreen', isFullscreen);
+}
+
 function closeEditor() {
     els.viewEditor.classList.remove('active');
     // 恢复主内容区滚动
@@ -2156,6 +2170,7 @@ function initEventListeners() {
 
     // 编辑器
     els.editorCloseBtn.addEventListener('click', closeEditor);
+    els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
     els.editorCancelBtn.addEventListener('click', closeEditor);
     els.editorSaveBtn.addEventListener('click', async () => {
         if (state.editingNoteId) {
@@ -2319,6 +2334,11 @@ function handleKeyboardNavigation(e) {
     // Escape: 退出当前子视图，回到首页
     if (e.key === 'Escape') {
         e.preventDefault();
+        // 如果编辑器处于全屏模式，先退出全屏
+        if (els.editorPanel.classList.contains('fullscreen')) {
+            toggleEditorFullscreen();
+            return;
+        }
         if (state.batchMode) {
             toggleBatchMode();
         } else if (state.currentView === 'search') {

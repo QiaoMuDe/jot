@@ -595,9 +595,18 @@
 .editor-panel::before {
   content: '';
   display: block;
-  height: 3px;
-  background: var(--accent);
+  height: 1px;
+  background: transparent;
   flex-shrink: 0;
+}
+
+/* 全屏模式 */
+.editor-panel.fullscreen {
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100vh !important;
+  max-height: none !important;
+  border-radius: 0;
 }
 
 .editor-header {
@@ -617,7 +626,7 @@
   gap: 4px;
 }
 
-.editor-close-btn {
+.editor-header-btn {
   width: 32px;
   height: 32px;
   border: none;
@@ -629,13 +638,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition);
-  font-family: inherit;
+  transition: all var(--transition);
+  line-height: 1;
 }
 
-.editor-close-btn:hover {
+.editor-header-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
+}
+
+.editor-header-btn.fullscreen {
+  color: var(--accent);
 }
 
 .editor-body {
