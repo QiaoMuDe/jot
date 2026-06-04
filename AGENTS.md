@@ -17,29 +17,27 @@ jot/                                    # 项目根目录
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
 ├── AGENTS.md                           # 本报告文件
 │
-├── fontutil/                           # 【字体工具】Windows GDI 系统字体枚举
-│   └── fonts_windows.go               # EnumFontFamiliesW API 封装
-│
-├── database/                           # 【数据层】数据库连接与初始化
-│   └── db.go                           # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）
-│
-├── models/                             # 【数据模型层】GORM 实体定义
-│   ├── note.go                         # Note 实体（笔记）
-│   ├── tag.go                          # Tag 实体（标签）
-│   └── setting.go                      # Setting 实体（KV 配置）
-│
-├── services/                           # 【业务逻辑层】Service 模式封装
-│   ├── note_service.go                 # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出
-│   ├── tag_service.go                  # 标签管理 + 笔记标签关联 + 标签计数
-│   ├── setting_service.go              # 配置读写
-│   └── types.go                        # 通用类型（PaginatedResult, DataStats, ImportResult 等）
+├── internal/                           # 【内部包】Go 子包统一目录
+│   ├── database/
+│   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）
+│   ├── fontutil/
+│   │   └── fonts_windows.go           # EnumFontFamiliesW API 封装
+│   ├── models/
+│   │   ├── note.go                     # Note 实体（笔记）
+│   │   ├── tag.go                      # Tag 实体（标签）
+│   │   └── setting.go                  # Setting 实体（KV 配置）
+│   └── services/
+│       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出
+│       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
+│       ├── setting_service.go          # 配置读写
+│       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~1550 行
-│   │   ├── style.css                   # 组件样式 ~1020 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~1650 行
+│   │   ├── style.css                   # 组件样式 ~1060 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -502,9 +500,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`data/jot.db`），免 CGO 纯 Go 驱动 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 25 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置）|
+| **绑定方法数** | 29 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置 + 4 个排序/分页设置）|
 | **前端视图** | 6 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站 |
-| **前端代码量** | ~1580 行 JS + ~1026 行 CSS + 46 行 CSS 全局样式 |
+| **前端代码量** | ~1650 行 JS + ~1060 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -528,6 +526,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **view-header 统一** | 设置/数据管理/回收站三个功能页的 view-header 均为 `← 返回` + 居中标题 + `view-controls` 结构，保证标题位置一致 |
 | **内容区居中** | 设置页 `settings-content` 为 `max-width: 600px` + 居中；数据管理 `data-content` 和回收站 `trash-list` 为 `max-width: 680px` + 居中 |
 | **数字键导航** | 键盘快捷键扩展：`1`=首页(清空搜索)、`2`=设置、`3`=数据管理、`4`=回收站；输入框内不触发 |
+| **排序设置** | 设置页「笔记排序」支持按更新时间/创建时间/名称排序，持久化到 Setting `sort_order`；后端 `GetAll`/`GetByTag` 动态构建 ORDER BY |
+| **分页大小** | 设置页 iOS 风格分段控件：20/40/60/80/100，选中色块带滑动动画，默认 20，持久化到 Setting `page_size` |
+| **懒加载** | 所有场景（启动/CRUD）只加载第 1 页，滚动到底部（<200px）自动追加下一页；底部显示「共 X 条笔记」|
 
 ---
 

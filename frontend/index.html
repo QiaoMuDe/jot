@@ -152,10 +152,43 @@
                         </div>
                     </div>
                 </div>
+            <!-- 笔记排序 -->
+            <div class="settings-section">
+                <h3 class="settings-section-title">笔记排序</h3>
+                <div class="sort-options">
+                    <label class="sort-option">
+                        <input type="radio" name="sortOrder" value="updated_at" checked>
+                        <span>按更新时间</span>
+                    </label>
+                    <label class="sort-option">
+                        <input type="radio" name="sortOrder" value="created_at">
+                        <span>按创建时间</span>
+                    </label>
+                    <label class="sort-option">
+                        <input type="radio" name="sortOrder" value="title">
+                        <span>按名称</span>
+                    </label>
+                </div>
+            </div>
+            <!-- 分页大小 -->
+            <div class="settings-section">
+                <h3 class="settings-section-title">分页大小</h3>
+                <div class="page-size-control">
+                    <div class="segmented-control" id="pageSizeControl">
+                        <div class="segmented-indicator" id="pageSizeIndicator"></div>
+                        <button class="segmented-btn" data-value="20">20</button>
+                        <button class="segmented-btn" data-value="40">40</button>
+                        <button class="segmented-btn" data-value="60">60</button>
+                        <button class="segmented-btn" data-value="80">80</button>
+                        <button class="segmented-btn" data-value="100">100</button>
+                    </div>
+                    <span class="page-size-label" id="pageSizeLabel">20 条 / 页</span>
+                </div>
             </div>
         </div>
+    </div>
 
-        <!-- 视图 5: 数据管理页面 -->
+    <!-- 视图 5: 数据管理页面 -->
         <div id="viewData" class="view">
             <div class="view-header">
                 <button class="back-btn" id="dataBackBtn">← 返回</button>

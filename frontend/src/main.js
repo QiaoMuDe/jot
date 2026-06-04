@@ -15,6 +15,13 @@ const state = {
     selectedNoteIds: new Set(), // 选中的笔记 ID 集合
 };
 
+// 分页状态
+let currentPage = 1;
+let totalNotes = 0;
+let isLoadingMore = false;
+let hasMoreNotes = true;
+let pageSize = 18;
+
 /* ===== DOM 引用 ===== */
 const $ = (id) => document.getElementById(id);
 
@@ -62,6 +69,10 @@ const els = {
     fontFamilyDisplay: $('fontFamilyDisplay'),
     fontFamilyDropdown: $('fontFamilyDropdown'),
     fontFamilySearch: $('fontFamilySearch'),
+    // 分页设置
+    pageSizeControl: $('pageSizeControl'),
+    pageSizeIndicator: $('pageSizeIndicator'),
+    pageSizeLabel: $('pageSizeLabel'),
     fontSizePresets: $('fontSizePresets'),
     fontSizeInput: $('fontSizeInput'),
     // 回收站
@@ -166,6 +177,16 @@ function debounce(fn, delay) {
     };
 }
 
+/**
+ * 重置分页状态
+ */
+function resetPagination() {
+    currentPage = 1;
+    totalNotes = 0;
+    isLoadingMore = false;
+    hasMoreNotes = true;
+}
+
 /* ===== 视图切换 ===== */
 
 /**
@@ -201,6 +222,8 @@ function switchView(view) {
         case 'settings':
             els.viewSettings.classList.add('active');
             loadFontSettings();
+            loadSortSettings();
+            loadPageSizeSetting();
             loadTags();
             break;
         case 'data':
@@ -217,19 +240,43 @@ function switchView(view) {
 /* ===== Wails 后端调用封装 ===== */
 
 /**
- * 加载笔记列表
+ * 加载笔记列表（第 1 页，重置分页）
  */
 async function loadNotes() {
     try {
+        // 获取当前排序方式
+        let sortBy = 'updated_at';
+        const checkedRadio = document.querySelector('input[name="sortOrder"]:checked');
+        if (checkedRadio) sortBy = checkedRadio.value;
+
+        // 获取分页大小（当前选中按钮的值）
+        const activeBtn = els.pageSizeControl?.querySelector('.segmented-btn.active');
+        const savedPageSize = activeBtn ? parseInt(activeBtn.dataset.value, 10) : 20;
+        pageSize = savedPageSize;
+
+        // 重置分页状态
+        resetPagination();
+
+        // 加载第 1 页
+        let result = null;
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
-            const result = await window.go.main.App.GetNotes(1, 100);
-            state.notes = (result && result.items) || [];
+            result = await window.go.main.App.GetNotes(1, pageSize, sortBy);
+        }
+
+        if (result) {
+            state.notes = result.items || [];
+            totalNotes = result.total || 0;
+            hasMoreNotes = state.notes.length < totalNotes;
+            currentPage = 1;
         } else {
+            // 降级：后端未绑定时使用模拟数据
             console.warn('GetNotes 未绑定，使用模拟数据');
             if (!mockNotes) {
                 mockNotes = getMockNotes();
             }
             state.notes = mockNotes;
+            totalNotes = state.notes.length;
+            hasMoreNotes = false;
         }
     } catch (err) {
         console.error('加载笔记失败:', err);
@@ -237,8 +284,145 @@ async function loadNotes() {
             mockNotes = getMockNotes();
         }
         state.notes = mockNotes;
+        totalNotes = state.notes.length;
+        hasMoreNotes = false;
     }
     renderCardGrid();
+}
+
+/**
+ * 加载更多笔记（追加到列表末尾，滚动懒加载）
+ */
+async function loadMoreNotes() {
+    if (isLoadingMore || !hasMoreNotes) return;
+
+    isLoadingMore = true;
+    showLoadingIndicator(true);
+    const loadStart = Date.now(); // 记录加载开始时间
+
+    try {
+        let sortBy = 'updated_at';
+        const checkedRadio = document.querySelector('input[name="sortOrder"]:checked');
+        if (checkedRadio) sortBy = checkedRadio.value;
+        // 获取分页大小（当前选中按钮的值）
+        const activeBtn = els.pageSizeControl?.querySelector('.segmented-btn.active');
+        const savedPageSize = activeBtn ? parseInt(activeBtn.dataset.value, 10) : 20;
+        pageSize = savedPageSize;
+        const nextPage = currentPage + 1;
+
+        let result = null;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
+            result = await window.go.main.App.GetNotes(nextPage, pageSize, sortBy);
+        }
+
+        if (result && result.items && result.items.length > 0) {
+            state.notes = state.notes.concat(result.items);
+            currentPage = nextPage;
+            hasMoreNotes = state.notes.length < totalNotes;
+        } else {
+            hasMoreNotes = false;
+        }
+
+        renderCardGrid();
+    } catch (err) {
+        console.error('加载更多笔记失败:', err);
+    } finally {
+        // 确保加载动画至少显示 1 秒，避免闪一下就消失
+        const elapsed = Date.now() - loadStart;
+        const minDisplay = 1000;
+        if (elapsed < minDisplay) {
+            await new Promise(r => setTimeout(r, minDisplay - elapsed));
+        }
+        isLoadingMore = false;
+        showLoadingIndicator(false);
+    }
+}
+
+/**
+ * 加载所有剩余页面（Ctrl+End 使用）
+ * 一次性请求所有未加载的页，合并后跳到底部
+ */
+async function loadAllRemainingNotes() {
+    if (!hasMoreNotes || isLoadingMore) return;
+
+    isLoadingMore = true;
+    showLoadingIndicator(true);
+
+    try {
+        // 获取排序和分页参数
+        let sortBy = 'updated_at';
+        const checkedRadio = document.querySelector('input[name="sortOrder"]:checked');
+        if (checkedRadio) sortBy = checkedRadio.value;
+        const activeBtn = els.pageSizeControl?.querySelector('.segmented-btn.active');
+        const savedPageSize = activeBtn ? parseInt(activeBtn.dataset.value, 10) : 20;
+        pageSize = savedPageSize;
+
+        // 计算剩余页数，逐一加载
+        const loadedCount = state.notes.length;
+        let totalPages = Math.ceil(totalNotes / pageSize);
+        // 如果 total 未知（降级场景），直接取当前数据判断
+        if (totalNotes === 0 && state.notes.length === 0) return;
+
+        const remainingPages = [];
+        for (let p = currentPage + 1; p <= totalPages; p++) {
+            remainingPages.push(p);
+        }
+
+        // 逐一请求未加载的页
+        let allNewItems = [];
+        for (const page of remainingPages) {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
+                const result = await window.go.main.App.GetNotes(page, pageSize, sortBy);
+                if (result && result.items && result.items.length > 0) {
+                    allNewItems = allNewItems.concat(result.items);
+                    currentPage = page;
+                }
+            }
+        }
+
+        // 合并数据
+        if (allNewItems.length > 0) {
+            state.notes = state.notes.concat(allNewItems);
+        }
+        hasMoreNotes = false;
+
+        // 重新渲染并跳到底部
+        renderCardGrid();
+        const container = getScrollContainer();
+        if (container) {
+            // 等待 DOM 更新后滚动到底部
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+    } catch (err) {
+        console.error('加载全部失败:', err);
+    } finally {
+        isLoadingMore = false;
+        showLoadingIndicator(false);
+    }
+}
+
+/**
+ * 显示/隐藏加载指示器
+ */
+function showLoadingIndicator(show) {
+    let indicator = document.getElementById('loadingIndicator');
+    if (show) {
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'loadingIndicator';
+            indicator.className = 'loading-indicator';
+            const spinner = document.createElement('span');
+            spinner.className = 'loading-spinner';
+            indicator.appendChild(spinner);
+            indicator.appendChild(document.createTextNode('加载中...'));
+            document.getElementById('viewGrid').querySelector('.card-grid').after(indicator);
+        }
+        indicator.style.display = 'flex';
+    } else if (indicator) {
+        indicator.style.display = 'none';
+    }
 }
 
 /**
@@ -793,6 +977,94 @@ function getCurrentFontSize() {
     return parseInt(size, 10) || 16;
 }
 
+/* ===== 排序和分页设置函数 ===== */
+
+/**
+ * 初始化排序和分页设置
+ */
+async function initSortSettings() {
+    // 加载排序和分页设置
+    await loadSortSettings();
+    await loadPageSizeSetting();
+    // 绑定排序切换事件
+    document.querySelectorAll('input[name="sortOrder"]').forEach(radio => {
+        radio.addEventListener('change', async (e) => {
+            const order = e.target.value;
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSortOrder) {
+                await window.go.main.App.SetSortOrder(order);
+            }
+            // 重新加载笔记列表（重置分页）
+            resetPagination();
+            await loadNotes();
+        });
+    });
+    // 绑定分页大小分段控件事件
+    if (els.pageSizeControl) {
+        const moveIndicator = (btn) => {
+            const btns = Array.from(els.pageSizeControl.querySelectorAll('.segmented-btn'));
+            const index = btns.indexOf(btn);
+            if (index >= 0) {
+                const cw = els.pageSizeControl.offsetWidth;
+                const segW = (cw - 4) / btns.length;
+                els.pageSizeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+            }
+        };
+        els.pageSizeControl.querySelectorAll('.segmented-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const size = parseInt(btn.dataset.value, 10);
+                // 更新 active 状态和指示器位置
+                els.pageSizeControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                moveIndicator(btn);
+                els.pageSizeLabel.textContent = `${size} 条 / 页`;
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetPageSize) {
+                    await window.go.main.App.SetPageSize(size);
+                }
+                resetPagination();
+                await loadNotes();
+            });
+        });
+    }
+}
+
+/**
+ * 加载已保存的排序方式
+ */
+async function loadSortSettings() {
+    let sortOrder = 'updated_at';
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSortOrder) {
+        const saved = await window.go.main.App.GetSortOrder();
+        if (saved) sortOrder = saved;
+    }
+    const radio = document.querySelector(`input[name="sortOrder"][value="${sortOrder}"]`);
+    if (radio) radio.checked = true;
+}
+
+/**
+ * 加载已保存的分页大小
+ */
+async function loadPageSizeSetting() {
+    let size = 20;
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetPageSize) {
+        const saved = await window.go.main.App.GetPageSize();
+        if (saved && saved >= 20 && saved <= 100) size = saved;
+    }
+    // 高亮对应按钮并移动指示器
+    if (els.pageSizeControl) {
+        const btns = els.pageSizeControl.querySelectorAll('.segmented-btn');
+        const cw = els.pageSizeControl.offsetWidth;
+        const segW = (cw - 4) / btns.length;
+        btns.forEach((b, i) => {
+            const isActive = parseInt(b.dataset.value, 10) === size;
+            b.classList.toggle('active', isActive);
+            if (isActive) {
+                els.pageSizeIndicator.style.transform = `translateX(${2 + i * segW}px)`;
+            }
+        });
+    }
+    els.pageSizeLabel.textContent = `${size} 条 / 页`;
+}
+
 /**
  * 删除标签
  */
@@ -1059,10 +1331,23 @@ function showImportResult(result) {
  * 渲染卡片网格/列表
  */
 function renderCardGrid() {
+    // 获取当前排序方式，用于本地回落排序
+    const checkedRadio = document.querySelector('input[name="sortOrder"]:checked');
+    const sortBy = checkedRadio ? checkedRadio.value : 'updated_at';
+
     const sorted = [...state.notes].sort((a, b) => {
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
-        return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+        if (sortBy === 'title') {
+            const titleA = (a.title || '').toLowerCase();
+            const titleB = (b.title || '').toLowerCase();
+            if (titleA < titleB) return -1;
+            if (titleA > titleB) return 1;
+            return 0;
+        }
+        const dateA = new Date(sortBy === 'created_at' ? a.created_at : (a.updated_at || a.created_at));
+        const dateB = new Date(sortBy === 'created_at' ? b.created_at : (b.updated_at || b.created_at));
+        return dateB - dateA;
     });
 
     if (sorted.length === 0) {
@@ -1108,6 +1393,19 @@ function renderCardGrid() {
         `
         )
         .join('');
+
+    // 添加加载完成提示（底部已全部加载）
+    const gridContainer = els.viewGrid.querySelector('.card-grid') || els.viewGrid;
+    // 查找并移除旧的 footer（footer 在 card-grid 外部平级）
+    const oldFooter = els.viewGrid.querySelector('.notes-footer');
+    if (oldFooter) oldFooter.remove();
+
+    if (!hasMoreNotes && totalNotes > 0) {
+        const footer = document.createElement('div');
+        footer.className = 'notes-footer';
+        footer.textContent = `共 ${totalNotes} 条笔记`;
+        gridContainer.after(footer);
+    }
 }
 
 /**
@@ -1624,7 +1922,18 @@ function escapeHtml(text) {
 
 function initEventListeners() {
     // 搜索
-    // 输入框自动搜索（防抖 250ms）
+    // 搜索框回车：清空搜索时刷新笔记
+    els.searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !els.searchInput.value.trim()) {
+            e.preventDefault();
+            state.searchKeyword = '';
+            switchView('grid');
+            // 重置分页并重新加载
+            resetPagination();
+            loadNotes();
+        }
+    });
+    // 搜索框输入自动搜索（防抖 250ms）
     els.searchInput.addEventListener('input', debounce(function () {
         const kw = this.value.trim();
         if (kw) {
@@ -1835,10 +2144,23 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Escape: 退出批量模式
-    if (e.key === 'Escape' && state.batchMode) {
+    // Escape: 退出当前子视图，回到首页
+    if (e.key === 'Escape') {
         e.preventDefault();
-        toggleBatchMode();
+        if (state.batchMode) {
+            toggleBatchMode();
+        } else if (state.currentView === 'search') {
+            // 搜索页：清空搜索框后回到首页
+            els.searchInput.value = '';
+            state.searchKeyword = '';
+            state.searchSource = 'input';
+            switchView('grid');
+            loadNotes();
+        } else if (state.currentView !== 'grid') {
+            // 设置、数据管理、回收站等子视图 → 回到首页
+            switchView('grid');
+            loadNotes();
+        }
         return;
     }
 
@@ -1874,10 +2196,15 @@ function handleKeyboardNavigation(e) {
         container.scrollTop = 0;
         return;
     }
-    // Ctrl+End: 滚动到底部
+    // Ctrl+End: 加载所有剩余页后跳到底部
     if (e.ctrlKey && e.key === 'End') {
         e.preventDefault();
-        container.scrollTop = container.scrollHeight;
+        if (hasMoreNotes && !isLoadingMore) {
+            loadAllRemainingNotes();
+        } else {
+            // 无需加载，直接跳到底部
+            container.scrollTop = container.scrollHeight;
+        }
         return;
     }
     // PgUp: 向上翻一页
@@ -1886,12 +2213,43 @@ function handleKeyboardNavigation(e) {
         container.scrollTop -= container.clientHeight;
         return;
     }
-    // PgDn: 向下翻一页
+    // PgDn: 向下翻一页；已到底时加载下一页
     if (e.key === 'PageDown') {
         e.preventDefault();
-        container.scrollTop += container.clientHeight;
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        if (scrollTop + clientHeight >= scrollHeight - 1) {
+            // 已到底，主动加载下一页（不走 scroll 事件）
+            if (hasMoreNotes && !isLoadingMore) {
+                loadMoreNotes();
+            }
+            return;
+        }
+        _keyboardScroll = true;
+        container.scrollTop = scrollTop + clientHeight;
+        requestAnimationFrame(() => { _keyboardScroll = false; });
         return;
     }
+}
+
+/* ===== 滚动懒加载 ===== */
+
+// 键盘滚动标志：键盘触发的滚动不触发懒加载
+let _keyboardScroll = false;
+
+/**
+ * 绑定懒加载滚动事件（监听主内容区滚动到底部附近）
+ */
+function initScrollLoading() {
+    els.mainContent.addEventListener('scroll', () => {
+        if (state.currentView !== 'grid') return;
+        // 键盘触发的滚动不触发懒加载
+        if (_keyboardScroll) return;
+
+        const { scrollTop, scrollHeight, clientHeight } = els.mainContent;
+        if (scrollHeight - scrollTop - clientHeight < 200) {
+            loadMoreNotes();
+        }
+    });
 }
 
 /* ===== 初始化 ===== */
@@ -1899,8 +2257,10 @@ function handleKeyboardNavigation(e) {
 async function init() {
     initEventListeners();
     initFontSettings();
+    initScrollLoading();
     state.selectedTags = [];
     await loadFontSettings();
+    await initSortSettings();
     await loadNotes();
     await loadTags();
 }

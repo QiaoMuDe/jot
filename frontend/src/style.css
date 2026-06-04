@@ -1515,3 +1515,140 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* ==========================================================================
+   Section M: Sort Options & Page Size (Settings)
+   ========================================================================== */
+
+.sort-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition);
+}
+
+.sort-option:hover {
+  background: var(--hover-bg);
+}
+
+.sort-option input[type="radio"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.sort-option span {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.page-size-control {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+/* iOS 风格分段控件 */
+.segmented-control {
+    display: flex;
+    position: relative;
+    width: 280px;
+    height: 38px;
+    background: var(--input-bg, #f0f0f0);
+    border: 1px solid var(--border, #d9d9d9);
+    border-radius: 20px;
+    padding: 2px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.segmented-indicator {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(20% - 2px);
+    height: calc(100% - 4px);
+    background: var(--accent, #f59e0b);
+    border-radius: 18px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.segmented-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #666);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    z-index: 1;
+    transition: color 0.2s ease;
+    border-radius: 18px;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+.segmented-btn.active {
+    color: #fff;
+}
+
+.page-size-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 100px;
+}
+
+/* ==========================================================================
+   Section N: Notes Footer & Loading Indicator (Lazy Loading)
+   ========================================================================== */
+
+.notes-footer {
+  text-align: center;
+  padding: 16px 0 32px;
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 0;
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+}
+
+/* 加载旋转动画 */
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-top-color: var(--accent-color, #f97316);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

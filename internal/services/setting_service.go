@@ -2,7 +2,7 @@ package services
 
 import (
 	"gorm.io/gorm"
-	"jot/models"
+	"jot/internal/models"
 )
 
 // SettingService 封装配置相关的业务逻辑操作

@@ -1,0 +1,10 @@
+- [x] database/ 已移至 internal/database/
+- [x] fontutil/ 已移至 internal/fontutil/
+- [x] models/ 已移至 internal/models/
+- [x] services/ 已移至 internal/services/
+- [x] app.go 中 import 路径已更新
+- [x] services 中各文件 import 路径已更新
+- [x] database/db.go 中 import 路径已更新
+- [x] 旧的根目录子包已删除
+- [x] go build ./... 编译通过
+- [x] go vet ./... 无问题

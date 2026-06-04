@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"jot/database"
-	"jot/fontutil"
-	"jot/models"
-	"jot/services"
+	"jot/internal/database"
+	"jot/internal/fontutil"
+	"jot/internal/models"
+	"jot/internal/services"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -63,9 +64,9 @@ func (a *App) GetNote(id uint) (*models.Note, error) {
 	return a.noteService.GetByID(id)
 }
 
-// GetNotes 分页获取未删除的笔记列表
-func (a *App) GetNotes(page, pageSize int) (*services.PaginatedResult, error) {
-	notes, total, err := a.noteService.GetAll(page, pageSize)
+// GetNotes 分页获取未删除的笔记列表，支持指定排序方式（updated_at/created_at/title）
+func (a *App) GetNotes(page, pageSize int, sortBy string) (*services.PaginatedResult, error) {
+	notes, total, err := a.noteService.GetAll(page, pageSize, sortBy)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +141,9 @@ func (a *App) EmptyTrash() error {
 	return a.noteService.EmptyTrash()
 }
 
-// GetNotesByTag 按标签分页获取笔记
-func (a *App) GetNotesByTag(tagID uint, page, pageSize int) (*services.PaginatedResult, error) {
-	notes, total, err := a.noteService.GetByTag(tagID, page, pageSize)
+// GetNotesByTag 按标签分页获取笔记，支持指定排序方式（updated_at/created_at/title）
+func (a *App) GetNotesByTag(tagID uint, page, pageSize int, sortBy string) (*services.PaginatedResult, error) {
+	notes, total, err := a.noteService.GetByTag(tagID, page, pageSize, sortBy)
 	if err != nil {
 		return nil, err
 	}
@@ -256,4 +257,38 @@ func (a *App) SetSetting(key, value string) error {
 // GetSystemFonts 获取系统已安装的字体族列表
 func (a *App) GetSystemFonts() []string {
 	return fontutil.GetFonts()
+}
+
+// ==================== 排序与分页设置绑定方法 ====================
+
+// GetSortOrder 获取排序方式设置
+func (a *App) GetSortOrder() string {
+	order := a.settingService.Get("sort_order")
+	if order == "" {
+		return "updated_at"
+	}
+	return order
+}
+
+// SetSortOrder 保存排序方式设置
+func (a *App) SetSortOrder(order string) error {
+	return a.settingService.Set("sort_order", order)
+}
+
+// GetPageSize 获取分页大小设置
+func (a *App) GetPageSize() int {
+	size := a.settingService.Get("page_size")
+	if size == "" {
+		return 20
+	}
+	n, err := strconv.Atoi(size)
+	if err != nil || n < 20 || n > 100 {
+		return 20
+	}
+	return n
+}
+
+// SetPageSize 保存分页大小设置
+func (a *App) SetPageSize(size int) error {
+	return a.settingService.Set("page_size", strconv.Itoa(size))
 }

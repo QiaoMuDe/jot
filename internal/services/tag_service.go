@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
-	"jot/models"
+	"jot/internal/models"
 )
 
 // TagService 封装标签相关的业务逻辑操作

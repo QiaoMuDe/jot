@@ -6,7 +6,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"jot/models"
+	"jot/internal/models"
 )
 
 // InitDB 初始化 SQLite 数据库连接并执行自动迁移

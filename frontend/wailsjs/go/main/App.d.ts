@@ -31,11 +31,15 @@ export function GetDataStats():Promise<services.DataStats>;
 
 export function GetNote(arg1:number):Promise<models.Note>;
 
-export function GetNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
+export function GetNotes(arg1:number,arg2:number,arg3:string):Promise<services.PaginatedResult>;
 
-export function GetNotesByTag(arg1:number,arg2:number,arg3:number):Promise<services.PaginatedResult>;
+export function GetNotesByTag(arg1:number,arg2:number,arg3:number,arg4:string):Promise<services.PaginatedResult>;
+
+export function GetPageSize():Promise<number>;
 
 export function GetSetting(arg1:string):Promise<string>;
+
+export function GetSortOrder():Promise<string>;
 
 export function GetSystemFonts():Promise<Array<string>>;
 
@@ -53,7 +57,11 @@ export function RestoreNote(arg1:number):Promise<void>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number):Promise<services.PaginatedResult>;
 
+export function SetPageSize(arg1:number):Promise<void>;
+
 export function SetSetting(arg1:string,arg2:string):Promise<void>;
+
+export function SetSortOrder(arg1:string):Promise<void>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 

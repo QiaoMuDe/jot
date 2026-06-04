@@ -58,16 +58,24 @@ export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }
 
-export function GetNotes(arg1, arg2) {
-  return window['go']['main']['App']['GetNotes'](arg1, arg2);
+export function GetNotes(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetNotes'](arg1, arg2, arg3);
 }
 
-export function GetNotesByTag(arg1, arg2, arg3) {
-  return window['go']['main']['App']['GetNotesByTag'](arg1, arg2, arg3);
+export function GetNotesByTag(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetNotesByTag'](arg1, arg2, arg3, arg4);
+}
+
+export function GetPageSize() {
+  return window['go']['main']['App']['GetPageSize']();
 }
 
 export function GetSetting(arg1) {
   return window['go']['main']['App']['GetSetting'](arg1);
+}
+
+export function GetSortOrder() {
+  return window['go']['main']['App']['GetSortOrder']();
 }
 
 export function GetSystemFonts() {
@@ -102,8 +110,16 @@ export function SearchNotes(arg1, arg2, arg3) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3);
 }
 
+export function SetPageSize(arg1) {
+  return window['go']['main']['App']['SetPageSize'](arg1);
+}
+
 export function SetSetting(arg1, arg2) {
   return window['go']['main']['App']['SetSetting'](arg1, arg2);
+}
+
+export function SetSortOrder(arg1) {
+  return window['go']['main']['App']['SetSortOrder'](arg1);
 }
 
 export function TogglePinNote(arg1) {

@@ -1,0 +1,16 @@
+- [x] note_service.go GetAll 支持 sortBy 参数
+- [x] note_service.go GetByTag 支持 sortBy 参数
+- [x] app.go GetNotes/GetNotesByTag 透传 sortBy
+- [x] app.go 新增 GetSortOrder/SetSortOrder 绑定
+- [x] 设置页展示排序选项（更新时间/创建时间/名称）
+- [x] 排序切换后笔记列表即时刷新
+- [x] 排序偏好持久化到数据库
+- [x] 设置页展示分页大小滑块（range 9~54 step=9）
+- [x] 滑块拖动时实时显示当前值
+- [x] 分页大小切换后笔记列表即时刷新
+- [x] 分页大小持久化到数据库
+- [x] 所有触发场景（启动/CRUD）均只加载第 1 页
+- [x] 滚动到底部自动加载更多
+- [x] 全部加载完显示总数提示
+- [x] 搜索/回收站由后端数据库查询处理
+- [x] go build ./... 编译通过

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"jot/models"
+	"jot/internal/models"
 )
 
 // NoteService 封装笔记相关的业务逻辑操作
@@ -86,8 +86,21 @@ func (s *NoteService) GetByID(id uint) (*models.Note, error) {
 	return &note, nil
 }
 
-// GetAll 分页获取未删除的笔记列表，按置顶状态和更新时间降序排列，返回列表与总数
-func (s *NoteService) GetAll(page, pageSize int) ([]models.Note, int64, error) {
+// buildSortOrder 根据 sortBy 参数构建 ORDER BY 子句
+// 支持的排序方式：updated_at（默认）、created_at、title
+func buildSortOrder(sortBy string) string {
+	switch sortBy {
+	case "created_at":
+		return "pinned DESC, created_at DESC"
+	case "title":
+		return "pinned DESC, title ASC"
+	default:
+		return "pinned DESC, updated_at DESC"
+	}
+}
+
+// GetAll 分页获取未删除的笔记列表，按指定排序方式排列，返回列表与总数
+func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -97,7 +110,7 @@ func (s *NoteService) GetAll(page, pageSize int) ([]models.Note, int64, error) {
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order("pinned DESC, updated_at DESC").
+	if err := query.Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -219,8 +232,8 @@ func (s *NoteService) Restore(id uint) error {
 	return nil
 }
 
-// GetByTag 按标签 ID 分页获取未删除的笔记列表
-func (s *NoteService) GetByTag(tagID uint, page, pageSize int) ([]models.Note, int64, error) {
+// GetByTag 按标签 ID 分页获取未删除的笔记列表，支持指定排序方式
+func (s *NoteService) GetByTag(tagID uint, page, pageSize int, sortBy string) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -234,7 +247,7 @@ func (s *NoteService) GetByTag(tagID uint, page, pageSize int) ([]models.Note, i
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order("pinned DESC, updated_at DESC").
+	if err := query.Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
