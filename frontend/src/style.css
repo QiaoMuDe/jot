@@ -109,14 +109,16 @@
 
 /* 新建笔记和更多菜单按钮更明显 */
 #newNoteBtn,
-#moreMenuBtn {
+#moreMenuBtn,
+#batchModeBtn {
     color: #475569;
     font-weight: 600;
     border: 1px solid #e2e8f0;
 }
 
 #newNoteBtn:hover,
-#moreMenuBtn:hover {
+#moreMenuBtn:hover,
+#batchModeBtn:hover {
     border-color: #cbd5e1;
     background: #f8fafc;
 }
@@ -1126,6 +1128,106 @@
 
 .auto-save-indicator.saved {
     color: #10b981;
+}
+
+/* ===== 批量操作栏 ===== */
+.batch-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    gap: 12px;
+    flex-shrink: 0;
+    animation: batchSlideDown 0.15s ease;
+}
+
+@keyframes batchSlideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.batch-bar-info {
+    font-size: 13px;
+    color: #475569;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.batch-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.batch-btn {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #e2e8f0;
+}
+
+.batch-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.batch-btn.btn-danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.batch-btn.btn-danger:hover {
+    background: #fee2e2;
+}
+
+.batch-cancel {
+    background: transparent;
+    color: #94a3b8;
+    border-color: transparent;
+}
+
+.batch-cancel:hover {
+    color: #64748b;
+    background: #f1f5f9;
+}
+
+/* ===== 批量模式复选框（替换置顶按钮位置，右上角） ===== */
+.batch-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #6366f1;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+/* 批量模式下隐藏置顶按钮，显示复选框 */
+.note-card.batch-mode .card-action-btn {
+    display: none !important;
+}
+
+.note-card.batch-mode .batch-checkbox {
+    display: block;
+}
+
+/* 默认隐藏复选框 */
+.batch-checkbox {
+    display: none;
+}
+
+/* 选中态卡片 */
+.note-card.selected {
+    box-shadow: 0 0 0 2px #6366f1, 0 4px 12px rgba(99, 102, 241, 0.15);
+    transform: translateY(-1px);
+}
+
+/* 批量模式按钮激活态 */
+#batchModeBtn.active {
+    background-color: #6366f1;
+    color: #fff;
+    border-color: #6366f1;
 }
 
 

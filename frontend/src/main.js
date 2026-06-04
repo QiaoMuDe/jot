@@ -11,6 +11,8 @@ const state = {
     selectedTags: [],
     searchKeyword: '',
     searchSource: 'input',      // 'input' | 'tag' — 搜索触发来源
+    batchMode: false,           // 是否处于批量管理模式
+    selectedNoteIds: new Set(), // 选中的笔记 ID 集合
 };
 
 /* ===== DOM 引用 ===== */
@@ -87,6 +89,13 @@ const els = {
 
     // 主内容区（用于网格视图滚动）
     mainContent: $('mainContent'),
+
+    // 批量操作
+    batchModeBtn: $('batchModeBtn'),
+    batchBar: $('batchBar'),
+    batchCount: $('batchCount'),
+    batchDeleteBtn: $('batchDeleteBtn'),
+    batchCancelBtn: $('batchCancelBtn'),
 };
 
 /* ===== 工具函数 ===== */
@@ -150,6 +159,14 @@ function debounce(fn, delay) {
  * 切换右侧主内容区视图
  */
 function switchView(view) {
+    // 切换视图时强制退出批量模式
+    if (state.batchMode) {
+        state.batchMode = false;
+        els.batchModeBtn.classList.remove('active');
+        state.selectedNoteIds.clear();
+        els.batchBar.style.display = 'none';
+    }
+
     // 隐藏所有视图
     document.querySelectorAll('.view').forEach((v) => {
         v.classList.remove('active');
@@ -724,7 +741,7 @@ function renderCardGrid() {
     els.cardGrid.innerHTML = sorted
         .map(
             (note) => `
-        <div class="note-card" onclick="window.viewNote(${note.id})" oncontextmenu="event.preventDefault(); window.showContextMenu(event, ${note.id})">
+        <div class="note-card${state.batchMode ? ' batch-mode' : ''}${state.selectedNoteIds.has(note.id) ? ' selected' : ''}" onclick="${state.batchMode ? `window.toggleNoteSelection(${note.id})` : `window.viewNote(${note.id})`}" oncontextmenu="${state.batchMode ? 'event.preventDefault()' : `event.preventDefault(); window.showContextMenu(event, ${note.id})`}">
             ${note.pinned ? '<div class="card-pin-badge">📌</div>' : ''}
             <div class="card-body">
                 <div class="card-title">${escapeHtml(note.title || '无标题')}</div>
@@ -742,9 +759,12 @@ function renderCardGrid() {
                 <span class="card-time">${formatTime(note.updated_at || note.created_at)}</span>
             </div>
             <div class="card-actions" onclick="event.stopPropagation()">
-                <button class="card-action-btn" onclick="event.stopPropagation(); window.togglePin(${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
-                    ${note.pinned ? '★' : '☆'}
-                </button>
+                ${state.batchMode
+                    ? `<input type="checkbox" class="batch-checkbox" ${state.selectedNoteIds.has(note.id) ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleNoteSelection(${note.id})">`
+                    : `<button class="card-action-btn" onclick="event.stopPropagation(); window.togglePin(${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
+                           ${note.pinned ? '★' : '☆'}
+                       </button>`
+                }
             </div>
         </div>
         `
@@ -1166,6 +1186,81 @@ window.searchByTag = function (tagName) {
     searchNotes(tagName, 'tag');
 };
 
+/* ===== 批量管理函数 ===== */
+
+/**
+ * 切换批量管理模式
+ */
+function toggleBatchMode() {
+    state.batchMode = !state.batchMode;
+    if (!state.batchMode) {
+        // 退出批量模式：清空选中
+        clearSelection();
+    }
+    els.batchModeBtn.classList.toggle('active', state.batchMode);
+    renderCardGrid();
+    // 进入批量模式时显示 bar，退出时隐藏
+    if (state.batchMode) {
+        els.batchBar.style.display = 'flex';
+        els.batchCount.textContent = '0';
+    } else {
+        els.batchBar.style.display = 'none';
+    }
+}
+
+/**
+ * 切换笔记选中状态
+ */
+window.toggleNoteSelection = function (id) {
+    if (state.selectedNoteIds.has(id)) {
+        state.selectedNoteIds.delete(id);
+    } else {
+        state.selectedNoteIds.add(id);
+    }
+    updateBatchBar();
+    renderCardGrid();
+};
+
+/**
+ * 更新批量操作栏
+ */
+function updateBatchBar() {
+    const count = state.selectedNoteIds.size;
+    els.batchCount.textContent = count;
+}
+
+/**
+ * 取消选中
+ */
+function clearSelection() {
+    state.selectedNoteIds.clear();
+    updateBatchBar();
+    if (state.batchMode) {
+        renderCardGrid();
+    }
+}
+
+/**
+ * 批量删除选中的笔记
+ */
+async function batchDeleteSelected() {
+    const ids = Array.from(state.selectedNoteIds);
+    if (ids.length === 0) return;
+    if (!confirm(`确定要删除选中的 ${ids.length} 条笔记吗？`)) return;
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchDeleteNotes) {
+            await window.go.main.App.BatchDeleteNotes(ids);
+        } else {
+            console.warn('BatchDeleteNotes 未绑定，模拟批量删除');
+            mockNotes = mockNotes.filter(n => !ids.includes(n.id));
+        }
+    } catch (err) {
+        console.error('批量删除失败:', err);
+    }
+    clearSelection();
+    await loadNotes();
+}
+
 /* ===== HTML 转义 ===== */
 
 function escapeHtml(text) {
@@ -1295,6 +1390,13 @@ function initEventListeners() {
     // 右键菜单内阻止冒泡，避免触发 document.click 关闭
     els.contextMenu.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // 批量管理模式
+    els.batchModeBtn.addEventListener('click', toggleBatchMode);
+    els.batchDeleteBtn.addEventListener('click', batchDeleteSelected);
+    els.batchCancelBtn.addEventListener('click', () => {
+        if (state.batchMode) toggleBatchMode();
+    });
+
     // 键盘快捷键导航
     document.addEventListener('keydown', handleKeyboardNavigation);
 }
@@ -1390,6 +1492,13 @@ function handleKeyboardNavigation(e) {
         if (!els.viewEditor.classList.contains('active')) {
             openEditor(null);
         }
+        return;
+    }
+
+    // Escape: 退出批量模式
+    if (e.key === 'Escape' && state.batchMode) {
+        e.preventDefault();
+        toggleBatchMode();
         return;
     }
 

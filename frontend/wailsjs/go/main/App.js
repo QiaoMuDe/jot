@@ -6,6 +6,14 @@ export function AddTagToNote(arg1, arg2) {
   return window['go']['main']['App']['AddTagToNote'](arg1, arg2);
 }
 
+export function BatchAddTagToNotes(arg1, arg2) {
+  return window['go']['main']['App']['BatchAddTagToNotes'](arg1, arg2);
+}
+
+export function BatchDeleteNotes(arg1) {
+  return window['go']['main']['App']['BatchDeleteNotes'](arg1);
+}
+
 export function CreateNote(arg1, arg2) {
   return window['go']['main']['App']['CreateNote'](arg1, arg2);
 }

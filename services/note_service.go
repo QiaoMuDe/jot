@@ -195,6 +195,12 @@ func (s *NoteService) EmptyTrash() error {
 	return nil
 }
 
+// BatchDelete 批量软删除指定 ID 数组的笔记（移入回收站）
+func (s *NoteService) BatchDelete(ids []uint) error {
+	result := s.db.Where("id IN ?", ids).Delete(&models.Note{})
+	return result.Error
+}
+
 // Restore 从回收站恢复指定 ID 的笔记（取消软删除）
 func (s *NoteService) Restore(id uint) error {
 	result := s.db.Unscoped().Model(&models.Note{}).Where("id = ?", id).Update("deleted_at", nil)
