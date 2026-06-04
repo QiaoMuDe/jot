@@ -170,6 +170,12 @@ const els = {
     fabGroup: $('fabGroup'),
     fabNewNote: $('fabNewNote'),
     backToTopBtn: $('backToTopBtn'),
+
+    // 关于页面
+    viewAbout: $('viewAbout'),
+    aboutCloseBtn: $('aboutCloseBtn'),
+    aboutVersion: $('aboutVersion'),
+    aboutProjectLink: $('aboutProjectLink'),
 };
 
 /* ===== 工具函数 ===== */
@@ -2214,7 +2220,13 @@ function initEventListeners() {
         const item = e.target.closest('.dropdown-item');
         if (item && item.dataset.action) {
             els.moreMenu.classList.remove('active');
-            if (item.dataset.action === 'settings') {
+            if (item.dataset.action === 'home') {
+                state.searchKeyword = '';
+                els.searchInput.value = '';
+                switchView('grid');
+                resetPagination();
+                loadNotes();
+            } else if (item.dataset.action === 'settings') {
                 switchView('settings');
             } else if (item.dataset.action === 'data') {
                 switchView('data');
@@ -2308,6 +2320,28 @@ function initEventListeners() {
     els.batchDeleteBtn.addEventListener('click', batchDeleteSelected);
     els.batchCancelBtn.addEventListener('click', () => {
         if (state.batchMode) toggleBatchMode();
+    });
+
+    // 关于页面
+    document.querySelector('.brand-name').addEventListener('click', (e) => {
+        e.stopPropagation();
+        showAbout();
+    });
+    els.aboutCloseBtn.addEventListener('click', closeAbout);
+    els.viewAbout.addEventListener('click', (e) => {
+        if (e.target === els.viewAbout) closeAbout();
+    });
+    els.aboutProjectLink.addEventListener('click', async () => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenProjectURL) {
+                await window.go.main.App.OpenProjectURL('https://gitee.com/MM-Q/jot.git');
+            } else {
+                // 后端未绑定时使用替代方案
+                window.open('https://gitee.com/MM-Q/jot.git', '_blank');
+            }
+        } catch (err) {
+            console.error('打开项目地址失败:', err);
+        }
     });
 
     // 键盘快捷键导航
@@ -2411,6 +2445,11 @@ function handleKeyboardNavigation(e) {
     // Escape: 退出当前子视图，回到首页
     if (e.key === 'Escape') {
         e.preventDefault();
+        // 关于页面打开时关闭它
+        if (els.viewAbout.style.display === 'flex') {
+            closeAbout();
+            return;
+        }
         // 如果编辑器处于全屏模式，先退出全屏
         if (els.editorPanel.classList.contains('fullscreen')) {
             toggleEditorFullscreen();
@@ -2546,6 +2585,34 @@ function initScrollbarAutoHide() {
             els.backToTopBtn.classList.toggle('visible', scrollY > 300);
         });
     }
+}
+
+/* ===== 关于页面 ===== */
+
+/**
+ * 打开关于页面，获取版本信息
+ */
+async function showAbout() {
+    els.viewAbout.style.display = 'flex';
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetVersion) {
+            const version = await window.go.main.App.GetVersion();
+            els.aboutVersion.textContent = version || '-';
+        } else {
+            // 后端未绑定时使用 Mock
+            els.aboutVersion.textContent = 'v0.0.0 (Mock)';
+        }
+    } catch (err) {
+        console.error('获取版本信息失败:', err);
+        els.aboutVersion.textContent = '-';
+    }
+}
+
+/**
+ * 关闭关于页面
+ */
+function closeAbout() {
+    els.viewAbout.style.display = 'none';
 }
 
 /* ===== 初始化 ===== */

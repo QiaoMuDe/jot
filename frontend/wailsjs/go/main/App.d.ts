@@ -45,7 +45,11 @@ export function GetSystemFonts():Promise<Array<string>>;
 
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
+export function GetVersion():Promise<string>;
+
 export function ImportData(arg1:string):Promise<services.ImportResult>;
+
+export function OpenProjectURL(arg1:string):Promise<string>;
 
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 

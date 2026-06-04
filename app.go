@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"gitee.com/MM-Q/verman"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -291,4 +292,17 @@ func (a *App) GetPageSize() int {
 // SetPageSize 保存分页大小设置
 func (a *App) SetPageSize(size int) error {
 	return a.settingService.Set("page_size", strconv.Itoa(size))
+}
+
+// ==================== 版本与链接绑定方法 ====================
+
+// GetVersion 获取应用版本号
+func (a *App) GetVersion() string {
+	return verman.V.GitVersion
+}
+
+// OpenProjectURL 在默认浏览器中打开项目地址
+func (a *App) OpenProjectURL(url string) string {
+	runtime.BrowserOpenURL(a.ctx, url)
+	return "已打开浏览器"
 }

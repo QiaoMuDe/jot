@@ -1,8 +1,9 @@
 module jot
 
-go 1.23.0
+go 1.24.2
 
 require (
+	gitee.com/MM-Q/verman v0.0.19
 	github.com/glebarez/sqlite v1.11.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	gorm.io/gorm v1.31.1

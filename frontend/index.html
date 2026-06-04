@@ -24,8 +24,11 @@
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
+                    <div class="dropdown-item" data-action="home">全部笔记</div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="data">数据管理</div>
                     <div class="dropdown-item" data-action="trash">回收站</div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="settings">设置</div>
                 </div>
             </div>
@@ -329,6 +332,28 @@
             <div class="context-menu-item" data-action="pin">置顶</div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item danger" data-action="delete">删除</div>
+        </div>
+
+        <!-- 关于页面 -->
+        <div id="viewAbout" class="about-overlay" style="display:none;">
+            <div class="about-card">
+                <button class="about-close-btn" id="aboutCloseBtn">✕</button>
+                <div class="about-header">
+                    <div class="about-logo">Jot</div>
+                    <div class="about-subtitle">卡片式笔记应用</div>
+                </div>
+                <div class="about-body">
+                    <p class="about-desc">简洁、高效的卡片式笔记工具，帮助您快速记录和管理灵感。</p>
+                    <div class="about-info">
+                        <div class="about-info-row">
+                            <a class="about-link" id="aboutProjectLink" href="javascript:void(0)">https://gitee.com/MM-Q/jot.git</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-footer">
+                    <span class="about-version" id="aboutVersion">-</span>
+                </div>
+            </div>
         </div>
 </div>
 <script src="./src/main.js" type="module"></script>

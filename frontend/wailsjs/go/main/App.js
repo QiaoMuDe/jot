@@ -86,8 +86,16 @@ export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function ImportData(arg1) {
   return window['go']['main']['App']['ImportData'](arg1);
+}
+
+export function OpenProjectURL(arg1) {
+  return window['go']['main']['App']['OpenProjectURL'](arg1);
 }
 
 export function PermanentDeleteNote(arg1) {
