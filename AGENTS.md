@@ -500,6 +500,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **标签选中态视觉优化**：未选中标签压暗去饱和，选中亮色 + ✓ 前缀 + 脉冲动画 + 外发光
 - ✅ **悬浮操作按钮**：右下角 `+`（新建）和 `↑`（回到顶部），`↑` 滚动超过 300px 时淡入
 - ✅ **滚动条美化**：主内容区滚动显示/停止 1s 淡出，6px 半透明灰条，三主题独立配色；textarea `flex:1` 独占滚动，编者面板高度固定 85vh
+- ✅ **快速笔记模式**：设置页 iOS 风格开关，启用后启动自动全屏编辑，保存/取消后回到网格首页
 
 ---
 
@@ -552,6 +553,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **右键菜单滚动锁定** | `showContextMenu` 设 `#mainContent overflow:hidden`，`hideContextMenu` 清空还原。配合 `scrollbar-gutter: stable` 防止宽度抖动 |
 | **主内容区滚动条** | 滚动时显示 `var(--scrollbar-thumb)`，停止 1s 后淡出（`.scrolling` 类 0.3s transition）。三主题独立配色（default `rgba(0,0,0,0.18)`、light `rgba(0,0,0,0.14)`、dark `rgba(255,255,255,0.18)`），hover 加深。8px 宽，track 极淡底色 |
 | **标签重名提示** | 设置页添加标签时，先在前端 `state.tags` 中查重，已存在则弹出 Toast「该标签已存在」3s 自动消失 |
+| **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时自动 `openEditor(null)` + `toggleEditorFullscreen()`；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
 
 ---
 

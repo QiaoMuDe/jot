@@ -62,6 +62,7 @@ const els = {
 
     // 设置
     tagList: $('tagList'),
+    quickNoteToggle: $('quickNoteToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -84,6 +85,7 @@ const els = {
     fontSizeInput: $('fontSizeInput'),
     // 回收站
     trashList: $('trashList'),
+    trashListInner: $('trashListInner'),
     trashBackBtn: $('trashBackBtn'),
     restoreAllBtn: $('restoreAllBtn'),
     emptyTrashBtn: $('emptyTrashBtn'),
@@ -129,6 +131,7 @@ const els = {
     batchCancelBtn: $('batchCancelBtn'),
 
     // 浮动操作按钮
+    fabGroup: $('fabGroup'),
     fabNewNote: $('fabNewNote'),
     backToTopBtn: $('backToTopBtn'),
 };
@@ -222,6 +225,8 @@ function switchView(view) {
     // 新建按钮和批量管理按钮仅在笔记网格视图显示
     els.newNoteBtn.style.display = view === 'grid' ? 'flex' : 'none';
     els.batchModeBtn.style.display = view === 'grid' ? '' : 'none';
+    // 悬浮操作按钮仅在网格视图显示
+    els.fabGroup.style.display = view === 'grid' ? '' : 'none';
 
     switch (view) {
         case 'grid':
@@ -1266,6 +1271,7 @@ async function restoreNote(id) {
     }
     await loadTrashNotes();
     await loadNotes();
+    showToast('笔记已恢复');
 }
 
 /**
@@ -1526,7 +1532,7 @@ function renderCardGrid() {
                     ${(note.tags || [])
                         .map(
                             (tag) =>
-                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')">${escapeHtml(tag.name)}</span>`
+                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="${state.batchMode ? `event.stopPropagation()` : `event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')`}">${escapeHtml(tag.name)}</span>`
                         )
                         .join('')}
                 </div>
@@ -1663,7 +1669,7 @@ function renderTagSelector(readOnly) {
  */
 function renderTrashList() {
     if (state.trashNotes.length === 0) {
-        els.trashList.innerHTML = `
+        els.trashListInner.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">🗑️</div>
                 <div class="empty-title">回收站为空</div>
@@ -1673,7 +1679,7 @@ function renderTrashList() {
         return;
     }
 
-    els.trashList.innerHTML = state.trashNotes
+    els.trashListInner.innerHTML = state.trashNotes
         .map(
             (note) => `
         <div class="trash-item">
@@ -1841,6 +1847,11 @@ function closeEditor() {
     els.viewEditor.classList.remove('active');
     // 恢复主内容区滚动
     els.mainContent.style.overflow = '';
+    // 退出全屏模式
+    els.editorPanel.classList.remove('fullscreen');
+    els.editorFullscreenBtn.textContent = '⛶';
+    els.editorFullscreenBtn.title = '全屏编辑';
+    els.editorFullscreenBtn.classList.remove('fullscreen');
     // 清理事件监听
     els.editorNoteTitle.removeEventListener('input', onEditorInput);
     els.editorNoteContent.removeEventListener('input', onEditorInput);
@@ -2212,6 +2223,19 @@ function initEventListeners() {
         switchView('grid');
     });
 
+    // 快速笔记开关
+    els.quickNoteToggle.addEventListener('change', async (e) => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+                await window.go.main.App.SetSetting('quick_note_enabled', String(e.target.checked));
+            } else {
+                localStorage.setItem('quick_note_enabled', String(e.target.checked));
+            }
+        } catch (err) {
+            console.error('保存快速笔记设置失败:', err);
+        }
+    });
+
     // 右键菜单：点击其他区域关闭
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('click', () => els.moreMenu.classList.remove('active'));
@@ -2302,7 +2326,7 @@ function getScrollContainer() {
         case 'data':
             return els.dataContent;
         case 'trash':
-            return els.trashList;
+            return els.mainContent;
         default:
             return null;
     }
@@ -2451,7 +2475,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, els.searchResults, els.trashList].filter(Boolean);
+    const containers = [els.mainContent, els.searchResults].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', () => {
@@ -2483,8 +2507,32 @@ async function init() {
     await loadThemeSetting();
     await loadFontSettings();
     await initSortSettings();
+    // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
+    await loadQuickNoteSetting();
     await loadNotes();
     await loadTags();
+}
+
+/**
+ * 加载快速笔记设置，启用时自动打开全屏编辑器
+ */
+async function loadQuickNoteSetting() {
+    try {
+        let enabled = false;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('quick_note_enabled');
+            enabled = val === 'true';
+        } else {
+            enabled = localStorage.getItem('quick_note_enabled') === 'true';
+        }
+        els.quickNoteToggle.checked = enabled;
+        if (enabled) {
+            openEditor(null);
+            toggleEditorFullscreen();
+        }
+    } catch (err) {
+        console.error('加载快速笔记设置失败:', err);
+    }
 }
 
 // 应用启动

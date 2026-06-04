@@ -161,6 +161,22 @@
                         </div>
                     </div>
                 </div>
+                <!-- 快速笔记 -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">快速笔记</h3>
+                    <div class="font-settings">
+                        <div class="font-setting-row">
+                            <label class="font-setting-label">启动快速笔记</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="quickNoteToggle">
+                                <label class="toggle-track" for="quickNoteToggle">
+                                    <span class="toggle-thumb"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="quick-note-hint">启用后，启动应用时自动打开全屏编辑器，方便快速记录</div>
+                    </div>
+                </div>
                 <!-- 标签管理 -->
                 <div class="settings-section">
                     <h3 class="settings-section-title">标签管理</h3>
@@ -272,7 +288,9 @@
                 </div>
             </div>
             <div class="trash-list" id="trashList">
-                <!-- 回收站笔记由 JS 动态渲染 -->
+                <div class="trash-list-inner" id="trashListInner">
+                    <!-- 回收站笔记由 JS 动态渲染 -->
+                </div>
             </div>
         </div>
     </main>

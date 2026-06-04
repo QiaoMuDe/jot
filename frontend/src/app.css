@@ -188,41 +188,35 @@ body {
 
 /* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
 #mainContent::-webkit-scrollbar-thumb,
-.search-results::-webkit-scrollbar-thumb,
-.trash-list::-webkit-scrollbar-thumb {
+.search-results::-webkit-scrollbar-thumb {
     background: transparent;
     transition: background 0.4s ease;
 }
 
 #mainContent.scrolling::-webkit-scrollbar-thumb,
-.search-results.scrolling::-webkit-scrollbar-thumb,
-.trash-list.scrolling::-webkit-scrollbar-thumb {
+.search-results.scrolling::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
 }
 
 #mainContent:hover::-webkit-scrollbar-thumb,
-.search-results:hover::-webkit-scrollbar-thumb,
-.trash-list:hover::-webkit-scrollbar-thumb {
+.search-results:hover::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-hover);
 }
 
 /* 给 track 加一层极淡底色，让滚动条区域有存在感 */
 #mainContent::-webkit-scrollbar-track,
-.search-results::-webkit-scrollbar-track,
-.trash-list::-webkit-scrollbar-track {
+.search-results::-webkit-scrollbar-track {
     background: var(--scrollbar-track);
 }
 
 /* Firefox */
 #mainContent,
-.search-results,
-.trash-list {
+.search-results {
     scrollbar-width: thin;
     scrollbar-color: transparent var(--scrollbar-track);
 }
 
 #mainContent.scrolling,
-.search-results.scrolling,
-.trash-list.scrolling {
+.search-results.scrolling {
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
