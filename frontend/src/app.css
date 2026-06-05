@@ -81,6 +81,8 @@
     --scrollbar-track: rgba(0, 0, 0, 0.04);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+    --bg-secondary: #EDE9E0;
+    --text-tertiary: #C5C0B8;
 }
 
 /* ===== 亮色主题 ===== */
@@ -114,6 +116,8 @@
     --scrollbar-track: rgba(0, 0, 0, 0.03);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+    --bg-secondary: #F0F0F0;
+    --text-tertiary: #D0D0D0;
 }
 
 /* ===== 暗色主题 ===== */
@@ -147,6 +151,8 @@
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
+    --bg-secondary: #181818;
+    --text-tertiary: #505050;
 }
 
 /* nord 主题：北极蓝调 */
@@ -180,6 +186,8 @@
     --scrollbar-track: rgba(0, 0, 0, 0.03);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+    --bg-secondary: #E2E7EE;
+    --text-tertiary: #B0B7C8;
 }
 
 /* monokai-pro 主题：荧光粉墨 */
@@ -213,6 +221,8 @@
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
+    --bg-secondary: #1F1D20;
+    --text-tertiary: #706F70;
 }
 
 /* tokyo-night 主题：靛紫夜幕 */
@@ -246,6 +256,8 @@
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
+    --bg-secondary: #15161F;
+    --text-tertiary: #424B73;
 }
 
 * {

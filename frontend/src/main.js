@@ -816,10 +816,10 @@ async function undoDelete(noteIds) {
 function showConfirmDialog(msg) {
     return new Promise((resolve) => {
         els.confirmDialogMsg.textContent = msg;
-        els.confirmDialog.style.display = 'flex';
+        els.confirmDialog.classList.add('visible');
 
         const cleanup = (result) => {
-            els.confirmDialog.style.display = 'none';
+            els.confirmDialog.classList.remove('visible');
             resolve(result);
         };
 
@@ -928,6 +928,7 @@ async function createTag() {
     }
     els.newTagName.value = '';
     await loadTags();
+    nm.show('标签已创建', 'success');
 }
 
 /* ===== 字体设置函数 ===== */
@@ -1418,6 +1419,8 @@ async function deleteTag(id) {
         console.error('删除标签失败:', err);
     }
     await loadTags();
+    await loadNotes();
+    nm.show('标签已删除', 'success');
 }
 
 /**
@@ -2297,27 +2300,26 @@ const debouncedUpdatePreview = debounce(updatePreview, 300);
 function toggleEditorFullscreen() {
     const panel = els.editorPanel;
     const btn = els.editorFullscreenBtn;
+    const overlay = els.editorOverlay;
     const goFullscreen = !panel.classList.contains('fullscreen');
 
-    if (goFullscreen) {
-        // 进入全屏：缓动曲线进入
-        panel.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-        panel.classList.add('fullscreen');
-    } else {
-        // 退出全屏：快速淡出
-        panel.style.transition = 'all 0.2s ease-out';
-        panel.classList.remove('fullscreen');
-    }
+    panel.classList.toggle('fullscreen', goFullscreen);
+    overlay.classList.toggle('fullscreening', goFullscreen);
     btn.textContent = goFullscreen ? '⤡' : '⛶';
     btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
     btn.classList.toggle('fullscreen', goFullscreen);
 
-    // transition 结束后清理临时样式
-    const onEnd = () => {
-        panel.style.transition = '';
-        panel.removeEventListener('transitionend', onEnd);
-    };
-    panel.addEventListener('transitionend', onEnd);
+    // 内容延迟淡入/淡出
+    const body = panel.querySelector('.editor-body');
+    if (body) {
+        body.style.transition = 'opacity 0.15s ease-out';
+        body.style.opacity = '0';
+        clearTimeout(body._fullscreenFadeTimer);
+        body._fullscreenFadeTimer = setTimeout(() => {
+            body.style.opacity = '';
+            body.style.transition = '';
+        }, goFullscreen ? 300 : 150);
+    }
 }
 
 function closeEditor() {
@@ -3045,6 +3047,11 @@ function handleKeyboardNavigation(e) {
             toggleEditorFullscreen();
             return;
         }
+        // 编辑器打开时关闭它
+        if (els.viewEditor.classList.contains('active')) {
+            closeEditor();
+            return;
+        }
         if (els.shortcutsView.style.display !== 'none') {
             closeShortcuts();
             return;
@@ -3112,6 +3119,12 @@ function handleKeyboardNavigation(e) {
                 openShortcuts();
                 return;
         }
+    }
+
+    // 编辑器打开时，Ctrl+Home/End 和 PgUp/PgDn 交由编辑器/textarea 原生处理
+    if (els.viewEditor.classList.contains('active') &&
+        ((e.ctrlKey && (e.key === 'Home' || e.key === 'End')) || e.key === 'PageUp' || e.key === 'PageDown')) {
+        return;
     }
 
     if (!container) return;

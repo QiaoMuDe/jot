@@ -643,6 +643,13 @@
   z-index: 1000;
   backdrop-filter: blur(2px);
   opacity: 0;
+  transition: backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.35s ease-out;
+}
+
+.editor-overlay.fullscreening {
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .editor-panel {
@@ -658,7 +665,13 @@
   overflow: hidden;
   opacity: 0;
   transform: scale(0.85);
-  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
+  transition: background-color 0.3s ease-out,
+              border-color 0.3s ease-out,
+              width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .editor-panel::before {
@@ -676,14 +689,16 @@
   to   { transform: scaleX(1); }
 }
 
-/* 全屏模式 — Task 10 transition */
+/* 全屏模式 */
 .editor-panel.fullscreen {
-  width: 100vw !important;
-  max-width: none !important;
-  height: 100vh !important;
-  max-height: none !important;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
   border-radius: 0;
-  will-change: transform, width, height, border-radius;
+  transition-duration: 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: none;
 }
 
 .editor-header {
@@ -2214,44 +2229,6 @@
 }
 
 /* ==========================================================================
-   Section L: Confirm Dialog
-   ========================================================================== */
-
-.confirm-dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  backdrop-filter: blur(2px);
-}
-
-.confirm-dialog {
-  background: var(--card-bg);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: 28px 32px 20px;
-  min-width: 320px;
-  max-width: 420px;
-}
-
-.confirm-dialog-msg {
-  font-size: 0.938rem;
-  color: var(--text-primary);
-  line-height: 1.6;
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.confirm-dialog-btns {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-/* ==========================================================================
    Section M: Sort Options & Page Size (Settings)
    ========================================================================== */
 
@@ -2743,17 +2720,6 @@
   flex: 1;
 }
 
-/* 统计卡片入场动画 */
-@keyframes cardEnter {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
 .stat-card.entered {
   opacity: 1;
   transform: translateY(0) scale(1);
@@ -2771,9 +2737,11 @@
   opacity: 0;
   transition: opacity 150ms ease-out;
   backdrop-filter: blur(2px);
+  pointer-events: none;
 }
 .confirm-overlay.visible {
   opacity: 1;
+  pointer-events: auto;
 }
 .confirm-dialog {
   background: var(--card-bg);
