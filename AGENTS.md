@@ -36,8 +36,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（仅 Vite 3.x）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~2710 行
-│   │   ├── style.css                   # 组件样式 ~2320 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~2750 行
+│   │   ├── style.css                   # 组件样式 ~2380 行
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -80,6 +80,10 @@ jot/                                    # 项目根目录
     │   ├── tasks.md
     │   └── checklist.md
     ├── redesign-data-management/       # 数据管理页面 UI 重构与动画增强规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    ├── unify-notification-system/       # 统一通知系统规格（右上角浮动通知组件）
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
@@ -145,6 +149,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
+| **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/main.js:NotificationManager` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
 ### 2.3 模块分层图
 
@@ -522,6 +527,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 11. **动画系统**：全局 CSS 变量驱动动画体系（13 个 keyframes + 20 项交错延迟工具类），16 项动画覆盖所有交互场景，`prefers-reduced-motion` 降级支持
 12. **一键备份还原**：`~/.jot/backup/jot-backup.db` 固定路径，覆盖式备份，还原带确认弹窗
 13. **按钮交互反馈**：按压缩放 + 涟漪效果 + 危险按钮全红按压态 + 禁用态灰化，覆盖所有交互场景
+14. **统一通知系统**：右上角浮动通知组件，4 种类型色彩区分，自动消失/手动关闭/撤销回调
 
 ---
 
@@ -572,6 +578,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **数据管理页面重构**：除统计卡外所有区域改卡片风格（圆角/阴影/边框），标题与设置页统一（0.938rem 无装饰条），view-header 整体左移 16px
 - ✅ **按钮点击反馈增强**：所有 `data-action-btn` 按压缩放（0.975）+ 涟漪 `::after` 闪现；危险按钮按压全红底白字；禁用态灰化+禁止点击；统计卡卡 hover 上浮 + active 按压 + 交错入场动画
 - ✅ **全局 overscroll-behavior 禁用**：`body` + `#mainContent` 设置 `overscroll-behavior: none`，双指触控板滑动不回弹
+- ✅ **统一通知系统**：删除旧底部堆叠 toast（`#undoToast`/`showToast`/`showUndoToast`/`animateToast`），替换为 `NotificationManager` 单例类，右上角浮动通知组件。支持 4 种通知类型（success/error/warning/info）+ undo 类型，左侧色标条 + 图标区分，入场 `notifSlideIn` 弹性滑入，出场 `notifSlideOut` 滑出淡出。`nm.show(msg, type, duration?)` 自动 3s 消失，`nm.showUndo(msg, onUndo, duration?)` 带撤销按钮 5s 消失。替换全部 34 个旧调用点，删除旧函数 5 个 + 状态变量 4 个。设置页保存操作后发通知提示
 
 ---
 
@@ -585,7 +592,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 35 个（14 个 Note 相关 + 6 个 Tag 相关 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 1 个 GetAllNoteIDs）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~2710 行 JS + ~2320 行 CSS + ~316 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~2750 行 JS + ~2380 行 CSS + ~316 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -605,6 +612,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **打开数据目录** | `app.go:OpenDataDir()` 调用 `exec.Command("explorer", dir)` 在文件管理器中打开数据库目录，数据管理第三层按钮 |
 | **一键备份** | 备份到 `~/.jot/backup/jot-backup.db`（固定路径，每次覆盖）。前端按钮显示 loading 状态「⏳ 备份中…」+ disabled。备份后信息标签绿色标识 `✓ 已有备份 — 时间，大小`，无备份显示「暂无备份」|
 | **一键还原** | 从 `jot-backup.db` 还原，先弹出应用自定义确认弹窗，确认后按钮显示 loading 状态。还原失败自动从 .bak 回滚。成功后刷新笔记/标签/统计 |
+| **统一通知系统** | 删除旧底部堆叠 toast（`#undoToast`/`showToast`/`showUndoToast`），替换为 `NotificationManager` 单例类，从右上角浮动弹出。支持 4 种通知类型（success/error/warning/info）+ undo 类型，左侧色标条 + 图标区分，入场 `notifSlideIn` 弹性滑入，出场 `notifSlideOut` 滑出淡出。`nm.show(msg, type, duration?)` 自动 3s 消失，`nm.showUndo(msg, onUndo, duration?)` 带撤销按钮 5s 消失。替换全部 34 个旧调用点，删除旧函数 5 个 + 状态变量 4 个 |
 | **自定义确认弹窗** | `.confirm-overlay` 遮罩层 + `.confirm-dialog` 卡片（背景模糊，弹簧动画），确定按钮红色 danger 色。用于还原确认和回收站操作。复用已有 `showConfirmDialog()` 函数 |
 | **Ctrl+A/Ctrl+D 快捷键** | 全局阻止默认 Ctrl+A；批量模式下 Ctrl+A = 全选所有笔记、Ctrl+D = 取消全选 |
 | **lint 状态** | `golangci-lint run ./...` 0 issues（errcheck 等 7 个问题已全部修复）|
