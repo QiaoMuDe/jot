@@ -1247,13 +1247,13 @@
   background: var(--accent);
 }
 
-/* 主题分段控件（3 等分） */
+/* 主题分段控件（6 等分） */
 .theme-segmented {
-    width: 200px;
+    width: 320px;
 }
 
 .theme-segmented .segmented-indicator {
-    width: calc(33.33% - 2px);
+    width: calc(16.66% - 2px); /* 6 等分 */
 }
 
 .font-family-option {

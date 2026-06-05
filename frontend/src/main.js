@@ -955,8 +955,8 @@ function applyTheme(themeName) {
             if (isActive && els.themeIndicator) {
                 const index = Array.from(btns).indexOf(btn);
                 const cw = els.themeControl.offsetWidth;
-                const segW = (cw - 4) / btns.length;
-                els.themeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                const segW = (cw - btns.length * 4) / btns.length;
+                els.themeIndicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
             }
         });
     }
@@ -1017,9 +1017,9 @@ function initThemeSettings() {
             const btns = Array.from(els.themeControl.querySelectorAll('.segmented-btn'));
             const index = btns.indexOf(btn);
             const cw = els.themeControl.offsetWidth;
-            const segW = (cw - 4) / btns.length;
+            const segW = (cw - btns.length * 4) / btns.length;
             if (els.themeIndicator) {
-                els.themeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                els.themeIndicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
             }
             // 应用并保存
             applyTheme(theme);

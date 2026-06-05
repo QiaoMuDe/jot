@@ -135,6 +135,105 @@
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
 }
 
+/* nord 主题：北极蓝调 */
+[data-theme="nord"] {
+    --bg: #ECEFF4;
+    --card-bg: #FFFFFF;
+    --text-primary: #2E3440;
+    --text-secondary: #6B7394;
+    --text-muted: #9199B0;
+    --accent: #5E81AC;
+    --accent-rgb: 94, 129, 172;
+    --accent-light: #D8DEE9;
+    --accent-lighter: #E5E9F0;
+    --accent-dark: #4C6F8C;
+    --border: #D8DEE9;
+    --divider: #E2E6EF;
+    --danger: #DC2626;
+    --hover-bg: #E8ECF3;
+    --topbar-bg: #FFFFFF;
+    --input-bg: #E8ECF3;
+    --overlay-bg: rgba(46, 52, 64, 0.4);
+    --toast-bg: #2E3440;
+    --toast-text: #ECEFF4;
+    --danger-bg: #FEF2F2;
+    --danger-border: #FECACA;
+    --success-bg: #ECFDF5;
+    --success-border: #A7F3D0;
+    --success-text: #065F46;
+    --scrollbar-thumb: rgba(0, 0, 0, 0.14);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.26);
+    --scrollbar-track: rgba(0, 0, 0, 0.03);
+    --tag-delete-bg: rgba(0, 0, 0, 0.2);
+    --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
+}
+
+/* monokai-pro 主题：荧光粉墨 */
+[data-theme="monokai-pro"] {
+    --bg: #2D2A2E;
+    --card-bg: #221F22;
+    --text-primary: #FCFCFA;
+    --text-secondary: #CFCFC2;
+    --text-muted: #939293;
+    --accent: #FF6188;
+    --accent-rgb: 255, 97, 136;
+    --accent-light: #FF8DA8;
+    --accent-lighter: #FFB3C6;
+    --accent-dark: #E64C73;
+    --border: #3C3A3D;
+    --divider: #3C3A3D;
+    --danger: #FC9867;
+    --hover-bg: #3C3A3D;
+    --topbar-bg: #221F22;
+    --input-bg: #3C3A3D;
+    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --toast-bg: #221F22;
+    --toast-text: #FCFCFA;
+    --danger-bg: rgba(252, 152, 103, 0.1);
+    --danger-border: rgba(252, 152, 103, 0.25);
+    --success-bg: rgba(169, 219, 113, 0.1);
+    --success-border: rgba(169, 219, 113, 0.25);
+    --success-text: #A9DB71;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-track: rgba(255, 255, 255, 0.04);
+    --tag-delete-bg: rgba(255, 255, 255, 0.25);
+    --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
+}
+
+/* tokyo-night 主题：靛紫夜幕 */
+[data-theme="tokyo-night"] {
+    --bg: #1A1B26;
+    --card-bg: #24283B;
+    --text-primary: #C0CAF5;
+    --text-secondary: #7982A9;
+    --text-muted: #565F89;
+    --accent: #7AA2F7;
+    --accent-rgb: 122, 162, 247;
+    --accent-light: #1F2A4A;
+    --accent-lighter: #1A2340;
+    --accent-dark: #A9B1D6;
+    --border: #2F354A;
+    --divider: #2F354A;
+    --danger: #F7768E;
+    --hover-bg: #292E42;
+    --topbar-bg: #1F2335;
+    --input-bg: #292E42;
+    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --toast-bg: #24283B;
+    --toast-text: #C0CAF5;
+    --danger-bg: rgba(247, 118, 142, 0.1);
+    --danger-border: rgba(247, 118, 142, 0.25);
+    --success-bg: rgba(158, 206, 106, 0.1);
+    --success-border: rgba(158, 206, 106, 0.25);
+    --success-text: #9ECE6A;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-track: rgba(255, 255, 255, 0.04);
+    --tag-delete-bg: rgba(255, 255, 255, 0.25);
+    --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
+}
+
 * {
     margin: 0;
     padding: 0;
