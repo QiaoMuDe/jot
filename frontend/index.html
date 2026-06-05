@@ -30,6 +30,8 @@
                     <div class="dropdown-item" data-action="trash">回收站</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="settings">设置</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" data-action="help">帮助</div>
                 </div>
             </div>
         </div>
@@ -149,18 +151,11 @@
                     <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">主题</label>
-                            <div class="font-family-select" id="themeSelect">
-                                <div class="font-family-trigger" id="themeTrigger">
-                                    <span id="themeDisplay">默认</span>
-                                    <span class="font-family-arrow">▼</span>
-                                </div>
-                                <div class="font-family-dropdown" id="themeDropdown">
-                                    <div class="font-family-options" id="themeOptions">
-                                        <div class="font-family-option selected" data-theme-value="default">默认</div>
-                                        <div class="font-family-option" data-theme-value="light">浅色</div>
-                                        <div class="font-family-option" data-theme-value="dark">深色</div>
-                                    </div>
-                                </div>
+                            <div class="segmented-control theme-segmented" id="themeControl">
+                                <div class="segmented-indicator" id="themeIndicator"></div>
+                                <button class="segmented-btn active" data-theme-value="default">默认</button>
+                                <button class="segmented-btn" data-theme-value="light">浅色</button>
+                                <button class="segmented-btn" data-theme-value="dark">深色</button>
                             </div>
                         </div>
                     </div>
@@ -198,19 +193,13 @@
             <!-- 笔记排序 -->
             <div class="settings-section">
                 <h3 class="settings-section-title">笔记排序</h3>
-                <div class="sort-options">
-                    <label class="sort-option">
-                        <input type="radio" name="sortOrder" value="updated_at" checked>
-                        <span>按更新时间</span>
-                    </label>
-                    <label class="sort-option">
-                        <input type="radio" name="sortOrder" value="created_at">
-                        <span>按创建时间</span>
-                    </label>
-                    <label class="sort-option">
-                        <input type="radio" name="sortOrder" value="title">
-                        <span>按名称</span>
-                    </label>
+                <div class="page-size-control">
+                    <div class="segmented-control sort-segmented" id="sortControl">
+                        <div class="segmented-indicator" id="sortIndicator"></div>
+                        <button class="segmented-btn active" data-sort-value="updated_at">更新时间</button>
+                        <button class="segmented-btn" data-sort-value="created_at">创建时间</button>
+                        <button class="segmented-btn" data-sort-value="title">名称</button>
+                    </div>
                 </div>
             </div>
             <!-- 分页大小 -->
@@ -352,6 +341,19 @@
                 </div>
                 <div class="about-footer">
                     <span class="about-version" id="aboutVersion">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快捷键说明（模态框） -->
+        <div id="shortcutsView" class="shortcuts-overlay" style="display:none;">
+            <div class="shortcuts-card">
+                <div class="shortcuts-header">
+                    <h2>快捷键说明</h2>
+                    <button class="shortcuts-close-btn" id="shortcutsCloseBtn">✕</button>
+                </div>
+                <div class="shortcuts-body" id="shortcutsBody">
+                    <!-- 由 JS 渲染 -->
                 </div>
             </div>
         </div>

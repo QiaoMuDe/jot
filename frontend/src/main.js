@@ -107,16 +107,16 @@ const els = {
     fontFamilyDisplay: $('fontFamilyDisplay'),
     fontFamilyDropdown: $('fontFamilyDropdown'),
     fontFamilySearch: $('fontFamilySearch'),
-    // 主题设置
-    themeSelect: $('themeSelect'),
-    themeTrigger: $('themeTrigger'),
-    themeDisplay: $('themeDisplay'),
-    themeDropdown: $('themeDropdown'),
-    themeOptions: $('themeOptions'),
+    // 主题设置（分段控件）
+    themeControl: $('themeControl'),
+    themeIndicator: $('themeIndicator'),
     // 分页设置
     pageSizeControl: $('pageSizeControl'),
     pageSizeIndicator: $('pageSizeIndicator'),
     pageSizeLabel: $('pageSizeLabel'),
+    // 排序分段控件
+    sortControl: $('sortControl'),
+    sortIndicator: $('sortIndicator'),
     fontSizePresets: $('fontSizePresets'),
     fontSizeInput: $('fontSizeInput'),
     // 回收站
@@ -176,6 +176,11 @@ const els = {
     aboutCloseBtn: $('aboutCloseBtn'),
     aboutVersion: $('aboutVersion'),
     aboutProjectLink: $('aboutProjectLink'),
+
+    // 快捷键页面
+    shortcutsView: $('shortcutsView'),
+    shortcutsCloseBtn: $('shortcutsCloseBtn'),
+    shortcutsBody: $('shortcutsBody'),
 };
 
 /* ===== 工具函数 ===== */
@@ -935,15 +940,18 @@ async function saveFontSetting(key, value) {
  */
 function applyTheme(themeName) {
     document.documentElement.setAttribute('data-theme', themeName);
-    // 更新下拉菜单显示
-    if (els.themeDisplay) {
-        const themeLabels = { default: '默认', light: '浅色', dark: '深色' };
-        els.themeDisplay.textContent = themeLabels[themeName] || '默认';
-    }
-    // 更新选中状态
-    if (els.themeOptions) {
-        els.themeOptions.querySelectorAll('.font-family-option').forEach(opt => {
-            opt.classList.toggle('selected', opt.dataset.themeValue === themeName);
+    // 同步分段控件选中状态和指示器位置
+    if (els.themeControl) {
+        const btns = els.themeControl.querySelectorAll('.segmented-btn');
+        btns.forEach(btn => {
+            const isActive = btn.dataset.themeValue === themeName;
+            btn.classList.toggle('active', isActive);
+            if (isActive && els.themeIndicator) {
+                const index = Array.from(btns).indexOf(btn);
+                const cw = els.themeControl.offsetWidth;
+                const segW = (cw - 4) / btns.length;
+                els.themeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+            }
         });
     }
 }
@@ -986,58 +994,31 @@ async function saveThemeSetting(themeName) {
 }
 
 /**
- * 关闭主题下拉菜单
- */
-function closeThemeDropdown() {
-    if (els.themeDropdown) {
-        els.themeDropdown.classList.remove('open');
-    }
-    if (els.themeTrigger) {
-        els.themeTrigger.classList.remove('open');
-    }
-}
-
-/**
- * 初始化主题设置下拉菜单事件
+ * 初始化主题设置分段控件事件
  */
 function initThemeSettings() {
-    if (!els.themeTrigger) return;
+    if (!els.themeControl) return;
 
-    // 打开/关闭主题下拉菜单
-    els.themeTrigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = els.themeDropdown.classList.contains('open');
-        closeThemeDropdown();
-        if (!isOpen) {
-            els.themeDropdown.classList.add('open');
-            els.themeTrigger.classList.add('open');
-        }
-    });
-
-    // 点击选项切换主题
-    els.themeOptions.addEventListener('click', (e) => {
-        const option = e.target.closest('.font-family-option');
-        if (!option) return;
-        const theme = option.dataset.themeValue;
-        if (!theme) return;
-        applyTheme(theme);
-        saveThemeSetting(theme);
-        closeThemeDropdown();
-    });
-
-    // 点击外部关闭
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('#themeSelect')) {
-            closeThemeDropdown();
-        }
-    });
-
-    // Escape 键关闭
-    els.themeDropdown.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeThemeDropdown();
-            els.themeTrigger.focus();
-        }
+    // 点击分段按钮切换主题
+    els.themeControl.querySelectorAll('.segmented-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const theme = btn.dataset.themeValue;
+            if (!theme) return;
+            // 更新 active 状态
+            els.themeControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            // 移动指示器
+            const btns = Array.from(els.themeControl.querySelectorAll('.segmented-btn'));
+            const index = btns.indexOf(btn);
+            const cw = els.themeControl.offsetWidth;
+            const segW = (cw - 4) / btns.length;
+            if (els.themeIndicator) {
+                els.themeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+            }
+            // 应用并保存
+            applyTheme(theme);
+            await saveThemeSetting(theme);
+        });
     });
 }
 
@@ -1184,18 +1165,33 @@ async function initSortSettings() {
     // 加载排序和分页设置
     await loadSortSettings();
     await loadPageSizeSetting();
-    // 绑定排序切换事件
-    document.querySelectorAll('input[name="sortOrder"]').forEach(radio => {
-        radio.addEventListener('change', async (e) => {
-            const order = e.target.value;
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSortOrder) {
-                await window.go.main.App.SetSortOrder(order);
+    // 绑定排序分段控件事件
+    if (els.sortControl) {
+        const moveIndicator = (btn) => {
+            const btns = Array.from(els.sortControl.querySelectorAll('.segmented-btn'));
+            const index = btns.indexOf(btn);
+            if (index >= 0) {
+                const cw = els.sortControl.offsetWidth;
+                const segW = (cw - 4) / btns.length;
+                els.sortIndicator.style.transform = `translateX(${2 + index * segW}px)`;
             }
-            // 重新加载笔记列表（重置分页）
-            resetPagination();
-            await loadNotes();
+        };
+        els.sortControl.querySelectorAll('.segmented-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const order = btn.dataset.sortValue;
+                if (!order) return;
+                // 更新 active 状态和指示器位置
+                els.sortControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                moveIndicator(btn);
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSortOrder) {
+                    await window.go.main.App.SetSortOrder(order);
+                }
+                resetPagination();
+                await loadNotes();
+            });
         });
-    });
+    }
     // 绑定分页大小分段控件事件
     if (els.pageSizeControl) {
         const moveIndicator = (btn) => {
@@ -1234,8 +1230,19 @@ async function loadSortSettings() {
         const saved = await window.go.main.App.GetSortOrder();
         if (saved) sortOrder = saved;
     }
-    const radio = document.querySelector(`input[name="sortOrder"][value="${sortOrder}"]`);
-    if (radio) radio.checked = true;
+    // 高亮对应按钮并移动指示器
+    if (els.sortControl) {
+        const btns = els.sortControl.querySelectorAll('.segmented-btn');
+        const cw = els.sortControl.offsetWidth;
+        const segW = (cw - 4) / btns.length;
+        btns.forEach((b, i) => {
+            const isActive = b.dataset.sortValue === sortOrder;
+            b.classList.toggle('active', isActive);
+            if (isActive) {
+                els.sortIndicator.style.transform = `translateX(${2 + i * segW}px)`;
+            }
+        });
+    }
 }
 
 /**
@@ -2233,6 +2240,8 @@ function initEventListeners() {
             } else if (item.dataset.action === 'trash') {
                 switchView('trash');
                 loadTrashNotes();
+            } else if (item.dataset.action === 'help') {
+                openShortcuts();
             }
         }
     });
@@ -2342,6 +2351,12 @@ function initEventListeners() {
         } catch (err) {
             console.error('打开项目地址失败:', err);
         }
+    });
+
+    // 快捷键关闭按钮
+    els.shortcutsCloseBtn.addEventListener('click', closeShortcuts);
+    els.shortcutsView.addEventListener('click', (e) => {
+        if (e.target === els.shortcutsView) closeShortcuts();
     });
 
     // 键盘快捷键导航
@@ -2455,6 +2470,10 @@ function handleKeyboardNavigation(e) {
             toggleEditorFullscreen();
             return;
         }
+        if (els.shortcutsView.style.display !== 'none') {
+            closeShortcuts();
+            return;
+        }
         if (state.batchMode) {
             toggleBatchMode();
         } else if (state.currentView === 'search') {
@@ -2492,6 +2511,10 @@ function handleKeyboardNavigation(e) {
             case '4':
                 e.preventDefault();
                 switchView('settings');
+                return;
+            case '5':
+                e.preventDefault();
+                openShortcuts();
                 return;
         }
     }
@@ -2613,6 +2636,45 @@ async function showAbout() {
  */
 function closeAbout() {
     els.viewAbout.style.display = 'none';
+}
+
+/**
+ * 打开快捷键说明模态框
+ */
+function openShortcuts() {
+    els.shortcutsView.style.display = 'flex';
+    renderShortcutsPage();
+}
+
+/**
+ * 关闭快捷键说明模态框
+ */
+function closeShortcuts() {
+    els.shortcutsView.style.display = 'none';
+}
+
+/* ===== 快捷键说明页面 ===== */
+
+/**
+ * 渲染快捷键说明页面
+ */
+function renderShortcutsPage() {
+    const shortcuts = [
+        { key: 'Ctrl + N', desc: '新建笔记' },
+        { key: 'Ctrl + F', desc: '聚焦搜索框' },
+        { key: 'PgUp', desc: '上翻一页' },
+        { key: 'PgDn', desc: '下翻一页 / 触底加载更多' },
+        { key: 'Ctrl + Home', desc: '回到顶部' },
+        { key: 'Ctrl + End', desc: '加载全部并滚到底部' },
+        { key: 'Escape', desc: '关闭弹窗 / 返回上一页' },
+        { key: '1 2 3 4 5', desc: '快速切换视图' },
+    ];
+    els.shortcutsBody.innerHTML = shortcuts.map(s => `
+        <div class="shortcut-row">
+            <div class="shortcut-key">${s.key.replace(/(\w+)/g, '<kbd>$1</kbd>')}</div>
+            <div class="shortcut-desc">${s.desc}</div>
+        </div>
+    `).join('');
 }
 
 /* ===== 初始化 ===== */

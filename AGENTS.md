@@ -67,7 +67,11 @@ jot/                                    # 项目根目录
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
-    └── add-about-page/               # 关于页面规格
+    ├── add-about-page/               # 关于页面规格
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    └── add-misc-improvements/         # 杂项优化规格（滚动条美化/默认标签/快捷键说明/分段控件重构）
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -486,7 +490,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 5. **降级友好**：前端内置 Mock 数据，后端未绑定时仍可独立预览 UI
 6. **组件化渲染**：前端渲染函数独立，数据驱动 DOM 更新
 7. **原生桌面体验**：通过 Wails runtime 集成系统保存对话框（SaveFileDialog）
-8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn（触底加载下一页）/Ctrl+Home/Ctrl+End（加载全部到底）/E（回首页）及数字键 1-4 快捷导航
+8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn（触底加载下一页）/Ctrl+Home/Ctrl+End（加载全部到底）/E（回首页）及数字键 1-5 快捷导航
 
 ---
 
@@ -508,16 +512,17 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **Pagination 设置**：操作 CRUD 后重置到第 1 页
 - ✅ **PgDn/ESC 快捷键**：PgDn 触底主动加载，ESC 退出子视图回首页
 - ✅ **加载动画**：触底加载时显示 CSS 旋转动画 + 最短 1s 显示时间
-- ✅ **排序设置**：设置页支持按更新时间/创建时间/名称排序
-- ✅ **分页大小设置**：设置页支持 20/40/60/80/100 分页档位
+- ✅ **排序设置**：设置页支持按更新时间/创建时间/名称排序，iOS 风格分段控件（3 等分滑动指示器），持久化到 Setting `sort_order`
+- ✅ **分页大小设置**：设置页支持 20/40/60/80/100 分页档位，iOS 风格分段控件
 - ✅ **Go 内部包重构**：database/fontutil/models/services 移至 internal/ 目录
-- ✅ **主题系统**：默认/浅色/深色三个主题，CSS 变量体系统一，`data-theme` 属性切换，设置页下拉菜单选择
+- ✅ **主题系统**：默认/浅色/深色三个主题，CSS 变量体系统一，`data-theme` 属性切换，iOS 风格分段控件选择（非下拉菜单）
 - ✅ **标签选中态视觉优化**：未选中标签压暗去饱和，选中亮色 + ✓ 前缀 + 脉冲动画 + 外发光
 - ✅ **悬浮操作按钮**：右下角 `+`（新建）和 `↑`（回到顶部），`↑` 滚动超过 300px 时淡入
 - ✅ **滚动条美化**：主内容区滚动显示/停止 1s 淡出，6px 半透明灰条，三主题独立配色；textarea `flex:1` 独占滚动，编者面板高度固定 85vh
 - ✅ **快速笔记模式**：设置页 iOS 风格开关，启用后启动自动全屏编辑，保存/取消后回到网格首页
 - ✅ **Markdown 渲染查看**：查看模式使用 marked + highlight.js 渲染 Markdown 为 HTML，代码块语法高亮，编辑模式不变
 - ✅ **关于页面**：品牌名点击弹出覆盖层，展示项目名/简介/版本号/项目地址链接；版本号由 verman 库通过 ldflags 注入；项目链接点击在默认浏览器打开
+- ✅ **快捷键说明**：更多菜单「帮助」或按数字键 `5` 弹出模态覆盖层，展示全部快捷键列表；与关于页面相同遮罩/卡片动画
 
 ---
 
@@ -530,8 +535,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **数据库** | SQLite（`data/jot.db`），免 CGO 纯 Go 驱动 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 31 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面）|
-| **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（显示/隐藏）|
-| **前端代码量** | ~2650 行 JS + ~2180 行 CSS + 46 行 CSS 全局样式 |
+| **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
+| **前端代码量** | ~2630 行 JS + ~2170 行 CSS + 46 行 CSS 全局样式 |
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -539,7 +544,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=首页 2=数据管理 3=回收站 4=设置；输入框内数字键不触发 |
+| **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=首页 2=数据管理 3=回收站 4=设置 5=帮助；输入框内数字键不触发 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + JSON 导入导出（使用原生保存对话框）|
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，用户选择保存位置 |
@@ -547,23 +552,23 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `data/jot.db`，也可指定路径参数；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
-| **更多菜单** | 含全部笔记/数据管理/回收站/设置四个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/` |
+| **更多菜单** | 含全部笔记/数据管理/回收站/设置/帮助五个选项，分隔线分组，`min-width: 120px` |
+| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/` |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
 | **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |
 | **view-header 统一** | 设置/数据管理/回收站三个功能页的 view-header 均为 `← 返回` + 居中标题 + `view-controls` 结构，保证标题位置一致 |
 | **内容区居中** | 设置页 `settings-content` 为 `max-width: 600px` + 居中；数据管理 `data-content` 和回收站 `trash-list` 为 `max-width: 680px` + 居中 |
-| **数字键导航** | 键盘快捷键扩展：`1`=首页(清空搜索)、`2`=设置、`3`=数据管理、`4`=回收站；输入框内不触发 |
-| **排序设置** | 设置页「笔记排序」支持按更新时间/创建时间/名称排序，持久化到 Setting `sort_order`；后端 `GetAll`/`GetByTag` 动态构建 ORDER BY |
+| **数字键导航** | 键盘快捷键扩展：`1`=首页(清空搜索)、`2`=设置、`3`=数据管理、`4`=回收站、`5`=帮助；输入框内不触发 |
+| **排序设置** | 设置页「笔记排序」支持按更新时间/创建时间/名称排序，iOS 风格分段控件（3 等分滑动指示器），持久化到 Setting `sort_order`；后端 `GetAll`/`GetByTag` 动态构建 ORDER BY |
 | **分页大小** | 设置页 iOS 风格分段控件：20/40/60/80/100，选中色块带滑动动画，默认 20，持久化到 Setting `page_size` |
 | **懒加载** | 所有场景（启动/CRUD）只加载第 1 页，滚动到底部（<200px）自动追加下一页；Ctrl+End 一次加载所有剩余页；底部显示「共 X 条笔记」|
 | **加载动画** | CSS 圆环旋转动画（0.8s/infinite），最少显示 1 秒，确保可见 |
 | **PgDn 逻辑** | 已到底时直接调用 `loadMoreNotes()` 加载下一页（不走 scroll 事件）；未到底时设置 `_keyboardScroll` 标志阻止 scroll 监听器误触发 |
 | **ESC 逻辑** | 批量模式→退出批量；搜索视图→清空回首页；设置/数据管理/回收站→直接回首页 |
 | **Sort & PageSize** | 后端 `GetAll`/`GetByTag` 接受 `sortBy` 参数动态 ORDER BY，新增 4 个绑定方法：`GetSortOrder`/`SetSortOrder`/`GetPageSize`/`SetPageSize` |
-| **主题系统** | 三个主题：default（暖灰）、light（亮白蓝强调）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `app.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。前端无持久化（靠后端 Setting 表）|
+| **主题系统** | 三个主题：default（暖灰）、light（亮白蓝强调）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `app.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。设置页使用 iOS 风格分段控件（3 等分滑动指示器），持久化到 Setting `theme` |
 | **标签交互优化** | 编辑器标签点击态改为 DOM 类切换（`active`/`clicked`），不再整个重渲染 `renderTagSelector`。选中 → `filter:none + opacity:1 + ✓前缀 + box-shadow`；未选中 → `filter:saturate(0.25) brightness(0.65) + opacity:0.55`；点击脉冲动画 0.25s |
 | **编辑器滚动结构** | `.editor-panel` 固定 `height: 85vh`，`.editor-body` 做 flex 布局分配（无滚动），`.editor-textarea` 设为 `flex:1; overflow-y:auto` 独占滚动。textarea 不自带滚动高度（无 `rows`/`min-height` 限制，用 `flex:1; min-height:0` 填满空间）。Editor scrollbar 6px 半透明灰独立主题色 |
 | **悬浮按钮 FAB** | 右下角 `position: fixed`，z-index:100。`+`（`#fabNewNote`）始终可见，accent 圆底白字 44px；`↑`（`#backToTopBtn`）默认隐藏，主内容 scrollTop>300 淡入。hover scale(1.08)，active scale(0.95)。距右下角 28px，间距 12px，`+` 在下 |
@@ -573,6 +578,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时自动 `openEditor(null)` + `toggleEditorFullscreen()`；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
 | **Markdown 渲染查看** | 查看模式（只读）将 textarea 替换为 `.md-rendered` div，使用 `marked` 渲染 Markdown 为 HTML。代码块通过 `highlight.js` 着色（注册 JS/Python/CSS/HTML/Bash/JSON）。npm 本地安装（无 CDN），Vite 打包内联。编辑模式 textarea 不变。`.md-rendered` 样式覆盖 h1-h6/列表/引用/代码块/表格/图片/链接，三主题适配。`.md-rendered` 滚动条隐藏（`::-webkit-scrollbar { display: none }`），内边距 `0.5em 1rem 1rem 1.5em` |
 | **关于页面** | 品牌名「Jot」点击弹出全屏覆盖层（`#viewAbout`），居中卡片展示：品牌 Logo（2.5rem 800w accent 色）+ 副标题 + 简介 + 项目地址链接（外链 SVG 图标，点击调用 `runtime.BrowserOpenURL` 打开 `https://gitee.com/MM-Q/jot.git`）+ 底部版本号（等宽字体，通过 verman 库 + ldflags 注入 `GitVersion`）。卡片 `border-radius: 20px`，遮罩 `backdrop-filter: blur(6px)`，弹簧动画 `cubic-bezier(0.16, 1, 0.3, 1)`。关闭方式：✕ 按钮 / 点击遮罩 / ESC 键 |
+| **快捷键说明** | 更多菜单「帮助」或按数字键 `5` 弹出模态覆盖层（`#shortcutsView`），居中卡片展示所有快捷键列表，与关于页面相同弹出动画和遮罩样式。关闭方式：✕ 按钮 / 点击遮罩 / ESC 键 |
 | **verman 库** | `gitee.com/MM-Q/verman v0.0.19`，通过 `-X gitee.com/MM-Q/verman.V.GitVersion=$(git describe --tags --always --dirty)` 注入版本号。`app.go:GetVersion()` 返回 `verman.V.GitVersion`（纯版本号，不含平台/Go 版本信息）|
 
 ---

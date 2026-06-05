@@ -1155,7 +1155,7 @@
   left: 0;
   right: 0;
   max-height: 300px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1195,6 +1195,40 @@
   overflow-y: auto;
   max-height: 220px;
   padding: 0;
+  /* 强制非 overlay 滚动条，使 ::-webkit-scrollbar 生效 */
+  scrollbar-gutter: stable;
+  /* Firefox 标准属性 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--divider) transparent;
+}
+
+/* WebKit / WebView2 自定义滚动条 */
+.font-family-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.font-family-options::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.font-family-options::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.font-family-options::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* 主题分段控件（3 等分） */
+.theme-segmented {
+    width: 200px;
+}
+
+.theme-segmented .segmented-indicator {
+    width: calc(33.33% - 2px);
 }
 
 .font-family-option {
@@ -1810,36 +1844,13 @@
    Section M: Sort Options & Page Size (Settings)
    ========================================================================== */
 
-.sort-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* 排序分段控件（3 等分） */
+.sort-segmented {
+    width: 260px;
 }
 
-.sort-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 6px 8px;
-  border-radius: var(--radius-md);
-  transition: background var(--transition);
-}
-
-.sort-option:hover {
-  background: var(--hover-bg);
-}
-
-.sort-option input[type="radio"] {
-  accent-color: var(--accent);
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.sort-option span {
-  font-size: 0.9375rem;
-  color: var(--text-primary);
+.sort-segmented .segmented-indicator {
+    width: calc(33.33% - 2px);
 }
 
 .page-size-control {
@@ -2182,4 +2193,109 @@
   font-weight: 500;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   letter-spacing: 0.3px;
+}
+
+/* ==========================================================================
+   快捷键页面（模态框）
+   ========================================================================== */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+
+.shortcuts-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 420px;
+  max-width: 88vw;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.28),
+    0 0 1px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.shortcuts-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.shortcuts-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.shortcuts-close-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.shortcuts-body {
+  padding: 16px 24px 24px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-key {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.shortcut-key kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-family: var(--font-family);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.shortcut-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 24px;
 }

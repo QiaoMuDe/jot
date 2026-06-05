@@ -125,6 +125,38 @@ func (s *TagService) RemoveTagFromNote(noteID, tagID uint) error {
 	return s.db.Model(note).Association("Tags").Delete(tag)
 }
 
+// InitDefaultTags 初始化默认标签（仅在标签表为空时插入）
+func InitDefaultTags(db *gorm.DB) error {
+	var count int64
+	if err := db.Model(&models.Tag{}).Count(&count).Error; err != nil {
+		return err
+	}
+	// 标签表已有记录，跳过初始化
+	if count > 0 {
+		return nil
+	}
+
+	// 默认标签列表（名称 + 颜色）
+	defaultTags := []struct {
+		name  string
+		color string
+	}{
+		{"待办", "#F59E0B"}, // 琥珀色
+		{"工作", "#3B82F6"}, // 蓝色
+		{"生活", "#10B981"}, // 绿色
+		{"个人", "#8B5CF6"}, // 紫色
+		{"学习", "#EC4899"}, // 粉色
+		{"重要", "#EF4444"}, // 红色
+	}
+	for _, dt := range defaultTags {
+		tag := models.Tag{Name: dt.name, Color: dt.color}
+		if err := db.Create(&tag).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // getNoteByID 内部辅助方法，按 ID 获取笔记
 func (s *TagService) getNoteByID(id uint) (*models.Note, error) {
 	var note models.Note

@@ -21,7 +21,10 @@ func main() {
 
 	// 初始化数据库连接
 	fmt.Printf("连接数据库: %s\n", dbPath)
-	db := database.InitDB(dbPath)
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		panic(err)
+	}
 
 	// 注入标签
 	fmt.Println("正在注入标签...")

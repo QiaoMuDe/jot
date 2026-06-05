@@ -24,7 +24,10 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	db := database.InitDB("data/jot.db")
+	db, err := database.InitDB("data/jot.db")
+	if err != nil {
+		panic(err)
+	}
 	return &App{
 		noteService:    services.NewNoteService(db),
 		tagService:     services.NewTagService(db),
