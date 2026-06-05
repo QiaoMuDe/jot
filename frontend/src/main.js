@@ -935,7 +935,7 @@ async function createTag() {
  * 加载已保存的字体设置并应用到页面
  */
 async function loadFontSettings() {
-    let fontFamily = 'DM Sans';
+    let fontFamily = '';
     let fontSize = 16;
 
     if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
@@ -945,7 +945,7 @@ async function loadFontSettings() {
         if (savedSize) fontSize = parseInt(savedSize, 10);
     } else {
         // 从 localStorage 回退
-        fontFamily = localStorage.getItem('jot_font_family') || 'DM Sans';
+        fontFamily = localStorage.getItem('jot_font_family') || '';
         fontSize = parseInt(localStorage.getItem('jot_font_size') || '16', 10);
     }
 
@@ -986,7 +986,7 @@ async function renderFontFamilyOptions(selectedFont, filterText) {
             fontFamilyList = await window.go.main.App.GetSystemFonts();
         } else {
             fontFamilyList = [
-                'DM Sans', 'Arial', 'Helvetica', 'Verdana', 'Georgia',
+                'Arial', 'Helvetica', 'Verdana', 'Georgia',
                 'Times New Roman', 'Courier New', 'Segoe UI', 'Microsoft YaHei',
                 'PingFang SC', 'Noto Sans SC',
             ];
@@ -1029,8 +1029,13 @@ function highlightMatch(text, keyword) {
  * 应用字体族
  */
 function applyFontFamily(fontFamily) {
-    document.documentElement.style.setProperty('--font-family', `${fontFamily}, system-ui, -apple-system, sans-serif`);
-    els.fontFamilyDisplay.textContent = fontFamily;
+    if (fontFamily) {
+        document.documentElement.style.setProperty('--font-family', `${fontFamily}, system-ui, -apple-system, sans-serif`);
+        els.fontFamilyDisplay.textContent = fontFamily;
+    } else {
+        document.documentElement.style.removeProperty('--font-family');
+        els.fontFamilyDisplay.textContent = '系统默认';
+    }
 }
 
 /**
