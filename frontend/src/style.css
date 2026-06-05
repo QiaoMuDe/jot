@@ -11,6 +11,7 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
   padding: 0 24px;
   gap: 16px;
   user-select: none;
@@ -84,8 +85,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition);
+  transition: var(--transition), opacity 0.15s ease-out;
   font-family: inherit;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .topbar-btn:hover {
@@ -135,11 +138,16 @@
   padding: 6px;
   min-width: 120px;
   z-index: 2000;
-  display: none;
+  opacity: 0;
+  transform: scale(0.85);
+  transform-origin: top right;
+  pointer-events: none;
 }
 
 .dropdown-menu.active {
-  display: block;
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 
 .dropdown-item {
@@ -234,6 +242,16 @@
 .search-results {
   flex: 1;
   overflow-y: auto;
+  padding-right: 32px;
+  /* 与主内容区一致的滚动条空间预留 */
+  scrollbar-gutter: stable;
+  /* 负边距抵消父容器 #mainContent 的 scrollbar-gutter 预留空间（8px），让滚动条贴靠窗口右边缘 */
+  margin-right: -8px;
+}
+
+/* 搜索视图消除右侧内边距，让 scrollbar 靠右 */
+#viewSearch.view {
+  padding-right: 0;
 }
 
 .result-count {
@@ -347,16 +365,23 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: all var(--transition);
+  transition: all var(--transition), box-shadow 0.2s ease, background-color 0.3s ease-out, border-color 0.3s ease-out;
   cursor: pointer;
   position: relative;
   border: 1px solid transparent;
+  /* 初始透明，由 cardEnter 动画渐入 */
+  opacity: 0;
 }
 
 .note-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  transform: translateY(-2px) scale(1.01);
   border-color: var(--border);
+}
+
+/* 卡片点击反馈 */
+.note-card:active {
+  transform: scale(0.98);
 }
 
 .card-body {
@@ -459,6 +484,11 @@
   border-color: var(--accent-light);
 }
 
+/* 置顶按钮旋转动画 */
+.pin-btn.animating {
+  animation: rotateIn 0.3s ease-out forwards;
+}
+
 .card-pin-badge {
   position: absolute;
   top: 8px;
@@ -490,12 +520,9 @@
   border-bottom: 1px solid var(--border);
   gap: 12px;
   flex-shrink: 0;
-  animation: batchSlideDown 150ms ease;
-}
-
-@keyframes batchSlideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  transform: translateY(100%);
+  opacity: 0;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
 }
 
 .batch-bar-info {
@@ -582,6 +609,7 @@
   margin: 0;
   flex-shrink: 0;
   display: none;
+  opacity: 0;
 }
 
 .note-card.batch-mode .batch-checkbox {
@@ -608,6 +636,7 @@
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(2px);
+  opacity: 0;
 }
 
 .editor-panel {
@@ -621,23 +650,34 @@
   flex-direction: column;
   box-shadow: var(--shadow-xl);
   overflow: hidden;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
 }
 
 .editor-panel::before {
   content: '';
   display: block;
-  height: 1px;
-  background: transparent;
+  height: 3px;
+  background: var(--accent);
   flex-shrink: 0;
+  transform-origin: center;
+  animation: editorBarEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
 }
 
-/* 全屏模式 */
+@keyframes editorBarEnter {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* 全屏模式 — Task 10 transition */
 .editor-panel.fullscreen {
   width: 100vw !important;
   max-width: none !important;
   height: 100vh !important;
   max-height: none !important;
   border-radius: 0;
+  will-change: transform, width, height, border-radius;
 }
 
 .editor-header {
@@ -688,6 +728,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  opacity: 0;
 }
 
 .editor-input {
@@ -781,13 +822,7 @@
 }
 
 .tag-chip.clicked {
-  animation: tagPulse 0.25s ease;
-}
-
-@keyframes tagPulse {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.15); }
-  100% { transform: scale(1); }
+  animation: scalePulse 0.25s ease;
 }
 
 .editor-footer {
@@ -1179,20 +1214,25 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  max-height: 300px;
-  overflow: visible;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   z-index: 100;
-  display: none;
-  padding: 4px 4px 0;
+  padding: 0 4px;
+  transition: max-height 0.2s ease-out, opacity 0.15s ease-out, padding 0.2s ease-out;
+  pointer-events: none;
 }
 
 .font-family-dropdown.open {
-  display: flex;
-  flex-direction: column;
+  max-height: 300px;
+  opacity: 1;
+  overflow: visible;
+  padding: 4px 4px 0;
+  pointer-events: auto;
 }
 
 .font-family-search {
@@ -1504,12 +1544,14 @@
   background: var(--card-bg);
   border-radius: var(--radius-xl);
   padding: 20px 16px;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
   display: flex;
   align-items: center;
   gap: 14px;
   box-shadow: var(--shadow-sm);
   transition: var(--transition);
   border: 1px solid var(--border);
+  opacity: 0;
 }
 
 .stat-card:hover {
@@ -1658,6 +1700,7 @@
   box-shadow: var(--shadow-sm);
   border: 1px solid transparent;
   transition: var(--transition);
+  opacity: 0;
 }
 
 .trash-item:hover {
@@ -1723,6 +1766,13 @@
   background: var(--danger-bg);
 }
 
+/* 红色闪烁动画（永久删除确认） */
+@keyframes dangerFlash {
+    0%   { background-color: transparent; }
+    50%  { background-color: var(--danger-bg); }
+    100% { background-color: transparent; }
+}
+
 /* ==========================================================================
    Section J: Context Menu
    ========================================================================== */
@@ -1735,12 +1785,17 @@
   padding: 6px;
   min-width: 120px;
   z-index: 2000;
-  display: none;
   border: 1px solid var(--border);
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
 }
 
 .context-menu.active {
-  display: block;
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 
 .context-menu-item {
@@ -1784,8 +1839,11 @@
 .undo-toast {
   position: fixed;
   bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 90vw;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1797,7 +1855,6 @@
   box-shadow: var(--shadow-xl);
   z-index: 3000;
   opacity: 0;
-  transition: opacity 0.3s ease, transform 0.3s ease;
   pointer-events: none;
 }
 
@@ -1825,6 +1882,7 @@
 
 .undo-toast-btn:hover {
   background: rgba(var(--accent-rgb), 0.15);
+  transform: scale(1.05);
 }
 
 /* ==========================================================================
@@ -2081,7 +2139,7 @@
     0 0 1px rgba(0, 0, 0, 0.12);
   position: relative;
   overflow: hidden;
-  animation: aboutFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
 }
 
 @keyframes aboutFadeIn {
@@ -2129,6 +2187,7 @@
   letter-spacing: -1px;
   margin-bottom: 10px;
   line-height: 1.1;
+  opacity: 0;
 }
 
 .about-subtitle {
@@ -2244,6 +2303,7 @@
     0 24px 80px rgba(0, 0, 0, 0.28),
     0 0 1px rgba(0, 0, 0, 0.12);
   overflow: hidden;
+  opacity: 0;
 }
 
 .shortcuts-header {
@@ -2291,6 +2351,7 @@
   justify-content: space-between;
   padding: 12px 0;
   border-bottom: 1px solid var(--divider);
+  opacity: 0;
 }
 
 .shortcut-row:last-child {

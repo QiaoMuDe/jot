@@ -253,10 +253,29 @@ function resetPagination() {
 
 /* ===== 视图切换 ===== */
 
+// 视图动画状态锁，防止快速切换导致动画冲突
+let _viewAnimating = false;
+
 /**
- * 切换右侧主内容区视图
+ * 切换右侧主内容区视图（带动画过渡）
+ * 1. 当前视图添加 .view-exit，animationend 后隐藏
+ * 2. 目标视图添加 .view-enter（通过 requestAnimationFrame 确保生效）
  */
 function switchView(view) {
+    // 视图映射
+    const viewMap = {
+        grid: els.viewGrid,
+        search: els.viewSearch,
+        settings: els.viewSettings,
+        data: els.viewData,
+        trash: els.viewTrash,
+    };
+    const targetView = viewMap[view];
+    if (!targetView || _viewAnimating) return;
+
+    const currentViewEl = document.querySelector('.view.active');
+    if (targetView === currentViewEl) return;
+
     // 切换视图时强制退出批量模式
     if (state.batchMode) {
         state.batchMode = false;
@@ -265,42 +284,83 @@ function switchView(view) {
         els.batchBar.style.display = 'none';
     }
 
-    // 隐藏所有视图
-    document.querySelectorAll('.view').forEach((v) => {
-        v.classList.remove('active');
-    });
-
     state.currentView = view;
 
-    // 新建按钮和批量管理按钮仅在笔记网格视图显示
-    els.newNoteBtn.style.display = view === 'grid' ? 'flex' : 'none';
-    els.batchModeBtn.style.display = view === 'grid' ? '' : 'none';
+    // 新建按钮和批量管理按钮仅在笔记网格视图显示（含淡入淡出过渡）
+    if (view === 'grid') {
+        els.newNoteBtn.style.display = 'flex';
+        els.batchModeBtn.style.display = '';
+        // Use rAF to ensure display takes effect before opacity transition
+        requestAnimationFrame(() => {
+            els.newNoteBtn.style.opacity = '1';
+            els.newNoteBtn.style.pointerEvents = 'auto';
+            els.batchModeBtn.style.opacity = '1';
+            els.batchModeBtn.style.pointerEvents = 'auto';
+        });
+    } else {
+        els.newNoteBtn.style.opacity = '0';
+        els.newNoteBtn.style.pointerEvents = 'none';
+        els.batchModeBtn.style.opacity = '0';
+        els.batchModeBtn.style.pointerEvents = 'none';
+        setTimeout(() => {
+            els.newNoteBtn.style.display = 'none';
+            els.batchModeBtn.style.display = 'none';
+        }, 150);
+    }
     // 悬浮操作按钮仅在网格视图显示
     els.fabGroup.style.display = view === 'grid' ? '' : 'none';
 
-    switch (view) {
-        case 'grid':
-            els.viewGrid.classList.add('active');
-            break;
-        case 'search':
-            els.viewSearch.classList.add('active');
-            break;
-        case 'settings':
-            els.viewSettings.classList.add('active');
-            loadFontSettings();
-            loadThemeSetting();
-            loadSortSettings();
-            loadPageSizeSetting();
-            loadTags();
-            break;
-        case 'data':
-            els.viewData.classList.add('active');
-            loadDataStats();
-            break;
-        case 'trash':
-            els.viewTrash.classList.add('active');
-            loadTrashNotes();
-            break;
+    _viewAnimating = true;
+
+    /**
+     * 执行目标视图的进入动画
+     */
+    const showTargetView = () => {
+        // 清除可能残留的内联 display 样式
+        targetView.style.display = '';
+        // 添加 active 类，通过 CSS 规则 .view.active 显示
+        targetView.classList.add('active');
+
+        // 加载对应视图的数据（异步，在动画期间并行加载）
+        switch (view) {
+            case 'settings':
+                loadFontSettings();
+                loadThemeSetting();
+                loadSortSettings();
+                loadPageSizeSetting();
+                loadTags();
+                break;
+            case 'data':
+                loadDataStats();
+                break;
+            case 'trash':
+                loadTrashNotes();
+                break;
+        }
+
+        // 使用 requestAnimationFrame 确保 class 切换在下一渲染帧生效
+        requestAnimationFrame(() => {
+            targetView.classList.add('view-enter');
+            targetView.addEventListener('animationend', function onEnterEnd() {
+                targetView.removeEventListener('animationend', onEnterEnd);
+                targetView.classList.remove('view-enter');
+                _viewAnimating = false;
+            }, { once: true });
+        });
+    };
+
+    if (currentViewEl) {
+        // 当前视图执行退出动画
+        currentViewEl.classList.add('view-exit');
+        currentViewEl.addEventListener('animationend', function onExitEnd() {
+            currentViewEl.removeEventListener('animationend', onExitEnd);
+            currentViewEl.classList.remove('active', 'view-exit');
+            currentViewEl.style.display = 'none';
+            showTargetView();
+        }, { once: true });
+    } else {
+        // 没有当前活跃视图，直接显示目标视图
+        showTargetView();
     }
 }
 
@@ -369,6 +429,7 @@ async function loadMoreNotes() {
     isLoadingMore = true;
     showLoadingIndicator(true);
     const loadStart = Date.now(); // 记录加载开始时间
+    const prevCount = state.notes.length; // 记录追加前卡片数
 
     try {
         let sortBy = 'updated_at';
@@ -393,7 +454,7 @@ async function loadMoreNotes() {
             hasMoreNotes = false;
         }
 
-        renderCardGrid();
+        renderCardGrid('append', prevCount);
     } catch (err) {
         console.error('加载更多笔记失败:', err);
     } finally {
@@ -417,6 +478,7 @@ async function loadAllRemainingNotes() {
 
     isLoadingMore = true;
     showLoadingIndicator(true);
+    const prevCount = state.notes.length; // 记录追加前卡片数
 
     try {
         // 获取排序和分页参数
@@ -457,7 +519,7 @@ async function loadAllRemainingNotes() {
         hasMoreNotes = false;
 
         // 重新渲染并跳到底部
-        renderCardGrid();
+        renderCardGrid('append', prevCount);
         const container = getScrollContainer();
         if (container) {
             // 等待 DOM 更新后滚动到底部
@@ -616,6 +678,27 @@ async function copyNote(id) {
 let undoToastTimer = null;
 let undoNoteId = null;
 let toastTimer = null;
+let toastStack = 0;
+
+/**
+ * 应用入场/离场动画到 toast 容器
+ */
+function animateToast(el, action, cb) {
+    if (action === 'enter') {
+        el.style.animation = 'toastEnter 0.25s ease-out forwards';
+        el.classList.add('active');
+        if (cb) setTimeout(cb, 260);
+    } else {
+        el.style.animation = 'toastExit 0.2s ease-in forwards';
+        const onEnd = () => {
+            el.classList.remove('active');
+            el.style.animation = '';
+            el.removeEventListener('animationend', onEnd);
+            if (cb) cb();
+        };
+        el.addEventListener('animationend', onEnd);
+    }
+}
 
 function showUndoToast(msg, noteIds) {
     // 清除之前的定时器
@@ -629,14 +712,28 @@ function showUndoToast(msg, noteIds) {
 
     // 有可撤销的笔记 ID 时显示按钮，否则隐藏
     els.undoToastBtn.style.display = noteIds ? '' : 'none';
-    els.undoToast.classList.add('active');
+
+    // 堆叠：已有 toast 时上移旧 toast
+    if (els.undoToast.classList.contains('active')) {
+        els.undoToast.style.transform = `translateY(-${toastStack * 56}px)`;
+    }
+    toastStack++;
+
+    animateToast(els.undoToast, 'enter');
 
     // 5 秒后自动消失
     undoToastTimer = setTimeout(() => {
-        els.undoToast.classList.remove('active');
-        undoNoteId = null;
-        undoToastTimer = null;
+        hideUndoToast();
     }, 5000);
+}
+
+function hideUndoToast() {
+    toastStack = Math.max(0, toastStack - 1);
+    animateToast(els.undoToast, 'exit', () => {
+        undoNoteId = null;
+        els.undoToast.style.transform = '';
+    });
+    undoToastTimer = null;
 }
 
 /**
@@ -646,13 +743,29 @@ function showUndoToast(msg, noteIds) {
 function showToast(msg) {
     // 复用 undo-toast 的 UI，隐藏撤销按钮
     if (toastTimer) clearTimeout(toastTimer);
+
     els.undoToastMsg.textContent = msg;
     els.undoToastBtn.style.display = 'none';
-    els.undoToast.classList.add('active');
+
+    // 堆叠：已有 toast 时上移旧 toast
+    if (els.undoToast.classList.contains('active')) {
+        els.undoToast.style.transform = `translateY(-${toastStack * 56}px)`;
+    }
+    toastStack++;
+
+    animateToast(els.undoToast, 'enter');
+
     toastTimer = setTimeout(() => {
-        els.undoToast.classList.remove('active');
-        toastTimer = null;
+        hideToast();
     }, 3000);
+}
+
+function hideToast() {
+    toastStack = Math.max(0, toastStack - 1);
+    animateToast(els.undoToast, 'exit', () => {
+        els.undoToast.style.transform = '';
+    });
+    toastTimer = null;
 }
 
 /**
@@ -680,11 +793,11 @@ async function undoDelete() {
         console.error('撤销删除失败:', err);
     }
     // 关闭 Toast
-    els.undoToast.classList.remove('active');
     if (undoToastTimer) {
         clearTimeout(undoToastTimer);
         undoToastTimer = null;
     }
+    hideUndoToast();
     undoNoteId = null;
     await loadNotes();
 }
@@ -1312,9 +1425,17 @@ async function loadTrashNotes() {
 }
 
 /**
- * 恢复笔记
+ * 恢复笔记（带动画）
  */
 async function restoreNote(id) {
+    // 先对 DOM 元素应用 shrinkOut 动画
+    const item = els.trashListInner.querySelector(`.trash-item[data-id="${id}"]`);
+    if (item) {
+        item.style.animation = 'shrinkOut 0.2s ease-out forwards';
+        await new Promise(resolve => {
+            item.addEventListener('animationend', resolve, { once: true });
+        });
+    }
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreNote) {
             await window.go.main.App.RestoreNote(id);
@@ -1330,7 +1451,7 @@ async function restoreNote(id) {
 }
 
 /**
- * 全部恢复回收站笔记
+ * 全部恢复回收站笔记（带动画）
  */
 async function restoreAllNotes() {
     if (!state.trashNotes || state.trashNotes.length === 0) {
@@ -1339,6 +1460,18 @@ async function restoreAllNotes() {
     }
     const confirmed = await showConfirmDialog('确定要恢复回收站中的所有笔记吗？');
     if (!confirmed) return;
+
+    // 所有项依次收缩淡出（30ms 延迟）
+    const items = els.trashListInner.querySelectorAll('.trash-item');
+    const restorePromises = Array.from(items).map((item, index) => {
+        return new Promise(resolve => {
+            item.style.animation = `shrinkOut 0.2s ease-out forwards`;
+            item.style.animationDelay = `${index * 30}ms`;
+            item.addEventListener('animationend', resolve, { once: true });
+        });
+    });
+    await Promise.all(restorePromises);
+
     try {
         // 先获取回收站中的笔记 ID，用于撤销操作
         let trashedIds = [];
@@ -1369,7 +1502,7 @@ async function restoreAllNotes() {
 }
 
 /**
- * 清空回收站（永久删除所有）
+ * 清空回收站（永久删除所有，带动画）
  */
 async function emptyTrash() {
     if (!state.trashNotes || state.trashNotes.length === 0) {
@@ -1378,6 +1511,18 @@ async function emptyTrash() {
     }
     const confirmed = await showConfirmDialog('确定要永久清空回收站中的所有笔记吗？此操作不可撤销。');
     if (!confirmed) return;
+
+    // 所有项依次收缩淡出 + 红色闪烁（30ms 延迟）
+    const items = els.trashListInner.querySelectorAll('.trash-item');
+    const emptyPromises = Array.from(items).map((item, index) => {
+        return new Promise(resolve => {
+            item.style.animation = `shrinkOut 0.25s ease-out forwards, dangerFlash 0.25s ease-out forwards`;
+            item.style.animationDelay = `${index * 30}ms`;
+            item.addEventListener('animationend', resolve, { once: true });
+        });
+    });
+    await Promise.all(emptyPromises);
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.EmptyTrash) {
             await window.go.main.App.EmptyTrash();
@@ -1394,9 +1539,17 @@ async function emptyTrash() {
 }
 
 /**
- * 永久删除笔记
+ * 永久删除笔记（带动画）
  */
 async function permanentDeleteNote(id) {
+    // 先对 DOM 元素应用 shrinkOut 动画 + 红色闪烁
+    const item = els.trashListInner.querySelector(`.trash-item[data-id="${id}"]`);
+    if (item) {
+        item.style.animation = 'shrinkOut 0.25s ease-out forwards, dangerFlash 0.25s ease-out forwards';
+        await new Promise(resolve => {
+            item.addEventListener('animationend', resolve, { once: true });
+        });
+    }
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.PermanentDeleteNote) {
             await window.go.main.App.PermanentDeleteNote(id);
@@ -1414,26 +1567,72 @@ async function permanentDeleteNote(id) {
 /* ===== 数据管理函数 ===== */
 
 /**
+ * 数字递增动画（从 0 渐变到目标值）
+ * @param {HTMLElement} element - 显示数字的元素
+ * @param {number} targetValue - 目标数值
+ * @param {number} duration - 动画时长（毫秒）
+ */
+function animateCountUp(element, targetValue, duration = 300) {
+    const startTime = performance.now();
+    const startValue = 0;
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // easeOutQuad 缓动
+        const eased = 1 - Math.pow(1 - progress, 2);
+        const currentValue = Math.floor(startValue + (targetValue - startValue) * eased);
+        element.textContent = currentValue;
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+    requestAnimationFrame(update);
+}
+
+/**
  * 加载数据统计概览
  */
 async function loadDataStats() {
+    let totalNotes = 0, totalTags = 0, trashedNotes = 0;
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
             const stats = await window.go.main.App.GetDataStats();
             if (stats) {
-                els.statTotalNotes.textContent = stats.total_notes;
-                els.statTotalTags.textContent = stats.total_tags;
-                els.statTrashedNotes.textContent = stats.trashed_notes;
+                totalNotes = stats.total_notes || 0;
+                totalTags = stats.total_tags || 0;
+                trashedNotes = stats.trashed_notes || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
-            // 显示模拟数据
-            els.statTotalNotes.textContent = state.notes.length;
-            els.statTotalTags.textContent = state.tags.length;
+            totalNotes = state.notes.length;
+            totalTags = state.tags.length;
         }
     } catch (err) {
         console.error('加载统计数据失败:', err);
     }
+
+    // 统计卡片交错入场动画
+    const statCards = els.dataContent.querySelectorAll('.stat-card');
+    const totalCards = statCards.length;
+    if (totalCards > 0) {
+        statCards.forEach((card, index) => {
+            card.style.animation = `cardEnter 0.25s ease-out forwards`;
+            card.style.animationDelay = `${index * 80}ms`;
+        });
+    }
+
+    // 先全部设为 0，然后数字递增动画
+    els.statTotalNotes.textContent = '0';
+    els.statTotalTags.textContent = '0';
+    els.statTrashedNotes.textContent = '0';
+
+    // 入场动画完成后启动 count-up（取最后一张卡片的动画结束时间）
+    const lastDelay = (totalCards > 0 ? (totalCards - 1) * 80 : 0) + 250;
+    setTimeout(() => {
+        animateCountUp(els.statTotalNotes, totalNotes);
+        animateCountUp(els.statTotalTags, totalTags);
+        animateCountUp(els.statTrashedNotes, trashedNotes);
+    }, lastDelay + 50);
 }
 
 /**
@@ -1541,8 +1740,10 @@ function showImportResult(result) {
 
 /**
  * 渲染卡片网格/列表
+ * @param {string} [animateMode] - 'append' 追加模式（已有卡片不重播动画），'none' 无动画，省略则全部卡片播放入场动画
+ * @param {number} [prevCount] - 追加前已有的卡片数量（animateMode='append' 时使用）
  */
-function renderCardGrid() {
+function renderCardGrid(animateMode, prevCount) {
     // 获取当前排序方式，用于本地回落排序
     const checkedRadio = document.querySelector('input[name="sortOrder"]:checked');
     const sortBy = checkedRadio ? checkedRadio.value : 'updated_at';
@@ -1600,7 +1801,7 @@ function renderCardGrid() {
             <div class="card-actions" onclick="event.stopPropagation()">
                 ${state.batchMode
                     ? `<input type="checkbox" class="batch-checkbox" ${state.selectedNoteIds.has(note.id) ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleNoteSelection(${note.id})">`
-                    : `<button class="card-action-btn" onclick="event.stopPropagation(); window.togglePin(${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
+                    : `<button class="card-action-btn pin-btn" onclick="event.stopPropagation(); window.handlePinClick(event, ${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
                            ${note.pinned ? '★' : '☆'}
                        </button>`
                 }
@@ -1609,6 +1810,32 @@ function renderCardGrid() {
         `
         )
         .join('');
+
+    // 卡片入场动画
+    const cards = els.cardGrid.querySelectorAll('.note-card');
+    if (animateMode === 'none') {
+        // 无动画模式（批量操作），直接设为可见
+        cards.forEach(card => { card.style.opacity = '1'; });
+    } else if (animateMode === 'append' && typeof prevCount === 'number') {
+        // 追加模式：已有卡片不重播动画，新卡片带交错入场
+        cards.forEach((card, index) => {
+            if (index < prevCount) {
+                card.style.opacity = '1';
+                card.style.animation = 'none';
+            } else {
+                const delay = Math.min((index - prevCount) * 40, 480);
+                card.style.animation = `cardEnter 0.25s ease-out forwards`;
+                card.style.animationDelay = `${delay}ms`;
+            }
+        });
+    } else {
+        // 全量刷新模式：所有卡片带交错入场动画
+        cards.forEach((card, index) => {
+            const delay = Math.min(index * 40, 480);
+            card.style.animation = `cardEnter 0.25s ease-out forwards`;
+            card.style.animationDelay = `${delay}ms`;
+        });
+    }
 
     // 添加加载完成提示（底部已全部加载）
     const gridContainer = els.viewGrid.querySelector('.card-grid') || els.viewGrid;
@@ -1721,7 +1948,7 @@ function renderTagSelector(readOnly) {
 }
 
 /**
- * 渲染回收站列表
+ * 渲染回收站列表（带交错入场动画）
  */
 function renderTrashList() {
     if (state.trashNotes.length === 0) {
@@ -1738,19 +1965,26 @@ function renderTrashList() {
     els.trashListInner.innerHTML = state.trashNotes
         .map(
             (note) => `
-        <div class="trash-item">
+        <div class="trash-item" data-id="${note.id}">
             <div class="trash-item-info">
                 <div class="trash-item-title">${escapeHtml(note.title || '无标题')}</div>
                 <div class="trash-item-time">删除于 ${formatTime(note.deleted_at || note.updated_at)}</div>
             </div>
             <div class="trash-item-actions">
-                <button class="btn btn-restore btn-sm" onclick="window.restoreNote(${note.id})">恢复</button>
-                <button class="btn btn-perm-delete btn-sm" onclick="window.permanentDeleteNote(${note.id})">永久删除</button>
+                <button class="btn btn-restore btn-sm" onclick="event.stopPropagation(); window.restoreNote(${note.id})">恢复</button>
+                <button class="btn btn-perm-delete btn-sm" onclick="event.stopPropagation(); window.permanentDeleteNote(${note.id})">永久删除</button>
             </div>
         </div>
         `
         )
         .join('');
+
+    // 交错入场动画
+    const items = els.trashListInner.querySelectorAll('.trash-item');
+    items.forEach((item, index) => {
+        item.style.animation = `viewEnter 0.25s ease-out forwards`;
+        item.style.animationDelay = `${index * 30}ms`;
+    });
 }
 
 /* ===== 编辑器函数 ===== */
@@ -1792,8 +2026,10 @@ function startAutoSave() {
                 // 显示自动保存成功指示
                 els.autoSaveIndicator.textContent = '已保存 ✓';
                 els.autoSaveIndicator.className = 'auto-save-indicator active saved';
+                els.autoSaveIndicator.style.animation = 'pulseDot 0.5s ease-out';
                 setTimeout(() => {
                     els.autoSaveIndicator.className = 'auto-save-indicator';
+                    els.autoSaveIndicator.style.animation = '';
                 }, 2000);
             }
         } catch (err) {
@@ -1859,6 +2095,16 @@ async function openEditor(noteId, readOnly) {
         // 隐藏 textarea，显示渲染视图
         els.editorNoteContent.style.display = 'none';
         els.mdRendered.style.display = 'block';
+        // Markdown 内容淡入
+        els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
+        // 代码块逐个淡入
+        requestAnimationFrame(() => {
+            const codeBlocks = els.mdRendered.querySelectorAll('pre');
+            codeBlocks.forEach((block, index) => {
+                block.style.animation = `animFadeIn 0.2s ease-out forwards`;
+                block.style.animationDelay = `${index * 50}ms`;
+            });
+        });
     } else {
         els.editorEditTime.textContent = '';
         // 确保 textarea 可见，渲染视图隐藏
@@ -1886,6 +2132,20 @@ async function openEditor(noteId, readOnly) {
     els.mainContent.style.overflow = 'hidden';
     // 显示编辑器
     els.viewEditor.classList.add('active');
+
+    // 编辑器打开动画
+    const overlay = els.editorOverlay;
+    const panel = els.editorPanel;
+    const body = panel.querySelector('.editor-body');
+    overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
+    panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    // 内容区域延迟入场
+    if (body) {
+        requestAnimationFrame(() => {
+            body.style.animation = 'viewEnter 0.25s ease-out forwards';
+            body.style.animationDelay = '50ms';
+        });
+    }
 }
 
 /**
@@ -1905,38 +2165,71 @@ function onEditorInput() {
 function toggleEditorFullscreen() {
     const panel = els.editorPanel;
     const btn = els.editorFullscreenBtn;
-    panel.classList.toggle('fullscreen');
-    const isFullscreen = panel.classList.contains('fullscreen');
-    btn.textContent = isFullscreen ? '⤡' : '⛶';
-    btn.title = isFullscreen ? '退出全屏' : '全屏编辑';
-    btn.classList.toggle('fullscreen', isFullscreen);
+    const goFullscreen = !panel.classList.contains('fullscreen');
+
+    if (goFullscreen) {
+        // 进入全屏：缓动曲线进入
+        panel.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+        panel.classList.add('fullscreen');
+    } else {
+        // 退出全屏：快速淡出
+        panel.style.transition = 'all 0.2s ease-out';
+        panel.classList.remove('fullscreen');
+    }
+    btn.textContent = goFullscreen ? '⤡' : '⛶';
+    btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
+    btn.classList.toggle('fullscreen', goFullscreen);
+
+    // transition 结束后清理临时样式
+    const onEnd = () => {
+        panel.style.transition = '';
+        panel.removeEventListener('transitionend', onEnd);
+    };
+    panel.addEventListener('transitionend', onEnd);
 }
 
 function closeEditor() {
-    els.viewEditor.classList.remove('active');
-    // 恢复主内容区滚动
-    els.mainContent.style.overflow = '';
-    // 退出全屏模式
-    els.editorPanel.classList.remove('fullscreen');
-    els.editorFullscreenBtn.textContent = '⛶';
-    els.editorFullscreenBtn.title = '全屏编辑';
-    els.editorFullscreenBtn.classList.remove('fullscreen');
-    // 清理事件监听
-    els.editorNoteTitle.removeEventListener('input', onEditorInput);
-    els.editorNoteContent.removeEventListener('input', onEditorInput);
-    // 清除自动保存定时器
-    if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-        autoSaveTimer = null;
-    }
-    state.editingNoteId = null;
-    state.selectedTags = [];
-    // 字数归零
-    els.editorWordCount.textContent = '';
-    // 重置 Markdown 渲染/编辑显示状态
-    els.editorNoteContent.style.display = '';
-    els.mdRendered.style.display = 'none';
-    els.mdRendered.innerHTML = '';
+    const overlay = els.editorOverlay;
+    const panel = els.editorPanel;
+    const body = panel.querySelector('.editor-body');
+
+    // 退出动画
+    panel.style.animation = 'modalExit 0.18s ease-in forwards';
+    overlay.style.animation = 'overlayFadeOut 0.15s ease-in forwards';
+
+    // 动画完成后执行清理
+    setTimeout(() => {
+        // 重置动画
+        overlay.style.animation = '';
+        panel.style.animation = '';
+        if (body) body.style.animation = '';
+        els.mdRendered.style.animation = '';
+
+        els.viewEditor.classList.remove('active');
+        // 恢复主内容区滚动
+        els.mainContent.style.overflow = '';
+        // 退出全屏模式
+        els.editorPanel.classList.remove('fullscreen');
+        els.editorFullscreenBtn.textContent = '⛶';
+        els.editorFullscreenBtn.title = '全屏编辑';
+        els.editorFullscreenBtn.classList.remove('fullscreen');
+        // 清理事件监听
+        els.editorNoteTitle.removeEventListener('input', onEditorInput);
+        els.editorNoteContent.removeEventListener('input', onEditorInput);
+        // 清除自动保存定时器
+        if (autoSaveTimer) {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = null;
+        }
+        state.editingNoteId = null;
+        state.selectedTags = [];
+        // 字数归零
+        els.editorWordCount.textContent = '';
+        // 重置 Markdown 渲染/编辑显示状态
+        els.editorNoteContent.style.display = '';
+        els.mdRendered.style.display = 'none';
+        els.mdRendered.innerHTML = '';
+    }, 200);
 }
 
 /**
@@ -1966,7 +2259,15 @@ let contextMenuNoteId = null;
  * 隐藏右键菜单
  */
 function hideContextMenu() {
-    els.contextMenu.classList.remove('active');
+    const menu = els.contextMenu;
+    if (!menu.classList.contains('active')) return;
+    menu.style.animation = 'modalExit 0.1s ease-in forwards';
+    const onEnd = () => {
+        menu.classList.remove('active');
+        menu.style.animation = '';
+        menu.removeEventListener('animationend', onEnd);
+    };
+    menu.addEventListener('animationend', onEnd);
     contextMenuNoteId = null;
     // 恢复主内容区滚动
     els.mainContent.style.overflow = '';
@@ -2000,8 +2301,17 @@ window.showContextMenu = function (event, noteId) {
     if (pinItem && note) {
         pinItem.textContent = note.pinned ? '取消置顶' : '置顶';
     }
+
+    // 计算 transform-origin：靠近左上角还是右下角
+    const isRight = event.clientX > window.innerWidth / 2;
+    const isBottom = event.clientY > window.innerHeight / 2;
+    const originX = isRight ? 'right' : 'left';
+    const originY = isBottom ? 'bottom' : 'top';
+    menu.style.transformOrigin = `${originX} ${originY}`;
+
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
+    menu.style.animation = 'menuEnter 0.15s ease-out forwards';
     menu.classList.add('active');
     // 锁定主内容区滚动，防止菜单打开时误滚动
     els.mainContent.style.overflow = 'hidden';
@@ -2038,6 +2348,23 @@ window.handleContextAction = function (action) {
  */
 window.togglePin = async function (id) {
     await togglePin(id);
+};
+
+/**
+ * 处理置顶按钮点击（带动画）
+ * 先播放旋转动画，动画结束后执行置顶逻辑
+ */
+window.handlePinClick = function (event, id) {
+    event.stopPropagation();
+    const btn = event.currentTarget;
+    // 防止重复点击
+    if (btn.classList.contains('animating')) return;
+    btn.classList.add('animating');
+    btn.addEventListener('animationend', async function onPinAnimEnd() {
+        btn.removeEventListener('animationend', onPinAnimEnd);
+        btn.classList.remove('animating');
+        await window.togglePin(id);
+    }, { once: true });
 };
 
 /**
@@ -2100,19 +2427,34 @@ window.searchByTag = function (tagName) {
  */
 function toggleBatchMode() {
     state.batchMode = !state.batchMode;
-    if (!state.batchMode) {
-        // 退出批量模式：清空选中
-        clearSelection();
-    }
     els.batchModeBtn.classList.toggle('active', state.batchMode);
-    renderCardGrid();
-    // 进入批量模式时显示 bar，退出时隐藏
+    const bar = els.batchBar;
+
     if (state.batchMode) {
-        els.batchBar.style.display = 'flex';
+        // 进入批量模式
+        clearSelection();
+        bar.style.display = 'flex';
+        bar.style.animation = 'slideUp 0.25s ease-out forwards';
+        renderCardGrid('none');
+        updateBatchBar();
+
+        // 复选框交错淡入
+        const checkboxes = document.querySelectorAll('.batch-checkbox');
+        checkboxes.forEach((cb, i) => {
+            cb.style.animation = `scaleBounce 0.3s ease-out ${i * 20}ms forwards`;
+        });
     } else {
-        els.batchBar.style.display = 'none';
+        // 退出批量模式：清空选中 + bar 滑出
+        clearSelection();
+        bar.style.animation = 'slideDown 0.15s ease-in forwards';
+        bar.addEventListener('animationend', function onEnd() {
+            bar.style.display = 'none';
+            bar.style.animation = '';
+            bar.removeEventListener('animationend', onEnd);
+        });
+        renderCardGrid('none');
+        updateBatchBar();
     }
-    updateBatchBar();
 }
 
 /**
@@ -2125,7 +2467,7 @@ window.toggleNoteSelection = function (id) {
         state.selectedNoteIds.add(id);
     }
     updateBatchBar();
-    renderCardGrid();
+    renderCardGrid('none');
 };
 
 /**
@@ -2138,7 +2480,7 @@ function toggleSelectAll() {
         // 取消全选
         state.selectedNoteIds.clear();
         updateBatchBar();
-        renderCardGrid();
+        renderCardGrid('none');
     } else {
         // 全选：先从后端拉取所有 ID，再塞入选中的 Set
         selectAllIds();
@@ -2162,7 +2504,7 @@ async function selectAllIds() {
     }
     ids.forEach(id => state.selectedNoteIds.add(id));
     updateBatchBar();
-    renderCardGrid();
+    renderCardGrid('none');
 }
 
 /**
@@ -2189,7 +2531,7 @@ function clearSelection() {
     state.selectedNoteIds.clear();
     updateBatchBar();
     if (state.batchMode) {
-        renderCardGrid();
+        renderCardGrid('none');
     }
 }
 
@@ -2222,6 +2564,30 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/* ===== 更多菜单动画 ===== */
+
+/**
+ * 打开更多菜单
+ */
+function openMoreMenu(menu) {
+    menu.style.animation = 'menuEnter 0.15s ease-out forwards';
+    menu.classList.add('active');
+}
+
+/**
+ * 关闭更多菜单（含离场动画）
+ */
+function closeMoreMenu(menu) {
+    if (!menu.classList.contains('active')) return;
+    menu.style.animation = 'modalExit 0.1s ease-in forwards';
+    const onEnd = () => {
+        menu.classList.remove('active');
+        menu.style.animation = '';
+        menu.removeEventListener('animationend', onEnd);
+    };
+    menu.addEventListener('animationend', onEnd);
 }
 
 /* ===== 事件绑定 ===== */
@@ -2281,13 +2647,19 @@ function initEventListeners() {
     // 更多菜单按钮
     els.moreMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        els.moreMenu.classList.toggle('active');
+        const menu = els.moreMenu;
+        const isOpen = menu.classList.contains('active');
+        if (isOpen) {
+            closeMoreMenu(menu);
+        } else {
+            openMoreMenu(menu);
+        }
     });
     // 更多菜单项点击
     els.moreMenu.addEventListener('click', (e) => {
         const item = e.target.closest('.dropdown-item');
         if (item && item.dataset.action) {
-            els.moreMenu.classList.remove('active');
+            closeMoreMenu(els.moreMenu);
             if (item.dataset.action === 'home') {
                 state.searchKeyword = '';
                 els.searchInput.value = '';
@@ -2373,7 +2745,7 @@ function initEventListeners() {
 
     // 右键菜单：点击其他区域关闭
     document.addEventListener('click', hideContextMenu);
-    document.addEventListener('click', () => els.moreMenu.classList.remove('active'));
+    document.addEventListener('click', () => closeMoreMenu(els.moreMenu));
     // 右键菜单项点击
     els.contextMenu.addEventListener('click', (e) => {
         const item = e.target.closest('.context-menu-item');
@@ -2675,10 +3047,22 @@ function initScrollbarAutoHide() {
 /* ===== 关于页面 ===== */
 
 /**
- * 打开关于页面，获取版本信息
+ * 打开关于页面（带动画），获取版本信息
  */
 async function showAbout() {
     els.viewAbout.style.display = 'flex';
+    // 遮罩淡入
+    els.viewAbout.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
+    // 内容卡片缩放淡入
+    const card = els.viewAbout.querySelector('.about-card');
+    card.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    // 品牌 Logo 弹性缩放
+    const logo = els.viewAbout.querySelector('.about-logo');
+    logo.style.animation = 'scaleBounce 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    // 版本号延迟淡入
+    els.aboutVersion.style.animation = 'animFadeIn 0.2s ease-out forwards';
+    els.aboutVersion.style.animationDelay = '100ms';
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetVersion) {
             const version = await window.go.main.App.GetVersion();
@@ -2694,25 +3078,66 @@ async function showAbout() {
 }
 
 /**
- * 关闭关于页面
+ * 关闭关于页面（带动画）
  */
 function closeAbout() {
-    els.viewAbout.style.display = 'none';
+    const card = els.viewAbout.querySelector('.about-card');
+    card.style.animation = 'modalExit 0.15s ease-in forwards';
+    els.viewAbout.style.animation = 'overlayFadeOut 0.15s ease-in forwards';
+    // 重置子元素动画
+    const logo = els.viewAbout.querySelector('.about-logo');
+    logo.style.animation = '';
+    els.aboutVersion.style.animation = '';
+    els.aboutVersion.style.animationDelay = '';
+    // 动画完成后隐藏
+    setTimeout(() => {
+        els.viewAbout.style.display = 'none';
+        els.viewAbout.style.animation = '';
+        card.style.animation = '';
+    }, 200);
 }
 
 /**
- * 打开快捷键说明模态框
+ * 打开快捷键说明模态框（带动画）
  */
 function openShortcuts() {
     els.shortcutsView.style.display = 'flex';
+    // 遮罩淡入
+    els.shortcutsView.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
+    // 内容卡片缩放淡入
+    const card = els.shortcutsView.querySelector('.shortcuts-card');
+    card.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    // 渲染快捷键列表
     renderShortcutsPage();
+    // 快捷键列表项交错入场（确保 DOM 已渲染）
+    requestAnimationFrame(() => {
+        const rows = els.shortcutsBody.querySelectorAll('.shortcut-row');
+        rows.forEach((row, index) => {
+            row.style.animation = `viewEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards`;
+            row.style.animationDelay = `${index * 30}ms`;
+        });
+    });
 }
 
 /**
- * 关闭快捷键说明模态框
+ * 关闭快捷键说明模态框（带动画）
  */
 function closeShortcuts() {
-    els.shortcutsView.style.display = 'none';
+    const card = els.shortcutsView.querySelector('.shortcuts-card');
+    card.style.animation = 'modalExit 0.15s ease-in forwards';
+    els.shortcutsView.style.animation = 'overlayFadeOut 0.15s ease-in forwards';
+    // 动画完成后隐藏
+    setTimeout(() => {
+        els.shortcutsView.style.display = 'none';
+        // 重置动画
+        els.shortcutsView.style.animation = '';
+        card.style.animation = '';
+        const rows = els.shortcutsBody.querySelectorAll('.shortcut-row');
+        rows.forEach(row => {
+            row.style.animation = '';
+            row.style.animationDelay = '';
+        });
+    }, 200);
 }
 
 /* ===== 快捷键说明页面 ===== */
