@@ -141,6 +141,11 @@ const els = {
     statTrashedNotes: $('statTrashedNotes'),
     statDBSize: $('statDBSize'),
 
+    // 备份还原
+    backupBtn: $('backupBtn'),
+    restoreBtn: $('restoreBtn'),
+    backupInfo: $('backupInfo'),
+
     // 字数统计
     editorWordCount: $('editorWordCount'),
     autoSaveIndicator: $('autoSaveIndicator'),
@@ -1638,6 +1643,9 @@ async function loadDataStats() {
         animateCountUp(els.statTotalTags, totalTags);
         animateCountUp(els.statTrashedNotes, trashedNotes);
     }, lastDelay + 50);
+
+    // 加载备份信息
+    loadBackupInfo();
 }
 
 /**
@@ -1730,6 +1738,90 @@ async function importData() {
     } catch (err) {
         console.error('导入数据失败:', err);
         showToast('导入失败：' + err.message);
+    }
+}
+
+/**
+ * 加载最新备份信息并更新标签
+ */
+async function loadBackupInfo() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetBackupInfo) {
+            const info = await window.go.main.App.GetBackupInfo();
+            if (info && info.file_name) {
+                els.backupInfo.innerHTML = `<span style="color:var(--success,#2ea043)">&#10003; 已有备份</span> \u2014 ${info.file_time}，${info.file_size}`;
+                els.backupInfo.classList.add('has-backup');
+            } else {
+                els.backupInfo.textContent = '暂无备份';
+                els.backupInfo.classList.remove('has-backup');
+            }
+        }
+    } catch (err) {
+        console.error('加载备份信息失败:', err);
+        els.backupInfo.textContent = '暂无备份';
+        els.backupInfo.classList.remove('has-backup');
+    }
+}
+
+/**
+ * 一键备份（带按钮加载状态）
+ */
+async function backupToDir() {
+    const btn = els.backupBtn;
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="dab-text" style="opacity:0.7">⏳ 备份中…</span>';
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.BackupToDir) {
+            const msg = await window.go.main.App.BackupToDir();
+            if (msg) {
+                showToast(msg);
+                loadBackupInfo();
+            }
+        } else {
+            showToast('备份功能不可用');
+        }
+    } catch (err) {
+        console.error('备份失败:', err);
+        showToast('备份失败：' + (err.message || String(err)));
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
+}
+
+/**
+ * 一键还原（带按钮加载状态 + 确认提示）
+ */
+async function restoreFromDir() {
+    const btn = els.restoreBtn;
+    // 自定义确认弹窗
+    const confirmed = await showConfirmDialog('确定要从最新备份恢复数据吗？当前所有笔记将被替换为备份内容，此操作不可撤销。');
+    if (!confirmed) return;
+
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="dab-text" style="opacity:0.7">⏳ 还原中…</span>';
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreFromDir) {
+            const result = await window.go.main.App.RestoreFromDir();
+            if (result && result.message) {
+                showToast(result.message);
+                if (result.success_count > 0) {
+                    loadNotes();
+                    loadDataStats();
+                    loadTags();
+                }
+            }
+        } else {
+            showToast('还原功能不可用');
+        }
+    } catch (err) {
+        console.error('还原失败:', err);
+        showToast('还原失败：' + (err.message || String(err)));
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
     }
 }
 
@@ -2718,6 +2810,9 @@ function initEventListeners() {
     });
     els.exportDataBtn.addEventListener('click', exportData);
     els.importDataBtn.addEventListener('click', importData);
+    // 备份还原按钮
+    els.backupBtn?.addEventListener('click', backupToDir);
+    els.restoreBtn?.addEventListener('click', restoreFromDir);
     els.resetAllBtn.addEventListener('click', resetDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
 

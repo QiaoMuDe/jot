@@ -6,6 +6,10 @@ export function AddTagToNote(arg1, arg2) {
   return window['go']['main']['App']['AddTagToNote'](arg1, arg2);
 }
 
+export function BackupToDir() {
+  return window['go']['main']['App']['BackupToDir']();
+}
+
 export function BatchAddTagToNotes(arg1, arg2) {
   return window['go']['main']['App']['BatchAddTagToNotes'](arg1, arg2);
 }
@@ -48,6 +52,10 @@ export function GetAllNoteIDs() {
 
 export function GetAllTags() {
   return window['go']['main']['App']['GetAllTags']();
+}
+
+export function GetBackupInfo() {
+  return window['go']['main']['App']['GetBackupInfo']();
 }
 
 export function GetDataStats() {
@@ -116,6 +124,10 @@ export function ResetDatabase() {
 
 export function RestoreAllNotes() {
   return window['go']['main']['App']['RestoreAllNotes']();
+}
+
+export function RestoreFromDir() {
+  return window['go']['main']['App']['RestoreFromDir']();
 }
 
 export function RestoreNote(arg1) {

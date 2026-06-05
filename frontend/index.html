@@ -239,7 +239,6 @@
                 <div class="data-content-inner">
                 <!-- 第一层：数据统计 -->
                 <div class="data-section">
-                    <h3 class="data-section-title">数据统计</h3>
                     <div class="data-stats">
                         <div class="stat-card">
                             <div class="stat-body">
@@ -269,19 +268,21 @@
                 </div>
 
                 <!-- 第二层：数据操作 -->
-                <div class="data-section">
+                <div class="data-section data-section-card">
                     <h3 class="data-section-title">数据操作</h3>
                     <div class="data-actions">
-                        <button class="data-action-btn" id="exportDataBtn">
-                            <span class="dab-icon">⬇️</span>
-                            <span class="dab-text">导出数据</span>
-                            <span class="dab-desc">将当前数据库完整备份为 .db 文件</span>
-                        </button>
-                        <button class="data-action-btn" id="importDataBtn">
-                            <span class="dab-icon">⬆️</span>
-                            <span class="dab-text">导入数据</span>
-                            <span class="dab-desc">从 .db 文件还原数据库备份</span>
-                        </button>
+                        <div class="data-actions-row">
+                            <button class="data-action-btn" id="exportDataBtn">
+                                <span class="dab-icon">⬇️</span>
+                                <span class="dab-text">导出数据</span>
+                                <span class="dab-desc">将当前数据库完整备份为 .db 文件</span>
+                            </button>
+                            <button class="data-action-btn" id="importDataBtn">
+                                <span class="dab-icon">⬆️</span>
+                                <span class="dab-text">导入数据</span>
+                                <span class="dab-desc">从 .db 文件还原数据库备份</span>
+                            </button>
+                        </div>
                         <button class="data-action-btn data-action-btn-danger" id="resetAllBtn">
                             <span class="dab-icon">⚠️</span>
                             <span class="dab-text">恢复出厂设置</span>
@@ -290,8 +291,26 @@
                     </div>
                 </div>
 
+                <!-- 快速备份 -->
+                <div class="data-section data-section-card backup-section">
+                    <h3 class="data-section-title">快速备份</h3>
+                    <div class="backup-info" id="backupInfo">暂无备份</div>
+                    <div class="data-actions-row">
+                        <button class="data-action-btn" id="backupBtn">
+                            <span class="dab-icon">💾</span>
+                            <span class="dab-text">一键备份</span>
+                            <span class="dab-desc">覆盖上次备份</span>
+                        </button>
+                        <button class="data-action-btn" id="restoreBtn">
+                            <span class="dab-icon">↩️</span>
+                            <span class="dab-text">一键还原</span>
+                            <span class="dab-desc">恢复至最新备份</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 第三层：数据目录 -->
-                <div class="data-section">
+                <div class="data-section data-section-card">
                     <h3 class="data-section-title">数据目录</h3>
                     <div class="data-actions single-action">
                         <button class="data-action-btn" id="openDataDirBtn">

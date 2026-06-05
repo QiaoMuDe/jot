@@ -415,6 +415,127 @@ func (a *App) OpenProjectURL(url string) string {
 	return "已打开浏览器"
 }
 
+// ==================== 一键备份与还原绑定方法 ====================
+
+// BackupToDir 一键备份到 ~/.jot/backup/ 目录，固定文件名 jot-backup.db（覆盖旧备份）
+func (a *App) BackupToDir() (string, error) {
+	backupDir, err := database.BackupDir()
+	if err != nil {
+		return "", fmt.Errorf("获取备份目录失败: %w", err)
+	}
+	if err := database.EnsureBackupDir(); err != nil {
+		return "", fmt.Errorf("创建备份目录失败: %w", err)
+	}
+
+	filePath := filepath.Join(backupDir, "jot-backup.db")
+
+	// VACUUM INTO 要求目标文件不存在，先删除旧备份（文件不存在也忽略）
+	_ = os.Remove(filePath)
+
+	if err := a.noteService.ExportBackup(filePath); err != nil {
+		return "", fmt.Errorf("备份失败: %w", err)
+	}
+
+	return "备份成功：jot-backup.db", nil
+}
+
+// RestoreFromDir 从 backup 目录的 jot-backup.db 还原备份
+func (a *App) RestoreFromDir() (*services.ImportResult, error) {
+	backupDir, err := database.BackupDir()
+	if err != nil {
+		return &services.ImportResult{Message: "获取备份目录失败：" + err.Error()}, nil
+	}
+
+	filePath := filepath.Join(backupDir, "jot-backup.db")
+
+	// 检查备份文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return &services.ImportResult{Message: "暂无可用备份"}, nil
+	} else if err != nil {
+		return &services.ImportResult{Message: "读取备份文件失败：" + err.Error()}, nil
+	}
+
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		return &services.ImportResult{Message: "获取数据库路径失败：" + err.Error()}, nil
+	}
+
+	// Step 1: 备份当前数据库
+	backupPath := dbPath + ".bak"
+	if err := fs.CopyEx(dbPath, backupPath, true); err != nil {
+		return &services.ImportResult{Message: "备份当前数据库失败：" + err.Error()}, nil
+	}
+
+	// Step 2: 关闭旧连接
+	sqlDB, err := a.db.DB()
+	if err != nil {
+		_ = os.Remove(backupPath)
+		return &services.ImportResult{Message: "获取数据库连接失败：" + err.Error()}, nil
+	}
+	_ = sqlDB.Close()
+
+	// Step 3: 复制备份文件到数据库路径
+	if err := fs.CopyEx(filePath, dbPath, true); err != nil {
+		_ = fs.CopyEx(backupPath, dbPath, true)
+		if rerr := a.reconnectDB(dbPath); rerr != nil {
+			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
+		}
+		return &services.ImportResult{Message: "复制备份文件失败：" + err.Error()}, nil
+	}
+
+	// Step 4: 重新初始化数据库
+	newDB, err := database.InitDB(dbPath)
+	if err != nil {
+		_ = fs.CopyEx(backupPath, dbPath, true)
+		if rerr := a.reconnectDB(dbPath); rerr != nil {
+			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
+		}
+		return &services.ImportResult{Message: "数据库重连失败：" + err.Error()}, nil
+	}
+
+	// Step 5: 重建服务
+	a.db = newDB
+	a.noteService = services.NewNoteService(newDB)
+	a.tagService = services.NewTagService(newDB)
+	a.settingService = services.NewSettingService(newDB)
+
+	// Step 6: 清理备份
+	_ = os.Remove(backupPath)
+
+	return &services.ImportResult{Message: "已从备份文件恢复：jot-backup.db", SuccessCount: 1}, nil
+}
+
+// GetBackupInfo 获取备份文件信息（文件名、修改时间、文件大小），无备份时返回空值
+func (a *App) GetBackupInfo() (map[string]string, error) {
+	backupDir, err := database.BackupDir()
+	if err != nil {
+		return map[string]string{"file_name": "", "file_time": "", "file_size": ""}, nil
+	}
+
+	filePath := filepath.Join(backupDir, "jot-backup.db")
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		return map[string]string{"file_name": "", "file_time": "", "file_size": ""}, nil
+	}
+
+	size := fi.Size()
+	var sizeStr string
+	switch {
+	case size < 1024:
+		sizeStr = fmt.Sprintf("%d B", size)
+	case size < 1024*1024:
+		sizeStr = fmt.Sprintf("%.1f KB", float64(size)/1024)
+	default:
+		sizeStr = fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	}
+
+	return map[string]string{
+		"file_name": "jot-backup.db",
+		"file_time": fi.ModTime().Format("2006-01-02 15:04"),
+		"file_size": sizeStr,
+	}, nil
+}
+
 // ResetDatabase 清空所有数据（笔记/标签/设置），重新初始化默认标签，恢复出厂状态
 func (a *App) ResetDatabase() error {
 	// 1. 清空所有笔记和标签

@@ -188,6 +188,7 @@
   position: relative;
   /* 预占滚动条空间，防止 overflow:hidden 切换时内容晃动 */
   scrollbar-gutter: stable;
+  overscroll-behavior: none;
 }
 
 .view {
@@ -207,6 +208,7 @@
   justify-content: space-between;
   margin-bottom: 24px;
   flex-shrink: 0;
+  margin-left: -16px;
 }
 
 .view-title {
@@ -1575,11 +1577,21 @@
   border: 1px solid var(--border);
   text-align: center;
   opacity: 0;
+  transform: translateY(8px);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              border-color var(--transition),
+              box-shadow var(--transition);
 }
 
 .stat-card:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.stat-card:active {
+  transform: translateY(0px) scale(0.98);
+  transition-duration: 60ms;
 }
 
 .stat-value {
@@ -1604,6 +1616,35 @@
   gap: 10px;
 }
 
+.data-section-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 20px 18px 20px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.data-section-card .data-section-title {
+  font-size: 0.938rem;
+  margin-bottom: 16px;
+  padding-left: 0;
+}
+
+.data-section-card .data-section-title::before {
+  display: none;
+}
+
+.data-actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.data-actions-row .data-action-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 .data-actions.single-action {
   max-width: 400px;
 }
@@ -1620,12 +1661,48 @@
   cursor: pointer;
   font-family: inherit;
   text-align: left;
-  transition: var(--transition);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              border-color var(--transition),
+              box-shadow var(--transition),
+              background var(--transition);
+  transform: scale(1);
+  position: relative;
+  overflow: hidden;
 }
 
 .data-action-btn:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
+}
+
+.data-action-btn:active {
+  transform: scale(0.975);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  transition-duration: 60ms;
+}
+
+/* 轻量涟漪效果 */
+.data-action-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.data-action-btn:active::after {
+  opacity: 0.06;
+}
+
+.data-action-btn[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(0.3);
 }
 
 /* 危险按钮（恢复出厂设置） */
@@ -1635,6 +1712,17 @@
 .data-action-btn-danger:hover {
   border-color: var(--danger, #ef4444) !important;
   background: var(--danger-bg, #fef2f2) !important;
+}
+.data-action-btn-danger:active {
+  transform: scale(0.975);
+  background: var(--danger, #ef4444) !important;
+}
+.data-action-btn-danger:active .dab-text {
+  color: #fff !important;
+}
+.data-action-btn-danger:active .dab-icon {
+  color: #fff !important;
+  background: transparent !important;
 }
 
 .dab-icon {
@@ -2459,4 +2547,126 @@
   text-align: right;
   flex-shrink: 0;
   margin-left: 24px;
+}
+
+/* ==========================================================================
+   快速备份
+   ========================================================================== */
+
+.backup-section {
+}
+
+.backup-info {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  min-height: 22px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.backup-info.has-backup {
+  border-color: var(--success-border, #4ade8050);
+  background: var(--success-bg, #22c55e10);
+}
+
+.backup-section .data-action-btn {
+  flex: 1;
+}
+
+/* 统计卡片入场动画 */
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.stat-card.entered {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* ===== 自定义确认弹窗 ===== */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  backdrop-filter: blur(2px);
+}
+.confirm-overlay.visible {
+  opacity: 1;
+}
+.confirm-dialog {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px 20px;
+  min-width: 320px;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  transform: translateY(8px) scale(0.97);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.confirm-overlay.visible .confirm-dialog {
+  transform: translateY(0) scale(1);
+}
+.confirm-message {
+  font-size: 0.938rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  white-space: pre-line;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background var(--transition),
+              border-color var(--transition);
+  user-select: none;
+}
+.confirm-btn:active {
+  transform: scale(0.96);
+}
+.confirm-cancel {
+  background: var(--card-bg);
+  color: var(--text-secondary);
+}
+.confirm-cancel:hover {
+  background: var(--hover-bg);
+  border-color: var(--text-muted);
+}
+.confirm-ok {
+  background: var(--danger, #ef4444);
+  color: #fff;
+  border-color: var(--danger, #ef4444);
+}
+.confirm-ok:hover {
+  background: var(--danger-hover, #dc2626);
+  border-color: var(--danger-hover, #dc2626);
 }

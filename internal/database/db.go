@@ -54,3 +54,21 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 
 	return db, nil
 }
+
+// BackupDir 返回备份目录路径 ~/.jot/backup/
+func BackupDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot get user home directory: %w", err)
+	}
+	return filepath.Join(home, ".jot", "backup"), nil
+}
+
+// EnsureBackupDir 确保备份目录存在，不存在则创建
+func EnsureBackupDir() error {
+	dir, err := BackupDir()
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(dir, 0755)
+}

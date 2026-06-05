@@ -5,6 +5,8 @@ import {services} from '../models';
 
 export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
+export function BackupToDir():Promise<string>;
+
 export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>;
 
 export function BatchDeleteNotes(arg1:Array<number>):Promise<void>;
@@ -26,6 +28,8 @@ export function ExportDataWithDialog():Promise<string>;
 export function GetAllNoteIDs():Promise<Array<number>>;
 
 export function GetAllTags():Promise<Array<models.Tag>>;
+
+export function GetBackupInfo():Promise<Record<string, string>>;
 
 export function GetDataStats():Promise<services.DataStats>;
 
@@ -60,6 +64,8 @@ export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
 export function ResetDatabase():Promise<void>;
 
 export function RestoreAllNotes():Promise<void>;
+
+export function RestoreFromDir():Promise<services.ImportResult>;
 
 export function RestoreNote(arg1:number):Promise<void>;
 
