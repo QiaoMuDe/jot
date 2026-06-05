@@ -36,6 +36,109 @@ marked.setOptions({
     gfm: true,
 });
 
+/* ===== 统一通知系统 ===== */
+
+/**
+ * 右上角浮动通知管理器
+ * 单例模式，全局可引用
+ */
+class NotificationManager {
+    constructor() {
+        this.container = document.getElementById('notificationContainer');
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.id = 'notificationContainer';
+            this.container.className = 'notification-container';
+            document.body.appendChild(this.container);
+        }
+    }
+
+    /**
+     * 显示通知
+     * @param {string} message - 通知内容
+     * @param {string} type - 类型：'success' | 'error' | 'warning' | 'info'
+     * @param {number} duration - 自动消失毫秒数（默认 3000）
+     */
+    show(message, type = 'info', duration = 3000) {
+        const el = document.createElement('div');
+        el.className = `notification ${type}`;
+
+        const iconMap = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+        el.innerHTML = `
+            <span class="notification-icon">${iconMap[type] || 'ℹ'}</span>
+            <span class="notification-msg">${this._esc(message)}</span>
+            <button class="notification-close" aria-label="关闭">✕</button>
+        `;
+
+        this.container.appendChild(el);
+
+        // 关闭按钮
+        el.querySelector('.notification-close').addEventListener('click', () => this._dismiss(el));
+
+        // 自动消失
+        const timer = setTimeout(() => this._dismiss(el), duration);
+        el._timer = timer;
+
+        return el;
+    }
+
+    /**
+     * 显示可撤销通知
+     * @param {string} message - 通知内容
+     * @param {Function} onUndo - 点击撤销的回调函数
+     * @param {number} duration - 自动消失毫秒数（默认 5000）
+     */
+    showUndo(message, onUndo, duration = 5000) {
+        const el = document.createElement('div');
+        el.className = 'notification undo';
+        el.innerHTML = `
+            <span class="notification-icon" style="color:var(--accent,#6366f1)">↩</span>
+            <span class="notification-msg">${this._esc(message)}</span>
+            <button class="notification-undo-btn">撤销</button>
+        `;
+
+        this.container.appendChild(el);
+
+        // 撤销按钮
+        el.querySelector('.notification-undo-btn').addEventListener('click', () => {
+            if (typeof onUndo === 'function') onUndo();
+            this._dismiss(el);
+        });
+
+        // 自动消失
+        const timer = setTimeout(() => this._dismiss(el), duration);
+        el._timer = timer;
+
+        return el;
+    }
+
+    /**
+     * 手动销毁通知
+     */
+    _dismiss(el) {
+        if (el._dismissing) return;
+        el._dismissing = true;
+        clearTimeout(el._timer);
+        el.classList.add('exit');
+        el.addEventListener('animationend', () => {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }, { once: true });
+    }
+
+    /**
+     * HTML 转义
+     */
+    _esc(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+/** 全局通知管理器实例 */
+const nm = new NotificationManager();
+
 /* ===== 应用状态 ===== */
 const state = {
     notes: [],
@@ -151,10 +254,8 @@ const els = {
     autoSaveIndicator: $('autoSaveIndicator'),
     editorEditTime: $('editorEditTime'),
 
-    // 撤销 Toast
-    undoToast: $('undoToast'),
-    undoToastMsg: $('undoToastMsg'),
-    undoToastBtn: $('undoToastBtn'),
+    // 通知容器
+    notificationContainer: $('notificationContainer'),
 
     // 右键菜单
     contextMenu: $('contextMenu'),
@@ -659,7 +760,7 @@ async function deleteNote(id) {
         return;
     }
     await loadNotes();
-    showUndoToast('笔记已删除', id);
+    nm.showUndo('笔记已删除', () => undoDelete(id));
 }
 
 /**
@@ -671,142 +772,38 @@ async function copyNote(id) {
     const text = (note.title ? note.title + '\n\n' : '') + (note.content || '');
     try {
         await navigator.clipboard.writeText(text);
-        showUndoToast('已复制到剪贴板');
+        nm.show('已复制到剪贴板', 'success');
     } catch (err) {
         console.error('复制失败:', err);
-        showUndoToast('复制失败');
+        nm.show('复制失败', 'error');
     }
 }
 
-/**
- * 显示撤销 Toast
- * @param {string} msg - 提示信息
- * @param {number|number[]} [noteIds] - 可撤销的笔记 ID（不传则为纯提示）
- */
-let undoToastTimer = null;
-let undoNoteId = null;
-let toastTimer = null;
-let toastStack = 0;
 
-/**
- * 应用入场/离场动画到 toast 容器
- */
-function animateToast(el, action, cb) {
-    if (action === 'enter') {
-        el.style.animation = 'toastEnter 0.25s ease-out forwards';
-        el.classList.add('active');
-        if (cb) setTimeout(cb, 260);
-    } else {
-        el.style.animation = 'toastExit 0.2s ease-in forwards';
-        const onEnd = () => {
-            el.classList.remove('active');
-            el.style.animation = '';
-            el.removeEventListener('animationend', onEnd);
-            if (cb) cb();
-        };
-        el.addEventListener('animationend', onEnd);
-    }
-}
-
-function showUndoToast(msg, noteIds) {
-    // 清除之前的定时器
-    if (undoToastTimer) {
-        clearTimeout(undoToastTimer);
-        undoToastTimer = null;
-    }
-
-    els.undoToastMsg.textContent = msg;
-    undoNoteId = noteIds || null;
-
-    // 有可撤销的笔记 ID 时显示按钮，否则隐藏
-    els.undoToastBtn.style.display = noteIds ? '' : 'none';
-
-    // 堆叠：已有 toast 时上移旧 toast
-    if (els.undoToast.classList.contains('active')) {
-        els.undoToast.style.transform = `translateY(-${toastStack * 56}px)`;
-    }
-    toastStack++;
-
-    animateToast(els.undoToast, 'enter');
-
-    // 5 秒后自动消失
-    undoToastTimer = setTimeout(() => {
-        hideUndoToast();
-    }, 5000);
-}
-
-function hideUndoToast() {
-    toastStack = Math.max(0, toastStack - 1);
-    animateToast(els.undoToast, 'exit', () => {
-        undoNoteId = null;
-        els.undoToast.style.transform = '';
-    });
-    undoToastTimer = null;
-}
-
-/**
- * 通用 Toast 提示（自动 3 秒消失）
- * @param {string} msg - 提示内容
- */
-function showToast(msg) {
-    // 复用 undo-toast 的 UI，隐藏撤销按钮
-    if (toastTimer) clearTimeout(toastTimer);
-
-    els.undoToastMsg.textContent = msg;
-    els.undoToastBtn.style.display = 'none';
-
-    // 堆叠：已有 toast 时上移旧 toast
-    if (els.undoToast.classList.contains('active')) {
-        els.undoToast.style.transform = `translateY(-${toastStack * 56}px)`;
-    }
-    toastStack++;
-
-    animateToast(els.undoToast, 'enter');
-
-    toastTimer = setTimeout(() => {
-        hideToast();
-    }, 3000);
-}
-
-function hideToast() {
-    toastStack = Math.max(0, toastStack - 1);
-    animateToast(els.undoToast, 'exit', () => {
-        els.undoToast.style.transform = '';
-    });
-    toastTimer = null;
-}
 
 /**
  * 撤销删除（支持单条和批量）
+ * @param {number|number[]} noteIds - 要恢复的笔记 ID
  */
-async function undoDelete() {
-    if (undoNoteId == null) return;
+async function undoDelete(noteIds) {
+    if (noteIds == null) return;
     try {
-        if (Array.isArray(undoNoteId)) {
+        if (Array.isArray(noteIds)) {
             // 批量撤销
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchRestoreNotes) {
-                await window.go.main.App.BatchRestoreNotes(undoNoteId);
+                await window.go.main.App.BatchRestoreNotes(noteIds);
             } else {
                 console.warn('BatchRestoreNotes 未绑定');
             }
         } else {
             // 单条撤销
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreNote) {
-                await window.go.main.App.RestoreNote(undoNoteId);
-            } else {
-                console.warn('RestoreNote 未绑定');
+                await window.go.main.App.RestoreNote(noteIds);
             }
         }
     } catch (err) {
         console.error('撤销删除失败:', err);
     }
-    // 关闭 Toast
-    if (undoToastTimer) {
-        clearTimeout(undoToastTimer);
-        undoToastTimer = null;
-    }
-    hideUndoToast();
-    undoNoteId = null;
     await loadNotes();
 }
 
@@ -913,7 +910,7 @@ async function createTag() {
 
     // 检查标签名是否已存在
     if (state.tags && state.tags.some(tag => tag.name === name)) {
-        showToast('该标签已存在');
+        nm.show('该标签已存在', 'warning');
         els.newTagName.value = '';
         return;
     }
@@ -926,7 +923,7 @@ async function createTag() {
         }
     } catch (err) {
         console.error('创建标签失败:', err);
-        showToast('创建标签失败');
+        nm.show('创建标签失败', 'error');
     }
     els.newTagName.value = '';
     await loadTags();
@@ -1057,6 +1054,7 @@ async function saveFontSetting(key, value) {
     } else {
         localStorage.setItem('jot_' + key, value);
     }
+    nm.show('字体设置已保存', 'success');
 }
 
 /* ===== 主题设置函数 ===== */
@@ -1118,6 +1116,7 @@ async function saveThemeSetting(themeName) {
     } else {
         localStorage.setItem('jot_theme', themeName);
     }
+    nm.show('主题设置已保存', 'success');
 }
 
 /**
@@ -1313,6 +1312,7 @@ async function initSortSettings() {
                 moveIndicator(btn);
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSortOrder) {
                     await window.go.main.App.SetSortOrder(order);
+                    nm.show('排序方式已保存', 'success');
                 }
                 resetPagination();
                 await loadNotes();
@@ -1340,6 +1340,7 @@ async function initSortSettings() {
                 els.pageSizeLabel.textContent = `${size} 条 / 页`;
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetPageSize) {
                     await window.go.main.App.SetPageSize(size);
+                    nm.show('分页大小已保存', 'success');
                 }
                 resetPagination();
                 await loadNotes();
@@ -1455,7 +1456,7 @@ async function restoreNote(id) {
     }
     await loadTrashNotes();
     await loadNotes();
-    showToast('笔记已恢复');
+    nm.show('笔记已恢复', 'success');
 }
 
 /**
@@ -1463,7 +1464,7 @@ async function restoreNote(id) {
  */
 async function restoreAllNotes() {
     if (!state.trashNotes || state.trashNotes.length === 0) {
-        showUndoToast('回收站为空');
+        nm.show('回收站为空', 'info');
         return;
     }
     const confirmed = await showConfirmDialog('确定要恢复回收站中的所有笔记吗？');
@@ -1497,13 +1498,13 @@ async function restoreAllNotes() {
         }
 
         if (trashedIds.length > 0) {
-            showUndoToast(`已恢复 ${trashedIds.length} 条笔记`, trashedIds);
+            nm.showUndo(`已恢复 ${trashedIds.length} 条笔记`, () => undoDelete(trashedIds));
         } else {
-            showUndoToast('已恢复所有笔记');
+            nm.show('已恢复所有笔记', 'success');
         }
     } catch (err) {
         console.error('全部恢复失败:', err);
-        showUndoToast('恢复失败');
+        nm.show('恢复失败', 'error');
     }
     await loadTrashNotes();
     await loadNotes();
@@ -1514,7 +1515,7 @@ async function restoreAllNotes() {
  */
 async function emptyTrash() {
     if (!state.trashNotes || state.trashNotes.length === 0) {
-        showUndoToast('回收站为空');
+        nm.show('回收站为空', 'info');
         return;
     }
     const confirmed = await showConfirmDialog('确定要永久清空回收站中的所有笔记吗？此操作不可撤销。');
@@ -1537,10 +1538,10 @@ async function emptyTrash() {
         } else {
             console.warn('EmptyTrash 未绑定');
         }
-        showUndoToast('回收站已清空');
+        nm.show('回收站已清空', 'info');
     } catch (err) {
         console.error('清空回收站失败:', err);
-        showUndoToast('清空失败');
+        nm.show('清空失败', 'error');
     }
     await loadTrashNotes();
     await loadNotes();
@@ -1564,10 +1565,10 @@ async function permanentDeleteNote(id) {
         } else {
             console.warn('PermanentDeleteNote 未绑定');
         }
-        showUndoToast('笔记已永久删除');
+        nm.show('笔记已永久删除', 'info');
     } catch (err) {
         console.error('永久删除失败:', err);
-        showUndoToast('删除失败');
+        nm.show('删除失败', 'error');
     }
     await loadTrashNotes();
 }
@@ -1666,14 +1667,14 @@ async function resetDatabase() {
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ResetDatabase) {
             await window.go.main.App.ResetDatabase();
-            showToast('已恢复出厂设置，所有数据已清空');
+            nm.show('已恢复出厂设置，所有数据已清空', 'success');
         } else {
             console.warn('ResetDatabase 未绑定');
-            showToast('功能不可用：后端未绑定');
+            nm.show('功能不可用：后端未绑定', 'error');
         }
     } catch (err) {
         console.error('重置数据库失败:', err);
-        showToast('重置失败：' + err.message);
+        nm.show('重置失败：' + err.message, 'error');
     }
     await loadDataStats();
     // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
@@ -1689,11 +1690,11 @@ async function openDataDir() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenDataDir) {
             await window.go.main.App.OpenDataDir();
         } else {
-            showToast('打开文件管理器功能不可用');
+            nm.show('打开文件管理器功能不可用', 'error');
         }
     } catch (err) {
         console.error('打开数据目录失败:', err);
-        showToast('打开数据目录失败：' + err.message);
+        nm.show('打开数据目录失败：' + err.message, 'error');
     }
 }
 
@@ -1705,14 +1706,14 @@ async function exportData() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ExportDataWithDialog) {
             const msg = await window.go.main.App.ExportDataWithDialog();
             if (msg && msg !== '已取消') {
-                showToast(msg);
+                nm.show(msg, 'success');
             }
         } else {
-            showToast('导出功能不可用');
+            nm.show('导出功能不可用', 'error');
         }
     } catch (err) {
         console.error('导出数据失败:', err);
-        showToast('导出失败：' + err.message);
+        nm.show('导出失败：' + err.message, 'error');
     }
 }
 
@@ -1724,7 +1725,7 @@ async function importData() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ImportDatabaseWithDialog) {
             const result = await window.go.main.App.ImportDatabaseWithDialog();
             if (result && result.message !== '已取消') {
-                showToast(result.message);
+                nm.show(result.message, 'success');
                 if (result.success_count > 0) {
                     // 刷新所有数据
                     loadNotes();
@@ -1733,11 +1734,11 @@ async function importData() {
                 }
             }
         } else {
-            showToast('导入功能不可用');
+            nm.show('导入功能不可用', 'error');
         }
     } catch (err) {
         console.error('导入数据失败:', err);
-        showToast('导入失败：' + err.message);
+        nm.show('导入失败：' + err.message, 'error');
     }
 }
 
@@ -1775,15 +1776,15 @@ async function backupToDir() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.BackupToDir) {
             const msg = await window.go.main.App.BackupToDir();
             if (msg) {
-                showToast(msg);
+                nm.show(msg, 'success');
                 loadBackupInfo();
             }
         } else {
-            showToast('备份功能不可用');
+            nm.show('备份功能不可用', 'error');
         }
     } catch (err) {
         console.error('备份失败:', err);
-        showToast('备份失败：' + (err.message || String(err)));
+        nm.show('备份失败：' + (err.message || String(err)), 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
@@ -1806,7 +1807,7 @@ async function restoreFromDir() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreFromDir) {
             const result = await window.go.main.App.RestoreFromDir();
             if (result && result.message) {
-                showToast(result.message);
+                nm.show(result.message, 'success');
                 if (result.success_count > 0) {
                     loadNotes();
                     loadDataStats();
@@ -1814,11 +1815,11 @@ async function restoreFromDir() {
                 }
             }
         } else {
-            showToast('还原功能不可用');
+            nm.show('还原功能不可用', 'error');
         }
     } catch (err) {
         console.error('还原失败:', err);
-        showToast('还原失败：' + (err.message || String(err)));
+        nm.show('还原失败：' + (err.message || String(err)), 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = origText;
@@ -2643,7 +2644,7 @@ async function batchDeleteSelected() {
     }
     clearSelection();
     await loadNotes();
-    showUndoToast(`已删除 ${ids.length} 条笔记`, ids);
+    nm.showUndo(`已删除 ${ids.length} 条笔记`, () => undoDelete(ids));
 }
 
 /* ===== HTML 转义 ===== */
@@ -2816,10 +2817,6 @@ function initEventListeners() {
     els.resetAllBtn.addEventListener('click', resetDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
 
-    // 撤销 Toast
-    els.undoToastBtn.addEventListener('click', undoDelete);
-
-
     els.settingsBackBtn.addEventListener('click', () => {
         switchView('grid');
     });
@@ -2829,8 +2826,10 @@ function initEventListeners() {
         try {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
                 await window.go.main.App.SetSetting('quick_note_enabled', String(e.target.checked));
+                nm.show('设置已保存', 'success');
             } else {
                 localStorage.setItem('quick_note_enabled', String(e.target.checked));
+                nm.show('设置已保存', 'success');
             }
         } catch (err) {
             console.error('保存快速笔记设置失败:', err);

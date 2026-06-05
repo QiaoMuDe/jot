@@ -1,0 +1,13 @@
+# Checklist
+- [x] `.notification-container` 定位在右上角，通知堆叠不重叠
+- [x] 四种通知类型（success/error/warning/info）视觉可区分（色标条 + 图标 + 文本色）
+- [x] 通知入场动画（从右滑入 + 弹性效果）
+- [x] 通知出场动画（向左滑出 + 淡出）
+- [x] 点击通知可手动关闭
+- [x] undo 类型通知显示「撤销」按钮，点击执行回调
+- [x] 通知自动消失（默认 3s，undo 类型 5s）
+- [x] 所有旧 `showToast()` 调用点已替换为新 `nm.show()` API
+- [x] `showUndoToast()` 替换为 `nm.showUndo()` + 删除旧函数和状态变量
+- [x] 旧 DOM 元素（`#undoToast` 等）已移除
+- [x] `showConfirmDialog` 色板与通知系统一致
+- [x] Vite build 无错误
