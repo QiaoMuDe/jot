@@ -39,7 +39,10 @@
 
     <!-- 批量操作栏 -->
     <div id="batchBar" class="batch-bar" style="display:none;">
-        <span class="batch-bar-info">已选 <span id="batchCount">0</span> 条</span>
+        <div class="batch-bar-left">
+            <span class="batch-bar-info">已选 <span id="batchCount">0</span> 条</span>
+            <button class="batch-select-all-btn" id="batchSelectAllBtn">全选</button>
+        </div>
         <div class="batch-bar-actions">
             <button class="btn btn-sm batch-btn btn-danger" id="batchDeleteBtn">批量删除</button>
             <button class="btn btn-sm batch-btn batch-cancel" id="batchCancelBtn">退出批量</button>

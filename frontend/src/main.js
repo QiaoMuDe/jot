@@ -165,6 +165,7 @@ const els = {
     batchCount: $('batchCount'),
     batchDeleteBtn: $('batchDeleteBtn'),
     batchCancelBtn: $('batchCancelBtn'),
+    batchSelectAllBtn: $('batchSelectAllBtn'),
 
     // 浮动操作按钮
     fabGroup: $('fabGroup'),
@@ -2102,10 +2103,10 @@ function toggleBatchMode() {
     // 进入批量模式时显示 bar，退出时隐藏
     if (state.batchMode) {
         els.batchBar.style.display = 'flex';
-        els.batchCount.textContent = '0';
     } else {
         els.batchBar.style.display = 'none';
     }
+    updateBatchBar();
 }
 
 /**
@@ -2122,11 +2123,38 @@ window.toggleNoteSelection = function (id) {
 };
 
 /**
+ * 全选/取消全选当前可见笔记
+ */
+function toggleSelectAll() {
+    const allIds = state.notes.map(n => n.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => state.selectedNoteIds.has(id));
+
+    if (allSelected) {
+        // 取消全选
+        state.selectedNoteIds.clear();
+    } else {
+        // 全选：将当前所有可见笔记 ID 加入选中集合
+        allIds.forEach(id => state.selectedNoteIds.add(id));
+    }
+    updateBatchBar();
+    renderCardGrid();
+}
+
+/**
  * 更新批量操作栏
  */
 function updateBatchBar() {
     const count = state.selectedNoteIds.size;
     els.batchCount.textContent = count;
+    // 同步全选按钮文字
+    const total = state.notes.length;
+    if (els.batchSelectAllBtn) {
+        if (total > 0 && count === total) {
+            els.batchSelectAllBtn.textContent = '取消全选';
+        } else {
+            els.batchSelectAllBtn.textContent = '全选';
+        }
+    }
 }
 
 /**
@@ -2175,15 +2203,21 @@ function escapeHtml(text) {
 
 function initEventListeners() {
     // 搜索
-    // 搜索框回车：清空搜索时刷新笔记
+    // 搜索框回车：非空立即搜索，空内容时刷新笔记
     els.searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !els.searchInput.value.trim()) {
+        if (e.key === 'Enter') {
             e.preventDefault();
-            state.searchKeyword = '';
-            switchView('grid');
-            // 重置分页并重新加载
-            resetPagination();
-            loadNotes();
+            const kw = els.searchInput.value.trim();
+            if (kw) {
+                // 非空：立即搜索，跳过防抖
+                searchNotes(kw, 'input');
+            } else {
+                // 空：切回网格并刷新
+                state.searchKeyword = '';
+                switchView('grid');
+                resetPagination();
+                loadNotes();
+            }
         }
     });
     // 搜索框输入自动搜索（防抖 250ms）
@@ -2194,6 +2228,8 @@ function initEventListeners() {
         } else {
             state.searchKeyword = '';
             switchView('grid');
+            resetPagination();
+            loadNotes();
         }
     }, 250));
     els.searchBackBtn.addEventListener('click', () => {
@@ -2330,6 +2366,7 @@ function initEventListeners() {
     els.batchCancelBtn.addEventListener('click', () => {
         if (state.batchMode) toggleBatchMode();
     });
+    els.batchSelectAllBtn.addEventListener('click', toggleSelectAll);
 
     // 关于页面
     document.querySelector('.brand-name').addEventListener('click', (e) => {

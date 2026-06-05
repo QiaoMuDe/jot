@@ -549,6 +549,31 @@
   background: var(--hover-bg);
 }
 
+/* 全选按钮 */
+.batch-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-select-all-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.batch-select-all-btn:hover {
+  background: var(--accent-lighter);
+  border-color: var(--accent);
+}
+
 .batch-checkbox {
   width: 18px;
   height: 18px;
