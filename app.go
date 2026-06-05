@@ -24,7 +24,11 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	db, err := database.InitDB("data/jot.db")
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		panic(err)
+	}
+	db, err := database.InitDB(dbPath)
 	if err != nil {
 		panic(err)
 	}
@@ -80,6 +84,11 @@ func (a *App) GetNotes(page, pageSize int, sortBy string) (*services.PaginatedRe
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// GetAllNoteIDs 获取所有未删除笔记的 ID 数组
+func (a *App) GetAllNoteIDs() ([]uint, error) {
+	return a.noteService.GetAllIDs()
 }
 
 // SearchNotes 按关键词搜索笔记（标题/内容），支持分页

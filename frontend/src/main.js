@@ -48,6 +48,7 @@ const state = {
     searchSource: 'input',      // 'input' | 'tag' — 搜索触发来源
     batchMode: false,           // 是否处于批量管理模式
     selectedNoteIds: new Set(), // 选中的笔记 ID 集合
+    totalAllNotes: 0,           // 所有未删除笔记的总数（用于全选判断）
 };
 
 // 分页状态
@@ -247,6 +248,7 @@ function resetPagination() {
     totalNotes = 0;
     isLoadingMore = false;
     hasMoreNotes = true;
+    state.totalAllNotes = 0;
 }
 
 /* ===== 视图切换 ===== */
@@ -331,6 +333,7 @@ async function loadNotes() {
         if (result) {
             state.notes = result.items || [];
             totalNotes = result.total || 0;
+            state.totalAllNotes = totalNotes;
             hasMoreNotes = state.notes.length < totalNotes;
             currentPage = 1;
         } else {
@@ -341,6 +344,7 @@ async function loadNotes() {
             }
             state.notes = mockNotes;
             totalNotes = state.notes.length;
+            state.totalAllNotes = totalNotes;
             hasMoreNotes = false;
         }
     } catch (err) {
@@ -350,6 +354,7 @@ async function loadNotes() {
         }
         state.notes = mockNotes;
         totalNotes = state.notes.length;
+        state.totalAllNotes = totalNotes;
         hasMoreNotes = false;
     }
     renderCardGrid();
@@ -1557,6 +1562,10 @@ function renderCardGrid() {
         return dateB - dateA;
     });
 
+    // 先清理旧 footer，确保空数据时也能正确移除
+    const oldFooter = els.viewGrid.querySelector('.notes-footer');
+    if (oldFooter) oldFooter.remove();
+
     if (sorted.length === 0) {
         els.cardGrid.innerHTML = `
             <div class="empty-state" style="grid-column: 1 / -1;">
@@ -1603,9 +1612,6 @@ function renderCardGrid() {
 
     // 添加加载完成提示（底部已全部加载）
     const gridContainer = els.viewGrid.querySelector('.card-grid') || els.viewGrid;
-    // 查找并移除旧的 footer（footer 在 card-grid 外部平级）
-    const oldFooter = els.viewGrid.querySelector('.notes-footer');
-    if (oldFooter) oldFooter.remove();
 
     if (!hasMoreNotes && totalNotes > 0) {
         const footer = document.createElement('div');
@@ -2123,19 +2129,38 @@ window.toggleNoteSelection = function (id) {
 };
 
 /**
- * 全选/取消全选当前可见笔记
+ * 全选/取消全选（全选时从后端获取所有笔记 ID）
  */
 function toggleSelectAll() {
-    const allIds = state.notes.map(n => n.id);
-    const allSelected = allIds.length > 0 && allIds.every(id => state.selectedNoteIds.has(id));
+    const allSelected = state.selectedNoteIds.size === state.totalAllNotes;
 
     if (allSelected) {
         // 取消全选
         state.selectedNoteIds.clear();
+        updateBatchBar();
+        renderCardGrid();
     } else {
-        // 全选：将当前所有可见笔记 ID 加入选中集合
-        allIds.forEach(id => state.selectedNoteIds.add(id));
+        // 全选：先从后端拉取所有 ID，再塞入选中的 Set
+        selectAllIds();
     }
+}
+
+/**
+ * 全选：获取所有未删除笔记的 ID
+ */
+async function selectAllIds() {
+    let ids = [];
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllNoteIDs) {
+        try {
+            ids = await window.go.main.App.GetAllNoteIDs();
+        } catch (err) {
+            console.error('获取全部 ID 失败，降级为当前页:', err);
+            ids = state.notes.map(n => n.id);
+        }
+    } else {
+        ids = state.notes.map(n => n.id);
+    }
+    ids.forEach(id => state.selectedNoteIds.add(id));
     updateBatchBar();
     renderCardGrid();
 }
@@ -2147,7 +2172,7 @@ function updateBatchBar() {
     const count = state.selectedNoteIds.size;
     els.batchCount.textContent = count;
     // 同步全选按钮文字
-    const total = state.notes.length;
+    const total = state.totalAllNotes || state.notes.length;
     if (els.batchSelectAllBtn) {
         if (total > 0 && count === total) {
             els.batchSelectAllBtn.textContent = '取消全选';
@@ -2722,6 +2747,24 @@ async function init() {
     initThemeSettings();
     initScrollLoading();
     initScrollbarAutoHide();
+    // 窗口可见性变化时自动刷新（如从外部进程注入种子数据后切回应用）
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        // 正在编辑或批量操作时不刷新，避免打断用户
+        if (state.batchMode) return;
+        if (els.editorPanel.style.display !== 'none') return;
+
+        const view = state.currentView;
+        if (view === 'grid') {
+            resetPagination();
+            loadNotes();
+        } else if (view === 'trash') {
+            loadTrashNotes();
+        } else if (view === 'data') {
+            loadDataStats();
+        }
+    });
+
     state.selectedTags = [];
     await loadThemeSetting();
     await loadFontSettings();

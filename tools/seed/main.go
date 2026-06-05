@@ -14,9 +14,15 @@ import (
 
 func main() {
 	// 默认数据库路径
-	dbPath := "data/jot.db"
+	dbPath := ""
 	if len(os.Args) >= 2 {
 		dbPath = os.Args[1]
+	} else {
+		var err error
+		dbPath, err = database.DefaultDBPath()
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// 初始化数据库连接
@@ -123,7 +129,7 @@ func seedNotes(db *gorm.DB, tags []models.Tag) []models.Note {
 		},
 		{
 			Title:   "⚙️ 开发环境配置指南",
-			Content: "### Windows 开发环境\n\n**Go 工具链**\n1. 安装 Go 1.26\n2. 配置 GOPATH\n3. 安装 golangci-lint\n\n**Wails**\n1. `wails doctor` 检查环境\n2. `wails dev` 启动开发模式\n\n**数据库**\n- SQLite (纯 Go 驱动，免 CGO)\n- 数据库路径: `data/jot.db`",
+			Content: "### Windows 开发环境\n\n**Go 工具链**\n1. 安装 Go 1.26\n2. 配置 GOPATH\n3. 安装 golangci-lint\n\n**Wails**\n1. `wails doctor` 检查环境\n2. `wails dev` 启动开发模式\n\n**数据库**\n- SQLite (纯 Go 驱动，免 CGO)\n- 数据库路径: `~/.jot/data/jot.db`",
 			Pinned:  false,
 			DaysAgo: 10,
 		},

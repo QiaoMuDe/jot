@@ -121,6 +121,17 @@ func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, 
 	return notes, total, nil
 }
 
+// GetAllIDs 获取所有未删除笔记的 ID 数组
+func (s *NoteService) GetAllIDs() ([]uint, error) {
+	var ids []uint
+	if err := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL").
+		Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页
 func (s *NoteService) Search(keyword string, page, pageSize int) ([]models.Note, int64, error) {
 	var notes []models.Note

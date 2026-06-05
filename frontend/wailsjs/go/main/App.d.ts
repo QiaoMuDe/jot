@@ -25,6 +25,8 @@ export function ExportData():Promise<string>;
 
 export function ExportDataWithDialog():Promise<string>;
 
+export function GetAllNoteIDs():Promise<Array<number>>;
+
 export function GetAllTags():Promise<Array<models.Tag>>;
 
 export function GetDataStats():Promise<services.DataStats>;

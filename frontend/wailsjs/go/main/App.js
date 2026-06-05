@@ -46,6 +46,10 @@ export function ExportDataWithDialog() {
   return window['go']['main']['App']['ExportDataWithDialog']();
 }
 
+export function GetAllNoteIDs() {
+  return window['go']['main']['App']['GetAllNoteIDs']();
+}
+
 export function GetAllTags() {
   return window['go']['main']['App']['GetAllTags']();
 }

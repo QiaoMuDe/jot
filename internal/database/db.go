@@ -11,8 +11,17 @@ import (
 	"jot/internal/services"
 )
 
+// DefaultDBPath 返回默认数据库路径：~/.jot/data/jot.db
+func DefaultDBPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot get user home directory: %w", err)
+	}
+	return filepath.Join(home, ".jot", "data", "jot.db"), nil
+}
+
 // InitDB 初始化 SQLite 数据库连接并执行自动迁移
-// dbPath 为数据库文件路径，默认为 data/jot.db
+// dbPath 为数据库文件路径，默认为 ~/.jot/data/jot.db
 func InitDB(dbPath string) (*gorm.DB, error) {
 	// 确保数据库文件所在目录存在
 	dir := filepath.Dir(dbPath)
