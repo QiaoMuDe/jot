@@ -737,6 +737,33 @@
   opacity: 0;
 }
 
+/* 编辑器编辑/预览区域容器 */
+.editor-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 预览模式 */
+.editor-overlay[data-mode="preview"] .editor-textarea {
+  display: none;
+}
+
+.editor-overlay[data-mode="preview"] .md-rendered {
+  display: block !important;
+}
+
+/* 纯文本模式（默认，预览区隐藏） */
+.editor-overlay[data-mode="edit"] .editor-textarea {
+  display: block;
+}
+
+.editor-overlay[data-mode="edit"] .md-rendered {
+  display: none !important;
+}
+
 .editor-input {
   width: 100%;
   padding: 8px 0;
@@ -840,12 +867,60 @@
   border-top: 1px solid var(--divider);
 }
 
+.editor-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.editor-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* 底部模式切换按钮组 */
+.editor-footer .editor-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-lg);
+  padding: 3px;
+}
+
+.editor-footer .mode-btn {
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editor-footer .mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.editor-footer .mode-btn.active {
+  background: var(--card-bg);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 .editor-edit-time {
   display: none;
   font-size: 0.688rem;
   color: var(--text-muted);
   white-space: nowrap;
-  margin-left: auto;
 }
 
 .editor-view-mode .editor-edit-time {

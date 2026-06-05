@@ -74,16 +74,26 @@
                                 <!-- 标签选项由 JS 动态渲染 -->
                             </div>
                         </div>
-                        <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
-                        <div id="mdRendered" class="md-rendered" style="display:none"></div>
+                        <div class="editor-panes">
+                            <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
+                            <div id="mdRendered" class="md-rendered" style="display:none"></div>
+                        </div>
                     </div>
                     <div class="editor-footer">
-                        <span class="word-count" id="editorWordCount"></span>
-                        <span class="auto-save-indicator" id="autoSaveIndicator"></span>
-                        <span class="editor-edit-time" id="editorEditTime"></span>
-                        <div class="editor-footer-btns">
-                            <button class="btn btn-cancel" id="editorCancelBtn">取消</button>
-                            <button class="btn btn-save" id="editorSaveBtn">保存</button>
+                        <div class="editor-footer-left">
+                            <span class="word-count" id="editorWordCount"></span>
+                            <span class="auto-save-indicator" id="autoSaveIndicator"></span>
+                        </div>
+                        <div class="editor-modes">
+                            <button class="mode-btn active" data-mode="edit" title="纯文本编辑">纯文本</button>
+                            <button class="mode-btn" data-mode="preview" title="预览">预览</button>
+                        </div>
+                        <div class="editor-footer-right">
+                            <span class="editor-edit-time" id="editorEditTime"></span>
+                            <div class="editor-footer-btns">
+                                <button class="btn btn-cancel" id="editorCancelBtn">取消</button>
+                                <button class="btn btn-save" id="editorSaveBtn">保存</button>
+                            </div>
                         </div>
                     </div>
                     <!-- 导入结果提示 -->

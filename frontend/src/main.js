@@ -199,6 +199,7 @@ const els = {
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
     mdRendered: $('mdRendered'),
+    editorModeBtns: document.querySelectorAll('.mode-btn'),
 
     // 设置
     tagList: $('tagList'),
@@ -2014,17 +2015,22 @@ function renderTagSelector(readOnly) {
     }
 
     if (readOnly) {
-        // 只读模式：仅展示标签，不可切换
-        els.tagSelector.innerHTML = state.tags
-            .map(
-                (tag) => `
+        // 只读模式：仅展示笔记已添加的标签，不可切换
+        const noteTags = state.tags.filter(tag => state.selectedTags.includes(tag.id));
+        if (noteTags.length === 0) {
+            els.tagSelector.innerHTML = '<div style="color: #94a3b8; font-size: 12px;">暂无标签</div>';
+        } else {
+            els.tagSelector.innerHTML = noteTags
+                .map(
+                    (tag) => `
             <span class="card-tag" style="background-color: ${tag.color || '#6366f1'}; cursor: default;"
                   data-tag-id="${tag.id}">
                 ${escapeHtml(tag.name)}
             </span>
             `
-            )
-            .join('');
+                )
+                .join('');
+        }
         return;
     }
 
@@ -2177,19 +2183,10 @@ async function openEditor(noteId, readOnly) {
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
 
-    // 查看模式：显示最近编辑时间 + Markdown 渲染
+    // 查看模式：显示最近编辑时间 + Markdown 渲染，模式切换到预览
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
-        // 渲染 Markdown
-        const content = noteData.content || '';
-        if (content.trim()) {
-            els.mdRendered.innerHTML = marked.parse(content);
-        } else {
-            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
-        }
-        // 隐藏 textarea，显示渲染视图
-        els.editorNoteContent.style.display = 'none';
-        els.mdRendered.style.display = 'block';
+        switchEditorMode('preview');
         // Markdown 内容淡入
         els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
         // 代码块逐个淡入
@@ -2202,9 +2199,8 @@ async function openEditor(noteId, readOnly) {
         });
     } else {
         els.editorEditTime.textContent = '';
-        // 确保 textarea 可见，渲染视图隐藏
-        els.editorNoteContent.style.display = '';
-        els.mdRendered.style.display = 'none';
+        // 编辑模式切换到纯文本
+        switchEditorMode('edit');
     }
 
     // 字数统计
@@ -2244,12 +2240,53 @@ async function openEditor(noteId, readOnly) {
 }
 
 /**
- * 编辑器输入事件处理：更新字数 + 触发自动保存
+ * 更新 Markdown 预览区
+ */
+function updatePreview() {
+    const content = els.editorNoteContent.value;
+    if (content.trim()) {
+        els.mdRendered.innerHTML = marked.parse(content);
+        // 代码高亮
+        els.mdRendered.querySelectorAll('pre code').forEach((block) => {
+            if (typeof hljs !== 'undefined') {
+                hljs.highlightElement(block);
+            }
+        });
+    } else {
+        els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+    }
+}
+
+/**
+ * 切换编辑器模式（纯文本/预览）
+ */
+function switchEditorMode(mode) {
+    // 更新按钮活跃状态
+    els.editorModeBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    // 更新 overlay 的 data-mode
+    els.editorOverlay.dataset.mode = mode;
+    // 预览模式下立即渲染
+    if (mode === 'preview') {
+        updatePreview();
+    }
+}
+
+/**
+ * 编辑器输入事件处理：更新字数 + 触发自动保存 + 预览渲染
  */
 function onEditorInput() {
     updateWordCount();
     startAutoSave();
+    // 预览模式下自动更新
+    if (els.editorOverlay.dataset.mode === 'preview') {
+        debouncedUpdatePreview();
+    }
 }
+
+// 防抖预览更新
+const debouncedUpdatePreview = debounce(updatePreview, 300);
 
 /**
  * 关闭编辑器
@@ -2324,6 +2361,7 @@ function closeEditor() {
         els.editorNoteContent.style.display = '';
         els.mdRendered.style.display = 'none';
         els.mdRendered.innerHTML = '';
+        delete els.editorOverlay.dataset.mode;
     }, 200);
 }
 
@@ -2795,6 +2833,11 @@ function initEventListeners() {
     // 点击蒙层关闭编辑器
     els.editorOverlay.addEventListener('click', (e) => {
         if (e.target === els.editorOverlay) closeEditor();
+    });
+
+    // 编辑器模式切换（纯文本/分栏/预览）
+    els.editorModeBtns.forEach(btn => {
+        btn.addEventListener('click', () => switchEditorMode(btn.dataset.mode));
     });
 
     // 标签管理
