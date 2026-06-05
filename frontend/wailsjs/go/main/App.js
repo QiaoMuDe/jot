@@ -38,10 +38,6 @@ export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
 }
 
-export function ExportData() {
-  return window['go']['main']['App']['ExportData']();
-}
-
 export function ExportDataWithDialog() {
   return window['go']['main']['App']['ExportDataWithDialog']();
 }
@@ -94,8 +90,12 @@ export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
-export function ImportData(arg1) {
-  return window['go']['main']['App']['ImportData'](arg1);
+export function ImportDatabaseWithDialog() {
+  return window['go']['main']['App']['ImportDatabaseWithDialog']();
+}
+
+export function OpenDataDir() {
+  return window['go']['main']['App']['OpenDataDir']();
 }
 
 export function OpenProjectURL(arg1) {
@@ -108,6 +108,10 @@ export function PermanentDeleteNote(arg1) {
 
 export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
+}
+
+export function ResetDatabase() {
+  return window['go']['main']['App']['ResetDatabase']();
 }
 
 export function RestoreAllNotes() {

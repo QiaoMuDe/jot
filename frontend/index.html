@@ -88,6 +88,8 @@
                             <button class="btn btn-save" id="editorSaveBtn">保存</button>
                         </div>
                     </div>
+                    <!-- 导入结果提示 -->
+                    <div id="importResult" class="import-result" style="display: none;"></div>
                 </div>
             </div>
         </div>
@@ -234,48 +236,75 @@
                 <div class="view-controls"></div>
             </div>
             <div class="data-content" id="dataContent">
-                <!-- 统计卡片 -->
-                <div class="data-stats">
-                    <div class="stat-card">
-                        <div class="stat-icon">📄</div>
-                        <div class="stat-body">
-                            <div class="stat-value" id="statTotalNotes">0</div>
-                            <div class="stat-label">笔记总数</div>
+                <div class="data-content-inner">
+                <!-- 第一层：数据统计 -->
+                <div class="data-section">
+                    <h3 class="data-section-title">数据统计</h3>
+                    <div class="data-stats">
+                        <div class="stat-card">
+                            <div class="stat-body">
+                                <div class="stat-value" id="statTotalNotes">0</div>
+                                <div class="stat-label">笔记总数</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🏷️</div>
-                        <div class="stat-body">
-                            <div class="stat-value" id="statTotalTags">0</div>
-                            <div class="stat-label">标签总数</div>
+                        <div class="stat-card">
+                            <div class="stat-body">
+                                <div class="stat-value" id="statTotalTags">0</div>
+                                <div class="stat-label">标签总数</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">🗑️</div>
-                        <div class="stat-body">
-                            <div class="stat-value" id="statTrashedNotes">0</div>
-                            <div class="stat-label">回收站</div>
+                        <div class="stat-card">
+                            <div class="stat-body">
+                                <div class="stat-value" id="statTrashedNotes">0</div>
+                                <div class="stat-label">回收站</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-body">
+                                <div class="stat-value" id="statDBSize">0</div>
+                                <div class="stat-label">数据库大小</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <!-- 操作区域 -->
-                <div class="data-actions">
-                    <button class="data-action-btn" id="exportDataBtn">
-                        <span class="dab-icon">⬇️</span>
-                        <span class="dab-text">导出数据</span>
-                        <span class="dab-desc">将所有笔记导出为 JSON 文件保存到本地</span>
-                    </button>
-                    <button class="data-action-btn" id="importDataBtn">
-                        <span class="dab-icon">⬆️</span>
-                        <span class="dab-text">导入数据</span>
-                        <span class="dab-desc">从本地的 JSON 文件恢复笔记</span>
-                    </button>
+
+                <!-- 第二层：数据操作 -->
+                <div class="data-section">
+                    <h3 class="data-section-title">数据操作</h3>
+                    <div class="data-actions">
+                        <button class="data-action-btn" id="exportDataBtn">
+                            <span class="dab-icon">⬇️</span>
+                            <span class="dab-text">导出数据</span>
+                            <span class="dab-desc">将当前数据库完整备份为 .db 文件</span>
+                        </button>
+                        <button class="data-action-btn" id="importDataBtn">
+                            <span class="dab-icon">⬆️</span>
+                            <span class="dab-text">导入数据</span>
+                            <span class="dab-desc">从 .db 文件还原数据库备份</span>
+                        </button>
+                        <button class="data-action-btn data-action-btn-danger" id="resetAllBtn">
+                            <span class="dab-icon">⚠️</span>
+                            <span class="dab-text">恢复出厂设置</span>
+                            <span class="dab-desc">清空所有笔记、标签和设置</span>
+                        </button>
+                    </div>
                 </div>
-                <!-- 导入结果提示 -->
-                <div id="importResult" class="import-result" style="display: none;"></div>
+
+                <!-- 第三层：数据目录 -->
+                <div class="data-section">
+                    <h3 class="data-section-title">数据目录</h3>
+                    <div class="data-actions single-action">
+                        <button class="data-action-btn" id="openDataDirBtn">
+                            <span class="dab-icon">📂</span>
+                            <span class="dab-text">打开数据目录</span>
+                            <span class="dab-desc">在文件管理器中查看数据库文件</span>
+                        </button>
+                    </div>
+                </div>
+                </div>
             </div>
         </div>
-
+        
         <!-- 视图 6: 回收站页面 -->
         <div id="viewTrash" class="view">
             <div class="view-header">

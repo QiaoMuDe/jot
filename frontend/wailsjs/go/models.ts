@@ -133,6 +133,8 @@ export namespace services {
 	    trashed_notes: number;
 	    pinned_notes: number;
 	    total_tags: number;
+	    db_size: number;
+	    db_size_str: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DataStats(source);
@@ -144,6 +146,8 @@ export namespace services {
 	        this.trashed_notes = source["trashed_notes"];
 	        this.pinned_notes = source["pinned_notes"];
 	        this.total_tags = source["total_tags"];
+	        this.db_size = source["db_size"];
+	        this.db_size_str = source["db_size_str"];
 	    }
 	}
 	export class ImportResult {

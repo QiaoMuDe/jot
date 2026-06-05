@@ -1,10 +1,7 @@
 package services
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 	"jot/internal/models"
@@ -293,104 +290,20 @@ func (s *NoteService) GetStats() (*DataStats, error) {
 	}, nil
 }
 
-// ExportAll 导出所有未删除笔记（含标签）为 JSON 字节数组
-func (s *NoteService) ExportAll() ([]byte, error) {
-	var notes []models.Note
-	if err := s.db.Where("deleted_at IS NULL").Preload("Tags").Order("updated_at DESC").Find(&notes).Error; err != nil {
-		return nil, err
+// ResetAll 清空所有笔记和标签数据，用于恢复出厂设置
+func (s *NoteService) ResetAll() error {
+	// 清空所有笔记（包括软删除，自动清理 note_tags 关联）
+	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Note{}).Error; err != nil {
+		return err
 	}
-
-	var items []ExportNoteItem
-	for _, n := range notes {
-		item := ExportNoteItem{
-			Title:     n.Title,
-			Content:   n.Content,
-			Pinned:    n.Pinned,
-			CreatedAt: n.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: n.UpdatedAt.Format(time.RFC3339),
-		}
-		for _, t := range n.Tags {
-			item.Tags = append(item.Tags, ExportTag{
-				Name:  t.Name,
-				Color: t.Color,
-			})
-		}
-		items = append(items, item)
+	// 清空所有标签（自动清理 note_tags 中残留关联）
+	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Tag{}).Error; err != nil {
+		return err
 	}
-
-	return json.MarshalIndent(items, "", "  ")
+	return nil
 }
 
-// ImportFromJSON 从 JSON 数据导入笔记，返回导入结果
-func (s *NoteService) ImportFromJSON(data []byte) (*ImportResult, error) {
-	var items []struct {
-		Title     string      `json:"title"`
-		Content   string      `json:"content"`
-		Pinned    bool        `json:"pinned"`
-		Tags      []ExportTag `json:"tags,omitempty"`
-		CreatedAt string      `json:"created_at"`
-		UpdatedAt string      `json:"updated_at"`
-	}
-
-	if err := json.Unmarshal(data, &items); err != nil {
-		return &ImportResult{
-			SuccessCount: 0,
-			FailCount:    0,
-			Message:      "JSON 格式错误：" + err.Error(),
-		}, nil
-	}
-
-	result := &ImportResult{}
-
-	for _, item := range items {
-		if item.Title == "" {
-			result.FailCount++
-			continue
-		}
-
-		// 检查是否已存在同名笔记（未删除的），存在则跳过
-		var existing models.Note
-		if err := s.db.Where("title = ? AND deleted_at IS NULL", item.Title).First(&existing).Error; err == nil {
-			result.SkippedCount++
-			continue
-		}
-
-		note := models.Note{
-			Title:   item.Title,
-			Content: item.Content,
-			Pinned:  item.Pinned,
-		}
-		if err := s.db.Create(&note).Error; err != nil {
-			result.FailCount++
-			continue
-		}
-
-		// 处理标签：查找或创建
-		for _, et := range item.Tags {
-			var tag models.Tag
-			if err := s.db.Where("name = ?", et.Name).First(&tag).Error; err != nil {
-				// 标签不存在，创建新标签
-				tag = models.Tag{
-					Name:  et.Name,
-					Color: et.Color,
-				}
-				if et.Color == "" {
-					tag.Color = "#6366f1"
-				}
-				if err := s.db.Create(&tag).Error; err != nil {
-					continue
-				}
-			}
-			// 关联标签到笔记
-			_ = s.db.Model(&note).Association("Tags").Append(&tag)
-		}
-
-		result.SuccessCount++
-	}
-
-	result.Message = "导入完成"
-	if result.SkippedCount > 0 {
-		result.Message = "导入完成（已跳过 " + fmt.Sprintf("%d", result.SkippedCount) + " 条同名笔记）"
-	}
-	return result, nil
+// ExportBackup 使用 VACUUM INTO 创建数据库的压缩副本到指定路径
+func (s *NoteService) ExportBackup(destPath string) error {
+	return s.db.Exec("VACUUM INTO ?", destPath).Error
 }

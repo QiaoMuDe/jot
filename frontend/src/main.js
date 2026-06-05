@@ -133,10 +133,13 @@ const els = {
     exportDataBtn: $('exportDataBtn'),
     importDataBtn: $('importDataBtn'),
     importResult: $('importResult'),
+    resetAllBtn: $('resetAllBtn'),
+    openDataDirBtn: $('openDataDirBtn'),
     dataContent: $('dataContent'),
     statTotalNotes: $('statTotalNotes'),
     statTotalTags: $('statTotalTags'),
     statTrashedNotes: $('statTrashedNotes'),
+    statDBSize: $('statDBSize'),
 
     // 字数统计
     editorWordCount: $('editorWordCount'),
@@ -1593,7 +1596,7 @@ function animateCountUp(element, targetValue, duration = 300) {
  * 加载数据统计概览
  */
 async function loadDataStats() {
-    let totalNotes = 0, totalTags = 0, trashedNotes = 0;
+    let totalNotes = 0, totalTags = 0, trashedNotes = 0, dbSizeStr = '';
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
             const stats = await window.go.main.App.GetDataStats();
@@ -1601,6 +1604,7 @@ async function loadDataStats() {
                 totalNotes = stats.total_notes || 0;
                 totalTags = stats.total_tags || 0;
                 trashedNotes = stats.trashed_notes || 0;
+                dbSizeStr = stats.db_size_str || '';
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -1621,10 +1625,11 @@ async function loadDataStats() {
         });
     }
 
-    // 先全部设为 0，然后数字递增动画
+    // 先全部设为 0/占位，然后数字递增动画
     els.statTotalNotes.textContent = '0';
     els.statTotalTags.textContent = '0';
     els.statTrashedNotes.textContent = '0';
+    els.statDBSize.textContent = dbSizeStr || '0';
 
     // 入场动画完成后启动 count-up（取最后一张卡片的动画结束时间）
     const lastDelay = (totalCards > 0 ? (totalCards - 1) * 80 : 0) + 250;
@@ -1636,6 +1641,55 @@ async function loadDataStats() {
 }
 
 /**
+ * 恢复出厂设置：清空所有数据（笔记/标签/设置），重新初始化默认标签
+ */
+async function resetDatabase() {
+    const confirmed = await showConfirmDialog(
+        '确定要恢复出厂设置吗？这将永久删除所有笔记、标签和设置，此操作不可撤销。'
+    );
+    if (!confirmed) return;
+
+    // 二次确认
+    const confirmed2 = await showConfirmDialog(
+        '再次确认：所有数据将被清空，且无法恢复。确定要继续吗？'
+    );
+    if (!confirmed2) return;
+
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ResetDatabase) {
+            await window.go.main.App.ResetDatabase();
+            showToast('已恢复出厂设置，所有数据已清空');
+        } else {
+            console.warn('ResetDatabase 未绑定');
+            showToast('功能不可用：后端未绑定');
+        }
+    } catch (err) {
+        console.error('重置数据库失败:', err);
+        showToast('重置失败：' + err.message);
+    }
+    await loadDataStats();
+    // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
+    switchView('grid');
+    loadNotes();
+}
+
+/**
+ * 在文件管理器中打开数据库目录
+ */
+async function openDataDir() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenDataDir) {
+            await window.go.main.App.OpenDataDir();
+        } else {
+            showToast('打开文件管理器功能不可用');
+        }
+    } catch (err) {
+        console.error('打开数据目录失败:', err);
+        showToast('打开数据目录失败：' + err.message);
+    }
+}
+
+/**
  * 导出笔记数据
  */
 async function exportData() {
@@ -1643,33 +1697,14 @@ async function exportData() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ExportDataWithDialog) {
             const msg = await window.go.main.App.ExportDataWithDialog();
             if (msg && msg !== '已取消') {
-                showImportResult({ success_count: 0, fail_count: 0, skipped_count: 0, message: msg });
+                showToast(msg);
             }
         } else {
-            console.warn('ExportDataWithDialog 未绑定');
-            // 降级：前端导出并下载
-            const mockExport = state.notes.map(n => ({
-                title: n.title,
-                content: n.content,
-                pinned: n.pinned,
-                tags: (n.tags || []).map(t => ({ name: t.name, color: t.color })),
-                created_at: n.created_at,
-                updated_at: n.updated_at,
-            }));
-            const jsonStr = JSON.stringify(mockExport, null, 2);
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `jot-notes-${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            showToast('导出功能不可用');
         }
     } catch (err) {
         console.error('导出数据失败:', err);
-        showImportResult({ success_count: 0, fail_count: 0, skipped_count: 0, message: '导出失败：' + err.message });
+        showToast('导出失败：' + err.message);
     }
 }
 
@@ -1677,63 +1712,25 @@ async function exportData() {
  * 导入笔记数据
  */
 async function importData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        try {
-            const text = await file.text();
-
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.ImportData) {
-                const result = await window.go.main.App.ImportData(text);
-                if (result) {
-                    showImportResult(result);
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ImportDatabaseWithDialog) {
+            const result = await window.go.main.App.ImportDatabaseWithDialog();
+            if (result && result.message !== '已取消') {
+                showToast(result.message);
+                if (result.success_count > 0) {
+                    // 刷新所有数据
+                    loadNotes();
+                    loadDataStats();
+                    loadTags();
                 }
-            } else {
-                console.warn('ImportData 未绑定');
-                alert('导入功能需要在后端绑定时可用');
             }
-        } catch (err) {
-            console.error('导入数据失败:', err);
-            showImportResult({ success_count: 0, fail_count: 0, message: '导入失败：' + err.message });
+        } else {
+            showToast('导入功能不可用');
         }
-    });
-    input.click();
-}
-
-/**
- * 显示导入结果
- */
-function showImportResult(result) {
-    const el = els.importResult;
-    el.style.display = 'block';
-
-    // 导出成功消息
-    if (result.message && result.success_count === 0 && result.fail_count === 0 && !result.skipped_count) {
-        el.className = 'import-result success';
-        el.textContent = result.message;
-        setTimeout(() => { el.style.display = 'none'; }, 5000);
-        return;
+    } catch (err) {
+        console.error('导入数据失败:', err);
+        showToast('导入失败：' + err.message);
     }
-
-    if (result.fail_count > 0 && result.success_count === 0) {
-        el.className = 'import-result error';
-        el.textContent = result.message || '导入失败';
-    } else {
-        el.className = 'import-result success';
-        let text = `导入完成：成功 ${result.success_count} 条`;
-        if (result.skipped_count > 0) {
-            text += `，跳过 ${result.skipped_count} 条（已存在）`;
-        }
-        if (result.fail_count > 0) {
-            text += `，失败 ${result.fail_count} 条`;
-        }
-        el.textContent = text;
-    }
-    setTimeout(() => { el.style.display = 'none'; }, 5000);
 }
 
 /* ===== 渲染函数 ===== */
@@ -2721,6 +2718,8 @@ function initEventListeners() {
     });
     els.exportDataBtn.addEventListener('click', exportData);
     els.importDataBtn.addEventListener('click', importData);
+    els.resetAllBtn.addEventListener('click', resetDatabase);
+    els.openDataDirBtn.addEventListener('click', openDataDir);
 
     // 撤销 Toast
     els.undoToastBtn.addEventListener('click', undoDelete);
@@ -2925,6 +2924,26 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl+A/Ctrl+D 快捷键处理
+    if ((e.ctrlKey || e.metaKey) && !e.target.closest('input, textarea, [contenteditable]')) {
+        if (e.key === 'a') {
+            e.preventDefault(); // 阻止浏览器默认全选
+            if (state.batchMode && state.currentView === 'grid') {
+                selectAllIds();
+            }
+            return;
+        }
+        if (e.key === 'd') {
+            if (state.batchMode && state.currentView === 'grid') {
+                e.preventDefault();
+                state.selectedNoteIds.clear();
+                updateBatchBar();
+                renderCardGrid('none');
+                return;
+            }
+        }
+    }
+
     // 数字键快捷导航（仅在非输入框内生效）
     if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest('input, textarea')) {
         switch (e.key) {
@@ -3024,7 +3043,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, els.searchResults].filter(Boolean);
+    const containers = [els.mainContent, els.searchResults, els.dataContent].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', () => {

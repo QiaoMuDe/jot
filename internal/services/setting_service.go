@@ -37,3 +37,8 @@ func (s *SettingService) Set(key, value string) error {
 	// 存在则更新
 	return s.db.Model(&setting).Update("value", value).Error
 }
+
+// DeleteAll 删除所有配置项，用于恢复出厂设置
+func (s *SettingService) DeleteAll() error {
+	return s.db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Setting{}).Error
+}

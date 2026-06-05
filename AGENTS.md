@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-05
+> 生成日期: 2026-06-06
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS
 
@@ -71,7 +71,11 @@ jot/                                    # 项目根目录
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
-    └── add-misc-improvements/         # 杂项优化规格（滚动条美化/默认标签/快捷键说明/分段控件重构）
+    ├── add-misc-improvements/         # 杂项优化规格（滚动条美化/默认标签/快捷键说明/分段控件重构）
+    │   ├── spec.md
+    │   ├── tasks.md
+    │   └── checklist.md
+    └── enhance-interaction-animation/  # 交互体验与动画增强规格（16 项动画/过渡/交互动画）
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -352,44 +356,54 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
     → 全部清空: EmptyTrash() → GORM: Unscoped().Delete 所有回收站笔记
 ```
 
-#### 4.2.5 数据导出流程
+#### 4.2.5 数据库导出流程
 
 ```
 用户进入数据管理页面（通过顶部 ☰ → 数据管理）
   → loadDataStats()
     → GetDataStats()
-      → noteService.GetStats() + tagService.Count()
-    → 渲染统计卡片（笔记总数/标签总数/回收站数）
+      → noteService.GetStats() + tagService.Count() + os.Stat(dbPath) 获取文件大小
+    → 渲染 4 张统计卡片（笔记总数/标签总数/回收站数/数据库大小）
+      → 数字使用 countUp 动画递增显示
 
 用户点击「导出数据」
   → window.go.main.App.ExportDataWithDialog()
     → app.go:ExportDataWithDialog()
-      → noteService.ExportAll()
-        → 查询所有未删除笔记并组装 JSON
-      → runtime.SaveFileDialog()              // 弹出原生保存对话框
-      → os.WriteFile(path, jsonData, 0644)    // 写入用户选择路径
-    → 返回 "导出成功：/path/to/file.json"
+      → 创建临时路径 → noteService.ExportBackup(tempPath)
+        → GORM: VACUUM INTO tempPath       // SQLite 原生在线备份
+      → runtime.SaveFileDialog()            // 弹出原生保存对话框
+      → fs.CopyEx(tempPath, filePath, true) // go-kit/fs 原子性复制
+      → 清理临时文件
+    → 返回 "导出成功：/path/to/file.db"
+    → 前端 Toast 弹出提示
 ```
 
-#### 4.2.6 数据导入流程
+#### 4.2.6 数据库导入流程
 
 ```
 用户点击「导入数据」
-  → 前端 <input type="file"> 弹出文件选择器
-  → 选择 .json 文件后读取内容
-  → window.go.main.App.ImportData(jsonString)
-    → app.go:ImportData()
-      → noteService.ImportFromJSON([]byte)
-        → json.Unmarshal([]ExportNoteItem)
-        → 遍历每个条目:
-          → 检查标题为空? → fail++
-          → 检查同名笔记已存在? → skip++
-          → db.Create(&note) 失败? → fail++
-          → 处理标签：查找或创建后关联
-          → success++
-    → 返回 ImportResult{success, fail, skipped, message}
-  → showImportResult()
-    → 显示 "导入完成：成功 X 条，跳过 Y 条（已存在），失败 Z 条"
+  → runtime.OpenFileDialog()                // 弹出原生文件选择器，过滤 *.db
+  → 用户选择 .db 文件
+  → window.go.main.App.ImportDatabaseWithDialog()
+    → app.go:ImportDatabaseWithDialog()
+      → Step 1: 备份当前数据库 → fs.CopyEx(dbPath, backupPath)   // go-kit/fs
+      → Step 2: sqlDB.Close() 关闭旧 SQLite 连接
+      → Step 3: fs.CopyEx(filePath, dbPath) 覆盖数据库文件
+      → Step 4: database.InitDB(dbPath) 重新打开数据库
+      → Step 5: 重建 NoteService/TagService/SettingService
+      → Step 6: 清理 .bak 备份
+      → [任何步骤失败] 自动从 backupPath 恢复原始文件 + 重连
+    → 返回 ImportResult{Message, SuccessCount}
+    → 前端 Toast 提示结果 + 自动刷新笔记/标签/统计
+
+用户点击「恢复出厂设置」
+  → 二次确认对话框
+  → window.go.main.App.ResetDatabase()
+    → app.go:ResetDatabase()
+      → 清空 notes、tags、note_tags、settings 所有表
+      → 重新注入 6 个默认标签
+    → 前端切回首页 + loadNotes() 刷新笔记列表
+    → 统计卡片刷新显示零值
 ```
 
 ### 4.3 代码质量分析
@@ -494,6 +508,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 8. **键盘驱动**：支持 Ctrl+F/Ctrl+N/PgUp/PgDn（触底加载下一页）/Ctrl+Home/Ctrl+End（加载全部到底）/E（回首页）及数字键 1-5 快捷导航
 9. **窗口焦点自动刷新**：`visibilitychange` 事件监听，切回应用自动刷新数据
 10. **批量管理**：批量选择（全选从后端拉取全部 ID）、批量删除（支持撤销）、选中计数联动
+11. **动画系统**：全局 CSS 变量驱动动画体系（13 个 keyframes + 20 项交错延迟工具类），16 项动画覆盖所有交互场景，`prefers-reduced-motion` 降级支持
 
 ---
 
@@ -529,6 +544,16 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **数据库路径迁移**：从 `./data/jot.db` 迁移到 `~/.jot/data/jot.db`（`DefaultDBPath()`），应用/种子脚本统一
 - ✅ **批量全选加载全部 ID**：全选时调用 `App.GetAllNoteIDs()` 获取所有笔记 ID，一次选中全部
 - ✅ **搜索框逻辑修复**：回车立即搜索，清空自动刷新笔记列表（footer 清理 bug 修复）
+- ✅ **交互体验与动画增强**：16 项动画/过渡增强 — 视图切换过渡、卡片网格交错入场/hover/active 动画、统计卡片 count-up 数字动画、回收站 shrinkOut 删除/恢复动画、设置 toggle-switch/字体下拉展开收起、帮助/关于模态弹簧动画、编辑器模态缩放淡入 + 品牌色条展开 + 标签脉冲、Markdown 淡入/代码块交错、快速笔记全屏过渡、批量模式滑入滑出 + 复选框交错、Toast 滑入滑出/堆叠上移、右键菜单缩放展开/收起、更多菜单 transform-origin 缩放、主题切换 300ms 平滑过渡；全局 prefers-reduced-motion 降级支持
+- ✅ **搜索结果滚动条贴边**：搜索列表容器负边距贴靠窗口右边缘，列表内容保持 32px 内边距
+- ✅ **数据管理三层布局**：第一层统计卡片（4 列网格）、第二层操作按钮（纵向 card 列表 + 恢复出厂设置危险按钮）、第三层数据目录
+- ✅ **数据库大小统计**：4 张统计卡片包含数据库文件大小，通过 os.Stat 读取并格式化显示 B/KB/MB
+- ✅ **导出改为 DB 文件备份**：VACUUM INTO → fs.CopyEx → .db 文件，完整备份所有数据（含回收站/设置/关联关系）
+- ✅ **导入改为文件覆盖**：6 步流程（备份→关连接→覆盖→重连→重建→清理），出错自动回滚
+- ✅ **恢复出厂设置刷新首页**：重置后自动切回首页 + loadNotes()，空库显示「暂无笔记」
+- ✅ **打开数据目录**：数据管理第三层按钮，exec.Command("explorer") 在文件管理器中打开数据库目录
+- ✅ **Ctrl+A/Ctrl+D 批量快捷键**：全局 Ctrl+A 阻止全选，批量模式 Ctrl+A 全选 Ctrl+D 取消全选
+- ✅ **lint 0 issues**：golangci-lint errcheck 等 7 个问题全部修复，0 issues 通过
 
 ---
 
@@ -540,9 +565,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 32 个（14 个 Note 相关 + 6 个 Tag 相关 + 2 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 1 个 GetAllNoteIDs）|
+| **绑定方法数** | 33 个（14 个 Note 相关 + 6 个 Tag 相关 + 4 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 1 个 GetAllNoteIDs）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~2550 行 JS + ~2015 行 CSS + ~294 行 CSS 全局样式（含 6 主题 CSS 变量）|
+| **前端代码量** | ~2620 行 JS + ~2080 行 CSS + ~316 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -553,13 +578,20 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **键盘快捷键** | Ctrl+F 搜索 / Ctrl+N 新建 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=首页 2=数据管理 3=回收站 4=设置 5=帮助；输入框内数字键不触发 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + JSON 导入导出（使用原生保存对话框）|
-| **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，用户选择保存位置 |
-| **导入** | 前端 `<input type="file">` 选择 JSON，后端 `ImportFromJSON` 解析并跳过同名笔记 |
+| **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，VACUUM INTO 创建 SQLite 压缩副本 → fs.CopyEx 到用户选择路径，输出 .db 文件 |
+| **导入** | `ImportDatabaseWithDialog()` 弹出原生文件选择器（*.db），6 步流程：备份 → 关连接 → 覆盖文件 → 重开数据库 → 重建 Service → 清理备份；任何步骤失败自动从 .bak 恢复 + 重连；前端 Toast 提示 + 自动刷新 |
+| **恢复出厂设置** | `ResetDatabase()` 清空 notes/tags/note_tags/settings 所有表，重新注入 6 个默认标签；前端切回首页 + loadNotes() 刷新笔记列表 |
+| **数据管理统计卡片** | 4 张卡片（笔记总数/标签总数/回收站数/数据库大小），去图标纯文字居中，数字使用 countUp 动画递增显示；最大宽度 760px + margin:0 auto 居中 |
+| **数据管理布局** | 三层结构：第一层「数据统计」（4 卡片网格 4 列）、第二层「数据操作」（导出/导入/恢复出厂设置，纵向 card 列表）、第三层「数据目录」（单按钮 max-width:400px）|
+| **数据管理滚动条** | 与首页一致的覆盖式滚动条（6px 半透明灰 + 自动隐藏），`#viewData.view { padding-right: 0 }` 贴靠窗口右边缘 |
+| **打开数据目录** | `app.go:OpenDataDir()` 调用 `exec.Command("explorer", dir)` 在文件管理器中打开数据库目录，数据管理第三层按钮 |
+| **Ctrl+A/Ctrl+D 快捷键** | 全局阻止默认 Ctrl+A；批量模式下 Ctrl+A = 全选所有笔记、Ctrl+D = 取消全选 |
+| **lint 状态** | `golangci-lint run ./...` 0 issues（errcheck 等 7 个问题已全部修复）|
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含全部笔记/数据管理/回收站/设置/帮助五个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/` |
+| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/` |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
@@ -591,7 +623,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **搜索框逻辑** | `input` 事件 250ms 防抖自动搜索，清空时 `loadNotes()` 刷新。`keydown(Enter)` 非空立即搜索（跳过防抖），空内容刷新笔记。`renderCardGrid()` 中 footer 清理移到空状态判断之前，避免提前 return 导致 footer 残留 |
 | **分段控件重构** | 主题选择（6 主题：默认/北极/粉墨/浅色/夜幕/深色）和笔记排序（更新时间/创建时间/名称）从下拉菜单/radio 改为 iOS 风格分段控件（`.segmented-control`）。分段控件动态计算按钮数及指示器位置，支持任意数量按钮 |
 | **默认标签颜色** | 6 个默认标签使用不同色：待办#F59E0B、工作#3B82F6、生活#10B981、个人#8B5CF6、学习#EC4899、重要#EF4444 |
+| **动画系统** | 全局 `:root` CSS 动画变量（`--anim-duration-fast: 150ms`、`--anim-ease-spring: cubic-bezier(0.16,1,0.3,1)` 等）+ 13 个 keyframes（fadeIn/fadeInUp/fadeInDown/scaleIn/slideUp/slideDown/slideInRight/shrinkOut/countUp/pulseOnce/spin/elasticScale/shake）。通用工具类 `.anim-fade-in`/`.anim-slide-up`/`.anim-scale-in`/`.anim-stagger-*`（支持 20 项交错延迟 0.02-0.4s）。`prefers-reduced-motion` 媒体查询一键降级所有动画。所有动画使用 `will-change` + `transform`/`opacity` 保证 GPU 合成层性能 |
+| **搜索结果滚动条** | `.search-results` 容器通过 `scrollbar-gutter: stable` 预占滚动条空间 + `margin-right: -8px` 抵消父容器 gutter 预留，使滚动条贴靠窗口右边缘，与主内容区一致的滚动条显示/1s 淡出逻辑 |
 
 ---
 
-> **报告结束** | 已完成项目记忆更新（2026-06-05），后续可基于此报告回答项目相关问题。
+> **报告结束** | 已完成项目记忆更新（2026-06-06），后续可基于此报告回答项目相关问题。

@@ -21,8 +21,6 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function EmptyTrash():Promise<void>;
 
-export function ExportData():Promise<string>;
-
 export function ExportDataWithDialog():Promise<string>;
 
 export function GetAllNoteIDs():Promise<Array<number>>;
@@ -49,13 +47,17 @@ export function GetTrashNotes(arg1:number,arg2:number):Promise<services.Paginate
 
 export function GetVersion():Promise<string>;
 
-export function ImportData(arg1:string):Promise<services.ImportResult>;
+export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
+
+export function OpenDataDir():Promise<void>;
 
 export function OpenProjectURL(arg1:string):Promise<string>;
 
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
+
+export function ResetDatabase():Promise<void>;
 
 export function RestoreAllNotes():Promise<void>;
 

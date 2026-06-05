@@ -10,26 +10,12 @@ type PaginatedResult struct {
 
 // DataStats 数据统计概览
 type DataStats struct {
-	TotalNotes   int64 `json:"total_notes"`
-	TrashedNotes int64 `json:"trashed_notes"`
-	PinnedNotes  int64 `json:"pinned_notes"`
-	TotalTags    int64 `json:"total_tags"`
-}
-
-// ExportNoteItem 导出笔记的结构
-type ExportNoteItem struct {
-	Title     string      `json:"title"`
-	Content   string      `json:"content"`
-	Pinned    bool        `json:"pinned"`
-	Tags      []ExportTag `json:"tags,omitempty"`
-	CreatedAt string      `json:"created_at"`
-	UpdatedAt string      `json:"updated_at"`
-}
-
-// ExportTag 导出标签的结构
-type ExportTag struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	TotalNotes   int64  `json:"total_notes"`
+	TrashedNotes int64  `json:"trashed_notes"`
+	PinnedNotes  int64  `json:"pinned_notes"`
+	TotalTags    int64  `json:"total_tags"`
+	DBSize       int64  `json:"db_size"`
+	DBSizeStr    string `json:"db_size_str"`
 }
 
 // ImportResult 导入操作的结果

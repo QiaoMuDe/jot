@@ -2,21 +2,27 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"jot/internal/database"
 	"jot/internal/fontutil"
 	"jot/internal/models"
 	"jot/internal/services"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"gitee.com/MM-Q/go-kit/fs"
 	"gitee.com/MM-Q/verman"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"gorm.io/gorm"
 )
 
 // App struct
 type App struct {
 	ctx            context.Context
+	db             *gorm.DB
 	noteService    *services.NoteService
 	tagService     *services.TagService
 	settingService *services.SettingService
@@ -33,6 +39,7 @@ func NewApp() *App {
 		panic(err)
 	}
 	return &App{
+		db:             db,
 		noteService:    services.NewNoteService(db),
 		tagService:     services.NewTagService(db),
 		settingService: services.NewSettingService(db),
@@ -179,35 +186,44 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 		return nil, err
 	}
 	stats.TotalTags = tagCount
+	// 获取数据库文件大小
+	dbPath, pathErr := database.DefaultDBPath()
+	if pathErr == nil {
+		if fi, statErr := os.Stat(dbPath); statErr == nil {
+			size := fi.Size()
+			stats.DBSize = size
+			switch {
+			case size < 1024:
+				stats.DBSizeStr = fmt.Sprintf("%d B", size)
+			case size < 1024*1024:
+				stats.DBSizeStr = fmt.Sprintf("%.1f KB", float64(size)/1024)
+			default:
+				stats.DBSizeStr = fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+			}
+		}
+	}
 	return stats, nil
 }
 
-// ExportData 导出所有笔记为 JSON 字符串
-func (a *App) ExportData() (string, error) {
-	data, err := a.noteService.ExportAll()
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// ImportData 从 JSON 字符串导入笔记
-func (a *App) ImportData(jsonData string) (*services.ImportResult, error) {
-	return a.noteService.ImportFromJSON([]byte(jsonData))
-}
-
-// ExportDataWithDialog 弹出保存对话框，将笔记导出到用户选择的位置
+// ExportDataWithDialog 弹出保存对话框，使用 VACUUM INTO 创建数据库压缩副本到用户选择的位置
 func (a *App) ExportDataWithDialog() (string, error) {
-	data, err := a.noteService.ExportAll()
-	if err != nil {
-		return "", err
-	}
+	// 创建临时路径用于 VACUUM INTO 输出
+	tempPath := filepath.Join(os.TempDir(), "jot-backup-"+time.Now().Format("2006-01-02")+".db")
 
+	// 使用 VACUUM INTO 创建压缩副本
+	if err := a.noteService.ExportBackup(tempPath); err != nil {
+		return "", fmt.Errorf("数据库备份失败: %w", err)
+	}
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+
+	// 弹出保存对话框让用户选择保存位置
 	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "导出笔记",
-		DefaultFilename: "jot-notes-" + time.Now().Format("2006-01-02") + ".json",
+		Title:           "导出数据库备份",
+		DefaultFilename: "jot-backup-" + time.Now().Format("2006-01-02") + ".db",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "JSON 文件 (*.json)", Pattern: "*.json"},
+			{DisplayName: "SQLite 数据库 (*.db)", Pattern: "*.db"},
 		},
 	})
 	if err != nil {
@@ -217,10 +233,79 @@ func (a *App) ExportDataWithDialog() (string, error) {
 		return "已取消", nil
 	}
 
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	// 将临时文件复制到用户选择的路径
+	if err := fs.CopyEx(tempPath, filePath, true); err != nil {
 		return "", err
 	}
+
 	return "导出成功：" + filePath, nil
+}
+
+// ImportDatabaseWithDialog 弹出文件选择对话框，从数据库备份文件恢复数据
+func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
+	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "导入数据库备份",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "SQLite 数据库 (*.db)", Pattern: "*.db"},
+		},
+	})
+	if err != nil {
+		return &services.ImportResult{Message: "导入失败：" + err.Error()}, nil
+	}
+	if filePath == "" {
+		return &services.ImportResult{Message: "已取消"}, nil
+	}
+
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		return &services.ImportResult{Message: "获取数据库路径失败：" + err.Error()}, nil
+	}
+
+	// Step 1: 备份当前数据库
+	backupPath := dbPath + ".bak"
+	if err := fs.CopyEx(dbPath, backupPath, true); err != nil {
+		return &services.ImportResult{Message: "备份当前数据库失败：" + err.Error()}, nil
+	}
+
+	// Step 2: 关闭旧连接
+	sqlDB, err := a.db.DB()
+	if err != nil {
+		_ = os.Remove(backupPath)
+		return &services.ImportResult{Message: "获取数据库连接失败：" + err.Error()}, nil
+	}
+	_ = sqlDB.Close()
+
+	// Step 3: 复制选定文件到数据库路径
+	if err := fs.CopyEx(filePath, dbPath, true); err != nil {
+		// 恢复备份
+		_ = fs.CopyEx(backupPath, dbPath, true)
+		if rerr := a.reconnectDB(dbPath); rerr != nil {
+			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
+		}
+		return &services.ImportResult{Message: "复制备份文件失败：" + err.Error()}, nil
+	}
+
+	// Step 4: 重新初始化数据库
+	newDB, err := database.InitDB(dbPath)
+	if err != nil {
+		// 恢复备份
+		_ = fs.CopyEx(backupPath, dbPath, true)
+		if rerr := a.reconnectDB(dbPath); rerr != nil {
+			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
+		}
+		return &services.ImportResult{Message: "数据库重连失败：" + err.Error()}, nil
+	}
+
+	// Step 5: 重建服务
+	a.db = newDB
+	a.noteService = services.NewNoteService(newDB)
+	a.tagService = services.NewTagService(newDB)
+	a.settingService = services.NewSettingService(newDB)
+
+	// Step 6: 清理备份
+	_ = os.Remove(backupPath)
+
+	return &services.ImportResult{Message: "已从备份文件恢复数据库", SuccessCount: 1}, nil
 }
 
 // ==================== Tag 相关绑定方法 ====================
@@ -313,8 +398,54 @@ func (a *App) GetVersion() string {
 	return verman.V.GitVersion
 }
 
+// OpenDataDir 在文件管理器中打开数据库目录
+func (a *App) OpenDataDir() error {
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(dbPath)
+	cmd := exec.Command("explorer", dir)
+	return cmd.Start()
+}
+
 // OpenProjectURL 在默认浏览器中打开项目地址
 func (a *App) OpenProjectURL(url string) string {
 	runtime.BrowserOpenURL(a.ctx, url)
 	return "已打开浏览器"
+}
+
+// ResetDatabase 清空所有数据（笔记/标签/设置），重新初始化默认标签，恢复出厂状态
+func (a *App) ResetDatabase() error {
+	// 1. 清空所有笔记和标签
+	if err := a.noteService.ResetAll(); err != nil {
+		return err
+	}
+	// 2. 清空所有设置
+	if err := a.settingService.DeleteAll(); err != nil {
+		return err
+	}
+	// 3. 重新初始化默认标签
+	if err := services.InitDefaultTags(a.db); err != nil {
+		return err
+	}
+	return nil
+}
+
+// reconnectDB 重新连接数据库（用于导入失败后的恢复）
+func (a *App) reconnectDB(dbPath string) error {
+	// 关闭旧连接
+	if sqlDB, err := a.db.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		return fmt.Errorf("数据库重连失败: %w", err)
+	}
+	a.db = db
+	a.noteService = services.NewNoteService(db)
+	a.tagService = services.NewTagService(db)
+	a.settingService = services.NewSettingService(db)
+	return nil
 }
