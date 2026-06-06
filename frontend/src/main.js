@@ -2172,8 +2172,10 @@ async function openEditor(noteId, readOnly) {
             document.getElementById('colorPicker').value = '#6366f1';
         }
     } else {
-        // 新建模式
-        els.editorNoteTitle.value = '';
+        // 新建模式：默认标题为当前日期时间 + 表情
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        els.editorNoteTitle.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ☺️`;
         els.editorNoteContent.value = '';
     }
 
@@ -3034,6 +3036,14 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl+L: 编辑器打开时切换纯文本/预览模式
+    if (e.ctrlKey && (e.key === 'l' || e.key === 'L') && els.viewEditor.classList.contains('active')) {
+        e.preventDefault();
+        const current = els.editorOverlay.dataset.mode;
+        switchEditorMode(current === 'preview' ? 'edit' : 'preview');
+        return;
+    }
+
     // Escape: 退出当前子视图，回到首页
     if (e.key === 'Escape') {
         e.preventDefault();
@@ -3323,6 +3333,7 @@ function renderShortcutsPage() {
     const shortcuts = [
         { key: 'Ctrl + N', desc: '新建笔记' },
         { key: 'Ctrl + F', desc: '聚焦搜索框' },
+        { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
         { key: 'PgUp', desc: '上翻一页' },
         { key: 'PgDn', desc: '下翻一页 / 触底加载更多' },
         { key: 'Ctrl + Home', desc: '回到顶部' },

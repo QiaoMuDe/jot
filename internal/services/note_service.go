@@ -168,7 +168,7 @@ func (s *NoteService) TogglePin(id uint) (*models.Note, error) {
 		return nil, err
 	}
 	note.Pinned = !note.Pinned
-	if err := s.db.Save(note).Error; err != nil {
+	if err := s.db.Model(note).UpdateColumn("pinned", note.Pinned).Error; err != nil {
 		return nil, err
 	}
 	return note, nil
