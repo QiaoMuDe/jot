@@ -602,6 +602,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **右键导出为 Markdown**：右键菜单「导出」→ 标题特殊符号→下划线 → 系统保存对话框 → `.md` 文件（`# 标题\n\n内容` 格式写入）
 - ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
 - ✅ **草稿自动保存与恢复**：新建 `drafts` 表（仅 1 行 ID=1，存 title/content），后端 `DraftService`（SaveDraft upsert / GetDraft / ClearDraft）+ app.go 绑定 3 个方法。前端 `startAutoSave()` 扩展：有 ID → `UpdateNote`（编辑已有笔记），无 ID → `SaveDraft`（新建笔记草稿），3s 防抖，标题内容均空不保存。`loadNotes()` 完成后延迟 1s 检测草稿（编辑器打开时跳过），有则弹窗「发现未保存的草稿，是否恢复？」恢复→填入编辑器、放弃→清除。清除时机：保存成功（`createNote`）、取消按钮（明确放弃）、恢复弹窗恢复/放弃。叉号/点击蒙层/ESC 不清除（保留供下次恢复）。快速笔记启用启动时 `loadQuickNoteSetting()` 自动查草稿并填入编辑器。底部栏 autoSaveIndicator 提示文字 2s 后清空（`textContent=''`），布局自动恢复
+- ✅ **设置页首次打开白屏修复**：根因为 `updateFontSettingsUI()` 调用 `renderFontFamilyOptions()` 在首次显示时创建 200+ 带 `style="font-family:..."` 的字体选项 DOM 节点，浏览器首次布局计算耗时 1-2 秒。修复：`updateFontSettingsUI()` 移除 `renderFontFamilyOptions()` 调用，改为仅在用户点击下拉触发器时渲染（已有点击处理逻辑），设置页首次打开不再含大量字体节点参与布局，白屏消除
 
 ---
 
@@ -644,7 +645,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含全部笔记/数据管理/回收站/设置/帮助五个选项，分隔线分组，`min-width: 120px` |
 | **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/` |
-| **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义 |
+| **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
 | **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |

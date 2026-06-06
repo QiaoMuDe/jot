@@ -1020,9 +1020,6 @@ function updateFontSettingsUI(fontFamily, fontSize) {
 
     // 更新自定义输入框
     els.fontSizeInput.value = fontSize;
-
-    // 渲染字体族下拉选项
-    renderFontFamilyOptions(fontFamily);
 }
 
 // 缓存全量字体列表，供搜索过滤使用
