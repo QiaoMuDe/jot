@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 	"jot/internal/models"
@@ -284,8 +285,9 @@ func (s *NoteService) GetByTag(tagID uint, page, pageSize int, sortBy string) ([
 }
 
 // GetStats 获取数据统计概览
+// GetStats 获取数据统计概览（笔记数/标签数/笔记本数/数据库大小）
 func (s *NoteService) GetStats() (*DataStats, error) {
-	var totalNotes, trashedNotes, pinnedNotes int64
+	var totalNotes, trashedNotes, pinnedNotes, totalNotebooks int64
 
 	// 未删除笔记总数
 	if err := s.db.Model(&models.Note{}).Where("deleted_at IS NULL").Count(&totalNotes).Error; err != nil {
@@ -299,11 +301,16 @@ func (s *NoteService) GetStats() (*DataStats, error) {
 	if err := s.db.Model(&models.Note{}).Where("deleted_at IS NULL AND pinned = ?", true).Count(&pinnedNotes).Error; err != nil {
 		return nil, err
 	}
+	// 笔记本数（包含软删除的保留计数，不统计已删除的笔记本）
+	if err := s.db.Model(&models.Notebook{}).Where("deleted_at IS NULL").Count(&totalNotebooks).Error; err != nil {
+		return nil, err
+	}
 
 	return &DataStats{
-		TotalNotes:   totalNotes,
-		TrashedNotes: trashedNotes,
-		PinnedNotes:  pinnedNotes,
+		TotalNotes:     totalNotes,
+		TrashedNotes:   trashedNotes,
+		PinnedNotes:    pinnedNotes,
+		TotalNotebooks: totalNotebooks,
 	}, nil
 }
 
@@ -339,6 +346,60 @@ func (s *NoteService) GetAllNoteIDsByNotebook(notebookID uint) ([]uint, error) {
 // MigrateOrphanNotesToDefault 将 notebook_id=0 的存量笔记迁移到默认笔记本（id=1）
 func (s *NoteService) MigrateOrphanNotesToDefault() error {
 	return s.db.Model(&models.Note{}).Where("notebook_id = ?", 0).Update("notebook_id", 1).Error
+}
+
+// MoveToNotebook 将单条笔记移动到目标笔记本
+func (s *NoteService) MoveToNotebook(noteID uint, targetNotebookID uint) error {
+	// 检查笔记是否存在
+	if _, err := s.GetByID(noteID); err != nil {
+		return err
+	}
+
+	// 检查目标笔记本是否存在
+	var notebook models.Notebook
+	if err := s.db.First(&notebook, targetNotebookID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("notebook not found")
+		}
+		return err
+	}
+
+	// 使用 UpdateColumn 以避免修改 UpdatedAt
+	return s.db.Model(&models.Note{}).Where("id = ?", noteID).UpdateColumn("notebook_id", targetNotebookID).Error
+}
+
+// BatchMoveToNotebook 批量将多条笔记移动到目标笔记本
+func (s *NoteService) BatchMoveToNotebook(noteIDs []uint, targetNotebookID uint) error {
+	// 先检查目标笔记本是否存在
+	var notebook models.Notebook
+	if err := s.db.First(&notebook, targetNotebookID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("notebook not found")
+		}
+		return err
+	}
+
+	// 遍历笔记 ID 逐个迁移，遇到错误不中断，继续迁移剩余笔记
+	var errs []error
+	for _, noteID := range noteIDs {
+		if err := s.MoveToNotebook(noteID, targetNotebookID); err != nil {
+			errs = append(errs, fmt.Errorf("note %d: %w", noteID, err))
+		}
+	}
+
+	// 如果有错误，合并返回
+	if len(errs) > 0 {
+		combined := "batch move errors: "
+		for i, e := range errs {
+			if i > 0 {
+				combined += "; "
+			}
+			combined += e.Error()
+		}
+		return errors.New(combined)
+	}
+
+	return nil
 }
 
 // CreateWithNotebook 创建一条新笔记并指定所属笔记本，返回创建后的笔记对象

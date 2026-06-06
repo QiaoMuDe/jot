@@ -11,6 +11,8 @@ export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>
 
 export function BatchDeleteNotes(arg1:Array<number>):Promise<void>;
 
+export function BatchMoveNotesToNotebook(arg1:Array<number>,arg2:number):Promise<void>;
+
 export function BatchPinNotes(arg1:Array<number>,arg2:boolean):Promise<void>;
 
 export function BatchRemoveTagFromNotes(arg1:Array<number>,arg2:number):Promise<void>;
@@ -74,6 +76,8 @@ export function GetTrashNotes(arg1:number,arg2:number):Promise<services.Paginate
 export function GetVersion():Promise<string>;
 
 export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
+
+export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
 
 export function OpenDataDir():Promise<void>;
 

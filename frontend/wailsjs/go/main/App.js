@@ -18,6 +18,10 @@ export function BatchDeleteNotes(arg1) {
   return window['go']['main']['App']['BatchDeleteNotes'](arg1);
 }
 
+export function BatchMoveNotesToNotebook(arg1, arg2) {
+  return window['go']['main']['App']['BatchMoveNotesToNotebook'](arg1, arg2);
+}
+
 export function BatchPinNotes(arg1, arg2) {
   return window['go']['main']['App']['BatchPinNotes'](arg1, arg2);
 }
@@ -144,6 +148,10 @@ export function GetVersion() {
 
 export function ImportDatabaseWithDialog() {
   return window['go']['main']['App']['ImportDatabaseWithDialog']();
+}
+
+export function MoveNoteToNotebook(arg1, arg2) {
+  return window['go']['main']['App']['MoveNoteToNotebook'](arg1, arg2);
 }
 
 export function OpenDataDir() {

@@ -12,6 +12,12 @@
     <div id="mainLayout" class="main-layout">
         <!-- 笔记本侧栏 -->
         <aside id="notebookSidebar" class="notebook-sidebar">
+            <script>
+                // 默认收起侧栏，仅当明确存储了 'false' 时才展开
+                if (localStorage.getItem('jot_sidebar_collapsed') !== 'false') {
+                    document.getElementById('notebookSidebar').classList.add('collapsed');
+                }
+            </script>
             <div class="sidebar-header">
                 <span class="sidebar-title">笔记本</span>
                 <button id="newNotebookBtn" class="sidebar-header-add-btn" title="新建笔记本">+</button>
@@ -62,6 +68,7 @@
             <button class="btn btn-sm batch-btn" id="batchPinBtn">置顶</button>
             <button class="btn btn-sm batch-btn" id="batchAddTagBtn">+标签</button>
             <button class="btn btn-sm batch-btn" id="batchRemoveTagBtn">-标签</button>
+            <button class="btn btn-sm batch-btn" id="batchMoveBtn">移动到</button>
             <button class="btn btn-sm batch-btn btn-danger" id="batchDeleteBtn">批量删除</button>
             <button class="btn btn-sm batch-btn batch-cancel" id="batchCancelBtn">退出批量</button>
         </div>
@@ -288,6 +295,12 @@
                         </div>
                         <div class="stat-card">
                             <div class="stat-body">
+                                <div class="stat-value" id="statTotalNotebooks">0</div>
+                                <div class="stat-label">笔记本数</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-body">
                                 <div class="stat-value" id="statDBSize">0</div>
                                 <div class="stat-label">数据库大小</div>
                             </div>
@@ -399,6 +412,26 @@
             </div>
         </div>
 
+        <!-- 移动到目标笔记本选择器 -->
+        <div id="moveNotebookDialog" class="move-notebook-overlay" style="display:none;">
+            <div class="move-notebook-dialog">
+                <div class="move-notebook-header">
+                    <span class="move-notebook-title">移动到...</span>
+                    <button class="move-notebook-close" id="moveNotebookClose">✕</button>
+                </div>
+                <div class="move-notebook-body">
+                    <div class="move-notebook-empty" id="moveNotebookEmpty" style="display:none;">
+                        没有其他笔记本可供选择
+                    </div>
+                    <div class="move-notebook-list" id="moveNotebookList"></div>
+                </div>
+                <div class="move-notebook-footer">
+                    <button class="move-notebook-btn move-notebook-cancel" id="moveNotebookCancel">取消</button>
+                    <button class="move-notebook-btn move-notebook-confirm" id="moveNotebookConfirm" disabled>移动到</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 右键菜单 -->
         <div id="contextMenu" class="context-menu">
             <div class="context-menu-item" data-action="copy">复制</div>
@@ -406,6 +439,8 @@
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="view">查看</div>
             <div class="context-menu-item" data-action="edit">编辑</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="move">移动到...</div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="pin">置顶</div>
             <div class="context-menu-divider"></div>

@@ -247,6 +247,7 @@ const els = {
     statTotalNotes: $('statTotalNotes'),
     statTotalTags: $('statTotalTags'),
     statTrashedNotes: $('statTrashedNotes'),
+    statTotalNotebooks: $('statTotalNotebooks'),
     statDBSize: $('statDBSize'),
 
     // 备份还原
@@ -311,6 +312,15 @@ const els = {
     notebookList: $('notebookList'),
     newNotebookBtn: $('newNotebookBtn'),
     notebookSidebar: $('notebookSidebar'),
+
+    // 移动到弹窗
+    moveNotebookDialog: $('moveNotebookDialog'),
+    moveNotebookList: $('moveNotebookList'),
+    moveNotebookConfirm: $('moveNotebookConfirm'),
+    moveNotebookCancel: $('moveNotebookCancel'),
+    moveNotebookClose: $('moveNotebookClose'),
+    moveNotebookEmpty: $('moveNotebookEmpty'),
+    batchMoveBtn: $('batchMoveBtn'),
 };
 
 /* ===== 工具函数 ===== */
@@ -1682,7 +1692,7 @@ function animateCountUp(element, targetValue, duration = 300) {
  * 加载数据统计概览
  */
 async function loadDataStats() {
-    let totalNotes = 0, totalTags = 0, trashedNotes = 0, dbSizeStr = '';
+    let totalNotes = 0, totalTags = 0, trashedNotes = 0, totalNotebooks = 0, dbSizeStr = '';
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
             const stats = await window.go.main.App.GetDataStats();
@@ -1690,6 +1700,7 @@ async function loadDataStats() {
                 totalNotes = stats.total_notes || 0;
                 totalTags = stats.total_tags || 0;
                 trashedNotes = stats.trashed_notes || 0;
+                totalNotebooks = stats.total_notebooks || 0;
                 dbSizeStr = stats.db_size_str || '';
             }
         } else {
@@ -1715,6 +1726,7 @@ async function loadDataStats() {
     els.statTotalNotes.textContent = '0';
     els.statTotalTags.textContent = '0';
     els.statTrashedNotes.textContent = '0';
+    els.statTotalNotebooks.textContent = '0';
     els.statDBSize.textContent = dbSizeStr || '0';
 
     // 入场动画完成后启动 count-up（取最后一张卡片的动画结束时间）
@@ -1723,6 +1735,7 @@ async function loadDataStats() {
         animateCountUp(els.statTotalNotes, totalNotes);
         animateCountUp(els.statTotalTags, totalTags);
         animateCountUp(els.statTrashedNotes, trashedNotes);
+        animateCountUp(els.statTotalNotebooks, totalNotebooks);
     }, lastDelay + 50);
 
     // 加载备份信息
@@ -2578,6 +2591,9 @@ window.handleContextAction = function (action) {
         case 'export':
             exportNote(id);
             break;
+        case 'move':
+            openMoveDialog([id]);
+            break;
     }
 };
 
@@ -2971,6 +2987,117 @@ async function confirmBatchTagAction() {
     nm.show(`已${isAdd ? '添加' : '移除'} ${tagNames.length} 个标签`, 'success');
 }
 
+/* ===== 移动到目标笔记本 ===== */
+
+/** 当前待迁移的笔记 ID 列表 */
+let moveNoteIds = [];
+
+/**
+ * 打开目标笔记本选择器弹窗
+ * @param {number[]} noteIds - 要迁移的笔记 ID 数组
+ */
+async function openMoveDialog(noteIds) {
+    moveNoteIds = noteIds;
+    const dialog = els.moveNotebookDialog;
+    const list = els.moveNotebookList;
+    const empty = els.moveNotebookEmpty;
+    const confirmBtn = els.moveNotebookConfirm;
+    const allNotebooks = state.notebooks || [];
+
+    // 过滤：排除当前笔记本
+    const targets = allNotebooks.filter(nb => nb.id !== state.activeNotebookId);
+
+    // 重置弹窗状态
+    list.innerHTML = '';
+    confirmBtn.disabled = true;
+    empty.style.display = 'none';
+
+    if (targets.length === 0) {
+        // 空状态：没有其他笔记本
+        empty.style.display = 'block';
+    } else {
+        // 渲染笔记本列表
+        targets.forEach(nb => {
+            const item = document.createElement('div');
+            item.className = 'move-notebook-item';
+            item.dataset.id = nb.id;
+            item.innerHTML = `
+                <div class="move-notebook-radio"></div>
+                <span class="move-notebook-name">${escapeHtml(nb.name)}</span>
+                <span class="move-notebook-badge">${nb.noteCount ?? 0}</span>
+            `;
+            item.addEventListener('click', () => {
+                // 取消其他项的选中
+                list.querySelectorAll('.move-notebook-item.selected').forEach(el => el.classList.remove('selected'));
+                // 选中当前项
+                item.classList.add('selected');
+                confirmBtn.disabled = false;
+            });
+            list.appendChild(item);
+        });
+    }
+
+    // 显示弹窗（弹簧动画由 CSS 驱动）
+    dialog.style.display = 'flex';
+    requestAnimationFrame(() => {
+        dialog.classList.add('visible');
+    });
+}
+
+/** 关闭目标笔记本选择器弹窗 */
+function closeMoveDialog() {
+    const dialog = els.moveNotebookDialog;
+    dialog.classList.remove('visible');
+    // 等出场动画完成后隐藏
+    setTimeout(() => {
+        dialog.style.display = 'none';
+    }, 200);
+}
+
+/** 确认迁移 — 将选中的笔记移动到目标笔记本 */
+async function confirmMoveNotes() {
+    const selectedItem = els.moveNotebookList.querySelector('.move-notebook-item.selected');
+    if (!selectedItem || moveNoteIds.length === 0) return;
+
+    const targetId = parseInt(selectedItem.dataset.id);
+    const targetName = selectedItem.querySelector('.move-notebook-name').textContent;
+    const confirmBtn = els.moveNotebookConfirm;
+
+    // 防止重复点击
+    confirmBtn.disabled = true;
+
+    try {
+        if (moveNoteIds.length === 1) {
+            // 单条迁移
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.MoveNoteToNotebook) {
+                await window.go.main.App.MoveNoteToNotebook(moveNoteIds[0], targetId);
+            } else {
+                console.warn('MoveNoteToNotebook 未绑定，模拟迁移');
+            }
+        } else {
+            // 批量迁移
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchMoveNotesToNotebook) {
+                await window.go.main.App.BatchMoveNotesToNotebook(moveNoteIds, targetId);
+            } else {
+                console.warn('BatchMoveNotesToNotebook 未绑定，模拟批量迁移');
+            }
+        }
+
+        closeMoveDialog();
+        // 刷新笔记列表和笔记本列表（badge 计数同步更新）
+        await loadNotes();
+        await loadNotebooks();
+        renderNotebookList();
+        nm.show(`已将 ${moveNoteIds.length} 条笔记移动到「${targetName}」`, 'success');
+    } catch (err) {
+        console.error('迁移笔记失败:', err);
+        nm.show('迁移笔记失败: ' + (err.message || err), 'error');
+        confirmBtn.disabled = false;
+    }
+
+    moveNoteIds = [];
+}
+
 /* ===== HTML 转义 ===== */
 
 function escapeHtml(text) {
@@ -3224,6 +3351,18 @@ function initEventListeners() {
     els.batchTagConfirmBtn.addEventListener('click', confirmBatchTagAction);
     els.batchTagOverlay.addEventListener('click', (e) => {
         if (e.target === els.batchTagOverlay) closeBatchTagPicker();
+    });
+
+    // 移动到目标笔记本
+    els.batchMoveBtn.addEventListener('click', () => {
+        if (state.selectedNoteIds.size === 0) return;
+        openMoveDialog([...state.selectedNoteIds]);
+    });
+    els.moveNotebookClose.addEventListener('click', closeMoveDialog);
+    els.moveNotebookCancel.addEventListener('click', closeMoveDialog);
+    els.moveNotebookConfirm.addEventListener('click', confirmMoveNotes);
+    els.moveNotebookDialog.addEventListener('click', (e) => {
+        if (e.target === els.moveNotebookDialog) closeMoveDialog();
     });
 
     // 关于页面
@@ -3683,10 +3822,19 @@ async function loadNotebooks() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllNotebooks) {
             const notebooks = await window.go.main.App.GetAllNotebooks();
             state.notebooks = notebooks || [];
+            // 一并获取笔记数，写入 state.notebooks 供选择器弹窗使用
+            try {
+                if (window.go.main.App.GetNotebookNoteCounts) {
+                    const counts = await window.go.main.App.GetNotebookNoteCounts() || {};
+                    state.notebooks.forEach(nb => {
+                        nb.noteCount = counts[nb.id] || 0;
+                    });
+                }
+            } catch (_) {}
         } else {
             console.warn('GetAllNotebooks 未绑定，使用模拟数据');
             state.notebooks = [
-                { id: 1, name: '默认笔记本', sort_order: 0 },
+                { id: 1, name: '默认笔记本', sort_order: 0, noteCount: 0 },
             ];
         }
     } catch (err) {
@@ -3768,6 +3916,12 @@ function renderListContent(noteCounts) {
  */
 async function switchNotebook(notebookId) {
     if (notebookId === state.activeNotebookId) return;
+
+    // 切换笔记本时自动退出批量模式，避免选中残留
+    if (state.batchMode) {
+        toggleBatchMode();
+    }
+
     state.activeNotebookId = notebookId;
 
     // 清除搜索内容和页码，回到笔记首页
@@ -4065,11 +4219,12 @@ function updateSidebarMenuItem() {
 }
 
 /**
- * 恢复侧栏折叠状态
+ * 恢复侧栏折叠状态（默认收起）
  */
 function restoreSidebarState() {
     try {
-        const collapsed = localStorage.getItem('jot_sidebar_collapsed') === 'true';
+        // 默认收起，仅当明确存储了 'false' 时才展开
+        const collapsed = localStorage.getItem('jot_sidebar_collapsed') !== 'false';
         if (collapsed) {
             const sidebar = els.notebookSidebar;
             if (sidebar) sidebar.classList.add('collapsed');

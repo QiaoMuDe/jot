@@ -415,6 +415,16 @@ func (a *App) DeleteNotebookWithNotes(id uint) error {
 	return a.notebookService.DeleteWithNotes(id)
 }
 
+// MoveNoteToNotebook 将单条笔记移动到目标笔记本
+func (a *App) MoveNoteToNotebook(id, targetNotebookID uint) error {
+	return a.noteService.MoveToNotebook(id, targetNotebookID)
+}
+
+// BatchMoveNotesToNotebook 批量将多条笔记移动到目标笔记本
+func (a *App) BatchMoveNotesToNotebook(noteIDs []uint, targetNotebookID uint) error {
+	return a.noteService.BatchMoveToNotebook(noteIDs, targetNotebookID)
+}
+
 // GetAllNotebooks 获取所有未删除笔记本列表
 func (a *App) GetAllNotebooks() ([]models.Notebook, error) {
 	return a.notebookService.GetAll()

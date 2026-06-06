@@ -1823,7 +1823,7 @@
 /* ======== 统计卡片（无图标，纯文字居中） ======== */
 .data-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
 }
 
@@ -3394,4 +3394,249 @@
   color: var(--text-secondary);
   margin-top: 8px;
   line-height: 1.5;
+}
+
+/* ========== 移动到目标笔记本选择器 ========== */
+.move-notebook-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.move-notebook-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.move-notebook-dialog {
+  background: var(--card-bg);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15), 0 0 1px rgba(0,0,0,0.08);
+  border: 1px solid var(--border);
+  width: 360px;
+  max-width: 90vw;
+  transform: scale(0.92) translateY(8px);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  overflow: hidden;
+}
+
+.move-notebook-overlay.visible .move-notebook-dialog {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+/* 头部 */
+.move-notebook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+}
+
+.move-notebook-title {
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.move-notebook-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.move-notebook-close:hover {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-primary);
+}
+
+/* 列表体 */
+.move-notebook-body {
+  padding: 0 8px 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.move-notebook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 空状态 */
+.move-notebook-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.813rem;
+  padding: 24px 16px;
+}
+
+/* 每个笔记本项 — radio 选择 */
+.move-notebook-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.move-notebook-item:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.move-notebook-item.selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--card-bg));
+}
+
+/* 自定义 radio 圆圈 */
+.move-notebook-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.move-notebook-item.selected .move-notebook-radio {
+  border-color: var(--accent);
+}
+
+.move-notebook-radio::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.move-notebook-item.selected .move-notebook-radio::after {
+  background: var(--accent);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* 笔记本名称 */
+.move-notebook-name {
+  flex: 1;
+  font-size: 0.813rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 450;
+}
+
+.move-notebook-item.selected .move-notebook-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 笔记数 badge */
+.move-notebook-badge {
+  font-size: 0.656rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--border) 40%, transparent);
+  padding: 1px 7px;
+  min-width: 20px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.move-notebook-item.selected .move-notebook-badge {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+/* 底部 */
+.move-notebook-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+
+.move-notebook-btn {
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.813rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.move-notebook-cancel {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.move-notebook-cancel:hover {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.move-notebook-confirm {
+  background: var(--accent);
+  color: #fff;
+  opacity: 1;
+}
+
+.move-notebook-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.move-notebook-confirm:not(:disabled):hover {
+  filter: brightness(1.1);
+}
+
+.move-notebook-confirm:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* 自定义滚动条 */
+.move-notebook-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.move-notebook-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.move-notebook-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }

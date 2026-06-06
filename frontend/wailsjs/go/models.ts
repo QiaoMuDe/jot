@@ -219,6 +219,7 @@ export namespace services {
 	    trashed_notes: number;
 	    pinned_notes: number;
 	    total_tags: number;
+	    total_notebooks: number;
 	    db_size: number;
 	    db_size_str: string;
 	
@@ -232,6 +233,7 @@ export namespace services {
 	        this.trashed_notes = source["trashed_notes"];
 	        this.pinned_notes = source["pinned_notes"];
 	        this.total_tags = source["total_tags"];
+	        this.total_notebooks = source["total_notebooks"];
 	        this.db_size = source["db_size"];
 	        this.db_size_str = source["db_size_str"];
 	    }
