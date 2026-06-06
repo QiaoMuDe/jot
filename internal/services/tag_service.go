@@ -99,6 +99,22 @@ func (s *TagService) BatchAddTagToNotes(noteIDs []uint, tagID uint) error {
 	return nil
 }
 
+// BatchRemoveTagFromNotes 批量从多篇笔记移除指定标签
+func (s *TagService) BatchRemoveTagFromNotes(noteIDs []uint, tagID uint) error {
+	tag, err := s.getTagByID(tagID)
+	if err != nil {
+		return err
+	}
+	for _, noteID := range noteIDs {
+		note, err := s.getNoteByID(noteID)
+		if err != nil {
+			continue // 跳过不存在的笔记
+		}
+		_ = s.db.Model(note).Association("Tags").Delete(tag)
+	}
+	return nil
+}
+
 // AddTagToNote 为指定笔记添加一个标签（多对多关联）
 func (s *TagService) AddTagToNote(noteID, tagID uint) error {
 	note, err := s.getNoteByID(noteID)

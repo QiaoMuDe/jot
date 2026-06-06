@@ -18,6 +18,10 @@ export function BatchDeleteNotes(arg1) {
   return window['go']['main']['App']['BatchDeleteNotes'](arg1);
 }
 
+export function BatchRemoveTagFromNotes(arg1, arg2) {
+  return window['go']['main']['App']['BatchRemoveTagFromNotes'](arg1, arg2);
+}
+
 export function BatchRestoreNotes(arg1) {
   return window['go']['main']['App']['BatchRestoreNotes'](arg1);
 }
@@ -44,6 +48,10 @@ export function EmptyTrash() {
 
 export function ExportDataWithDialog() {
   return window['go']['main']['App']['ExportDataWithDialog']();
+}
+
+export function ExportNoteAsMarkdown(arg1) {
+  return window['go']['main']['App']['ExportNoteAsMarkdown'](arg1);
 }
 
 export function GetAllNoteIDs() {

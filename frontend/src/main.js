@@ -277,6 +277,14 @@ const els = {
     batchDeleteBtn: $('batchDeleteBtn'),
     batchCancelBtn: $('batchCancelBtn'),
     batchSelectAllBtn: $('batchSelectAllBtn'),
+    batchAddTagBtn: $('batchAddTagBtn'),
+    batchRemoveTagBtn: $('batchRemoveTagBtn'),
+    batchTagOverlay: $('batchTagOverlay'),
+    batchTagTitle: $('batchTagTitle'),
+    batchTagList: $('batchTagList'),
+    batchTagCloseBtn: $('batchTagCloseBtn'),
+    batchTagFooter: $('batchTagFooter'),
+    batchTagConfirmBtn: $('batchTagConfirmBtn'),
 
     // 浮动操作按钮
     fabGroup: $('fabGroup'),
@@ -779,6 +787,21 @@ async function copyNote(id) {
         nm.show('复制失败', 'error');
     }
 }
+
+/**
+ * 导出笔记为 Markdown 文件
+ */
+window.exportNote = async function (id) {
+    try {
+        const result = await window.go.main.App.ExportNoteAsMarkdown(id);
+        if (result && result !== '已取消') {
+            nm.show(result, 'success');
+        }
+    } catch (err) {
+        nm.show('导出失败', 'error');
+        console.error('导出失败:', err);
+    }
+};
 
 
 
@@ -2477,6 +2500,9 @@ window.handleContextAction = function (action) {
         case 'copy':
             copyNote(id);
             break;
+        case 'export':
+            exportNote(id);
+            break;
     }
 };
 
@@ -2694,6 +2720,139 @@ async function batchDeleteSelected() {
     nm.showUndo(`已删除 ${ids.length} 条笔记`, () => undoDelete(ids));
 }
 
+/* ===== 批量标签操作 ===== */
+
+let batchTagAction = null; // 'add' | 'remove'
+
+/**
+ * 收集选中笔记中已包含的标签 ID 集合
+ */
+function getTagIdsInSelectedNotes() {
+    const ids = new Set();
+    for (const note of state.notes) {
+        if (state.selectedNoteIds.has(note.id) && note.tags) {
+            note.tags.forEach(t => ids.add(t.id));
+        }
+    }
+    return ids;
+}
+
+/**
+ * 打开批量标签选择弹窗
+ */
+function openBatchTagPicker(action) {
+    if (state.selectedNoteIds.size === 0) {
+        nm.show('请先选择笔记', 'warning');
+        return;
+    }
+    batchTagAction = action;
+    const isAdd = action === 'add';
+    els.batchTagTitle.textContent = isAdd ? '批量添加标签' : '批量移除标签';
+
+    // 移除模式：先检查选中笔记是否包含标签
+    if (!isAdd) {
+        const tagIdsInNotes = getTagIdsInSelectedNotes();
+        if (tagIdsInNotes.size === 0) {
+            nm.show('当前选中的笔记中没有可移除的标签', 'info');
+            batchTagAction = null;
+            return;
+        }
+    }
+
+    // 显示底部确认按钮
+    els.batchTagFooter.style.display = 'flex';
+    els.batchTagConfirmBtn.textContent = isAdd ? '确定添加' : '确定移除';
+
+    renderBatchTagList();
+    els.batchTagOverlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+        els.batchTagOverlay.style.opacity = '1';
+    });
+}
+
+/**
+ * 关闭弹窗
+ */
+function closeBatchTagPicker() {
+    els.batchTagOverlay.style.display = 'none';
+    els.batchTagOverlay.style.opacity = '';
+    els.batchTagFooter.style.display = 'none';
+    batchTagAction = null;
+}
+
+/**
+ * 渲染批量标签列表
+ */
+function renderBatchTagList() {
+    const list = els.batchTagList;
+    if (!state.tags || state.tags.length === 0) {
+        list.innerHTML = '<div class="batch-tag-empty">暂无标签，请先在设置中创建标签</div>';
+        return;
+    }
+
+    const isRemove = batchTagAction === 'remove';
+    const tagIdsInNotes = isRemove ? getTagIdsInSelectedNotes() : new Set();
+
+    list.innerHTML = state.tags
+        .map(tag => {
+            // 移除模式：不在选中笔记中的标签不可选
+            const disabled = isRemove && !tagIdsInNotes.has(tag.id);
+            const cls = `batch-tag-chip${disabled ? ' disabled' : ''}`;
+            return `<div class="${cls}" data-tag-id="${tag.id}" data-tag-color="${tag.color || '#6B7280'}" style="--tag-color:${tag.color || '#6B7280'}">${escapeHtml(tag.name)}</div>`;
+        })
+        .join('');
+
+    // 绑定点击事件
+    list.querySelectorAll('.batch-tag-chip:not(.disabled)').forEach(el => {
+        el.addEventListener('click', () => onBatchTagClick(el));
+    });
+}
+
+/**
+ * 点击标签：切换选中态，更新确认按钮计数
+ */
+function onBatchTagClick(el) {
+    el.classList.toggle('selected');
+    const isAdd = batchTagAction === 'add';
+    const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
+    const label = isAdd ? '确定添加' : '确定移除';
+    els.batchTagConfirmBtn.textContent = count > 0 ? `${label}（${count}）` : label;
+}
+
+/**
+ * 确认批量标签操作（由确定按钮触发）
+ */
+async function confirmBatchTagAction() {
+    const selectedChips = els.batchTagList.querySelectorAll('.batch-tag-chip.selected');
+    if (selectedChips.length === 0) {
+        nm.show('请先选择标签', 'warning');
+        return;
+    }
+    const isAdd = batchTagAction === 'add';
+    const ids = Array.from(state.selectedNoteIds);
+    const tagNames = [];
+    try {
+        for (const chip of selectedChips) {
+            const tagId = parseInt(chip.dataset.tagId);
+            tagNames.push(chip.textContent);
+            if (isAdd) {
+                await window.go.main.App.BatchAddTagToNotes(ids, tagId);
+            } else {
+                await window.go.main.App.BatchRemoveTagFromNotes(ids, tagId);
+            }
+        }
+    } catch (err) {
+        console.error(`批量${isAdd ? '添加' : '移除'}标签失败:`, err);
+        closeBatchTagPicker();
+        nm.show('操作失败', 'error');
+        return;
+    }
+    closeBatchTagPicker();
+    // 不退出批量模式，保持选中状态
+    await loadNotes();
+    nm.show(`已${isAdd ? '添加' : '移除'} ${tagNames.length} 个标签`, 'success');
+}
+
 /* ===== HTML 转义 ===== */
 
 function escapeHtml(text) {
@@ -2909,6 +3068,15 @@ function initEventListeners() {
         if (state.batchMode) toggleBatchMode();
     });
     els.batchSelectAllBtn.addEventListener('click', toggleSelectAll);
+
+    // 批量标签操作
+    els.batchAddTagBtn.addEventListener('click', () => openBatchTagPicker('add'));
+    els.batchRemoveTagBtn.addEventListener('click', () => openBatchTagPicker('remove'));
+    els.batchTagCloseBtn.addEventListener('click', closeBatchTagPicker);
+    els.batchTagConfirmBtn.addEventListener('click', confirmBatchTagAction);
+    els.batchTagOverlay.addEventListener('click', (e) => {
+        if (e.target === els.batchTagOverlay) closeBatchTagPicker();
+    });
 
     // 关于页面
     document.querySelector('.brand-name').addEventListener('click', (e) => {

@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"gitee.com/MM-Q/go-kit/fs"
@@ -149,6 +151,11 @@ func (a *App) BatchRestoreNotes(ids []uint) error {
 // BatchAddTagToNotes 批量添加标签到笔记
 func (a *App) BatchAddTagToNotes(noteIDs []uint, tagID uint) error {
 	return a.tagService.BatchAddTagToNotes(noteIDs, tagID)
+}
+
+// BatchRemoveTagFromNotes 批量从笔记移除标签
+func (a *App) BatchRemoveTagFromNotes(noteIDs []uint, tagID uint) error {
+	return a.tagService.BatchRemoveTagFromNotes(noteIDs, tagID)
 }
 
 // RestoreAllNotes 批量恢复回收站中所有笔记
@@ -396,6 +403,56 @@ func (a *App) SetPageSize(size int) error {
 // GetVersion 获取应用版本号
 func (a *App) GetVersion() string {
 	return verman.V.GitVersion
+}
+
+// ExportNoteAsMarkdown 导出单条笔记为 Markdown 文件，弹出保存对话框让用户选择路径
+func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
+	note, err := a.noteService.GetByID(id)
+	if err != nil {
+		return "", fmt.Errorf("笔记不存在: %w", err)
+	}
+
+	defaultName := sanitizeFilename(note.Title) + ".md"
+	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "导出笔记为 Markdown",
+		DefaultFilename: defaultName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Markdown (*.md)", Pattern: "*.md"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "已取消", nil
+	}
+
+	content := fmt.Sprintf("# %s\n\n%s", note.Title, note.Content)
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	return "导出成功：" + filePath, nil
+}
+
+// sanitizeFilename 将笔记标题中的特殊符号和空白替换为下划线，生成安全的文件名
+func sanitizeFilename(title string) string {
+	name := strings.TrimSpace(title)
+	if name == "" {
+		return "untitled"
+	}
+	// 替换无效文件名字符和空白为下划线
+	re := regexp.MustCompile(`[\\/:*?"<>|\s]+`)
+	name = re.ReplaceAllString(name, "_")
+	// 合并连续下划线
+	re2 := regexp.MustCompile(`_+`)
+	name = re2.ReplaceAllString(name, "_")
+	// 去掉首尾下划线
+	name = strings.Trim(name, "_")
+	if name == "" {
+		return "untitled"
+	}
+	return name
 }
 
 // OpenDataDir 在文件管理器中打开数据库目录

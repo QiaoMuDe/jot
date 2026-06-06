@@ -42,6 +42,8 @@
             <button class="batch-select-all-btn" id="batchSelectAllBtn">全选</button>
         </div>
         <div class="batch-bar-actions">
+            <button class="btn btn-sm batch-btn" id="batchAddTagBtn">+标签</button>
+            <button class="btn btn-sm batch-btn" id="batchRemoveTagBtn">-标签</button>
             <button class="btn btn-sm batch-btn btn-danger" id="batchDeleteBtn">批量删除</button>
             <button class="btn btn-sm batch-btn batch-cancel" id="batchCancelBtn">退出批量</button>
         </div>
@@ -373,6 +375,7 @@
         <!-- 右键菜单 -->
         <div id="contextMenu" class="context-menu">
             <div class="context-menu-item" data-action="copy">复制</div>
+            <div class="context-menu-item" data-action="export">导出</div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="view">查看</div>
             <div class="context-menu-item" data-action="edit">编辑</div>
@@ -413,6 +416,22 @@
                 </div>
                 <div class="shortcuts-body" id="shortcutsBody">
                     <!-- 由 JS 渲染 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量标签选择弹窗 -->
+        <div id="batchTagOverlay" class="batch-tag-overlay" style="display:none;">
+            <div class="batch-tag-card">
+                <div class="batch-tag-header">
+                    <span id="batchTagTitle">选择标签</span>
+                    <button class="batch-tag-close" id="batchTagCloseBtn">✕</button>
+                </div>
+                <div class="batch-tag-body" id="batchTagList">
+                    <!-- 由 JS 渲染 -->
+                </div>
+                <div class="batch-tag-footer" id="batchTagFooter" style="display:none;">
+                    <button class="batch-tag-confirm-btn" id="batchTagConfirmBtn">确定移除</button>
                 </div>
             </div>
         </div>

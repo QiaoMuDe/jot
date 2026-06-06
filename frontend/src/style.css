@@ -627,6 +627,148 @@
 }
 
 /* ==========================================================================
+   Batch Tag Overlay (批量标签选择弹窗)
+   ========================================================================== */
+
+.batch-tag-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.batch-tag-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  width: 320px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalEnter 0.2s var(--anim-easing-spring) forwards;
+}
+
+.batch-tag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--divider);
+}
+
+.batch-tag-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: var(--transition);
+}
+
+.batch-tag-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.batch-tag-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  align-content: flex-start;
+}
+
+.batch-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--tag-color, #6B7280);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.batch-tag-chip:hover {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.batch-tag-chip:active {
+  transform: scale(0.95);
+}
+
+/* 移除模式：不可移除标签（不在选中笔记中） */
+.batch-tag-chip.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: saturate(0.3);
+  pointer-events: none;
+}
+
+/* 移除模式：已选中的待移除标签 */
+.batch-tag-chip.selected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--tag-color, #6B7280);
+  transform: scale(1.05);
+}
+
+.batch-tag-empty {
+  width: 100%;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.813rem;
+}
+
+/* 批量标签弹窗底部按钮区 */
+.batch-tag-footer {
+  padding: 0 20px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.batch-tag-confirm-btn {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.batch-tag-confirm-btn:hover {
+  opacity: 0.9;
+}
+
+.batch-tag-confirm-btn:active {
+  transform: scale(0.98);
+}
+
+/* ==========================================================================
    Section E: Editor Modal
    ========================================================================== */
 
