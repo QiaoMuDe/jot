@@ -26,6 +26,10 @@ export function BatchRestoreNotes(arg1) {
   return window['go']['main']['App']['BatchRestoreNotes'](arg1);
 }
 
+export function ClearDraft() {
+  return window['go']['main']['App']['ClearDraft']();
+}
+
 export function CreateNote(arg1, arg2) {
   return window['go']['main']['App']['CreateNote'](arg1, arg2);
 }
@@ -68,6 +72,10 @@ export function GetBackupInfo() {
 
 export function GetDataStats() {
   return window['go']['main']['App']['GetDataStats']();
+}
+
+export function GetDraft() {
+  return window['go']['main']['App']['GetDraft']();
 }
 
 export function GetNote(arg1) {
@@ -140,6 +148,10 @@ export function RestoreFromDir() {
 
 export function RestoreNote(arg1) {
   return window['go']['main']['App']['RestoreNote'](arg1);
+}
+
+export function SaveDraft(arg1, arg2) {
+  return window['go']['main']['App']['SaveDraft'](arg1, arg2);
 }
 
 export function SearchNotes(arg1, arg2, arg3) {

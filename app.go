@@ -28,6 +28,7 @@ type App struct {
 	noteService    *services.NoteService
 	tagService     *services.TagService
 	settingService *services.SettingService
+	draftService   *services.DraftService
 }
 
 // NewApp creates a new App application struct
@@ -45,6 +46,7 @@ func NewApp() *App {
 		noteService:    services.NewNoteService(db),
 		tagService:     services.NewTagService(db),
 		settingService: services.NewSettingService(db),
+		draftService:   services.NewDraftService(db),
 	}
 }
 
@@ -52,6 +54,23 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+}
+
+// ==================== Draft 相关绑定方法 ====================
+
+// SaveDraft 保存草稿（新建笔记的临时内容）
+func (a *App) SaveDraft(title, content string) error {
+	return a.draftService.SaveDraft(title, content)
+}
+
+// GetDraft 获取已保存的草稿，无草稿时返回 nil
+func (a *App) GetDraft() (*models.Draft, error) {
+	return a.draftService.GetDraft()
+}
+
+// ClearDraft 清除已保存的草稿
+func (a *App) ClearDraft() error {
+	return a.draftService.ClearDraft()
 }
 
 // ==================== Note 相关绑定方法 ====================

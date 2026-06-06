@@ -15,6 +15,8 @@ export function BatchRemoveTagFromNotes(arg1:Array<number>,arg2:number):Promise<
 
 export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
+export function ClearDraft():Promise<void>;
+
 export function CreateNote(arg1:string,arg2:string):Promise<models.Note>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
@@ -36,6 +38,8 @@ export function GetAllTags():Promise<Array<models.Tag>>;
 export function GetBackupInfo():Promise<Record<string, string>>;
 
 export function GetDataStats():Promise<services.DataStats>;
+
+export function GetDraft():Promise<models.Draft>;
 
 export function GetNote(arg1:number):Promise<models.Note>;
 
@@ -72,6 +76,8 @@ export function RestoreAllNotes():Promise<void>;
 export function RestoreFromDir():Promise<services.ImportResult>;
 
 export function RestoreNote(arg1:number):Promise<void>;
+
+export function SaveDraft(arg1:string,arg2:string):Promise<void>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number):Promise<services.PaginatedResult>;
 

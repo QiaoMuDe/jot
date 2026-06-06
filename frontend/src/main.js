@@ -536,6 +536,31 @@ async function loadNotes() {
         hasMoreNotes = false;
     }
     renderCardGrid();
+
+    // 延迟检测草稿
+    setTimeout(async () => {
+        // 编辑器打开时不检测
+        if (els.viewEditor.classList.contains('active')) return;
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDraft) {
+                const draft = await window.go.main.App.GetDraft();
+                if (draft && (draft.title || draft.content)) {
+                    const confirmed = await showConfirmDialog('发现未保存的草稿。您有一段未保存的笔记草稿，是否恢复？');
+                    if (confirmed) {
+                        await window.go.main.App.ClearDraft();
+                        await openEditor(null);
+                        els.editorNoteTitle.value = draft.title || '';
+                        els.editorNoteContent.value = draft.content || '';
+                        updateWordCount();
+                    } else {
+                        await window.go.main.App.ClearDraft();
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('检查草稿失败:', err);
+        }
+    }, 1000);
 }
 
 /**
@@ -711,6 +736,8 @@ async function createNote() {
     } catch (err) {
         console.error('创建笔记失败:', err);
     }
+    // 清除草稿（如果有）
+    try { if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearDraft) { await window.go.main.App.ClearDraft(); } } catch (e) {}
     closeEditor();
     await loadNotes();
 }
@@ -2138,25 +2165,30 @@ function startAutoSave() {
         clearTimeout(autoSaveTimer);
         autoSaveTimer = null;
     }
-    // 新创建的笔记（无 ID）不自动保存
-    if (!state.editingNoteId) return;
     autoSaveTimer = setTimeout(async () => {
         const title = els.editorNoteTitle.value.trim();
-        if (!title) return;
+        const content = els.editorNoteContent.value.trim();
+        // 标题和内容均为空时不保存
+        if (!title && !content) return;
+
         try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
-                await window.go.main.App.UpdateNote(
-                    state.editingNoteId,
-                    title,
-                    els.editorNoteContent.value || ''
-                );
+            if (window.go && window.go.main && window.go.main.App) {
+                if (state.editingNoteId) {
+                    // 编辑已有笔记：更新到 notes 表
+                    if (!title) return;
+                    await window.go.main.App.UpdateNote(state.editingNoteId, title, content || '');
+                } else {
+                    // 新建笔记：保存草稿到 drafts 表
+                    await window.go.main.App.SaveDraft(title, content);
+                }
                 // 显示自动保存成功指示
-                els.autoSaveIndicator.textContent = '已保存 ✓';
+                els.autoSaveIndicator.textContent = state.editingNoteId ? '已保存 ✓' : '草稿已保存 ✓';
                 els.autoSaveIndicator.className = 'auto-save-indicator active saved';
                 els.autoSaveIndicator.style.animation = 'pulseDot 0.5s ease-out';
                 setTimeout(() => {
                     els.autoSaveIndicator.className = 'auto-save-indicator';
                     els.autoSaveIndicator.style.animation = '';
+                    els.autoSaveIndicator.textContent = '';
                 }, 2000);
             }
         } catch (err) {
@@ -2165,6 +2197,7 @@ function startAutoSave() {
             els.autoSaveIndicator.className = 'auto-save-indicator active';
             setTimeout(() => {
                 els.autoSaveIndicator.className = 'auto-save-indicator';
+                els.autoSaveIndicator.textContent = '';
             }, 2000);
         }
         autoSaveTimer = null;
@@ -2985,7 +3018,13 @@ function initEventListeners() {
     // 编辑器
     els.editorCloseBtn.addEventListener('click', closeEditor);
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
-    els.editorCancelBtn.addEventListener('click', closeEditor);
+    els.editorCancelBtn.addEventListener('click', async () => {
+        // 取消：清除草稿再关闭编辑器（用户明确放弃当前编辑）
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearDraft) {
+            try { await window.go.main.App.ClearDraft(); } catch (e) { console.error('清除草稿失败:', e); }
+        }
+        closeEditor();
+    });
     els.editorSaveBtn.addEventListener('click', async () => {
         if (state.editingNoteId) {
             await updateNote(state.editingNoteId);
@@ -3569,6 +3608,19 @@ async function loadQuickNoteSetting() {
         if (enabled) {
             openEditor(null);
             toggleEditorFullscreen();
+            // 有草稿时自动填入内容
+            try {
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDraft) {
+                    const draft = await window.go.main.App.GetDraft();
+                    if (draft && (draft.title || draft.content)) {
+                        els.editorNoteTitle.value = draft.title || '';
+                        els.editorNoteContent.value = draft.content || '';
+                        updateWordCount();
+                    }
+                }
+            } catch (e) {
+                console.error('加载草稿失败:', e);
+            }
         }
     } catch (err) {
         console.error('加载快速笔记设置失败:', err);
