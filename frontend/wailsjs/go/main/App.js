@@ -34,8 +34,12 @@ export function ClearDraft() {
   return window['go']['main']['App']['ClearDraft']();
 }
 
-export function CreateNote(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3);
+export function CreateNote(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3, arg4);
+}
+
+export function CreateNotebook(arg1) {
+  return window['go']['main']['App']['CreateNotebook'](arg1);
 }
 
 export function CreateTag(arg1, arg2) {
@@ -44,6 +48,14 @@ export function CreateTag(arg1, arg2) {
 
 export function DeleteNote(arg1) {
   return window['go']['main']['App']['DeleteNote'](arg1);
+}
+
+export function DeleteNotebook(arg1) {
+  return window['go']['main']['App']['DeleteNotebook'](arg1);
+}
+
+export function DeleteNotebookWithNotes(arg1) {
+  return window['go']['main']['App']['DeleteNotebookWithNotes'](arg1);
 }
 
 export function DeleteTag(arg1) {
@@ -66,6 +78,10 @@ export function GetAllNoteIDs() {
   return window['go']['main']['App']['GetAllNoteIDs']();
 }
 
+export function GetAllNotebooks() {
+  return window['go']['main']['App']['GetAllNotebooks']();
+}
+
 export function GetAllTags() {
   return window['go']['main']['App']['GetAllTags']();
 }
@@ -86,8 +102,16 @@ export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }
 
-export function GetNotes(arg1, arg2, arg3) {
-  return window['go']['main']['App']['GetNotes'](arg1, arg2, arg3);
+export function GetNoteIDsByNotebook(arg1) {
+  return window['go']['main']['App']['GetNoteIDsByNotebook'](arg1);
+}
+
+export function GetNotebookNoteCounts() {
+  return window['go']['main']['App']['GetNotebookNoteCounts']();
+}
+
+export function GetNotes(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetNotes'](arg1, arg2, arg3, arg4);
 }
 
 export function GetNotesByTag(arg1, arg2, arg3, arg4) {
@@ -138,6 +162,10 @@ export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
 }
 
+export function RenameNotebook(arg1, arg2) {
+  return window['go']['main']['App']['RenameNotebook'](arg1, arg2);
+}
+
 export function ResetDatabase() {
   return window['go']['main']['App']['ResetDatabase']();
 }
@@ -158,8 +186,8 @@ export function SaveDraft(arg1, arg2) {
   return window['go']['main']['App']['SaveDraft'](arg1, arg2);
 }
 
-export function SearchNotes(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3);
+export function SearchNotes(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4);
 }
 
 export function SetPageSize(arg1) {

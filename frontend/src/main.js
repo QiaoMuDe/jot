@@ -152,6 +152,8 @@ const state = {
     batchMode: false,           // 是否处于批量管理模式
     selectedNoteIds: new Set(), // 选中的笔记 ID 集合
     totalAllNotes: 0,           // 所有未删除笔记的总数（用于全选判断）
+    activeNotebookId: 1,        // 当前激活的笔记本 ID，默认为 1（默认笔记本）
+    notebooks: [],              // 笔记本列表
 };
 
 // 分页状态
@@ -304,6 +306,11 @@ const els = {
     shortcutsView: $('shortcutsView'),
     shortcutsCloseBtn: $('shortcutsCloseBtn'),
     shortcutsBody: $('shortcutsBody'),
+
+    // 笔记本侧栏
+    notebookList: $('notebookList'),
+    newNotebookBtn: $('newNotebookBtn'),
+    notebookSidebar: $('notebookSidebar'),
 };
 
 /* ===== 工具函数 ===== */
@@ -508,7 +515,7 @@ async function loadNotes() {
         // 加载第 1 页
         let result = null;
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
-            result = await window.go.main.App.GetNotes(1, pageSize, sortBy);
+            result = await window.go.main.App.GetNotes(1, pageSize, sortBy, state.activeNotebookId);
         }
 
         if (result) {
@@ -589,7 +596,7 @@ async function loadMoreNotes() {
 
         let result = null;
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
-            result = await window.go.main.App.GetNotes(nextPage, pageSize, sortBy);
+            result = await window.go.main.App.GetNotes(nextPage, pageSize, sortBy, state.activeNotebookId);
         }
 
         if (result && result.items && result.items.length > 0) {
@@ -650,7 +657,7 @@ async function loadAllRemainingNotes() {
         let allNewItems = [];
         for (const page of remainingPages) {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotes) {
-                const result = await window.go.main.App.GetNotes(page, pageSize, sortBy);
+                const result = await window.go.main.App.GetNotes(page, pageSize, sortBy, state.activeNotebookId);
                 if (result && result.items && result.items.length > 0) {
                     allNewItems = allNewItems.concat(result.items);
                     currentPage = page;
@@ -713,7 +720,7 @@ async function createNote() {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
-            const note = await window.go.main.App.CreateNote(title, content, state.noteType);
+            const note = await window.go.main.App.CreateNote(title, content, state.noteType, state.activeNotebookId);
             // 为笔记添加标签
             if (note && note.id && state.selectedTags.length > 0) {
                 for (const tagId of state.selectedTags) {
@@ -731,6 +738,7 @@ async function createNote() {
                 title: title,
                 content: content,
                 note_type: state.noteType,
+                notebook_id: state.activeNotebookId,
                 pinned: false,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -744,6 +752,7 @@ async function createNote() {
     try { if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearDraft) { await window.go.main.App.ClearDraft(); } } catch (e) {}
     closeEditor();
     await loadNotes();
+    await loadNotebooks();
 }
 
 /**
@@ -783,6 +792,7 @@ async function updateNote(id) {
     }
     closeEditor();
     await loadNotes();
+    await loadNotebooks();
 }
 
 /**
@@ -801,6 +811,7 @@ async function deleteNote(id) {
         return;
     }
     await loadNotes();
+    await loadNotebooks();
     nm.showUndo('笔记已删除', () => undoDelete(id));
 }
 
@@ -861,6 +872,7 @@ async function undoDelete(noteIds) {
         console.error('撤销删除失败:', err);
     }
     await loadNotes();
+    await loadNotebooks();
 }
 
 /**
@@ -901,7 +913,7 @@ async function searchNotes(keyword, source) {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.SearchNotes) {
-            const result = await window.go.main.App.SearchNotes(kw, 1, 100);
+            const result = await window.go.main.App.SearchNotes(kw, 1, 100, state.activeNotebookId);
             renderSearchResults((result && result.items) || [], kw);
         } else {
             console.warn('SearchNotes 未绑定，模拟搜索');
@@ -1522,6 +1534,7 @@ async function restoreNote(id) {
     }
     await loadTrashNotes();
     await loadNotes();
+    await loadNotebooks();
     nm.show('笔记已恢复', 'success');
 }
 
@@ -1574,6 +1587,7 @@ async function restoreAllNotes() {
     }
     await loadTrashNotes();
     await loadNotes();
+    await loadNotebooks();
 }
 
 /**
@@ -2712,15 +2726,15 @@ function toggleSelectAll() {
 }
 
 /**
- * 全选：获取所有未删除笔记的 ID
+ * 全选：获取当前笔记本的所有笔记 ID
  */
 async function selectAllIds() {
     let ids = [];
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllNoteIDs) {
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNoteIDsByNotebook) {
         try {
-            ids = await window.go.main.App.GetAllNoteIDs();
+            ids = await window.go.main.App.GetNoteIDsByNotebook(state.activeNotebookId);
         } catch (err) {
-            console.error('获取全部 ID 失败，降级为当前页:', err);
+            console.error('获取笔记本笔记 ID 失败，降级为当前页:', err);
             ids = state.notes.map(n => n.id);
         }
     } else {
@@ -2786,6 +2800,7 @@ async function batchDeleteSelected() {
     }
     clearSelection();
     await loadNotes();
+    await loadNotebooks();
     nm.showUndo(`已删除 ${ids.length} 条笔记`, () => undoDelete(ids));
 }
 
@@ -3068,6 +3083,9 @@ function initEventListeners() {
                 switchView('grid');
                 resetPagination();
                 loadNotes();
+            } else if (item.dataset.action === 'sidebar-toggle') {
+                toggleSidebar();
+                updateSidebarMenuItem();
             } else if (item.dataset.action === 'settings') {
                 switchView('settings');
             } else if (item.dataset.action === 'data') {
@@ -3238,6 +3256,9 @@ function initEventListeners() {
 
     // 键盘快捷键导航
     document.addEventListener('keydown', handleKeyboardNavigation);
+
+    // 笔记本侧栏事件
+    els.newNotebookBtn?.addEventListener('click', showNewNotebookDialog);
 }
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
@@ -3412,17 +3433,22 @@ function handleKeyboardNavigation(e) {
                 return;
             case '2':
                 e.preventDefault();
-                switchView('data');
+                toggleSidebar();
+                updateSidebarMenuItem();
                 return;
             case '3':
                 e.preventDefault();
-                switchView('trash');
+                switchView('data');
                 return;
             case '4':
                 e.preventDefault();
-                switchView('settings');
+                switchView('trash');
                 return;
             case '5':
+                e.preventDefault();
+                switchView('settings');
+                return;
+            case '6':
                 e.preventDefault();
                 openShortcuts();
                 return;
@@ -3637,7 +3663,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + Home', desc: '回到顶部' },
         { key: 'Ctrl + End', desc: '加载全部并滚到底部' },
         { key: 'Escape', desc: '关闭弹窗 / 返回上一页' },
-        { key: '1 2 3 4 5', desc: '快速切换视图' },
+        { key: '1 2 3 4 5 6', desc: '快速切换视图 / 切换侧栏' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
@@ -3645,6 +3671,411 @@ function renderShortcutsPage() {
             <div class="shortcut-desc">${s.desc}</div>
         </div>
     `).join('');
+}
+
+/* ===== 笔记本相关函数 ===== */
+
+/**
+ * 加载笔记本列表
+ */
+async function loadNotebooks() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllNotebooks) {
+            const notebooks = await window.go.main.App.GetAllNotebooks();
+            state.notebooks = notebooks || [];
+        } else {
+            console.warn('GetAllNotebooks 未绑定，使用模拟数据');
+            state.notebooks = [
+                { id: 1, name: '默认笔记本', sort_order: 0 },
+            ];
+        }
+    } catch (err) {
+        console.error('加载笔记本失败:', err);
+        state.notebooks = [];
+    }
+    renderNotebookList();
+}
+
+/**
+ * 渲染笔记本侧栏列表
+ */
+function renderNotebookList() {
+    const list = els.notebookList;
+    if (!list) return;
+
+    if (state.notebooks.length === 0) {
+        list.innerHTML = '<div style="padding: 12px 10px; color: var(--text-muted); font-size: 0.813rem;">暂无笔记本</div>';
+        return;
+    }
+
+    // 获取笔记数量
+    let noteCounts = {};
+    // 从后端获取 counts（如果有）
+    (async () => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNotebookNoteCounts) {
+                noteCounts = await window.go.main.App.GetNotebookNoteCounts() || {};
+            }
+        } catch (e) {}
+        renderListContent(noteCounts);
+    })();
+}
+
+/**
+ * 渲染笔记本列表内容（带笔记数 badge）
+ */
+function renderListContent(noteCounts) {
+    const list = els.notebookList;
+    if (!list) return;
+
+    // 默认笔记本始终排在最前面
+    const sorted = [...state.notebooks].sort((a, b) => {
+        if (a.id === 1) return -1;
+        if (b.id === 1) return 1;
+        return (a.sort_order || 0) - (b.sort_order || 0);
+    });
+
+    list.innerHTML = sorted.map(nb => {
+        const count = noteCounts[nb.id] || 0;
+        const isActive = nb.id === state.activeNotebookId;
+        return `
+            <div class="notebook-item${isActive ? ' active' : ''}" data-notebook-id="${nb.id}" data-notebook-name="${escapeHtml(nb.name)}">
+                <span class="notebook-name">${escapeHtml(nb.name)}</span>
+                <span class="notebook-badge">${count}</span>
+            </div>
+        `;
+    }).join('');
+
+    // 绑定点击事件（事件委托）
+    list.querySelectorAll('.notebook-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = parseInt(item.dataset.notebookId);
+            if (id === state.activeNotebookId) return;
+            switchNotebook(id);
+        });
+        // 右键菜单
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = parseInt(item.dataset.notebookId);
+            showNotebookContextMenu(e, id, item.dataset.notebookName);
+        });
+    });
+}
+
+/**
+ * 切换笔记本
+ */
+async function switchNotebook(notebookId) {
+    if (notebookId === state.activeNotebookId) return;
+    state.activeNotebookId = notebookId;
+
+    // 清除搜索内容和页码，回到笔记首页
+    state.searchKeyword = '';
+    els.searchInput.value = '';
+    state.searchSource = 'input';
+    switchView('grid');
+    resetPagination();
+
+    // 重新加载笔记
+    await loadNotes();
+    // 刷新侧栏高亮
+    renderNotebookList();
+}
+
+/**
+ * 创建笔记本（显示输入弹窗）
+ */
+function showNewNotebookDialog() {
+    // 创建模态框 DOM
+    const overlay = document.createElement('div');
+    overlay.className = 'new-notebook-overlay';
+    overlay.innerHTML = `
+        <div class="new-notebook-dialog">
+            <div class="new-notebook-title">新建笔记本</div>
+            <input type="text" class="new-notebook-input" id="newNotebookInput" placeholder="输入笔记本名称..." maxlength="50" autofocus>
+            <div class="new-notebook-actions">
+                <button class="btn btn-cancel" id="newNotebookCancelBtn">取消</button>
+                <button class="btn btn-save" id="newNotebookConfirmBtn">创建</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('#newNotebookInput');
+    const confirmBtn = overlay.querySelector('#newNotebookConfirmBtn');
+    const cancelBtn = overlay.querySelector('#newNotebookCancelBtn');
+
+    // 动画显示
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        input.focus();
+    });
+
+    /** 关闭弹窗并清理 */
+    const close = () => {
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    /** 执行创建 */
+    const doCreate = async () => {
+        const name = input.value.trim();
+        if (!name) {
+            nm.show('请输入笔记本名称', 'warning');
+            return;
+        }
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNotebook) {
+                const notebook = await window.go.main.App.CreateNotebook(name);
+                if (notebook) {
+                    close();
+                    await loadNotebooks();
+                    // 自动切换到新笔记本
+                    state.activeNotebookId = notebook.id;
+                    resetPagination();
+                    await loadNotes();
+                    renderNotebookList();
+                    nm.show('笔记本已创建', 'success');
+                }
+            } else {
+                console.warn('CreateNotebook 未绑定');
+                close();
+            }
+        } catch (err) {
+            const msg = (typeof err === 'string' ? err : err?.message || '创建笔记本失败');
+            console.error('创建笔记本失败:', msg);
+            nm.show(msg, 'error');
+        }
+    };
+
+    confirmBtn.addEventListener('click', doCreate);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doCreate();
+        if (e.key === 'Escape') close();
+    });
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+}
+
+/**
+ * 显示笔记本右键菜单
+ */
+function showNotebookContextMenu(event, notebookId, notebookName) {
+    // 移除已有的右键菜单
+    document.querySelectorAll('.notebook-context-menu').forEach(m => m.remove());
+
+    const isDefault = notebookId === 1;
+    const menu = document.createElement('div');
+    menu.className = 'notebook-context-menu active';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+
+    menu.innerHTML = `
+        <div class="notebook-context-item${isDefault ? ' disabled' : ''}" data-action="rename">${isDefault ? '默认笔记本' : '重命名'}</div>
+        <div class="notebook-context-item danger${isDefault ? ' disabled' : ''}" data-action="delete">${isDefault ? '不可删除' : '删除'}</div>
+    `;
+    document.body.appendChild(menu);
+
+    // 点击菜单项
+    menu.addEventListener('click', async (e) => {
+        const item = e.target.closest('.notebook-context-item');
+        if (!item || item.classList.contains('disabled')) return;
+        const action = item.dataset.action;
+        menu.remove();
+
+        if (action === 'rename') {
+            startInlineRename(notebookId, notebookName);
+        } else if (action === 'delete') {
+            showDeleteNotebookDialog(notebookId, notebookName);
+        }
+    });
+
+    // 点击其他地方关闭
+    const closeMenu = (e2) => {
+        if (!menu.contains(e2.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+/**
+ * 内联重命名笔记本
+ */
+function startInlineRename(notebookId, currentName) {
+    const items = els.notebookList.querySelectorAll('.notebook-item');
+    let targetItem = null;
+    items.forEach(item => {
+        if (parseInt(item.dataset.notebookId) === notebookId) {
+            targetItem = item;
+        }
+    });
+    if (!targetItem) return;
+
+    const nameEl = targetItem.querySelector('.notebook-name');
+    const originalName = currentName || nameEl.textContent;
+
+    // 替换为输入框
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'notebook-rename-input';
+    input.value = originalName;
+    input.maxLength = 50;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let renaming = false; // 防止 Enter + blur 重复执行
+
+    /** 完成重命名 */
+    const finishRename = async (save) => {
+        if (renaming) return; // 已处理过，忽略重复触发
+        renaming = true;
+
+        if (!save) {
+            // 取消：恢复原样
+            const span = document.createElement('span');
+            span.className = 'notebook-name';
+            span.textContent = originalName;
+            input.replaceWith(span);
+            return;
+        }
+
+        const newName = input.value.trim();
+        if (!newName || newName === originalName) {
+            const span = document.createElement('span');
+            span.className = 'notebook-name';
+            span.textContent = originalName;
+            input.replaceWith(span);
+            return;
+        }
+
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.RenameNotebook) {
+                await window.go.main.App.RenameNotebook(notebookId, newName);
+                await loadNotebooks();
+                nm.show('笔记本已重命名', 'success');
+            }
+        } catch (err) {
+            const msg = (typeof err === 'string' ? err : err?.message || '重命名失败');
+            console.error('重命名失败:', msg);
+            nm.show(msg, 'error');
+            const span = document.createElement('span');
+            span.className = 'notebook-name';
+            span.textContent = originalName;
+            input.replaceWith(span);
+        }
+    };
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') finishRename(true);
+        if (e.key === 'Escape') finishRename(false);
+    });
+    input.addEventListener('blur', () => finishRename(true));
+}
+
+/**
+ * 显示删除笔记本确认弹窗
+ */
+function showDeleteNotebookDialog(notebookId, notebookName) {
+    const msg = `确定要删除笔记本「${notebookName}」吗？`;
+    const checkboxText = `同时永久删除该笔记本中的 ${state.notes.length} 条笔记（不进回收站）`;
+
+    // 显示自定义确认对话框（带 checkbox 选项）
+    els.confirmDialogMsg.textContent = msg;
+    const optionArea = document.getElementById('confirmOptionArea');
+    const checkbox = document.getElementById('confirmCheckbox');
+    const checkboxTextEl = document.getElementById('confirmCheckboxText');
+    if (optionArea && checkbox && checkboxTextEl) {
+        checkbox.checked = false;
+        checkboxTextEl.textContent = checkboxText;
+        optionArea.style.display = 'block';
+    }
+    els.confirmDialog.classList.add('visible');
+
+    const cleanup = (confirmed) => {
+        els.confirmDialog.classList.remove('visible');
+        if (optionArea) optionArea.style.display = 'none';
+        if (!confirmed) return;
+        doDeleteNotebook(notebookId, checkbox ? checkbox.checked : false);
+    };
+
+    els.confirmOkBtn.onclick = () => cleanup(true);
+    els.confirmCancelBtn.onclick = () => cleanup(false);
+    els.confirmDialog.onclick = (e) => {
+        if (e.target === els.confirmDialog) cleanup(false);
+    };
+}
+
+async function doDeleteNotebook(notebookId, deleteNotes) {
+    try {
+        if (deleteNotes) {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteNotebookWithNotes) {
+                await window.go.main.App.DeleteNotebookWithNotes(notebookId);
+            }
+        } else {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteNotebook) {
+                await window.go.main.App.DeleteNotebook(notebookId);
+            }
+        }
+        // 如果删除的是当前激活的笔记本，自动切到默认笔记本并回到笔记首页
+        if (state.activeNotebookId === notebookId) {
+            state.activeNotebookId = 1;
+            state.searchKeyword = '';
+            els.searchInput.value = '';
+            switchView('grid');
+            resetPagination();
+        }
+        await loadNotebooks();
+        await loadNotes();
+        const suffix = deleteNotes ? '及其笔记已永久删除' : '已删除';
+        nm.show(`笔记本「${els.notebookList.querySelector(`[data-notebook-id="${notebookId}"]`)?.querySelector('.notebook-name')?.textContent || ''}」${suffix}`, 'success');
+    } catch (err) {
+        const msg = (typeof err === 'string' ? err : err?.message || '删除笔记本失败');
+        console.error('删除笔记本失败:', msg);
+        nm.show(msg, 'error');
+    }
+}
+
+/**
+ * 切换侧栏折叠/展开
+ */
+function toggleSidebar() {
+    const sidebar = els.notebookSidebar;
+    if (!sidebar) return;
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    // localStorage 持久化
+    try {
+        localStorage.setItem('jot_sidebar_collapsed', String(isCollapsed));
+    } catch (e) {}
+}
+
+/**
+ * 更新菜单项文字：展开侧栏 ↔ 折叠侧栏
+ */
+function updateSidebarMenuItem() {
+    const menuItem = els.moreMenu?.querySelector('[data-action="sidebar-toggle"]');
+    if (!menuItem) return;
+    const isCollapsed = els.notebookSidebar?.classList.contains('collapsed');
+    menuItem.textContent = isCollapsed ? '展开侧栏' : '折叠侧栏';
+}
+
+/**
+ * 恢复侧栏折叠状态
+ */
+function restoreSidebarState() {
+    try {
+        const collapsed = localStorage.getItem('jot_sidebar_collapsed') === 'true';
+        if (collapsed) {
+            const sidebar = els.notebookSidebar;
+            if (sidebar) sidebar.classList.add('collapsed');
+        }
+        updateSidebarMenuItem();
+    } catch (e) {}
 }
 
 /* ===== 初始化 ===== */
@@ -3679,6 +4110,14 @@ async function init() {
     await initSortSettings();
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
+    // 先恢复侧栏折叠状态
+    restoreSidebarState();
+    // 加载笔记本列表（会设置默认选中）
+    await loadNotebooks();
+    // 确保 activeNotebookId 有值（默认为 1）
+    if (!state.activeNotebookId && state.notebooks.length > 0) {
+        state.activeNotebookId = state.notebooks[0].id;
+    }
     await loadNotes();
     await loadTags();
 }

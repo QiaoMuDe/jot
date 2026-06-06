@@ -23,12 +23,13 @@ import (
 
 // App struct
 type App struct {
-	ctx            context.Context
-	db             *gorm.DB
-	noteService    *services.NoteService
-	tagService     *services.TagService
-	settingService *services.SettingService
-	draftService   *services.DraftService
+	ctx             context.Context
+	db              *gorm.DB
+	noteService     *services.NoteService
+	tagService      *services.TagService
+	settingService  *services.SettingService
+	draftService    *services.DraftService
+	notebookService *services.NotebookService
 }
 
 // NewApp creates a new App application struct
@@ -42,11 +43,12 @@ func NewApp() *App {
 		panic(err)
 	}
 	return &App{
-		db:             db,
-		noteService:    services.NewNoteService(db),
-		tagService:     services.NewTagService(db),
-		settingService: services.NewSettingService(db),
-		draftService:   services.NewDraftService(db),
+		db:              db,
+		noteService:     services.NewNoteService(db),
+		tagService:      services.NewTagService(db),
+		settingService:  services.NewSettingService(db),
+		draftService:    services.NewDraftService(db),
+		notebookService: services.NewNotebookService(db),
 	}
 }
 
@@ -54,6 +56,10 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// 确保默认笔记本存在（首次启动自动创建）
+	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
+		fmt.Printf("初始化默认笔记本失败: %v\n", err)
+	}
 }
 
 // ==================== Draft 相关绑定方法 ====================
@@ -75,9 +81,9 @@ func (a *App) ClearDraft() error {
 
 // ==================== Note 相关绑定方法 ====================
 
-// CreateNote 创建一条新笔记
-func (a *App) CreateNote(title, content, noteType string) (*models.Note, error) {
-	return a.noteService.Create(title, content, noteType)
+// CreateNote 创建一条新笔记，归入指定笔记本
+func (a *App) CreateNote(title, content, noteType string, notebookID uint) (*models.Note, error) {
+	return a.noteService.CreateWithNotebook(title, content, noteType, notebookID)
 }
 
 // UpdateNote 更新指定笔记的标题和内容
@@ -100,9 +106,17 @@ func (a *App) GetNote(id uint) (*models.Note, error) {
 	return a.noteService.GetByID(id)
 }
 
-// GetNotes 分页获取未删除的笔记列表，支持指定排序方式（updated_at/created_at/title）
-func (a *App) GetNotes(page, pageSize int, sortBy string) (*services.PaginatedResult, error) {
-	notes, total, err := a.noteService.GetAll(page, pageSize, sortBy)
+// GetNotes 分页获取未删除的笔记列表，支持指定排序方式和笔记本筛选
+func (a *App) GetNotes(page, pageSize int, sortBy string, notebookID uint) (*services.PaginatedResult, error) {
+	var notes []models.Note
+	var total int64
+	var err error
+
+	if notebookID > 0 {
+		notes, total, err = a.noteService.GetAllByNotebook(page, pageSize, sortBy, notebookID)
+	} else {
+		notes, total, err = a.noteService.GetAll(page, pageSize, sortBy)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -119,9 +133,17 @@ func (a *App) GetAllNoteIDs() ([]uint, error) {
 	return a.noteService.GetAllIDs()
 }
 
-// SearchNotes 按关键词搜索笔记（标题/内容），支持分页
-func (a *App) SearchNotes(keyword string, page, pageSize int) (*services.PaginatedResult, error) {
-	notes, total, err := a.noteService.Search(keyword, page, pageSize)
+// SearchNotes 按关键词搜索笔记（标题/内容），支持分页和笔记本筛选
+func (a *App) SearchNotes(keyword string, page, pageSize int, notebookID uint) (*services.PaginatedResult, error) {
+	var notes []models.Note
+	var total int64
+	var err error
+
+	if notebookID > 0 {
+		notes, total, err = a.noteService.SearchByNotebook(keyword, page, pageSize, notebookID)
+	} else {
+		notes, total, err = a.noteService.Search(keyword, page, pageSize)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -369,6 +391,43 @@ func (a *App) AddTagToNote(noteID, tagID uint) error {
 // RemoveTagFromNote 为指定笔记移除标签
 func (a *App) RemoveTagFromNote(noteID, tagID uint) error {
 	return a.tagService.RemoveTagFromNote(noteID, tagID)
+}
+
+// ==================== Notebook 相关绑定方法 ====================
+
+// CreateNotebook 创建新笔记本
+func (a *App) CreateNotebook(name string) (*models.Notebook, error) {
+	return a.notebookService.Create(name)
+}
+
+// RenameNotebook 重命名笔记本
+func (a *App) RenameNotebook(id uint, name string) (*models.Notebook, error) {
+	return a.notebookService.Update(id, name)
+}
+
+// DeleteNotebook 删除笔记本，其下笔记自动迁入默认笔记本
+func (a *App) DeleteNotebook(id uint) error {
+	return a.notebookService.Delete(id)
+}
+
+// DeleteNotebookWithNotes 删除笔记本并永久删除其下所有笔记
+func (a *App) DeleteNotebookWithNotes(id uint) error {
+	return a.notebookService.DeleteWithNotes(id)
+}
+
+// GetAllNotebooks 获取所有未删除笔记本列表
+func (a *App) GetAllNotebooks() ([]models.Notebook, error) {
+	return a.notebookService.GetAll()
+}
+
+// GetNotebookNoteCounts 获取各笔记本下笔记数量
+func (a *App) GetNotebookNoteCounts() (map[uint]int, error) {
+	return a.notebookService.GetAllNotesCount(a.db)
+}
+
+// GetNoteIDsByNotebook 获取指定笔记本中所有未删除笔记的 ID 数组
+func (a *App) GetNoteIDsByNotebook(notebookID uint) ([]uint, error) {
+	return a.noteService.GetAllNoteIDsByNotebook(notebookID)
 }
 
 // ==================== Setting 相关绑定方法 ====================

@@ -98,12 +98,21 @@ func buildSortOrder(sortBy string) string {
 	}
 }
 
-// GetAll 分页获取未删除的笔记列表，按指定排序方式排列，返回列表与总数
+// GetAll 分页获取未删除的笔记列表（不过滤 notebook_id），按指定排序方式排列，返回列表与总数
 func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, int64, error) {
+	return s.GetAllByNotebook(page, pageSize, sortBy, 0)
+}
+
+// GetAllByNotebook 按 notebook_id 筛选分页获取未删除的笔记列表，支持指定排序方式并预加载标签
+// 当 notebookID 为 0 时，不过滤笔记本，返回所有未删除笔记
+func (s *NoteService) GetAllByNotebook(page, pageSize int, sortBy string, notebookID uint) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
 	query := s.db.Model(&models.Note{}).Where("deleted_at IS NULL")
+	if notebookID > 0 {
+		query = query.Where("notebook_id = ?", notebookID)
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -314,4 +323,66 @@ func (s *NoteService) ResetAll() error {
 // ExportBackup 使用 VACUUM INTO 创建数据库的压缩副本到指定路径
 func (s *NoteService) ExportBackup(destPath string) error {
 	return s.db.Exec("VACUUM INTO ?", destPath).Error
+}
+
+// GetAllNoteIDsByNotebook 获取指定笔记本中所有未删除笔记的 ID 数组
+func (s *NoteService) GetAllNoteIDsByNotebook(notebookID uint) ([]uint, error) {
+	var ids []uint
+	if err := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
+		Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// MigrateOrphanNotesToDefault 将 notebook_id=0 的存量笔记迁移到默认笔记本（id=1）
+func (s *NoteService) MigrateOrphanNotesToDefault() error {
+	return s.db.Model(&models.Note{}).Where("notebook_id = ?", 0).Update("notebook_id", 1).Error
+}
+
+// CreateWithNotebook 创建一条新笔记并指定所属笔记本，返回创建后的笔记对象
+func (s *NoteService) CreateWithNotebook(title, content, noteType string, notebookID uint) (*models.Note, error) {
+	note := models.Note{
+		Title:      title,
+		Content:    content,
+		NoteType:   noteType,
+		NotebookID: notebookID,
+	}
+	if err := s.db.Create(&note).Error; err != nil {
+		return nil, err
+	}
+	return &note, nil
+}
+
+// SearchByNotebook 在指定笔记本范围内按标题或内容关键词模糊搜索未删除的笔记，支持分页
+func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint) ([]models.Note, int64, error) {
+	var notes []models.Note
+	var total int64
+
+	likePattern := "%" + keyword + "%"
+	tagSubquery := s.db.Table("note_tags").
+		Select("note_id").
+		Joins("JOIN tags ON tags.id = note_tags.tag_id").
+		Where("tags.name LIKE ?", likePattern)
+
+	query := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
+		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
+			Or("id IN (?)", tagSubquery))
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("pinned DESC, updated_at DESC").
+		Preload("Tags").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&notes).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return notes, total, nil
 }

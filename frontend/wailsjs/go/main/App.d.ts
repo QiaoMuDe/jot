@@ -19,11 +19,17 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function ClearDraft():Promise<void>;
 
-export function CreateNote(arg1:string,arg2:string,arg3:string):Promise<models.Note>;
+export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Promise<models.Note>;
+
+export function CreateNotebook(arg1:string):Promise<models.Notebook>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
 export function DeleteNote(arg1:number):Promise<void>;
+
+export function DeleteNotebook(arg1:number):Promise<void>;
+
+export function DeleteNotebookWithNotes(arg1:number):Promise<void>;
 
 export function DeleteTag(arg1:number):Promise<void>;
 
@@ -35,6 +41,8 @@ export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
 export function GetAllNoteIDs():Promise<Array<number>>;
 
+export function GetAllNotebooks():Promise<Array<models.Notebook>>;
+
 export function GetAllTags():Promise<Array<models.Tag>>;
 
 export function GetBackupInfo():Promise<Record<string, string>>;
@@ -45,7 +53,11 @@ export function GetDraft():Promise<models.Draft>;
 
 export function GetNote(arg1:number):Promise<models.Note>;
 
-export function GetNotes(arg1:number,arg2:number,arg3:string):Promise<services.PaginatedResult>;
+export function GetNoteIDsByNotebook(arg1:number):Promise<Array<number>>;
+
+export function GetNotebookNoteCounts():Promise<Record<number, number>>;
+
+export function GetNotes(arg1:number,arg2:number,arg3:string,arg4:number):Promise<services.PaginatedResult>;
 
 export function GetNotesByTag(arg1:number,arg2:number,arg3:number,arg4:string):Promise<services.PaginatedResult>;
 
@@ -71,6 +83,8 @@ export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
 
+export function RenameNotebook(arg1:number,arg2:string):Promise<models.Notebook>;
+
 export function ResetDatabase():Promise<void>;
 
 export function RestoreAllNotes():Promise<void>;
@@ -81,7 +95,7 @@ export function RestoreNote(arg1:number):Promise<void>;
 
 export function SaveDraft(arg1:string,arg2:string):Promise<void>;
 
-export function SearchNotes(arg1:string,arg2:number,arg3:number):Promise<services.PaginatedResult>;
+export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number):Promise<services.PaginatedResult>;
 
 export function SetPageSize(arg1:number):Promise<void>;
 

@@ -8,8 +8,24 @@
 </head>
 <body>
 <div id="app">
-    <!-- 顶部导航栏 -->
-    <header id="topbar">
+    <!-- 主布局容器：侧栏 + 内容区 -->
+    <div id="mainLayout" class="main-layout">
+        <!-- 笔记本侧栏 -->
+        <aside id="notebookSidebar" class="notebook-sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-title">笔记本</span>
+                <button id="newNotebookBtn" class="sidebar-header-add-btn" title="新建笔记本">+</button>
+            </div>
+            <div class="sidebar-notebook-list" id="notebookList">
+                <!-- 笔记本列表由 JS 动态渲染 -->
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <div class="main-content-area">
+
+            <!-- 顶部导航栏 -->
+            <header id="topbar">
         <div class="topbar-brand">
             <span class="brand-name">Jot</span>
         </div>
@@ -22,14 +38,15 @@
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
-                    <div class="dropdown-item" data-action="home">全部笔记</div>
+                    <div class="dropdown-item" data-action="home" title="按 1 切换">笔记首页</div>
+                    <div class="dropdown-item" data-action="sidebar-toggle" title="按 2 切换">展开侧栏</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="data">数据管理</div>
-                    <div class="dropdown-item" data-action="trash">回收站</div>
+                    <div class="dropdown-item" data-action="data" title="按 3 切换">数据管理</div>
+                    <div class="dropdown-item" data-action="trash" title="按 4 切换">回收站</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="settings">设置</div>
+                    <div class="dropdown-item" data-action="settings" title="按 5 切换">设置</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="help">帮助</div>
+                    <div class="dropdown-item" data-action="help" title="按 6 打开">帮助</div>
                 </div>
             </div>
         </div>
@@ -359,6 +376,9 @@
         <button id="fabNewNote" class="fab fab-add" title="新建笔记">+</button>
     </div>
 
+        </div><!-- /.main-content-area -->
+    </div><!-- /#mainLayout -->
+
     <!-- 统一通知容器（右上角浮动） -->
     <div id="notificationContainer" class="notification-container"></div>
 
@@ -366,6 +386,12 @@
         <div id="confirmDialog" class="confirm-overlay">
             <div class="confirm-dialog">
                 <div class="confirm-message" id="confirmDialogMsg"></div>
+                <div class="confirm-option" id="confirmOptionArea" style="display:none;">
+                    <label class="confirm-checkbox-label">
+                        <input type="checkbox" id="confirmCheckbox">
+                        <span id="confirmCheckboxText"></span>
+                    </label>
+                </div>
                 <div class="confirm-actions">
                     <button class="confirm-btn confirm-cancel" id="confirmCancelBtn">取消</button>
                     <button class="confirm-btn confirm-ok" id="confirmOkBtn">确定</button>
