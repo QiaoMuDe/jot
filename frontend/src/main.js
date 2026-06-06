@@ -1230,6 +1230,14 @@ function initThemeSettings() {
             // 应用并保存
             applyTheme(theme);
             await saveThemeSetting(theme);
+            // 同步更新 Windows 窗口标题栏深色/浅色模式
+            try {
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.ApplyWindowTheme) {
+                    await window.go.main.App.ApplyWindowTheme(theme);
+                }
+            } catch (err) {
+                console.error('更新窗口主题失败:', err);
+            }
         });
     });
 }

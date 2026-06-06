@@ -717,7 +717,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **笔记本删除流程** | 自定义确认弹窗内嵌 checkbox「同时永久删除该笔记本中的 N 条笔记」。勾选 → `DeleteNotebookWithNotes()`（硬删除所有笔记 + 软删笔记本），不勾选 → `DeleteNotebook()`（笔记迁移到默认笔记本）。删除活跃笔记本后：`activeNotebookId=1` + `switchView('grid')` + `resetPagination()` 自动回到默认笔记本笔记首页 |
 | **笔记本切换** | `switchNotebook(id)` 设置 `activeNotebookId` → 清空搜索 → `switchView('grid')` 强制回到网格首页 → `resetPagination()` + `loadNotes()` + `renderNotebookList()`。切换笔记本总是回到该笔记本首页 |
 | **Notebook 后端模型** | `models/notebook.go` — ID/Name/CreatedAt/UpdatedAt/DeletedAt，GORM 软删除。`notebook_service.go` — 7 个公开方法 + 1 个私有 `isNameTaken()`。默认笔记本（ID=1）由 `EnsureDefaultNotebook()` 在启动时自动创建保护 |
-| **启动蓝屏修复** | 问题：Wails 窗口在 WebView 加载完成前显示 `BackgroundColour`（原硬编码 `RGB(27,38,54)` 深蓝色），页面实际背景为暖白 `#F7F5F0`，二者反差大导致启动时短暂"蓝屏"闪烁。修复：在 `app.go` 新增 `getThemeBackgroundColour()` 方法，`main.go` 中 `wails.Run()` 前从 DB 读取用户已保存的 `theme` 设置，动态计算对应的窗口预置背景色。各主题映射：default→`RGB(247,245,240)`、light→`RGB(250,250,250)`、nord→`RGB(236,239,244)`、monokai-pro→`RGB(45,42,46)`、tokyo-night→`RGB(26,27,38)`、dark→`RGB(13,13,13)`。浅色主题用浅色预置色，深色主题用深色预置色，颜色闪烁消除 |
+| **窗口主题与颜色同步** | **问题**：启动时 BackgroundColour 改为动态取色 (getThemeBackgroundColour)，但运行时切换主题后窗口标题栏颜色未同步更新。Wails runtime.WindowSetDarkTheme 因 Invoke() 异步投递，DwmSetWindowAttribute 延迟执行且无强制重绘，导致标题栏不刷新 |
+| | **修复**：1. 启动时通过 getWindowsOptions() 设置 CustomTheme 自定义标题栏色/文字色/边框色 2. 运行时 ApplyWindowTheme 在**当前 goroutine 同步**调用 DwmSetWindowAttribute 的 DWMWA_USE_IMMERSIVE_DARK_MODE(20) / CAPTION_COLOR(35) / TEXT_COLOR(36) / BORDER_COLOR(34) API 3. 发送 WM_NCACTIVATE(0x86) 强制标题栏重绘，解决 Win10 上 API 设置后不立即生效的问题 |
+| | **相关文件**：app.go (getThemeBackgroundColour, getWindowsOptions, ApplyWindowTheme, findMainWindow, setWindowAttribute), main.go (Windows 选项) |
 
 ---
 

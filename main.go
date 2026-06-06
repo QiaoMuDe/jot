@@ -24,6 +24,7 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: app.getThemeBackgroundColour(),
+		Windows:          app.getWindowsOptions(),
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
