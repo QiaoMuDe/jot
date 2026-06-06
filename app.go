@@ -17,6 +17,7 @@ import (
 
 	"gitee.com/MM-Q/go-kit/fs"
 	"gitee.com/MM-Q/verman"
+	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 )
@@ -59,6 +60,26 @@ func (a *App) startup(ctx context.Context) {
 	// 确保默认笔记本存在（首次启动自动创建）
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		fmt.Printf("初始化默认笔记本失败: %v\n", err)
+	}
+}
+
+// getThemeBackgroundColour 读取用户保存的主题设置，返回对应的窗口预置背景色
+// 在 WebView 加载完成前，窗口会先显示此颜色，避免启动时颜色闪烁
+func (a *App) getThemeBackgroundColour() *options.RGBA {
+	theme := a.settingService.Get("theme")
+	switch theme {
+	case "dark":
+		return &options.RGBA{R: 13, G: 13, B: 13, A: 1}
+	case "monokai-pro":
+		return &options.RGBA{R: 45, G: 42, B: 46, A: 1}
+	case "tokyo-night":
+		return &options.RGBA{R: 26, G: 27, B: 38, A: 1}
+	case "nord":
+		return &options.RGBA{R: 236, G: 239, B: 244, A: 1}
+	case "light":
+		return &options.RGBA{R: 250, G: 250, B: 250, A: 1}
+	default: // "default" 及未知主题均使用暖白背景
+		return &options.RGBA{R: 247, G: 245, B: 240, A: 1}
 	}
 }
 
