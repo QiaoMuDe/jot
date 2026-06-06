@@ -603,6 +603,13 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
 - ✅ **草稿自动保存与恢复**：新建 `drafts` 表（仅 1 行 ID=1，存 title/content），后端 `DraftService`（SaveDraft upsert / GetDraft / ClearDraft）+ app.go 绑定 3 个方法。前端 `startAutoSave()` 扩展：有 ID → `UpdateNote`（编辑已有笔记），无 ID → `SaveDraft`（新建笔记草稿），3s 防抖，标题内容均空不保存。`loadNotes()` 完成后延迟 1s 检测草稿（编辑器打开时跳过），有则弹窗「发现未保存的草稿，是否恢复？」恢复→填入编辑器、放弃→清除。清除时机：保存成功（`createNote`）、取消按钮（明确放弃）、恢复弹窗恢复/放弃。叉号/点击蒙层/ESC 不清除（保留供下次恢复）。快速笔记启用启动时 `loadQuickNoteSetting()` 自动查草稿并填入编辑器。底部栏 autoSaveIndicator 提示文字 2s 后清空（`textContent=''`），布局自动恢复
 - ✅ **设置页首次打开白屏修复**：根因为 `updateFontSettingsUI()` 调用 `renderFontFamilyOptions()` 在首次显示时创建 200+ 带 `style="font-family:..."` 的字体选项 DOM 节点，浏览器首次布局计算耗时 1-2 秒。修复：`updateFontSettingsUI()` 移除 `renderFontFamilyOptions()` 调用，改为仅在用户点击下拉触发器时渲染（已有点击处理逻辑），设置页首次打开不再含大量字体节点参与布局，白屏消除
+- ✅ **笔记类型功能**：Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种类型。新建笔记默认选中「纯文本」（text）。纯文本模式底部隐藏「编辑/预览」切换按钮（`#editorModes`），仅显示纯文本编辑区。查看模式：`note_type="text"` 或 `""` 时内容以 `<pre>` 原始格式显示跳过 marked 解析；`note_type="markdown"` 走现有渲染流程。创建/更新笔记时 `note_type` 字段随请求写入，旧笔记 `note_type=""` 默认按 text 处理
+- ✅ **笔记类型切换器位置重构**：类型切换器从 footer 底部（与模式切换器冲突）移到 header 标题行右侧紧凑胶囊（`.editor-title-row`），再重构为 header 工具栏中的 32×32 T/M 图标按钮（`#editorTypeToggle`），与全屏/关闭按钮同尺寸同风格。查看只读模式隐藏
+- ✅ **置顶按钮重新设计**：从旧 `.card-pin-badge` 左侧指示器 + hover 显示按钮改为始终可见的圆形图标按钮（`border-radius: 50%`）。分 4 级透明度：默认 20% → 卡片 hover 50% → 按钮自身 hover 100% + 放大 1.15x → 已置顶 100% + `accent-lighter` 背景 + 阴影。star 使用字体加粗区分状态
+- ✅ **置顶操作局部更新**：`togglePin()` 切换后不再 `await loadNotes()` 全量重载，改为本地更新 `state.notes` + `renderCardGrid('none')`，省掉后端请求和整页入场动画
+- ✅ **批量模式 pin 按钮可见**：批量模式下 pin 按钮不再 `display: none`，与 checkbox 并存显示；添加 `.disabled` class（`pointer-events: none`），退出批量模式恢复交互
+- ✅ **批量置顶/取消置顶**：后端 `note_service.go` 新增 `BatchPinNotes(ids []uint, pin bool)` + `app.go` 绑定。批量操作栏新增 `#batchPinBtn` 按钮；`updateBatchBar()` 根据选中笔记状态动态切换文字（全部已置顶→"取消置顶"，否则→"置顶"）；`batchPinSelected()` 调用后端 + 本地同步 + 通知提示
+- ✅ **Seed 工具 note_type**：`tools/seed/main.go` 24 条模拟笔记 50/50 分配 text/markdown 类型（含 Checklist/纯列表的为 text，含 headings/代码块/表格的为 markdown）
 
 ---
 
@@ -614,7 +621,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 38 个（14 个 Note 相关 + 6 个 Tag 相关 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 1 个 GetAllNoteIDs + 3 个 Draft 草稿）|
+| **绑定方法数** | 39 个（14 个 Note 相关 + 6 个 Tag 相关 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 1 个 GetAllNoteIDs + 3 个 Draft 草稿）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
 | **前端代码量** | ~2900 行 JS + ~2350 行 CSS + ~320 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
@@ -688,6 +695,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **右键导出 Markdown** | 右键菜单「导出」→ `ExportNoteAsMarkdown(id)` → 标题特殊符号/空白→下划线（`\ / : * ? " < > \|`）→ `runtime.SaveFileDialog` 默认文件名 `标题.md` → `os.WriteFile` 写入 `# 标题\n\n内容`，成功/失败通知 |
 | **批量标签操作** | 批量工具栏 +标签/-标签 按钮。点击打开 `.batch-tag-overlay`（毛玻璃 + 居中弹入动画）。添加/移除模式统一流程：全部标签以 `.batch-tag-chip` 展示（彩色圆点，移除模式不可移除标签加 `.disabled` 灰色禁用）→ 点击切换 `.selected` 态（双环高亮边框）→ 底部确认按钮显示已选数量 → 执行后 `loadNotes()` 刷新但**不退出批量模式、不清空选择**。移除模式空态：选中笔记无任何标签时通知提示，不弹窗。后端 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes` 遍历笔记 IDs 逐个操作 |
 | **草稿自动保存与恢复** | 新建 `drafts` 表（ID 固定 1，字段 ID/Title/Content/CreatedAt/UpdatedAt），`DraftService` 提供 SaveDraft(upsert)/GetDraft(nil, nil)/ClearDraft。app.go 绑定 SaveDraft/GetDraft/ClearDraft 三个方法。前端 `startAutoSave()` 分支：有 editingNoteId → UpdateNote（编辑），无 → SaveDraft（新建草稿），3s 防抖，空内容不保存。`loadNotes()` 完成后延迟 1s GetDraft 检测（编辑器打开时跳过），有则 showConfirmDialog 弹窗恢复/放弃。清除时机：createNote 成功、取消按钮（明确放弃）、恢复弹窗恢复/放弃；叉号/蒙层/ESC 不清除（保留下次恢复）。快速笔记启用启动时 `loadQuickNoteSetting()` 自动查草稿填入编辑器。autoSaveIndicator 提示文字 2s 后 textContent 清空恢复布局 |
+| **笔记类型（NoteType）** | Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种。新建笔记默认 `"text"`。类型切换器为 header 工具栏 T/M 图标按钮（`#editorTypeToggle`，32×32，与全屏按钮同风格），查看只读模式隐藏。纯文本模式隐藏底部「编辑/预览」切换按钮（`#editorModes`），查看模式 text/`<pre>` 原始显示跳过 marked，markdown 走现有渲染。旧笔记 `note_type=""` 默认按 text 处理。创建/更新由前端传入 `noteType` 参数 |
+| **置顶按钮** | 圆形图标按钮（`border-radius: 50%`），始终可见，分 4 级透明度：默认 20% → 卡片 hover 50% → 按钮 hover 100% + 放大 1.15x → 已置顶 100% + accent-lighter 背景 + 阴影。置顶操作 `togglePin()` 局部 `renderCardGrid('none')` 不再重载全部笔记 |
+| **批量置顶** | 后端 `BatchPinNotes(ids, pin)` + 前端 `#batchPinBtn`。按钮文字动态：全部已置顶→「取消置顶」，否则→「置顶」。批量模式下 pin 按钮可见但 `pointer-events: none` 禁止交互 |
 
 ---
 

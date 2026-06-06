@@ -454,40 +454,66 @@
 
 .card-actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  display: none;
+  top: 6px;
+  right: 6px;
+  display: flex;
   gap: 4px;
+  z-index: 2;
 }
 
-.note-card:hover .card-actions {
-  display: flex;
-}
-
-.note-card.batch-mode .card-actions {
-  display: flex;
-}
+/* 批量模式下也保持显示（由 .card-actions display:flex 保证） */
 
 .card-action-btn {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--card-bg);
-  color: var(--text-secondary);
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 0.813rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: var(--transition);
+  transition: all 0.2s ease;
   font-family: inherit;
 }
 
 .card-action-btn:hover {
   background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* 置顶按钮：未置顶时弱化显示，hover 时显现 */
+.pin-btn {
+  opacity: 0.2;
+}
+
+.note-card:hover .pin-btn {
+  opacity: 0.5;
+  font-weight: 700;
+}
+
+.pin-btn:hover {
+  opacity: 1 !important;
   color: var(--accent);
-  border-color: var(--accent-light);
+  transform: scale(1.15);
+  background: var(--hover-bg);
+  font-weight: 700;
+}
+
+/* 置顶状态：高亮显示 */
+.note-card.pinned .pin-btn {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-lighter);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  font-weight: 700;
+}
+
+.note-card.pinned .pin-btn:hover {
+  background: var(--accent-light);
+  transform: scale(1.15);
 }
 
 /* 置顶按钮旋转动画 */
@@ -495,14 +521,9 @@
   animation: rotateIn 0.3s ease-out forwards;
 }
 
-.card-pin-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  font-size: 0.688rem;
-  color: var(--accent);
-  opacity: 0.7;
-  font-weight: 500;
+/* 批量模式下禁止交互 */
+.pin-btn.disabled {
+  cursor: default;
   pointer-events: none;
 }
 
@@ -620,10 +641,6 @@
 
 .note-card.batch-mode .batch-checkbox {
   display: block;
-}
-
-.note-card.batch-mode .card-action-btn {
-  display: none !important;
 }
 
 /* ==========================================================================
@@ -1071,6 +1088,14 @@
   background: var(--card-bg);
   color: var(--accent);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 笔记类型切换器（工具栏图标按钮，位于 header 全屏按钮左侧） */
+.editor-type-toggle {
+  font-size: 0.813rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
 }
 
 .editor-edit-time {

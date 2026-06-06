@@ -76,13 +76,13 @@ func (a *App) ClearDraft() error {
 // ==================== Note 相关绑定方法 ====================
 
 // CreateNote 创建一条新笔记
-func (a *App) CreateNote(title, content string) (*models.Note, error) {
-	return a.noteService.Create(title, content)
+func (a *App) CreateNote(title, content, noteType string) (*models.Note, error) {
+	return a.noteService.Create(title, content, noteType)
 }
 
 // UpdateNote 更新指定笔记的标题和内容
-func (a *App) UpdateNote(id uint, title, content string) (*models.Note, error) {
-	return a.noteService.Update(id, title, content)
+func (a *App) UpdateNote(id uint, title, content, noteType string) (*models.Note, error) {
+	return a.noteService.Update(id, title, content, noteType)
 }
 
 // DeleteNote 软删除指定笔记（移入回收站）
@@ -155,6 +155,11 @@ func (a *App) GetTrashNotes(page, pageSize int) (*services.PaginatedResult, erro
 // RestoreNote 从回收站恢复指定笔记
 func (a *App) RestoreNote(id uint) error {
 	return a.noteService.Restore(id)
+}
+
+// BatchPinNotes 批量置顶或取消置顶笔记
+func (a *App) BatchPinNotes(noteIDs []uint, pin bool) error {
+	return a.noteService.BatchPinNotes(noteIDs, pin)
 }
 
 // BatchDeleteNotes 批量软删除笔记

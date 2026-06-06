@@ -18,10 +18,11 @@ func NewNoteService(db *gorm.DB) *NoteService {
 }
 
 // Create 创建一条新笔记，返回创建后的笔记对象
-func (s *NoteService) Create(title, content string) (*models.Note, error) {
+func (s *NoteService) Create(title, content, noteType string) (*models.Note, error) {
 	note := models.Note{
-		Title:   title,
-		Content: content,
+		Title:    title,
+		Content:  content,
+		NoteType: noteType,
 	}
 	if err := s.db.Create(&note).Error; err != nil {
 		return nil, err
@@ -30,7 +31,7 @@ func (s *NoteService) Create(title, content string) (*models.Note, error) {
 }
 
 // Update 更新指定 ID 的笔记的标题和内容，返回更新后的笔记对象
-func (s *NoteService) Update(id uint, title, content string) (*models.Note, error) {
+func (s *NoteService) Update(id uint, title, content, noteType string) (*models.Note, error) {
 	note, err := s.GetByID(id)
 	if err != nil {
 		return nil, err
@@ -41,6 +42,7 @@ func (s *NoteService) Update(id uint, title, content string) (*models.Note, erro
 	if content != "" {
 		note.Content = content
 	}
+	note.NoteType = noteType
 	if err := s.db.Save(note).Error; err != nil {
 		return nil, err
 	}
@@ -214,6 +216,12 @@ func (s *NoteService) EmptyTrash() error {
 		return result.Error
 	}
 	return nil
+}
+
+// BatchPinNotes 批量置顶或取消置顶指定 ID 数组的笔记
+func (s *NoteService) BatchPinNotes(ids []uint, pin bool) error {
+	result := s.db.Model(&models.Note{}).Where("id IN ?", ids).UpdateColumn("pinned", pin)
+	return result.Error
 }
 
 // BatchDelete 批量软删除指定 ID 数组的笔记（移入回收站）

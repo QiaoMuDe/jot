@@ -11,13 +11,15 @@ export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>
 
 export function BatchDeleteNotes(arg1:Array<number>):Promise<void>;
 
+export function BatchPinNotes(arg1:Array<number>,arg2:boolean):Promise<void>;
+
 export function BatchRemoveTagFromNotes(arg1:Array<number>,arg2:number):Promise<void>;
 
 export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function ClearDraft():Promise<void>;
 
-export function CreateNote(arg1:string,arg2:string):Promise<models.Note>;
+export function CreateNote(arg1:string,arg2:string,arg3:string):Promise<models.Note>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
@@ -89,6 +91,6 @@ export function SetSortOrder(arg1:string):Promise<void>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 
-export function UpdateNote(arg1:number,arg2:string,arg3:string):Promise<models.Note>;
+export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Promise<models.Note>;
 
 export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Tag>;

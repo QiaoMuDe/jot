@@ -200,6 +200,8 @@ const els = {
     editorSaveBtn: $('editorSaveBtn'),
     mdRendered: $('mdRendered'),
     editorModeBtns: document.querySelectorAll('.mode-btn'),
+    editorModes: $('editorModes'),
+    editorTypeToggle: $('editorTypeToggle'),
 
     // 设置
     tagList: $('tagList'),
@@ -279,6 +281,7 @@ const els = {
     batchSelectAllBtn: $('batchSelectAllBtn'),
     batchAddTagBtn: $('batchAddTagBtn'),
     batchRemoveTagBtn: $('batchRemoveTagBtn'),
+    batchPinBtn: $('batchPinBtn'),
     batchTagOverlay: $('batchTagOverlay'),
     batchTagTitle: $('batchTagTitle'),
     batchTagList: $('batchTagList'),
@@ -710,7 +713,7 @@ async function createNote() {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
-            const note = await window.go.main.App.CreateNote(title, content);
+            const note = await window.go.main.App.CreateNote(title, content, state.noteType);
             // 为笔记添加标签
             if (note && note.id && state.selectedTags.length > 0) {
                 for (const tagId of state.selectedTags) {
@@ -727,6 +730,7 @@ async function createNote() {
                 id: Date.now(),
                 title: title,
                 content: content,
+                note_type: state.noteType,
                 pinned: false,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -752,7 +756,7 @@ async function updateNote(id) {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
-            await window.go.main.App.UpdateNote(id, title, content);
+            await window.go.main.App.UpdateNote(id, title, content, state.noteType);
             // 更新笔记标签：先移除所有，再添加选中的
             const note = await window.go.main.App.GetNote(id);
             if (note && note.tags) {
@@ -769,6 +773,7 @@ async function updateNote(id) {
             if (note) {
                 note.title = title;
                 note.content = content;
+                note.note_type = state.noteType;
                 note.updated_at = new Date().toISOString();
                 note.tags = state.tags.filter((t) => state.selectedTags.includes(t.id));
             }
@@ -915,6 +920,7 @@ async function searchNotes(keyword, source) {
 
 /**
  * 置顶切换
+ * 本地更新置顶状态后局部渲染网格，避免全量重新加载
  */
 async function togglePin(id) {
     try {
@@ -922,13 +928,17 @@ async function togglePin(id) {
             await window.go.main.App.TogglePinNote(id);
         } else {
             console.warn('TogglePinNote 未绑定，模拟置顶切换');
-            const note = state.notes.find((n) => n.id === id);
-            if (note) note.pinned = !note.pinned;
+        }
+        // 本地切换置顶状态，避免重新加载全部笔记
+        const note = state.notes.find((n) => n.id === id);
+        if (note) {
+            note.pinned = !note.pinned;
         }
     } catch (err) {
         console.error('置顶切换失败:', err);
     }
-    await loadNotes();
+    // 仅重新渲染卡片网格（无动画），不重新请求后端
+    await renderCardGrid('none');
 }
 
 /**
@@ -1927,8 +1937,7 @@ function renderCardGrid(animateMode, prevCount) {
     els.cardGrid.innerHTML = sorted
         .map(
             (note) => `
-        <div class="note-card${state.batchMode ? ' batch-mode' : ''}${state.selectedNoteIds.has(note.id) ? ' selected' : ''}" onclick="${state.batchMode ? `window.toggleNoteSelection(${note.id})` : `window.viewNote(${note.id})`}" oncontextmenu="${state.batchMode ? 'event.preventDefault()' : `event.preventDefault(); window.showContextMenu(event, ${note.id})`}">
-            ${note.pinned ? '<div class="card-pin-badge">★</div>' : ''}
+        <div class="note-card${note.pinned ? ' pinned' : ''}${state.batchMode ? ' batch-mode' : ''}${state.selectedNoteIds.has(note.id) ? ' selected' : ''}" onclick="${state.batchMode ? `window.toggleNoteSelection(${note.id})` : `window.viewNote(${note.id})`}" oncontextmenu="${state.batchMode ? 'event.preventDefault()' : `event.preventDefault(); window.showContextMenu(event, ${note.id})`}">
             <div class="card-body">
                 <div class="card-title">${escapeHtml(note.title || '无标题')}</div>
                 <div class="card-content">${escapeHtml(getSummary(note.content, 200))}</div>
@@ -1947,10 +1956,11 @@ function renderCardGrid(animateMode, prevCount) {
             <div class="card-actions" onclick="event.stopPropagation()">
                 ${state.batchMode
                     ? `<input type="checkbox" class="batch-checkbox" ${state.selectedNoteIds.has(note.id) ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleNoteSelection(${note.id})">`
-                    : `<button class="card-action-btn pin-btn" onclick="event.stopPropagation(); window.handlePinClick(event, ${note.id})" title="${note.pinned ? '取消置顶' : '置顶'}">
-                           ${note.pinned ? '★' : '☆'}
-                       </button>`
+                    : ''
                 }
+                <button class="card-action-btn pin-btn${state.batchMode ? ' disabled' : ''}" onclick="event.stopPropagation()${state.batchMode ? '' : `; window.handlePinClick(event, ${note.id})`}" title="${note.pinned ? '已置顶' : (state.batchMode ? '批量模式下不可操作' : '置顶')}">
+                    ${note.pinned ? '★' : '☆'}
+                </button>
             </div>
         </div>
         `
@@ -2173,7 +2183,7 @@ function startAutoSave() {
                 if (state.editingNoteId) {
                     // 编辑已有笔记：更新到 notes 表
                     if (!title) return;
-                    await window.go.main.App.UpdateNote(state.editingNoteId, title, content || '');
+                    await window.go.main.App.UpdateNote(state.editingNoteId, title, content || '', state.noteType);
                 } else {
                     // 新建笔记：保存草稿到 drafts 表
                     await window.go.main.App.SaveDraft(title, content);
@@ -2240,21 +2250,42 @@ async function openEditor(noteId, readOnly) {
     els.editorSaveBtn.style.display = isReadOnly ? 'none' : '';
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
+    // 只读模式隐藏笔记类型切换按钮，编辑/新建模式显示
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.style.display = isReadOnly ? 'none' : '';
+    }
 
-    // 查看模式：显示最近编辑时间 + Markdown 渲染，模式切换到预览
+    // 设置笔记类型
+    state.noteType = (noteData && noteData.note_type) || 'text';
+    // 更新类型切换按钮文字和 tooltip
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.textContent = state.noteType === 'text' ? 'T' : 'M';
+        els.editorTypeToggle.title = state.noteType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
+    }
+    // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
+    els.editorModes.style.display = state.noteType === 'markdown' ? '' : 'none';
+
+    // 查看模式：显示最近编辑时间 + 按类型选择渲染方式
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
-        switchEditorMode('preview');
-        // Markdown 内容淡入
-        els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
-        // 代码块逐个淡入
-        requestAnimationFrame(() => {
-            const codeBlocks = els.mdRendered.querySelectorAll('pre');
-            codeBlocks.forEach((block, index) => {
-                block.style.animation = `animFadeIn 0.2s ease-out forwards`;
-                block.style.animationDelay = `${index * 50}ms`;
+        if (state.noteType === 'text') {
+            // 纯文本：显示原始文本，跳过 Markdown 渲染
+            els.editorNoteContent.style.display = '';
+            els.mdRendered.style.display = 'none';
+            els.editorNoteContent.readOnly = true;
+            els.editorNoteContent.classList.add('editor-textarea-readonly');
+        } else {
+            // Markdown：正常渲染
+            switchEditorMode('preview');
+            els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
+            requestAnimationFrame(() => {
+                const codeBlocks = els.mdRendered.querySelectorAll('pre');
+                codeBlocks.forEach((block, index) => {
+                    block.style.animation = `animFadeIn 0.2s ease-out forwards`;
+                    block.style.animationDelay = `${index * 50}ms`;
+                });
             });
-        });
+        }
     } else {
         els.editorEditTime.textContent = '';
         // 编辑模式切换到纯文本
@@ -2715,6 +2746,14 @@ function updateBatchBar() {
             els.batchSelectAllBtn.textContent = '全选';
         }
     }
+    // 更新批量置顶按钮文字
+    if (els.batchPinBtn && count > 0) {
+        const allPinned = Array.from(state.selectedNoteIds).every(id => {
+            const note = state.notes.find(n => n.id === id);
+            return note && note.pinned;
+        });
+        els.batchPinBtn.textContent = allPinned ? '取消置顶' : '置顶';
+    }
 }
 
 /**
@@ -2748,6 +2787,40 @@ async function batchDeleteSelected() {
     clearSelection();
     await loadNotes();
     nm.showUndo(`已删除 ${ids.length} 条笔记`, () => undoDelete(ids));
+}
+
+/**
+ * 批量置顶/取消置顶选中的笔记
+ * 判断策略：如果至少有一条未置顶则全部置顶，否则全部取消置顶
+ */
+async function batchPinSelected() {
+    const ids = Array.from(state.selectedNoteIds);
+    if (ids.length === 0) return;
+
+    // 判断当前选中笔记中是否有未置顶的
+    const anyUnpinned = state.notes.some(n => ids.includes(n.id) && !n.pinned);
+    const pin = anyUnpinned; // 有未置顶 → 全部置顶；全部已置顶 → 取消置顶
+
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchPinNotes) {
+            await window.go.main.App.BatchPinNotes(ids, pin);
+        } else {
+            console.warn('BatchPinNotes 未绑定，模拟批量置顶切换');
+            state.notes.forEach(n => {
+                if (ids.includes(n.id)) n.pinned = pin;
+            });
+        }
+        // 本地同步更新 state.notes 中的 pinned 状态
+        state.notes.forEach(n => {
+            if (ids.includes(n.id)) n.pinned = pin;
+        });
+    } catch (err) {
+        console.error('批量置顶/取消置顶失败:', err);
+        return;
+    }
+    clearSelection();
+    renderCardGrid('none');
+    nm.showUndo(`已${pin ? '置顶' : '取消置顶'} ${ids.length} 条笔记`);
 }
 
 /* ===== 批量标签操作 ===== */
@@ -2919,6 +2992,9 @@ function closeMoreMenu(menu) {
 /* ===== 事件绑定 ===== */
 
 function initEventListeners() {
+    // 全局禁用浏览器默认右键菜单（应用已有自定义右键菜单）
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
     // 搜索
     // 搜索框回车：非空立即搜索，空内容时刷新笔记
     els.searchInput.addEventListener('keydown', (e) => {
@@ -3039,6 +3115,21 @@ function initEventListeners() {
         btn.addEventListener('click', () => switchEditorMode(btn.dataset.mode));
     });
 
+    // 笔记类型切换（纯文本/Markdown）— 单按钮 T/M 切换
+    els.editorTypeToggle.addEventListener('click', () => {
+        const newType = state.noteType === 'text' ? 'markdown' : 'text';
+        state.noteType = newType;
+        // 更新按钮文字和 tooltip
+        els.editorTypeToggle.textContent = newType === 'text' ? 'T' : 'M';
+        els.editorTypeToggle.title = newType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
+        // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
+        els.editorModes.style.display = newType === 'markdown' ? '' : 'none';
+        // 切到纯文本时自动切回编辑模式
+        if (newType === 'text') {
+            switchEditorMode('edit');
+        }
+    });
+
     // 标签管理
     els.addTagBtn.addEventListener('click', createTag);
     els.newTagName.addEventListener('keydown', (e) => {
@@ -3104,6 +3195,9 @@ function initEventListeners() {
         if (state.batchMode) toggleBatchMode();
     });
     els.batchSelectAllBtn.addEventListener('click', toggleSelectAll);
+
+    // 批量置顶
+    els.batchPinBtn.addEventListener('click', batchPinSelected);
 
     // 批量标签操作
     els.batchAddTagBtn.addEventListener('click', () => openBatchTagPicker('add'));
