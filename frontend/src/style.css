@@ -2824,6 +2824,8 @@
 
 .shortcuts-body {
   padding: 16px 24px 24px;
+  max-height: 50vh;
+  overflow-y: auto;
 }
 
 .shortcut-row {

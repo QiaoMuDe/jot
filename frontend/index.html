@@ -39,25 +39,24 @@
             <input type="text" id="searchInput" class="topbar-search-input" placeholder="搜索笔记..." />
         </div>
         <div class="topbar-actions">
-            <button id="newNoteBtn" class="topbar-btn" title="新建笔记">+</button>
-            <button id="batchModeBtn" class="topbar-btn" title="批量选择">✓</button>
+            <button class="topbar-btn window-minimize" id="windowMinimizeBtn" title="最小化">─</button>
+            <button class="topbar-btn window-maximize" id="windowMaximizeBtn" title="最大化">□</button>
+            <button class="topbar-btn window-close" id="windowCloseBtn" title="关闭">✕</button>
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
                     <div class="dropdown-item" data-action="home" title="按 1 切换">笔记首页</div>
                     <div class="dropdown-item" data-action="sidebar-toggle" title="按 2 切换">展开侧栏</div>
+                    <div class="dropdown-item" data-action="batch-mode" title="按 3 切换">批量管理</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="data" title="按 3 切换">数据管理</div>
-                    <div class="dropdown-item" data-action="trash" title="按 4 切换">回收站</div>
+                    <div class="dropdown-item" data-action="data" title="按 4 切换">数据管理</div>
+                    <div class="dropdown-item" data-action="trash" title="按 5 切换">回收站</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="settings" title="按 5 切换">设置</div>
+                    <div class="dropdown-item" data-action="settings" title="按 6 切换">设置</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="help" title="按 6 打开">帮助</div>
+                    <div class="dropdown-item" data-action="help" title="按 7 打开">帮助</div>
                 </div>
             </div>
-            <button class="topbar-btn window-minimize" id="windowMinimizeBtn" title="最小化">─</button>
-            <button class="topbar-btn window-maximize" id="windowMaximizeBtn" title="最大化">□</button>
-            <button class="topbar-btn window-close" id="windowCloseBtn" title="关闭">✕</button>
         </div>
     </header>
 

@@ -170,7 +170,6 @@ const $ = (id) => document.getElementById(id);
 const els = {
     // 侧边栏
     searchInput: $('searchInput'),
-    newNoteBtn: $('newNoteBtn'),
     // 更多菜单
     moreMenuBtn: $('moreMenuBtn'),
     moreMenu: $('moreMenu'),
@@ -277,7 +276,6 @@ const els = {
     mainContent: $('mainContent'),
 
     // 批量操作
-    batchModeBtn: $('batchModeBtn'),
     batchBar: $('batchBar'),
     batchCount: $('batchCount'),
     batchDeleteBtn: $('batchDeleteBtn'),
@@ -425,27 +423,6 @@ function switchView(view) {
 
     state.currentView = view;
 
-    // 新建按钮和批量管理按钮仅在笔记网格视图显示（含淡入淡出过渡）
-    if (view === 'grid') {
-        els.newNoteBtn.style.display = 'flex';
-        els.batchModeBtn.style.display = '';
-        // Use rAF to ensure display takes effect before opacity transition
-        requestAnimationFrame(() => {
-            els.newNoteBtn.style.opacity = '1';
-            els.newNoteBtn.style.pointerEvents = 'auto';
-            els.batchModeBtn.style.opacity = '1';
-            els.batchModeBtn.style.pointerEvents = 'auto';
-        });
-    } else {
-        els.newNoteBtn.style.opacity = '0';
-        els.newNoteBtn.style.pointerEvents = 'none';
-        els.batchModeBtn.style.opacity = '0';
-        els.batchModeBtn.style.pointerEvents = 'none';
-        setTimeout(() => {
-            els.newNoteBtn.style.display = 'none';
-            els.batchModeBtn.style.display = 'none';
-        }, 150);
-    }
     // 悬浮操作按钮仅在网格视图显示
     els.fabGroup.style.display = view === 'grid' ? '' : 'none';
 
@@ -2683,7 +2660,6 @@ window.searchByTag = function (tagName) {
  */
 function toggleBatchMode() {
     state.batchMode = !state.batchMode;
-    els.batchModeBtn.classList.toggle('active', state.batchMode);
     const bar = els.batchBar;
 
     if (state.batchMode) {
@@ -3175,11 +3151,6 @@ function initEventListeners() {
         switchView('grid');
     });
 
-    // 新建笔记
-    els.newNoteBtn.addEventListener('click', () => {
-        openEditor(null);
-    });
-
     // 浮动新建按钮
     els.fabNewNote.addEventListener('click', () => {
         openEditor(null);
@@ -3215,6 +3186,9 @@ function initEventListeners() {
             } else if (item.dataset.action === 'sidebar-toggle') {
                 toggleSidebar();
                 updateSidebarMenuItem();
+            } else if (item.dataset.action === 'batch-mode') {
+                switchView('grid');
+                toggleBatchMode();
             } else if (item.dataset.action === 'settings') {
                 switchView('settings');
             } else if (item.dataset.action === 'data') {
@@ -3336,7 +3310,6 @@ function initEventListeners() {
     els.contextMenu.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // 批量管理模式
-    els.batchModeBtn.addEventListener('click', toggleBatchMode);
     els.batchDeleteBtn.addEventListener('click', batchDeleteSelected);
     els.batchCancelBtn.addEventListener('click', () => {
         if (state.batchMode) toggleBatchMode();
@@ -3579,17 +3552,22 @@ function handleKeyboardNavigation(e) {
                 return;
             case '3':
                 e.preventDefault();
-                switchView('data');
+                switchView('grid');
+                toggleBatchMode();
                 return;
             case '4':
                 e.preventDefault();
-                switchView('trash');
+                switchView('data');
                 return;
             case '5':
                 e.preventDefault();
-                switchView('settings');
+                switchView('trash');
                 return;
             case '6':
+                e.preventDefault();
+                switchView('settings');
+                return;
+            case '7':
                 e.preventDefault();
                 openShortcuts();
                 return;
@@ -3804,7 +3782,13 @@ function renderShortcutsPage() {
         { key: 'Ctrl + Home', desc: '回到顶部' },
         { key: 'Ctrl + End', desc: '加载全部并滚到底部' },
         { key: 'Escape', desc: '关闭弹窗 / 返回上一页' },
-        { key: '1 2 3 4 5 6', desc: '快速切换视图 / 切换侧栏' },
+        { key: '1', desc: '笔记首页' },
+        { key: '2', desc: '展开侧栏' },
+        { key: '3', desc: '批量管理' },
+        { key: '4', desc: '数据管理' },
+        { key: '5', desc: '回收站' },
+        { key: '6', desc: '设置' },
+        { key: '7', desc: '快捷键说明' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
