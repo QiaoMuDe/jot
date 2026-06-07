@@ -2,7 +2,73 @@
 /* 设计系统变量在 app.css :root 中定义 */
 
 /* ==========================================================================
-   Section A: Topbar
+   Section A: Window Titlebar (Frameless Mode)
+   ========================================================================== */
+
+.window-titlebar {
+  height: 32px;
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  z-index: 101;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
+}
+
+.window-titlebar-drag {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 12px;
+  --wails-draggable: drag;
+  cursor: default;
+}
+
+.window-titlebar-brand {
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.window-titlebar-controls {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  --wails-draggable: no-drag;
+}
+
+.window-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out;
+  --wails-draggable: no-drag;
+}
+
+.window-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.window-btn.window-close:hover {
+  background: #E81123;
+  color: #FFFFFF;
+}
+
+/* ==========================================================================
+   Section B: Topbar
    ========================================================================== */
 
 #topbar {

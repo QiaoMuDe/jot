@@ -1,5 +1,6 @@
 import './style.css';
 import './app.css';
+import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn } from '../wailsjs/runtime/runtime.js';
 import { marked } from 'marked';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -1230,14 +1231,7 @@ function initThemeSettings() {
             // 应用并保存
             applyTheme(theme);
             await saveThemeSetting(theme);
-            // 同步更新 Windows 窗口标题栏深色/浅色模式
-            try {
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.ApplyWindowTheme) {
-                    await window.go.main.App.ApplyWindowTheme(theme);
-                }
-            } catch (err) {
-                console.error('更新窗口主题失败:', err);
-            }
+
         });
     });
 }
@@ -4283,6 +4277,67 @@ async function init() {
     }
     await loadNotes();
     await loadTags();
+    // 初始化无边框窗口控制
+    initWindowControls();
+}
+
+/**
+ * 初始化无边框窗口控制按钮事件
+ */
+function initWindowControls() {
+    const minimizeBtn = document.getElementById('windowMinimizeBtn');
+    const maximizeBtn = document.getElementById('windowMaximizeBtn');
+    const closeBtn = document.getElementById('windowCloseBtn');
+
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', () => WindowMinimise());
+    }
+
+    if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', async () => {
+            await WindowToggleMaximise();
+            updateMaximizeButtonIcon(maximizeBtn);
+        });
+        // 双击标题栏拖拽区域最大化/还原
+        const dragArea = document.querySelector('.window-titlebar-drag');
+        if (dragArea) {
+            dragArea.addEventListener('dblclick', async () => {
+                await WindowToggleMaximise();
+                updateMaximizeButtonIcon(maximizeBtn);
+            });
+        }
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => Quit());
+    }
+
+    // 监听窗口最大化状态变化事件
+    EventsOn('wails:window:maximise', () => {
+        if (maximizeBtn) updateMaximizeButtonIcon(maximizeBtn, true);
+    });
+    EventsOn('wails:window:unmaximise', () => {
+        if (maximizeBtn) updateMaximizeButtonIcon(maximizeBtn, false);
+    });
+}
+
+/**
+ * 更新最大化按钮图标
+ */
+function updateMaximizeButtonIcon(btn, isMaximized) {
+    if (typeof isMaximized !== 'boolean') {
+        // 异步获取当前状态
+        WindowIsMaximised().then(maximised => {
+            btn.textContent = maximised ? '❐' : '□';
+            btn.title = maximised ? '还原' : '最大化';
+        }).catch(() => {
+            // 如果获取失败，切换图标
+            btn.textContent = btn.textContent === '□' ? '❐' : '□';
+        });
+    } else {
+        btn.textContent = isMaximized ? '❐' : '□';
+        btn.title = isMaximized ? '还原' : '最大化';
+    }
 }
 
 /**

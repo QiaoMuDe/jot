@@ -5,8 +5,6 @@ import {services} from '../models';
 
 export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
-export function ApplyWindowTheme(arg1:string):Promise<void>;
-
 export function BackupToDir():Promise<string>;
 
 export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>;

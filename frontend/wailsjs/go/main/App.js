@@ -6,10 +6,6 @@ export function AddTagToNote(arg1, arg2) {
   return window['go']['main']['App']['AddTagToNote'](arg1, arg2);
 }
 
-export function ApplyWindowTheme(arg1) {
-  return window['go']['main']['App']['ApplyWindowTheme'](arg1);
-}
-
 export function BackupToDir() {
   return window['go']['main']['App']['BackupToDir']();
 }

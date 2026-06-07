@@ -17,15 +17,16 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "jot",
-		Width:  1024,
-		Height: 768,
+		Title:           "jot",
+		Width:           1024,
+		Height:          768,
+		Frameless:       true,
+		CSSDragProperty: "--wails-draggable",
+		CSSDragValue:    "drag",
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: app.getThemeBackgroundColour(),
-		Windows:          app.getWindowsOptions(),
-		OnStartup:        app.startup,
+		OnStartup: app.startup,
 		Bind: []interface{}{
 			app,
 		},

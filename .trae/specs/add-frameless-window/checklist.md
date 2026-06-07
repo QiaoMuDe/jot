@@ -1,0 +1,11 @@
+- [x] Go 后端 `Frameless: true` 已启用，`CSSDragProperty`/`CSSDragValue` 已配置
+- [x] Go 后端 `BackgroundColour`、`getWindowsOptions()`、`ApplyWindowTheme()`、`findMainWindow()`、`setWindowAttribute()` 及 Windows API 常量已移除
+- [x] 前端 `index.html` 已添加 `#windowTitleBar` 自定义标题栏
+- [x] 前端 `style.css` 已添加标题栏样式，适配全部 6 套主题
+- [x] 前端 `main.js` 已绑定窗口控制按钮事件（最小化/最大化/关闭）
+- [x] 前端 `main.js` 已监听窗口最大化状态事件并切换按钮图标
+- [x] 窗口可正常拖拽移动
+- [x] 双击标题栏可最大化/还原
+- [x] 失去焦点时标题栏颜色与激活状态完全一致（无视觉差异）
+- [x] 切换主题时标题栏颜色同步变化
+- [x] `golangci-lint` 零警告通过
