@@ -4298,18 +4298,21 @@ function initWindowControls() {
             await WindowToggleMaximise();
             updateMaximizeButtonIcon(maximizeBtn);
         });
-        // 双击标题栏拖拽区域最大化/还原
-        const dragArea = document.querySelector('.window-titlebar-drag');
-        if (dragArea) {
-            dragArea.addEventListener('dblclick', async () => {
-                await WindowToggleMaximise();
-                updateMaximizeButtonIcon(maximizeBtn);
-            });
-        }
     }
 
     if (closeBtn) {
         closeBtn.addEventListener('click', () => Quit());
+    }
+
+    // 双击 topbar 空白区域最大化/还原
+    const topbar = document.getElementById('topbar');
+    if (topbar && maximizeBtn) {
+        topbar.addEventListener('dblclick', async (e) => {
+            // 如果双击的是按钮，不触发
+            if (e.target.closest('.topbar-btn')) return;
+            await WindowToggleMaximise();
+            updateMaximizeButtonIcon(maximizeBtn);
+        });
     }
 
     // 监听窗口最大化状态变化事件
