@@ -720,6 +720,12 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **窗口主题与颜色同步** | **问题**：启动时 BackgroundColour 改为动态取色 (getThemeBackgroundColour)，但运行时切换主题后窗口标题栏颜色未同步更新。Wails runtime.WindowSetDarkTheme 因 Invoke() 异步投递，DwmSetWindowAttribute 延迟执行且无强制重绘，导致标题栏不刷新 |
 | | **修复**：1. 启动时通过 getWindowsOptions() 设置 CustomTheme 自定义标题栏色/文字色/边框色 2. 运行时 ApplyWindowTheme 在**当前 goroutine 同步**调用 DwmSetWindowAttribute 的 DWMWA_USE_IMMERSIVE_DARK_MODE(20) / CAPTION_COLOR(35) / TEXT_COLOR(36) / BORDER_COLOR(34) API 3. 发送 WM_NCACTIVATE(0x86) 强制标题栏重绘，解决 Win10 上 API 设置后不立即生效的问题 |
 | | **相关文件**：app.go (getThemeBackgroundColour, getWindowsOptions, ApplyWindowTheme, findMainWindow, setWindowAttribute), main.go (Windows 选项) |
+| **无边框窗口与自定义标题栏** | **问题**：Windows 原生标题栏失去焦点时变黑色（DWM 非激活状态默认行为），深色主题下反差极大 |
+| | **方案**：改用 Frameless 模式完全移除原生标题栏，前端用 HTML/CSS 绘制自定义标题栏。topbar 同时承担窗口标题栏职责，右侧放置窗口控制按钮（─ □ ✕），与应用操作按钮（+ ✓ ☰）融为一体 |
+| | **实现**：1. main.go 启用 `Frameless: true` + `CSSDragProperty/Value` 2. index.html 删除独立 #windowTitleBar，窗口控制按钮直接放入 #topbar-actions 3. style.css 统一按钮样式（.topbar-btn），窗口控制按钮与应用按钮同风格 4. main.js 导入 Wails Runtime API，新增 initWindowControls() 绑定最小化/最大化/关闭事件，双击 topbar 空白区最大化/还原 5. 所有按钮加 `--wails-draggable: no-drag`，topbar 加 `--wails-draggable: drag` |
+| | **按钮布局演进**：最初 6 个按钮并排（+ ✓ ☰ ─ □ ✕）→ 去掉 +（底部 FAB 已有新建）→ ✓ 移入更多菜单（批量管理）→ 最终只剩 ☰ ─ □ ✕，☰ 在最右侧 |
+| | **快捷键更新**：数字键 1-7 重新映射（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 帮助），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto） |
+| | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), style.css (按钮样式), main.js (窗口控制 + 快捷键映射) |
 
 ---
 
