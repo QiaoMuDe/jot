@@ -39,9 +39,7 @@
             <input type="text" id="searchInput" class="topbar-search-input" placeholder="搜索笔记..." />
         </div>
         <div class="topbar-actions">
-            <button class="topbar-btn window-minimize" id="windowMinimizeBtn" title="最小化">─</button>
-            <button class="topbar-btn window-maximize" id="windowMaximizeBtn" title="最大化">□</button>
-            <button class="topbar-btn window-close" id="windowCloseBtn" title="关闭">✕</button>
+            <!-- 更多菜单移到窗口按钮左侧 -->
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
@@ -57,6 +55,10 @@
                     <div class="dropdown-item" data-action="help" title="按 7 打开">帮助</div>
                 </div>
             </div>
+            <!-- 窗口控制按钮靠最右侧 -->
+            <button class="topbar-btn window-minimize" id="windowMinimizeBtn" title="最小化">─</button>
+            <button class="topbar-btn window-maximize" id="windowMaximizeBtn" title="最大化">□</button>
+            <button class="topbar-btn window-close" id="windowCloseBtn" title="关闭">✕</button>
         </div>
     </header>
 
