@@ -13,11 +13,13 @@ import 'highlight.js/styles/github.css';
 
 // CodeMirror 6 导入
 import { EditorState } from '@codemirror/state';
-import { EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightSpecialChars, drawSelection, highlightActiveLine } from '@codemirror/view';
+import { EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightSpecialChars, drawSelection, highlightActiveLine, placeholder, scrollPastEnd } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, setSearchQuery, SearchQuery } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } from '@codemirror/autocomplete';
+import { bracketMatching, indentOnInput, foldGutter, foldKeymap, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { markdown } from '@codemirror/lang-markdown';
+import { tags } from '@lezer/highlight';
 
 // 注册常用语言
 hljs.registerLanguage('javascript', javascript);
@@ -192,6 +194,12 @@ function initCodeMirror(container, content = '', readOnly = false) {
             lineHeight: '2.13',
             padding: '0 8px 0 4px',
         },
+        '.cm-foldGutter .cm-gutterElement': {
+            color: 'var(--text-muted)',
+            fontSize: '0.75rem',
+            padding: '0 2px 0 8px',
+            cursor: 'default',
+        },
         '.cm-matchingBracket': {
             backgroundColor: 'var(--accent-light)',
             outline: 'none',
@@ -207,6 +215,31 @@ function initCodeMirror(container, content = '', readOnly = false) {
         },
     });
 
+    // Markdown 语法高亮样式（引用 CSS 变量，跟随主题变化）
+    const jotHighlightStyle = HighlightStyle.define([
+        { tag: tags.heading1, fontSize: '1.5rem', fontWeight: '700', color: 'var(--accent)' },
+        { tag: tags.heading2, fontSize: '1.25rem', fontWeight: '700', color: 'var(--accent)' },
+        { tag: tags.heading3, fontSize: '1.1rem', fontWeight: '600', color: 'var(--accent)' },
+        { tag: tags.heading4, fontSize: '1rem', fontWeight: '600', color: 'var(--text-primary)' },
+        { tag: tags.heading5, fontSize: '0.938rem', fontWeight: '600', color: 'var(--text-primary)' },
+        { tag: tags.heading6, fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-secondary)' },
+        { tag: tags.strong, fontWeight: '700' },
+        { tag: tags.emphasis, fontStyle: 'italic' },
+        { tag: tags.strikethrough, textDecoration: 'line-through' },
+        { tag: tags.link, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer' },
+        { tag: tags.url, color: 'var(--text-muted)', fontStyle: 'italic' },
+        { tag: tags.quote, color: 'var(--text-secondary)', fontStyle: 'italic' },
+        { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+        { tag: tags.comment, color: 'var(--text-muted)', fontStyle: 'italic' },
+        { tag: tags.list, color: 'var(--accent)', fontWeight: '500' },
+        { tag: tags.contentSeparator, borderTop: '1px solid var(--border)', display: 'block', margin: '0.5em 0' },
+        { tag: tags.escape, color: 'var(--text-muted)', fontWeight: '600' },
+        { tag: tags.character, color: 'var(--text-muted)' },
+        { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+        { tag: tags.string, color: 'var(--text-secondary)' },
+        { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+    ]);
+
     const extensions = [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -214,18 +247,26 @@ function initCodeMirror(container, content = '', readOnly = false) {
         drawSelection(),
         highlightSpecialChars(),
         history(),
+        bracketMatching(),
+        indentOnInput(),
+        foldGutter(),
+        placeholder('在此输入笔记内容...'),
+        scrollPastEnd(),
         keymap.of([
             ...defaultKeymap,
             ...historyKeymap,
             ...searchKeymap,
             ...closeBracketsKeymap,
             ...completionKeymap,
+            ...foldKeymap,
             indentWithTab,
         ]),
         closeBrackets(),
         autocompletion(),
         markdown(),
+        syntaxHighlighting(jotHighlightStyle),
         highlightSelectionMatches(),
+        EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
         EditorState.readOnly.of(readOnly),
         // 监听内容变化以触发自动保存和字数更新

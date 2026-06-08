@@ -993,27 +993,6 @@
 }
 
 /* ==========================================================================
-   CodeMirror 6 Markdown 语法高亮
-   ========================================================================== */
-
-.cm-header-1 { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
-.cm-header-2 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-.cm-header-3 { font-size: 1.1rem; font-weight: 600; color: var(--accent); }
-.cm-header-4 { font-size: 1rem; font-weight: 600; color: var(--text-primary); }
-.cm-header-5 { font-size: 0.938rem; font-weight: 600; color: var(--text-primary); }
-.cm-header-6 { font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
-.cm-strong { font-weight: 700; }
-.cm-em { font-style: italic; }
-.cm-strikethrough { text-decoration: line-through; }
-.cm-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
-.cm-url { color: var(--text-muted); font-style: italic; }
-.cm-quote { color: var(--text-secondary); font-style: italic; border-left: 3px solid var(--border); padding-left: 12px; }
-.cm-comment { color: var(--text-muted); font-style: italic; }
-.cm-code { background: var(--hover-bg); border-radius: 3px; padding: 1px 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; }
-.cm-list { color: var(--accent); font-weight: 500; }
-.cm-hr { border: none; border-top: 1px solid var(--border); }
-
-/* ==========================================================================
    CodeMirror 6 搜索面板样式覆盖
    ========================================================================== */
 
