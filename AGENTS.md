@@ -2,7 +2,7 @@
 
 > 生成日期: 2026-06-08
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
-> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS
+> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
 ---
 
@@ -36,10 +36,10 @@ jot/                                    # 项目根目录
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
-│   ├── package.json                    # 前端依赖（仅 Vite 3.x）
+│   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~3800 行
-│   │   ├── style.css                   # 组件样式 ~2974 行
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5100 行（含 CM6 集成）
+│   │   ├── style.css                   # 组件样式 ~3064 行（含 CM6 主题/语法高亮）
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~458 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -93,7 +93,7 @@ jot/                                    # 项目根目录
     │   ├── spec.md
     │   ├── tasks.md
     │   └── checklist.md
-    └── integrate-codemirror-6/        # CodeMirror 6 编辑器集成规格（待实施）
+    └── integrate-codemirror-6/        # CodeMirror 6 编辑器集成（已完成）
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -142,14 +142,14 @@ jot/                                    # 项目根目录
 | **数据导出为 .db** | 导出为 SQLite 数据库文件（VACUUM INTO + fs.CopyEx）| `app.go:ExportDataWithDialog()` | — | "导出成功" 提示 |
 | **数据导入** | 从 JSON 文件导入笔记（跳过同名） | `note_service.go:ImportFromJSON()` | JSON 字节数组 | ImportResult 对象 |
 | **前端卡片渲染** | 卡片网格展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
-| **前端编辑器** | 笔记编辑模态框（含标签选择/颜色选择/查找替换） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
-| **前端查找替换** | FindReplaceManager 类，Ctrl+F/H 唤起，纯文本 overlay 高亮 + 预览 TreeWalker 高亮，支持替换全部/单个、匹配导航 `[`/`]`、选中内容自动填入 | `frontend/src/main.js:FindReplaceManager` (~636 行) | 搜索关键词 | 高亮+导航+替换 |
+| **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
+| **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
 | **前端搜索交互** | 输入框 250ms 防抖自动搜索，支持标题/内容/标签 | `frontend/src/main.js` | 关键词 | 搜索结果列表 |
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 触发按标签名搜索 | `frontend/src/main.js:searchByTag()` | 标签名 | 搜索结果列表 |
-| **键盘快捷键** | Ctrl+F 查找/全局搜索 / Ctrl+H 替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / `[` `]` 查找匹配导航 / PgUp/PgDn 滚动 / Ctrl+Home/End | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
+| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+数字键 1-7 导航 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
 | **打开外链** | 调用 runtime.BrowserOpenURL 在默认浏览器打开链接 | `app.go:OpenProjectURL()` | URL 字符串 | — |
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
@@ -454,7 +454,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **SQLite 驱动** | glebarez/sqlite | v1.11.0 | 纯 Go SQLite 驱动（免 cgo） | 🟢 活跃，纯 Go 实现 |
 | **底层 SQLite** | modernc.org/sqlite | v1.23.1 | CGo-free SQLite 实现 | 🟢 活跃 |
 | **前端构建** | Vite | v3.2.11 | 前端构建工具 | 🟡 较老版本（v3 已 EOL，建议 v5/v6） |
-| **前端技术** | 原生 HTML/CSS/JS | — | 无框架依赖 | 🟢 稳定 |
+| **前端技术** | 原生 HTML/CSS/JS（CM6 编辑器）| — | 无框架依赖 | 🟢 稳定 |
 
 ### 5.2 技术栈选型评价
 
@@ -544,23 +544,20 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 21. **笔记本侧边栏系统**：三段式侧栏设计（header/list/footer），使用 `--card-bg`/`--bg-secondary` + `color-mix()` 配色过渡。书签隐喻（左侧 3px 指示条 + hover 微弹）。新建按钮移入 header 标题右侧（简洁 `+`）。footer 与按钮铺平融为一体，折叠动画 `white-space: nowrap` 防文字换行。6 主题自适应
 22. **笔记本 CRUD**：后端 NotebookService（Create/Update/Delete/DeleteWithNotes/GetAll/GetAllNotesCount/EnsureDefaultNotebook），默认笔记本（ID=1）不可删不可改名。前端 rename 防重名校验（`isNameTaken`），删除对话框带 checkbox（迁移笔记到默认 / 连带永久删除笔记），删除活跃笔记本后自动切换到默认笔记本首页
 23. **笔记本笔记隔离**：所有笔记查询按 `activeNotebookId` 过滤（`GetNotes`/`SearchNotes` 均接受 `notebookID` 参数）。`selectAllIds` 使用 `GetNoteIDsByNotebook` 替代 `GetAllNoteIDs`，确保全选仅限当前笔记本笔记。各笔记本笔记数 badge 自动同步更新
-24. **CodeMirror 6 集成计划（待实施）**：计划用 CM6 替换原生 `<textarea>` 解决 WebView2 中撤销/恢复失效、查找替换实现复杂、Tab 缩进缺失、选中文本关闭编辑器等问题。方案矩阵：纯文本模式用 CM6（可编辑/只读），预览模式保留 marked.js。净减约 ~600 行代码，新增 ~75KB gzipped 依赖。详见 `.trae/specs/integrate-codemirror-6/spec.md`
+24. **CodeMirror 6 编辑器集成**：用 CM6（EditorView/EditorState）替换原生 `<textarea>`，解决了 WebView2 中撤销/恢复失效的问题，同时带来行号、Tab 缩进、自动补全、闭合括号、Markdown 语法高亮等原生编辑器能力。搜索替换改用 CM6 内置 search panel（`openSearchPanel` + `setSearchQuery`），选中内容自动填入搜索框。预览模式按 Ctrl+F 自动切回编辑模式搜索。新增 ~22 个 CM6 依赖包（`@codemirror/state`、`@codemirror/view`、`@codemirror/commands`、`@codemirror/search`、`@codemirror/lang-markdown`、`@codemirror/language`、`@codemirror/autocomplete`、`@lezer/highlight` 等），删除 ~640 行 FindReplaceManager 死代码。净减 ~510 行，CSS/JS 重构覆盖编辑器初始化/快捷键/只读模式/模式切换。详见 `.trae/specs/integrate-codemirror-6/`
 
 ---
 
 
 ## 八、待优化点
 
-### 优先优化（当前最高优先级）
-1. **CodeMirror 6 集成**：用 CM6 替换原生 `<textarea>` 解决 WebView2 撤销/恢复失效、查找替换复杂、Tab 缩进缺失、选中文本关闭编辑器等问题。纯文本模式用 CM6（可编辑/只读），预览模式保留 marked.js。净减 ~600 行代码。详见 `.trae/specs/integrate-codemirror-6/`（含完整 spec/tasks/checklist）
-
 ### 中期优化
-2. **Vite 升级**：Vite 3 → Vite 5/6，获取更好的构建性能和生态支持
-3. **全文搜索**：引入 SQLite FTS5，替代 `LIKE %keyword%` 模糊搜索
+1. **Vite 升级**：Vite 3 → Vite 5/6，获取更好的构建性能和生态支持
+2. **全文搜索**：引入 SQLite FTS5，替代 `LIKE %keyword%` 模糊搜索
 
 ### 架构层面
-4. **前端框架**（可选）：若功能持续增长，可引入 Vue/React 管理复杂状态
-5. **单元测试**：补充 Service 层的 `_test.go` 测试文件
+3. **前端框架**（可选）：若功能持续增长，可引入 Vue/React 管理复杂状态
+4. **单元测试**：补充 Service 层的 `_test.go` 测试文件
 
 ### 已实现
 - ✅ **滚动/分页加载**：首屏按分页大小加载，触底按需追加下一页，Ctrl+End 一次加载全部
@@ -634,7 +631,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **笔记本数统计卡片**：数据管理页第 5 张统计卡片（`statTotalNotebooks`），`DataStats` 新增 `total_notebooks` 字段，后端 COUNT + 前端 count-up 动画
 - ✅ **切换笔记本退出批量模式**：`switchNotebook()` 中检测 `state.batchMode`，自动调用 `toggleBatchMode()` 清空选中，防止跨笔记本残留选中
 - ✅ **启动默认收起侧边栏**：`restoreSidebarState()` 和 inline script 逻辑改为 `!== 'false'`，无 localStorage 记录时默认收起
-- ✅ **加载遮罩试用后回退**：`app-loader` CSS/inline script 方案试用后已回退，`loadQuickNoteSetting()` 恢复为原始 `openEditor(null)` + `toggleEditorFullscreen()` + 后端 `GetSetting` 异步调用
+- ✅ **CodeMirror 6 编辑器集成**：CM6（EditorView/EditorState）替换原生 `<textarea>`，解决 WebView2 撤销/恢复失效，支持行号/Tab 缩进/自动补全/闭合括号/Markdown 语法高亮。搜索替换改用 CM6 search panel。删除 FindReplaceManager（~640 行）和旧 Find Bar CSS（~140 行）。净减 ~510 行。CM6 在面板动画启动前同步初始化，面板/编辑器一体出场。CSS 变量联动主题/字体，`cmFadeIn` 动画防白屏。详见 `.trae/specs/integrate-codemirror-6/`
 
 ---
 
@@ -648,7 +645,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个 Draft 草稿 + 3 个备份还原）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~3931 行 JS + ~3186 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~5100 行 JS + ~3064 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -656,7 +653,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索/回车立即搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 查找（编辑器内打开查找条/编辑器外聚焦搜索框）/ Ctrl+H 替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / `[` `]` 查找匹配导航 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / 数字键 1=笔记首页 2=展开/折叠侧栏 3=数据管理 4=回收站 5=设置 6=帮助；输入框内数字键不触发；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 textarea 原生处理 |
+| **键盘快捷键** | Ctrl+F 查找（编辑器内打开 CM6 搜索面板/编辑器外聚焦全局搜索框）/ Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + 数据操作/快速备份/数据目录三个卡片分区 |
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，VACUUM INTO 创建 SQLite 压缩副本 → fs.CopyEx 到用户选择路径，输出 .db 文件 |
@@ -676,14 +673,14 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/帮助六个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成计划，待实施） |
+| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成） |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
 | **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |
 | **view-header 统一** | 设置/数据管理/回收站三个功能页的 view-header 均为 `← 返回` + 居中标题 + `view-controls` 结构，保证标题位置一致 |
 | **内容区居中** | 设置页 `settings-content` 为 `max-width: 600px` + 居中；数据管理 `data-content` 和回收站 `trash-list` 为 `max-width: 680px` + 居中 |
-| **数字键导航** | 键盘快捷键扩展：`1`=首页(清空搜索)、`2`=设置、`3`=数据管理、`4`=回收站、`5`=帮助；输入框内不触发 |
+| **数字键导航** | 键盘快捷键：Ctrl+1=首页(清空搜索)/Ctrl+2=展开侧栏/Ctrl+3=批量管理/Ctrl+4=数据管理/Ctrl+5=回收站/Ctrl+6=设置/Ctrl+7=帮助；不在输入框或编辑器中触发 |
 | **排序设置** | 设置页「笔记排序」支持按更新时间/创建时间/名称排序，iOS 风格分段控件（3 等分滑动指示器），持久化到 Setting `sort_order`；后端 `GetAll`/`GetByTag` 动态构建 ORDER BY |
 | **分页大小** | 设置页 iOS 风格分段控件：20/40/60/80/100，选中色块带滑动动画，默认 20，持久化到 Setting `page_size` |
 | **懒加载** | 所有场景（启动/CRUD）只加载第 1 页，滚动到底部（<200px）自动追加下一页；Ctrl+End 一次加载所有剩余页；底部显示「共 X 条笔记」|
@@ -711,8 +708,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **动画系统** | 全局 `:root` CSS 动画变量（`--anim-duration-fast: 150ms`、`--anim-ease-spring: cubic-bezier(0.16,1,0.3,1)` 等）+ 13 个 keyframes（fadeIn/fadeInUp/fadeInDown/scaleIn/slideUp/slideDown/slideInRight/shrinkOut/countUp/pulseOnce/spin/elasticScale/shake）。通用工具类 `.anim-fade-in`/`.anim-slide-up`/`.anim-scale-in`/`.anim-stagger-*`（支持 20 项交错延迟 0.02-0.4s）。`prefers-reduced-motion` 媒体查询一键降级所有动画。所有动画使用 `will-change` + `transform`/`opacity` 保证 GPU 合成层性能 |
 | **搜索结果滚动条** | `.search-results` 容器通过 `scrollbar-gutter: stable` 预占滚动条空间 + `margin-right: -8px` 抵消父容器 gutter 预留，使滚动条贴靠窗口右边缘，与主内容区一致的滚动条显示/1s 淡出逻辑 |
 | **编辑器双模式** | 编辑器新增纯文本/预览双模式，底部状态栏中间胶囊按钮组切换（`.editor-modes`），`data-mode="edit|preview"` 控制 textarea/预览区显隐。查看模式自动切预览，编辑默认纯文本。marked + 防抖渲染，各滚各的 |
-| **查找替换** | FindReplaceManager 全局单例（~636 行），Ctrl+F 查找条 / Ctrl+H 替换条（位于状态栏上方）。纯文本 overlay 覆盖层高亮 + 预览 TreeWalker 高亮。支持替换单个/全部、`[`/`]` 导航、选中内容自动填入。查看模式仅查找，预览模式替换提示切换到纯文本。模式切换自动关闭查找条 |
-| **撤销恢复** | WebView2 原生 Ctrl+Z/Y 失效。曾实现 UndoRedoManager（字符串快照栈）但已移除。计划引入 CodeMirror 6 后由内置 history() extension 解决 |
+| **查找替换** | 使用 CM6 内置 search panel，Ctrl+F 打开搜索面板（选中内容自动填充搜索框），Ctrl+H 打开搜索面板（替换功能默认展开）。预览模式下 Ctrl+F 自动切回编辑模式搜索，Ctrl+H 在预览模式无效。模式切换自动关闭查找条 |
+| **撤销恢复** | WebView2 原生 Ctrl+Z/Y 失效。曾实现 UndoRedoManager（字符串快照栈）但已移除。现由 CM6 history() extension 原生支持撤销/恢复，支持多次回退 |
 | **蒙层关闭修复** | 编辑器 overlay 关闭事件从 `click` 改为 `mousedown`，解决拖拽选中文本时 mouseup 落在 overlay 误关闭的问题 |
 | **全屏动画** | 全屏切换不再使用 JS inline transition，改为 CSS class 切换。`.editor-panel` 默认 `transition` 包含 `width/height/max-width/max-height/border-radius`（0.35s spring）。`.editor-panel.fullscreen` 移除 `!important`，靠 class 优先级自然覆盖。`.editor-overlay.fullscreening` 增加 backdrop-filter(10px) + 深色背景，全屏时周围更沉浸。editor-body 在过渡期间短暂淡出/淡入防内容跳跃 |
 | **CSS 变量补齐** | 6 主题均已定义 `--bg-secondary`（略深于 `--bg`）+ `--text-tertiary`（略浅于 `--text-muted`），此前 7 处引用为未定义变量 |
@@ -738,9 +735,27 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | | **方案**：改用 Frameless 模式完全移除原生标题栏，前端用 HTML/CSS 绘制自定义标题栏。topbar 同时承担窗口标题栏职责，右侧放置窗口控制按钮（─ □ ✕），与应用操作按钮（+ ✓ ☰）融为一体 |
 | | **实现**：1. main.go 启用 `Frameless: true` + `CSSDragProperty/Value` 2. index.html 删除独立 #windowTitleBar，窗口控制按钮直接放入 #topbar-actions 3. style.css 统一按钮样式（.topbar-btn），窗口控制按钮与应用按钮同风格 4. main.js 导入 Wails Runtime API，新增 initWindowControls() 绑定最小化/最大化/关闭事件，双击 topbar 空白区最大化/还原 5. 所有按钮加 `--wails-draggable: no-drag`，topbar 加 `--wails-draggable: drag` |
 | | **按钮布局演进**：最初 6 个按钮并排（+ ✓ ☰ ─ □ ✕）→ 去掉 +（底部 FAB 已有新建）→ ✓ 移入更多菜单（批量管理）→ 最终只剩 ☰ ─ □ ✕，☰ 在最右侧 |
-| | **快捷键更新**：数字键 1-7 重新映射（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 帮助），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto） |
+| | **快捷键更新**：Ctrl+数字键 1-7 导航（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 快捷键说明），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto）。`[`/`]` 随 FindReplaceManager 一并删除 |
 | | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), style.css (按钮样式), main.js (窗口控制 + 快捷键映射) |
 
 ---
 
 > **报告结束** | 已完成项目记忆更新（2026-06-08），后续可基于此报告回答项目相关问题。
+
+## 十、新增记忆点（CodeMirror 6 集成）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **CM6 初始化** | `els.viewEditor.classList.add('active')` 后同步调用 `initCodeMirror()`，CM6 在 `opacity:0` 状态下完成渲染，再启动面板动画，做到一体出场 |
+| **CM6 扩展** | lineNumbers, highlightActiveLineGutter, history (historyKeymap), search (searchKeymap + highlightSelectionMatches), markdown, autocomplete (autocompletionKeymap + closeBracketsKeymap), highlightSpecialChars, drawSelection, highlightActiveLine |
+| **CM6 Theme** | `EditorView.theme()` 引用 CSS 变量（`--accent`、`--bg`、`--text-primary`、`--font-family` 等），无需编译时主题同步，运行时 CSS 变量变化自动反映 |
+| **CM6 只读模式** | `EditorState.readOnly.of(true)` 配置，查看笔记时 CM6 不可编辑但可选中/滚动/搜索 |
+| **CM6 搜索** | 使用 `openSearchPanel` + `setSearchQuery` + `SearchQuery`。Ctrl+F 选中内容自动填充搜索面板。预览模式 Ctrl+F 切回编辑模式搜索，Ctrl+H 仅在编辑模式生效 |
+| **CM6 快捷键重构** | 删除旧 FindReplaceManager 的 `[`/`]` 匹配导航。Ctrl+Z/Y 由 historyKeymap 原生处理。Ctrl+F/H 由文档级 `handleKeyboardNavigation` 统一调度 |
+| **CM6 初始化时序** | 初始文本内容通过 `editorContent` 变量暂存，无需等待 CM6 实例化。查看模式 Markdown 笔记直接由 `marked.parse(editorContent)` 渲染预览，CM6 就绪后无感刷新 |
+| **CM6 异步初始化修复** | 查看模式预览渲染先由 `editorContent` 字符串直接渲染（不依赖 CM6），CM6 初始化完成后若处于预览模式则二次刷新。已删除旧 320ms setTimeout 延迟，CM6 在面板动画启动前同步初始化 |
+| **CM6 反白闪屏** | CSS 添加 `animation: cmFadeIn 0.15s ease-out forwards` 在 `.cm-editor` 上，CM6 创建编辑器 DOM 时自动淡入。编辑器 `editor-textarea` 使用 `background: transparent` 避免白屏 |
+| **CM6 依赖包** | 新增 8 个主要包：`@codemirror/state@^6.5.0`、`@codemirror/view@^6.35.0`、`@codemirror/commands@^6.8.0`、`@codemirror/search@^6.5.0`、`@codemirror/lang-markdown@^6.3.0`、`@codemirror/language@^6.10.0`、`@codemirror/autocomplete@^6.18.0`、`@lezer/highlight@^1.2.0` |
+| **旧代码清理** | 删除 FindReplaceManager 类（~636 行）及所有 findReplace 引用（12 处变量 + 1 处 init 调用）。删除 style.css 中旧 Find Bar CSS（~140 行）。index.html 删除 `#findOverlay` div，`<textarea>` 替换为 `<div>` |
+| **快捷键数字键** | 1-7 改为 Ctrl+数字键防止误触。快捷键说明页、下拉菜单 tooltip、侧栏动态 tooltip 同步更新。`[`/`]` 快捷键说明已移除 |
+| **字体联动** | CM6 通过 `EditorView.theme()` 中 `"&"` 的 `fontFamily`/ `fontSize` 绑定 `--cm-font-family` / `--cm-font-size` CSS 变量，字体设置实时同步 |
