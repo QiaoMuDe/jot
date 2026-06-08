@@ -43,16 +43,16 @@
             <div class="topbar-dropdown">
                 <button id="moreMenuBtn" class="topbar-btn" title="更多">☰</button>
                 <div id="moreMenu" class="dropdown-menu">
-                    <div class="dropdown-item" data-action="home" title="按 1 切换">笔记首页</div>
-                    <div class="dropdown-item" data-action="sidebar-toggle" title="按 2 切换">展开侧栏</div>
-                    <div class="dropdown-item" data-action="batch-mode" title="按 3 切换">批量管理</div>
+                    <div class="dropdown-item" data-action="home" title="Ctrl+1 笔记首页">笔记首页</div>
+                    <div class="dropdown-item" data-action="sidebar-toggle" title="Ctrl+2 展开侧栏">展开侧栏</div>
+                    <div class="dropdown-item" data-action="batch-mode" title="Ctrl+3 批量管理">批量管理</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="data" title="按 4 切换">数据管理</div>
-                    <div class="dropdown-item" data-action="trash" title="按 5 切换">回收站</div>
+                    <div class="dropdown-item" data-action="data" title="Ctrl+4 数据管理">数据管理</div>
+                    <div class="dropdown-item" data-action="trash" title="Ctrl+5 回收站">回收站</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="settings" title="按 6 切换">设置</div>
+                    <div class="dropdown-item" data-action="settings" title="Ctrl+6 设置">设置</div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" data-action="help" title="按 7 打开">帮助</div>
+                    <div class="dropdown-item" data-action="help" title="Ctrl+7 快捷键说明">帮助</div>
                 </div>
             </div>
             <!-- 窗口控制按钮靠最右侧 -->
@@ -106,8 +106,7 @@
                             </div>
                         </div>
                         <div class="editor-panes" style="position:relative;">
-                            <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
-                            <div id="findOverlay" class="find-overlay" style="display:none;"></div>
+                            <div id="editorNoteContent" class="editor-textarea"></div>
                             <div id="mdRendered" class="md-rendered" style="display:none"></div>
                         </div>
                     </div>

@@ -5,7 +5,7 @@
 - [ ] Task 1: 安装 CodeMirror 6 npm 依赖包
   - [ ] 安装核心包：@codemirror/state, @codemirror/view, @codemirror/commands
   - [ ] 安装功能包：@codemirror/search, @codemirror/lang-markdown, @codemirror/language
-  - [ ] 安装增强包：@codemirror/autocomplete, lezer/highlight
+  - [ ] 安装增强包：@codemirror/autocomplete, @lezer/highlight
   - [ ] 验证安装成功，确认无版本冲突
 
 - [ ] Task 2: 创建 CM6 初始化模块
@@ -27,12 +27,11 @@
 - [ ] Task 4: 改造 openEditor() 函数
   - [ ] 加载笔记数据后调用 initCodeMirror() 替代 textarea.value 赋值
   - [ ] 只读模式配置 CM6 editable:false / readOnly
-  - [ ] 删除 UndoRedoManager 实例化代码（2 处）
   - [ ] 查看模式纯文本使用 CM6 readOnly 展示
+  - [ ] 注意：initCodeMirror() 需在面板动画完成后调用，或初始化后调用 cmEditor.requestMeasure()
 
 - [ ] Task 5: 改造 closeEditor() 函数
   - [ ] 新增 destroyCodeMirror() 调用
-  - [ ] 删除 undoRedoTitle/Content.destroy() 调用
   - [ ] 删除 findReplace.reset() 调用
 
 - [ ] Task 6: 改造 switchEditorMode() 函数
@@ -59,8 +58,9 @@
 ## Phase 5: 样式适配
 
 - [ ] Task 10: 编写 CM6 主题 CSS
-  - [ ] .cm-editor 容器样式（替代原 .editor-textarea）
-  - [ ] CM6 Theme 变量定义（背景、文字、光标、选区、激活行、搜索高亮等）
+  - [ ] .cm-editor 容器样式（替代原 .editor-textarea，font 继承自 --font-family/--font-size-base）
+  - [ ] 更新 CSS 模式切换选择器：`.editor-textarea` → `.cm-editor`（约 4 处）
+  - [ ] CM6 Theme 变量定义（背景、文字、光标、选区、激活行、搜索高亮等），包含 --cm-font-family/--cm-font-size 实现字体联动
   - [ ] Markdown 语法高亮样式（标题/加粗/斜体/链接/代码/列表）
   - [ ] 搜索面板样式微调（融入应用风格）
 
@@ -74,14 +74,11 @@
 
 - [ ] Task 12: 删除 FindReplaceManager 类（~636 行）
   - [ ] 保留预览模式查找高亮的轻量工具函数（从类中剥离为独立函数）
-
-- [ ] Task 13: 删除 UndoRedoManager 类（~90 行）
-  - [ ] 删除全局变量 undoRedoTitle / undoRedoContent
   - [ ] 删除 findReplace 全局单例变量
 
 ## Phase 7: 预览模式查找（可选增强）
 
-- [ ] Task 14: 预览区查找高亮保留轻量版
+- [ ] Task 13: 预览区查找高亮保留轻量版
   - [ ] 从 FindReplaceManager 中剥离 _highlightPreview() / _clearPreviewHighlight()
   - [ ] 在 switchEditorMode('preview') 时绑定 Ctrl+F/H 到预览区查找
   - [ ] 或评估是否用临时只读 CM6 实例替代
@@ -95,9 +92,8 @@
 - [Task 6] 依赖 [Task 2]
 - [Task 7] 依赖 [Task 4]
 - [Task 8] 依赖 [Task 4]
-- [Task 9] 依赖 [Task 2] + [Task 12] + [Task 13]（或并行，删除后重写）
+- [Task 9] 依赖 [Task 2] + [Task 12]（或并行，删除后重写）
 - [Task 10] 依赖 [Task 1]
 - [Task 11] 依赖 [Task 10]
 - [Task 12] 可在 [Task 9] 之后执行（先改快捷键引用再删原实现）
-- [Task 13] 可在 [Task 9] 之后执行
-- [Task 14] 依赖 [Task 6] + [Task 9]，可选
+- [Task 13] 依赖 [Task 6] + [Task 9]，可选

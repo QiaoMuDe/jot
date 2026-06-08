@@ -971,16 +971,84 @@
   width: 100%;
   padding: 0;
   border: none;
-  font-size: 0.938rem;
   color: var(--text-primary);
   outline: none;
-  resize: none;
-  overflow-y: auto;
   flex: 1;
   min-height: 0;
   font-family: var(--font-family);
   line-height: 1.7;
   background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CM6 编辑器淡入（避免初始化前的白屏闪烁） */
+.cm-editor {
+  animation: cmFadeIn 0.15s ease-out forwards;
+}
+
+@keyframes cmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   CodeMirror 6 Markdown 语法高亮
+   ========================================================================== */
+
+.cm-header-1 { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.cm-header-2 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+.cm-header-3 { font-size: 1.1rem; font-weight: 600; color: var(--accent); }
+.cm-header-4 { font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+.cm-header-5 { font-size: 0.938rem; font-weight: 600; color: var(--text-primary); }
+.cm-header-6 { font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); }
+.cm-strong { font-weight: 700; }
+.cm-em { font-style: italic; }
+.cm-strikethrough { text-decoration: line-through; }
+.cm-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.cm-url { color: var(--text-muted); font-style: italic; }
+.cm-quote { color: var(--text-secondary); font-style: italic; border-left: 3px solid var(--border); padding-left: 12px; }
+.cm-comment { color: var(--text-muted); font-style: italic; }
+.cm-code { background: var(--hover-bg); border-radius: 3px; padding: 1px 4px; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85em; }
+.cm-list { color: var(--accent); font-weight: 500; }
+.cm-hr { border: none; border-top: 1px solid var(--border); }
+
+/* ==========================================================================
+   CodeMirror 6 搜索面板样式覆盖
+   ========================================================================== */
+
+.cm-panel.cm-search {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.cm-panel.cm-search input,
+.cm-panel.cm-search label {
+  font-family: var(--font-family);
+  font-size: 0.813rem;
+  color: var(--text-primary);
+}
+
+.cm-panel.cm-search input[type=checkbox] {
+  accent-color: var(--accent);
+}
+
+.cm-panel.cm-search button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 .editor-section {
@@ -1043,174 +1111,8 @@
 }
 
 /* ==========================================================================
-   Find & Replace Bar（body 与 footer 之间）
+   Markdown 渲染样式
    ========================================================================== */
-
-.editor-find-bar {
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  background: var(--card-bg);
-  padding: 8px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  animation: findBarSlideIn 0.15s ease-out;
-}
-
-@keyframes findBarSlideIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.find-bar-row,
-.replace-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.find-input,
-.replace-input {
-  flex: 1;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 0.813rem;
-  font-family: inherit;
-  color: var(--text-primary);
-  background: var(--input-bg);
-  outline: none;
-  transition: border-color 0.15s ease;
-  min-width: 0;
-}
-
-.find-input:focus,
-.replace-input:focus {
-  border-color: var(--accent);
-  background: var(--card-bg);
-}
-
-.find-count {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  min-width: 36px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.find-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s ease;
-  font-family: inherit;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.find-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.find-btn:active {
-  transform: scale(0.92);
-}
-
-.find-btn.find-close-btn {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
-.find-btn.find-close-btn:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-bg);
-}
-
-.find-btn.replace-btn {
-  width: auto;
-  padding: 0 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--accent);
-  border-color: var(--accent-light);
-}
-
-.find-btn.replace-btn:hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.find-btn.replace-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.replace-hint {
-  font-size: 0.75rem;
-  color: var(--accent);
-  white-space: nowrap;
-}
-
-/* 查找高亮标记 */
-.find-highlight {
-  background: var(--accent-light);
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 1px;
-}
-
-.find-highlight.active {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 2px;
-  padding: 0 1px;
-}
-
-/* 查找覆盖层（位于 textarea 之上，透明不可交互） */
-.find-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  overflow: hidden;
-  font-size: 0.938rem;
-  font-family: var(--font-family);
-  line-height: 1.7;
-  padding: 0;
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  border: none;
-  z-index: 1;
-}
-
-/* 查找激活时，让 textarea 文字透明（保留光标和交互） */
-.editor-textarea.find-active {
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  caret-color: var(--text-primary);
-}
-
-/* 预览模式下使用 md-rendered 高亮 */
-.editor-overlay[data-mode="preview"] .find-overlay {
-  display: none !important;
-}
 
 .editor-footer {
   display: flex;
@@ -1220,7 +1122,6 @@
   padding: 12px 24px;
   border-top: 1px solid var(--divider);
 }
-
 .editor-footer-left {
   display: flex;
   align-items: center;
@@ -1323,33 +1224,33 @@
   background: transparent;
 }
 
-/* 编辑器内部滚动条：textarea 和 editor-body 精致微调样式 */
-/* 编辑器文本区滚动条：textarea 填满面板，精致微调融合 */
-.editor-textarea::-webkit-scrollbar {
+/* 编辑器内部滚动条：CM6 scroller 和 editor-body 精致微调样式 */
+/* 编辑器文本区滚动条：CM6 scroller 填满面板，精致微调融合 */
+.cm-scroller::-webkit-scrollbar {
   width: 6px;
 }
 
-.editor-textarea::-webkit-scrollbar-track {
+.cm-scroller::-webkit-scrollbar-track {
   background: transparent;
   border-radius: 3px;
 }
 
-.editor-textarea::-webkit-scrollbar-thumb {
+.cm-scroller::-webkit-scrollbar-thumb {
   background: rgba(128, 128, 128, 0.15);
   border-radius: 3px;
   transition: background 0.25s ease;
 }
 
-.editor-textarea::-webkit-scrollbar-thumb:hover {
+.cm-scroller::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.3);
 }
 
 /* 深色主题 */
-[data-theme="dark"] .editor-textarea::-webkit-scrollbar-thumb {
+[data-theme="dark"] .cm-scroller::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
 }
 
-[data-theme="dark"] .editor-textarea::-webkit-scrollbar-thumb:hover {
+[data-theme="dark"] .cm-scroller::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 

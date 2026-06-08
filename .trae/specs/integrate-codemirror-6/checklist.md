@@ -45,8 +45,7 @@
 
 ## Phase 6: 代码清理
 - [ ] FindReplaceManager 类已删除
-- [ ] UndoRedoManager 类已删除
-- [ ] 全局变量 undoRedoTitle / undoRedoContent / findReplace 已移除
+- [ ] 全局变量 findReplace 已移除
 - [ ] 无遗留的废弃代码引用（无 console 报错）
 
 ## Phase 7: 边界场景
