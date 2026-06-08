@@ -151,9 +151,10 @@ let cmEditor = null;
  * @param {HTMLElement} container - 挂载容器
  * @param {string} content - 初始内容
  * @param {boolean} readOnly - 是否只读
+ * @param {boolean} useMdHighlight - 是否启用 MD 语法高亮
  * @returns {EditorView}
  */
-function initCodeMirror(container, content = '', readOnly = false) {
+function initCodeMirror(container, content = '', readOnly = false, useMdHighlight = true) {
     // 自定义主题：匹配应用 UI 风格
     const jotTheme = EditorView.theme({
         '&': {
@@ -263,8 +264,7 @@ function initCodeMirror(container, content = '', readOnly = false) {
         ]),
         closeBrackets(),
         autocompletion(),
-        markdown(),
-        syntaxHighlighting(jotHighlightStyle),
+        ...(useMdHighlight ? [markdown(), syntaxHighlighting(jotHighlightStyle)] : []),
         highlightSelectionMatches(),
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
@@ -389,6 +389,7 @@ const els = {
     // 设置
     tagList: $('tagList'),
     quickNoteToggle: $('quickNoteToggle'),
+    mdHighlightToggle: $('mdHighlightToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -625,6 +626,7 @@ function switchView(view) {
                 loadThemeSetting();
                 loadSortSettings();
                 loadPageSizeSetting();
+                loadMdHighlightSetting();
                 loadTags();
                 break;
             case 'data':
@@ -2522,7 +2524,9 @@ async function openEditor(noteId, readOnly) {
     els.viewEditor.classList.add('active');
 
     // 先初始化 CM6（此时编辑器 opacity: 0，用户还看不到）
-    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly);
+    // Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定
+    const useMdHighlight = state.noteType === 'markdown' || els.mdHighlightToggle.checked;
+    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useMdHighlight);
     // CM6 就绪后刷新预览（解决查看模式下 CM6 初始化前预览无法渲染的问题）
     if (els.editorOverlay.dataset.mode === 'preview') {
         updatePreview();
@@ -2555,6 +2559,31 @@ function updatePreview() {
             if (typeof hljs !== 'undefined') {
                 hljs.highlightElement(block);
             }
+        });
+        // 为每个代码块添加复制按钮
+        els.mdRendered.querySelectorAll('pre').forEach((pre) => {
+            // 避免重复添加
+            if (pre.querySelector('.copy-code-btn')) return;
+            const btn = document.createElement('button');
+            btn.className = 'copy-code-btn';
+            btn.textContent = '复制';
+            btn.title = '复制代码';
+            btn.addEventListener('click', async () => {
+                const code = pre.querySelector('code').textContent;
+                try {
+                    await navigator.clipboard.writeText(code);
+                    btn.classList.add('copied');
+                    btn.textContent = '✓ 已复制';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.textContent = '复制';
+                    }, 1500);
+                } catch {
+                    btn.textContent = '✗ 复制失败';
+                    setTimeout(() => { btn.textContent = '复制'; }, 1000);
+                }
+            });
+            pre.appendChild(btn);
         });
     } else {
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
@@ -3508,6 +3537,21 @@ function initEventListeners() {
             }
         } catch (err) {
             console.error('保存快速笔记设置失败:', err);
+        }
+    });
+
+    // 纯文本 MD 高亮开关
+    els.mdHighlightToggle.addEventListener('change', async (e) => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+                await window.go.main.App.SetSetting('md_highlight_plain', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            } else {
+                localStorage.setItem('md_highlight_plain', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            }
+        } catch (err) {
+            console.error('保存 MD 高亮设置失败:', err);
         }
     });
 
@@ -4497,6 +4541,7 @@ async function init() {
     await initSortSettings();
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
+    await loadMdHighlightSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 加载笔记本列表（会设置默认选中）
@@ -4607,6 +4652,25 @@ async function loadQuickNoteSetting() {
         }
     } catch (err) {
         console.error('加载快速笔记设置失败:', err);
+    }
+}
+
+/**
+ * 加载纯文本 MD 语法高亮设置
+ */
+async function loadMdHighlightSetting() {
+    try {
+        let enabled = true;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('md_highlight_plain');
+            enabled = val !== 'false'; // 默认启用
+        } else {
+            const local = localStorage.getItem('md_highlight_plain');
+            enabled = local !== 'false';
+        }
+        els.mdHighlightToggle.checked = enabled;
+    } catch (err) {
+        console.error('加载 MD 高亮设置失败:', err);
     }
 }
 
