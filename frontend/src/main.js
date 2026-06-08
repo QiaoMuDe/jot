@@ -2350,6 +2350,11 @@ function updatePreview() {
     } else {
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
     }
+    // 查找功能激活时，预览更新后重新应用高亮
+    if (findReplace.isVisible && els.editorOverlay.dataset.mode === 'preview' && findReplace._searchQuery) {
+        findReplace._cleanPreviewHtml = '';
+        findReplace._highlightPreview(findReplace._searchQuery);
+    }
 }
 
 /**
@@ -2365,6 +2370,10 @@ function switchEditorMode(mode) {
     // 预览模式下立即渲染
     if (mode === 'preview') {
         updatePreview();
+    }
+    // 切换模式时关闭查找/替换条（预览↔纯文本高亮机制不同，让用户重新打开）
+    if (findReplace.isVisible) {
+        findReplace.close();
     }
 }
 
@@ -2447,6 +2456,8 @@ function closeEditor() {
             clearTimeout(autoSaveTimer);
             autoSaveTimer = null;
         }
+        // 查找替换重置
+        findReplace.reset();
         state.editingNoteId = null;
         state.selectedTags = [];
         // 字数归零
@@ -3446,17 +3457,679 @@ function getScrollContainer() {
     }
 }
 
+/* ==========================================================================
+   FindReplaceManager — 编辑器内查找替换
+   ========================================================================== */
+
 /**
- * 处理键盘快捷键（Ctrl+Home/End, PgUp/PgDn）
+ * 编辑器查找/替换管理器
+ * 支持纯文本模式下的查找高亮、导航和替换功能
+ */
+class FindReplaceManager {
+    constructor() {
+        // DOM 元素引用（init 时绑定）
+        this.bar = null;
+        this.findInput = null;
+        this.replaceInput = null;
+        this.findCount = null;
+        this.findPrevBtn = null;
+        this.findNextBtn = null;
+        this.findCloseBtn = null;
+        this.replaceBarRow = null;
+        this.replaceOnceBtn = null;
+        this.replaceAllBtn = null;
+        this.replaceHint = null;
+        this.overlay = null;
+
+        // 状态
+        this.matches = [];               // [{start, end, text}]
+        this.currentIndex = -1;
+        this.isVisible = false;
+        this.showReplace = false;
+        this._textarea = null;           // 当前编辑器 textarea 引用
+        this._mdRendered = null;         // md 预览区引用
+        this._cleanPreviewHtml = '';     // 纯净的预览 HTML（未高亮）
+        this._searchQuery = '';          // 当前搜索词
+    }
+
+    /**
+     * 初始化，绑定 DOM 引用和事件
+     */
+    init() {
+        this.bar = document.getElementById('editorFindBar');
+        this.findInput = document.getElementById('findInput');
+        this.replaceInput = document.getElementById('replaceInput');
+        this.findCount = document.getElementById('findCount');
+        this.findPrevBtn = document.getElementById('findPrevBtn');
+        this.findNextBtn = document.getElementById('findNextBtn');
+        this.findCloseBtn = document.getElementById('findCloseBtn');
+        this.replaceBarRow = document.getElementById('replaceBarRow');
+        this.replaceOnceBtn = document.getElementById('replaceOnceBtn');
+        this.replaceAllBtn = document.getElementById('replaceAllBtn');
+        this.replaceHint = document.getElementById('replaceHint');
+        this.overlay = document.getElementById('findOverlay');
+        this._mdRendered = document.getElementById('mdRendered');
+
+        this._textarea = els.editorNoteContent;
+
+        // 查找输入事件
+        this.findInput.addEventListener('input', () => {
+            this._performSearch(this.findInput.value);
+        });
+
+        // 导航按钮
+        this.findPrevBtn.addEventListener('click', () => this._navigate(-1));
+        this.findNextBtn.addEventListener('click', () => this._navigate(1));
+
+        // 关闭
+        this.findCloseBtn.addEventListener('click', () => this.close());
+
+        // 替换按钮
+        this.replaceOnceBtn.addEventListener('click', () => this._replaceOnce());
+        this.replaceAllBtn.addEventListener('click', () => this._replaceAll());
+
+        // 替换输入框回车触发替换
+        this.replaceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this._replaceAll();
+                } else {
+                    this._replaceOnce();
+                }
+            }
+        });
+
+        // 查找输入框回车导航
+        this.findInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this._navigate(e.shiftKey ? -1 : 1);
+            }
+        });
+
+        // textarea 滚动时同步 overlay
+        this._textarea.addEventListener('scroll', () => {
+            this._syncOverlayScroll();
+        });
+
+        // textarea 内容变化时重新搜索（保持高亮同步）
+        this._textarea.addEventListener('input', () => {
+            if (this.isVisible && this._searchQuery) {
+                this._performSearch(this._searchQuery);
+            }
+        });
+    }
+
+    /**
+     * 打开查找条
+     * @param {boolean} withReplace - 是否同时显示替换条
+     */
+    open(withReplace = false) {
+        this._textarea = els.editorNoteContent;
+        this.isVisible = true;
+        this.showReplace = withReplace;
+
+        // 检查替换权限：只读模式或预览模式禁用替换
+        const isReadOnly = this._textarea.readOnly;
+        const isPreview = els.editorOverlay.dataset.mode === 'preview';
+
+        if (withReplace && isPreview) {
+            // 预览模式下显示提示（父容器显示，替换输入框由 hint 替代）
+            this.replaceBarRow.style.display = '';
+            this.replaceHint.style.display = '';
+            this.replaceHint.textContent = '请先切换到纯文本模式再进行替换操作';
+        } else if (withReplace && isReadOnly) {
+            // 只读模式（查看页面）不显示替换
+            this.replaceBarRow.style.display = '';
+            this.replaceHint.style.display = '';
+            this.replaceHint.textContent = '查看模式不支持替换';
+        } else {
+            this.replaceBarRow.style.display = withReplace ? '' : 'none';
+            this.replaceHint.style.display = 'none';
+        }
+
+        // 更新替换按钮状态
+        this._updateReplaceButtons();
+
+        this.bar.style.display = '';
+        this.findInput.value = '';
+        this.replaceInput.value = '';
+        this.findCount.textContent = '0/0';
+        this.matches = [];
+        this.currentIndex = -1;
+        this._searchQuery = '';
+        this._clearOverlay();
+
+        // 自动填入选中的文本到查找条
+        let selectionText = '';
+        const textarea = this._textarea;
+        if (isPreview) {
+            // 预览模式：从 mdRendered 中获取选中文本
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
+                try {
+                    const range = sel.getRangeAt(0);
+                    if (range && this._mdRendered && this._mdRendered.contains(range.commonAncestorContainer)) {
+                        selectionText = sel.toString().trim();
+                    }
+                } catch (_) { /* ignore */ }
+            }
+        } else if (textarea && textarea.selectionStart !== textarea.selectionEnd) {
+            // 纯文本模式：从 textarea 获取选中文本
+            selectionText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+        }
+
+        if (selectionText) {
+            const query = selectionText.slice(0, 200);
+            this.findInput.value = query;
+            this._searchQuery = query;
+            this._performSearch(query);
+        }
+
+        // 聚焦查找输入框
+        this.findInput.focus();
+    }
+
+    /**
+     * 关闭查找条
+     */
+    close() {
+        this.isVisible = false;
+        this.showReplace = false;
+        this.bar.style.display = 'none';
+        this.replaceBarRow.style.display = 'none';
+        this.replaceHint.style.display = 'none';
+        this.findInput.value = '';
+        this.replaceInput.value = '';
+        this.matches = [];
+        this.currentIndex = -1;
+        this._searchQuery = '';
+        this._clearOverlay();
+        // 移除 textarea 查找激活类，恢复文字显示
+        if (this._textarea) {
+            this._textarea.classList.remove('find-active');
+        }
+        // 恢复预览区纯净 HTML
+        if (this._mdRendered && this._cleanPreviewHtml) {
+            this._mdRendered.innerHTML = this._cleanPreviewHtml;
+            this._cleanPreviewHtml = '';
+        }
+        // 聚焦回 textarea
+        if (this._textarea && !this._textarea.readOnly) {
+            this._textarea.focus();
+        }
+    }
+
+    /**
+     * 关闭替换条（保留查找条）
+     */
+    closeReplace() {
+        this.showReplace = false;
+        this.replaceBarRow.style.display = 'none';
+        this.replaceHint.style.display = 'none';
+        this.replaceInput.value = '';
+        this.findInput.focus();
+    }
+
+    /**
+     * 切换替换条显示
+     */
+    toggleReplace() {
+        if (this.replaceBarRow.style.display !== 'none' && !this.replaceHint.style.display) {
+            // 替换条已显示，关闭它
+            this.closeReplace();
+            return;
+        }
+
+        const isReadOnly = this._textarea.readOnly;
+        const isPreview = els.editorOverlay.dataset.mode === 'preview';
+
+        if (isPreview) {
+            this.replaceBarRow.style.display = '';
+            this.replaceHint.style.display = '';
+            this.replaceHint.textContent = '请先切换到纯文本模式再进行替换操作';
+            // 3 秒后自动隐藏提示
+            setTimeout(() => {
+                if (this.isVisible) this.replaceHint.style.display = 'none';
+                if (this.isVisible) this.replaceBarRow.style.display = 'none';
+            }, 3000);
+        } else if (isReadOnly) {
+            this.replaceBarRow.style.display = '';
+            this.replaceHint.style.display = '';
+            this.replaceHint.textContent = '查看模式不支持替换';
+        } else {
+            this.replaceBarRow.style.display = '';
+            this.replaceHint.style.display = 'none';
+            this.replaceInput.focus();
+        }
+
+        this.showReplace = this.replaceBarRow.style.display !== 'none';
+        this._updateReplaceButtons();
+    }
+
+    /**
+     * 执行查找
+     */
+    _performSearch(query) {
+        this.matches = [];
+        this.currentIndex = -1;
+        this._searchQuery = query;
+
+        if (!query || !this._textarea) {
+            this.findCount.textContent = '0/0';
+            this._clearOverlay();
+            return;
+        }
+
+        // 预览模式：直接在 mdRendered 中高亮
+        if (els.editorOverlay.dataset.mode === 'preview') {
+            this._highlightPreview(query);
+            return;
+        }
+
+        const text = this._textarea.value;
+        const lowerQuery = query.toLowerCase();
+        const lowerText = text.toLowerCase();
+        let startIndex = 0;
+        let match;
+
+        // 查找所有匹配位置
+        while ((match = this._findNextIndex(lowerText, lowerQuery, startIndex)) !== -1) {
+            this.matches.push({
+                start: match,
+                end: match + query.length,
+                text: text.substring(match, match + query.length)
+            });
+            startIndex = match + query.length;
+        }
+
+        // 更新计数和 overlay
+        if (this.matches.length > 0) {
+            this.currentIndex = 0;
+            this.findCount.textContent = `1/${this.matches.length}`;
+            this._highlightOverlay();
+        } else {
+            this.findCount.textContent = `0/0`;
+            this._clearOverlay();
+        }
+    }
+
+    /**
+     * 查找下一个匹配项的起始索引
+     */
+    _findNextIndex(text, query, fromIndex) {
+        const idx = text.indexOf(query, fromIndex);
+        return idx;
+    }
+
+    /**
+     * 导航到上一个/下一个匹配
+     * @param {number} dir - 1: 下一个, -1: 上一个
+     */
+    _navigate(dir) {
+        if (!this.matches.length) return;
+
+        // 预览模式：在 mdRendered 中导航高亮
+        if (els.editorOverlay.dataset.mode === 'preview') {
+            this._navigatePreview(dir);
+            return;
+        }
+
+        this.currentIndex = (this.currentIndex + dir + this.matches.length) % this.matches.length;
+        this.findCount.textContent = `${this.currentIndex + 1}/${this.matches.length}`;
+        // 在 overlay 中更新高亮，不移动 textarea 焦点
+        this._highlightOverlay();
+        // 滚动 textarea 到匹配位置（不聚焦，保持查找输入框焦点）
+        this._scrollToMatch(this.matches[this.currentIndex]);
+    }
+
+    /**
+     * 预览模式下导航匹配项
+     */
+    _navigatePreview(dir) {
+        if (!this._mdRendered) return;
+        const highlights = this._mdRendered.querySelectorAll('.find-highlight');
+        if (!highlights.length) return;
+
+        // 找到当前激活项索引
+        let current = -1;
+        for (let i = 0; i < highlights.length; i++) {
+            if (highlights[i].classList.contains('active')) {
+                current = i;
+                break;
+            }
+        }
+
+        // 计算新索引
+        if (current === -1) {
+            current = dir > 0 ? 0 : highlights.length - 1;
+        } else {
+            highlights[current].classList.remove('active');
+            current = (current + dir + highlights.length) % highlights.length;
+        }
+
+        highlights[current].classList.add('active');
+        this.currentIndex = current;
+        this.findCount.textContent = `${current + 1}/${highlights.length}`;
+        highlights[current].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    /**
+     * 选中 textarea 中的匹配文本
+     */
+    _selectMatch(index) {
+        if (index < 0 || index >= this.matches.length) return;
+        const match = this.matches[index];
+        this._textarea.focus();
+        this._textarea.setSelectionRange(match.start, match.end);
+        // 滚动到可视区域
+        this._scrollToMatch(match);
+    }
+
+    /**
+     * 滚动 textarea 使匹配行可见
+     */
+    _scrollToMatch(match) {
+        const text = this._textarea.value;
+        const lineStart = text.lastIndexOf('\n', match.start - 1) + 1;
+        const lineEnd = text.indexOf('\n', match.start);
+        const lineStr = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
+        // 计算行号
+        let lineNumber = 1;
+        for (let i = 0; i < match.start; i++) {
+            if (text[i] === '\n') lineNumber++;
+        }
+
+        // 使用 textarea 的 scrollToLine 近似方法
+        const lineHeight = 24; // 近似行高，与 CSS line-height 1.7 * 0.938rem 匹配 ≈ 24px
+        const targetScroll = (lineNumber - 3) * lineHeight;
+        if (targetScroll > 0) {
+            this._textarea.scrollTop = targetScroll;
+        } else {
+            this._textarea.scrollTop = 0;
+        }
+    }
+
+    /**
+     * 替换当前激活匹配
+     */
+    _replaceOnce() {
+        if (!this._canReplace()) return;
+        if (this.currentIndex < 0 || this.currentIndex >= this.matches.length) return;
+
+        const match = this.matches[this.currentIndex];
+        const replacement = this.replaceInput.value;
+        const text = this._textarea.value;
+
+        // 执行替换
+        this._textarea.value = text.substring(0, match.start) + replacement + text.substring(match.end);
+        // 触发编辑器 input 事件（用于自动保存等）
+        this._textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 重新搜索
+        const query = this.findInput.value;
+        this._performSearch(query);
+
+        // 定位到替换位置的下一项
+        if (this.matches.length > 0) {
+            this.currentIndex = Math.min(this.currentIndex, this.matches.length - 1);
+            this.findCount.textContent = `${this.currentIndex + 1}/${this.matches.length}`;
+            this._selectMatch(this.currentIndex);
+            this._highlightOverlay();
+        }
+    }
+
+    /**
+     * 替换所有匹配
+     */
+    _replaceAll() {
+        if (!this._canReplace()) return;
+        if (!this.matches.length) return;
+
+        const query = this.findInput.value;
+        const replacement = this.replaceInput.value;
+        let text = this._textarea.value;
+
+        // 从后往前替换以保持位置正确
+        const sortedMatches = [...this.matches].sort((a, b) => b.start - a.start);
+        for (const match of sortedMatches) {
+            text = text.substring(0, match.start) + replacement + text.substring(match.end);
+        }
+
+        this._textarea.value = text;
+        // 触发编辑器 input 事件
+        this._textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 重新搜索
+        this._performSearch(query);
+    }
+
+    /**
+     * 检查是否可以执行替换
+     */
+    _canReplace() {
+        if (this._textarea.readOnly) return false;
+        if (els.editorOverlay.dataset.mode === 'preview') return false;
+        return true;
+    }
+
+    /**
+     * 更新替换按钮状态
+     */
+    _updateReplaceButtons() {
+        const canReplace = this._canReplace();
+        this.replaceOnceBtn.disabled = !canReplace;
+        this.replaceAllBtn.disabled = !canReplace;
+        if (!canReplace && this.replaceBarRow.style.display !== 'none') {
+            this.replaceOnceBtn.title = '请切换到纯文本模式';
+            this.replaceAllBtn.title = '请切换到纯文本模式';
+        } else {
+            this.replaceOnceBtn.title = '替换当前 (Enter)';
+            this.replaceAllBtn.title = '替换全部 (Shift+Enter)';
+        }
+    }
+
+    /**
+     * 在 overlay 中高亮所有匹配
+     */
+    _highlightOverlay() {
+        if (!this.overlay || !this._textarea) return;
+        const text = this._textarea.value;
+        if (!text || !this.matches.length) {
+            this.overlay.style.display = 'none';
+            return;
+        }
+
+        // 确保 textarea 文字透明交由 overlay 显示
+        this._textarea.classList.add('find-active');
+
+        this.overlay.style.display = '';
+        let html = '';
+        let lastEnd = 0;
+
+        for (let i = 0; i < this.matches.length; i++) {
+            const m = this.matches[i];
+            // 转义 HTML
+            const before = this._escapeHtml(text.substring(lastEnd, m.start));
+            const matchText = this._escapeHtml(text.substring(m.start, m.end));
+            const cls = i === this.currentIndex ? 'find-highlight active' : 'find-highlight';
+            html += before + `<span class="${cls}">${matchText}</span>`;
+            lastEnd = m.end;
+        }
+        html += this._escapeHtml(text.substring(lastEnd));
+
+        this.overlay.innerHTML = html;
+        this._syncOverlayScroll();
+    }
+
+    /**
+     * 清除 overlay 高亮
+     */
+    _clearOverlay() {
+        // 清除 textarea overlay
+        if (this.overlay) {
+            this.overlay.style.display = 'none';
+            this.overlay.innerHTML = '';
+        }
+        // 清除 textarea 查找激活类（恢复文字显示）
+        if (this._textarea) {
+            this._textarea.classList.remove('find-active');
+        }
+        // 清除预览区高亮
+        if (this._mdRendered && this._cleanPreviewHtml) {
+            this._mdRendered.innerHTML = this._cleanPreviewHtml;
+            this._cleanPreviewHtml = '';
+        }
+    }
+
+    /**
+     * 在 MD 预览区高亮匹配文本
+     */
+    _highlightPreview(query) {
+        if (!this._mdRendered) return;
+
+        // 保存纯净 HTML（仅首次）
+        if (!this._cleanPreviewHtml) {
+            this._cleanPreviewHtml = this._mdRendered.innerHTML;
+        }
+
+        const html = this._cleanPreviewHtml;
+        if (!html || !query) {
+            this._mdRendered.innerHTML = this._cleanPreviewHtml || html;
+            this.findCount.textContent = '0/0';
+            return;
+        }
+
+        // 使用 TreeWalker 遍历文本节点，安全地包裹匹配文本
+        const container = this._mdRendered;
+        container.innerHTML = this._cleanPreviewHtml;
+
+        const lowerQuery = query.toLowerCase();
+        let totalMatches = 0;
+
+        const treeWalker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+        const textNodes = [];
+        while (treeWalker.nextNode()) {
+            textNodes.push(treeWalker.currentNode);
+        }
+
+        // 从后往前处理文本节点，避免偏移问题
+        for (let i = textNodes.length - 1; i >= 0; i--) {
+            const node = textNodes[i];
+            const text = node.textContent;
+            const lowerText = text.toLowerCase();
+            let startIdx = 0;
+
+            // 查找该文本节点中的所有匹配
+            const parts = [];
+            let idx;
+            let count = 0;
+            while ((idx = lowerText.indexOf(lowerQuery, startIdx)) !== -1) {
+                if (idx > startIdx) {
+                    parts.push(document.createTextNode(text.substring(startIdx, idx)));
+                }
+                const span = document.createElement('span');
+                span.className = 'find-highlight';
+                span.textContent = text.substring(idx, idx + query.length);
+                parts.push(span);
+                startIdx = idx + query.length;
+                count++;
+                totalMatches++;
+            }
+            if (startIdx < text.length) {
+                parts.push(document.createTextNode(text.substring(startIdx)));
+            }
+
+            if (count > 0) {
+                const fragment = document.createDocumentFragment();
+                for (const part of parts) {
+                    fragment.appendChild(part);
+                }
+                node.parentNode.replaceChild(fragment, node);
+            }
+        }
+
+        if (totalMatches > 0) {
+            this.findCount.textContent = `1/${totalMatches}`;
+            this.matches = [{ start: 0, end: query.length, text: query }];
+            this.currentIndex = 0;
+            // 高亮第一个匹配
+            const firstMatch = container.querySelector('.find-highlight');
+            if (firstMatch) {
+                container.querySelectorAll('.find-highlight').forEach((el, i) => {
+                    el.classList.toggle('active', i === 0);
+                });
+                firstMatch.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        } else {
+            this.findCount.textContent = '0/0';
+            this.matches = [];
+            this.currentIndex = -1;
+        }
+    }
+
+    /**
+     * 同步 textarea 滚动位置到 overlay
+     */
+    _syncOverlayScroll() {
+        if (this.overlay && this._textarea) {
+            this.overlay.style.transform = `translateY(-${this._textarea.scrollTop}px)`;
+        }
+    }
+
+    /**
+     * 转义 HTML 特殊字符
+     */
+    _escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    /**
+     * 重置状态（编辑器关闭时调用）
+     */
+    reset() {
+        this.close();
+        this.matches = [];
+        this.currentIndex = -1;
+    }
+}
+
+// 全局单例
+const findReplace = new FindReplaceManager();
+
+/**
+ * 处理键盘快捷键（Ctrl+Home/End, PgUp/PgDn, Ctrl+F, Ctrl+H）
  */
 function handleKeyboardNavigation(e) {
     const container = getScrollContainer();
 
-    // Ctrl+F: 聚焦搜索输入框
+    // Ctrl+F: 编辑器打开时触发查找，否则聚焦搜索框
     if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
-        els.searchInput.focus();
-        els.searchInput.select();
+        if (els.viewEditor.classList.contains('active')) {
+            findReplace.open(false);
+        } else {
+            els.searchInput.focus();
+            els.searchInput.select();
+        }
+        return;
+    }
+
+    // Ctrl+H: 编辑器打开时触发查找+替换
+    if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        if (els.viewEditor.classList.contains('active')) {
+            // 如果查找条已显示，仅切换替换条；否则同时打开查找和替换
+            if (findReplace.isVisible) {
+                findReplace.toggleReplace();
+            } else {
+                findReplace.open(true);
+            }
+        }
         return;
     }
 
@@ -3477,9 +4150,21 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Escape: 退出当前子视图，回到首页
+    // [ 和 ]: 查找条激活时导航匹配项
+    if ((e.key === '[' || e.key === ']') && findReplace.isVisible && findReplace.matches.length > 0) {
+        e.preventDefault();
+        findReplace._navigate(e.key === ']' ? 1 : -1);
+        return;
+    }
+
+    // Escape: 关闭查找条或退出当前子视图
     if (e.key === 'Escape') {
         e.preventDefault();
+        // find/replace 条打开时先关闭
+        if (findReplace.isVisible) {
+            findReplace.close();
+            return;
+        }
         // 关于页面打开时关闭它
         if (els.viewAbout.style.display === 'flex') {
             closeAbout();
@@ -3775,7 +4460,10 @@ function closeShortcuts() {
 function renderShortcutsPage() {
     const shortcuts = [
         { key: 'Ctrl + N', desc: '新建笔记' },
-        { key: 'Ctrl + F', desc: '聚焦搜索框' },
+        { key: 'Ctrl + F', desc: '编辑器内查找 / 聚焦搜索框' },
+        { key: 'Ctrl + H', desc: '编辑器内查找替换' },
+        { key: '[', desc: '匹配上一项（查找条激活时）' },
+        { key: ']', desc: '匹配下一项（查找条激活时）' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
         { key: 'PgUp', desc: '上翻一页' },
         { key: 'PgDn', desc: '下翻一页 / 触底加载更多' },
@@ -4261,6 +4949,8 @@ async function init() {
     }
     await loadNotes();
     await loadTags();
+    // 初始化查找替换管理器
+    findReplace.init();
     // 初始化无边框窗口控制
     initWindowControls();
 }

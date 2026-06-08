@@ -105,9 +105,26 @@
                                 <!-- 标签选项由 JS 动态渲染 -->
                             </div>
                         </div>
-                        <div class="editor-panes">
+                        <div class="editor-panes" style="position:relative;">
                             <textarea id="editorNoteContent" class="editor-textarea" placeholder="开始写点什么..." rows="12"></textarea>
+                            <div id="findOverlay" class="find-overlay" style="display:none;"></div>
                             <div id="mdRendered" class="md-rendered" style="display:none"></div>
+                        </div>
+                    </div>
+                    <!-- 查找/替换条（body 与 footer 之间） -->
+                    <div class="editor-find-bar" id="editorFindBar" style="display:none;">
+                        <div class="find-bar-row">
+                            <input type="text" id="findInput" class="find-input" placeholder="查找..." spellcheck="false" />
+                            <span class="find-count" id="findCount">0/0</span>
+                            <button class="find-btn" id="findPrevBtn" title="上一个匹配 ( [ )">▲</button>
+                            <button class="find-btn" id="findNextBtn" title="下一个匹配 ( ] )">▼</button>
+                            <button class="find-btn find-close-btn" id="findCloseBtn" title="关闭查找 (Esc)">✕</button>
+                        </div>
+                        <div class="replace-bar-row" id="replaceBarRow" style="display:none;">
+                            <input type="text" id="replaceInput" class="replace-input" placeholder="替换为..." spellcheck="false" />
+                            <button class="find-btn replace-btn" id="replaceOnceBtn" title="替换当前">替换</button>
+                            <button class="find-btn replace-btn" id="replaceAllBtn" title="替换全部">全部替换</button>
+                            <span class="replace-hint" id="replaceHint" style="display:none;">请切换到纯文本模式</span>
                         </div>
                     </div>
                     <div class="editor-footer">
