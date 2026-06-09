@@ -549,7 +549,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 26. **预览区代码块复制按钮**：`updatePreview()` 中为每个 `pre` 元素添加 `.copy-code-btn`，悬浮时显示（`.copy-code-btn { opacity: 0; } pre:hover .copy-code-btn { opacity: 1; }`），点击通过 `navigator.clipboard.writeText()` 复制代码内容到剪贴板。状态反馈：默认 `'复制'` → 成功 `'✓ 已复制'` → 1.5s 恢复 `'复制'`；失败 `'✗ 复制失败'` → 1s 恢复 `'复制'`。
 27. **纯文本编辑器 MD 高亮开关**：设置页新增「编辑器选项」→「纯文本编辑器启用 MD 语法高亮」toggle，存储键 `md_highlight_plain`（默认 true）。`initCodeMirror()` 新增 `useMdHighlight` 参数，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定。
 28. **查看页编辑按钮**：查看模式（只读）header 工具栏在「全屏」按钮左侧显示 `✎` 编辑按钮（空心铅笔图标，与全屏⛶/关闭✕ 线条风格一致）。点击后直接调用 `openEditor(noteId, false)` 原地切换为编辑模式，不走 `closeEditor()`（避免其内部 200ms setTimeout 动画回调隐藏面板导致闪烁后消失的问题）。编辑模式下该按钮自动 `display:none` 隐藏。按钮顺序：T(类型切换) → ✎(编辑,仅查看可见) → ⛶(全屏) → ✕(关闭)
-29. **拖拽文件导入**：支持将文件拖入应用窗口导入为笔记。使用 HTML5 原生 Drag & Drop API（dragover/dragleave/drop + FileReader），Wails runtime.OnFileDrop 在此配置下不可靠故未采用。拖入时显示全局半透明遮罩层（#dropOverlay）+ 虚线卡片提示「释放以导入文件」。支持多文件批量导入，拒绝目录拖入并提示。单文件大小限制 10MB。读取内容后通过前端 CreateNote API 创建笔记（归入默认笔记本 ID=1），标题取文件名（去扩展名），内容取文件全文。导入完成后打开最后一条笔记为查看页面，发通知提示导入结果。
+29. **拖拽文件导入**：支持将文件拖入应用窗口导入为笔记。Wails 层面 `main.go` 配置 `DragAndDrop.EnableFileDrop: true` 启用 OS 级拖放拦截。前端用 `_dragCounter` 模式控制遮罩显示/隐藏（避免子元素 dragleave 误触发），拖入文件后 Wails `OnFileDrop(x, y, paths)` 回调直接返回文件路径数组，传后端 `ImportFiles(paths)` 统一处理。拖入时显示全局半透明遮罩层（#dropOverlay）+ 虚线卡片提示「释放以导入文件」。后端用 `go-kit/fs.IsBinaryPath()` 检测二进制文件（前 8000 字节含空字符）并拒绝。支持多文件批量导入，后端 stat 检测目录并拒绝提示。单文件大小限制 10MB。导入完成后打开最后一条笔记为查看页面，发通知提示导入结果。
 
 ---
 
@@ -641,7 +641,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **预览区代码块复制按钮**：悬浮出现、点击复制代码内容、成功/失败状态反馈
 - ✅ **纯文本编辑器 MD 高亮开关**：设置页新增 toggle，md_highlight_plain 键存储，Markdown 笔记始终启用，纯文本按设置决定
 - ✅ **查看页编辑按钮**：查看模式 header 工具栏显示 ✎ 编辑按钮（全屏左侧），点击原地切换为编辑模式（不走 closeEditor 避免闪烁），图标为空心铅笔与全屏/关闭风格统一
-- ✅ **拖拽文件导入**：HTML5 Drag & Drop API + FileReader，多文件批量导入，拒绝目录，10MB 大小限制，导入后打开查看页
+- ✅ **拖拽文件导入**：Wails OnFileDrop + DragAndDrop.EnableFileDrop，后端 go-kit/fs 检测二进制
 - ✅ **重置数据库后刷新侧边栏**：resetDatabase 后追加 loadNotebooks() 调用，解决笔记本计数不刷新问题
 - ✅ **空标题保存校验**：createNote/updateNote 标题为空时 show('标题不能为空...') 提示，阻止保存
 
@@ -775,7 +775,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **预览区代码块复制按钮** | `updatePreview()` 末尾遍历 `pre code` 为每个 `pre` 添加 `.copy-code-btn`。CSS 初始 `opacity:0`，`pre:hover .copy-code-btn { opacity:1 }`。点击通过 `navigator.clipboard.writeText(code.textContent)` 复制。状态反馈：初始 `'复制'` → 成功 `'✓ 已复制'` 1.5s 恢复 → 失败 `'✗ 复制失败'` 1s 恢复。按钮样式：右上角定位于 pre 内（`position:absolute; top:6px; right:6px`），`padding: 2px 8px` 自适应文字 |
 | **纯文本编辑器 MD 高亮开关** | 设置键 `md_highlight_plain`（默认 true）。HTML 添加 `#mdHighlightToggle`，JS 添加 `els.mdHighlightToggle` DOM 引用 + `loadMdHighlightSetting()`（读取后端/回退 localStorage）+ toggle `change` 事件自动保存。`initCodeMirror()` 第三参数 `useMdHighlight`，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。`openEditor()` 中逻辑：`const useMdHighlight = state.noteType === 'markdown' \|\| els.mdHighlightToggle.checked` — Markdown 笔记始终启用，纯文本按设置决定 |
 | **查看页编辑按钮** | header 工具栏中 `#editorEditBtn`（✎ 空心铅笔），仅在查看模式（isReadOnly=true）下显示（`els.editorEditBtn.style.display = isReadOnly ? '' : 'none'`）。位置在 `#editorFullscreenBtn` 左侧。点击事件：直接调用 `openEditor(noteId, false)` 原地切换为编辑模式——**不走 closeEditor()**，因为 closeEditor 内部 200ms setTimeout 动画回调会隐藏面板，导致 openEditor 先显示后又被隐藏（闪烁后消失）。initCodeMirror() 内部会销毁旧只读实例并创建新的可编辑实例 |
-| **拖拽文件导入** | 使用 HTML5 原生 Drag & Drop API（非 Wails runtime.OnFileDrop，后者在此配置下回调不触发）。`initFileDrop()` 监听 document 级 dragover（显示 #dropOverlay 遮罩）/ dragleave（隐藏遮罩，仅 clientX/Y 均为 0 时防误触）/ drop（隐藏遮罩 + 处理文件）。`handleFileDrop(files)` 遍历文件数组：目录拒绝提示；单文件 >10MB 跳过；通过 `readFileContent(file)` (FileReader) 读文本内容；调用 CreateNote(文件名去扩展名, 内容, noteType, notebookId=1) 创建笔记。导入完成后发通知 + 刷新笔记/笔记本列表 + 打开最后一条为查看页面 |
+| **拖拽文件导入** | Wails 层面：`main.go` 需添加 `DragAndDrop: &options.DragAndDrop{EnableFileDrop: true}`（缺失则 OnFileDrop 回调永不触发）。前端 `initFileDrop()` 使用 `_dragCounter` 模式控制 `#dropOverlay` 遮罩（dragenter ++ / dragleave --），HTML5 drop 事件仅 `preventDefault` + 重置遮罩，不处理文件。文件处理由 `window.runtime.OnFileDrop(cb, false)` 接手，回调签名 `(x, y, paths)` 返回文件路径数组。传后端 `ImportFiles(paths)` 统一处理：os.Stat 检测目录拒绝、fs.IsBinaryPath(p) 读前 8000 字节检测二进制、os.ReadFile 读取内容、CreateWithNotebook 创建笔记（默认笔记本 id=1）。多文件批量导入，单文件 10MB 限制。完成通知 + 刷新列表 + 打开最后一条查看页 |
 | **空标题校验** | `createNote()` 和 `updateNote()` 入口检查 `if (!title)` → `nm.show('标题不能为空，请输入标题后再保存', 'warning')` + return，阻止空标题保存 |
 | **重置数据库刷新侧边栏** | `resetDatabase()` 成功后追加 `await loadNotebooks()` 调用（位于 `loadDataStats()` 之后、`switchView('grid')` 之前），解决重置后笔记本侧边栏仍显示旧计数的问题 |
 | **复制功能逻辑** | `copyNote(id)` 在前端直接拼接标题和内容：`const text = (note.title ? note.title + '\n\n' : '') + (note.content || '')`，通过 `navigator.clipboard.writeText(text)` 写入剪贴板。与导出功能 `ExportNoteAsMarkdown` 类似（也是标题+内容组合），但导出走后端生成 .md 文件 |

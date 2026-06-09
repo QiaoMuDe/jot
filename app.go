@@ -733,6 +733,13 @@ func (a *App) ImportFiles(paths []string) []FileImportResult {
 			continue
 		}
 
+		// 二进制文件检测（go-kit/fs 读取前 8000 字节检查是否包含空字符）
+		if fs.IsBinaryPath(p) {
+			result.Error = "不支持导入二进制文件，请选择文本文件后重试"
+			results = append(results, result)
+			continue
+		}
+
 		// 读取文件内容
 		content, err := os.ReadFile(p)
 		if err != nil {

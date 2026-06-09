@@ -4577,118 +4577,113 @@ async function init() {
 }
 
 /**
- * 初始化文件拖拽导入（HTML5 Drag & Drop）
+ * 初始化文件拖拽导入
+ *
+ * _dragCounter 控制拖入/离开遮罩状态（避免子元素 dragleave 误触发），
+ * Wails OnFileDrop 获取文件路径（需 main.go 中 EnableFileDrop: true），
+ * 传后端 ImportFiles 统一完成 stat 检测目录、二进制检测和笔记创建。
  */
+let _dragCounter = 0;
 function initFileDrop() {
     const dropOverlay = document.getElementById('dropOverlay');
+    let registered = false;
+    if (registered) return;
+    registered = true;
+
+    document.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        if (!e.dataTransfer.types.includes('Files')) return;
+        _dragCounter++;
+        if (_dragCounter === 1 && dropOverlay) {
+            dropOverlay.classList.add('active');
+        }
+    });
 
     document.addEventListener('dragover', (e) => {
-        // 只处理文件拖拽，不处理文本/链接等
-        if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
-        // 显示拖拽提示遮罩
-        if (dropOverlay) dropOverlay.classList.add('active');
     });
 
     document.addEventListener('dragleave', (e) => {
-        // 只有离开文档时才隐藏遮罩
-        if (e.clientX === 0 && e.clientY === 0 && dropOverlay) {
-            dropOverlay.classList.remove('active');
-        }
-    });
-
-    document.addEventListener('drop', (e) => {
-        if (dropOverlay) dropOverlay.classList.remove('active');
-        if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
         e.preventDefault();
-        const files = Array.from(e.dataTransfer.files);
-        handleFileDrop(files);
+        _dragCounter--;
+        if (_dragCounter <= 0) {
+            _dragCounter = 0;
+            if (dropOverlay) dropOverlay.classList.remove('active');
+        }
     });
+
+    // HTML5 drop 仅重置遮罩，不处理文件（由 OnFileDrop 接手）
+    document.addEventListener('drop', (e) => {
+        e.preventDefault();
+        _dragCounter = 0;
+        if (dropOverlay) dropOverlay.classList.remove('active');
+    });
+
+    // Wails OnFileDrop：OS 级拦截，直接返回文件路径
+    // 回调签名：(x, y, paths) — x/y 为释放坐标，paths 为文件路径数组
+    if (window.runtime && window.runtime.OnFileDrop) {
+        console.log('[拖拽] 注册 OnFileDrop 回调 (useDropTarget=false)');
+        window.runtime.OnFileDrop(async (x, y, paths) => {
+            console.log('[拖拽] OnFileDrop 触发, paths:', paths);
+            // 确保遮罩已隐藏
+            _dragCounter = 0;
+            if (dropOverlay) dropOverlay.classList.remove('active');
+            if (!paths || paths.length === 0) return;
+
+            // 调用后端 ImportFiles 统一处理（stat 检测目录 + 二进制检测 + 创建笔记）
+            handleFileDropPaths(paths);
+        }, false);
+    }
 }
 
 /**
- * 处理拖拽文件导入（HTML5 File API + 后端 CreateNote）
+ * 处理拖拽文件导入（Wails OnFileDrop → 后端 ImportFiles）
  */
-async function handleFileDrop(files) {
-    if (!files || files.length === 0) return;
+async function handleFileDropPaths(paths) {
+    if (!paths || paths.length === 0) return;
 
-    let successCount = 0;
-    let failCount = 0;
-    let dirSkipped = 0;
-    let lastNoteId = null;
+    if (!window.go || !window.go.main || !window.go.main.App || !window.go.main.App.ImportFiles) {
+        nm.show('文件导入功能暂不可用', 'error');
+        return;
+    }
 
-    for (const file of files) {
-        // 拒绝目录：File API 中目录 size 为 0 且 type 为空，但无法完全判断
-        // 如果文件大小为 0，不做强制判断（空文件也可能有效），直接读取
-        if (file.size > 10 * 1024 * 1024) {
-            nm.show(`"${file.name}" 文件过大（超过 10MB），已跳过`, 'warning');
-            failCount++;
-            continue;
-        }
+    try {
+        const results = await window.go.main.App.ImportFiles(paths);
+        if (!results || results.length === 0) return;
 
-        try {
-            const content = await readFileContent(file);
-            if (content === null) {
-                nm.show(`"${file.name}" 读取失败，已跳过`, 'warning');
+        let successCount = 0;
+        let failCount = 0;
+        let lastNoteId = null;
+
+        for (const result of results) {
+            const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
+            if (result.error && result.error.includes('文件夹')) {
+                // 后端 stat 检测到目录
                 failCount++;
-                continue;
-            }
-
-            // 提取文件名（去后缀）作标题
-            const name = file.name;
-            const dotIndex = name.lastIndexOf('.');
-            const title = dotIndex > 0 ? name.substring(0, dotIndex) : name;
-
-            // 判断笔记类型：.md → markdown，其他 → text
-            const ext = dotIndex > 0 ? name.substring(dotIndex).toLowerCase() : '';
-            const noteType = ext === '.md' ? 'markdown' : 'text';
-
-            // 调用后端创建笔记（默认笔记本 id=1）
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
-                const note = await window.go.main.App.CreateNote(title || 'untitled', content, noteType, 1);
-                if (note && note.id) {
-                    successCount++;
-                    lastNoteId = note.id;
-                } else {
-                    failCount++;
-                }
+                nm.show(`${label} ${result.error}`, 'warning');
+            } else if (result.success) {
+                successCount++;
+                lastNoteId = result.note_id;
             } else {
-                nm.show('笔记创建功能暂不可用', 'error');
-                return;
+                failCount++;
+                nm.show(`"${label}" ${result.error || '导入失败'}`, 'warning');
             }
-        } catch (err) {
-            console.error(`导入 "${file.name}" 失败:`, err);
-            failCount++;
         }
+
+        if (successCount > 0) {
+            const msg = failCount > 0
+                ? `${successCount} 个文件导入成功，${failCount} 个失败`
+                : `${successCount} 个文件导入成功`;
+            nm.show(msg, 'success');
+        }
+
+        await loadNotes();
+        await loadNotebooks();
+        if (lastNoteId) openEditor(lastNoteId, true);
+    } catch (err) {
+        console.error('批量导入失败:', err);
+        nm.show('文件导入失败：' + (err.message || '未知错误'), 'error');
     }
-
-    // 组装通知消息
-    const parts = [];
-    if (successCount > 0) parts.push(`${successCount} 个文件导入成功`);
-    if (failCount > 0) parts.push(`${failCount} 个文件导入失败`);
-    if (parts.length > 0) nm.show(parts.join('，'), successCount > 0 ? 'success' : 'warning');
-
-    // 刷新笔记列表和侧栏
-    await loadNotes();
-    await loadNotebooks();
-
-    // 打开最后一个成功导入的笔记的查看页面
-    if (lastNoteId) {
-        openEditor(lastNoteId, true);
-    }
-}
-
-/**
- * 使用 FileReader 读取文件内容
- */
-function readFileContent(file) {
-    return new Promise((resolve) => {
-        // 文本文件应该用 UTF-8 读取
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = () => resolve(null);
-        reader.readAsText(file);
-    });
 }
 
 /**
