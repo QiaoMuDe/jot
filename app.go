@@ -106,6 +106,11 @@ func (a *App) GetNote(id uint) (*models.Note, error) {
 	return a.noteService.GetByID(id)
 }
 
+// GetNoteContent 按 ID 仅获取笔记的完整 content 文本（列表查询只返回截断版本，用于编辑器按需加载）
+func (a *App) GetNoteContent(id uint) (string, error) {
+	return a.noteService.GetNoteContent(id)
+}
+
 // GetNotes 分页获取未删除的笔记列表，支持指定排序方式和笔记本筛选
 func (a *App) GetNotes(page, pageSize int, sortBy string, notebookID uint) (*services.PaginatedResult, error) {
 	var notes []models.Note

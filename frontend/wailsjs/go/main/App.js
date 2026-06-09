@@ -106,6 +106,10 @@ export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }
 
+export function GetNoteContent(arg1) {
+  return window['go']['main']['App']['GetNoteContent'](arg1);
+}
+
 export function GetNoteIDsByNotebook(arg1) {
   return window['go']['main']['App']['GetNoteIDsByNotebook'](arg1);
 }

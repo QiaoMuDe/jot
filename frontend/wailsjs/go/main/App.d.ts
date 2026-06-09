@@ -56,6 +56,8 @@ export function GetDraft():Promise<models.Draft>;
 
 export function GetNote(arg1:number):Promise<models.Note>;
 
+export function GetNoteContent(arg1:number):Promise<string>;
+
 export function GetNoteIDsByNotebook(arg1:number):Promise<Array<number>>;
 
 export function GetNotebookNoteCounts():Promise<Record<number, number>>;

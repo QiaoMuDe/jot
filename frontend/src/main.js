@@ -2437,7 +2437,17 @@ async function openEditor(noteId, readOnly) {
         if (note) {
             // 查看/编辑模式
             els.editorNoteTitle.value = note.title || '';
-            editorContent = note.content || '';
+            // 列表中的 content 是截断版本（前 200 字符），从后端加载完整内容
+            try {
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNoteContent) {
+                    editorContent = await window.go.main.App.GetNoteContent(noteId) || '';
+                } else {
+                    editorContent = note.content || '';
+                }
+            } catch (err) {
+                console.error('获取完整笔记内容失败:', err);
+                editorContent = note.content || '';
+            }
             state.selectedTags = (note.tags || []).map((t) => t.id);
         } else {
             document.getElementById('colorPicker').value = '#6366f1';

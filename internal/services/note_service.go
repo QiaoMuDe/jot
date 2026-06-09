@@ -86,6 +86,21 @@ func (s *NoteService) GetByID(id uint) (*models.Note, error) {
 	return &note, nil
 }
 
+// GetNoteContent 按 ID 仅获取笔记的完整 content 文本（列表查询只返回截断版本，用于按需加载）
+func (s *NoteService) GetNoteContent(id uint) (string, error) {
+	var content string
+	if err := s.db.Model(&models.Note{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Select("content").
+		Take(&content).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("note not found")
+		}
+		return "", err
+	}
+	return content, nil
+}
+
 // buildSortOrder 根据 sortBy 参数构建 ORDER BY 子句
 // 支持的排序方式：updated_at（默认）、created_at、title
 func buildSortOrder(sortBy string) string {
@@ -98,6 +113,9 @@ func buildSortOrder(sortBy string) string {
 		return "pinned DESC, updated_at DESC"
 	}
 }
+
+// noteThinSelect 列表/搜索查询时使用的 Select，排除全量 Content，替换为前 200 字符用于卡片预览
+const noteThinSelect = "id, title, SUBSTR(content, 1, 200) AS content, note_type, pinned, notebook_id, created_at, updated_at"
 
 // GetAll 分页获取未删除的笔记列表（不过滤 notebook_id），按指定排序方式排列，返回列表与总数
 func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, int64, error) {
@@ -119,7 +137,8 @@ func (s *NoteService) GetAllByNotebook(page, pageSize int, sortBy string, notebo
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order(buildSortOrder(sortBy)).
+	if err := query.Select(noteThinSelect).
+		Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -162,7 +181,8 @@ func (s *NoteService) Search(keyword string, page, pageSize int) ([]models.Note,
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order("pinned DESC, updated_at DESC").
+	if err := query.Select(noteThinSelect).
+		Order("pinned DESC, updated_at DESC").
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -437,7 +457,8 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Order("pinned DESC, updated_at DESC").
+	if err := query.Select(noteThinSelect).
+		Order("pinned DESC, updated_at DESC").
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
