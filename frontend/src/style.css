@@ -2400,6 +2400,40 @@
 /* 类型色板 */
 .notification.success::before { background: #2ea043; }
 .notification.error::before { background: #ef4444; }
+
+/* ===== 拖拽文件导入遮罩 ===== */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.drop-overlay.active {
+  opacity: 1;
+}
+.drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 60px;
+  background: var(--card-bg, #1e1e2e);
+  border: 2px dashed var(--accent, #6c63ff);
+  border-radius: var(--radius-xl, 16px);
+  color: var(--accent, #6c63ff);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+}
+.drop-overlay-content p {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
 .notification.warning::before { background: #f59e0b; }
 .notification.info::before { background: #3b82f6; }
 

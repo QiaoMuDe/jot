@@ -378,6 +378,7 @@ const els = {
     editorNoteContent: $('editorNoteContent'),
     tagSelector: $('tagSelector'),
     editorCloseBtn: $('editorCloseBtn'),
+    editorEditBtn: $('editorEditBtn'),
     editorFullscreenBtn: $('editorFullscreenBtn'),
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
@@ -887,7 +888,10 @@ function showLoadingIndicator(show) {
 async function createNote() {
     const title = els.editorNoteTitle.value.trim();
     const content = getEditorContent().trim();
-    if (!title) return;
+    if (!title) {
+        nm.show('标题不能为空，请输入标题后再保存', 'warning');
+        return;
+    }
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
@@ -932,7 +936,10 @@ async function createNote() {
 async function updateNote(id) {
     const title = els.editorNoteTitle.value.trim();
     const content = getEditorContent().trim();
-    if (!title) return;
+    if (!title) {
+        nm.show('标题不能为空，请输入标题后再保存', 'warning');
+        return;
+    }
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
@@ -1932,6 +1939,8 @@ async function resetDatabase() {
         nm.show('重置失败：' + err.message, 'error');
     }
     await loadDataStats();
+    // 重新加载笔记本列表（数据已重置，旧 counts 不再有效）
+    await loadNotebooks();
     // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
     switchView('grid');
     loadNotes();
@@ -2451,6 +2460,8 @@ async function openEditor(noteId, readOnly) {
     if (els.editorTypeToggle) {
         els.editorTypeToggle.style.display = isReadOnly ? 'none' : '';
     }
+    // 只读模式显示编辑按钮，编辑/新建模式隐藏
+    els.editorEditBtn.style.display = isReadOnly ? '' : 'none';
 
     // 设置笔记类型
     state.noteType = (noteData && noteData.note_type) || 'text';
@@ -3456,6 +3467,13 @@ function initEventListeners() {
 
     // 编辑器
     els.editorCloseBtn.addEventListener('click', closeEditor);
+    els.editorEditBtn.addEventListener('click', () => {
+        const noteId = state.editingNoteId;
+        if (noteId) {
+            // 原地切换为编辑模式，不走 closeEditor（避免动画 setTimeout 冲突）
+            openEditor(noteId, false);
+        }
+    });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
     els.editorCancelBtn.addEventListener('click', async () => {
         // 取消：清除草稿再关闭编辑器（用户明确放弃当前编辑）
@@ -4552,10 +4570,125 @@ async function init() {
     }
     await loadNotes();
     await loadTags();
-    // 初始化查找替换管理（CM6 search 替代）
-    // findReplace 已删除
     // 初始化无边框窗口控制
     initWindowControls();
+    // 注册文件拖拽导入
+    initFileDrop();
+}
+
+/**
+ * 初始化文件拖拽导入（HTML5 Drag & Drop）
+ */
+function initFileDrop() {
+    const dropOverlay = document.getElementById('dropOverlay');
+
+    document.addEventListener('dragover', (e) => {
+        // 只处理文件拖拽，不处理文本/链接等
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        // 显示拖拽提示遮罩
+        if (dropOverlay) dropOverlay.classList.add('active');
+    });
+
+    document.addEventListener('dragleave', (e) => {
+        // 只有离开文档时才隐藏遮罩
+        if (e.clientX === 0 && e.clientY === 0 && dropOverlay) {
+            dropOverlay.classList.remove('active');
+        }
+    });
+
+    document.addEventListener('drop', (e) => {
+        if (dropOverlay) dropOverlay.classList.remove('active');
+        if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files);
+        handleFileDrop(files);
+    });
+}
+
+/**
+ * 处理拖拽文件导入（HTML5 File API + 后端 CreateNote）
+ */
+async function handleFileDrop(files) {
+    if (!files || files.length === 0) return;
+
+    let successCount = 0;
+    let failCount = 0;
+    let dirSkipped = 0;
+    let lastNoteId = null;
+
+    for (const file of files) {
+        // 拒绝目录：File API 中目录 size 为 0 且 type 为空，但无法完全判断
+        // 如果文件大小为 0，不做强制判断（空文件也可能有效），直接读取
+        if (file.size > 10 * 1024 * 1024) {
+            nm.show(`"${file.name}" 文件过大（超过 10MB），已跳过`, 'warning');
+            failCount++;
+            continue;
+        }
+
+        try {
+            const content = await readFileContent(file);
+            if (content === null) {
+                nm.show(`"${file.name}" 读取失败，已跳过`, 'warning');
+                failCount++;
+                continue;
+            }
+
+            // 提取文件名（去后缀）作标题
+            const name = file.name;
+            const dotIndex = name.lastIndexOf('.');
+            const title = dotIndex > 0 ? name.substring(0, dotIndex) : name;
+
+            // 判断笔记类型：.md → markdown，其他 → text
+            const ext = dotIndex > 0 ? name.substring(dotIndex).toLowerCase() : '';
+            const noteType = ext === '.md' ? 'markdown' : 'text';
+
+            // 调用后端创建笔记（默认笔记本 id=1）
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
+                const note = await window.go.main.App.CreateNote(title || 'untitled', content, noteType, 1);
+                if (note && note.id) {
+                    successCount++;
+                    lastNoteId = note.id;
+                } else {
+                    failCount++;
+                }
+            } else {
+                nm.show('笔记创建功能暂不可用', 'error');
+                return;
+            }
+        } catch (err) {
+            console.error(`导入 "${file.name}" 失败:`, err);
+            failCount++;
+        }
+    }
+
+    // 组装通知消息
+    const parts = [];
+    if (successCount > 0) parts.push(`${successCount} 个文件导入成功`);
+    if (failCount > 0) parts.push(`${failCount} 个文件导入失败`);
+    if (parts.length > 0) nm.show(parts.join('，'), successCount > 0 ? 'success' : 'warning');
+
+    // 刷新笔记列表和侧栏
+    await loadNotes();
+    await loadNotebooks();
+
+    // 打开最后一个成功导入的笔记的查看页面
+    if (lastNoteId) {
+        openEditor(lastNoteId, true);
+    }
+}
+
+/**
+ * 使用 FileReader 读取文件内容
+ */
+function readFileContent(file) {
+    return new Promise((resolve) => {
+        // 文本文件应该用 UTF-8 读取
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+    });
 }
 
 /**

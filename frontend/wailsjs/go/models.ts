@@ -36,6 +36,31 @@ export namespace gorm {
 
 }
 
+export namespace main {
+	
+	export class FileImportResult {
+	    path: string;
+	    title: string;
+	    note_id: number;
+	    success: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.title = source["title"];
+	        this.note_id = source["note_id"];
+	        this.success = source["success"];
+	        this.error = source["error"];
+	    }
+	}
+
+}
+
 export namespace models {
 	
 	export class Draft {

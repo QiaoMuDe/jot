@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-09
+> 生成日期: 2026-06-09（已更新）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -548,6 +548,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 25. **CM6 Markdown 语法高亮系统**：使用 `HighlightStyle.define()` + `syntaxHighlighting()` 为 Markdown 语法节点分配颜色，引用 CSS 变量（`--accent`、`--text-primary`、`--text-muted` 等）实现 6 主题联动。覆盖 16 种元素：heading1-6、strong、emphasis、strikethrough、link、url、quote、monospace、comment（代码块）、list（列表标记）、contentSeparator（水平线）、escape（转义符）、character（HTML 实体）、labelName（代码语言标签）、string（链接标题）、processingInstruction（语法标记符号如 ```）。不使用 `classHighlighter`（生成 `tok-xxx` 类名不匹配 CM6 DOM 结构）。
 26. **预览区代码块复制按钮**：`updatePreview()` 中为每个 `pre` 元素添加 `.copy-code-btn`，悬浮时显示（`.copy-code-btn { opacity: 0; } pre:hover .copy-code-btn { opacity: 1; }`），点击通过 `navigator.clipboard.writeText()` 复制代码内容到剪贴板。状态反馈：默认 `'复制'` → 成功 `'✓ 已复制'` → 1.5s 恢复 `'复制'`；失败 `'✗ 复制失败'` → 1s 恢复 `'复制'`。
 27. **纯文本编辑器 MD 高亮开关**：设置页新增「编辑器选项」→「纯文本编辑器启用 MD 语法高亮」toggle，存储键 `md_highlight_plain`（默认 true）。`initCodeMirror()` 新增 `useMdHighlight` 参数，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定。
+28. **查看页编辑按钮**：查看模式（只读）header 工具栏在「全屏」按钮左侧显示 `✎` 编辑按钮（空心铅笔图标，与全屏⛶/关闭✕ 线条风格一致）。点击后直接调用 `openEditor(noteId, false)` 原地切换为编辑模式，不走 `closeEditor()`（避免其内部 200ms setTimeout 动画回调隐藏面板导致闪烁后消失的问题）。编辑模式下该按钮自动 `display:none` 隐藏。按钮顺序：T(类型切换) → ✎(编辑,仅查看可见) → ⛶(全屏) → ✕(关闭)
+29. **拖拽文件导入**：支持将文件拖入应用窗口导入为笔记。使用 HTML5 原生 Drag & Drop API（dragover/dragleave/drop + FileReader），Wails runtime.OnFileDrop 在此配置下不可靠故未采用。拖入时显示全局半透明遮罩层（#dropOverlay）+ 虚线卡片提示「释放以导入文件」。支持多文件批量导入，拒绝目录拖入并提示。单文件大小限制 10MB。读取内容后通过前端 CreateNote API 创建笔记（归入默认笔记本 ID=1），标题取文件名（去扩展名），内容取文件全文。导入完成后打开最后一条笔记为查看页面，发通知提示导入结果。
 
 ---
 
@@ -638,6 +640,10 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **CM6 Markdown 语法高亮**：使用 HighlightStyle + syntaxHighlighting 引用 CSS 变量实现，覆盖 16 种 MD 元素。不使用 classHighlighter（tok-xxx 类名不匹配 CM6 DOM）
 - ✅ **预览区代码块复制按钮**：悬浮出现、点击复制代码内容、成功/失败状态反馈
 - ✅ **纯文本编辑器 MD 高亮开关**：设置页新增 toggle，md_highlight_plain 键存储，Markdown 笔记始终启用，纯文本按设置决定
+- ✅ **查看页编辑按钮**：查看模式 header 工具栏显示 ✎ 编辑按钮（全屏左侧），点击原地切换为编辑模式（不走 closeEditor 避免闪烁），图标为空心铅笔与全屏/关闭风格统一
+- ✅ **拖拽文件导入**：HTML5 Drag & Drop API + FileReader，多文件批量导入，拒绝目录，10MB 大小限制，导入后打开查看页
+- ✅ **重置数据库后刷新侧边栏**：resetDatabase 后追加 loadNotebooks() 调用，解决笔记本计数不刷新问题
+- ✅ **空标题保存校验**：createNote/updateNote 标题为空时 show('标题不能为空...') 提示，阻止保存
 
 ---
 
@@ -679,7 +685,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/帮助六个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成） |
+| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成） |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
@@ -768,4 +774,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **CM6 Markdown 语法高亮** | 使用 `HighlightStyle.define([...])` + `syntaxHighlighting()` 扩展，引用 CSS 变量（`--accent`/`--text-primary`/`--text-muted`/`--text-secondary`/`--hover-bg`/`--border` 等）实现 6 主题联动。`jotHighlightStyle` 定义在 `initCodeMirror()` 上方，覆盖 16 种 tag：`heading1~6`（h1 最大最亮橙色，逐级递减）、`strong`（加粗）、`emphasis`（斜体）、`strikethrough`（删除线）、`link`（accent 色）、`url`（下划线）、`quote`（灰绿）、`monospace`（橙底）、`comment`（灰色斜体，代码块）、`list`（列表标记）、`contentSeparator`（水平线）、`escape`（转义符）、`character`（HTML 实体）、`labelName`（代码语言标签）、`string`（链接标题）、`processingInstruction`（语法标记符号）。不使用 `classHighlighter`（生成 `tok-xxx` 类名不匹配 CM6 DOM 结构）|
 | **预览区代码块复制按钮** | `updatePreview()` 末尾遍历 `pre code` 为每个 `pre` 添加 `.copy-code-btn`。CSS 初始 `opacity:0`，`pre:hover .copy-code-btn { opacity:1 }`。点击通过 `navigator.clipboard.writeText(code.textContent)` 复制。状态反馈：初始 `'复制'` → 成功 `'✓ 已复制'` 1.5s 恢复 → 失败 `'✗ 复制失败'` 1s 恢复。按钮样式：右上角定位于 pre 内（`position:absolute; top:6px; right:6px`），`padding: 2px 8px` 自适应文字 |
 | **纯文本编辑器 MD 高亮开关** | 设置键 `md_highlight_plain`（默认 true）。HTML 添加 `#mdHighlightToggle`，JS 添加 `els.mdHighlightToggle` DOM 引用 + `loadMdHighlightSetting()`（读取后端/回退 localStorage）+ toggle `change` 事件自动保存。`initCodeMirror()` 第三参数 `useMdHighlight`，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。`openEditor()` 中逻辑：`const useMdHighlight = state.noteType === 'markdown' \|\| els.mdHighlightToggle.checked` — Markdown 笔记始终启用，纯文本按设置决定 |
+| **查看页编辑按钮** | header 工具栏中 `#editorEditBtn`（✎ 空心铅笔），仅在查看模式（isReadOnly=true）下显示（`els.editorEditBtn.style.display = isReadOnly ? '' : 'none'`）。位置在 `#editorFullscreenBtn` 左侧。点击事件：直接调用 `openEditor(noteId, false)` 原地切换为编辑模式——**不走 closeEditor()**，因为 closeEditor 内部 200ms setTimeout 动画回调会隐藏面板，导致 openEditor 先显示后又被隐藏（闪烁后消失）。initCodeMirror() 内部会销毁旧只读实例并创建新的可编辑实例 |
+| **拖拽文件导入** | 使用 HTML5 原生 Drag & Drop API（非 Wails runtime.OnFileDrop，后者在此配置下回调不触发）。`initFileDrop()` 监听 document 级 dragover（显示 #dropOverlay 遮罩）/ dragleave（隐藏遮罩，仅 clientX/Y 均为 0 时防误触）/ drop（隐藏遮罩 + 处理文件）。`handleFileDrop(files)` 遍历文件数组：目录拒绝提示；单文件 >10MB 跳过；通过 `readFileContent(file)` (FileReader) 读文本内容；调用 CreateNote(文件名去扩展名, 内容, noteType, notebookId=1) 创建笔记。导入完成后发通知 + 刷新笔记/笔记本列表 + 打开最后一条为查看页面 |
+| **空标题校验** | `createNote()` 和 `updateNote()` 入口检查 `if (!title)` → `nm.show('标题不能为空，请输入标题后再保存', 'warning')` + return，阻止空标题保存 |
+| **重置数据库刷新侧边栏** | `resetDatabase()` 成功后追加 `await loadNotebooks()` 调用（位于 `loadDataStats()` 之后、`switchView('grid')` 之前），解决重置后笔记本侧边栏仍显示旧计数的问题 |
 | **复制功能逻辑** | `copyNote(id)` 在前端直接拼接标题和内容：`const text = (note.title ? note.title + '\n\n' : '') + (note.content || '')`，通过 `navigator.clipboard.writeText(text)` 写入剪贴板。与导出功能 `ExportNoteAsMarkdown` 类似（也是标题+内容组合），但导出走后端生成 .md 文件 |

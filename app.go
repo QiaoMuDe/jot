@@ -686,6 +686,92 @@ func (a *App) GetBackupInfo() (map[string]string, error) {
 	}, nil
 }
 
+// FileImportResult 单个文件导入结果
+type FileImportResult struct {
+	Path    string `json:"path"`
+	Title   string `json:"title"`
+	NoteID  uint   `json:"note_id"`
+	Success bool   `json:"success"`
+	Error   string `json:"error"`
+}
+
+// ImportFiles 批量导入拖拽文件为笔记（归入默认笔记本）
+func (a *App) ImportFiles(paths []string) []FileImportResult {
+	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
+		return []FileImportResult{{
+			Path:    "",
+			Success: false,
+			Error:   "获取默认笔记本失败: " + err.Error(),
+		}}
+	}
+
+	const maxSize int64 = 10 * 1024 * 1024 // 10MB
+	var results []FileImportResult
+
+	for _, p := range paths {
+		result := FileImportResult{Path: p}
+
+		// 检查路径
+		info, err := os.Stat(p)
+		if err != nil {
+			result.Error = "无法访问文件: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		// 拒绝目录
+		if info.IsDir() {
+			result.Error = "不支持导入目录，请选择文件"
+			results = append(results, result)
+			continue
+		}
+
+		// 文件大小限制
+		if info.Size() > maxSize {
+			result.Error = "文件过大（超过 10MB），无法导入"
+			results = append(results, result)
+			continue
+		}
+
+		// 读取文件内容
+		content, err := os.ReadFile(p)
+		if err != nil {
+			result.Error = "读取文件失败: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		// 提取文件名（去后缀）作标题
+		name := filepath.Base(p)
+		ext := filepath.Ext(name)
+		title := strings.TrimSuffix(name, ext)
+		if title == "" {
+			title = "untitled"
+		}
+
+		// 判断笔记类型：.md → markdown，其他 → text
+		noteType := "text"
+		if strings.EqualFold(ext, ".md") {
+			noteType = "markdown"
+		}
+
+		// 创建笔记（默认笔记本 id=1）
+		note, err := a.noteService.CreateWithNotebook(title, string(content), noteType, 1)
+		if err != nil {
+			result.Error = "创建笔记失败: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		result.Title = title
+		result.NoteID = note.ID
+		result.Success = true
+		results = append(results, result)
+	}
+
+	return results
+}
+
 // ResetDatabase 清空所有数据（笔记/标签/设置），重新初始化默认标签，恢复出厂状态
 func (a *App) ResetDatabase() error {
 	// 1. 清空所有笔记和标签
