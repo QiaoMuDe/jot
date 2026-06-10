@@ -1291,12 +1291,22 @@
   font-size: 0.938rem;
   line-height: 1.7;
   color: var(--text-primary);
-  /* 隐藏滚动条，保留滚动能力 */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  /* 精致微调滚动条：Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(128,128,128,0.18)) transparent;
 }
 .md-rendered::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
+  width: 6px;
+}
+.md-rendered::-webkit-scrollbar-track {
+  background: transparent;
+}
+.md-rendered::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, rgba(128,128,128,0.18));
+  border-radius: 3px;
+}
+.md-rendered::-webkit-scrollbar-thumb:hover {
+  background: rgba(128,128,128,0.3);
 }
 
 .md-rendered h1,
