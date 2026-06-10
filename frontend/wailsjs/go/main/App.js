@@ -154,8 +154,8 @@ export function ImportDatabaseWithDialog() {
   return window['go']['main']['App']['ImportDatabaseWithDialog']();
 }
 
-export function ImportFiles(arg1) {
-  return window['go']['main']['App']['ImportFiles'](arg1);
+export function ImportFiles(arg1, arg2) {
+  return window['go']['main']['App']['ImportFiles'](arg1, arg2);
 }
 
 export function MoveNoteToNotebook(arg1, arg2) {

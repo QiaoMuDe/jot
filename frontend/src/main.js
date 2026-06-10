@@ -4640,8 +4640,8 @@ function initFileDrop() {
             if (dropOverlay) dropOverlay.classList.remove('active');
             if (!paths || paths.length === 0) return;
 
-            // 调用后端 ImportFiles 统一处理（stat 检测目录 + 二进制检测 + 创建笔记）
-            handleFileDropPaths(paths);
+            // 调用后端 ImportFiles 统一处理（stat 检测目录 + 二进制检测 + 创建笔记到当前笔记本）
+            handleFileDropPaths(paths, state.activeNotebookId);
         }, false);
     }
 }
@@ -4649,7 +4649,7 @@ function initFileDrop() {
 /**
  * 处理拖拽文件导入（Wails OnFileDrop → 后端 ImportFiles）
  */
-async function handleFileDropPaths(paths) {
+async function handleFileDropPaths(paths, notebookId) {
     if (!paths || paths.length === 0) return;
 
     if (!window.go || !window.go.main || !window.go.main.App || !window.go.main.App.ImportFiles) {
@@ -4658,7 +4658,7 @@ async function handleFileDropPaths(paths) {
     }
 
     try {
-        const results = await window.go.main.App.ImportFiles(paths);
+        const results = await window.go.main.App.ImportFiles(paths, notebookId);
         if (!results || results.length === 0) return;
 
         let successCount = 0;

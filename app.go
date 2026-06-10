@@ -700,8 +700,8 @@ type FileImportResult struct {
 	Error   string `json:"error"`
 }
 
-// ImportFiles 批量导入拖拽文件为笔记（归入默认笔记本）
-func (a *App) ImportFiles(paths []string) []FileImportResult {
+// ImportFiles 批量导入拖拽文件为笔记（归入指定笔记本）
+func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		return []FileImportResult{{
 			Path:    "",
@@ -767,8 +767,8 @@ func (a *App) ImportFiles(paths []string) []FileImportResult {
 			noteType = "markdown"
 		}
 
-		// 创建笔记（默认笔记本 id=1）
-		note, err := a.noteService.CreateWithNotebook(title, string(content), noteType, 1)
+		// 创建笔记（归入指定笔记本）
+		note, err := a.noteService.CreateWithNotebook(title, string(content), noteType, notebookID)
 		if err != nil {
 			result.Error = "创建笔记失败: " + err.Error()
 			results = append(results, result)

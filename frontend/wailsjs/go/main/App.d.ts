@@ -80,7 +80,7 @@ export function GetVersion():Promise<string>;
 
 export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
-export function ImportFiles(arg1:Array<string>):Promise<Array<main.FileImportResult>>;
+export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
 
 export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
 
