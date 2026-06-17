@@ -186,14 +186,14 @@ function initCodeMirror(container, content = '', readOnly = false, useMdHighligh
             backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
         },
         '.cm-gutters': {
-            backgroundColor: 'transparent',
+            backgroundColor: 'var(--card-bg)',
             border: 'none',
         },
         '.cm-lineNumbers .cm-gutterElement': {
             color: 'var(--text-muted)',
             fontSize: '0.75rem',
             lineHeight: '2.13',
-            padding: '0 8px 0 4px',
+            padding: '0 4px 0 4px',
         },
         '.cm-foldGutter .cm-gutterElement': {
             color: 'var(--text-muted)',

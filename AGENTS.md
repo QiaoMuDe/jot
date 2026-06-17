@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-09（已更新）
+> 生成日期: 2026-06-10（已更新）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -106,6 +106,10 @@ jot/                                    # 项目根目录
         ├── tasks.md
         └── checklist.md
     └── fix-preview-scrollbar/          # 预览模式滚动条修复（已完成）
+        ├── spec.md
+        ├── tasks.md
+        └── checklist.md
+    └── fix-cm6-horizontal-scrollbar-gutter/  # CM6 水平滚动条遮挡行号修复（已完成）
         ├── spec.md
         ├── tasks.md
         └── checklist.md
@@ -660,6 +664,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **懒加载 Content 优化**：列表/搜索查询使用 Select 截断 Content 为前 200 字符，打开笔记时按需加载完整内容
 - ✅ **重置数据库后刷新侧边栏**：resetDatabase 后追加 loadNotebooks() 调用，解决笔记本计数不刷新问题
 - ✅ **空标题保存校验**：createNote/updateNote 标题为空时 show('标题不能为空...') 提示，阻止保存
+- ✅ **CM6 行号栏背景修复**：水平滚动条出现时不再覆盖左侧行号区域；`.cm-gutters` 背景改为 `var(--card-bg)` 并设置 `z-index: 10`，行号数字右侧 padding 从 8px 收窄到 4px。详见 `.trae/specs/fix-cm6-horizontal-scrollbar-gutter/`
 
 ---
 
@@ -796,3 +801,4 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **空标题校验** | `createNote()` 和 `updateNote()` 入口检查 `if (!title)` → `nm.show('标题不能为空，请输入标题后再保存', 'warning')` + return，阻止空标题保存 |
 | **重置数据库刷新侧边栏** | `resetDatabase()` 成功后追加 `await loadNotebooks()` 调用（位于 `loadDataStats()` 之后、`switchView('grid')` 之前），解决重置后笔记本侧边栏仍显示旧计数的问题 |
 | **复制功能逻辑** | `copyNote(id)` 在前端直接拼接标题和内容：`const text = (note.title ? note.title + '\n\n' : '') + (note.content || '')`，通过 `navigator.clipboard.writeText(text)` 写入剪贴板。与导出功能 `ExportNoteAsMarkdown` 类似（也是标题+内容组合），但导出走后端生成 .md 文件 |
+| **CM6 行号栏背景修复** | 水平滚动条不再遮挡行号：`.cm-gutters` 背景设为 `var(--card-bg)` + `z-index: 10`；`.cm-lineNumbers .cm-gutterElement` padding 从 `0 8px 0 4px` 收窄为 `0 4px 0 4px`，减少背景色延伸。详见 `.trae/specs/fix-cm6-horizontal-scrollbar-gutter/` |
