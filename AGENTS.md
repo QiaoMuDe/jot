@@ -119,6 +119,10 @@ jot/                                    # 项目根目录
         └── checklist.md
     └── hide-topbar-items-on-editor-fullscreen/ # 全屏隐藏搜索框/更多菜单 + 平滑过渡（已完成，文档在 .trae/documents/）
         └── ...
+    └── elevate-visual-refinement/ # UI 视觉品质升级（已完成）
+        ├── spec.md
+        ├── tasks.md
+        └── checklist.md
 ```
 
 ### 目录规范评价
@@ -779,7 +783,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 已完成项目记忆更新（2026-06-09），后续可基于此报告回答项目相关问题。
+> **报告结束** | 已完成项目记忆更新（2026-06-23），后续可基于此报告回答项目相关问题。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -799,7 +803,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **快捷键数字键** | 1-7 改为 Ctrl+数字键防止误触。快捷键说明页、下拉菜单 tooltip、侧栏动态 tooltip 同步更新。`[`/`]` 快捷键说明已移除 |
 | **字体联动** | CM6 通过 `EditorView.theme()` 中 `"&"` 的 `fontFamily`/ `fontSize` 绑定 `--cm-font-family` / `--cm-font-size` CSS 变量，字体设置实时同步 |
 | **CM6 Markdown 语法高亮** | 使用 `HighlightStyle.define([...])` + `syntaxHighlighting()` 扩展，引用 CSS 变量（`--accent`/`--text-primary`/`--text-muted`/`--text-secondary`/`--hover-bg`/`--border` 等）实现 6 主题联动。`jotHighlightStyle` 定义在 `initCodeMirror()` 上方，覆盖 16 种 tag：`heading1~6`（h1 最大最亮橙色，逐级递减）、`strong`（加粗）、`emphasis`（斜体）、`strikethrough`（删除线）、`link`（accent 色）、`url`（下划线）、`quote`（灰绿）、`monospace`（橙底）、`comment`（灰色斜体，代码块）、`list`（列表标记）、`contentSeparator`（水平线）、`escape`（转义符）、`character`（HTML 实体）、`labelName`（代码语言标签）、`string`（链接标题）、`processingInstruction`（语法标记符号）。不使用 `classHighlighter`（生成 `tok-xxx` 类名不匹配 CM6 DOM 结构）|
-| **预览区代码块复制按钮** | `updatePreview()` 末尾遍历 `pre code` 为每个 `pre` 添加 `.copy-code-btn`。CSS 初始 `opacity:0`，`pre:hover .copy-code-btn { opacity:1 }`。点击通过 `navigator.clipboard.writeText(code.textContent)` 复制。状态反馈：初始 `'复制'` → 成功 `'✓ 已复制'` 1.5s 恢复 → 失败 `'✗ 复制失败'` 1s 恢复。按钮样式：右上角定位于 pre 内（`position:absolute; top:6px; right:6px`），`padding: 2px 8px` 自适应文字 |
+| **预览区代码块复制按钮** | `updatePreview()` 末尾遍历 `pre code` 为每个 `pre` 添加 `.copy-code-btn`。CSS 初始 `opacity:0`，`pre:hover .copy-code-btn { opacity:1 }`。按钮垂直居中于代码块（`top:50%; transform:translateY(-50%)`），置于右侧内边距区域（`right:4px`，pre `padding-right:16px`），不遮挡代码文字。悬浮 hover 放大 `scale(1.08)`。点击通过 `navigator.clipboard.writeText(code.textContent)` 复制。状态反馈：初始 `'复制'` → 成功 `'✓ 已复制'` 1.5s 恢复 → 失败 `'✗ 复制失败'` 1s 恢复 |
+
 | **纯文本编辑器 MD 高亮开关** | 设置键 `md_highlight_plain`（默认 true）。HTML 添加 `#mdHighlightToggle`，JS 添加 `els.mdHighlightToggle` DOM 引用 + `loadMdHighlightSetting()`（读取后端/回退 localStorage）+ toggle `change` 事件自动保存。`initCodeMirror()` 第三参数 `useMdHighlight`，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。`openEditor()` 中逻辑：`const useMdHighlight = state.noteType === 'markdown' \|\| els.mdHighlightToggle.checked` — Markdown 笔记始终启用，纯文本按设置决定 |
 | **查看页编辑按钮** | header 工具栏中 `#editorEditBtn`（✎ 空心铅笔），仅在查看模式（isReadOnly=true）下显示（`els.editorEditBtn.style.display = isReadOnly ? '' : 'none'`）。位置在 `#editorFullscreenBtn` 左侧。点击事件：直接调用 `openEditor(noteId, false)` 原地切换为编辑模式——**不走 closeEditor()**，因为 closeEditor 内部 200ms setTimeout 动画回调会隐藏面板，导致 openEditor 先显示后又被隐藏（闪烁后消失）。initCodeMirror() 内部会销毁旧只读实例并创建新的可编辑实例 |
 | **拖拽文件导入** | Wails 层面：`main.go` 需添加 `DragAndDrop: &options.DragAndDrop{EnableFileDrop: true}`（缺失则 OnFileDrop 回调永不触发）。前端 `initFileDrop()` 使用 `_dragCounter` 模式控制 `#dropOverlay` 遮罩（dragenter ++ / dragleave --），HTML5 drop 事件仅 `preventDefault` + 重置遮罩，不处理文件。文件处理由 `window.runtime.OnFileDrop(cb, false)` 接手，回调签名 `(x, y, paths)` 返回文件路径数组。`OnFileDrop` 回调调用 `handleFileDropPaths(paths, state.activeNotebookId)` 传递当前笔记本 ID。后端 `ImportFiles(paths, notebookID uint)` 统一处理：os.Stat 检测目录拒绝、fs.IsBinaryPath(p) 读前 8000 字节检测二进制、os.ReadFile 读取内容、CreateWithNotebook(title, content, noteType, notebookID) 创建笔记到指定笔记本。多文件批量导入，单文件 10MB 限制。完成通知 + 刷新列表 + 打开最后一条查看页 |
@@ -811,3 +816,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **全屏模式保留自定义标题栏** | 编辑器全屏时 `.editor-panel.fullscreen` 将 `height: 100vh` 改为 `height: calc(100vh - 56px)`，`.editor-overlay.fullscreening` 添加 `top: 56px`，使 Wails Frameless 自定义标题栏（#topbar，高 56px）始终可见可交互。详见 `.trae/specs/fix-fullscreen-cover-custom-titlebar/` |
 | **全屏隐藏装饰横线** | `.editor-panel.fullscreen::before { display: none }` — 全屏模式下隐藏编辑器顶部 3px 粉色强调线（accent 色），保持界面干净 |
 | **全屏隐藏搜索框与更多菜单** | 进入/退出全屏时通过 JS 给 `#topbar` 切换 `editor-fullscreen` 类，CSS 控制 `.topbar-search`（搜索框）和 `.topbar-dropdown`（☰ 菜单）隐藏。隐藏使用 `opacity + max-width + transform` 平滑过渡（~250ms），搜索框淡出+水平收缩，☰ 菜单淡出+scale缩小，右侧窗口控件随 flex 布局自然左移。文档见 `.trae/documents/smooth-topbar-transition-on-fullscreen.md` |
+| **UI 视觉品质升级** | 5 项升级：① 30+ Unicode 图标替换为 Lucide 风格 SVG（窗口控制/工具栏/功能按钮），所有图标使用 `currentColor` 适配 6 主题；② 新增语义色 Token（success/warning/error/info）和 4 层阴影 Token（elevated/dropdown/modal/toast），6 主题分别定义且满足 WCAG AA；③ 组件交互增强（卡片 hover 上浮+边框微亮、按钮 hover→active 分层反馈、编辑器色条渐变、侧栏 spring 缓动）；④ 空状态 SVG 插图+骨架屏 shimmer 加载态；⑤ 全局一致性修复（12 处圆角硬编码→Token、侧栏 172px→176px）。spec 见 `.trae/specs/elevate-visual-refinement/` |
+| **侧栏笔记本项圆角对称** | `.notebook-item` 从 `border-radius: var(--radius-sm) 0 0 var(--radius-sm)`（左侧圆角右侧直角书签隐喻）改为 `border-radius: var(--radius-sm)` 两侧对称圆角，与项目中其他容器（卡片/按钮/面板）保持一致 |
+| **全屏自动收起侧栏** | `toggleEditorFullscreen(goFullscreen)` 进入全屏时检测 `els.notebookSidebar` 未折叠则添加 `collapsed` 类自动收起，退出全屏不自动展开 |
+| **代码块内边距重构** | 内边距从 `pre code { padding: 1em }` 移到 `pre { padding: 12px 16px; margin: 1.2em 0 }`，`pre code { padding: 0 }`。修正重复 `.md-rendered pre` 声明合并，统一为 L1227（含 `position: relative; min-height: 52px`），删除 L1510 旧副本。复制按钮置于 16px 右内边距区域内（`right: 4px`），不遮挡代码文字。`min-height: 52px` 确保单行代码块高度足够容纳按钮 |

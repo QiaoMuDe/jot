@@ -98,6 +98,16 @@
   pointer-events: auto;
 }
 
+/* 按钮内 SVG 图标：禁止指针事件 */
+button svg {
+  pointer-events: none;
+}
+
+/* SVG-only 按钮：块级居中 */
+button :only-child:is(svg) {
+  display: block;
+}
+
 .topbar-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
@@ -249,6 +259,9 @@
   border-radius: var(--radius-sm);
   font-family: inherit;
   transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .back-btn:hover {
@@ -341,32 +354,98 @@
   margin-top: 8px;
 }
 
+/* ---------- 增强空状态样式 ---------- */
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: var(--text-muted);
+  flex: 1;
+  padding: 48px 24px;
+  text-align: center;
 }
 
-.empty-icon {
-  font-size: 3rem;
+.empty-state-icon {
+  width: 72px;
+  height: 72px;
+  color: var(--text-tertiary);
   margin-bottom: 16px;
   opacity: 0.6;
 }
 
-.empty-title {
+.empty-state-icon svg {
+  width: 72px;
+  height: 72px;
+}
+
+.empty-state-title {
   font-size: 1rem;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin: 0 0 8px;
 }
 
-.empty-desc {
+.empty-state-desc {
   font-size: 0.813rem;
   color: var(--text-muted);
+  margin: 0;
+  max-width: 240px;
+  line-height: 1.5;
 }
+
+/* ---------- 骨架屏加载 ---------- */
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 24px;
+}
+
+.skeleton-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl, 12px);
+  padding: 20px;
+  border: 1px solid var(--border, transparent);
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--hover-bg);
+  margin-bottom: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* 尊重用户减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line::after {
+    animation: none;
+    background: var(--hover-bg);
+  }
+}
+
+.skeleton-line-title { width: 70%; height: 16px; margin-bottom: 16px; }
+.skeleton-line-body { width: 100%; }
+.skeleton-line-short { width: 55%; }
+.skeleton-line-footer { width: 40%; height: 10px; margin-top: 16px; margin-bottom: 0; }
 
 /* ==========================================================================
    Section C: Card Grid (.card-grid + .note-card + .card-* + .card-pin-badge)
@@ -386,7 +465,10 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: all var(--transition), box-shadow 0.2s ease, background-color 0.3s ease-out, border-color 0.3s ease-out;
+  transition: transform var(--anim-duration-normal) var(--anim-easing-spring),
+              box-shadow var(--anim-duration-normal) ease,
+              border-color var(--anim-duration-fast) ease,
+              background-color 0.3s ease-out;
   cursor: pointer;
   position: relative;
   border: 1px solid transparent;
@@ -395,7 +477,7 @@
 }
 
 .note-card:hover {
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-elevated, var(--shadow-md));
   transform: translateY(-2px) scale(1.01);
   border-color: var(--border);
 }
@@ -403,6 +485,21 @@
 /* 卡片点击反馈 */
 .note-card:active {
   transform: scale(0.98);
+}
+
+/* 卡片 hover 时左侧 inset 高亮边框 */
+.note-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  pointer-events: none;
+  transition: border-color var(--anim-duration-fast) ease;
+}
+
+.note-card:hover::after {
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .card-body {
@@ -853,10 +950,10 @@
   content: '';
   display: block;
   height: 3px;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--accent-light, #fff)));
   flex-shrink: 0;
   transform-origin: center;
-  animation: editorBarEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+  animation: editorBarEnter 0.35s var(--anim-easing-spring) 0.05s both;
 }
 
 @keyframes editorBarEnter {
@@ -1116,7 +1213,6 @@
 }
 
 .tag-chip.active::before {
-  content: '✓ ';
   font-weight: 600;
 }
 
@@ -1130,23 +1226,45 @@
 
 .md-rendered pre {
     position: relative;
+    margin: 1.2em 0;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    min-height: 52px;
 }
+
+/* ==========================================================================
+   预览区代码块复制按钮
+   ========================================================================== */
 
 .copy-code-btn {
     position: absolute;
-    top: 6px;
-    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    right: 4px;
     padding: 2px 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: var(--card-bg);
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.6;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s, background 0.15s;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
     z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.copy-code-btn svg {
+    width: 12px;
+    height: 12px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .md-rendered pre:hover .copy-code-btn {
@@ -1156,6 +1274,7 @@
 .copy-code-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    transform: translateY(-50%) scale(1.08);
 }
 
 .copy-code-btn.copied {
@@ -1390,18 +1509,9 @@
   color: var(--text-primary);
 }
 
-.md-rendered pre {
-  margin: 0.8em 0;
-  padding: 0;
-  border-radius: 6px;
-  overflow-x: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-}
-
 .md-rendered pre code {
   display: block;
-  padding: 1em;
+  padding: 0;
   font-size: 0.85rem;
   line-height: 1.5;
   background: none;
@@ -1510,6 +1620,7 @@
 
 .btn-save:hover {
   background: var(--accent-dark);
+  filter: brightness(1.1);
 }
 
 .btn-link {
@@ -1811,7 +1922,7 @@
   position: relative;
   width: 44px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--border);
   cursor: pointer;
   transition: background var(--transition);
@@ -1876,13 +1987,18 @@
   border-radius: 50%;
   background: var(--tag-delete-bg);
   color: #fff;
-  font-size: 0.625rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.15s;
   font-family: inherit;
+  padding: 0;
+}
+
+.tag-delete-btn svg {
+  width: 10px;
+  height: 10px;
 }
 
 .tag-delete-btn:hover {
@@ -2076,7 +2192,8 @@
 
 .data-action-btn:hover {
   border-color: var(--accent);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-elevated, var(--shadow-md));
+  transform: translateY(-2px);
 }
 
 .data-action-btn:active {
@@ -2723,8 +2840,8 @@
 }
 
 .fab:hover {
-  transform: scale(1.08);
-  box-shadow: var(--shadow-lg);
+  transform: scale(1.08) translateY(-1px);
+  box-shadow: var(--shadow-elevated, var(--shadow-lg));
 }
 
 .fab:active {
@@ -2782,7 +2899,7 @@
 
 .about-card {
   background: var(--card-bg);
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   width: 400px;
   max-width: 88vw;
   box-shadow:
@@ -2873,7 +2990,7 @@
   gap: 8px;
   padding: 12px 20px;
   background: var(--bg-secondary);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   transition: background 0.2s;
 }
 
@@ -3202,8 +3319,8 @@
 
 /* 笔记本侧栏 — 独立分区感，与主内容区区分 */
 .notebook-sidebar {
-  width: 172px;
-  min-width: 172px;
+  width: 176px;
+  min-width: 176px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
@@ -3282,11 +3399,14 @@
   align-items: center;
   padding: 7px 10px 7px 20px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--anim-duration-normal) var(--anim-easing-spring),
+              background var(--anim-duration-fast) ease,
+              color var(--anim-duration-fast) ease,
+              box-shadow var(--anim-duration-fast) ease;
   gap: 8px;
   position: relative;
   margin-left: 6px;
-  border-radius: 6px 0 0 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* 左侧书签指示条 — 默认隐藏 */
@@ -3305,7 +3425,7 @@
 /* hover 时左侧条半透明显示，项向右微弹 */
 .notebook-item:hover {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  transform: translateX(3px);
+  transform: translateX(4px);
 }
 
 .notebook-item:hover::before {
@@ -3393,7 +3513,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-size: 1.2rem;
@@ -3600,7 +3720,7 @@
 
 .move-notebook-dialog {
   background: var(--card-bg);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 16px 48px rgba(0,0,0,0.15), 0 0 1px rgba(0,0,0,0.08);
   border: 1px solid var(--border);
   width: 360px;
@@ -3638,7 +3758,7 @@
   color: var(--text-muted);
   font-size: 1rem;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3677,7 +3797,7 @@
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
@@ -3770,7 +3890,7 @@
 
 .move-notebook-btn {
   padding: 7px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: none;
   font-size: 0.813rem;
   font-weight: 500;

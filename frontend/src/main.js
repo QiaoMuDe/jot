@@ -39,6 +39,57 @@ marked.setOptions({
     gfm: true,
 });
 
+/* ===== SVG 图标常量集 ===== */
+/**
+ * Lucide 风格 SVG 图标常量（24x24 viewBox, 1.5px stroke, currentColor）
+ * 所有图标继承父元素 color, 适配明暗主题
+ */
+const SVGS = {
+    // 窗口控制
+    windowMinimize: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    windowMaximize: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>`,
+    windowRestore: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="14" height="14" rx="2" ry="2"/><path d="M5 17V5a2 2 0 0 1 2-2h12"/></svg>`,
+    windowClose: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+
+    // 编辑器
+    editorFullscreen: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
+    editorExitFullscreen: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
+    edit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`,
+
+    // 置顶（星标）
+    pinFilled: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    pinOutline: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+
+    // 操作按钮
+    plus: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    backToTop: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
+    menu: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
+    search: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+
+    // 导航箭头
+    chevronDown: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+    chevronUp: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
+    arrowLeft: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
+
+    // 状态符号
+    checkmark: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    xmark: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    warning: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    info: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+    undo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+
+    // 数据管理
+    download: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+    upload: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+    save: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`,
+    folder: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+
+    // 杂项
+    trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+    tag: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+    copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+};
+
 /* ===== 统一通知系统 ===== */
 
 /**
@@ -66,11 +117,11 @@ class NotificationManager {
         const el = document.createElement('div');
         el.className = `notification ${type}`;
 
-        const iconMap = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+        const iconSvg = { success: SVGS.checkmark, error: SVGS.windowClose, warning: SVGS.warning, info: SVGS.info };
         el.innerHTML = `
-            <span class="notification-icon">${iconMap[type] || 'ℹ'}</span>
+            <span class="notification-icon">${iconSvg[type] || SVGS.info}</span>
             <span class="notification-msg">${this._esc(message)}</span>
-            <button class="notification-close" aria-label="关闭">✕</button>
+            <button class="notification-close" aria-label="关闭">${SVGS.windowClose}</button>
         `;
 
         this.container.appendChild(el);
@@ -95,7 +146,7 @@ class NotificationManager {
         const el = document.createElement('div');
         el.className = 'notification undo';
         el.innerHTML = `
-            <span class="notification-icon" style="color:var(--accent,#6366f1)">↩</span>
+            <span class="notification-icon" style="color:var(--accent,#6366f1)">${SVGS.undo}</span>
             <span class="notification-msg">${this._esc(message)}</span>
             <button class="notification-undo-btn">撤销</button>
         `;
@@ -365,6 +416,9 @@ const els = {
     editorPanel: $('editorPanel'),
 
     cardGrid: $('cardGrid'),
+    skeletonGrid: $('skeletonGrid'),
+    emptyNotes: $('emptyNotes'),
+    emptySearch: $('emptySearch'),
 
     // 搜索
     searchResults: $('searchResults'),
@@ -670,6 +724,11 @@ function switchView(view) {
  * 加载笔记列表（第 1 页，重置分页）
  */
 async function loadNotes() {
+    // 显示骨架屏加载状态
+    if (els.skeletonGrid) els.skeletonGrid.style.display = '';
+    if (els.emptyNotes) els.emptyNotes.style.display = 'none';
+    if (els.cardGrid) { els.cardGrid.style.display = 'none'; els.cardGrid.innerHTML = ''; }
+
     try {
         // 获取当前排序方式
         let sortBy = 'updated_at';
@@ -2121,16 +2180,19 @@ function renderCardGrid(animateMode, prevCount) {
     const oldFooter = els.viewGrid.querySelector('.notes-footer');
     if (oldFooter) oldFooter.remove();
 
+    // 隐藏骨架屏
+    if (els.skeletonGrid) els.skeletonGrid.style.display = 'none';
+
     if (sorted.length === 0) {
-        els.cardGrid.innerHTML = `
-            <div class="empty-state" style="grid-column: 1 / -1;">
-                <div class="empty-icon">📝</div>
-                <div class="empty-title">还没有笔记</div>
-                <div class="empty-desc">点击左侧 "+" 按钮创建你的第一条笔记</div>
-            </div>
-        `;
+        // 隐藏卡片网格，显示空状态
+        els.cardGrid.style.display = 'none';
+        if (els.emptyNotes) els.emptyNotes.style.display = 'flex';
         return;
     }
+
+    // 有笔记时：隐藏空状态，显示卡片网格
+    if (els.emptyNotes) els.emptyNotes.style.display = 'none';
+    els.cardGrid.style.display = '';
 
     els.cardGrid.innerHTML = sorted
         .map(
@@ -2157,7 +2219,7 @@ function renderCardGrid(animateMode, prevCount) {
                     : ''
                 }
                 <button class="card-action-btn pin-btn${state.batchMode ? ' disabled' : ''}" onclick="event.stopPropagation()${state.batchMode ? '' : `; window.handlePinClick(event, ${note.id})`}" title="${note.pinned ? '已置顶' : (state.batchMode ? '批量模式下不可操作' : '置顶')}">
-                    ${note.pinned ? '★' : '☆'}
+                    ${note.pinned ? SVGS.pinFilled : SVGS.pinOutline}
                 </button>
             </div>
         </div>
@@ -2209,15 +2271,15 @@ function renderSearchResults(results, keyword) {
     els.resultCount.textContent = `找到 ${results.length} 条结果`;
 
     if (results.length === 0) {
-        els.searchResults.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">🔍</div>
-                <div class="empty-title">未找到相关笔记</div>
-                <div class="empty-desc">尝试其他关键词搜索</div>
-            </div>
-        `;
+        // 隐藏搜索结果列表，显示空搜索状态
+        els.searchResults.style.display = 'none';
+        if (els.emptySearch) els.emptySearch.style.display = 'flex';
         return;
     }
+
+    // 有结果时：隐藏空搜索状态，显示搜索结果列表
+    if (els.emptySearch) els.emptySearch.style.display = 'none';
+    els.searchResults.style.display = '';
 
     els.searchResults.innerHTML = results
         .map(
@@ -2252,7 +2314,7 @@ function renderTagList() {
             (tag) => `
         <div class="tag-item" style="background-color: ${tag.color || '#6366f1'}">
             ${escapeHtml(tag.name)}
-            <button class="tag-delete-btn" onclick="window.deleteTag(${tag.id})">✕</button>
+            <button class="tag-delete-btn" onclick="window.deleteTag(${tag.id})">${SVGS.windowClose}</button>
         </div>
         `
         )
@@ -2313,9 +2375,9 @@ function renderTrashList() {
     if (state.trashNotes.length === 0) {
         els.trashListInner.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">🗑️</div>
-                <div class="empty-title">回收站为空</div>
-                <div class="empty-desc">删除的笔记会出现在这里</div>
+                <div class="empty-state-icon">${SVGS.trash}</div>
+                <p class="empty-state-title">回收站为空</p>
+                <p class="empty-state-desc">删除的笔记会出现在这里</p>
             </div>
         `;
         return;
@@ -2594,13 +2656,13 @@ function updatePreview() {
                 try {
                     await navigator.clipboard.writeText(code);
                     btn.classList.add('copied');
-                    btn.textContent = '✓ 已复制';
+                    btn.innerHTML = SVGS.checkmark + ' 已复制';
                     setTimeout(() => {
                         btn.classList.remove('copied');
                         btn.textContent = '复制';
                     }, 1500);
                 } catch {
-                    btn.textContent = '✗ 复制失败';
+                    btn.innerHTML = SVGS.xmark + ' 复制失败';
                     setTimeout(() => { btn.textContent = '复制'; }, 1000);
                 }
             });
@@ -2660,10 +2722,15 @@ function toggleEditorFullscreen() {
 
     panel.classList.toggle('fullscreen', goFullscreen);
     overlay.classList.toggle('fullscreening', goFullscreen);
-    btn.textContent = goFullscreen ? '⤡' : '⛶';
+    btn.innerHTML = goFullscreen ? SVGS.editorExitFullscreen : SVGS.editorFullscreen;
     btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
     btn.classList.toggle('fullscreen', goFullscreen);
     document.getElementById('topbar').classList.toggle('editor-fullscreen', goFullscreen);
+
+    // 全屏时自动收起侧栏
+    if (goFullscreen && els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
+        els.notebookSidebar.classList.add('collapsed');
+    }
 
     // 内容延迟淡入/淡出
     const body = panel.querySelector('.editor-body');
@@ -2700,7 +2767,7 @@ function closeEditor() {
         els.mainContent.style.overflow = '';
         // 退出全屏模式
         els.editorPanel.classList.remove('fullscreen');
-        els.editorFullscreenBtn.textContent = '⛶';
+        els.editorFullscreenBtn.innerHTML = SVGS.editorFullscreen;
         els.editorFullscreenBtn.title = '全屏编辑';
         els.editorFullscreenBtn.classList.remove('fullscreen');
         document.getElementById('topbar').classList.remove('editor-fullscreen');
@@ -4748,14 +4815,15 @@ function updateMaximizeButtonIcon(btn, isMaximized) {
     if (typeof isMaximized !== 'boolean') {
         // 异步获取当前状态
         WindowIsMaximised().then(maximised => {
-            btn.textContent = maximised ? '❐' : '□';
+            btn.innerHTML = maximised ? SVGS.windowRestore : SVGS.windowMaximize;
             btn.title = maximised ? '还原' : '最大化';
         }).catch(() => {
             // 如果获取失败，切换图标
-            btn.textContent = btn.textContent === '□' ? '❐' : '□';
+            const isMax = btn.innerHTML.includes(SVGS.windowMaximize);
+            btn.innerHTML = isMax ? SVGS.windowRestore : SVGS.windowMaximize;
         });
     } else {
-        btn.textContent = isMaximized ? '❐' : '□';
+        btn.innerHTML = isMaximized ? SVGS.windowRestore : SVGS.windowMaximize;
         btn.title = isMaximized ? '还原' : '最大化';
     }
 }

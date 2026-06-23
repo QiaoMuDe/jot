@@ -52,6 +52,11 @@
     /* 过渡 */
     --transition: 150ms ease-out;
 
+    /* 图标尺寸 */
+    --icon-sm: 14px;
+    --icon-md: 16px;
+    --icon-lg: 20px;
+
     /* 动画 */
     --anim-duration-fast: 150ms;
     --anim-duration-normal: 250ms;
@@ -83,6 +88,27 @@
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
     --bg-secondary: #EDE9E0;
     --text-tertiary: #C5C0B8;
+
+    /* 语义色 */
+    --success: #16a34a;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --warning-text: #92400e;
+    --error: #dc2626;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --error-text: #991b1b;
+    --info: #2563eb;
+    --info-bg: #eff6ff;
+    --info-border: #bfdbfe;
+    --info-text: #1e40af;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(45, 42, 36, 0.08);
+    --shadow-dropdown: 0 4px 16px rgba(45, 42, 36, 0.10);
+    --shadow-modal: 0 8px 32px rgba(45, 42, 36, 0.14);
+    --shadow-toast: 0 12px 48px rgba(45, 42, 36, 0.18);
 }
 
 /* ===== 亮色主题 ===== */
@@ -118,6 +144,27 @@
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
     --bg-secondary: #F0F0F0;
     --text-tertiary: #D0D0D0;
+
+    /* 语义色 */
+    --success: #16a34a;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --warning-text: #92400e;
+    --error: #dc2626;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --error-text: #991b1b;
+    --info: #2563eb;
+    --info-bg: #eff6ff;
+    --info-border: #bfdbfe;
+    --info-text: #1e40af;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.12);
+    --shadow-toast: 0 12px 48px rgba(0, 0, 0, 0.15);
 }
 
 /* ===== 暗色主题 ===== */
@@ -153,6 +200,27 @@
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
     --bg-secondary: #181818;
     --text-tertiary: #505050;
+
+    /* 语义色 */
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --warning-bg: rgba(251, 191, 36, 0.1);
+    --warning-border: rgba(251, 191, 36, 0.25);
+    --warning-text: #fde68a;
+    --error: #f87171;
+    --error-bg: rgba(248, 113, 113, 0.1);
+    --error-border: rgba(248, 113, 113, 0.25);
+    --error-text: #fca5a5;
+    --info: #60a5fa;
+    --info-bg: rgba(96, 165, 250, 0.1);
+    --info-border: rgba(96, 165, 250, 0.25);
+    --info-text: #93c5fd;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.20);
+    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.30);
+    --shadow-toast: 0 12px 48px rgba(0, 0, 0, 0.35);
 }
 
 /* nord 主题：北极蓝调 */
@@ -188,6 +256,27 @@
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
     --bg-secondary: #E2E7EE;
     --text-tertiary: #B0B7C8;
+
+    /* 语义色 */
+    --success: #16a34a;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --warning-border: #fde68a;
+    --warning-text: #92400e;
+    --error: #dc2626;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --error-text: #991b1b;
+    --info: #5E81AC;
+    --info-bg: #EFF6FF;
+    --info-border: #D8DEE9;
+    --info-text: #4C6F8C;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(46, 52, 64, 0.08);
+    --shadow-dropdown: 0 4px 16px rgba(46, 52, 64, 0.10);
+    --shadow-modal: 0 8px 32px rgba(46, 52, 64, 0.14);
+    --shadow-toast: 0 12px 48px rgba(46, 52, 64, 0.18);
 }
 
 /* monokai-pro 主题：荧光粉墨 */
@@ -223,6 +312,27 @@
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
     --bg-secondary: #1F1D20;
     --text-tertiary: #706F70;
+
+    /* 语义色 */
+    --success: #A9DB71;
+    --warning: #E6B450;
+    --warning-bg: rgba(230, 180, 80, 0.1);
+    --warning-border: rgba(230, 180, 80, 0.25);
+    --warning-text: #F9E4B7;
+    --error: #FC9867;
+    --error-bg: rgba(252, 152, 103, 0.1);
+    --error-border: rgba(252, 152, 103, 0.25);
+    --error-text: #FEDCBA;
+    --info: #78DCE8;
+    --info-bg: rgba(120, 220, 232, 0.1);
+    --info-border: rgba(120, 220, 232, 0.25);
+    --info-text: #B0F0F8;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.30);
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --shadow-toast: 0 12px 48px rgba(0, 0, 0, 0.40);
 }
 
 /* tokyo-night 主题：靛紫夜幕 */
@@ -258,6 +368,27 @@
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
     --bg-secondary: #15161F;
     --text-tertiary: #424B73;
+
+    /* 语义色 */
+    --success: #9ECE6A;
+    --warning: #E0AF68;
+    --warning-bg: rgba(224, 175, 104, 0.1);
+    --warning-border: rgba(224, 175, 104, 0.25);
+    --warning-text: #F0D5A8;
+    --error: #F7768E;
+    --error-bg: rgba(247, 118, 142, 0.1);
+    --error-border: rgba(247, 118, 142, 0.25);
+    --error-text: #F9B4C0;
+    --info: #7AA2F7;
+    --info-bg: rgba(122, 162, 247, 0.1);
+    --info-border: rgba(122, 162, 247, 0.25);
+    --info-text: #A9B1D6;
+
+    /* 分层阴影 */
+    --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.30);
+    --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --shadow-toast: 0 12px 48px rgba(0, 0, 0, 0.40);
 }
 
 * {
