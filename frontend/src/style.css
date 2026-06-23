@@ -43,7 +43,11 @@
   background: var(--input-bg);
   border-radius: var(--radius-lg);
   padding: 0 4px 0 12px;
-  transition: var(--transition);
+  overflow: hidden;
+  transition: opacity 0.15s ease,
+              max-width 0.25s ease,
+              padding 0.25s ease,
+              margin 0.25s ease;
 }
 
 .topbar-search:focus-within {
@@ -129,6 +133,7 @@
 
 .topbar-dropdown {
   position: relative;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 /* 窗口控制按钮样式（与 topbar-btn 一致，但独立选择器用于特殊 hover） */
@@ -817,6 +822,7 @@
 }
 
 .editor-overlay.fullscreening {
+  top: 56px;
   backdrop-filter: blur(10px);
   background: rgba(0, 0, 0, 0.6);
 }
@@ -862,12 +868,31 @@
 .editor-panel.fullscreen {
   width: 100vw;
   max-width: none;
-  height: 100vh;
+  height: calc(100vh - 56px);
   max-height: none;
   border-radius: 0;
   transition-duration: 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s;
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: none;
+}
+
+.editor-panel.fullscreen::before {
+  display: none;
+}
+
+#topbar.editor-fullscreen .topbar-search {
+  opacity: 0;
+  max-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+#topbar.editor-fullscreen .topbar-dropdown {
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
 }
 
 .editor-header {

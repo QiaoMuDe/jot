@@ -2663,6 +2663,7 @@ function toggleEditorFullscreen() {
     btn.textContent = goFullscreen ? '⤡' : '⛶';
     btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
     btn.classList.toggle('fullscreen', goFullscreen);
+    document.getElementById('topbar').classList.toggle('editor-fullscreen', goFullscreen);
 
     // 内容延迟淡入/淡出
     const body = panel.querySelector('.editor-body');
@@ -2702,6 +2703,7 @@ function closeEditor() {
         els.editorFullscreenBtn.textContent = '⛶';
         els.editorFullscreenBtn.title = '全屏编辑';
         els.editorFullscreenBtn.classList.remove('fullscreen');
+        document.getElementById('topbar').classList.remove('editor-fullscreen');
         // 清理事件监听
         if (state._titleInputListenerAttached) {
             els.editorNoteTitle.removeEventListener('input', onEditorInput);

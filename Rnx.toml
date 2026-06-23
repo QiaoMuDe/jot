@@ -7,9 +7,9 @@
 # 工作目录
 work_dir = '.'
 # 超时时间
-timeout = '60s'
+timeout = '120s'
 # 是否显示输出
-show_output = false
+show_output = true
 # 任务执行失败时是否退出程序
 exit_on_error = true
 # 是否显示执行的命令
@@ -22,12 +22,14 @@ parallel_tasks = []
 # 全局变量
 [global.vars]
 app_name = 'jot'
-exec_path = '{{output_dir}}/{{app_name}}.exe'
+exe_name = '{{app_name}}{{exe_suffix}}'
+exe_path = '{{output_dir}}/{{exe_name}}'
+exe_suffix = '@go env GOEXE'
 git_version = '@git describe --tags --always --dirty'
 ldflags = "-s -w -X 'gitee.com/MM-Q/verman.appName={{app_name}}' -X 'gitee.com/MM-Q/verman.gitVersion={{git_version}}'"
-main_path = 'main.go'
+main_path = '.'
 output_dir = './build/bin'
-release_name = '{{app_name}}-windows-amd64-{{git_version}}.zip'
+release_name = '{{app_name}}_windows_amd64_{{git_version}}.zip'
 
 # 任务定义
 [task]
@@ -36,7 +38,7 @@ release_name = '{{app_name}}-windows-amd64-{{git_version}}.zip'
 desc = '构建程序'
 # 命令列表
 cmds = [
-    'wails build -ldflags "{{ldflags}}"'
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean'
 ]
 # 任务工作目录
 work_dir = ''
@@ -44,22 +46,12 @@ work_dir = ''
 depends_on = [
     'fc'
 ]
+# 后继任务列表
+run_after = []
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
 platform = []
-
-[task.clean]
-# 任务描述
-desc = '清理构建目录'
-# 命令列表
-cmds = [
-    'fck rm -f {{output_dir}}/*'
-]
-# 任务工作目录
-work_dir = ''
-# 依赖任务列表
-depends_on = []
-# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
-platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
 
 [task.fc]
 # 任务描述
@@ -73,36 +65,42 @@ cmds = [
 work_dir = ''
 # 依赖任务列表
 depends_on = []
+# 后继任务列表
+run_after = []
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
 platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
 
 [task.release]
 # 任务描述
 desc = '发布程序'
 # 命令列表
 cmds = [
-    'wails build -ldflags "{{ldflags}}"',
-    'upx {{exec_path}}',
-    'fck pack -o {{output_dir}}/{{release_name}} {{exec_path}}',
-    'fck rm -f {{exec_path}}'
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean -nsis',
+    'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
+    'fck rm -f {{exe_path}}'
 ]
 # 任务工作目录
 work_dir = ''
 # 依赖任务列表
 depends_on = [
-    'clean',
     'fc'
 ]
+# 后继任务列表
+run_after = []
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
 platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
 
 [task.run]
 # 任务描述
 desc = '运行程序'
 # 命令列表
 cmds = [
-    'wails build -debug -ldflags "{{ldflags}}"',
-    '{{exec_path}}'
+    'wails build -debug -ldflags "{{ldflags}}" -o {{exe_name}} -clean',
+    '{{exe_path}}'
 ]
 # 任务工作目录
 work_dir = ''
@@ -110,7 +108,9 @@ work_dir = ''
 depends_on = [
     'fc'
 ]
+# 后继任务列表
+run_after = []
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
-platform = [
-    'windows'
-]
+platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
