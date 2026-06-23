@@ -2,13 +2,7 @@ import './style.css';
 import './app.css';
 import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn } from '../wailsjs/runtime/runtime.js';
 import { marked } from 'marked';
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import python from 'highlight.js/lib/languages/python';
-import css from 'highlight.js/lib/languages/css';
-import html from 'highlight.js/lib/languages/xml';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
+import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 
 // CodeMirror 6 导入
@@ -20,18 +14,6 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } 
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap, syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { markdown } from '@codemirror/lang-markdown';
 import { tags } from '@lezer/highlight';
-
-// 注册常用语言
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('js', javascript);
-hljs.registerLanguage('python', python);
-hljs.registerLanguage('py', python);
-hljs.registerLanguage('css', css);
-hljs.registerLanguage('html', html);
-hljs.registerLanguage('xml', html);
-hljs.registerLanguage('bash', bash);
-hljs.registerLanguage('sh', bash);
-hljs.registerLanguage('json', json);
 
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
