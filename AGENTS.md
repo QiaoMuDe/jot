@@ -49,6 +49,7 @@ jot/                                    # 项目根目录
 │   └── dist/                           # Vite 构建产物（前端编译输出）
 │
 └── .trae/specs/                        # 项目 Spec 文档目录
+    ├── add-view-mode-toggle-from-edit/  # 查看/编辑模式返回按钮
     ├── add-card-note-app/              # 初始需求规格
     │   ├── spec.md
     │   ├── tasks.md
@@ -720,7 +721,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/帮助六个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成） |
+| **Spec 位置** | `.trae/specs/add-view-mode-toggle-from-edit/`、`.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成） |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
@@ -828,3 +829,6 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **代码块语言标签** | 预览模式代码块 hover 时右下角显示只读语言标签（`.code-lang-badge`），显示 hljs 检测到的语言名。定位在代码块外部右下角（`top: 100%; right: 8px; margin-top: 4px`），`background: var(--card-bg)` + `border: 1px solid var(--border)` + `color: var(--text-muted)` 全主题自适应。JS 中用 `<div class="pre-wrapper">`（`position: relative`）包裹 `<pre>`，badge 追加到 wrapper 内（pre 外部），避免 pre 的 `overflow-x: auto` 裁剪。与右上角的复制按钮互不干扰 |
 | **单行复制按钮垂直居中** | 单行代码块复制按钮使用 `.copy-code-btn--single` 类：`top: 50%; translateY(-50%)` 右侧垂直居中；多行代码块按钮在右上角（`.copy-code-btn`）。通过 `codeEl.textContent.trim().includes('\n')` 精确判定单行/多行（trim 掉 marked 自动追加的尾随换行符） |
 | **highlight.js 全量导入** | `main.js` 中将按需导入（`highlight.js/lib/core` + 6 个语言文件）改为 `import hljs from 'highlight.js'` 全量导入，自动注册全部 197 种语言语法。删除 6 个 `import .../languages/...` 和 10 行 `hljs.registerLanguage()` 调用。打包体积约 800KB（Vite 构建时 tree-shaking + minify 后体积有限） |
+| **编辑器返回查看模式按钮** | 查看模式点击铅笔编辑后，右上角出现眼睛图标按钮（`#editorViewBtn`）可切回查看模式。通过 `state.enteredFromViewMode` 标志位控制：仅从查看模式进入编辑时显示。点击后先保存内容（`UpdateNote` + 标签同步）并更新 `state.notes` 本地缓存，再调用 `openEditor(noteId, true)` 切回只读查看。`closeEditor()` 中重置标志位。spec 见 `.trae/specs/add-view-mode-toggle-from-edit/` |
+| **编辑器搜索框/菜单隐藏** | 打开编辑器（`openEditor()`）时自动给 `#topbar` 添加 `editor-fullscreen` 类隐藏搜索框和更多菜单，关闭编辑器（`closeEditor()`）时移除。全屏切换不再单独控制 `topbar` 类名，由 `openEditor`/`closeEditor` 统一管理 |
+| **Ctrl+S 保存快捷键** | `handleKeyboardNavigation()` 中新增 Ctrl+S 处理：`e.preventDefault()` 阻止浏览器默认保存，检查编辑器激活且非只读模式（`els.editorSaveBtn.style.display !== 'none'`）后调用 `updateNote(noteId)` 或 `createNote()`。快捷键说明面板已添加 `Ctrl + S — 编辑器内保存笔记` |

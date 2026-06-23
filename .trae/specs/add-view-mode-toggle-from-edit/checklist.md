@@ -1,0 +1,9 @@
+- [x] HTML 中新增了 `#editorViewBtn` 按钮，带眼睛 SVG 图标，默认隐藏
+- [x] `state.enteredFromViewMode` 标志正确初始化为 `false`
+- [x] `els.editorViewBtn` DOM 引用已注册
+- [x] 点击铅笔编辑按钮时（`editorEditBtn`），`state.enteredFromViewMode` 正确设为 `true`
+- [x] `openEditor()` 中：`!isReadOnly && state.enteredFromViewMode` 时显示 `editorViewBtn`，否则隐藏
+- [x] 点击 `editorViewBtn` 调用 `openEditor(noteId, true)` 并重置 `enteredFromViewMode = false`
+- [x] `closeEditor()` 中重置 `state.enteredFromViewMode = false`
+- [x] 正常编辑（非查看模式进入）时 `editorViewBtn` 不显示
+- [x] 新建笔记时 `editorViewBtn` 不显示

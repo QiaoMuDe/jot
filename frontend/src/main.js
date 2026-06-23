@@ -368,6 +368,7 @@ const state = {
     totalAllNotes: 0,           // 所有未删除笔记的总数（用于全选判断）
     activeNotebookId: 1,        // 当前激活的笔记本 ID，默认为 1（默认笔记本）
     notebooks: [],              // 笔记本列表
+    enteredFromViewMode: false, // 是否从查看模式点击编辑按钮进入编辑模式（控制返回按钮显示）
     _titleInputListenerAttached: false, // 编辑器标题 input 监听是否已绑定（用于清理）
 };
 
@@ -415,6 +416,7 @@ const els = {
     tagSelector: $('tagSelector'),
     editorCloseBtn: $('editorCloseBtn'),
     editorEditBtn: $('editorEditBtn'),
+    editorViewBtn: $('editorViewBtn'),
     editorFullscreenBtn: $('editorFullscreenBtn'),
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
@@ -2516,6 +2518,8 @@ async function openEditor(noteId, readOnly) {
     }
     // 只读模式显示编辑按钮，编辑/新建模式隐藏
     els.editorEditBtn.style.display = isReadOnly ? '' : 'none';
+    // 从查看模式进入编辑时显示"返回查看模式"按钮
+    els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
 
     // 设置笔记类型
     state.noteType = (noteData && noteData.note_type) || 'text';
@@ -2601,6 +2605,8 @@ async function openEditor(noteId, readOnly) {
     const overlay = els.editorOverlay;
     const panel = els.editorPanel;
     const body = panel.querySelector('.editor-body');
+    // 编辑器打开时自动隐藏 #topbar 搜索框和更多菜单（不受全屏限制）
+    document.getElementById('topbar').classList.add('editor-fullscreen');
     overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
     panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
     // 内容区域延迟入场
@@ -2785,7 +2791,6 @@ function toggleEditorFullscreen() {
     btn.innerHTML = goFullscreen ? SVGS.editorExitFullscreen : SVGS.editorFullscreen;
     btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
     btn.classList.toggle('fullscreen', goFullscreen);
-    document.getElementById('topbar').classList.toggle('editor-fullscreen', goFullscreen);
 
     // 全屏时自动收起侧栏
     if (goFullscreen && els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
@@ -2831,6 +2836,8 @@ function closeEditor() {
         els.editorFullscreenBtn.title = '全屏编辑';
         els.editorFullscreenBtn.classList.remove('fullscreen');
         document.getElementById('topbar').classList.remove('editor-fullscreen');
+        // 重置查看模式标志
+        state.enteredFromViewMode = false;
         // 清理事件监听
         if (state._titleInputListenerAttached) {
             els.editorNoteTitle.removeEventListener('input', onEditorInput);
@@ -3609,8 +3616,44 @@ function initEventListeners() {
     els.editorEditBtn.addEventListener('click', () => {
         const noteId = state.editingNoteId;
         if (noteId) {
+            state.enteredFromViewMode = true;
             // 原地切换为编辑模式，不走 closeEditor（避免动画 setTimeout 冲突）
             openEditor(noteId, false);
+        }
+    });
+    els.editorViewBtn.addEventListener('click', async () => {
+        const noteId = state.editingNoteId;
+        if (noteId) {
+            // 先保存当前内容再切回查看模式
+            const title = els.editorNoteTitle.value.trim();
+            const content = getEditorContent().trim();
+            if (title && window.go?.main?.App?.UpdateNote) {
+                try {
+                    await window.go.main.App.UpdateNote(noteId, title, content, state.noteType);
+                    // 更新标签
+                    const note = await window.go.main.App.GetNote(noteId);
+                    if (note?.tags) {
+                        for (const t of note.tags) {
+                            try { await window.go.main.App.RemoveTagFromNote(noteId, t.id); } catch (e) {}
+                        }
+                    }
+                    for (const tagId of state.selectedTags) {
+                        try { await window.go.main.App.AddTagToNote(noteId, tagId); } catch (e) {}
+                    }
+                } catch (err) {
+                    console.error('保存失败:', err);
+                }
+            }
+            state.enteredFromViewMode = false;
+            // 同步更新 state.notes 中的本地缓存，避免 loadNotes() 全量刷新
+            const cached = state.notes.find(n => n.id === noteId);
+            if (cached) {
+                cached.title = title;
+                cached.content = content;
+                cached.note_type = state.noteType;
+                cached.updated_at = new Date().toISOString();
+            }
+            openEditor(noteId, true);
         }
     });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
@@ -3870,6 +3913,15 @@ function getScrollContainer() {
  */
 function handleKeyboardNavigation(e) {
     const container = getScrollContainer();
+
+    // Ctrl+S: 编辑器内保存（编辑/新建模式有效，查看模式忽略）
+    if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        if (els.viewEditor.classList.contains('active') && els.editorSaveBtn.style.display !== 'none') {
+            (state.editingNoteId ? updateNote(state.editingNoteId) : createNote());
+        }
+        return;
+    }
 
     // Ctrl+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）
     if (e.ctrlKey && e.key === 'f') {
@@ -4219,6 +4271,7 @@ function closeShortcuts() {
 function renderShortcutsPage() {
     const shortcuts = [
         { key: 'Ctrl + N', desc: '新建笔记' },
+        { key: 'Ctrl + S', desc: '编辑器内保存笔记' },
         { key: 'Ctrl + F', desc: '编辑器内查找 / 聚焦搜索框' },
         { key: 'Ctrl + H', desc: '编辑器内查找替换' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
