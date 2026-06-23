@@ -2668,9 +2668,64 @@ function updatePreview() {
             });
             pre.appendChild(btn);
         });
+        // 为每个表格添加复制按钮
+        els.mdRendered.querySelectorAll('table').forEach((table) => {
+            // 避免重复包装
+            let wrapper = table.parentNode;
+            if (wrapper.classList.contains('table-wrapper')) return;
+            // 用 div 包裹 table，作为复制按钮的定位容器
+            wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(table);
+            // 添加复制按钮
+            const btn = document.createElement('button');
+            btn.className = 'copy-table-btn';
+            btn.textContent = '复制';
+            btn.title = '复制表格';
+            btn.addEventListener('click', async () => {
+                const md = tableToMarkdown(table);
+                try {
+                    await navigator.clipboard.writeText(md);
+                    btn.classList.add('copied');
+                    btn.innerHTML = SVGS.checkmark + ' 已复制';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.textContent = '复制';
+                    }, 1500);
+                } catch {
+                    btn.innerHTML = SVGS.xmark + ' 复制失败';
+                    setTimeout(() => { btn.textContent = '复制'; }, 1000);
+                }
+            });
+            wrapper.appendChild(btn);
+        });
     } else {
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
     }
+}
+
+/**
+ * 将 HTML table 元素转换为 Markdown 表格语法文本
+ * @param {HTMLTableElement} tableEl
+ * @returns {string}
+ */
+function tableToMarkdown(tableEl) {
+    const rows = [];
+    // 获取所有行（含 thead + tbody 的行）
+    const trs = tableEl.querySelectorAll('tr');
+    if (!trs.length) return '';
+    trs.forEach((tr, index) => {
+        const cells = tr.querySelectorAll('th, td');
+        const row = '| ' + Array.from(cells).map(c => c.textContent.trim()).join(' | ') + ' |';
+        rows.push(row);
+        // 表头后添加分隔行
+        if (index === 0 && tr.querySelector('th')) {
+            const sep = '| ' + Array.from(cells).map(() => '---').join(' | ') + ' |';
+            rows.push(sep);
+        }
+    });
+    return rows.join('\n');
 }
 
 /**
