@@ -123,6 +123,10 @@ jot/                                    # 项目根目录
         ├── spec.md
         ├── tasks.md
         └── checklist.md
+    └── add-table-copy-button/ # 表格复制按钮（已完成）
+        ├── spec.md
+        ├── tasks.md
+        └── checklist.md
 ```
 
 ### 目录规范评价
