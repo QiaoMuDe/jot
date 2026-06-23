@@ -2648,7 +2648,10 @@ function updatePreview() {
             // 避免重复添加
             if (pre.querySelector('.copy-code-btn')) return;
             const btn = document.createElement('button');
-            btn.className = 'copy-code-btn';
+            // 单行代码块 → 垂直居中；多行 → 右上角（trim 掉 marked 自动追加的尾随换行符）
+            const codeEl = pre.querySelector('code');
+            const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
+            btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
             btn.textContent = '复制';
             btn.title = '复制代码';
             btn.addEventListener('click', async () => {
@@ -2667,6 +2670,26 @@ function updatePreview() {
                 }
             });
             pre.appendChild(btn);
+        });
+        /* 为每个代码块添加语言标签（只读，显示 hljs 检测到的语言，置于 pre 外部右下角） */
+        els.mdRendered.querySelectorAll('pre').forEach((pre) => {
+            // 已处理则跳过
+            if (pre.parentNode.classList.contains('pre-wrapper')) return;
+            const code = pre.querySelector('code');
+            if (!code) return;
+            const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
+            const lang = langClass ? langClass.replace('language-', '') : '';
+            if (!lang) return;
+            // 用 wrapper 包裹 pre，为语言标签提供独立定位上下文（不挤占 pre 内部空间）
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pre-wrapper';
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+            // 语言标签置于 wrapper 内（pre 外部右下角），不会被 pre 的 overflow-x 裁剪
+            const badge = document.createElement('span');
+            badge.className = 'code-lang-badge';
+            badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+            wrapper.appendChild(badge);
         });
         // 为每个表格添加复制按钮
         els.mdRendered.querySelectorAll('table').forEach((table) => {

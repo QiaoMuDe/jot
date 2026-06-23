@@ -1241,9 +1241,8 @@ button :only-child:is(svg) {
 
 .copy-code-btn {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    right: 4px;
+    top: 6px;
+    right: 6px;
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -1274,6 +1273,15 @@ button :only-child:is(svg) {
 .copy-code-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    transform: scale(1.08);
+}
+
+/* 单行代码块：复制按钮垂直居中于右侧 */
+.copy-code-btn--single {
+    top: 50%;
+    transform: translateY(-50%);
+}
+.copy-code-btn--single:hover {
     transform: translateY(-50%) scale(1.08);
 }
 
@@ -1281,6 +1289,36 @@ button :only-child:is(svg) {
     opacity: 1;
     color: #28a745;
     border-color: #28a745;
+}
+
+/* pre wrapper：保留用于管理连续代码块之间的间距 */
+.pre-wrapper {
+    position: relative;
+}
+
+/* 代码块语言标签：代码块外部右下角，主题自适应 */
+.code-lang-badge {
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.5;
+    border-radius: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 2;
+    user-select: none;
+}
+
+.pre-wrapper:hover .code-lang-badge {
+    opacity: 1;
 }
 
 /* 表格 wrapper：为复制按钮提供 absolute 定位容器 */
