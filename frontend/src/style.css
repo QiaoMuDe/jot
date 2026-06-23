@@ -11,12 +11,27 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
+  transition: background-color 0.3s ease-out, border-color 0.3s ease-out, padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0 24px;
   gap: 16px;
   user-select: none;
   z-index: 100;
   --wails-draggable: drag;
+}
+
+#topbar.editor-fullscreen {
+  padding-left: 4px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.topbar-left .topbar-dropdown {
+  margin-left: -12px;
 }
 
 .topbar-brand {
@@ -25,6 +40,7 @@
   gap: 8px;
   flex-shrink: 0;
   cursor: pointer;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brand-name {
@@ -44,10 +60,10 @@
   border-radius: var(--radius-lg);
   padding: 0 4px 0 12px;
   overflow: hidden;
-  transition: opacity 0.15s ease,
-              max-width 0.25s ease,
-              padding 0.25s ease,
-              margin 0.25s ease;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              margin 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .topbar-search:focus-within {
@@ -83,7 +99,7 @@
 .topbar-btn {
   width: 34px;
   height: 34px;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
@@ -111,7 +127,6 @@ button :only-child:is(svg) {
 .topbar-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
-  border-color: var(--border);
 }
 
 .topbar-btn.active {
@@ -125,7 +140,6 @@ button :only-child:is(svg) {
 #batchModeBtn {
   color: var(--text-primary);
   font-weight: 600;
-  border: 1px solid var(--border);
 }
 
 #newNoteBtn:hover,
@@ -143,20 +157,21 @@ button :only-child:is(svg) {
 
 .topbar-dropdown {
   position: relative;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 窗口控制按钮样式（与 topbar-btn 一致，但独立选择器用于特殊 hover） */
 .topbar-actions .topbar-btn.window-close:hover {
   background: #E81123;
   color: #FFFFFF;
-  border-color: #E81123;
 }
 
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
   background: var(--card-bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -989,6 +1004,9 @@ button :only-child:is(svg) {
 #topbar.editor-fullscreen .topbar-dropdown {
   opacity: 0;
   transform: scale(0.8);
+  width: 0;
+  margin: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 

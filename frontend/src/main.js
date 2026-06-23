@@ -359,6 +359,7 @@ const state = {
     tags: [],
     trashNotes: [],
     currentView: 'grid',       // grid | search | settings | data | trash
+    _isFullscreen: false,
     editingNoteId: null,        // null = 新建, number = 编辑
     selectedTags: [],
     searchKeyword: '',
@@ -2784,8 +2785,9 @@ function toggleEditorFullscreen() {
     const panel = els.editorPanel;
     const btn = els.editorFullscreenBtn;
     const overlay = els.editorOverlay;
-    const goFullscreen = !panel.classList.contains('fullscreen');
+    const goFullscreen = !state._isFullscreen;
 
+    state._isFullscreen = goFullscreen;
     panel.classList.toggle('fullscreen', goFullscreen);
     overlay.classList.toggle('fullscreening', goFullscreen);
     btn.innerHTML = goFullscreen ? SVGS.editorExitFullscreen : SVGS.editorFullscreen;
@@ -2830,11 +2832,14 @@ function closeEditor() {
         els.viewEditor.classList.remove('active');
         // 恢复主内容区滚动
         els.mainContent.style.overflow = '';
-        // 退出全屏模式
-        els.editorPanel.classList.remove('fullscreen');
-        els.editorFullscreenBtn.innerHTML = SVGS.editorFullscreen;
-        els.editorFullscreenBtn.title = '全屏编辑';
-        els.editorFullscreenBtn.classList.remove('fullscreen');
+        // 退出全屏模式（仅当实际处于全屏状态时重置）
+        if (state._isFullscreen) {
+            els.editorPanel.classList.remove('fullscreen');
+            els.editorFullscreenBtn.innerHTML = SVGS.editorFullscreen;
+            els.editorFullscreenBtn.title = '全屏编辑';
+            els.editorFullscreenBtn.classList.remove('fullscreen');
+            state._isFullscreen = false;
+        }
         document.getElementById('topbar').classList.remove('editor-fullscreen');
         // 重置查看模式标志
         state.enteredFromViewMode = false;
@@ -4891,9 +4896,17 @@ function initWindowControls() {
     }
 
     if (maximizeBtn) {
+        // 初始化窗口最大化状态标记
+        maximizeBtn.dataset.maximized = 'false';
+
         maximizeBtn.addEventListener('click', async () => {
             await WindowToggleMaximise();
-            updateMaximizeButtonIcon(maximizeBtn);
+            // 使用 data-* 属性追踪状态，完全避免 async 竞态
+            const isMax = maximizeBtn.dataset.maximized === 'true';
+            const nextMax = !isMax;
+            maximizeBtn.dataset.maximized = nextMax ? 'true' : 'false';
+            maximizeBtn.innerHTML = nextMax ? SVGS.windowRestore : SVGS.windowMaximize;
+            maximizeBtn.title = nextMax ? '还原' : '最大化';
         });
     }
 
@@ -4908,7 +4921,12 @@ function initWindowControls() {
             // 如果双击的是按钮，不触发
             if (e.target.closest('.topbar-btn')) return;
             await WindowToggleMaximise();
-            updateMaximizeButtonIcon(maximizeBtn);
+            // 使用 data-* 属性追踪状态，完全避免 async 竞态
+            const isMax = maximizeBtn.dataset.maximized === 'true';
+            const nextMax = !isMax;
+            maximizeBtn.dataset.maximized = nextMax ? 'true' : 'false';
+            maximizeBtn.innerHTML = nextMax ? SVGS.windowRestore : SVGS.windowMaximize;
+            maximizeBtn.title = nextMax ? '还原' : '最大化';
         });
     }
 
@@ -4926,16 +4944,20 @@ function initWindowControls() {
  */
 function updateMaximizeButtonIcon(btn, isMaximized) {
     if (typeof isMaximized !== 'boolean') {
-        // 异步获取当前状态
+        // 异步获取当前状态（兜底，不应走此路径）
         WindowIsMaximised().then(maximised => {
+            btn.dataset.maximized = maximised ? 'true' : 'false';
             btn.innerHTML = maximised ? SVGS.windowRestore : SVGS.windowMaximize;
             btn.title = maximised ? '还原' : '最大化';
         }).catch(() => {
             // 如果获取失败，切换图标
-            const isMax = btn.innerHTML.includes(SVGS.windowMaximize);
-            btn.innerHTML = isMax ? SVGS.windowRestore : SVGS.windowMaximize;
+            const nextMax = btn.dataset.maximized !== 'true';
+            btn.dataset.maximized = nextMax ? 'true' : 'false';
+            btn.innerHTML = nextMax ? SVGS.windowRestore : SVGS.windowMaximize;
+            btn.title = nextMax ? '还原' : '最大化';
         });
     } else {
+        btn.dataset.maximized = isMaximized ? 'true' : 'false';
         btn.innerHTML = isMaximized ? SVGS.windowRestore : SVGS.windowMaximize;
         btn.title = isMaximized ? '还原' : '最大化';
     }
