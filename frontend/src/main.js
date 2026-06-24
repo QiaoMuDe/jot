@@ -2464,6 +2464,8 @@ async function openEditor(noteId, readOnly, startFullscreen) {
         const pad = (n) => String(n).padStart(2, '0');
         els.editorNoteTitle.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ☺️`;
         editorContent = '';
+        // 缓存默认标题，用于判断用户是否改过标题
+        state._defaultNewNoteTitle = els.editorNoteTitle.value;
     }
 
     // 只读模式：禁用输入，隐藏保存/取消按钮
@@ -2968,6 +2970,7 @@ function closeEditor() {
         state.editingNoteId = null;
         state.selectedTags = [];
         state._editSnapshot = null;
+        state._defaultNewNoteTitle = null;
         // 字数归零
         els.editorWordCount.textContent = '';
         // 重置 Markdown 渲染/编辑显示状态
@@ -2975,6 +2978,64 @@ function closeEditor() {
         els.mdRendered.innerHTML = '';
         delete els.editorOverlay.dataset.mode;
     }, 200);
+}
+
+/**
+ * 安全关闭编辑器：检查未保存内容，有改动时弹出保存确认
+ */
+async function closeEditorSafe() {
+    // 查看模式或保存按钮不可见 → 直接关闭
+    if (els.editorSaveBtn.style.display === 'none') {
+        closeEditor();
+        return;
+    }
+
+    // 新建模式：内容为空 → 直接关闭
+    if (!state.editingNoteId) {
+        const title = els.editorNoteTitle.value.trim();
+        const content = getEditorContent().trim();
+        // 标题是默认自动生成的且内容为空 → 未编辑过，直接关闭
+        if (state._defaultNewNoteTitle && title === state._defaultNewNoteTitle && !content) {
+            closeEditor();
+            return;
+        }
+        if (!title && !content) {
+            closeEditor();
+            return;
+        }
+    } else {
+        // 编辑模式：有快照且无改动 → 直接关闭
+        const snapshot = state._editSnapshot;
+        if (snapshot) {
+            const currentTitle = els.editorNoteTitle.value.trim();
+            const currentContent = getEditorContent().trim();
+            const currentTags = [...state.selectedTags].sort();
+            const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
+            if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged) {
+                closeEditor();
+                return;
+            }
+        } else {
+            closeEditor();
+            return;
+        }
+    }
+
+    // 有未保存的内容 → 弹出确认
+    const action = await showSaveConfirmDialog('笔记内容尚未保存，是否保存？');
+    if (action === 'cancel') return;
+
+    if (action === 'save') {
+        if (state.editingNoteId) {
+            await updateNote(state.editingNoteId);
+        } else {
+            await createNote();
+        }
+        // createNote/updateNote 内已调用了 closeEditor，不再重复执行
+        return;
+    }
+    // discard: 放弃修改，关闭编辑器
+    closeEditor();
 }
 
 /**
@@ -3728,7 +3789,7 @@ function initEventListeners() {
     });
 
     // 编辑器
-    els.editorCloseBtn.addEventListener('click', closeEditor);
+    els.editorCloseBtn.addEventListener('click', closeEditorSafe);
     els.editorEditBtn.addEventListener('click', () => {
         const noteId = state.editingNoteId;
         if (noteId) {
@@ -3776,9 +3837,7 @@ function initEventListeners() {
         }
     });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
-    els.editorCancelBtn.addEventListener('click', async () => {
-        closeEditor();
-    });
+    els.editorCancelBtn.addEventListener('click', closeEditorSafe);
     els.editorSaveBtn.addEventListener('click', async () => {
         if (state.editingNoteId) {
             await updateNote(state.editingNoteId);
@@ -3789,55 +3848,7 @@ function initEventListeners() {
     // 点击蒙层关闭编辑器（编辑/新建模式有未保存内容时弹出保存确认）
     els.editorOverlay.addEventListener('click', async (e) => {
         if (e.target !== els.editorOverlay) return;
-
-        // 查看模式或保存按钮不可见 → 直接关闭
-        if (els.editorSaveBtn.style.display === 'none') {
-            closeEditor();
-            return;
-        }
-
-        // 新建模式：内容为空 → 直接关闭
-        if (!state.editingNoteId) {
-            const title = els.editorNoteTitle.value.trim();
-            const content = getEditorContent().trim();
-            if (!title && !content) {
-                closeEditor();
-                return;
-            }
-        } else {
-            // 编辑模式：有快照且无改动 → 直接关闭
-            const snapshot = state._editSnapshot;
-            if (snapshot) {
-                const currentTitle = els.editorNoteTitle.value.trim();
-                const currentContent = getEditorContent().trim();
-                const currentTags = [...state.selectedTags].sort();
-                const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
-                if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged) {
-                    closeEditor();
-                    return;
-                }
-            } else {
-                closeEditor();
-                return;
-            }
-        }
-
-        // 有未保存的内容 → 弹出确认
-        const action = await showSaveConfirmDialog('笔记内容尚未保存，是否保存？');
-        if (action === 'cancel') return;
-
-        if (action === 'save') {
-            if (state.editingNoteId) {
-                await updateNote(state.editingNoteId);
-            } else {
-                await createNote();
-            }
-            // createNote/updateNote 内已调用了 closeEditor，不再重复执行
-            return;
-        }
-        // discard: 放弃修改，关闭编辑器
-
-        closeEditor();
+        await closeEditorSafe();
     });
 
     // 编辑器模式切换（纯文本/分栏/预览）
@@ -4179,9 +4190,9 @@ async function handleKeyboardNavigation(e) {
             toggleEditorFullscreen();
             return;
         }
-        // 编辑器打开时关闭它
+        // 编辑器打开时关闭它（检查未保存内容）
         if (els.viewEditor.classList.contains('active')) {
-            closeEditor();
+            closeEditorSafe();
             return;
         }
         if (els.shortcutsView.style.display !== 'none') {
