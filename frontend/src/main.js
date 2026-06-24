@@ -1,6 +1,6 @@
 import './style.css';
 import './app.css';
-import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn } from '../wailsjs/runtime/runtime.js';
+import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn, WindowFullscreen, WindowUnfullscreen, WindowIsFullscreen } from '../wailsjs/runtime/runtime.js';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
@@ -4073,6 +4073,28 @@ function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl+E: 切换编辑器全屏模式（仅编辑器打开时有效）
+    if (e.ctrlKey && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        if (els.viewEditor.classList.contains('active')) {
+            toggleEditorFullscreen();
+        }
+        return;
+    }
+
+    // F11: 切换窗口 OS 全屏（全局可用，与编辑器全屏独立）
+    if (e.key === 'F11') {
+        e.preventDefault();
+        WindowIsFullscreen().then(isWinFs => {
+            if (isWinFs) {
+                WindowUnfullscreen();
+            } else {
+                WindowFullscreen();
+            }
+        });
+        return;
+    }
+
     // Escape: 关闭查找条或退出当前子视图
     if (e.key === 'Escape') {
         e.preventDefault();
@@ -4375,6 +4397,8 @@ function renderShortcutsPage() {
         { key: 'Ctrl + F', desc: '编辑器内查找 / 聚焦搜索框' },
         { key: 'Ctrl + H', desc: '编辑器内查找替换' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
+        { key: 'Ctrl + E', desc: '编辑器内切换全屏' },
+        { key: 'F11', desc: '切换窗口全屏' },
         { key: 'PgUp', desc: '上翻一页' },
         { key: 'PgDn', desc: '下翻一页 / 触底加载更多' },
         { key: 'Ctrl + Home', desc: '回到顶部' },

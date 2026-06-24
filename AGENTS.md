@@ -685,6 +685,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **空标题保存校验**：createNote/updateNote 标题为空时 show('标题不能为空...') 提示，阻止保存
 - ✅ **CM6 行号栏背景修复**：水平滚动条出现时不再覆盖左侧行号区域；`.cm-gutters` 背景改为 `var(--card-bg)` 并设置 `z-index: 10`，行号数字右侧 padding 从 8px 收窄到 4px。详见 `.trae/specs/fix-cm6-horizontal-scrollbar-gutter/`
 - ✅ **查看模式全屏半高修复**：查看模式纯文本笔记全屏后编辑器只剩半高的根因是 `openEditor()` 的 view mode + text 分支未设置 `data-mode="edit"`，导致 `toggleEditorFullscreen()` Phase 3 清除内联样式后 `.md-rendered` 以 `flex: 1` 可见与 CM6 各占一半空间。修复方案：统一在 `openEditor()` 各分支前设默认 `data-mode="edit"`，查看模式纯文本分支不再需要手动设置，Markdown 分支继续 override 为 `'preview'`。详见 `.trae/specs/fix-viewmode-fullscreen-halfheight/`
+- ✅ **全屏快捷键绑定**：编辑器全屏绑定 `Ctrl+E`（编辑器打开时有效），窗口 OS 全屏绑定 `F11`（全局有效），两者独立不冲突。导入 Wails runtime 的 `WindowFullscreen/WindowUnfullscreen/WindowIsFullscreen` 实现窗口全屏。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md`
 
 ---
 
@@ -843,3 +844,4 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **全屏按钮状态标志位** | `toggleEditorFullscreen()` 改为使用 `state._isFullscreen` 标志位代替 `panel.classList.contains('fullscreen')` DOM 检查，消除 `closeEditor()` setTimeout 回调与 `toggleEditorFullscreen()` 之间的状态不同步。`closeEditor()` 中先检查 `state._isFullscreen` 再重置 |
 | **窗口最大化按钮 `dataset.maximized`** | `WindowToggleMaximise()` 后直接用 `dataset.maximized` 追踪窗口最大化状态（`'true'`/`'false'`），不依赖 innerHTML 字符串比较或异步 `WindowIsMaximised()` 查询。初始化 `maximizeBtn.dataset.maximized = 'false'`，点击/双击 topbar 时取反。`EventsOn('wails:window:maximise/unmaximise')` 也同步更新 dataset。`updateMaximizeButtonIcon()` 兜底路径改用 dataset 而非 innerHTML.includes |
 | **查看模式全屏半高修复** | 查看模式纯文本笔记全屏后编辑器半高的根因：view mode + text 分支未设 `data-mode="edit"`，全屏 Phase 3 清除 `.md-rendered` 内联 `display:none` 后无 CSS `[data-mode]` 选择器命中，`.md-rendered` 以 `flex: 1` 可见与 CM6 各占一半高度。修复：在 `openEditor()` 各分支前统一设 `els.editorOverlay.dataset.mode = 'edit'`，查看模式纯文本分支不再手动设置，Markdown 分支 override 为 `'preview'`。详见 `.trae/specs/fix-viewmode-fullscreen-halfheight/` |
+| **全屏快捷键区分** | 编辑器 CSS 伪全屏 = `Ctrl+E`（需编辑器打开），窗口 OS 全屏 = `F11`（全局），两者完全独立可同时启用。`WindowIsFullscreen()` 返回 Promise，用 `.then()` 回调判断状态决定 `WindowFullscreen()` 或 `WindowUnfullscreen()`。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md` |
