@@ -2615,9 +2615,16 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     document.getElementById('topbar').classList.add('editor-fullscreen');
 
     if (startFullscreen) {
-        // 快速笔记：直接以全屏尺寸打开，不经过悬浮卡片
+        // 快速笔记启动：直接以全屏尺寸打开，不经过悬浮卡片，跳过所有动画
+        // 先禁用 CSS transition，避免添加 fullscreen class 时触发尺寸过渡动画
+        panel.style.transition = 'none';
         overlay.classList.add('fullscreening');
         panel.classList.add('fullscreen');
+        // 强制回流确保 transition:none 生效
+        void panel.offsetHeight;
+        // 恢复 transition（后续用户操作的过渡仍需保留）
+        panel.style.transition = '';
+
         state._isFullscreen = true;
         if (els.editorFullscreenBtn) {
             els.editorFullscreenBtn.innerHTML = SVGS.editorExitFullscreen;
@@ -2628,16 +2635,21 @@ async function openEditor(noteId, readOnly, startFullscreen) {
         if (els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
             els.notebookSidebar.classList.add('collapsed');
         }
-    }
 
-    overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
-    panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
-    // 内容区域延迟入场
-    if (body) {
-        requestAnimationFrame(() => {
-            body.style.animation = 'viewEnter 0.25s ease-out forwards';
-            body.style.animationDelay = '50ms';
-        });
+        // 覆盖 CSS 初始 opacity:0/scale(0.85)，立即显示
+        overlay.style.opacity = '1';
+        panel.style.opacity = '1';
+        panel.style.transform = 'scale(1)';
+    } else {
+        overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
+        panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+        // 内容区域延迟入场
+        if (body) {
+            requestAnimationFrame(() => {
+                body.style.animation = 'viewEnter 0.25s ease-out forwards';
+                body.style.animationDelay = '50ms';
+            });
+        }
     }
 }
 
