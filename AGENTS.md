@@ -38,8 +38,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5100 行（含 CM6 集成）
-│   │   ├── style.css                   # 组件样式 ~3064 行（含 CM6 主题/语法高亮）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~3957 行（含 CM6 集成）
+│   │   ├── style.css                   # 组件样式 ~4083 行（含 CM6 主题/语法高亮）
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~458 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -691,6 +691,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **退出时清除新建笔记草稿**：在 `handleAppExit()` 的「保存并退出」和「不保存」分支中，当为新建笔记（`!state.editingNoteId`）且后端 `ClearDraft` 可用时，调用 `await window.go.main.App.ClearDraft()` 清除临时草稿。`cancel` 分支保持不变。仅影响新建笔记，编辑已有笔记不涉及。详见 `.trae/specs/add-draft-cleanup-on-exit/`
 - ✅ **Web Worker 离线程预览渲染**：创建 `preview-worker.js`（ESM Worker），使用 `marked.parse()` 在独立线程中解析 Markdown，主线程仅做 DOM 操作。`updatePreview()` 重构为：哈希缓存（内容未变直接复用 DOM）→ Worker 异步渲染（显示 loading 动画）→ Worker 正忙/不可用时回退到主线程同步渲染。大文件预览不再阻塞 UI，编辑器在全屏/滚动/模式切换时保持流畅。详见 `.trae/specs/add-web-worker-rendering/`
 - ✅ **大文件全屏动画卡顿修复**：大文件（含大量代码块/表格的 Markdown）全屏/恢复时动画卡顿的根因是渲染完成前 DOM 重计算阻塞 transition。`contain: layout style` 方案因干扰浏览器滚动优化导致鼠标卡顿被回退。最终方案：全屏切换前 `panel.style.transition = 'none'` 临时禁用 CSS 过渡，`void panel.offsetHeight` 强制回流确保 class 切换后立即应用，再恢复 transition。全程零动画过渡，消除 DOM 布局阻塞导致的动画掉帧。
+- ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新，不保存时清除草稿(Ctrl+Q 和覆盖关闭按钮流程)。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
+- ✅ **查看模式保存刷新列表**：从查看→编辑→返回查看时，保存后调 `loadNotes()` 刷新列表，解决列表不更新问题
+- ✅ **蒙层保存修复(createNote/updateNote)**：修复了蒙层点击保存时调 `saveEditorContent()` 导致新建笔记用 `SaveDraft()`（只存临时草稿而非真笔记）且被 `ClearDraft()` 清掉的 bug，改为直接调 `createNote()`/`updateNote()`
 
 ---
 
@@ -704,7 +707,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个 Draft 草稿 + 3 个备份还原）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~5100 行 JS + ~3064 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~3957 行 JS + ~4083 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -852,3 +855,4 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **全屏快捷键区分** | 编辑器 CSS 伪全屏 = `Ctrl+E`（需编辑器打开），窗口 OS 全屏 = `F11`（全局），两者完全独立可同时启用。`WindowIsFullscreen()` 返回 Promise，用 `.then()` 回调判断状态决定 `WindowFullscreen()` 或 `WindowUnfullscreen()`。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md` |
 | **快速笔记启动零动画** | `openEditor(null, false, true)` 的 `startFullscreen` 分支先 `panel.style.transition='none'` 禁用 CSS 过渡，再添加 `.fullscreen` class，`void panel.offsetHeight` 强制回流后恢复 transition。同时设 `overlay/panel` 的 `opacity:1`、`panel.transform:scale(1)` 覆盖 CSS 初始不可见态。`transition:none` + 强制回流是确保全屏 class 切换不触发 `width/height` transition 的关键技巧。详见 `.trae/specs/skip-quicknote-animation-on-start/` |
 | **Ctrl+Q 退出 + 关闭按钮保存笔记** | 提取 `saveEditorContent()` 共用函数 + `showSaveConfirmDialog()` 三选一对话框 + `handleAppExit()` 统一退出流程。编辑器未打开直接 `Quit()`；有未保存内容时弹出对话框：「保存并退出」→ 调 `UpdateNote()`/`SaveDraft()` + `Quit()`，「不保存」→ 直接 `Quit()`，「取消」→ 不退出。Ctrl+Q 和窗口关闭按钮（×）统一走 `handleAppExit()`。HTML 新增 `confirm-third` 按钮，CSS 新增 `.confirm-third` 黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md` |
+| **蒙层点击保存确认** | 编辑器蒙层点击不再直接 `closeEditor()`，改为条件判断：查看模式/无内容直接关闭，编辑模式通过前端快照 `state._editSnapshot`（标题+内容+标签快照字符串对比）判断是否有改动，新建模式内容非空即弹确认对话框。保存分支直接调 `createNote()`/`updateNote()` 而非 `saveEditorContent()`（后者新建笔记走 `SaveDraft()` 无法真正创建笔记）。discard 分支清除草稿。详见 `.trae/documents/add-save-prompt-on-overlay-click.md` |

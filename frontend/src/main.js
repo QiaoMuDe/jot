@@ -971,6 +971,7 @@ async function createNote() {
     }
     // 清除草稿（如果有）
     try { if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearDraft) { await window.go.main.App.ClearDraft(); } } catch (e) {}
+    nm.show('笔记已创建', 'success');
     closeEditor();
     await loadNotes();
     await loadNotebooks();
@@ -1014,6 +1015,7 @@ async function updateNote(id) {
     } catch (err) {
         console.error('更新笔记失败:', err);
     }
+    nm.show('笔记已更新', 'success');
     closeEditor();
     await loadNotes();
     await loadNotebooks();
@@ -2459,6 +2461,9 @@ function startAutoSave() {
         autoSaveTimer = null;
     }
     autoSaveTimer = setTimeout(async () => {
+        // 编辑模式（已有笔记）不做自动保存，只保留新建笔记的草稿自动保存
+        if (state.editingNoteId) return;
+
         const title = els.editorNoteTitle.value.trim();
         const content = getEditorContent().trim();
         // 标题和内容均为空时不保存
@@ -2621,6 +2626,11 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     } else {
         els.editorNoteTitle.removeEventListener('input', onEditorInput);
         state._titleInputListenerAttached = false;
+        // 查看模式下清除待执行的自动保存定时器，防止切回后误触发
+        if (autoSaveTimer) {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = null;
+        }
     }
 
     // 加载标签并渲染标签选择器（等待标签加载完毕再显示编辑器，避免闪烁）
@@ -2634,6 +2644,14 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     // Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定
     const useMdHighlight = state.noteType === 'markdown' || els.mdHighlightToggle.checked;
     initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useMdHighlight);
+    // 编辑模式下记录快照，用于蒙层点击判断内容是否有改动
+    if (!isReadOnly && state.editingNoteId) {
+        state._editSnapshot = {
+            title: els.editorNoteTitle.value.trim(),
+            content: getEditorContent().trim(),
+            tags: [...state.selectedTags].sort()
+        };
+    }
     // CM6 就绪后刷新预览（解决查看模式下 CM6 初始化前预览无法渲染的问题）
     if (els.editorOverlay.dataset.mode === 'preview') {
         updatePreview();
@@ -2976,8 +2994,8 @@ async function saveEditorContent() {
  * 退出程序前的统一处理：提示保存 → 执行退出
  */
 async function handleAppExit() {
-    // 编辑器打开且有内容 → 询问是否保存
-    if (els.viewEditor.classList.contains('active')) {
+    // 编辑器打开且有内容 + 非只读模式 → 询问是否保存
+    if (els.viewEditor.classList.contains('active') && els.editorSaveBtn.style.display !== 'none') {
         const title = els.editorNoteTitle.value.trim();
         const content = getEditorContent().trim();
         if (title && content) {
@@ -3045,6 +3063,7 @@ function closeEditor() {
         }
         state.editingNoteId = null;
         state.selectedTags = [];
+        state._editSnapshot = null;
         // 字数归零
         els.editorWordCount.textContent = '';
         // 重置 Markdown 渲染/编辑显示状态
@@ -3838,6 +3857,7 @@ function initEventListeners() {
                 }
             }
             state.enteredFromViewMode = false;
+            nm.show('笔记已更新', 'success');
             // 同步更新 state.notes 中的本地缓存，避免 loadNotes() 全量刷新
             const cached = state.notes.find(n => n.id === noteId);
             if (cached) {
@@ -3846,7 +3866,9 @@ function initEventListeners() {
                 cached.note_type = state.noteType;
                 cached.updated_at = new Date().toISOString();
             }
+            state._editSnapshot = null;
             openEditor(noteId, true);
+            await loadNotes();
         }
     });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
@@ -3864,9 +3886,62 @@ function initEventListeners() {
             await createNote();
         }
     });
-    // 点击蒙层关闭编辑器
-    els.editorOverlay.addEventListener('click', (e) => {
-        if (e.target === els.editorOverlay) closeEditor();
+    // 点击蒙层关闭编辑器（编辑/新建模式有未保存内容时弹出保存确认）
+    els.editorOverlay.addEventListener('click', async (e) => {
+        if (e.target !== els.editorOverlay) return;
+
+        // 查看模式或保存按钮不可见 → 直接关闭
+        if (els.editorSaveBtn.style.display === 'none') {
+            closeEditor();
+            return;
+        }
+
+        // 新建模式：内容为空 → 直接关闭
+        if (!state.editingNoteId) {
+            const title = els.editorNoteTitle.value.trim();
+            const content = getEditorContent().trim();
+            if (!title && !content) {
+                closeEditor();
+                return;
+            }
+        } else {
+            // 编辑模式：有快照且无改动 → 直接关闭
+            const snapshot = state._editSnapshot;
+            if (snapshot) {
+                const currentTitle = els.editorNoteTitle.value.trim();
+                const currentContent = getEditorContent().trim();
+                const currentTags = [...state.selectedTags].sort();
+                const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
+                if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged) {
+                    closeEditor();
+                    return;
+                }
+            } else {
+                closeEditor();
+                return;
+            }
+        }
+
+        // 有未保存的内容 → 弹出确认
+        const action = await showSaveConfirmDialog('笔记内容尚未保存，是否保存？');
+        if (action === 'cancel') return;
+
+        if (action === 'save') {
+            if (state.editingNoteId) {
+                await updateNote(state.editingNoteId);
+            } else {
+                await createNote();
+            }
+            // createNote/updateNote 内已调用了 closeEditor，不再重复执行
+            return;
+        } else if (action === 'discard') {
+            // 新建笔记不保存时也清除草稿
+            if (!state.editingNoteId && window.go?.main?.App?.ClearDraft) {
+                await window.go.main.App.ClearDraft();
+            }
+        }
+
+        closeEditor();
     });
 
     // 编辑器模式切换（纯文本/分栏/预览）
