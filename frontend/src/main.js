@@ -195,7 +195,8 @@ function initCodeMirror(container, content = '', readOnly = false, useMdHighligh
             color: 'var(--text-primary)',
             fontFamily: 'var(--font-family)',
             fontSize: 'var(--font-size-base)',
-            height: '100%',
+            flex: '1 1 0',
+            minHeight: 0,
         },
         '.cm-scroller': {
             fontFamily: 'var(--font-family)',
@@ -2469,7 +2470,7 @@ function startAutoSave() {
  * @param {number|null} noteId - 笔记 ID，null 表示新建
  * @param {boolean} readOnly - 是否为只读查看模式
  */
-async function openEditor(noteId, readOnly) {
+async function openEditor(noteId, readOnly, startFullscreen) {
     state.editingNoteId = noteId || null;
     state.selectedTags = [];
 
@@ -2532,11 +2533,15 @@ async function openEditor(noteId, readOnly) {
     // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
     els.editorModes.style.display = state.noteType === 'markdown' ? '' : 'none';
 
+    // 统一初始化编辑器模式为纯文本编辑（data-mode 值影响 flex 布局 CSS 选择器）
+    // 后续各分支根据情况可 override：查看+Markdown → 'preview'
+    els.editorOverlay.dataset.mode = 'edit';
+
     // 查看模式：显示最近编辑时间 + 按类型选择渲染方式
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
         if (state.noteType === 'text') {
-            // 纯文本：CM6 自动以只读模式展示
+            // 纯文本：CM6 自动以只读模式展示（data-mode 已由默认值 'edit' 覆盖）
             els.mdRendered.style.display = 'none';
         } else {
             // Markdown：直接从暂存内容渲染预览，无需等 CM6 初始化
@@ -2608,6 +2613,23 @@ async function openEditor(noteId, readOnly) {
     const body = panel.querySelector('.editor-body');
     // 编辑器打开时自动隐藏 #topbar 搜索框和更多菜单（不受全屏限制）
     document.getElementById('topbar').classList.add('editor-fullscreen');
+
+    if (startFullscreen) {
+        // 快速笔记：直接以全屏尺寸打开，不经过悬浮卡片
+        overlay.classList.add('fullscreening');
+        panel.classList.add('fullscreen');
+        state._isFullscreen = true;
+        if (els.editorFullscreenBtn) {
+            els.editorFullscreenBtn.innerHTML = SVGS.editorExitFullscreen;
+            els.editorFullscreenBtn.title = '退出全屏';
+            els.editorFullscreenBtn.classList.add('fullscreen');
+        }
+        // 收起侧栏
+        if (els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
+            els.notebookSidebar.classList.add('collapsed');
+        }
+    }
+
     overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
     panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
     // 内容区域延迟入场
@@ -2619,102 +2641,158 @@ async function openEditor(noteId, readOnly) {
     }
 }
 
+/** 预览渲染处理中标志，防重复请求 */
+let _previewWorkerLoading = false;
+
+/**
+ * 初始化预览渲染 Worker
+ */
+function initPreviewWorker() {
+    try {
+        _previewWorker = new Worker(
+            new URL('./preview-worker.js', import.meta.url),
+            { type: 'module' }
+        );
+        _previewWorker.onmessage = function (e) {
+            const { html, error } = e.data;
+            if (error) {
+                console.error('Preview Worker:', error);
+                els.mdRendered.innerHTML = '<p class="md-error">渲染失败</p>';
+                _previewWorkerLoading = false;
+                return;
+            }
+            // 设置渲染结果
+            els.mdRendered.innerHTML = html;
+            // hljs 高亮（必须在主线程，需要 DOM 环境）
+            els.mdRendered.querySelectorAll('pre code').forEach((block) => {
+                if (typeof hljs !== 'undefined') {
+                    hljs.highlightElement(block);
+                }
+            });
+            // 复制按钮、语言标签、表格按钮等 DOM 后处理
+            _applyPreviewDOMHelpers();
+            // 隐藏加载状态
+            const loadingEl = els.mdRendered.querySelector('.md-rendered-loading');
+            if (loadingEl) loadingEl.remove();
+            _previewWorkerLoading = false;
+        };
+    } catch (err) {
+        console.warn('Preview Worker init fallback:', err);
+        _previewWorker = null;
+    }
+}
+
+/**
+ * 预览渲染后的 DOM 辅助处理（复制按钮、语言标签、表格按钮）
+ */
+function _applyPreviewDOMHelpers() {
+    // 代码高亮
+    els.mdRendered.querySelectorAll('pre code').forEach((block) => {
+        if (typeof hljs !== 'undefined') {
+            hljs.highlightElement(block);
+        }
+    });
+    // 为每个代码块添加复制按钮
+    els.mdRendered.querySelectorAll('pre').forEach((pre) => {
+        if (pre.querySelector('.copy-code-btn')) return;
+        const btn = document.createElement('button');
+        const codeEl = pre.querySelector('code');
+        const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
+        btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
+        btn.textContent = '复制';
+        btn.title = '复制代码';
+        btn.addEventListener('click', async () => {
+            const code = pre.querySelector('code').textContent;
+            try {
+                await navigator.clipboard.writeText(code);
+                btn.classList.add('copied');
+                btn.innerHTML = SVGS.checkmark + ' 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.textContent = '复制';
+                }, 1500);
+            } catch {
+                btn.innerHTML = SVGS.xmark + ' 复制失败';
+                setTimeout(() => { btn.textContent = '复制'; }, 1000);
+            }
+        });
+        pre.appendChild(btn);
+    });
+    // 为每个代码块添加语言标签
+    els.mdRendered.querySelectorAll('pre').forEach((pre) => {
+        if (pre.parentNode.classList.contains('pre-wrapper')) return;
+        const code = pre.querySelector('code');
+        if (!code) return;
+        const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
+        const lang = langClass ? langClass.replace('language-', '') : '';
+        if (!lang) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pre-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+        const badge = document.createElement('span');
+        badge.className = 'code-lang-badge';
+        badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+        wrapper.appendChild(badge);
+    });
+    // 为每个表格添加复制按钮
+    els.mdRendered.querySelectorAll('table').forEach((table) => {
+        let wrapper = table.parentNode;
+        if (wrapper.classList.contains('table-wrapper')) return;
+        wrapper = document.createElement('div');
+        wrapper.className = 'table-wrapper';
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+        const btn = document.createElement('button');
+        btn.className = 'copy-table-btn';
+        btn.textContent = '复制';
+        btn.title = '复制表格';
+        btn.addEventListener('click', async () => {
+            const md = tableToMarkdown(table);
+            try {
+                await navigator.clipboard.writeText(md);
+                btn.classList.add('copied');
+                btn.innerHTML = SVGS.checkmark + ' 已复制';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.textContent = '复制';
+                }, 1500);
+            } catch {
+                btn.innerHTML = SVGS.xmark + ' 复制失败';
+                setTimeout(() => { btn.textContent = '复制'; }, 1000);
+            }
+        });
+        wrapper.appendChild(btn);
+    });
+}
+
 /**
  * 更新 Markdown 预览区
+ * 通过 Web Worker 离线程解析，不阻塞主线程 UI
  */
 function updatePreview() {
     const content = getEditorContent();
-    if (content.trim()) {
-        els.mdRendered.innerHTML = marked.parse(content);
-        // 代码高亮
-        els.mdRendered.querySelectorAll('pre code').forEach((block) => {
-            if (typeof hljs !== 'undefined') {
-                hljs.highlightElement(block);
-            }
-        });
-        // 为每个代码块添加复制按钮
-        els.mdRendered.querySelectorAll('pre').forEach((pre) => {
-            // 避免重复添加
-            if (pre.querySelector('.copy-code-btn')) return;
-            const btn = document.createElement('button');
-            // 单行代码块 → 垂直居中；多行 → 右上角（trim 掉 marked 自动追加的尾随换行符）
-            const codeEl = pre.querySelector('code');
-            const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
-            btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
-            btn.textContent = '复制';
-            btn.title = '复制代码';
-            btn.addEventListener('click', async () => {
-                const code = pre.querySelector('code').textContent;
-                try {
-                    await navigator.clipboard.writeText(code);
-                    btn.classList.add('copied');
-                    btn.innerHTML = SVGS.checkmark + ' 已复制';
-                    setTimeout(() => {
-                        btn.classList.remove('copied');
-                        btn.textContent = '复制';
-                    }, 1500);
-                } catch {
-                    btn.innerHTML = SVGS.xmark + ' 复制失败';
-                    setTimeout(() => { btn.textContent = '复制'; }, 1000);
-                }
-            });
-            pre.appendChild(btn);
-        });
-        /* 为每个代码块添加语言标签（只读，显示 hljs 检测到的语言，置于 pre 外部右下角） */
-        els.mdRendered.querySelectorAll('pre').forEach((pre) => {
-            // 已处理则跳过
-            if (pre.parentNode.classList.contains('pre-wrapper')) return;
-            const code = pre.querySelector('code');
-            if (!code) return;
-            const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
-            const lang = langClass ? langClass.replace('language-', '') : '';
-            if (!lang) return;
-            // 用 wrapper 包裹 pre，为语言标签提供独立定位上下文（不挤占 pre 内部空间）
-            const wrapper = document.createElement('div');
-            wrapper.className = 'pre-wrapper';
-            pre.parentNode.insertBefore(wrapper, pre);
-            wrapper.appendChild(pre);
-            // 语言标签置于 wrapper 内（pre 外部右下角），不会被 pre 的 overflow-x 裁剪
-            const badge = document.createElement('span');
-            badge.className = 'code-lang-badge';
-            badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
-            wrapper.appendChild(badge);
-        });
-        // 为每个表格添加复制按钮
-        els.mdRendered.querySelectorAll('table').forEach((table) => {
-            // 避免重复包装
-            let wrapper = table.parentNode;
-            if (wrapper.classList.contains('table-wrapper')) return;
-            // 用 div 包裹 table，作为复制按钮的定位容器
-            wrapper = document.createElement('div');
-            wrapper.className = 'table-wrapper';
-            table.parentNode.insertBefore(wrapper, table);
-            wrapper.appendChild(table);
-            // 添加复制按钮
-            const btn = document.createElement('button');
-            btn.className = 'copy-table-btn';
-            btn.textContent = '复制';
-            btn.title = '复制表格';
-            btn.addEventListener('click', async () => {
-                const md = tableToMarkdown(table);
-                try {
-                    await navigator.clipboard.writeText(md);
-                    btn.classList.add('copied');
-                    btn.innerHTML = SVGS.checkmark + ' 已复制';
-                    setTimeout(() => {
-                        btn.classList.remove('copied');
-                        btn.textContent = '复制';
-                    }, 1500);
-                } catch {
-                    btn.innerHTML = SVGS.xmark + ' 复制失败';
-                    setTimeout(() => { btn.textContent = '复制'; }, 1000);
-                }
-            });
-            wrapper.appendChild(btn);
-        });
-    } else {
+    if (!content.trim()) {
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+        _lastPreviewContent = '';
+        return;
     }
+    // 内容未变化则跳过重复渲染（哈希缓存）
+    if (content === _lastPreviewContent) return;
+    _lastPreviewContent = content;
+
+    // 有 Worker 且不在处理中则走 Worker 渲染
+    if (_previewWorker && !_previewWorkerLoading) {
+        _previewWorkerLoading = true;
+        // 显示加载状态
+        els.mdRendered.innerHTML = '<div class="md-rendered-loading">加载中…</div>';
+        _previewWorker.postMessage(content);
+        return;
+    }
+
+    // 无 Worker 或 Worker 正忙时回退到主线程同步渲染
+    els.mdRendered.innerHTML = marked.parse(content);
+    _applyPreviewDOMHelpers();
 }
 
 /**
@@ -2786,30 +2864,47 @@ function toggleEditorFullscreen() {
     const btn = els.editorFullscreenBtn;
     const overlay = els.editorOverlay;
     const goFullscreen = !state._isFullscreen;
-
-    state._isFullscreen = goFullscreen;
-    panel.classList.toggle('fullscreen', goFullscreen);
-    overlay.classList.toggle('fullscreening', goFullscreen);
-    btn.innerHTML = goFullscreen ? SVGS.editorExitFullscreen : SVGS.editorFullscreen;
-    btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
-    btn.classList.toggle('fullscreen', goFullscreen);
-
-    // 全屏时自动收起侧栏
-    if (goFullscreen && els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
-        els.notebookSidebar.classList.add('collapsed');
-    }
-
-    // 内容延迟淡入/淡出
+    const mdRendered = els.mdRendered;
     const body = panel.querySelector('.editor-body');
-    if (body) {
-        body.style.transition = 'opacity 0.15s ease-out';
-        body.style.opacity = '0';
-        clearTimeout(body._fullscreenFadeTimer);
-        body._fullscreenFadeTimer = setTimeout(() => {
-            body.style.opacity = '';
-            body.style.transition = '';
-        }, goFullscreen ? 300 : 150);
-    }
+
+    // 清除上一次未完成的定时器
+    if (panel._fsTimer) { clearTimeout(panel._fsTimer); panel._fsTimer = null; }
+
+    /* 阶段1（0→50ms）：内容快速淡出 */
+    if (body) body.style.transition = 'opacity 0.05s ease-out';
+    if (body) body.style.opacity = '0';
+
+    panel._fsTimer = setTimeout(() => {
+        /* 阶段2（50ms）：隐藏内容 DOM，切换 class（CSS transition 处理 350ms 过渡） */
+        if (mdRendered) mdRendered.style.display = 'none';
+        if (body) body.style.transition = '';
+
+        state._isFullscreen = goFullscreen;
+        panel.classList.toggle('fullscreen', goFullscreen);
+        overlay.classList.toggle('fullscreening', goFullscreen);
+        btn.innerHTML = goFullscreen ? SVGS.editorExitFullscreen : SVGS.editorFullscreen;
+        btn.title = goFullscreen ? '退出全屏' : '全屏编辑';
+        btn.classList.toggle('fullscreen', goFullscreen);
+
+        // 全屏时自动收起侧栏
+        if (goFullscreen && els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
+            els.notebookSidebar.classList.add('collapsed');
+        }
+
+        /* 阶段3（50ms + 350ms）：等待 CSS transition 完成 */
+        panel._fsTimer = setTimeout(() => {
+            /* 恢复内容，淡入 */
+            if (mdRendered) mdRendered.style.display = '';
+            if (body) {
+                body.style.transition = 'opacity 0.12s ease-out';
+                body.style.opacity = '1';
+                setTimeout(() => {
+                    body.style.transition = '';
+                }, 130);
+            }
+            panel._fsTimer = null;
+        }, 350);
+    }, 50);
 }
 
 function closeEditor() {
@@ -4767,6 +4862,8 @@ async function init() {
     }
     await loadNotes();
     await loadTags();
+    // 初始化预览渲染 Worker
+    initPreviewWorker();
     // 初始化无边框窗口控制
     initWindowControls();
     // 注册文件拖拽导入
@@ -4781,6 +4878,10 @@ async function init() {
  * 传后端 ImportFiles 统一完成 stat 检测目录、二进制检测和笔记创建。
  */
 let _dragCounter = 0;
+/** 预览渲染内容缓存，内容未变化时跳过重复渲染 */
+let _lastPreviewContent = '';
+/** 预览渲染 Worker 实例 */
+let _previewWorker = null;
 function initFileDrop() {
     const dropOverlay = document.getElementById('dropOverlay');
     let registered = false;
@@ -4977,8 +5078,7 @@ async function loadQuickNoteSetting() {
         }
         els.quickNoteToggle.checked = enabled;
         if (enabled) {
-            openEditor(null);
-            toggleEditorFullscreen();
+            openEditor(null, false, true);
             // 有草稿时自动填入内容
             try {
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDraft) {

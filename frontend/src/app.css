@@ -559,6 +559,12 @@ body {
     to   { opacity: 0; transform: scale(0.95); }
 }
 
+/* 全屏切换：浅退出（scale 微缩保持视觉连续） */
+@keyframes modalExitShallow {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0.98; transform: scale(0.92); }
+}
+
 /* Slide up from bottom (for batch bar, toast) */
 @keyframes slideUp {
     from { transform: translateY(100%); opacity: 0; }

@@ -1,0 +1,12 @@
+- [x] `preview-worker.js` 文件已创建，可被 Vite 正确处理（ESM import 语法）
+- [x] Worker 内正确导入 `marked` 并执行 `marked.parse()`
+- [x] 主线程 `updatePreview()` 入口处有内容哈希缓存检查
+- [x] 相同内容重复调用更新哈希缓存直接 return
+- [x] Worker postMessage 触发后主线程显示加载状态（旋转圈 + "加载中…"）
+- [x] Worker onmessage 回调中正确设置 `els.mdRendered.innerHTML`
+- [x] hljs 高亮在 Worker 返回后由主线程执行
+- [x] 复制按钮/语言标签/表格按钮 DOM 创建在 Worker 返回后由主线程执行（`_applyPreviewDOMHelpers()`）
+- [x] 加载状态在 Worker 返回后正确隐藏（`.md-rendered-loading` remove）
+- [x] CSS 加载状态样式新增（旋转圈 + 脉动动画 + 居中文字）
+- [ ] 小文件渲染时 UI 不出现明显卡顿（需运行时验证）
+- [ ] 大文件渲染时 UI 保持流畅可响应（需运行时验证）

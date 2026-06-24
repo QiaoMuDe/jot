@@ -952,12 +952,12 @@ button :only-child:is(svg) {
   overflow: hidden;
   opacity: 0;
   transform: scale(0.85);
-  transition: background-color 0.3s ease-out,
-              border-color 0.3s ease-out,
-              width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
               height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
               max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
               max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.3s ease-out,
+              border-color 0.3s ease-out,
               border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -983,8 +983,6 @@ button :only-child:is(svg) {
   height: calc(100vh - 56px);
   max-height: none;
   border-radius: 0;
-  transition-duration: 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s, 0.35s;
-  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: none;
 }
 
@@ -1058,7 +1056,6 @@ button :only-child:is(svg) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  opacity: 0;
 }
 
 /* 编辑器编辑/预览区域容器 */
@@ -1081,7 +1078,7 @@ button :only-child:is(svg) {
 
 /* 纯文本模式（默认，预览区隐藏） */
 .editor-overlay[data-mode="edit"] .editor-textarea {
-  display: block;
+  display: flex;
 }
 
 .editor-overlay[data-mode="edit"] .md-rendered {
@@ -1567,6 +1564,34 @@ button :only-child:is(svg) {
 }
 .md-rendered::-webkit-scrollbar-thumb:hover {
   background: rgba(128,128,128,0.3);
+}
+
+/* 预览加载状态：脉动"加载中…"提示 */
+.md-rendered-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  gap: 8px;
+  animation: mdLoadingPulse 1.2s ease-in-out infinite;
+}
+.md-rendered-loading::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: mdLoadingSpin 0.8s linear infinite;
+}
+@keyframes mdLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes mdLoadingPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .md-rendered h1,
