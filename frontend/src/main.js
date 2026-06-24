@@ -494,6 +494,7 @@ const els = {
     confirmDialogMsg: $('confirmDialogMsg'),
     confirmOkBtn: $('confirmOkBtn'),
     confirmCancelBtn: $('confirmCancelBtn'),
+    confirmThirdBtn: $('confirmThirdBtn'),
 
     // 主内容区（用于网格视图滚动）
     mainContent: $('mainContent'),
@@ -1105,6 +1106,36 @@ async function undoDelete(noteIds) {
  */
 function showConfirmDialog(msg) {
     return new Promise((resolve) => {
+        // 确保第三方按钮在普通确认框中隐藏
+        if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
+        
+        els.confirmDialogMsg.textContent = msg;
+        els.confirmDialog.classList.add('visible');
+
+        const cleanup = (result) => {
+            els.confirmDialog.classList.remove('visible');
+            // 恢复第三方按钮显示
+            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = '';
+            resolve(result);
+        };
+
+        els.confirmOkBtn.onclick = () => cleanup(true);
+        els.confirmCancelBtn.onclick = () => cleanup(false);
+        els.confirmDialog.onclick = (e) => {
+            if (e.target === els.confirmDialog) cleanup(false);
+        };
+    });
+}
+
+/**
+ * 显示保存确认对话框（退出程序前使用）
+ * @param {string} msg - 提示信息
+ * @returns {Promise<'save'|'discard'|'cancel'>}
+ */
+function showSaveConfirmDialog(msg) {
+    return new Promise((resolve) => {
+        if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = '';
+
         els.confirmDialogMsg.textContent = msg;
         els.confirmDialog.classList.add('visible');
 
@@ -1113,10 +1144,11 @@ function showConfirmDialog(msg) {
             resolve(result);
         };
 
-        els.confirmOkBtn.onclick = () => cleanup(true);
-        els.confirmCancelBtn.onclick = () => cleanup(false);
+        els.confirmOkBtn.onclick = () => cleanup('save');
+        els.confirmThirdBtn.onclick = () => cleanup('discard');
+        els.confirmCancelBtn.onclick = () => cleanup('cancel');
         els.confirmDialog.onclick = (e) => {
-            if (e.target === els.confirmDialog) cleanup(false);
+            if (e.target === els.confirmDialog) cleanup('cancel');
         };
     });
 }
@@ -2919,6 +2951,55 @@ function toggleEditorFullscreen() {
     }, 50);
 }
 
+/**
+ * 保存编辑器内容（退出程序前调用）
+ * 编辑态调 UpdateNote，新建态调 SaveDraft
+ */
+async function saveEditorContent() {
+    if (!els.viewEditor.classList.contains('active')) return;
+    const title = els.editorNoteTitle.value.trim();
+    const content = getEditorContent().trim();
+    if (!title || !content) return;
+    if (!window.go || !window.go.main || !window.go.main.App) return;
+    try {
+        if (state.editingNoteId) {
+            await window.go.main.App.UpdateNote(state.editingNoteId, title, content, state.noteType);
+        } else {
+            await window.go.main.App.SaveDraft(title, content);
+        }
+    } catch (err) {
+        console.error('退出前保存失败:', err);
+    }
+}
+
+/**
+ * 退出程序前的统一处理：提示保存 → 执行退出
+ */
+async function handleAppExit() {
+    // 编辑器打开且有内容 → 询问是否保存
+    if (els.viewEditor.classList.contains('active')) {
+        const title = els.editorNoteTitle.value.trim();
+        const content = getEditorContent().trim();
+        if (title && content) {
+            const action = await showSaveConfirmDialog('笔记内容尚未保存，退出前是否保存？');
+            if (action === 'cancel') return;               // 取消：不退出
+            if (action === 'save') {
+                await saveEditorContent();                  // 保存后退出
+                // 新建笔记保存后清除草稿
+                if (!state.editingNoteId && window.go?.main?.App?.ClearDraft) {
+                    await window.go.main.App.ClearDraft();
+                }
+            } else if (action === 'discard') {
+                // 新建笔记不保存时也清除草稿
+                if (!state.editingNoteId && window.go?.main?.App?.ClearDraft) {
+                    await window.go.main.App.ClearDraft();
+                }
+            }
+        }
+    }
+    Quit();
+}
+
 function closeEditor() {
     const overlay = els.editorOverlay;
     const panel = els.editorPanel;
@@ -4023,7 +4104,7 @@ function getScrollContainer() {
 /**
  * 处理键盘快捷键（Ctrl+Home/End, PgUp/PgDn, Ctrl+F, Ctrl+H）
  */
-function handleKeyboardNavigation(e) {
+async function handleKeyboardNavigation(e) {
     const container = getScrollContainer();
 
     // Ctrl+S: 编辑器内保存（编辑/新建模式有效，查看模式忽略）
@@ -4104,6 +4185,13 @@ function handleKeyboardNavigation(e) {
                 WindowFullscreen();
             }
         });
+        return;
+    }
+
+    // Ctrl+Q: 退出程序（全局生效，退出前提示保存）
+    if (e.ctrlKey && (e.key === 'q' || e.key === 'Q')) {
+        e.preventDefault();
+        await handleAppExit();
         return;
     }
 
@@ -4411,6 +4499,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
         { key: 'Ctrl + E', desc: '编辑器内切换全屏' },
         { key: 'F11', desc: '切换窗口全屏' },
+        { key: 'Ctrl + Q', desc: '退出程序' },
         { key: 'PgUp', desc: '上翻一页' },
         { key: 'PgDn', desc: '下翻一页 / 触底加载更多' },
         { key: 'Ctrl + Home', desc: '回到顶部' },
@@ -5048,7 +5137,9 @@ function initWindowControls() {
     }
 
     if (closeBtn) {
-        closeBtn.addEventListener('click', () => Quit());
+        closeBtn.addEventListener('click', async () => {
+            await handleAppExit();
+        });
     }
 
     // 双击 topbar 空白区域最大化/还原

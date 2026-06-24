@@ -3425,6 +3425,15 @@ button :only-child:is(svg) {
   background: var(--danger-hover, #dc2626);
   border-color: var(--danger-hover, #dc2626);
 }
+.confirm-third {
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  border-color: var(--warning, #f59e0b);
+}
+.confirm-third:hover {
+  background: var(--warning-hover, #d97706);
+  border-color: var(--warning-hover, #d97706);
+}
 
 /* ==========================================================================
    Section O: Notebook Sidebar
