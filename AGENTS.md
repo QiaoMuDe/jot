@@ -25,13 +25,11 @@ jot/                                    # 项目根目录
 │   ├── models/
 │   │   ├── note.go                     # Note 实体（笔记）
 │   │   ├── tag.go                      # Tag 实体（标签）
-│   │   ├── setting.go                  # Setting 实体（KV 配置）
-│   │   └── draft.go                    # Draft 实体（草稿，仅 1 行记录 ID=1）
+│   │   └── setting.go                  # Setting 实体（KV 配置）
 │   └── services/
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── draft_service.go            # 草稿 SaveDraft/GetDraft/ClearDraft
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -654,7 +652,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **置顶不更新时间**：`TogglePin` 改为 `UpdateColumn("pinned")`，跳过 `UpdatedAt` 自动更新
 - ✅ **右键导出为 Markdown**：右键菜单「导出」→ 标题特殊符号→下划线 → 系统保存对话框 → `.md` 文件（`# 标题\n\n内容` 格式写入）
 - ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
-- ✅ **草稿自动保存与恢复**：新建 `drafts` 表（仅 1 行 ID=1，存 title/content），后端 `DraftService`（SaveDraft upsert / GetDraft / ClearDraft）+ app.go 绑定 3 个方法。前端 `startAutoSave()` 扩展：有 ID → `UpdateNote`（编辑已有笔记），无 ID → `SaveDraft`（新建笔记草稿），3s 防抖，标题内容均空不保存。`loadNotes()` 完成后延迟 1s 检测草稿（编辑器打开时跳过），有则弹窗「发现未保存的草稿，是否恢复？」恢复→填入编辑器、放弃→清除。清除时机：保存成功（`createNote`）、取消按钮（明确放弃）、恢复弹窗恢复/放弃。叉号/点击蒙层/ESC 不清除（保留供下次恢复）。快速笔记启用启动时 `loadQuickNoteSetting()` 自动查草稿并填入编辑器。底部栏 autoSaveIndicator 提示文字 2s 后清空（`textContent=''`），布局自动恢复
+- ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
 - ✅ **设置页首次打开白屏修复**：根因为 `updateFontSettingsUI()` 调用 `renderFontFamilyOptions()` 在首次显示时创建 200+ 带 `style="font-family:..."` 的字体选项 DOM 节点，浏览器首次布局计算耗时 1-2 秒。修复：`updateFontSettingsUI()` 移除 `renderFontFamilyOptions()` 调用，改为仅在用户点击下拉触发器时渲染（已有点击处理逻辑），设置页首次打开不再含大量字体节点参与布局，白屏消除
 - ✅ **笔记类型功能**：Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种类型。新建笔记默认选中「纯文本」（text）。纯文本模式底部隐藏「编辑/预览」切换按钮（`#editorModes`），仅显示纯文本编辑区。查看模式：`note_type="text"` 或 `""` 时内容以 `<pre>` 原始格式显示跳过 marked 解析；`note_type="markdown"` 走现有渲染流程。创建/更新笔记时 `note_type` 字段随请求写入，旧笔记 `note_type=""` 默认按 text 处理
 - ✅ **笔记类型切换器位置重构**：类型切换器从 footer 底部（与模式切换器冲突）移到 header 标题行右侧紧凑胶囊（`.editor-title-row`），再重构为 header 工具栏中的 32×32 T/M 图标按钮（`#editorTypeToggle`），与全屏/关闭按钮同尺寸同风格。查看只读模式隐藏
@@ -687,14 +685,12 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **查看模式全屏半高修复**：查看模式纯文本笔记全屏后编辑器只剩半高的根因是 `openEditor()` 的 view mode + text 分支未设置 `data-mode="edit"`，导致 `toggleEditorFullscreen()` Phase 3 清除内联样式后 `.md-rendered` 以 `flex: 1` 可见与 CM6 各占一半空间。修复方案：统一在 `openEditor()` 各分支前设默认 `data-mode="edit"`，查看模式纯文本分支不再需要手动设置，Markdown 分支继续 override 为 `'preview'`。详见 `.trae/specs/fix-viewmode-fullscreen-halfheight/`
 - ✅ **全屏快捷键绑定**：编辑器全屏绑定 `Ctrl+E`（编辑器打开时有效），窗口 OS 全屏绑定 `F11`（全局有效），两者独立不冲突。导入 Wails runtime 的 `WindowFullscreen/WindowUnfullscreen/WindowIsFullscreen` 实现窗口全屏。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md`
 - ✅ **快速笔记启动跳过动画**：`openEditor(null, false, true)` 的 `startFullscreen` 分支先 `panel.style.transition='none'` 禁用 CSS 过渡，再添加 `.fullscreen` class，`void panel.offsetHeight` 强制回流确保生效后恢复 transition。同时覆盖 `overlay/panel` 的 `opacity: 1`、`transform: scale(1)` 避免 CSS 初始状态 `opacity:0/scale(0.85)` 导致面板不可见。全程零动画，快速笔记启动瞬间全屏显示。详见 `.trae/specs/skip-quicknote-animation-on-start/`
-- ✅ **Ctrl+Q 退出 + 关闭按钮保存笔记**：提取 `saveEditorContent()` 共用函数，新增 `showSaveConfirmDialog()` 三选一对话框（保存并退出/不保存/取消）和 `handleAppExit()` 统一退出流程（有未保存内容时弹对话框，选「取消」不退出，选「保存」调 `UpdateNote`/`SaveDraft`，选「不保存」直接 `Quit()`）。`handleKeyboardNavigation` 改为 `async` 并添加 `Ctrl+Q` 全局快捷键；窗口关闭按钮（×）改用 `handleAppExit()`。HTML 确认对话框新增`confirm-third`按钮，CSS 新增`.confirm-third`黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md`
-- ✅ **退出时清除新建笔记草稿**：在 `handleAppExit()` 的「保存并退出」和「不保存」分支中，当为新建笔记（`!state.editingNoteId`）且后端 `ClearDraft` 可用时，调用 `await window.go.main.App.ClearDraft()` 清除临时草稿。`cancel` 分支保持不变。仅影响新建笔记，编辑已有笔记不涉及。详见 `.trae/specs/add-draft-cleanup-on-exit/`
+- ✅ **Ctrl+Q 退出 + 关闭按钮保存笔记**：提取 `saveEditorContent()` 共用函数，新增 `showSaveConfirmDialog()` 三选一对话框（保存并退出/不保存/取消）和 `handleAppExit()` 统一退出流程（有未保存内容时弹对话框，选「取消」不退出，选「保存」调 `UpdateNote()`/`CreateNote()`（新建笔记直接创建），选「不保存」直接 `Quit()`）。`handleKeyboardNavigation` 改为 `async` 并添加 `Ctrl+Q` 全局快捷键；窗口关闭按钮（×）改用 `handleAppExit()`。HTML 确认对话框新增`confirm-third`按钮，CSS 新增`.confirm-third`黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md`
 - ✅ **Web Worker 离线程预览渲染**：创建 `preview-worker.js`（ESM Worker），使用 `marked.parse()` 在独立线程中解析 Markdown，主线程仅做 DOM 操作。`updatePreview()` 重构为：哈希缓存（内容未变直接复用 DOM）→ Worker 异步渲染（显示 loading 动画）→ Worker 正忙/不可用时回退到主线程同步渲染。大文件预览不再阻塞 UI，编辑器在全屏/滚动/模式切换时保持流畅。详见 `.trae/specs/add-web-worker-rendering/`
 - ✅ **大文件全屏动画卡顿修复**：大文件（含大量代码块/表格的 Markdown）全屏/恢复时动画卡顿的根因是渲染完成前 DOM 重计算阻塞 transition。`contain: layout style` 方案因干扰浏览器滚动优化导致鼠标卡顿被回退。最终方案：全屏切换前 `panel.style.transition = 'none'` 临时禁用 CSS 过渡，`void panel.offsetHeight` 强制回流确保 class 切换后立即应用，再恢复 transition。全程零动画过渡，消除 DOM 布局阻塞导致的动画掉帧。
-- ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新，不保存时清除草稿(Ctrl+Q 和覆盖关闭按钮流程)。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
+- ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
 - ✅ **查看模式保存刷新列表**：从查看→编辑→返回查看时，保存后调 `loadNotes()` 刷新列表，解决列表不更新问题
-- ✅ **蒙层保存修复(createNote/updateNote)**：修复了蒙层点击保存时调 `saveEditorContent()` 导致新建笔记用 `SaveDraft()`（只存临时草稿而非真笔记）且被 `ClearDraft()` 清掉的 bug，改为直接调 `createNote()`/`updateNote()`
-
+- ✅ **查看模式保存刷新列表**
 ---
 
 ## 九、关键记忆点
@@ -705,7 +701,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个 Draft 草稿 + 3 个备份还原）|
+| **绑定方法数** | 54 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
 | **前端代码量** | ~3957 行 JS + ~4083 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
@@ -735,7 +731,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
 | **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/帮助六个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-view-mode-toggle-from-edit/`、`.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/add-draft-auto-save/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成） |
+| **Spec 位置** | `.trae/specs/add-view-mode-toggle-from-edit/`、`.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成） |
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
@@ -757,7 +753,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **右键菜单滚动锁定** | `showContextMenu` 设 `#mainContent overflow:hidden`，`hideContextMenu` 清空还原。配合 `scrollbar-gutter: stable` 防止宽度抖动 |
 | **主内容区滚动条** | 滚动时显示 `var(--scrollbar-thumb)`，停止 1s 后淡出（`.scrolling` 类 0.3s transition）。6 主题独立配色（default `rgba(0,0,0,0.18)`、nord `rgba(46,52,64,0.20)`、monokai-pro `rgba(255,97,136,0.25)`、light `rgba(0,0,0,0.14)`、tokyo-night `rgba(122,162,247,0.25)`、dark `rgba(255,255,255,0.18)`），hover 加深。8px 宽，track 极淡底色 |
 | **标签重名提示** | 设置页添加标签时，先在前端 `state.tags` 中查重，已存在则弹出 Toast「该标签已存在」3s 自动消失 |
-| **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时直接 `openEditor(null, false, true)`（以全屏尺寸一步打开，不经过悬浮卡片态），自动查询草稿并填入编辑器；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
+| **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时直接 `openEditor(null, false, true)`（以全屏尺寸一步打开，不经过悬浮卡片态）；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
 | **Markdown 渲染查看** | 查看模式（只读）将 textarea 替换为 `.md-rendered` div，使用 `marked` 渲染 Markdown 为 HTML。代码块通过 `highlight.js` 全量导入（197 种语言自动注册，`import hljs from 'highlight.js'`）着色。npm 本地安装（无 CDN），Vite 打包内联。编辑模式 textarea 不变。`.md-rendered` 样式覆盖 h1-h6/列表/引用/代码块/表格/图片/链接，6 主题适配。`.md-rendered` 滚动条隐藏（`::-webkit-scrollbar { display: none }`），内边距 `0.5em 1rem 1rem 1.5em` |
 | **关于页面** | 品牌名「Jot」点击弹出全屏覆盖层（`#viewAbout`），居中卡片展示：品牌 Logo（2.5rem 800w accent 色）+ 副标题 + 简介 + 项目地址链接（外链 SVG 图标，点击调用 `runtime.BrowserOpenURL` 打开 `https://gitee.com/MM-Q/jot.git`）+ 底部版本号（等宽字体，通过 verman 库 + ldflags 注入 `GitVersion`）。卡片 `border-radius: 20px`，遮罩 `backdrop-filter: blur(6px)`，弹簧动画 `cubic-bezier(0.16, 1, 0.3, 1)`。关闭方式：✕ 按钮 / 点击遮罩 / ESC 键 |
 | **快捷键说明** | 更多菜单「帮助」或按数字键 `5` 弹出模态覆盖层（`#shortcutsView`），居中卡片展示所有快捷键列表，与关于页面相同弹出动画和遮罩样式。关闭方式：✕ 按钮 / 点击遮罩 / ESC 键 |
@@ -781,7 +777,6 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **置顶不更新时间** | 后端 `TogglePin` 使用 `s.db.Model(note).UpdateColumn("pinned", note.Pinned)`，GORM 的 `UpdateColumn` 不触发 `BeforeUpdate` hook，`UpdatedAt` 保持不变 |
 | **右键导出 Markdown** | 右键菜单「导出」→ `ExportNoteAsMarkdown(id)` → 标题特殊符号/空白→下划线（`\ / : * ? " < > \|`）→ `runtime.SaveFileDialog` 默认文件名 `标题.md` → `os.WriteFile` 写入 `# 标题\n\n内容`，成功/失败通知 |
 | **批量标签操作** | 批量工具栏 +标签/-标签 按钮。点击打开 `.batch-tag-overlay`（毛玻璃 + 居中弹入动画）。添加/移除模式统一流程：全部标签以 `.batch-tag-chip` 展示（彩色圆点，移除模式不可移除标签加 `.disabled` 灰色禁用）→ 点击切换 `.selected` 态（双环高亮边框）→ 底部确认按钮显示已选数量 → 执行后 `loadNotes()` 刷新但**不退出批量模式、不清空选择**。移除模式空态：选中笔记无任何标签时通知提示，不弹窗。后端 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes` 遍历笔记 IDs 逐个操作 |
-| **草稿自动保存与恢复** | 新建 `drafts` 表（ID 固定 1，字段 ID/Title/Content/CreatedAt/UpdatedAt），`DraftService` 提供 SaveDraft(upsert)/GetDraft(nil, nil)/ClearDraft。app.go 绑定 SaveDraft/GetDraft/ClearDraft 三个方法。前端 `startAutoSave()` 分支：有 editingNoteId → UpdateNote（编辑），无 → SaveDraft（新建草稿），3s 防抖，空内容不保存。`loadNotes()` 完成后延迟 1s GetDraft 检测（编辑器打开时跳过），有则 showConfirmDialog 弹窗恢复/放弃。清除时机：createNote 成功、取消按钮（明确放弃）、恢复弹窗恢复/放弃；叉号/蒙层/ESC 不清除（保留下次恢复）。快速笔记启用启动时 `loadQuickNoteSetting()` 自动查草稿填入编辑器。autoSaveIndicator 提示文字 2s 后 textContent 清空恢复布局 |
 | **笔记类型（NoteType）** | Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种。新建笔记默认 `"text"`。类型切换器为 header 工具栏 T/M 图标按钮（`#editorTypeToggle`，32×32，与全屏按钮同风格），查看只读模式隐藏。纯文本模式隐藏底部「编辑/预览」切换按钮（`#editorModes`），查看模式 text/`<pre>` 原始显示跳过 marked，markdown 走现有渲染。旧笔记 `note_type=""` 默认按 text 处理。创建/更新由前端传入 `noteType` 参数 |
 | **置顶按钮** | 圆形图标按钮（`border-radius: 50%`），始终可见，分 4 级透明度：默认 20% → 卡片 hover 50% → 按钮 hover 100% + 放大 1.15x → 已置顶 100% + accent-lighter 背景 + 阴影。置顶操作 `togglePin()` 局部 `renderCardGrid('none')` 不再重载全部笔记 |
 | **批量置顶** | 后端 `BatchPinNotes(ids, pin)` + 前端 `#batchPinBtn`。按钮文字动态：全部已置顶→「取消置顶」，否则→「置顶」。批量模式下 pin 按钮可见但 `pointer-events: none` 禁止交互 |
@@ -854,5 +849,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **查看模式全屏半高修复** | 查看模式纯文本笔记全屏后编辑器半高的根因：view mode + text 分支未设 `data-mode="edit"`，全屏 Phase 3 清除 `.md-rendered` 内联 `display:none` 后无 CSS `[data-mode]` 选择器命中，`.md-rendered` 以 `flex: 1` 可见与 CM6 各占一半高度。修复：在 `openEditor()` 各分支前统一设 `els.editorOverlay.dataset.mode = 'edit'`，查看模式纯文本分支不再手动设置，Markdown 分支 override 为 `'preview'`。详见 `.trae/specs/fix-viewmode-fullscreen-halfheight/` |
 | **全屏快捷键区分** | 编辑器 CSS 伪全屏 = `Ctrl+E`（需编辑器打开），窗口 OS 全屏 = `F11`（全局），两者完全独立可同时启用。`WindowIsFullscreen()` 返回 Promise，用 `.then()` 回调判断状态决定 `WindowFullscreen()` 或 `WindowUnfullscreen()`。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md` |
 | **快速笔记启动零动画** | `openEditor(null, false, true)` 的 `startFullscreen` 分支先 `panel.style.transition='none'` 禁用 CSS 过渡，再添加 `.fullscreen` class，`void panel.offsetHeight` 强制回流后恢复 transition。同时设 `overlay/panel` 的 `opacity:1`、`panel.transform:scale(1)` 覆盖 CSS 初始不可见态。`transition:none` + 强制回流是确保全屏 class 切换不触发 `width/height` transition 的关键技巧。详见 `.trae/specs/skip-quicknote-animation-on-start/` |
-| **Ctrl+Q 退出 + 关闭按钮保存笔记** | 提取 `saveEditorContent()` 共用函数 + `showSaveConfirmDialog()` 三选一对话框 + `handleAppExit()` 统一退出流程。编辑器未打开直接 `Quit()`；有未保存内容时弹出对话框：「保存并退出」→ 调 `UpdateNote()`/`SaveDraft()` + `Quit()`，「不保存」→ 直接 `Quit()`，「取消」→ 不退出。Ctrl+Q 和窗口关闭按钮（×）统一走 `handleAppExit()`。HTML 新增 `confirm-third` 按钮，CSS 新增 `.confirm-third` 黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md` |
-| **蒙层点击保存确认** | 编辑器蒙层点击不再直接 `closeEditor()`，改为条件判断：查看模式/无内容直接关闭，编辑模式通过前端快照 `state._editSnapshot`（标题+内容+标签快照字符串对比）判断是否有改动，新建模式内容非空即弹确认对话框。保存分支直接调 `createNote()`/`updateNote()` 而非 `saveEditorContent()`（后者新建笔记走 `SaveDraft()` 无法真正创建笔记）。discard 分支清除草稿。详见 `.trae/documents/add-save-prompt-on-overlay-click.md` |
+| **Ctrl+Q 退出 + 关闭按钮保存笔记** | 提取 `saveEditorContent()` 共用函数 + `showSaveConfirmDialog()` 三选一对话框 + `handleAppExit()` 统一退出流程。编辑器未打开直接 `Quit()`；有未保存内容时弹出对话框：「保存并退出」→ 调 `UpdateNote()`/`CreateNote()`（新建笔记直接创建）+ `Quit()`，「不保存」→ 直接 `Quit()`，「取消」→ 不退出。Ctrl+Q 和窗口关闭按钮（×）统一走 `handleAppExit()`。HTML 新增 `confirm-third` 按钮，CSS 新增 `.confirm-third` 黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md` |
+| **蒙层点击保存确认** | 编辑器蒙层点击不再直接 `closeEditor()`，改为条件判断：查看模式/无内容直接关闭，编辑模式通过前端快照 `state._editSnapshot`（标题+内容+标签快照字符串对比）判断是否有改动，新建模式内容非空即弹确认对话框。保存分支直接调 `createNote()`/`updateNote()` 确保笔记真正创建。详见 `.trae/documents/add-save-prompt-on-overlay-click.md` |
+| **移除草稿自动保存功能** | 删除后端 `internal/models/draft.go`、`internal/services/draft_service.go` 及 `app.go` 中 `draftService` 字段/初始化/SaveDraft/GetDraft/ClearDraft 3 个绑定方法。前端删除 `startAutoSave()`/`autoSaveTimer`/`autoSaveIndicator`/草稿恢复弹窗/所有 `ClearDraft`/`SaveDraft` 调用/快速笔记草稿自动填入。HTML 删除 `#autoSaveIndicator`，CSS 删除 `.auto-save-indicator` 规则。`saveEditorContent()` 改为新建笔记直接调 `CreateNote()`（不再调 `SaveDraft`）。移除后：无自动保存，无草稿恢复弹窗，新建笔记靠用户主动保存。绑定方法数 57→54 |
+| **新建笔记自动聚焦内容框** | `openEditor()` 末尾新增 focus 逻辑：`!state.editingNoteId && data-mode!=='preview' && document.hasFocus()` → `window.focus()` + `cmEditor?.focus()`。仅手动点击新建按钮时生效（`document.hasFocus()` 为 true），启动时快速笔记页面未激活不 focus。解决用户每次新建笔记后需手动点击内容区的痛点 |

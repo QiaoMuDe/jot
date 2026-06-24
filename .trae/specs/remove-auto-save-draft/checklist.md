@@ -1,0 +1,16 @@
+- [x] `internal/models/draft.go` 已删除
+- [x] `internal/services/draft_service.go` 已删除
+- [x] `internal/database/db.go` 的 AutoMigrate 中无 Draft
+- [x] `app.go` 无 draftService 字段/初始化/绑定方法
+- [x] `main.js` 无 `startAutoSave()` 函数和 `autoSaveTimer` 变量
+- [x] `main.js` 的 `onEditorInput()` 中无 `startAutoSave()` 调用
+- [x] `main.js` 的 `openEditor()` 和 `closeEditor()` 中无 autoSaveTimer/autoSaveIndicator 引用
+- [x] `main.js` 的 `loadNotes()` 中无草稿检测弹窗
+- [x] `main.js` 的 `createNote()` 中无 `ClearDraft()` 调用
+- [x] `main.js` 的 `saveEditorContent()` 中无 `SaveDraft` 分支
+- [x] `main.js` 的 `handleAppExit()` 中无 `ClearDraft` 调用
+- [x] `main.js` 的取消按钮和蒙层点击中无 `ClearDraft` 调用
+- [x] `main.js` 的 `els` 对象中无 `autoSaveIndicator`
+- [x] `index.html` 中无 `#autoSaveIndicator` 元素
+- [x] `style.css` 中无 `.auto-save-indicator` 规则
+- [x] 后端 `go build ./...` 编译通过

@@ -28,7 +28,6 @@ type App struct {
 	noteService     *services.NoteService
 	tagService      *services.TagService
 	settingService  *services.SettingService
-	draftService    *services.DraftService
 	notebookService *services.NotebookService
 }
 
@@ -47,7 +46,6 @@ func NewApp() *App {
 		noteService:     services.NewNoteService(db),
 		tagService:      services.NewTagService(db),
 		settingService:  services.NewSettingService(db),
-		draftService:    services.NewDraftService(db),
 		notebookService: services.NewNotebookService(db),
 	}
 }
@@ -60,23 +58,6 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		fmt.Printf("初始化默认笔记本失败: %v\n", err)
 	}
-}
-
-// ==================== Draft 相关绑定方法 ====================
-
-// SaveDraft 保存草稿（新建笔记的临时内容）
-func (a *App) SaveDraft(title, content string) error {
-	return a.draftService.SaveDraft(title, content)
-}
-
-// GetDraft 获取已保存的草稿，无草稿时返回 nil
-func (a *App) GetDraft() (*models.Draft, error) {
-	return a.draftService.GetDraft()
-}
-
-// ClearDraft 清除已保存的草稿
-func (a *App) ClearDraft() error {
-	return a.draftService.ClearDraft()
 }
 
 // ==================== Note 相关绑定方法 ====================

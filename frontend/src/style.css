@@ -1478,22 +1478,6 @@ button :only-child:is(svg) {
   white-space: nowrap;
 }
 
-.auto-save-indicator {
-  font-size: 0.688rem;
-  color: var(--accent);
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.auto-save-indicator.active {
-  opacity: 1;
-}
-
-.auto-save-indicator.saved {
-  color: #10b981;
-}
-
 .editor-input-readonly,
 .editor-textarea-readonly {
   cursor: default;
