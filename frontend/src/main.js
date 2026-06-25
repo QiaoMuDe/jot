@@ -4498,7 +4498,7 @@ function renderShortcutsPage() {
     const shortcuts = [
         { key: 'Ctrl + N', desc: '新建笔记' },
         { key: 'Ctrl + S', desc: '编辑器内保存笔记' },
-        { key: 'Ctrl + F', desc: '编辑器内查找 / 聚焦搜索框' },
+        { key: 'Ctrl + F', desc: '编辑器内查找 / 打开搜索弹窗' },
         { key: 'Ctrl + H', desc: '编辑器内查找替换' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
         { key: 'Ctrl + E', desc: '编辑器内切换全屏' },
@@ -5008,12 +5008,20 @@ function openSearchModal() {
     renderNotebookFilterDropdown();
     renderTagFilterDropdown();
     renderDateFilterDropdownSelection();
-    // 延迟聚焦输入框(等待弹窗动画)
-    setTimeout(() => {
+    // 弹窗动画完成后聚焦输入框
+    const focusInput = () => {
         if (els.searchModalInput) {
             els.searchModalInput.focus();
         }
-    }, 50);
+    };
+    const contentEl = els.searchModalContent || els.searchModal?.querySelector('.search-modal-content');
+    if (contentEl) {
+        contentEl.addEventListener('transitionend', focusInput, { once: true });
+        // 兜底：如果 transitionend 未触发（如 reduced-motion），500ms 后备
+        setTimeout(focusInput, 500);
+    } else {
+        focusInput();
+    }
 }
 
 /**
@@ -5021,21 +5029,16 @@ function openSearchModal() {
  */
 function closeSearchModal() {
     if (!els.searchModal) return;
-    els.searchModal.classList.remove('visible');
+    // 先立即解锁 body 滚动和关闭下拉（避免卡住）
     document.body.style.overflow = '';
-    // 关闭所有过滤器下拉
     closeAllFilterDropdowns();
-    // 清理结果项的 animation-delay 残留(避免下次打开有延迟)
-    if (els.searchModalResults) {
-        const items = els.searchModalResults.querySelectorAll('.search-modal-item');
-        items.forEach(el => el.style.removeProperty('animation-delay'));
-    }
-    // 恢复焦点到触发元素
-    const prev = state._searchModalPrevFocus;
-    if (prev && document.contains(prev) && typeof prev.focus === 'function') {
-        try { prev.focus(); } catch (e) { /* ignore */ }
-    }
-    state._searchModalPrevFocus = null;
+    // 添加 closing class 触发退出动画
+    els.searchModal.classList.add('closing');
+    // 退出动画完成后移除 visible 和 closing
+    setTimeout(() => {
+        els.searchModal.classList.remove('visible');
+        els.searchModal.classList.remove('closing');
+    }, 150);
 }
 
 /**

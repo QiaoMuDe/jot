@@ -593,8 +593,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 37. **编辑器顶部 header/标题/标签激进压缩**：激进压缩策略（合计省 38px）：① `.editor-header` padding-top 12→4px（省 8px）；② `.editor-input` 标题 padding 8px 0→2px 0（省 12px）；③ `.editor-section` 标签区 margin-bottom 24→6px（最初压到 6px）。3 种模式（编辑/新建/查看）都生效，markdown 笔记的 preview 模式多获得近 1 行文本高度。
 38. **标签-正文间距精细调整**：激进压缩后标签底部 margin 6px 显得过贴，根据用户反馈微调到 12px。**这是一个非对称设计点**：用户既要「内容区最大化」又希望「标签和正文之间有呼吸感」，最终值 12px 平衡了两者诉求（比起原始 24px 仍省 12px）。
 39. **CodeMirror 滚动条精细化**：`.cm-scroller` 加 `padding-right: 1px; padding-bottom: 1px`（最初 2px，压缩到 1px 几乎贴边）。同时给 `::-webkit-scrollbar` 补 `height: 6px`（之前只设了 width，水平滚动条默认 0 高度不可见）→ 水平滚动条首次可见。**WebView2 滚动条贴边问题**：`.editor-body` 的 `padding-right` 24px 会让滚动条距 editor-panel 右边缘 24px，循环迭代压缩 24→16→8px（最终值），让滚动条贴近 panel 右边 8px（1px 间隙 + 6px 滚动条 + 1px 间隙）。该值与文本区横向扩展空间直接 trade-off。
-40. **搜索弹窗系统**：Ctrl+F 唤起 #searchModal 搜索弹窗替代原 topbar 搜索框。温色遮罩 rgba(45,42,36,0.32) + 2px 琥珀装饰条 + 圆角 20px 与编辑器模态对齐。搜索输入框 flex:1 无快捷键提示 chip。三栏过滤器（笔记本/标签/日期）带 chevron 图标 + activate 态四重指示（背景/文字/边框/chevron 旋转）。标签筛选支持 AND 语义客户端过滤。结果列表 8/12px padding 呼吸感 + hover 渐变+左边框 + selected --accent-light。keyword 高亮 --accent 文字+--accent-light 背景+字重 600。空状态 64×64 圆形图标+双行文案。底部"共 N 条 · ⏎ 打开"组合。动画系统：容器打开 280ms spring 曲线 / 关闭 180ms ease-in / prefers-reduced-motion 降级。
-41. **时间筛选简化（日历→下拉菜单）**：时间筛选从日历弹窗选择器改为简单的下拉菜单（和笔记本/标签筛选器一致）。移除了自定义日历组件（~520 行 JS+CSS），保留 4 个快捷选项（今天/最近7天/最近30天/不限）。后端 `SearchNotes` 的 `startDate, endDate string` 参数不变，SQL `updated_at BETWEEN` 过滤逻辑不变。详见 `.trae/specs/simplify-date-filter/`。
+40. **搜索弹窗系统**：Ctrl+F 唤起 #searchModal 搜索弹窗替代原 topbar 搜索框。温色遮罩 rgba(45,42,36,0.32) + 2px 琥珀装饰条 + 圆角 20px 与编辑器模态对齐。搜索输入框 flex:1 无快捷键提示 chip。三栏过滤器（笔记本/标签/日期）带 chevron 图标 + activate 态四重指示（背景/文字/边框/chevron 旋转）。标签筛选支持 AND 语义客户端过滤。结果列表 8/12px padding 呼吸感 + hover 渐变+左边框 + selected --accent-light。keyword 高亮 --accent 文字+--accent-light 背景+字重 600。空状态 64×64 圆形图标+双行文案。底部"共 N 条 · ⏎ 打开"组合。
+41. **搜索弹窗动画优化**：打开动画层级错峰（遮罩 0ms → 内容 50ms delay → 结果项 80ms+ 逐条进场），遮罩 opacity + backdrop-filter 200ms ease-out 渐入。关闭用 `closing` class 触发退出动画：结果项 100ms fade + translateY(-6px)、遮罩 + 内容 150ms ease-in 并发完成。聚焦用 `transitionend` 事件替代 50ms setTimeout。`prefers-reduced-motion` 完整降级（所有transition/animation归零）。详见 `.trae/specs/polish-search-modal-animation/`。
+42. **时间筛选简化（日历→下拉菜单）**：时间筛选从日历弹窗选择器改为简单的下拉菜单（和笔记本/标签筛选器一致）。移除了自定义日历组件（~520 行 JS+CSS），保留 4 个快捷选项（今天/最近7天/最近30天/不限）。后端 `SearchNotes` 的 `startDate, endDate string` 参数不变，SQL `updated_at BETWEEN` 过滤逻辑不变。详见 `.trae/specs/simplify-date-filter/`。
 
 ---
 
@@ -807,7 +808,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 时间筛选简化：移除日历弹窗（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单，保留 4 个快捷选项（今天/最近7天/最近30天/不限），后端 `startDate/endDate` 参数和 SQL `updated_at BETWEEN` 过滤不变。② `fix-date-picker-auto-close` spec 被 `simplify-date-filter` 替代。详见 `.trae/specs/simplify-date-filter/`。
+> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 搜索弹窗动画优化：层级错峰入场（遮罩→内容50ms延迟→结果项逐条）、遮罩 opacity+backdrop-filter 过渡、closing class 退出动画（结果项/遮罩/内容 150ms 并发）、transitionend 事件聚焦替代 setTimeout、prefers-reduced-motion 完整降级。详见 `.trae/specs/polish-search-modal-animation/`。② 时间筛选简化：移除日历弹窗（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单，保留 4 个快捷选项（今天/最近7天/最近30天/不限），后端 `startDate/endDate` 参数和 SQL `updated_at BETWEEN` 过滤不变。③ `fix-date-picker-auto-close` spec 被 `simplify-date-filter` 替代。详见 `.trae/specs/simplify-date-filter/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 

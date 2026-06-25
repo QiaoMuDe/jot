@@ -4048,11 +4048,15 @@ button :only-child:is(svg) {
     padding-top: 12vh;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.18s ease-in;
 }
 .search-modal.visible {
     pointer-events: auto;
     opacity: 1;
+}
+.search-modal.visible .search-modal-mask {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
 .search-modal-mask {
     position: absolute;
@@ -4061,9 +4065,11 @@ button :only-child:is(svg) {
     width: 100%;
     height: 100%;
     background: rgba(45, 42, 36, 0.32);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
     cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease-out, backdrop-filter 0.2s ease-out;
 }
 .search-modal-content {
     position: relative;
@@ -4077,7 +4083,9 @@ button :only-child:is(svg) {
     overflow: visible;
     border-top: 2px solid var(--accent);
     transform: scale(0.96) translateY(-8px);
-    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out;
+    transition-delay: 0.05s;
 }
 .search-modal-content::before {
     content: none;
@@ -4085,6 +4093,7 @@ button :only-child:is(svg) {
 .search-modal.visible .search-modal-content {
     transform: scale(1) translateY(0);
     opacity: 1;
+    transition-delay: 0.05s;
 }
 .search-modal-header {
     display: flex;
@@ -4345,7 +4354,7 @@ button :only-child:is(svg) {
     cursor: pointer;
     border-left: 2px solid transparent;
     background: transparent;
-    transition: background 0.18s ease-out, border-color 0.18s ease-out, transform 0.18s ease-out;
+    transition: background 0.18s ease-out, border-color 0.18s ease-out, transform 0.18s ease-out, opacity 0.1s ease-in;
     animation: searchModalItemEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 @keyframes searchModalItemEnter {
@@ -4357,6 +4366,23 @@ button :only-child:is(svg) {
         opacity: 1;
         transform: translateY(0);
     }
+}
+/* 退出动画 */
+.search-modal.closing .search-modal-item {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+.search-modal.closing .search-modal-mask {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    transition: opacity 0.15s ease-in, backdrop-filter 0.15s ease-in;
+}
+.search-modal.closing .search-modal-content {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+    transition: transform 0.15s ease-in, opacity 0.15s ease-in;
+    transition-delay: 0s;
 }
 .search-modal-item:hover {
     background: linear-gradient(90deg, var(--hover-bg), transparent);
@@ -4434,12 +4460,26 @@ button :only-child:is(svg) {
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
     .search-modal,
+    .search-modal-mask,
     .search-modal-content,
     .search-modal-filter-dropdown,
     .search-modal-item,
     .search-modal-input {
-        transition: opacity 0.1s ease-out !important;
+        transition: none !important;
         animation: none !important;
+        transition-delay: 0s !important;
+    }
+    .search-modal {
+        opacity: 1 !important;
+    }
+    .search-modal-mask {
+        opacity: 1 !important;
+        backdrop-filter: blur(4px) !important;
+        -webkit-backdrop-filter: blur(4px) !important;
+    }
+    .search-modal-content {
+        opacity: 1 !important;
+        transform: none !important;
     }
     .search-modal-item {
         opacity: 1 !important;
