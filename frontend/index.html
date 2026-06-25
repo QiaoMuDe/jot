@@ -633,11 +633,23 @@
                             <span id="searchModalDateLabel">不限</span>
                             <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
-                        <div class="search-modal-filter-dropdown" id="searchModalDateDropdown">
-                            <div class="search-modal-filter-option" data-value="all"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>不限</span></div>
-                            <div class="search-modal-filter-option" data-value="today"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>今天</span></div>
-                            <div class="search-modal-filter-option" data-value="week"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>最近 7 天</span></div>
-                            <div class="search-modal-filter-option" data-value="month"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>最近 30 天</span></div>
+                        <div class="search-modal-date-picker" id="searchModalDateDropdown">
+                            <div class="search-modal-date-picker-prompt" id="searchModalDatePickerPrompt">选择日期范围</div>
+                            <div class="search-modal-date-picker-header">
+                                <button type="button" class="nav-btn" id="datePickerPrevMonth">‹</button>
+                                <span class="month-label" id="datePickerMonthLabel">2026 年 6 月</span>
+                                <button type="button" class="nav-btn" id="datePickerNextMonth">›</button>
+                            </div>
+                            <div class="search-modal-date-picker-weekdays">
+                                <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                            </div>
+                            <div class="search-modal-date-picker-grid" id="datePickerGrid"></div>
+                            <div class="search-modal-date-picker-quick">
+                                <button type="button" class="search-modal-date-picker-quick-btn" data-quick="today">今天</button>
+                                <button type="button" class="search-modal-date-picker-quick-btn" data-quick="7d">最近7天</button>
+                                <button type="button" class="search-modal-date-picker-quick-btn" data-quick="30d">最近30天</button>
+                                <button type="button" class="search-modal-date-picker-quick-btn" data-quick="all">不限</button>
+                            </div>
                         </div>
                     </div>
                 </div>

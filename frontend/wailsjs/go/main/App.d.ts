@@ -98,7 +98,7 @@ export function RestoreFromDir():Promise<services.ImportResult>;
 
 export function RestoreNote(arg1:number):Promise<void>;
 
-export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number):Promise<services.PaginatedResult>;
+export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string):Promise<services.PaginatedResult>;
 
 export function SetPageSize(arg1:number):Promise<void>;
 

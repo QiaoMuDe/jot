@@ -190,8 +190,8 @@ export function RestoreNote(arg1) {
   return window['go']['main']['App']['RestoreNote'](arg1);
 }
 
-export function SearchNotes(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4);
+export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SetPageSize(arg1) {

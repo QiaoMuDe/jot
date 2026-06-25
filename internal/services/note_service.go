@@ -160,8 +160,8 @@ func (s *NoteService) GetAllIDs() ([]uint, error) {
 	return ids, nil
 }
 
-// Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页
-func (s *NoteService) Search(keyword string, page, pageSize int) ([]models.Note, int64, error) {
+// Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页和日期范围筛选
+func (s *NoteService) Search(keyword string, page, pageSize int, startDate, endDate string) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -175,6 +175,50 @@ func (s *NoteService) Search(keyword string, page, pageSize int) ([]models.Note,
 		Where("deleted_at IS NULL").
 		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
 			Or("id IN (?)", tagSubquery))
+
+	// 日期范围过滤
+	if startDate != "" && endDate != "" {
+		query = query.Where("updated_at BETWEEN ? AND ?",
+			startDate+" 00:00:00", endDate+" 23:59:59")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Select(noteThinSelect).
+		Order("pinned DESC, updated_at DESC").
+		Preload("Tags").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&notes).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return notes, total, nil
+}
+
+// SearchByNotebook 在指定笔记本范围内按关键词搜索，支持分页和日期范围筛选
+func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint, startDate, endDate string) ([]models.Note, int64, error) {
+	var notes []models.Note
+	var total int64
+
+	likePattern := "%" + keyword + "%"
+	tagSubquery := s.db.Table("note_tags").
+		Select("note_id").
+		Joins("JOIN tags ON tags.id = note_tags.tag_id").
+		Where("tags.name LIKE ?", likePattern)
+
+	query := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
+		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
+			Or("id IN (?)", tagSubquery))
+
+	if startDate != "" && endDate != "" {
+		query = query.Where("updated_at BETWEEN ? AND ?",
+			startDate+" 00:00:00", endDate+" 23:59:59")
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -436,35 +480,4 @@ func (s *NoteService) CreateWithNotebook(title, content, noteType string, notebo
 	return &note, nil
 }
 
-// SearchByNotebook 在指定笔记本范围内按标题或内容关键词模糊搜索未删除的笔记，支持分页
-func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint) ([]models.Note, int64, error) {
-	var notes []models.Note
-	var total int64
-
-	likePattern := "%" + keyword + "%"
-	tagSubquery := s.db.Table("note_tags").
-		Select("note_id").
-		Joins("JOIN tags ON tags.id = note_tags.tag_id").
-		Where("tags.name LIKE ?", likePattern)
-
-	query := s.db.Model(&models.Note{}).
-		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
-		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
-			Or("id IN (?)", tagSubquery))
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	if err := query.Select(noteThinSelect).
-		Order("pinned DESC, updated_at DESC").
-		Preload("Tags").
-		Offset(offset).
-		Limit(pageSize).
-		Find(&notes).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return notes, total, nil
-}
+// SearchByNotebook 在指定笔记本范围内按标题或内容关键词
