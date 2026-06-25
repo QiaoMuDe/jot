@@ -295,6 +295,10 @@ function initCodeMirror(container, content = '', readOnly = false, useMdHighligh
             ...completionKeymap,
             ...foldKeymap,
             indentWithTab,
+            // 格式化工具栏快捷键
+            { key: 'Ctrl-b', run: () => { formatBold(); return true; } },
+            { key: 'Ctrl-i', run: () => { formatItalic(); return true; } },
+            { key: 'Ctrl-u', run: () => { formatStrikethrough(); return true; } },
         ]),
         closeBrackets(),
         autocompletion(),
@@ -457,6 +461,20 @@ const els = {
     editorModeBtns: document.querySelectorAll('.mode-btn'),
     editorModes: $('editorModes'),
     editorTypeToggle: $('editorTypeToggle'),
+
+    // 格式化工具栏
+    editorToolbar: $('editorToolbar'),
+    tbBold: $('tbBold'),
+    tbItalic: $('tbItalic'),
+    tbStrikethrough: $('tbStrikethrough'),
+    tbCode: $('tbCode'),
+    tbHeading: $('tbHeading'),
+    headingDropdown: $('headingDropdown'),
+    tbLink: $('tbLink'),
+    tbImage: $('tbImage'),
+    tbList: $('tbList'),
+    tbQuote: $('tbQuote'),
+    tbHr: $('tbHr'),
 
     // 设置
     tagList: $('tagList'),
@@ -2526,6 +2544,11 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
     els.editorModes.style.display = state.noteType === 'markdown' ? '' : 'none';
 
+    // 控制工具栏显示（仅 markdown 笔记显示）
+    if (els.editorToolbar) {
+        els.editorToolbar.style.display = (state.noteType === 'markdown' && !isReadOnly) ? 'flex' : 'none';
+    }
+
     // 统一初始化编辑器模式为纯文本编辑（data-mode 值影响 flex 布局 CSS 选择器）
     // 后续各分支根据情况可 override：查看+Markdown → 'preview'
     els.editorOverlay.dataset.mode = 'edit';
@@ -3886,6 +3909,10 @@ function initEventListeners() {
         els.editorTypeToggle.title = newType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
         // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
         els.editorModes.style.display = newType === 'markdown' ? '' : 'none';
+        // 同步工具栏显隐
+        if (els.editorToolbar) {
+            els.editorToolbar.style.display = newType === 'markdown' ? 'flex' : 'none';
+        }
         // 切到纯文本时自动切回编辑模式
         if (newType === 'text') {
             switchEditorMode('edit');
@@ -5593,6 +5620,7 @@ async function init() {
     initThemeSettings();
     initScrollLoading();
     initScrollbarAutoHide();
+    initEditorToolbar();
     // 窗口可见性变化时自动刷新（如从外部进程注入种子数据后切回应用）
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) return;
@@ -5870,6 +5898,195 @@ async function loadMdHighlightSetting() {
     } catch (err) {
         console.error('加载 MD 高亮设置失败:', err);
     }
+}
+
+// ============================================================
+// Markdown 格式化工具栏函数
+// ============================================================
+
+function formatBold() {
+    if (!cmEditor) return;
+    const { from, to } = cmEditor.state.selection.main;
+    const selected = cmEditor.state.sliceDoc(from, to);
+    if (selected) {
+        cmEditor.dispatch({
+            changes: { from, to, insert: `**${selected}**` },
+            selection: { anchor: from, head: from + selected.length + 4 }
+        });
+    } else {
+        const pos = from;
+        cmEditor.dispatch({
+            changes: { from: pos, to: pos, insert: '****' },
+            selection: { anchor: pos + 2, head: pos + 2 }
+        });
+    }
+    cmEditor.focus();
+}
+
+function formatItalic() {
+    if (!cmEditor) return;
+    const { from, to } = cmEditor.state.selection.main;
+    const selected = cmEditor.state.sliceDoc(from, to);
+    if (selected) {
+        cmEditor.dispatch({
+            changes: { from, to, insert: `*${selected}*` },
+            selection: { anchor: from, head: from + selected.length + 2 }
+        });
+    } else {
+        const pos = from;
+        cmEditor.dispatch({
+            changes: { from: pos, to: pos, insert: '**' },
+            selection: { anchor: pos + 1, head: pos + 1 }
+        });
+    }
+    cmEditor.focus();
+}
+
+function formatStrikethrough() {
+    if (!cmEditor) return;
+    const { from, to } = cmEditor.state.selection.main;
+    const selected = cmEditor.state.sliceDoc(from, to);
+    if (selected) {
+        cmEditor.dispatch({
+            changes: { from, to, insert: `~~${selected}~~` },
+            selection: { anchor: from, head: from + selected.length + 4 }
+        });
+    } else {
+        const pos = from;
+        cmEditor.dispatch({
+            changes: { from: pos, to: pos, insert: '~~~~' },
+            selection: { anchor: pos + 2, head: pos + 2 }
+        });
+    }
+    cmEditor.focus();
+}
+
+function formatInlineCode() {
+    if (!cmEditor) return;
+    const { from, to } = cmEditor.state.selection.main;
+    const selected = cmEditor.state.sliceDoc(from, to);
+    if (selected) {
+        cmEditor.dispatch({
+            changes: { from, to, insert: `\`${selected}\`` },
+            selection: { anchor: from, head: from + selected.length + 2 }
+        });
+    } else {
+        const pos = from;
+        cmEditor.dispatch({
+            changes: { from: pos, to: pos, insert: '``' },
+            selection: { anchor: pos + 1, head: pos + 1 }
+        });
+    }
+    cmEditor.focus();
+}
+
+function formatHeading(level) {
+    if (!cmEditor) return;
+    const prefix = '#'.repeat(level) + ' ';
+    const pos = cmEditor.state.selection.main.from;
+    const line = cmEditor.state.doc.lineAt(pos);
+    cmEditor.dispatch({
+        changes: { from: line.from, to: line.from, insert: prefix }
+    });
+    cmEditor.focus();
+}
+
+function formatLink() {
+    if (!cmEditor) return;
+    const { from, to } = cmEditor.state.selection.main;
+    const selected = cmEditor.state.sliceDoc(from, to);
+    const url = prompt('输入链接 URL：', 'https://');
+    if (url === null) return;
+    if (selected) {
+        cmEditor.dispatch({
+            changes: { from, to, insert: `[${selected}](${url})` },
+            selection: { anchor: from, head: from + selected.length + url.length + 4 }
+        });
+    } else {
+        const pos = from;
+        cmEditor.dispatch({
+            changes: { from: pos, to: pos, insert: `[链接文字](${url})` },
+            selection: { anchor: pos + 1, head: pos + 5 }
+        });
+    }
+    cmEditor.focus();
+}
+
+function formatImage() {
+    if (!cmEditor) return;
+    const url = prompt('输入图片 URL：', 'https://');
+    if (url === null) return;
+    const pos = cmEditor.state.selection.main.from;
+    cmEditor.dispatch({
+        changes: { from: pos, to: pos, insert: `![](${url})` }
+    });
+    cmEditor.focus();
+}
+
+function formatList() {
+    if (!cmEditor) return;
+    const pos = cmEditor.state.selection.main.from;
+    const line = cmEditor.state.doc.lineAt(pos);
+    cmEditor.dispatch({
+        changes: { from: line.from, to: line.from, insert: '- ' }
+    });
+    cmEditor.focus();
+}
+
+function formatBlockquote() {
+    if (!cmEditor) return;
+    const pos = cmEditor.state.selection.main.from;
+    const line = cmEditor.state.doc.lineAt(pos);
+    cmEditor.dispatch({
+        changes: { from: line.from, to: line.from, insert: '> ' }
+    });
+    cmEditor.focus();
+}
+
+function formatHr() {
+    if (!cmEditor) return;
+    const pos = cmEditor.state.selection.main.from;
+    cmEditor.dispatch({
+        changes: { from: pos, to: pos, insert: '\n---\n' }
+    });
+    cmEditor.focus();
+}
+
+function initEditorToolbar() {
+    // 绑定格式化按钮
+    els.tbBold.addEventListener('click', formatBold);
+    els.tbItalic.addEventListener('click', formatItalic);
+    els.tbStrikethrough.addEventListener('click', formatStrikethrough);
+    els.tbCode.addEventListener('click', formatInlineCode);
+    els.tbLink.addEventListener('click', formatLink);
+    els.tbImage.addEventListener('click', formatImage);
+    els.tbList.addEventListener('click', formatList);
+    els.tbQuote.addEventListener('click', formatBlockquote);
+    els.tbHr.addEventListener('click', formatHr);
+
+    // 标题下拉 toggle
+    els.tbHeading.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const panel = els.headingDropdown;
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+
+    // 标题选项点击
+    document.querySelectorAll('.heading-dropdown-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+            const level = parseInt(this.dataset.level);
+            formatHeading(level);
+            els.headingDropdown.style.display = 'none';
+        });
+    });
+
+    // 点击外部关闭下拉
+    document.addEventListener('click', function(e) {
+        const wrapper = els.tbHeading.closest('.editor-toolbar-btn-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+            els.headingDropdown.style.display = 'none';
+        }
+    });
 }
 
 // 应用启动
