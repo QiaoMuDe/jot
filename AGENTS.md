@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-24（已更新）
+> 生成日期: 2026-06-26（已更新）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,9 +36,9 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~3957 行（含 CM6 集成）
-│   │   ├── style.css                   # 组件样式 ~4083 行（含 CM6 主题/语法高亮）
-│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~458 行）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5322 行（含 CM6 集成 + 搜索弹窗）
+│   │   ├── style.css                   # 组件样式 ~3944 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
+│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~581 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -593,6 +593,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 37. **编辑器顶部 header/标题/标签激进压缩**：激进压缩策略（合计省 38px）：① `.editor-header` padding-top 12→4px（省 8px）；② `.editor-input` 标题 padding 8px 0→2px 0（省 12px）；③ `.editor-section` 标签区 margin-bottom 24→6px（最初压到 6px）。3 种模式（编辑/新建/查看）都生效，markdown 笔记的 preview 模式多获得近 1 行文本高度。
 38. **标签-正文间距精细调整**：激进压缩后标签底部 margin 6px 显得过贴，根据用户反馈微调到 12px。**这是一个非对称设计点**：用户既要「内容区最大化」又希望「标签和正文之间有呼吸感」，最终值 12px 平衡了两者诉求（比起原始 24px 仍省 12px）。
 39. **CodeMirror 滚动条精细化**：`.cm-scroller` 加 `padding-right: 1px; padding-bottom: 1px`（最初 2px，压缩到 1px 几乎贴边）。同时给 `::-webkit-scrollbar` 补 `height: 6px`（之前只设了 width，水平滚动条默认 0 高度不可见）→ 水平滚动条首次可见。**WebView2 滚动条贴边问题**：`.editor-body` 的 `padding-right` 24px 会让滚动条距 editor-panel 右边缘 24px，循环迭代压缩 24→16→8px（最终值），让滚动条贴近 panel 右边 8px（1px 间隙 + 6px 滚动条 + 1px 间隙）。该值与文本区横向扩展空间直接 trade-off。
+40. **搜索弹窗系统**：Ctrl+F 唤起 #searchModal 搜索弹窗替代原 topbar 搜索框。温色遮罩 rgba(45,42,36,0.32) + 2px 琥珀装饰条 + 圆角 20px 与编辑器模态对齐。搜索输入框 flex:1 无快捷键提示 chip。三栏过滤器（笔记本/标签/日期）带 chevron 图标 + activate 态四重指示（背景/文字/边框/chevron 旋转）。标签筛选支持 AND 语义客户端过滤。结果列表 8/12px padding 呼吸感 + hover 渐变+左边框 + selected --accent-light。keyword 高亮 --accent 文字+--accent-light 背景+字重 600。空状态 64×64 圆形图标+双行文案。底部"共 N 条 · ⏎ 打开"组合。动画系统：容器打开 280ms spring 曲线 / 关闭 180ms ease-in / prefers-reduced-motion 降级。
 
 ---
 
@@ -709,17 +710,17 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 54 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原）|
+| **绑定方法数** | 56 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~3957 行 JS + ~4083 行 CSS + ~458 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~5322 行 JS + ~3944 行 CSS + ~581 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
 | **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
-| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），输入框 250ms 防抖自动搜索/回车立即搜索，标签 chip 可点击搜索，Ctrl+F 聚焦搜索，Ctrl+N 新建笔记 |
+| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 查找（编辑器内打开 CM6 搜索面板/编辑器外聚焦全局搜索框）/ Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
+| **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + 数据操作/快速备份/数据目录三个卡片分区 |
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，VACUUM INTO 创建 SQLite 压缩副本 → fs.CopyEx 到用户选择路径，输出 .db 文件 |
@@ -805,7 +806,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 已完成项目记忆更新（2026-06-25），本次更新内容：① 第三方按钮"不保存"状态污染修复 ② 表格复制按钮居中对齐 + JS 精确定位 + 响应式 ③ 查看模式 markdown 笔记首次渲染补全 ④ 笔记本名「」统一标记风格记录 ⑤ topbar/sidebar 多轮压缩 56→36px ⑥ 编辑器 footer 紧凑化 + body padding 24→8px ⑦ 编辑器 header/标题/标签激进压缩省 38px ⑧ CodeMirror 滚动条 1px 间隙 + 水平滚动条 height 6px ⑨ Ctrl+F 智能切换 + 搜索弹窗迁移（详见 `.trae/specs/move-search-to-modal/`）。后续可基于此报告回答项目相关问题。
+> **报告结束** | 已完成项目记忆更新（2026-06-26），本次更新内容：① 搜索弹窗 UI 与交互动画精修（暖色遮罩/琥珀装饰条/过滤器下拉/错峰入场/弹簧动画系统）② 搜索快捷键提示移除 ③ 筛选下拉菜单被弹窗裁剪修复（overflow:hidden→visible） ④ 筛选菜单选中态不持久修复（展开前重新渲染） ⑤ 标签筛选 AND 语义客户端过滤 ⑥ 标签/笔记本/日期筛选展开前重新渲染同步当前 state ⑦ 选中态宽度修复（width:100%+flex stretch） ⑧ 自定义薄滚动条 6px ⑨ 筛选后键盘导航失效修复（closeAllFilterDropdowns 归还焦点） ⑩ 导航"两个选中项"修复（移除错峰动画延时 + :has() 抑制 hover 左边框） ⑪ 搜索结果打开笔记自动切换笔记本 + 刷新笔记列表 ⑫ _triggerFilterSearch 绕过防抖直接执行搜索。后续可基于此报告回答项目相关问题。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -867,3 +868,26 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **表格复制按钮 JS 精确定位** | CSS 用 `position: absolute; right: 6px; top: 0; transform: none`（基础定位），hover 改 `transform: scale(1.08)`。`top` 值由 JS 在 `wrapper.appendChild(btn)` 后用 `requestAnimationFrame` 测量 `tr:first-child`（不是 `thead`，兼容无 thead 标签情况）的 `getBoundingClientRect()`，计算 `centerY = rowRect.top - wrapperRect.top + rowRect.height / 2`，再设 `btn.style.top = (centerY - btnHeight/2) + 'px'`。**HTML 不允许 button 作为 thead/tr 子元素**（HTML5 解析会把非法子元素 foster 到 table 外），所以 button 只能放在 wrapper 内，跨结构定位必须用 JS 测量。`btnHeight` 用 `btn.offsetHeight \|\| 24` 兜底。**双重 rAF 兜底**：WebView2 中 table 刚渲染时 `getBoundingClientRect()` 可能返回过渡值，单次 rAF 不够稳定 → 第一次 layout 完算，第二次样式稳定后重算。**`ResizeObserver` 响应式**：监听 table 尺寸变化，主题切换/字体加载/窗口缩放等场景下自动重对齐，旧的 inline top 不会跟着 table 高度变化。**`transition` 兼容性**：`transition: opacity 0.15s, background 0.15s, transform 0.15s` 已覆盖所有变化属性 |
 | **笔记本名「」统一标记** | 项目里动态嵌入笔记本名的 3 处统一用中文直角引号「」(U+300C/U+300D)，不用半角 `[]`/书名号 `《》`/引号 `""`。代码位置：① [main.js:3650](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 移动成功通知 `已将 ${N} 条笔记移动到「${targetName}」`；② [main.js:4834](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 删除确认弹窗 `确定要删除笔记本「${notebookName}」吗?`；③ [main.js:4890](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 删除/移动/重命名通知 `笔记本「${name}」${suffix}`。设计意图：把用户输入的专有名词和系统文案视觉分离，长度自适应（无断行问题），3 处风格统一。L2495/L3868 注释中也用「编辑/预览」标记 UI 元素。后续如要修改风格（改为 `[]` 或《》），3 处需同步改 |
 | **查看模式 markdown 笔记首次渲染** | `openEditor(noteId, true)` 查看模式打开 markdown 笔记时,自动 `data-mode='preview'` + 直接 `marked.parse(editorContent)` 同步渲染到 `els.mdRendered`（不等待 CM6 worker）。**关键 bug**：原代码只做 hljs 高亮，**漏调 `_applyPreviewDOMHelpers()`** → 表格无 wrapper 复制按钮、代码块无 copy-code-btn / 语言标签。**用户症状**："打开笔记首次不显示复制按钮，编辑一下内容再切到预览就有"（因为编辑触发 worker 异步渲染，onmessage 回调里走 `_applyPreviewDOMHelpers()` 补上）。**修复**：把那 6 行 `hljs.highlightElement` 直接替换为 `_applyPreviewDOMHelpers()`（后者内部已包含 hljs 高亮 + 代码块/表格/语言标签的 DOM 后处理）。**worker 异步路径**（`onmessage` 回调中 `els.mdRendered.innerHTML = html` 之后调用 `_applyPreviewDOMHelpers()`）一直是正确的，没受影响。教训：DOM 后处理函数必须在**所有**渲染路径都调用,不能依赖 worker 路径来"兜底"查看模式 |
+
+## 十一、新增记忆点（搜索弹窗系统）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **搜索弹窗 UI 精修** | 弹窗容器 `min(560px, calc(100vw - 48px))` 自适应宽度，暖色遮罩 `rgba(45,42,36,0.32)`，顶部 2px 琥珀色装饰条（改用 `border-top` 避免 overflow 裁切），圆角 20px 与编辑器模态对齐 |
+| **搜索输入框** | 左侧 28×28 琥珀色浅底搜索图标，输入框 `flex:1; font-size:1rem; font-weight:500`，聚焦时底部 `border-bottom-color: var(--accent)` 渐显。右侧去掉原 Esc/↑↓/⏏ 快捷键提示 chip |
+| **过滤器行** | `--input-bg` 背景与 header 形成层次分层。filter 按钮带 chevron SVG 图标（激活时旋转 180°），激活态用背景/文字/边框/chevron 四重指示。下拉菜单 `opacity + translateY` 动画 |
+| **下拉菜单溢出修复** | `.search-modal-content` 原 `overflow:hidden` 裁切绝对定位的下拉菜单。修复：把 `::before` 装饰条（2px 琥珀色）改为 `border-top`，`.search-modal-content: overflow:hidden→visible` |
+| **过滤选项选中态** | 已选项右侧 ✓ SVG 图标。`.search-modal-filter-option` 设 `width:100% + box-sizing:border-box` 确保选中态背景铺满整行。下拉菜单改为 `flex direction:column align-items:stretch` 让选项自动拉伸填满宽度 |
+| **过滤器选中态同步** | 笔记本/标签/日期三个过滤按钮点击时展开前重新渲染下拉，同步 `state` 中的当前选中值。新增 `updateSearchModalFilterBtnActive()` 统一更新按钮 active 样式 |
+| **标签 AND 语义过滤** | 选择标签后不向后端传递，在 `searchModalLoadPage` 后端返回结果后做客户端过滤：笔记必须包含所有选中标签（AND 语义）。支持多选，选中"全部"时清除标签过滤 |
+| **结果列表交互** | 8/12px padding 增加呼吸感，hover 渐变背景 + 左边框渐显，selected 态 `--accent-light` 背景 + 标题 `font-weight:600`。meta 行用 SVG 笔记本图标替代 emoji，标签 chip 加细边框 |
+| **关键词高亮** | 结果中使用 `<mark>` 包裹匹配文本，CSS 样式：`--accent` 文字色 + `--accent-light` 背景 + `font-weight:600` + 底部 1px 边线 |
+| **空状态** | 64×64 圆形琥珀浅底容器 + 居中搜索 SVG 图标，主标题+副标题`<p>noto-color-emoji` 双层文案 |
+| **底部信息栏** | 「共 N 条 · ⏎ 打开」组合（kbd chip 风格）|
+| **弹窗动画系统** | 容器打开 `280ms cubic-bezier(0.16,1,0.3,1)` 弹簧曲线，关闭 `180ms cubic-bezier(0.4,0,1,1)` ease-in。`prefers-reduced-motion` 媒体查询降级（关闭时清除 `animation-delay` 残留）|
+| **快捷键提示移除** | 搜索输入框右侧的 Esc/↑↓/⏏ kbd chip 容器从 `index.html` 删除，CSS 对应样式/媒体查询引用清理，JS 中 `els.searchModalHints` 引用及 `handleSearchModalInput` 中 `dim` 类切换逻辑删除 |
+| **筛选后键盘导航修复** | 点击筛选选项后，`closeAllFilterDropdowns()` 在关闭下拉前检查弹窗可见性，若可见则调用 `els.searchModalInput.focus()` 归还焦点，使键盘事件能正常触发 `handleSearchModalKeydown` |
+| **"两个选中项"修复** | 根因① 30ms 错峰入场延迟（前 18 项共 540ms）导致用户视觉上感觉"有防抖"；根因② `:hover` 与 `.selected` 共用 `border-left-color: var(--accent)` 左边框造成"两个选中项"错觉。修复：移除 animation-delay（全部 0ms），新增 `:has()` 规则—列表中有 `.selected` 时 `:hover:not(.selected)` 的 `border-left-color: transparent` |
+| **搜索结果切换笔记本** | 新增 `_openNoteFromSearch(noteId, notebookId)` 统一入口：关闭搜索弹窗 → 更新 `state.activeNotebookId` → `resetPagination()` + `await loadNotes()` 刷新笔记列表 → `renderNotebookList()` 更新侧栏 → 打开笔记。点击和 Enter 键统一走此入口 |
+| **_triggerFilterSearch** | 新增函数直接清除防抖定时器后同步设置 keyword/重置分页/立即执行 `searchModalLoadPage`，不走 200ms 防抖。替代原来 5 处 `dispatchEvent(new Event('input'))` 调用，消除筛选触发时防抖引起的选中项"跳回"问题 |
+

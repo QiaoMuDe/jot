@@ -604,9 +604,10 @@
             <div class="search-modal-content">
                 <!-- 搜索输入区 -->
                 <div class="search-modal-header">
-                    <svg class="search-modal-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span class="search-modal-icon-wrap">
+                        <svg class="search-modal-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </span>
                     <input type="text" id="searchModalInput" class="search-modal-input" placeholder="搜索笔记(标题/内容/标签)..." autocomplete="off" spellcheck="false" />
-                    <span class="search-modal-hint">Esc 关闭 · ↑↓ 选择 · Enter 打开</span>
                 </div>
                 <!-- 过滤器区 -->
                 <div class="search-modal-filters">
@@ -614,7 +615,7 @@
                         <span class="search-modal-filter-label">笔记本:</span>
                         <button type="button" class="search-modal-filter-btn" id="searchModalNotebookBtn">
                             <span id="searchModalNotebookLabel">全部</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
                         <div class="search-modal-filter-dropdown" id="searchModalNotebookDropdown"></div>
                     </div>
@@ -622,7 +623,7 @@
                         <span class="search-modal-filter-label">标签:</span>
                         <button type="button" class="search-modal-filter-btn" id="searchModalTagBtn">
                             <span id="searchModalTagLabel">全部</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
                         <div class="search-modal-filter-dropdown" id="searchModalTagDropdown"></div>
                     </div>
@@ -630,13 +631,13 @@
                         <span class="search-modal-filter-label">时间:</span>
                         <button type="button" class="search-modal-filter-btn" id="searchModalDateBtn">
                             <span id="searchModalDateLabel">不限</span>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
                         <div class="search-modal-filter-dropdown" id="searchModalDateDropdown">
-                            <div class="search-modal-filter-option" data-value="all">不限</div>
-                            <div class="search-modal-filter-option" data-value="today">今天</div>
-                            <div class="search-modal-filter-option" data-value="week">最近 7 天</div>
-                            <div class="search-modal-filter-option" data-value="month">最近 30 天</div>
+                            <div class="search-modal-filter-option" data-value="all"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>不限</span></div>
+                            <div class="search-modal-filter-option" data-value="today"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>今天</span></div>
+                            <div class="search-modal-filter-option" data-value="week"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>最近 7 天</span></div>
+                            <div class="search-modal-filter-option" data-value="month"><svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 8"/></svg><span>最近 30 天</span></div>
                         </div>
                     </div>
                 </div>
@@ -644,12 +645,18 @@
                 <div class="search-modal-results" id="searchModalResults"></div>
                 <!-- 空状态 -->
                 <div class="search-modal-empty" id="searchModalEmpty" style="display:none">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-                    <p>无匹配笔记</p>
+                    <div class="search-modal-empty-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </div>
+                    <p class="search-modal-empty-title" id="searchModalEmptyTitle">开始搜索你的笔记</p>
+                    <p class="search-modal-empty-desc" id="searchModalEmptyDesc">输入关键字搜索标题、内容或标签</p>
                 </div>
                 <!-- 底部状态 -->
                 <div class="search-modal-footer" id="searchModalFooter" style="display:none">
                     <span id="searchModalCount">共 0 条结果</span>
+                    <span>·</span>
+                    <kbd>⏎</kbd>
+                    <span>打开</span>
                 </div>
             </div>
         </div>
