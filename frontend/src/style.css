@@ -1342,11 +1342,12 @@ button :only-child:is(svg) {
     margin: 1.2em 0;
 }
 
-/* 表格复制按钮：悬停显示，右上角定位 */
+/* 表格复制按钮：悬停显示，表头行右侧居中定位（top 由 JS 根据 thead 中心计算） */
 .copy-table-btn {
     position: absolute;
-    top: 6px;
+    top: 0;
     right: 6px;
+    transform: none;
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);

@@ -2513,11 +2513,9 @@ async function openEditor(noteId, readOnly, startFullscreen) {
             });
             if (editorContent.trim()) {
                 els.mdRendered.innerHTML = marked.parse(editorContent);
-                els.mdRendered.querySelectorAll('pre code').forEach((block) => {
-                    if (typeof hljs !== 'undefined') {
-                        hljs.highlightElement(block);
-                    }
-                });
+                // 同步 DOM 后处理：hljs 高亮 + 代码块/表格复制按钮 + 语言标签
+                // 内部已包含 hljs.highlightElement,无需重复调用
+                _applyPreviewDOMHelpers();
             } else {
                 els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
             }
@@ -2748,6 +2746,27 @@ function _applyPreviewDOMHelpers() {
             }
         });
         wrapper.appendChild(btn);
+        // 将按钮 top 定位到第一行(表头)的垂直中线
+        // 单纯 CSS 无法跨越 thead 边界(HTML 不允许 button 放在 thead 内),
+        // 通过 JS 测量第一行相对 wrapper 的偏移来精确对齐
+        const updateBtnPosition = () => {
+            // 用 tr:first-child 作为参考(兼容没有 thead 标签的情况)
+            const firstRow = table.querySelector('tr');
+            if (!firstRow) return;
+            const rowRect = firstRow.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const centerY = rowRect.top - wrapperRect.top + rowRect.height / 2;
+            const btnHeight = btn.offsetHeight || 24;
+            btn.style.top = (centerY - btnHeight / 2) + 'px';
+        };
+        // 双重 rAF 兜底：第一次 layout 刚完成, 第二次确保样式完全稳定
+        requestAnimationFrame(() => {
+            updateBtnPosition();
+            requestAnimationFrame(updateBtnPosition);
+        });
+        // 监听 table 尺寸变化, 响应式 / 字体加载等场景下自动重新对齐
+        const ro = new ResizeObserver(updateBtnPosition);
+        ro.observe(table);
     });
 }
 

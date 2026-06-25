@@ -79,7 +79,8 @@ desc = '发布程序'
 cmds = [
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean -nsis',
     'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
-    'fck rm -f {{exe_path}}'
+    'fck rm -f {{exe_path}}',
+    'fck mv -f {{output_dir}}/jot-amd64-installer.exe {{output_dir}}/jot_windows_amd64_installer_{{git_version}}.exe'
 ]
 # 任务工作目录
 work_dir = ''
