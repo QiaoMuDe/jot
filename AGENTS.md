@@ -36,8 +36,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5570 行（含 CM6 集成 + 搜索弹窗 + 日历选择器）
-│   │   ├── style.css                   # 组件样式 ~4130 行（含 CM6 主题/语法高亮 + 搜索弹窗/日历样式）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5410 行（含 CM6 集成 + 搜索弹窗）
+│   │   ├── style.css                   # 组件样式 ~3930 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~581 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -594,7 +594,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 38. **标签-正文间距精细调整**：激进压缩后标签底部 margin 6px 显得过贴，根据用户反馈微调到 12px。**这是一个非对称设计点**：用户既要「内容区最大化」又希望「标签和正文之间有呼吸感」，最终值 12px 平衡了两者诉求（比起原始 24px 仍省 12px）。
 39. **CodeMirror 滚动条精细化**：`.cm-scroller` 加 `padding-right: 1px; padding-bottom: 1px`（最初 2px，压缩到 1px 几乎贴边）。同时给 `::-webkit-scrollbar` 补 `height: 6px`（之前只设了 width，水平滚动条默认 0 高度不可见）→ 水平滚动条首次可见。**WebView2 滚动条贴边问题**：`.editor-body` 的 `padding-right` 24px 会让滚动条距 editor-panel 右边缘 24px，循环迭代压缩 24→16→8px（最终值），让滚动条贴近 panel 右边 8px（1px 间隙 + 6px 滚动条 + 1px 间隙）。该值与文本区横向扩展空间直接 trade-off。
 40. **搜索弹窗系统**：Ctrl+F 唤起 #searchModal 搜索弹窗替代原 topbar 搜索框。温色遮罩 rgba(45,42,36,0.32) + 2px 琥珀装饰条 + 圆角 20px 与编辑器模态对齐。搜索输入框 flex:1 无快捷键提示 chip。三栏过滤器（笔记本/标签/日期）带 chevron 图标 + activate 态四重指示（背景/文字/边框/chevron 旋转）。标签筛选支持 AND 语义客户端过滤。结果列表 8/12px padding 呼吸感 + hover 渐变+左边框 + selected --accent-light。keyword 高亮 --accent 文字+--accent-light 背景+字重 600。空状态 64×64 圆形图标+双行文案。底部"共 N 条 · ⏎ 打开"组合。动画系统：容器打开 280ms spring 曲线 / 关闭 180ms ease-in / prefers-reduced-motion 降级。
-41. **日历日期范围选择器**：时间筛选从预设下拉改为日历弹窗选择器（自定义纯 JS 实现，无外部依赖）。单面板月视图 280px，7 列 CSS Grid，36×36px 日格子。支持任意开始/结束日期范围选择，选中范围高亮（`--accent-light` 背景），开始/结束日实心圆标记。底部快捷预设：今天/最近7天/最近30天/不限。月份导航 ← → 按钮切换。后端 SQL `updated_at BETWEEN` 真正执行过滤。`SearchNotes` 函数签名新增 `startDate, endDate string` 参数。
+41. **时间筛选简化（日历→下拉菜单）**：时间筛选从日历弹窗选择器改为简单的下拉菜单（和笔记本/标签筛选器一致）。移除了自定义日历组件（~520 行 JS+CSS），保留 4 个快捷选项（今天/最近7天/最近30天/不限）。后端 `SearchNotes` 的 `startDate, endDate string` 参数不变，SQL `updated_at BETWEEN` 过滤逻辑不变。详见 `.trae/specs/simplify-date-filter/`。
 
 ---
 
@@ -807,7 +807,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 已完成项目记忆更新（2026-06-26），本次更新内容：① 搜索弹窗 UI 与交互动画精修（暖色遮罩/琥珀装饰条/过滤器下拉/错峰入场/弹簧动画系统）② 搜索快捷键提示移除 ③ 筛选下拉菜单被弹窗裁剪修复（overflow:hidden→visible） ④ 筛选菜单选中态不持久修复（展开前重新渲染） ⑤ 标签筛选 AND 语义客户端过滤 ⑥ 标签/笔记本/日期筛选展开前重新渲染同步当前 state ⑦ 选中态宽度修复（width:100%+flex stretch） ⑧ 自定义薄滚动条 6px ⑨ 筛选后键盘导航失效修复（closeAllFilterDropdowns 归还焦点） ⑩ 导航"两个选中项"修复（移除错峰动画延时 + :has() 抑制 hover 左边框） ⑪ 搜索结果打开笔记自动切换笔记本 + 刷新笔记列表 ⑫ _triggerFilterSearch 绕过防抖直接执行搜索 ⑬ 日历日期选择器（自定义纯 JS/单面板月视图/280px/开始-结束范围/快捷预设/后端 `updated_at BETWEEN` 真正过滤/`SearchNotes` 签名新增 `startDate,endDate`）。后续可基于此报告回答项目相关问题。
+> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 时间筛选简化：移除日历弹窗（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单，保留 4 个快捷选项（今天/最近7天/最近30天/不限），后端 `startDate/endDate` 参数和 SQL `updated_at BETWEEN` 过滤不变。② `fix-date-picker-auto-close` spec 被 `simplify-date-filter` 替代。详见 `.trae/specs/simplify-date-filter/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -891,10 +891,6 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **"两个选中项"修复** | 根因① 30ms 错峰入场延迟（前 18 项共 540ms）导致用户视觉上感觉"有防抖"；根因② `:hover` 与 `.selected` 共用 `border-left-color: var(--accent)` 左边框造成"两个选中项"错觉。修复：移除 animation-delay（全部 0ms），新增 `:has()` 规则—列表中有 `.selected` 时 `:hover:not(.selected)` 的 `border-left-color: transparent` |
 | **搜索结果切换笔记本** | 新增 `_openNoteFromSearch(noteId, notebookId)` 统一入口：关闭搜索弹窗 → 更新 `state.activeNotebookId` → `resetPagination()` + `await loadNotes()` 刷新笔记列表 → `renderNotebookList()` 更新侧栏 → 打开笔记。点击和 Enter 键统一走此入口 |
 | **_triggerFilterSearch** | 新增函数直接清除防抖定时器后同步设置 keyword/重置分页/立即执行 `searchModalLoadPage`，不走 200ms 防抖。替代原来 5 处 `dispatchEvent(new Event('input'))` 调用，消除筛选触发时防抖引起的选中项"跳回"问题 |
-| **日历日期选择器** | 自定义纯 JS 实现，无外部依赖。单面板月视图，280px 宽度，7 列 CSS Grid 布局。`renderDatePickerCalendar()` 动态生成 6×7=42 格网格。`handleDatePickerDateClick()` 管理开始/结束选择逻辑：无开始→设为开始，有开始无结束且>=开始→设为结束(关闭+搜索)，<开始→重置为开始，已有范围→清空重来 |
-| **日历状态管理** | 全局变量 `_datePickerYear` / `_datePickerMonth` 跟踪当前显示月份。`state.searchModalDateStart` / `state.searchModalDateEnd` 空字符串表示无筛选。`openSearchModal` 重置为空。`toggleDatePicker()` 切换可见性，打开时以当前选中月份或今天为起始月 |
-| **日历选中态视觉** | `active` class：`--accent` 实心圆背景 + `#fff` 文字 + `border-radius: 50%`。`in-range` class：`color-mix(in srgb, var(--accent) 18%, transparent)` 背景。`today` class：`font-weight: 700` + `--accent` 色 + `::after 6px` 实心圆点标记。`outside` class：`--text-muted opacity: 0.35` + 禁止点击。`range-start`/`range-end` class：半圆角过渡 |
-| **日历快捷预设** | 底部 4 按钮（今天/最近7天/最近30天/不限），`data-quick` 区分。today=当天，7d=今天-6，30d=今天-29，all=清空。点击后立即 `_updateDateLabel()` + `updateSearchModalFilterBtnActive()` + 关闭 + `_triggerFilterSearch()` |
-| **日历月导航** | ← 按钮 `_datePickerMonth--`，→ 按钮 `_datePickerMonth++`，边界处理（<1→12 年减/ >12→1 年加）。点击后调用 `renderDatePickerCalendar()` 重新渲染。弹出动画：`opacity + translateY` 200ms spring 曲线，关闭 150ms ease-in |
+| **时间筛选简化（日历→下拉菜单）** | 移除了日历弹窗选择器（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单。`renderDateFilterDropdownSelection()` 渲染 4 个选项（今天/最近7天/最近30天/不限），复用 `_createFilterOption()` 和 `.search-modal-filter-dropdown` 样式。选中后设置 `state.searchModalDateStart/End` → `closeAllFilterDropdowns()` → `_triggerFilterSearch()` |
 | **后端日期过滤实现** | `app.go` 中 `SearchNotes` 签名从 `(keyword, page, pageSize, notebookID)` 改为 `(keyword, page, pageSize, notebookID, startDate, endDate)`。`note_service.go` 中 `Search()` 和 `SearchByNotebook()` 同步新增 `startDate, endDate string` 参数。非空时 SQL 追加 `AND updated_at BETWEEN ? AND ?`，前半部分 +" 00:00:00"，后半部分 +" 23:59:59"。Wails 绑定(JS/TS)自动更新。`go build ./...` + `npx vite build` 均通过 |
 

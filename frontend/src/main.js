@@ -386,9 +386,6 @@ const state = {
     searchModalSelectedIndex: -1,
 };
 
-// 日历日期选择器状态
-let _datePickerYear = 0;
-let _datePickerMonth = 0;
 
 // 分页状态
 let currentPage = 1;
@@ -421,11 +418,6 @@ const els = {
     searchModalDateBtn: $('searchModalDateBtn'),
     searchModalDateLabel: $('searchModalDateLabel'),
     searchModalDateDropdown: $('searchModalDateDropdown'),
-    searchModalDatePickerPrompt: $('searchModalDatePickerPrompt'),
-    datePickerGrid: $('datePickerGrid'),
-    datePickerMonthLabel: $('datePickerMonthLabel'),
-    datePickerPrevMonth: $('datePickerPrevMonth'),
-    datePickerNextMonth: $('datePickerNextMonth'),
     // 更多菜单
     moreMenuBtn: $('moreMenuBtn'),
     moreMenu: $('moreMenu'),
@@ -5328,216 +5320,92 @@ function updateTagFilterLabel() {
 }
 
 /**
- * 渲染日期过滤器下拉的 selected 状态
+ * 渲染日期过滤器下拉选项
  */
 function renderDateFilterDropdownSelection() {
-    // 日历日期选择器已取代旧的下拉选中逻辑
-}
-
-/**
- * 渲染日历日期选择器
- */
-function renderDatePickerCalendar() {
-    if (!els.searchModalDateDropdown) return;
+    const dd = els.searchModalDateDropdown;
+    if (!dd) return;
+    dd.innerHTML = '';
+    const quickOptions = [
+        { text: '今天', quick: 'today' },
+        { text: '最近7天', quick: '7d' },
+        { text: '最近30天', quick: '30d' },
+        { text: '不限', quick: 'all' },
+    ];
     const now = new Date();
-    const year = _datePickerYear || now.getFullYear();
-    const month = _datePickerMonth || (now.getMonth() + 1);
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const todayStr = y + '-' + m + '-' + d;
 
-    // 更新月份标签
-    if (els.datePickerMonthLabel) {
-        els.datePickerMonthLabel.textContent = year + ' 年 ' + month + ' 月';
-    }
-
-    // 更新提示文字
-    if (els.searchModalDatePickerPrompt) {
-        const start = state.searchModalDateStart;
-        const end = state.searchModalDateEnd;
-        if (start && end) {
-            els.searchModalDatePickerPrompt.textContent = start + ' ~ ' + end;
-        } else if (start) {
-            els.searchModalDatePickerPrompt.textContent = '请选择结束日期';
-        } else {
-            els.searchModalDatePickerPrompt.textContent = '请选择开始日期';
-        }
-    }
-
-    // 生成日历网格
-    const grid = els.datePickerGrid;
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    const daysInMonth = lastDay.getDate();
-    const startWeekday = firstDay.getDay(); // 0=Sun
-
-    // 上月填充
-    const prevLastDay = new Date(year, month - 1, 0);
-    const prevDaysInMonth = prevLastDay.getDate();
-
-    // 计算需要多少行（6 行保证不溢出）
-    const totalCells = 42; // 7*6
-
-    for (let i = 0; i < totalCells; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'search-modal-date-picker-day';
-
-        let day, dateObj, isOutside = false;
-
-        if (i < startWeekday) {
-            // 上月
-            day = prevDaysInMonth - startWeekday + 1 + i;
-            dateObj = new Date(year, month - 2, day);
-            isOutside = true;
-        } else if (i >= startWeekday + daysInMonth) {
-            // 下月
-            day = i - startWeekday - daysInMonth + 1;
-            dateObj = new Date(year, month, day);
-            isOutside = true;
-        } else {
-            day = i - startWeekday + 1;
-            dateObj = new Date(year, month - 1, day);
+    quickOptions.forEach(opt => {
+        // 判断当前选中的是否是此选项
+        let isSelected = false;
+        if (opt.quick === 'all') {
+            isSelected = state.searchModalDateStart === '' && state.searchModalDateEnd === '';
+        } else if (opt.quick === 'today') {
+            isSelected = state.searchModalDateStart === todayStr && state.searchModalDateEnd === todayStr;
+        } else if (opt.quick === '7d') {
+            const past = new Date(now);
+            past.setDate(past.getDate() - 6);
+            const py = past.getFullYear();
+            const pm = String(past.getMonth() + 1).padStart(2, '0');
+            const pd = String(past.getDate()).padStart(2, '0');
+            isSelected = state.searchModalDateStart === py + '-' + pm + '-' + pd && state.searchModalDateEnd === todayStr;
+        } else if (opt.quick === '30d') {
+            const past = new Date(now);
+            past.setDate(past.getDate() - 29);
+            const py = past.getFullYear();
+            const pm = String(past.getMonth() + 1).padStart(2, '0');
+            const pd = String(past.getDate()).padStart(2, '0');
+            isSelected = state.searchModalDateStart === py + '-' + pm + '-' + pd && state.searchModalDateEnd === todayStr;
         }
 
-        cell.textContent = day;
-
-        // 日期字符串 YYYY-MM-DD
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const d = String(dateObj.getDate()).padStart(2, '0');
-        const dateStr = y + '-' + m + '-' + d;
-
-        cell.dataset.date = dateStr;
-
-        if (isOutside) {
-            cell.classList.add('outside');
-        }
-
-        // 标记今天
-        const today = new Date();
-        if (y === today.getFullYear() && dateObj.getMonth() === today.getMonth() && dateObj.getDate() === today.getDate()) {
-            cell.classList.add('today');
-        }
-
-        // 标记选中状态
-        const start = state.searchModalDateStart;
-        const end = state.searchModalDateEnd;
-        if (start && end) {
-            if (dateStr === start || dateStr === end) {
-                cell.classList.add('active');
+        const optionEl = _createFilterOption({
+            text: opt.text,
+            selected: isSelected,
+            dataValue: opt.quick,
+            onClick: function() {
+                // 计算日期范围
+                if (opt.quick === 'all') {
+                    state.searchModalDateStart = '';
+                    state.searchModalDateEnd = '';
+                } else if (opt.quick === 'today') {
+                    state.searchModalDateStart = todayStr;
+                    state.searchModalDateEnd = todayStr;
+                } else if (opt.quick === '7d') {
+                    const p = new Date(now);
+                    p.setDate(p.getDate() - 6);
+                    const py = p.getFullYear();
+                    const pm = String(p.getMonth() + 1).padStart(2, '0');
+                    const pd = String(p.getDate()).padStart(2, '0');
+                    state.searchModalDateStart = py + '-' + pm + '-' + pd;
+                    state.searchModalDateEnd = todayStr;
+                } else if (opt.quick === '30d') {
+                    const p = new Date(now);
+                    p.setDate(p.getDate() - 29);
+                    const py = p.getFullYear();
+                    const pm = String(p.getMonth() + 1).padStart(2, '0');
+                    const pd = String(p.getDate()).padStart(2, '0');
+                    state.searchModalDateStart = py + '-' + pm + '-' + pd;
+                    state.searchModalDateEnd = todayStr;
+                }
+                // 更新 label
+                if (els.searchModalDateLabel) {
+                    els.searchModalDateLabel.textContent = opt.text;
+                }
+                updateSearchModalFilterBtnActive();
+                // 关闭下拉
+                closeAllFilterDropdowns();
+                _triggerFilterSearch();
             }
-            if (dateStr >= start && dateStr <= end) {
-                cell.classList.add('in-range');
-            }
-            // 范围端点（不在活跃选中时，用于视觉连接）
-            if (!isOutside && dateStr === start && dateStr !== end) {
-                cell.classList.add('range-start');
-            }
-            if (!isOutside && dateStr === end && dateStr !== start) {
-                cell.classList.add('range-end');
-            }
-        } else if (start && dateStr === start) {
-            cell.classList.add('active');
-        }
-
-        // 点击事件
-        cell.addEventListener('click', function() {
-            handleDatePickerDateClick(y, dateObj.getMonth() + 1, dateObj.getDate());
         });
-
-        grid.appendChild(cell);
-    }
+        dd.appendChild(optionEl);
+    });
 }
 
-/**
- * 处理日历日期点击
- */
-function handleDatePickerDateClick(year, month, day) {
-    const dateStr = String(year) + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
-    const start = state.searchModalDateStart;
-    const end = state.searchModalDateEnd;
-
-    if (!start && !end) {
-        // 无选中 -> 设为开始
-        state.searchModalDateStart = dateStr;
-        renderDatePickerCalendar();
-        if (els.searchModalDatePickerPrompt) {
-            els.searchModalDatePickerPrompt.textContent = '请选择结束日期';
-        }
-    } else if (start && !end) {
-        if (dateStr >= start) {
-            // 设为结束
-            state.searchModalDateEnd = dateStr;
-            _updateDateLabel();
-            updateSearchModalFilterBtnActive();
-            // 关闭日历，立即搜索
-            closeSearchModalDatePicker();
-            _triggerFilterSearch();
-        } else {
-            // 点击早于开始 -> 重置为开始
-            state.searchModalDateStart = dateStr;
-            renderDatePickerCalendar();
-            if (els.searchModalDatePickerPrompt) {
-                els.searchModalDatePickerPrompt.textContent = '请选择结束日期';
-            }
-        }
-    } else {
-        // 已有完整范围 -> 重新开始
-        state.searchModalDateStart = dateStr;
-        state.searchModalDateEnd = '';
-        renderDatePickerCalendar();
-        if (els.searchModalDatePickerPrompt) {
-            els.searchModalDatePickerPrompt.textContent = '请选择结束日期';
-        }
-    }
-}
-
-/**
- * 更新日期筛选按钮 label
- */
-function _updateDateLabel() {
-    const start = state.searchModalDateStart;
-    const end = state.searchModalDateEnd;
-    if (els.searchModalDateLabel) {
-        if (start && end) {
-            els.searchModalDateLabel.textContent = start + ' ~ ' + end;
-        } else {
-            els.searchModalDateLabel.textContent = '不限';
-        }
-    }
-}
-
-/**
- * 关闭日历日期选择器
- */
 function closeSearchModalDatePicker() {
-    if (els.searchModalDateDropdown) {
-        els.searchModalDateDropdown.classList.remove('visible');
-    }
-}
-
-/**
- * 切换日历日期选择器的可见性
- */
-function toggleDatePicker() {
-    if (!els.searchModalDateDropdown) return;
-    const isVisible = els.searchModalDateDropdown.classList.contains('visible');
-    // 先关闭其他下拉
-    closeAllFilterDropdowns();
-    if (!isVisible) {
-        // 重置月份到当前选中日期或今天
-        const now = new Date();
-        if (state.searchModalDateStart) {
-            const parts = state.searchModalDateStart.split('-');
-            _datePickerYear = parseInt(parts[0], 10);
-            _datePickerMonth = parseInt(parts[1], 10);
-        } else {
-            _datePickerYear = now.getFullYear();
-            _datePickerMonth = now.getMonth() + 1;
-        }
-        renderDatePickerCalendar();
-        els.searchModalDateDropdown.classList.add('visible');
-    }
+    // 日历已移除，无需操作
 }
 
 /**
@@ -5651,7 +5519,6 @@ function _triggerFilterSearch() {
  */
 function closeAllFilterDropdowns() {
     document.querySelectorAll('.search-modal-filter.open').forEach(el => el.classList.remove('open'));
-    closeSearchModalDatePicker();
     // 关闭下拉后归还焦点到输入框,确保键盘导航(↑↓/⏎)持续可用
     if (els.searchModal && els.searchModal.classList.contains('visible') && els.searchModalInput) {
         els.searchModalInput.focus();
@@ -5705,79 +5572,7 @@ function initSearchModalListeners() {
             }
         });
     });
-    // 日期筛选按钮 -> 切换日历弹窗
-    if (els.searchModalDateBtn) {
-        els.searchModalDateBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleDatePicker();
-        });
-    }
-    // 日历上月按钮
-    if (els.datePickerPrevMonth) {
-        els.datePickerPrevMonth.addEventListener('click', (e) => {
-            e.stopPropagation();
-            _datePickerMonth--;
-            if (_datePickerMonth < 1) {
-                _datePickerMonth = 12;
-                _datePickerYear--;
-            }
-            renderDatePickerCalendar();
-        });
-    }
-    // 日历下月按钮
-    if (els.datePickerNextMonth) {
-        els.datePickerNextMonth.addEventListener('click', (e) => {
-            e.stopPropagation();
-            _datePickerMonth++;
-            if (_datePickerMonth > 12) {
-                _datePickerMonth = 1;
-                _datePickerYear++;
-            }
-            renderDatePickerCalendar();
-        });
-    }
-    // 日历快捷按钮
-    if (els.searchModalDateDropdown) {
-        els.searchModalDateDropdown.querySelectorAll('.search-modal-date-picker-quick-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const quick = btn.dataset.quick;
-                const now = new Date();
-                const y = now.getFullYear();
-                const m = String(now.getMonth() + 1).padStart(2, '0');
-                const d = String(now.getDate()).padStart(2, '0');
-                const todayStr = y + '-' + m + '-' + d;
 
-                if (quick === 'all') {
-                    state.searchModalDateStart = '';
-                    state.searchModalDateEnd = '';
-                } else if (quick === 'today') {
-                    state.searchModalDateStart = todayStr;
-                    state.searchModalDateEnd = todayStr;
-                } else if (quick === '7d') {
-                    const past = new Date(now);
-                    past.setDate(past.getDate() - 6);
-                    const py = past.getFullYear();
-                    const pm = String(past.getMonth() + 1).padStart(2, '0');
-                    const pd = String(past.getDate()).padStart(2, '0');
-                    state.searchModalDateStart = py + '-' + pm + '-' + pd;
-                    state.searchModalDateEnd = todayStr;
-                } else if (quick === '30d') {
-                    const past = new Date(now);
-                    past.setDate(past.getDate() - 29);
-                    const py = past.getFullYear();
-                    const pm = String(past.getMonth() + 1).padStart(2, '0');
-                    const pd = String(past.getDate()).padStart(2, '0');
-                    state.searchModalDateStart = py + '-' + pm + '-' + pd;
-                    state.searchModalDateEnd = todayStr;
-                }
-                _updateDateLabel();
-                updateSearchModalFilterBtnActive();
-                closeSearchModalDatePicker();
-                _triggerFilterSearch();
-            });
-        });
-    }
     // 点击弹窗其它区域关闭下拉(注:点击 mask/content 都会冒泡到这里)
     document.addEventListener('click', (e) => {
         if (!els.searchModal || !els.searchModal.classList.contains('visible')) return;
