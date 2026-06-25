@@ -1116,6 +1116,8 @@ function showSaveConfirmDialog(msg) {
 
         const cleanup = (result) => {
             els.confirmDialog.classList.remove('visible');
+            // 恢复第三方按钮为隐藏状态,防止 showSaveConfirmDialog 残留的显式空值污染后续弹窗
+            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
             resolve(result);
         };
 
@@ -4832,6 +4834,9 @@ function showDeleteNotebookDialog(notebookId, notebookName) {
     const msg = `确定要删除笔记本「${notebookName}」吗？`;
     const checkboxText = `同时永久删除该笔记本中的 ${state.notes.length} 条笔记（不进回收站）`;
 
+    // 隐藏"不保存"按钮(仅三选一对话框使用)
+    if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
+
     // 显示自定义确认对话框（带 checkbox 选项）
     els.confirmDialogMsg.textContent = msg;
     const optionArea = document.getElementById('confirmOptionArea');
@@ -4847,6 +4852,8 @@ function showDeleteNotebookDialog(notebookId, notebookName) {
     const cleanup = (confirmed) => {
         els.confirmDialog.classList.remove('visible');
         if (optionArea) optionArea.style.display = 'none';
+        // 恢复"不保存"按钮为 CSS 默认隐藏状态
+        if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = '';
         if (!confirmed) return;
         doDeleteNotebook(notebookId, checkbox ? checkbox.checked : false);
     };
