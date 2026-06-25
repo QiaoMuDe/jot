@@ -372,6 +372,17 @@ const state = {
     notebooks: [],              // 笔记本列表
     enteredFromViewMode: false, // 是否从查看模式点击编辑按钮进入编辑模式（控制返回按钮显示）
     _titleInputListenerAttached: false, // 编辑器标题 input 监听是否已绑定（用于清理）
+    // 搜索弹窗状态(替代原 topbar 搜索)
+    _searchModalPrevFocus: null,        // 弹窗打开前 document.activeElement
+    searchModalKeyword: '',
+    searchModalPage: 1,
+    searchModalTotal: 0,
+    searchModalHasMore: false,
+    searchModalLoading: false,
+    searchModalNotebookId: 0,
+    searchModalTagIds: new Set(),
+    searchModalDateRange: 'all',
+    searchModalSelectedIndex: -1,
 };
 
 // 分页状态
@@ -386,7 +397,23 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
     // 侧边栏
-    searchInput: $('searchInput'),
+    searchInput: $('searchInput'), // [已废弃] topbar 搜索框已迁移到弹窗,所有引用应改为 openSearchModal()
+    // 搜索弹窗(替代原 topbar 搜索框)
+    searchModal: $('searchModal'),
+    searchModalInput: $('searchModalInput'),
+    searchModalResults: $('searchModalResults'),
+    searchModalEmpty: $('searchModalEmpty'),
+    searchModalFooter: $('searchModalFooter'),
+    searchModalCount: $('searchModalCount'),
+    searchModalNotebookBtn: $('searchModalNotebookBtn'),
+    searchModalNotebookLabel: $('searchModalNotebookLabel'),
+    searchModalNotebookDropdown: $('searchModalNotebookDropdown'),
+    searchModalTagBtn: $('searchModalTagBtn'),
+    searchModalTagLabel: $('searchModalTagLabel'),
+    searchModalTagDropdown: $('searchModalTagDropdown'),
+    searchModalDateBtn: $('searchModalDateBtn'),
+    searchModalDateLabel: $('searchModalDateLabel'),
+    searchModalDateDropdown: $('searchModalDateDropdown'),
     // 更多菜单
     moreMenuBtn: $('moreMenuBtn'),
     moreMenu: $('moreMenu'),
@@ -3246,11 +3273,16 @@ window.deleteTag = async function (id) {
 };
 
 /**
- * 按标签搜索（全局）
+ * 按标签搜索（全局）- 改为打开搜索弹窗并预填关键字
  */
 window.searchByTag = function (tagName) {
-    els.searchInput.value = tagName;
-    searchNotes(tagName, 'tag');
+    // 打开搜索弹窗(替代原 topbar 搜索框聚焦)
+    openSearchModal();
+    if (els.searchModalInput) {
+        els.searchModalInput.value = tagName;
+        // 触发搜索
+        handleSearchModalInput();
+    }
 };
 
 /* ===== 批量管理函数 ===== */
@@ -3715,41 +3747,7 @@ function initEventListeners() {
     // 全局禁用浏览器默认右键菜单（应用已有自定义右键菜单）
     document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // 搜索
-    // 搜索框回车：非空立即搜索，空内容时刷新笔记
-    els.searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const kw = els.searchInput.value.trim();
-            if (kw) {
-                // 非空：立即搜索，跳过防抖
-                searchNotes(kw, 'input');
-            } else {
-                // 空：切回网格并刷新
-                state.searchKeyword = '';
-                switchView('grid');
-                resetPagination();
-                loadNotes();
-            }
-        }
-    });
-    // 搜索框输入自动搜索（防抖 250ms）
-    els.searchInput.addEventListener('input', debounce(function () {
-        const kw = this.value.trim();
-        if (kw) {
-            searchNotes(kw, 'input');
-        } else {
-            state.searchKeyword = '';
-            switchView('grid');
-            resetPagination();
-            loadNotes();
-        }
-    }, 250));
-    els.searchBackBtn.addEventListener('click', () => {
-        els.searchInput.value = '';
-        state.searchKeyword = '';
-        switchView('grid');
-    });
+    // 搜索(已迁移到弹窗,事件在 initSearchModalListeners 中绑定)
 
     // 浮动新建按钮
     els.fabNewNote.addEventListener('click', () => {
@@ -3779,7 +3777,6 @@ function initEventListeners() {
             closeMoreMenu(els.moreMenu);
             if (item.dataset.action === 'home') {
                 state.searchKeyword = '';
-                els.searchInput.value = '';
                 switchView('grid');
                 resetPagination();
                 loadNotes();
@@ -3805,7 +3802,6 @@ function initEventListeners() {
     // 点击品牌名返回所有笔记
     document.querySelector('.topbar-brand')?.addEventListener('click', () => {
         state.searchKeyword = '';
-        els.searchInput.value = '';
         switchView('grid');
     });
 
@@ -4029,6 +4025,9 @@ function initEventListeners() {
 
     // 笔记本侧栏事件
     els.newNotebookBtn?.addEventListener('click', showNewNotebookDialog);
+
+    // 搜索弹窗事件绑定(替代原 topbar 搜索框)
+    initSearchModalListeners();
 }
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
@@ -4119,7 +4118,7 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）
+    // Ctrl+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）;编辑器外则打开搜索弹窗
     if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active') && cmEditor) {
@@ -4138,8 +4137,8 @@ async function handleKeyboardNavigation(e) {
             openSearchPanel(cmEditor);
             return;
         }
-        els.searchInput.focus();
-        els.searchInput.select();
+        // 编辑器外:打开搜索弹窗(替代原 topbar 搜索框聚焦)
+        openSearchModal();
         return;
     }
 
@@ -4223,8 +4222,7 @@ async function handleKeyboardNavigation(e) {
         if (state.batchMode) {
             toggleBatchMode();
         } else if (state.currentView === 'search') {
-            // 搜索页：清空搜索框后回到首页
-            els.searchInput.value = '';
+            // 搜索页：清空搜索后回到首页
             state.searchKeyword = '';
             state.searchSource = 'input';
             switchView('grid');
@@ -4263,7 +4261,6 @@ async function handleKeyboardNavigation(e) {
             case '1':
                 e.preventDefault();
                 state.searchKeyword = '';
-                els.searchInput.value = '';
                 switchView('grid');
                 return;
             case '2':
@@ -4638,7 +4635,6 @@ async function switchNotebook(notebookId) {
 
     // 清除搜索内容和页码，回到笔记首页
     state.searchKeyword = '';
-    els.searchInput.value = '';
     state.searchSource = 'input';
     switchView('grid');
     resetPagination();
@@ -4899,7 +4895,6 @@ async function doDeleteNotebook(notebookId, deleteNotes) {
         if (state.activeNotebookId === notebookId) {
             state.activeNotebookId = 1;
             state.searchKeyword = '';
-            els.searchInput.value = '';
             switchView('grid');
             resetPagination();
         }
@@ -4952,6 +4947,439 @@ function restoreSidebarState() {
         }
         updateSidebarMenuItem();
     } catch (e) {}
+}
+
+/* ===== 搜索弹窗(替代原 topbar 搜索) ===== */
+
+/**
+ * 高亮搜索关键字(用于弹窗结果)
+ * 与 font-search 的 highlightMatch 重名,使用单独命名避免冲突
+ */
+function highlightModalMatch(text, kw) {
+    if (!text) return '';
+    if (!kw) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const re = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return escaped.replace(re, m => `<mark>${m}</mark>`);
+}
+
+/**
+ * 打开搜索弹窗
+ */
+function openSearchModal() {
+    if (!els.searchModal) return;
+    // 记录触发前的焦点元素,关闭时恢复
+    state._searchModalPrevFocus = document.activeElement;
+    // 锁定 body 滚动
+    document.body.style.overflow = 'hidden';
+    // 显示弹窗
+    els.searchModal.classList.add('visible');
+    // 重置状态
+    state.searchModalKeyword = '';
+    state.searchModalPage = 1;
+    state.searchModalTotal = 0;
+    state.searchModalHasMore = false;
+    state.searchModalLoading = false;
+    state.searchModalNotebookId = 0;
+    state.searchModalTagIds = new Set();
+    state.searchModalDateRange = 'all';
+    state.searchModalSelectedIndex = -1;
+    // 重置 UI
+    els.searchModalInput.value = '';
+    els.searchModalResults.innerHTML = '';
+    els.searchModalEmpty.style.display = 'none';
+    els.searchModalFooter.style.display = 'none';
+    els.searchModalNotebookLabel.textContent = '全部';
+    els.searchModalTagLabel.textContent = '全部';
+    els.searchModalDateLabel.textContent = '不限';
+    // 渲染过滤器下拉内容
+    renderNotebookFilterDropdown();
+    renderTagFilterDropdown();
+    // 延迟聚焦输入框(等待弹窗动画)
+    setTimeout(() => {
+        if (els.searchModalInput) {
+            els.searchModalInput.focus();
+        }
+    }, 50);
+}
+
+/**
+ * 关闭搜索弹窗
+ */
+function closeSearchModal() {
+    if (!els.searchModal) return;
+    els.searchModal.classList.remove('visible');
+    document.body.style.overflow = '';
+    // 关闭所有过滤器下拉
+    closeAllFilterDropdowns();
+    // 恢复焦点到触发元素
+    const prev = state._searchModalPrevFocus;
+    if (prev && document.contains(prev) && typeof prev.focus === 'function') {
+        try { prev.focus(); } catch (e) { /* ignore */ }
+    }
+    state._searchModalPrevFocus = null;
+}
+
+/**
+ * 弹窗输入防抖处理
+ */
+let _searchModalInputTimer = null;
+function handleSearchModalInput() {
+    if (_searchModalInputTimer) clearTimeout(_searchModalInputTimer);
+    _searchModalInputTimer = setTimeout(() => {
+        const kw = els.searchModalInput ? els.searchModalInput.value.trim() : '';
+        state.searchModalKeyword = kw;
+        state.searchModalPage = 1;
+        state.searchModalSelectedIndex = -1;
+        searchModalLoadPage(1, false);
+    }, 200);
+}
+
+/**
+ * 加载弹窗搜索分页
+ */
+async function searchModalLoadPage(page, append) {
+    if (state.searchModalLoading) return;
+    state.searchModalLoading = true;
+    try {
+        const kw = state.searchModalKeyword;
+        // 笔记本过滤(后端 SearchNotes 第 4 个参数 notebookId 支持)
+        const notebookId = state.searchModalNotebookId || 0;
+        let notes = [];
+        let total = 0;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.SearchNotes) {
+            // 后端实际返回: {Items, Total, Page, PageSize}
+            const result = await window.go.main.App.SearchNotes(kw, page, pageSize, notebookId);
+            notes = (result && (result.Notes || result.items)) || [];
+            total = (result && result.Total) || 0;
+        } else {
+            console.warn('SearchNotes 未绑定');
+            notes = [];
+            total = 0;
+        }
+        state.searchModalTotal = total;
+        const loaded = (page - 1) * pageSize + notes.length;
+        state.searchModalHasMore = loaded < total;
+        renderSearchModalResults(notes, append);
+        // 底部状态
+        if (page > 1 && !state.searchModalHasMore) {
+            if (els.searchModalCount) els.searchModalCount.textContent = `共 ${state.searchModalTotal} 条结果`;
+            if (els.searchModalFooter) els.searchModalFooter.style.display = 'block';
+        } else if (notes.length > 0) {
+            if (els.searchModalFooter) els.searchModalFooter.style.display = 'none';
+        }
+        // 空状态
+        if (notes.length === 0 && page === 1) {
+            if (els.searchModalEmpty) {
+                els.searchModalEmpty.style.display = kw ? 'flex' : 'none';
+                if (kw) {
+                    const p = els.searchModalEmpty.querySelector('p');
+                    if (p) p.textContent = `无匹配笔记:「${kw}」`;
+                }
+            }
+        } else {
+            if (els.searchModalEmpty) els.searchModalEmpty.style.display = 'none';
+        }
+    } catch (err) {
+        console.error('[searchModal] load page error:', err);
+    } finally {
+        state.searchModalLoading = false;
+    }
+}
+
+/**
+ * 渲染搜索弹窗结果列表
+ */
+function renderSearchModalResults(notes, append) {
+    if (!append && els.searchModalResults) els.searchModalResults.innerHTML = '';
+    if (!notes || notes.length === 0) return;
+    const kw = state.searchModalKeyword;
+    const fragment = document.createDocumentFragment();
+    notes.forEach((note, idx) => {
+        const item = document.createElement('div');
+        item.className = 'search-modal-item';
+        // 兼容后端大小写(实际为小写,但兼容一下)
+        const noteId = note.id !== undefined ? note.id : note.ID;
+        item.dataset.noteId = String(noteId);
+        // 索引基于已渲染数量(append 模式累加)
+        const itemIdx = els.searchModalResults.children.length + idx;
+        item.dataset.idx = String(itemIdx);
+        // 标题(高亮)
+        const titleEl = document.createElement('div');
+        titleEl.className = 'search-modal-item-title';
+        const titleText = note.title !== undefined ? note.title : (note.Title || '');
+        titleEl.innerHTML = highlightModalMatch(titleText || '(无标题)', kw);
+        item.appendChild(titleEl);
+        // 摘要(从内容截前 100 字)
+        const content = note.content !== undefined ? note.content : (note.Content || '');
+        const snippet = String(content || '').slice(0, 100).replace(/\s+/g, ' ').trim();
+        const snippetEl = document.createElement('div');
+        snippetEl.className = 'search-modal-item-snippet';
+        snippetEl.innerHTML = highlightModalMatch(snippet, kw);
+        item.appendChild(snippetEl);
+        // meta(笔记本名 + 标签)
+        const notebookId = note.notebook_id !== undefined ? note.notebook_id : note.NotebookID;
+        const tags = note.tags || note.Tags || [];
+        if (notebookId || (tags && tags.length)) {
+            const meta = document.createElement('div');
+            meta.className = 'search-modal-item-meta';
+            // 笔记本名
+            if (state.notebooks && state.notebooks.length && notebookId) {
+                const nb = state.notebooks.find(n => n.id === notebookId);
+                if (nb) {
+                    const nbSpan = document.createElement('span');
+                    nbSpan.className = 'search-modal-item-notebook';
+                    nbSpan.textContent = '📓 ' + (nb.name || '');
+                    meta.appendChild(nbSpan);
+                }
+            }
+            // 标签(最多 3 个)
+            if (tags && tags.length) {
+                tags.slice(0, 3).forEach(t => {
+                    const tag = document.createElement('span');
+                    tag.className = 'search-modal-item-tag';
+                    tag.textContent = '#' + (t.name || t.Name || '');
+                    meta.appendChild(tag);
+                });
+            }
+            item.appendChild(meta);
+        }
+        // 点击打开
+        item.addEventListener('click', () => {
+            const id = parseInt(item.dataset.noteId, 10);
+            closeSearchModal();
+            if (typeof openEditor === 'function') {
+                openEditor(id, true); // 弹窗打开的笔记用只读模式(view)
+            } else {
+                window.viewNote(id);
+            }
+        });
+        // hover 选中
+        item.addEventListener('mouseenter', () => {
+            updateSelectedIndex(itemIdx);
+        });
+        fragment.appendChild(item);
+    });
+    els.searchModalResults.appendChild(fragment);
+}
+
+/**
+ * 弹窗内键盘导航与关闭
+ */
+function handleSearchModalKeydown(e) {
+    if (!els.searchModal || !els.searchModal.classList.contains('visible')) return;
+    // 输入框内的输入事件由 input 监听处理,这里只处理功能键
+    const items = els.searchModalResults ? els.searchModalResults.querySelectorAll('.search-modal-item') : [];
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSearchModal();
+        return;
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (items.length === 0) return;
+        const next = state.searchModalSelectedIndex < 0 ? 0 : (state.searchModalSelectedIndex + 1) % items.length;
+        updateSelectedIndex(next);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (items.length === 0) return;
+        const prev = state.searchModalSelectedIndex <= 0 ? items.length - 1 : state.searchModalSelectedIndex - 1;
+        updateSelectedIndex(prev);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const idx = state.searchModalSelectedIndex >= 0 ? state.searchModalSelectedIndex : 0;
+        if (items[idx]) {
+            const noteId = parseInt(items[idx].dataset.noteId, 10);
+            closeSearchModal();
+            if (typeof openEditor === 'function') {
+                openEditor(noteId, true);
+            } else {
+                window.viewNote(noteId);
+            }
+        }
+    }
+}
+
+/**
+ * 更新弹窗内结果项的选中索引
+ */
+function updateSelectedIndex(idx) {
+    if (!els.searchModalResults) return;
+    const items = els.searchModalResults.querySelectorAll('.search-modal-item');
+    items.forEach((el, i) => {
+        el.classList.toggle('selected', i === idx);
+        if (i === idx) {
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    });
+    state.searchModalSelectedIndex = idx;
+}
+
+/**
+ * 渲染笔记本过滤器下拉选项
+ */
+function renderNotebookFilterDropdown() {
+    const dd = els.searchModalNotebookDropdown;
+    if (!dd) return;
+    dd.innerHTML = '';
+    // 全部选项
+    const allOpt = document.createElement('div');
+    allOpt.className = 'search-modal-filter-option' + (state.searchModalNotebookId === 0 ? ' selected' : '');
+    allOpt.textContent = '全部';
+    allOpt.dataset.value = '0';
+    allOpt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.searchModalNotebookId = 0;
+        if (els.searchModalNotebookLabel) els.searchModalNotebookLabel.textContent = '全部';
+        closeAllFilterDropdowns();
+        if (els.searchModalInput) els.searchModalInput.dispatchEvent(new Event('input'));
+    });
+    dd.appendChild(allOpt);
+    if (!state.notebooks || state.notebooks.length === 0) return;
+    state.notebooks.forEach(nb => {
+        const opt = document.createElement('div');
+        opt.className = 'search-modal-filter-option' + (state.searchModalNotebookId === nb.id ? ' selected' : '');
+        opt.textContent = nb.name || '';
+        opt.dataset.value = String(nb.id);
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.searchModalNotebookId = nb.id;
+            if (els.searchModalNotebookLabel) els.searchModalNotebookLabel.textContent = nb.name || '';
+            closeAllFilterDropdowns();
+            if (els.searchModalInput) els.searchModalInput.dispatchEvent(new Event('input'));
+        });
+        dd.appendChild(opt);
+    });
+}
+
+/**
+ * 渲染标签过滤器下拉选项
+ */
+function renderTagFilterDropdown() {
+    const dd = els.searchModalTagDropdown;
+    if (!dd) return;
+    dd.innerHTML = '';
+    if (!state.tags || state.tags.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'search-modal-filter-option';
+        empty.textContent = '(无标签)';
+        empty.style.color = 'var(--text-muted)';
+        empty.style.cursor = 'default';
+        dd.appendChild(empty);
+        return;
+    }
+    // 全部选项
+    const allOpt = document.createElement('div');
+    allOpt.className = 'search-modal-filter-option' + (state.searchModalTagIds.size === 0 ? ' selected' : '');
+    allOpt.textContent = '全部';
+    allOpt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.searchModalTagIds = new Set();
+        if (els.searchModalTagLabel) els.searchModalTagLabel.textContent = '全部';
+        closeAllFilterDropdowns();
+        if (els.searchModalInput) els.searchModalInput.dispatchEvent(new Event('input'));
+    });
+    dd.appendChild(allOpt);
+    state.tags.forEach(tag => {
+        const opt = document.createElement('div');
+        opt.className = 'search-modal-filter-option' + (state.searchModalTagIds.has(tag.id) ? ' selected' : '');
+        opt.textContent = '#' + (tag.name || '');
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (state.searchModalTagIds.has(tag.id)) {
+                state.searchModalTagIds.delete(tag.id);
+            } else {
+                state.searchModalTagIds.add(tag.id);
+            }
+            // 更新 label
+            if (state.searchModalTagIds.size === 0) {
+                if (els.searchModalTagLabel) els.searchModalTagLabel.textContent = '全部';
+            } else if (state.searchModalTagIds.size === 1) {
+                const id = Array.from(state.searchModalTagIds)[0];
+                const t = state.tags.find(x => x.id === id);
+                if (els.searchModalTagLabel) els.searchModalTagLabel.textContent = '#' + (t ? t.name : '');
+            } else {
+                if (els.searchModalTagLabel) els.searchModalTagLabel.textContent = `${state.searchModalTagIds.size} 个标签`;
+            }
+            // 重新渲染以更新 selected 状态
+            renderTagFilterDropdown();
+            closeAllFilterDropdowns();
+            // 标签过滤后端暂不支持(后端 SearchNotes 不接 tags),仅 UI 状态,直接重新搜索
+            if (els.searchModalInput) els.searchModalInput.dispatchEvent(new Event('input'));
+        });
+        dd.appendChild(opt);
+    });
+}
+
+/**
+ * 关闭所有弹窗内的过滤器下拉
+ */
+function closeAllFilterDropdowns() {
+    document.querySelectorAll('.search-modal-filter.open').forEach(el => el.classList.remove('open'));
+}
+
+/**
+ * 初始化搜索弹窗相关事件绑定(在 initEventListeners 末尾调用)
+ */
+function initSearchModalListeners() {
+    if (!els.searchModal) return;
+    // 输入事件(防抖)
+    if (els.searchModalInput) {
+        els.searchModalInput.addEventListener('input', handleSearchModalInput);
+    }
+    // 弹窗内 keydown(在 capture 阶段拦截,避免与全局 handleKeyboardNavigation 冲突)
+    els.searchModal.addEventListener('keydown', handleSearchModalKeydown, true);
+    // 弹窗滚动加载更多
+    if (els.searchModalResults) {
+        els.searchModalResults.addEventListener('scroll', () => {
+            if (!state.searchModalHasMore || state.searchModalLoading) return;
+            const el = els.searchModalResults;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+                state.searchModalPage += 1;
+                searchModalLoadPage(state.searchModalPage, true);
+            }
+        });
+    }
+    // 点击遮罩关闭
+    els.searchModal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('search-modal-mask') || e.target === els.searchModal) {
+            closeSearchModal();
+        }
+    });
+    // 三个过滤器按钮切换下拉
+    [els.searchModalNotebookBtn, els.searchModalTagBtn, els.searchModalDateBtn].forEach((btn) => {
+        if (!btn) return;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const filter = btn.parentElement;
+            if (!filter) return;
+            const wasOpen = filter.classList.contains('open');
+            closeAllFilterDropdowns();
+            if (!wasOpen) filter.classList.add('open');
+        });
+    });
+    // 日期下拉(HTML 已有静态选项)
+    if (els.searchModalDateDropdown) {
+        els.searchModalDateDropdown.querySelectorAll('.search-modal-filter-option').forEach((opt) => {
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const val = opt.dataset.value || 'all';
+                const labelMap = { all: '不限', today: '今天', week: '最近 7 天', month: '最近 30 天' };
+                state.searchModalDateRange = val;
+                if (els.searchModalDateLabel) els.searchModalDateLabel.textContent = labelMap[val] || '不限';
+                closeAllFilterDropdowns();
+                // 日期过滤后端暂不支持(后端 SearchNotes 不接日期),仅 UI,直接重新搜索
+                if (els.searchModalInput) els.searchModalInput.dispatchEvent(new Event('input'));
+            });
+        });
+    }
+    // 点击弹窗其它区域关闭下拉(注:点击 mask/content 都会冒泡到这里)
+    document.addEventListener('click', (e) => {
+        if (!els.searchModal || !els.searchModal.classList.contains('visible')) return;
+        // 点击在 .search-modal-filter 容器内不关闭
+        if (e.target.closest && e.target.closest('.search-modal-filter')) return;
+        closeAllFilterDropdowns();
+    });
 }
 
 /* ===== 初始化 ===== */

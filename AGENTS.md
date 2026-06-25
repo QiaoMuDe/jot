@@ -588,7 +588,11 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 32. **表格复制按钮居中对齐 + 首次渲染同步 + 响应式自适应**：① CSS 改为 `position: absolute; right: 6px; top: 0; transform: none`（之前是 `top: 50% + translateY(-50%)` 相对整个 wrapper 居中），定位上下文改用 JS 精确设置。② JS 在 `wrapper.appendChild(btn)` 后用 `requestAnimationFrame` 测量 `tr:first-child` 相对 wrapper 的偏移，设置 `btn.style.top` 为该行垂直中线（HTML 不允许 button 放在 thead 内，必须跨结构定位）。③ 双重 rAF 兜底（WebView2 中 table 刚渲染时 `getBoundingClientRect()` 可能返回过渡值）。④ `ResizeObserver` 监听 table 尺寸变化，响应式/字体加载/主题切换等场景下自动重定位。⑤ 参考行从 `thead` 改为 `tr:first-child`，兼容没有 thead 标签的退化表格。修复后表格复制按钮稳定显示在表头行（第一行）右侧垂直居中，不依赖 CSS hover 状态。
 33. **查看模式打开 markdown 笔记的同步渲染补全**：查看模式（只读）打开 markdown 笔记时走 `openEditor()` 的同步分支（[main.js:2514-2520](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)），原代码只做了 `marked.parse()` + `hljs.highlightElement()`，漏调 `_applyPreviewDOMHelpers()` → 表格无 wrapper 复制按钮、代码块无 copy-code-btn 和语言标签。用户表现："打开笔记首次不显示，编辑一下内容再切到预览就有"（因为编辑触发 worker 异步渲染，onmessage 回调里调用了 `_applyPreviewDOMHelpers()` 补上）。修复：将 `hljs.highlightElement` 那段替换为 `_applyPreviewDOMHelpers()`（后者内部已包含 hljs 高亮）。
 34. **笔记本名引用统一用「」直角引号**：项目里 3 处动态嵌入用户输入的笔记本名时，统一用「」(U+300C/U+300D，中文直角引号) 当作专名标记符：① [L3650](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 移动笔记成功通知 `已将 N 条笔记移动到「xxx」`；② [L4834](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 删除笔记本确认弹窗 `确定要删除笔记本「xxx」吗?`；③ [L4890](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 笔记本删除/移动/重命名通知 `笔记本「xxx」xxx`。设计意图：把用户输入的专有名词和系统文案清晰区分，长度自适应（无断行问题），风格统一。L2495/L3868 注释里也用「编辑/预览」标记 UI 元素。
-
+35. **topbar/sidebar 极致紧凑化（多轮垂直压缩）**：用户追求「内容区最大化」，经历多轮 topbar/sidebar 高度压缩：56px → 48px → 40px → **36px（当前最终值）**。同步调整 4 处 CSS 数值（`#topbar` 高度 36px / `.sidebar-header` 36px / `.editor-overlay.fullscreening` top 36px / `.editor-panel.fullscreen` height calc(100vh - 36px)）+ 注释中「高度与 topbar 对齐」同步更新。按钮 34×34 上下各 1px 留白。再压需要缩按钮尺寸。
+36. **编辑模式 footer 紧凑化**：`.editor-footer` 原本 padding `12px 24px`（高约 50px）压缩到 `6px 24px`，且 `.editor-footer-btns .btn` 单独覆盖 `padding: 5px 14px; font-size: 0.75rem`（继承自全局 `.btn { padding: 8px 20px; font-size: 0.813rem }`，因为该位置按钮不能太大）。`.editor-body` 同步 `padding: 0 24px 8px` → `0 8px 8px`（节省 16px 水平 padding，文本区向右扩展）。3 处配合后编辑模式 footer 高度从 ~50px 降到 ~30px。
+37. **编辑器顶部 header/标题/标签激进压缩**：激进压缩策略（合计省 38px）：① `.editor-header` padding-top 12→4px（省 8px）；② `.editor-input` 标题 padding 8px 0→2px 0（省 12px）；③ `.editor-section` 标签区 margin-bottom 24→6px（最初压到 6px）。3 种模式（编辑/新建/查看）都生效，markdown 笔记的 preview 模式多获得近 1 行文本高度。
+38. **标签-正文间距精细调整**：激进压缩后标签底部 margin 6px 显得过贴，根据用户反馈微调到 12px。**这是一个非对称设计点**：用户既要「内容区最大化」又希望「标签和正文之间有呼吸感」，最终值 12px 平衡了两者诉求（比起原始 24px 仍省 12px）。
+39. **CodeMirror 滚动条精细化**：`.cm-scroller` 加 `padding-right: 1px; padding-bottom: 1px`（最初 2px，压缩到 1px 几乎贴边）。同时给 `::-webkit-scrollbar` 补 `height: 6px`（之前只设了 width，水平滚动条默认 0 高度不可见）→ 水平滚动条首次可见。**WebView2 滚动条贴边问题**：`.editor-body` 的 `padding-right` 24px 会让滚动条距 editor-panel 右边缘 24px，循环迭代压缩 24→16→8px（最终值），让滚动条贴近 panel 右边 8px（1px 间隙 + 6px 滚动条 + 1px 间隙）。该值与文本区横向扩展空间直接 trade-off。
 
 ---
 
@@ -801,7 +805,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 已完成项目记忆更新（2026-06-25），本次更新内容：① 第三方按钮"不保存"状态污染修复 ② 表格复制按钮居中对齐 + JS 精确定位 + 响应式 ③ 查看模式 markdown 笔记首次渲染补全 ④ 笔记本名「」统一标记风格记录。后续可基于此报告回答项目相关问题。
+> **报告结束** | 已完成项目记忆更新（2026-06-25），本次更新内容：① 第三方按钮"不保存"状态污染修复 ② 表格复制按钮居中对齐 + JS 精确定位 + 响应式 ③ 查看模式 markdown 笔记首次渲染补全 ④ 笔记本名「」统一标记风格记录 ⑤ topbar/sidebar 多轮压缩 56→36px ⑥ 编辑器 footer 紧凑化 + body padding 24→8px ⑦ 编辑器 header/标题/标签激进压缩省 38px ⑧ CodeMirror 滚动条 1px 间隙 + 水平滚动条 height 6px ⑨ Ctrl+F 智能切换 + 搜索弹窗迁移（详见 `.trae/specs/move-search-to-modal/`）。后续可基于此报告回答项目相关问题。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -812,6 +816,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **CM6 Theme** | `EditorView.theme()` 引用 CSS 变量（`--accent`、`--bg`、`--text-primary`、`--font-family` 等），无需编译时主题同步，运行时 CSS 变量变化自动反映 |
 | **CM6 只读模式** | `EditorState.readOnly.of(true)` 配置，查看笔记时 CM6 不可编辑但可选中/滚动/搜索 |
 | **CM6 搜索** | 使用 `openSearchPanel` + `setSearchQuery` + `SearchQuery`。Ctrl+F 选中内容自动填充搜索面板。预览模式 Ctrl+F 切回编辑模式搜索，Ctrl+H 仅在编辑模式生效 |
+| **Ctrl+F 智能切换 + 弹窗迁移** | 编辑器关闭时按 Ctrl+F 唤起 `#searchModal` 搜索弹窗（替代原 topbar 搜索框），编辑器打开时按 Ctrl+F 唤起 CM6 内置 search panel。弹窗用 `state._searchModalPrevFocus` 记录打开前焦点、`document.body.style.overflow = 'hidden'` 锁滚动。`highlightMatch` 已被 font-search 占用（行 1324），弹窗专用 `highlightModalMatch` 独立命名。`SearchNotes` 后端仅支持 notebookId 过滤，标签/日期范围仅前端 UI 状态（待后端扩展）。详见 `.trae/specs/move-search-to-modal/` |
 | **CM6 快捷键重构** | 删除旧 FindReplaceManager 的 `[`/`]` 匹配导航。Ctrl+Z/Y 由 historyKeymap 原生处理。Ctrl+F/H 由文档级 `handleKeyboardNavigation` 统一调度 |
 | **CM6 初始化时序** | 初始文本内容通过 `editorContent` 变量暂存，无需等待 CM6 实例化。查看模式 Markdown 笔记直接由 `marked.parse(editorContent)` 渲染预览，CM6 就绪后无感刷新 |
 | **CM6 异步初始化修复** | 查看模式预览渲染先由 `editorContent` 字符串直接渲染（不依赖 CM6），CM6 初始化完成后若处于预览模式则二次刷新。已删除旧 320ms setTimeout 延迟，CM6 在面板动画启动前同步初始化 |
