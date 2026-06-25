@@ -6,7 +6,7 @@
    ========================================================================== */
 
 #topbar {
-  height: 56px;
+  height: 48px;
   background: var(--topbar-bg);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -934,7 +934,7 @@ button :only-child:is(svg) {
 }
 
 .editor-overlay.fullscreening {
-  top: 56px;
+  top: 48px;
   backdrop-filter: blur(10px);
   background: rgba(0, 0, 0, 0.6);
 }
@@ -980,7 +980,7 @@ button :only-child:is(svg) {
 .editor-panel.fullscreen {
   width: 100vw;
   max-width: none;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 48px);
   max-height: none;
   border-radius: 0;
   box-shadow: none;
@@ -3466,14 +3466,14 @@ button :only-child:is(svg) {
   border-right: none;
 }
 
-/* 侧栏头部 — 高度与 topbar 对齐（56px） */
+/* 侧栏头部 — 高度与 topbar 对齐（48px） */
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 10px 0 14px;
   flex-shrink: 0;
-  height: 56px;
+  height: 48px;
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
 }
