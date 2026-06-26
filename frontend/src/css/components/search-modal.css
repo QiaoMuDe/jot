@@ -48,7 +48,7 @@
     width: min(560px, calc(100vw - 48px));
     max-height: 70vh;
     background: var(--card-bg);
-    border-radius: 20px;
+    border-radius: 12px;
     box-shadow: var(--shadow-xl);
     display: flex;
     flex-direction: column;
@@ -255,7 +255,8 @@
 .search-modal-results {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 12px;
+    overflow-x: hidden;
+    padding: 8px 12px 20px;
     min-height: 80px;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
