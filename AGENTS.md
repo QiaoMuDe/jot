@@ -37,8 +37,8 @@ jot/                                    # 项目根目录
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑 ~6303 行（含 CM6 集成 + 搜索弹窗 + MD 语法页面）
-│   │   ├── style.css                   # 组件样式 ~4925 行（含 CM6 主题/语法高亮 + MD 语法卡片样式）
-│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~651 行）
+│   │   ├── style.css                   # 组件样式 ~4990 行（含 CM6 主题/语法高亮 + MD 语法卡片样式 + 统一滚动条）
+│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~697 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -101,8 +101,9 @@ jot/                                    # 项目根目录
     ├── remove-auto-save-draft/       # 移除草稿自动保存
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
     ├── restructure-internal-packages/ # 内部包重构
-    ├── simplify-date-filter/         # 时间筛选简化（日历→下拉菜单）
+    ├── simplicity-date-filter/         # 时间筛选简化（日历→下拉菜单）
     ├── skip-quicknote-animation-on-start/ # 快速笔记启动跳过动画
+    ├── unify-app-scrollbars/           # 统一应用滚动条样式（已完成）
     └── unify-notification-system/    # 统一通知系统
 ```
 
@@ -576,6 +577,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 46. **MD 语法手册页面**：更多菜单新增「MD 语法」页面（Ctrl+8 访问），展示 10 张 MD 语法卡片（标题/文本样式/链接与图片/列表/引用与代码块/表格/任务列表/分割线/转义字符），每张卡片左侧语法源码 + 右侧渲染预览双栏对照布局。使用 `marked.parse()` + `highlight.js` 在页面渲染时同步完成预览渲染（非 Worker）。预览区域与设置页/数据管理一致的主题跟随（CSS 变量联动）。10 个 `.md-ref-source` 脚本标签存储源码，10 个 `.md-ref-preview` 容器通过 `data-ref` 索引映射渲染结果。
 47. **「打开编辑器试试」按钮**：每张 MD 语法卡片底部添加 `.md-ref-try-btn` 按钮，点击后自动创建新笔记并预填标题（`[MD 语法] xxx`）和源码内容到编辑器。`openMdRefTryEditor()` 函数处理：`switchView('grid')` → `await openEditor(null)` 等待 cmEditor 初始化 → `setEditorContent(decoded)` 写入内容 → `state.noteType = 'markdown'` 设为 MD 模式 → 更新类型切换按钮/编辑预览切换/工具栏显隐。HTML 实体解码处理 `&gt;`/`&lt;`/`&amp;`/`&quot;`/`&#39;`。
 48. **MD 语法页面全主题适配**：所有 MD 语法卡片颜色从硬编码改为 `var(--xxx)` 主题变量：源码面板背景 `var(--bg-secondary)`、预览面板背景 `var(--card-bg)`、代码块字体 `var(--font-family)`、复制按钮背景 `var(--card-bg)`/边框 `var(--border)`、引用块底色 `var(--hover-bg)`、表格边框 `var(--border)`、标签 `var(--accent)` 配色。6 套主题（default/nord/monokai-pro/light/tokyo-night/dark）均自动适配。
+49. **统一应用滚动条样式**：所有可滚动区域使用统一的 6px 细滚动条样式，颜色通过 `--scrollbar-thumb` / `--scrollbar-thumb-hover` CSS 变量跟随 6 套主题联动。覆盖区域：主内容区 (`#mainContent`)、CM6 编辑器 (`cm-scroller`)、Markdown 预览 (`md-rendered`)、侧栏笔记本列表 (`sidebar-notebook-list`)、字体下拉 (`font-family-options`)、移动笔记本弹窗 (`move-notebook-body`)、搜索过滤器下拉 (`search-modal-filter-dropdown`)、快捷键弹窗 (`shortcuts-body`)、搜索模式结果 (`search-modal-results`)、批量标签弹窗 (`batch-tag-body`)、MD 语法面板 (`md-ref-source-panel pre` / `md-ref-preview-panel .md-ref-preview`)。全局隐藏滚动条上下箭头按钮。各主题变量值：浅色主题 `rgba(0,0,0,0.32~0.35)` / hover `0.50~0.55`；深色主题 `rgba(255,255,255,0.35)` / hover `0.55`。详见 `.trae/specs/unify-app-scrollbars/`。
 
 ---
 
@@ -658,6 +660,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **笔记本笔记隔离**：所有查询按 `activeNotebookId` 过滤，`selectAllIds` 使用 `GetNoteIDsByNotebook`。badge 在 6 种笔记操作后自动同步更新
 - ✅ **切换笔记本回首页**：`switchNotebook()` 强制 `switchView('grid')` 回到当前笔记本笔记首页
 - ✅ **笔记本侧栏折叠动画优化**：`white-space: nowrap` + `overflow: hidden` 防按钮文字折叠时竖排换行
+- ✅ **统一应用滚动条样式**：所有可滚动区域 6px 细条 + `--scrollbar-thumb` 主题变量联动 + 全局隐藏箭头按钮
 - ✅ **笔记跨笔记本迁移**：右键菜单「移动到...」+ 批量工具栏「移动到」，弹出笔记本选择器弹窗（radio 列表 + badge 计数 + 弹簧动画），迁移后自动刷新列表和 badge 计数
 - ✅ **笔记本数统计卡片**：数据管理页第 5 张统计卡片（`statTotalNotebooks`），`DataStats` 新增 `total_notebooks` 字段，后端 COUNT + 前端 count-up 动画
 - ✅ **切换笔记本退出批量模式**：`switchNotebook()` 中检测 `state.batchMode`，自动调用 `toggleBatchMode()` 清空选中，防止跨笔记本残留选中
@@ -701,7 +704,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 9 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
-| **前端代码量** | ~6303 行 JS + ~4925 行 CSS + ~651 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~6303 行 JS + ~4990 行 CSS + ~697 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -749,7 +752,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **编辑器滚动结构** | `.editor-panel` 固定 `height: 85vh`，`.editor-body` 做 flex 布局分配（无滚动），`.editor-textarea` 设为 `flex:1; overflow-y:auto` 独占滚动。textarea 不自带滚动高度（无 `rows`/`min-height` 限制，用 `flex:1; min-height:0` 填满空间）。Editor scrollbar 6px 半透明灰独立主题色 |
 | **悬浮按钮 FAB** | 右下角 `position: fixed`，z-index:100。`+`（`#fabNewNote`）始终可见，accent 圆底白字 44px；`↑`（`#backToTopBtn`）默认隐藏，主内容 scrollTop>300 淡入。hover scale(1.08)，active scale(0.95)。距右下角 28px，间距 12px，`+` 在下 |
 | **右键菜单滚动锁定** | `showContextMenu` 设 `#mainContent overflow:hidden`，`hideContextMenu` 清空还原。配合 `scrollbar-gutter: stable` 防止宽度抖动 |
-| **主内容区滚动条** | 滚动时显示 `var(--scrollbar-thumb)`，停止 1s 后淡出（`.scrolling` 类 0.3s transition）。6 主题独立配色（default `rgba(0,0,0,0.18)`、nord `rgba(46,52,64,0.20)`、monokai-pro `rgba(255,97,136,0.25)`、light `rgba(0,0,0,0.14)`、tokyo-night `rgba(122,162,247,0.25)`、dark `rgba(255,255,255,0.18)`），hover 加深。8px 宽，track 极淡底色 |
+| **主内容区滚动条** | 统一 6px 细滚动条样式，所有可滚动区域使用 `--scrollbar-thumb` / `--scrollbar-thumb-hover` CSS 变量跟随主题。主内容区滚动时显示滑块、停止 1s 后淡出（`.scrolling` 类 0.3s transition）。全局隐藏上下箭头按钮。Firefox 使用 `scrollbar-width: thin` + `scrollbar-color` 兼容 |
 | **标签重名提示** | 设置页添加标签时，先在前端 `state.tags` 中查重，已存在则弹出 Toast「该标签已存在」3s 自动消失 |
 | **快速笔记模式** | 设置页「快速笔记」iOS 风格开关（`.toggle-switch`），持久化到 Setting `quick_note_enabled`。`init()` 最后调用 `loadQuickNoteSetting()`，启用时直接 `openEditor(null, false, true)`（以全屏尺寸一步打开，不经过悬浮卡片态）；关闭编辑器时 `closeEditor()` 自动退出全屏恢复网格视图 |
 | **Markdown 渲染查看** | 查看模式（只读）将 textarea 替换为 `.md-rendered` div，使用 `marked` 渲染 Markdown 为 HTML。代码块通过 `highlight.js` 全量导入（197 种语言自动注册，`import hljs from 'highlight.js'`）着色。npm 本地安装（无 CDN），Vite 打包内联。编辑模式 textarea 不变。`.md-rendered` 样式覆盖 h1-h6/列表/引用/代码块/表格/图片/链接，6 主题适配。`.md-rendered` 滚动条隐藏（`::-webkit-scrollbar { display: none }`），内边距 `0.5em 1rem 1rem 1.5em` |
@@ -795,7 +798,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 新增 MD 语法手册页面（10 张卡片源码+预览双栏对照、Ctrl+8 访问页面），详见 `.trae/specs/add-md-reference-page/`。② 新增「打开编辑器试试」按钮（每张卡片底部，点击自动创建 MD 笔记预填标题和源码内容），修复 async/await 时序和 noteType 覆盖问题，详见 `.trae/specs/add-md-ref-try-button/`。③ MD 语法页面全主题适配（6 套主题全部自动适配），代码块字体跟随全局字体设置。④ Seed 工具增强（笔记 22→38 条，笔记本 5→6，标签 5→7，每条带完整 Markdown 正文，时间跨度 30 天）。
+> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 新增 MD 语法手册页面（10 张卡片源码+预览双栏对照、Ctrl+8 访问页面），详见 `.trae/specs/add-md-reference-page/`。② 新增「打开编辑器试试」按钮（每张卡片底部，点击自动创建 MD 笔记预填标题和源码内容），修复 async/await 时序和 noteType 覆盖问题，详见 `.trae/specs/add-md-ref-try-button/`。③ MD 语法页面全主题适配（6 套主题全部自动适配），代码块字体跟随全局字体设置。④ Seed 工具增强（笔记 22→38 条，笔记本 5→6，标签 5→7，每条带完整 Markdown 正文，时间跨度 30 天）。⑤ 统一应用滚动条样式（所有可滚动区域 6px 细条 + 主题变量联动 + 隐藏箭头按钮），详见 `.trae/specs/unify-app-scrollbars/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 

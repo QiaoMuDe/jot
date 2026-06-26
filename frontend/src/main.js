@@ -4607,15 +4607,10 @@ function renderShortcutsPage() {
 
 /* ===== MD 语法手册渲染 ===== */
 
-let _mdRefRendered = false;
-
 /**
- * 渲染 MD 语法手册中的预览卡片
+ * 渲染 MD 语法手册中的预览卡片（每次进入视图都重新渲染）
  */
 function renderMdRefCards() {
-    if (_mdRefRendered) return;
-    _mdRefRendered = true;
-
     document.querySelectorAll('.md-ref-card').forEach((card) => {
         const script = card.querySelector('.md-ref-source');
         const preview = card.querySelector('.md-ref-preview');
@@ -4633,32 +4628,34 @@ function renderMdRefCards() {
         });
     });
 
+    // 绑定复制按钮
+    setupRefCopyButtons();
     // 绑定「打开编辑器试试」按钮
     setupMdRefTryButtons();
 }
 
 /**
- * 为语法手册中的源码块添加复制按钮
+ * 为语法手册卡片标题栏的复制按钮绑定事件
  */
 function setupRefCopyButtons() {
-    document.querySelectorAll('.md-ref-source-panel pre').forEach(pre => {
-        // 避免重复添加
-        if (pre.querySelector('.md-ref-copy-btn')) return;
-
-        const btn = document.createElement('button');
-        btn.className = 'md-ref-copy-btn';
-        btn.textContent = '复制';
+    document.querySelectorAll('.md-ref-editor-copy-btn').forEach(btn => {
+        // 避免重复绑定
+        if (btn._copyBound) return;
+        btn._copyBound = true;
 
         btn.addEventListener('click', () => {
-            const code = pre.querySelector('code');
+            const panel = btn.closest('.md-ref-source-panel');
+            if (!panel) return;
+            const code = panel.querySelector('pre code');
             if (!code) return;
 
             const text = code.textContent;
             navigator.clipboard.writeText(text).then(() => {
+                const origText = btn.textContent;
                 btn.textContent = '已复制 ✓';
                 btn.classList.add('copied');
                 setTimeout(() => {
-                    btn.textContent = '复制';
+                    btn.textContent = origText;
                     btn.classList.remove('copied');
                 }, 500);
             }).catch(() => {
@@ -4666,8 +4663,6 @@ function setupRefCopyButtons() {
                 setTimeout(() => { btn.textContent = '复制'; }, 1000);
             });
         });
-
-        pre.appendChild(btn);
     });
 }
 
@@ -4675,12 +4670,13 @@ function setupRefCopyButtons() {
  * 为语法手册卡片绑定「打开编辑器试试」按钮
  */
 function setupMdRefTryButtons() {
-    document.querySelectorAll('.md-ref-try-btn').forEach((btn) => {
-        // 防重复绑定
-        if (btn._mdRefTryBound) return;
-        btn._mdRefTryBound = true;
+    document.querySelectorAll('.md-ref-try-btn').forEach(btn => {
+        // 移除旧的监听器（如果有）
+        if (btn._mdRefTryBound) {
+            btn.removeEventListener('click', btn._mdRefTryHandler);
+        }
 
-        btn.addEventListener('click', () => {
+        const handler = () => {
             const card = btn.closest('.md-ref-card');
             if (!card) return;
 
@@ -4692,7 +4688,11 @@ function setupMdRefTryButtons() {
             const badgeText = badge ? badge.textContent.trim() : '示例';
 
             openMdRefTryEditor(rawSource, badgeText);
-        });
+        };
+
+        btn._mdRefTryHandler = handler;
+        btn._mdRefTryBound = true;
+        btn.addEventListener('click', handler);
     });
 }
 

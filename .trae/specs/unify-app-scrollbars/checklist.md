@@ -1,0 +1,13 @@
+- [x] 各主题 `--scrollbar-thumb` / `--scrollbar-thumb-hover` 变量值已按 spec 提高可见度
+- [x] 全局 `::-webkit-scrollbar` 宽度为 6px，圆角 3px
+- [x] CM6 scroller 滚动条颜色使用 `var(--scrollbar-thumb)` / `var(--scrollbar-thumb-hover)`
+- [x] `.md-rendered` 预览滚动条颜色使用 `var(--scrollbar-thumb)` / `var(--scrollbar-thumb-hover)`
+- [x] `.sidebar-notebook-list` 侧栏滚动条 6px + 变量
+- [x] `.font-family-options` 字体下拉滚动条使用变量
+- [x] `.move-notebook-body` 移动弹窗滚动条使用变量
+- [x] `.search-modal-filter-dropdown` 搜索过滤器下拉滚动条使用变量
+- [x] `.shortcuts-body` 快捷键弹窗有统一滚动条样式
+- [x] `.search-modal-results` 搜索模式结果有统一滚动条样式
+- [x] `.batch-tag-body` 批量标签弹窗有统一滚动条样式
+- [x] MD 语法手册面板内滚动条使用 CSS 变量
+- [x] 构建通过（`npm run build` exit code 0）

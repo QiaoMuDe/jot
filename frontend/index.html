@@ -535,12 +535,22 @@
                 <div class="view-controls"></div>
             </div>
             <div class="md-ref-content" id="mdRefContent">
-                <!-- 语法卡片 1: 标题 -->
+                <!-- 卡片 1: 标题 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge"># 标题 (Headings)</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">⌗ 标题 (Headings)</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">headings.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code># 一级标题
 ## 二级标题
 ### 三级标题
@@ -549,26 +559,37 @@
 ###### 六级标题</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="0"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">使用 <kbd>Ctrl+1</kbd> ~ <kbd>Ctrl+6</kbd> 也可在编辑器中快速插入</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">使用 <kbd>Ctrl+1</kbd> ~ <kbd>Ctrl+6</kbd> 也可在编辑器中快速插入</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source"># 一级标题
 ## 二级标题
 ### 三级标题
 #### 四级标题
 ##### 五级标题
 ###### 六级标题</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 2: 文本样式 -->
+                <!-- 卡片 2: 文本样式 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">B 文本样式</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">𝐁 文本样式</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">text-styles.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>**加粗文本**
 *斜体文本*
 ~~删除线文本~~
@@ -576,47 +597,69 @@
 ***加粗斜体***</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="1"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">快捷键：<kbd>Ctrl+B</kbd> 加粗 · <kbd>Ctrl+I</kbd> 斜体 · <kbd>Ctrl+U</kbd> 删除线</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">快捷键：<kbd>Ctrl+B</kbd> 加粗 · <kbd>Ctrl+I</kbd> 斜体 · <kbd>Ctrl+U</kbd> 删除线</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">**加粗文本**
 *斜体文本*
 ~~删除线文本~~
 `行内代码`
 ***加粗斜体***</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 3: 链接与图片 -->
+                <!-- 卡片 3: 链接与图片 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">🔗 链接与图片</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">🔗 链接与图片</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">links-images.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>[访问 Jot 主页](https://example.com)
 [带标题的链接](https://example.com "点击访问")
 ![替代文本](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=A+peaceful+mountain+landscape+with+a+lake+at+sunset+vivid+colors+realistic+photography&image_size=landscape_16_9)</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="2"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">图片支持本地路径和网络链接，拖动图片到编辑器也可自动插入</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">图片支持本地路径和网络链接，拖动图片到编辑器也可自动插入</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">[访问 Jot 主页](https://example.com)
 [带标题的链接](https://example.com "点击访问")
 ![替代文本](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=A+peaceful+mountain+landscape+with+a+lake+at+sunset+vivid+colors+realistic+photography&image_size=landscape_16_9)</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 4: 列表 -->
+                <!-- 卡片 4: 列表 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">📋 列表</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">📋 列表</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">lists.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>- 无序列表项
 - 嵌套列表项
   - 子项 1
@@ -627,11 +670,13 @@
 3. 第三步</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="3"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">列表支持最多 3 层嵌套，使用 2 个空格缩进</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">列表支持最多 3 层嵌套，使用 2 个空格缩进</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">- 无序列表项
 - 嵌套列表项
   - 子项 1
@@ -640,15 +685,24 @@
 1. 有序列表项
 2. 第二步
 3. 第三步</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 5: 代码块 -->
+                <!-- 卡片 5: 代码块 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">💻 代码块</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">💻 代码块</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">code-blocks.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>```javascript
 function greet(name) {
     return `Hello, ${name}!`;
@@ -663,11 +717,13 @@ console.log(greet("Jot"));
 }</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="4"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">在开头的 <kbd>```</kbd> 后指定语言名称可启用语法高亮</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">在开头的 <kbd>```</kbd> 后指定语言名称可启用语法高亮</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">~~~javascript
 function greet(name) {
     return `Hello, ${name}!`;
@@ -680,15 +736,24 @@ console.log(greet("Jot"));
     background: #fff;
     border-radius: 8px;
 }</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 6: 引用 -->
+                <!-- 卡片 6: 引用 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">💬 引用</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">💬 引用</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">blockquotes.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>&gt; 这是一段引用文本。
 &gt; 多行引用可以这样写。
 
@@ -699,11 +764,13 @@ console.log(greet("Jot"));
 &gt; **引用内也支持** `其他` *语法*</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="5"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">使用 <kbd>&gt;</kbd> 符号创建引用块，可多层嵌套</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">使用 <kbd>&gt;</kbd> 符号创建引用块，可多层嵌套</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">&gt; 这是一段引用文本。
 &gt; 多行引用可以这样写。
 
@@ -712,15 +779,24 @@ console.log(greet("Jot"));
 &gt;&gt;&gt; 第三层引用
 
 &gt; **引用内也支持** `其他` *语法*</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 7: 表格 -->
+                <!-- 卡片 7: 表格 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">📊 表格</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">📊 表格</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">tables.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>| 名称 | 价格 | 数量 |
 |------|------|------|
 | 苹果 | 5.00 | 10   |
@@ -728,49 +804,71 @@ console.log(greet("Jot"));
 | 橙子 | 4.00 | 12   |</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="6"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">对齐方式：<kbd>:---</kbd> 左对齐 · <kbd>---:</kbd> 右对齐 · <kbd>:---:</kbd> 居中</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">对齐方式：<kbd>:---</kbd> 左对齐 · <kbd>---:</kbd> 右对齐 · <kbd>:---:</kbd> 居中</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">| 名称 | 价格 | 数量 |
 |------|------|------|
 | 苹果 | 5.00 | 10   |
 | 香蕉 | 3.50 | 8    |
 | 橙子 | 4.00 | 12   |</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 8: 任务列表 -->
+                <!-- 卡片 8: 任务列表 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">✅ 任务列表</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">✅ 任务列表</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">task-lists.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>- [x] 已完成的任务
 - [ ] 待办任务
 - [ ] 另一个待办
   - [x] 子任务已完成</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="7"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">在列表项中使用 <kbd>[x]</kbd> 标记完成，<kbd>[ ]</kbd> 标记待办</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">在列表项中使用 <kbd>[x]</kbd> 标记完成，<kbd>[ ]</kbd> 标记待办</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">- [x] 已完成的任务
 - [ ] 待办任务
 - [ ] 另一个待办
   - [x] 子任务已完成</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 9: 分割线 -->
+                <!-- 卡片 9: 分割线 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">➖ 分割线</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">➖ 分割线</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">horizontal-rules.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>上方的文字
 
 ---
@@ -778,41 +876,53 @@ console.log(greet("Jot"));
 下方的文字</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="8"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote"><kbd>---</kbd> · <kbd>***</kbd> · <kbd>___</kbd> 三种写法效果相同</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote"><kbd>---</kbd> · <kbd>***</kbd> · <kbd>___</kbd> 三种写法效果相同</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">上方的文字
 
 ---
 
 下方的文字</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
 
-                <!-- 语法卡片 10: 转义字符 -->
+                <!-- 卡片 10: 转义字符 -->
                 <div class="md-ref-card">
-                    <div class="md-ref-badge">\ 转义字符</div>
-                    <div class="md-ref-panel">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">\ 转义字符</span>
+                    </div>
+                    <div class="md-ref-card-body">
                         <div class="md-ref-source-panel">
-                            <div class="md-ref-panel-label">语法</div>
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">escape-chars.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
                             <pre><code>\# 这不是标题，只是普通文字
 \* 这不是列表项
 \[这不是链接\](不会跳转)
 \~\~这不是删除线\~\~</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-panel-label">效果</div>
                             <div class="md-ref-preview" data-ref="9"></div>
                         </div>
                     </div>
-                    <div class="md-ref-card-footnote">在特殊字符前加反斜杠 <kbd>\</kbd> 即可按原样显示</div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">在特殊字符前加反斜杠 <kbd>\</kbd> 即可按原样显示</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
                     <script type="text/plain" class="md-ref-source">\# 这不是标题，只是普通文字
 \* 这不是列表项
 \[这不是链接\](不会跳转)
 \~\~这不是删除线\~\~</script>
-                    <button class="md-ref-try-btn">打开编辑器试试 ›</button>
                 </div>
             </div>
         </div>

@@ -81,8 +81,8 @@
     --overlay-bg: rgba(45, 42, 36, 0.4);
     --toast-bg: #2D2A24;
     --toast-text: #F7F5F0;
-    --scrollbar-thumb: rgba(0, 0, 0, 0.18);
-    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
+    --scrollbar-thumb: rgba(0, 0, 0, 0.35);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.55);
     --scrollbar-track: rgba(0, 0, 0, 0.04);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
@@ -137,8 +137,8 @@
     --success-bg: #F0FDF4;
     --success-border: #BBF7D0;
     --success-text: #166534;
-    --scrollbar-thumb: rgba(0, 0, 0, 0.14);
-    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.26);
+    --scrollbar-thumb: rgba(0, 0, 0, 0.32);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.50);
     --scrollbar-track: rgba(0, 0, 0, 0.03);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
@@ -193,8 +193,8 @@
     --success-bg: rgba(52, 211, 153, 0.1);
     --success-border: rgba(52, 211, 153, 0.25);
     --success-text: #6EE7B7;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.35);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.55);
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
@@ -249,8 +249,8 @@
     --success-bg: #ECFDF5;
     --success-border: #A7F3D0;
     --success-text: #065F46;
-    --scrollbar-thumb: rgba(0, 0, 0, 0.14);
-    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.26);
+    --scrollbar-thumb: rgba(0, 0, 0, 0.32);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.50);
     --scrollbar-track: rgba(0, 0, 0, 0.03);
     --tag-delete-bg: rgba(0, 0, 0, 0.2);
     --tag-delete-hover-bg: rgba(0, 0, 0, 0.4);
@@ -305,8 +305,8 @@
     --success-bg: rgba(169, 219, 113, 0.1);
     --success-border: rgba(169, 219, 113, 0.25);
     --success-text: #A9DB71;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.35);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.55);
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
@@ -361,8 +361,8 @@
     --success-bg: rgba(158, 206, 106, 0.1);
     --success-border: rgba(158, 206, 106, 0.25);
     --success-text: #9ECE6A;
-    --scrollbar-thumb: rgba(255, 255, 255, 0.18);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.35);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.55);
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
@@ -430,8 +430,8 @@ body {
 
 /* WebKit (Chrome / Edge / WebView2) */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -439,11 +439,28 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 ::-webkit-scrollbar-corner {
     background: transparent;
+}
+
+::-webkit-scrollbar-button {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* 主内容区等特定容器：再强化一层防止 WebView2 绘制按钮 */
+#mainContent::-webkit-scrollbar-button,
+.search-results::-webkit-scrollbar-button,
+.data-content::-webkit-scrollbar-button,
+.search-modal-results::-webkit-scrollbar-button,
+.search-modal-filter-dropdown::-webkit-scrollbar-button {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
 }
 
 /* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
