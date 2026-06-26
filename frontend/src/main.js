@@ -432,6 +432,7 @@ const els = {
     viewSettings: $('viewSettings'),
     viewData: $('viewData'),
     viewTrash: $('viewTrash'),
+    viewMdRef: $('viewMdRef'),
     viewEditor: $('viewEditor'),
     editorPanel: $('editorPanel'),
 
@@ -505,6 +506,7 @@ const els = {
     trashList: $('trashList'),
     trashListInner: $('trashListInner'),
     trashBackBtn: $('trashBackBtn'),
+    mdRefBackBtn: $('mdRefBackBtn'),
     restoreAllBtn: $('restoreAllBtn'),
     emptyTrashBtn: $('emptyTrashBtn'),
 
@@ -679,6 +681,7 @@ function switchView(view) {
         settings: els.viewSettings,
         data: els.viewData,
         trash: els.viewTrash,
+        'md-ref': els.viewMdRef,
     };
     const targetView = viewMap[view];
     if (!targetView || _viewAnimating) return;
@@ -688,10 +691,7 @@ function switchView(view) {
 
     // 切换视图时强制退出批量模式
     if (state.batchMode) {
-        state.batchMode = false;
-        els.batchModeBtn.classList.remove('active');
-        state.selectedNoteIds.clear();
-        els.batchBar.style.display = 'none';
+        toggleBatchMode();
     }
 
     state.currentView = view;
@@ -725,6 +725,9 @@ function switchView(view) {
                 break;
             case 'trash':
                 loadTrashNotes();
+                break;
+            case 'md-ref':
+                try { renderMdRefCards(); } catch (e) { console.warn('MD 语法手册渲染失败:', e); }
                 break;
         }
 
@@ -3837,6 +3840,8 @@ function initEventListeners() {
             } else if (item.dataset.action === 'trash') {
                 switchView('trash');
                 loadTrashNotes();
+            } else if (item.dataset.action === 'md-ref') {
+                switchView('md-ref');
             } else if (item.dataset.action === 'help') {
                 openShortcuts();
             }
@@ -3961,6 +3966,10 @@ function initEventListeners() {
     els.restoreBtn?.addEventListener('click', restoreFromDir);
     els.resetAllBtn.addEventListener('click', resetDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
+
+    els.mdRefBackBtn.addEventListener('click', () => {
+        switchView('grid');
+    });
 
     els.settingsBackBtn.addEventListener('click', () => {
         switchView('grid');
@@ -4359,6 +4368,10 @@ async function handleKeyboardNavigation(e) {
                 e.preventDefault();
                 openShortcuts();
                 return;
+            case '8':
+                e.preventDefault();
+                switchView('md-ref');
+                return;
         }
     }
 
@@ -4582,6 +4595,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 5', desc: '回收站' },
         { key: 'Ctrl + 6', desc: '设置' },
         { key: 'Ctrl + 7', desc: '快捷键说明' },
+        { key: 'Ctrl + 8', desc: 'MD 语法' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
@@ -4589,6 +4603,136 @@ function renderShortcutsPage() {
             <div class="shortcut-desc">${s.desc}</div>
         </div>
     `).join('');
+}
+
+/* ===== MD 语法手册渲染 ===== */
+
+let _mdRefRendered = false;
+
+/**
+ * 渲染 MD 语法手册中的预览卡片
+ */
+function renderMdRefCards() {
+    if (_mdRefRendered) return;
+    _mdRefRendered = true;
+
+    document.querySelectorAll('.md-ref-card').forEach((card) => {
+        const script = card.querySelector('.md-ref-source');
+        const preview = card.querySelector('.md-ref-preview');
+        if (!script || !preview) return;
+
+        const source = script.textContent.trim();
+        if (!source) return;
+
+        // 使用 marked 解析 Markdown
+        preview.innerHTML = marked.parse(source);
+
+        // 为预览中的代码块启用语法高亮
+        preview.querySelectorAll('pre code').forEach((block) => {
+            try { hljs.highlightElement(block); } catch (e) { /* ignore */ }
+        });
+    });
+
+    // 绑定「打开编辑器试试」按钮
+    setupMdRefTryButtons();
+}
+
+/**
+ * 为语法手册中的源码块添加复制按钮
+ */
+function setupRefCopyButtons() {
+    document.querySelectorAll('.md-ref-source-panel pre').forEach(pre => {
+        // 避免重复添加
+        if (pre.querySelector('.md-ref-copy-btn')) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'md-ref-copy-btn';
+        btn.textContent = '复制';
+
+        btn.addEventListener('click', () => {
+            const code = pre.querySelector('code');
+            if (!code) return;
+
+            const text = code.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = '已复制 ✓';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '复制';
+                    btn.classList.remove('copied');
+                }, 500);
+            }).catch(() => {
+                btn.textContent = '复制失败';
+                setTimeout(() => { btn.textContent = '复制'; }, 1000);
+            });
+        });
+
+        pre.appendChild(btn);
+    });
+}
+
+/**
+ * 为语法手册卡片绑定「打开编辑器试试」按钮
+ */
+function setupMdRefTryButtons() {
+    document.querySelectorAll('.md-ref-try-btn').forEach((btn) => {
+        // 防重复绑定
+        if (btn._mdRefTryBound) return;
+        btn._mdRefTryBound = true;
+
+        btn.addEventListener('click', () => {
+            const card = btn.closest('.md-ref-card');
+            if (!card) return;
+
+            const source = card.querySelector('.md-ref-source');
+            const badge = card.querySelector('.md-ref-badge');
+            if (!source) return;
+
+            const rawSource = source.textContent.trim();
+            const badgeText = badge ? badge.textContent.trim() : '示例';
+
+            openMdRefTryEditor(rawSource, badgeText);
+        });
+    });
+}
+
+/**
+ * 打开编辑器并预填 MD 语法示例内容
+ * @param {string} source - 源码文本（可能含 HTML 实体）
+ * @param {string} badgeText - 分类标签文字
+ */
+async function openMdRefTryEditor(source, badgeText) {
+    // 解码 HTML 实体（&gt; → >, &lt; → <, &amp; → &）
+    const decoded = source
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+
+    // 切换到首页
+    switchView('grid');
+    // 等待编辑器完全初始化（包括 cmEditor 创建）
+    await openEditor(null);
+    // 设置标题和内容（此时 cmEditor 已就绪）
+    els.editorNoteTitle.value = `[MD 语法] ${badgeText}`;
+    setEditorContent(decoded);
+    // 设为 Markdown 类型（覆盖 openEditor 内部默认的 'text'）
+    state.noteType = 'markdown';
+    // 更新类型切换按钮文字和 tooltip
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.textContent = 'M';
+        els.editorTypeToggle.title = state.noteType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
+    }
+    // 显示「编辑/预览」切换按钮（仅 Markdown 模式显示）
+    els.editorModes.style.display = '';
+    // 控制工具栏显示（仅 markdown + 设置启用时显示）
+    if (els.editorToolbar) {
+        const tbEnabled = localStorage.getItem('md_toolbar_enabled') !== 'false';
+        els.editorToolbar.style.display = tbEnabled ? 'flex' : 'none';
+    }
+    // 编辑器聚焦
+    if (cmEditor) cmEditor.focus();
 }
 
 /* ===== 笔记本相关函数 ===== */
@@ -5665,6 +5809,7 @@ async function init() {
     initScrollLoading();
     initScrollbarAutoHide();
     initEditorToolbar();
+    setupRefCopyButtons();
     // 窗口可见性变化时自动刷新（如从外部进程注入种子数据后切回应用）
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) return;

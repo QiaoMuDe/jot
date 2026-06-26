@@ -36,9 +36,9 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6158 行（含 CM6 集成 + 搜索弹窗）
-│   │   ├── style.css                   # 组件样式 ~4619 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
-│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~581 行）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6303 行（含 CM6 集成 + 搜索弹窗 + MD 语法页面）
+│   │   ├── style.css                   # 组件样式 ~4925 行（含 CM6 主题/语法高亮 + MD 语法卡片样式）
+│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~651 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -47,89 +47,63 @@ jot/                                    # 项目根目录
 │   └── dist/                           # Vite 构建产物（前端编译输出）
 │
 └── .trae/specs/                        # 项目 Spec 文档目录
-    ├── add-view-mode-toggle-from-edit/  # 查看/编辑模式返回按钮
-    ├── add-card-note-app/              # 初始需求规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-data-management/            # 数据管理功能规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-font-settings/              # 字体设置功能规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-quick-note-mode/          # 快速笔记模式规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-md-rendering/             # Markdown 渲染查看规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
     ├── add-about-page/               # 关于页面规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-misc-improvements/         # 杂项优化规格（滚动条美化/默认标签/快捷键说明/分段控件重构）
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── add-one-click-backup-restore/   # 一键备份还原规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── redesign-data-management/       # 数据管理页面 UI 重构与动画增强规格
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── unify-notification-system/       # 统一通知系统规格（右上角浮动通知组件）
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    ├── enhance-interaction-animation/  # 交互体验与动画增强规格（16 项动画/过渡/交互动画）
-    │   ├── spec.md
-    │   ├── tasks.md
-    │   └── checklist.md
-    └── integrate-codemirror-6/        # CodeMirror 6 编辑器集成（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── lazy-content-loading/          # 懒加载 Content 优化（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── fix-drag-drop-notebook-scope/   # 拖拽导入按当前笔记本作用域修正（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── fix-preview-scrollbar/          # 预览模式滚动条修复（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── fix-cm6-horizontal-scrollbar-gutter/  # CM6 水平滚动条遮挡行号修复（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── fix-fullscreen-cover-custom-titlebar/  # 全屏模式遮挡自定义标题栏修复（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── fix-viewmode-fullscreen-halfheight/  # 查看模式全屏半高修复（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── hide-topbar-items-on-editor-fullscreen/ # 全屏隐藏搜索框/更多菜单 + 平滑过渡（已完成，文档在 .trae/documents/）
-        └── ...
-    └── elevate-visual-refinement/ # UI 视觉品质升级（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
-    └── add-table-copy-button/ # 表格复制按钮（已完成）
-        ├── spec.md
-        ├── tasks.md
-        └── checklist.md
+    ├── add-batch-tagging/            # 批量标签操作
+    ├── add-calendar-date-picker/     # 日历日期选择器
+    ├── add-card-note-app/            # 初始需求规格
+    ├── add-code-lang-badge/          # 代码块语言标签
+    ├── add-data-management/          # 数据管理功能规格
+    ├── add-draft-auto-save/          # 草稿自动保存
+    ├── add-draft-cleanup-on-exit/    # 退出清理草稿
+    ├── add-drag-drop-import/         # 拖拽导入文件
+    ├── add-editor-and-undo-features/ # 编辑器和撤销功能
+    ├── add-editor-tweaks/            # 编辑器微调
+    ├── add-find-replace/             # 查找替换功能
+    ├── add-font-settings/            # 字体设置功能规格
+    ├── add-frameless-window/         # 无边框窗口
+    ├── add-md-editor/                # MD 编辑功能
+    ├── add-md-formatting-toolbar/    # MD 格式化工具栏
+    ├── add-md-ref-try-button/        # MD 语法打开编辑器试试按钮（已完成）
+    ├── add-md-reference-page/        # MD 语法手册页面（已完成）
+    ├── add-md-rendering/             # Markdown 渲染查看规格
+    ├── add-misc-improvements/        # 杂项优化规格
+    ├── add-note-type/                # 笔记类型（纯文本/Markdown）
+    ├── add-notebook-system/          # 笔记本系统
+    ├── add-notes-move-notebook/      # 笔记迁移笔记本
+    ├── add-one-click-backup-restore/ # 一键备份还原规格
+    ├── add-quick-note-mode/          # 快速笔记模式规格
+    ├── add-save-success-notification/ # 保存成功通知
+    ├── add-search-filters/           # 搜索筛选器
+    ├── add-sort-pagination/          # 排序分页设置
+    ├── add-table-copy-button/        # 表格复制按钮
+    ├── add-theme-system/             # 主题系统
+    ├── add-toolbar-toggle-setting/   # MD 工具栏开关设置（已完成）
+    ├── add-view-mode-toggle-from-edit/ # 查看/编辑模式返回按钮
+    ├── add-web-worker-rendering/     # Web Worker 离线程渲染
+    ├── db-backup-restore/            # 数据库备份还原
+    ├── editor-header-compact/        # 编辑器头部紧凑化
+    ├── elevate-visual-refinement/    # UI 视觉品质升级
+    ├── enhance-interaction-animation/ # 交互体验与动画增强
+    ├── fix-cm6-horizontal-scrollbar-gutter/ # CM6 水平滚动条遮挡行号修复（已完成）
+    ├── fix-date-picker-auto-close/   # 日期选择器自动关闭修复
+    ├── fix-drag-drop-notebook-scope/ # 拖拽导入笔记本作用域修正（已完成）
+    ├── fix-fullscreen-cover-custom-titlebar/ # 全屏模式遮挡标题栏修复（已完成）
+    ├── fix-preview-scrollbar/        # 预览模式滚动条修复（已完成）
+    ├── fix-viewmode-fullscreen-halfheight/ # 查看模式全屏半高修复（已完成）
+    ├── integrate-codemirror-6/       # CodeMirror 6 编辑器集成（已完成）
+    └── lazy-content-loading/         # 懒加载 Content 优化（已完成）
+    ├── move-menu-to-left/            # 更多菜单移至左上角
+    ├── move-search-to-modal/         # 搜索移至弹窗
+    ├── polish-search-modal-animation/ # 搜索弹窗动画优化
+    ├── redesign-data-management/     # 数据管理页面 UI 重构与动画增强
+    ├── redesign-ui/                  # UI 重新设计
+    ├── refine-search-modal-ui/       # 搜索弹窗 UI 优化
+    ├── remove-auto-save-draft/       # 移除草稿自动保存
+    ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
+    ├── restructure-internal-packages/ # 内部包重构
+    ├── simplify-date-filter/         # 时间筛选简化（日历→下拉菜单）
+    ├── skip-quicknote-animation-on-start/ # 快速笔记启动跳过动画
+    └── unify-notification-system/    # 统一通知系统
 ```
 
 ### 目录规范评价
@@ -599,6 +573,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 43. **MD 格式化工具栏开关设置**：设置页「编辑器选项」新增「Markdown 笔记显示格式化工具栏」toggle（`mdToolbarToggle`），存储键 `md_toolbar_enabled`（默认 true）。**与其他设置项一致的持久化模式**：保存时优先写后端 `SetSetting('md_toolbar_enabled', ...)`，不可用时 fallback 到 localStorage；加载时通过 `loadToolbarSetting()` 从后端 `GetSetting` 读取，无记录时默认 true。重置数据库后 settings 表被清空，前端自动回退到默认值。工具栏显隐逻辑：仅 `markdown 笔记 + 编辑模式 + 设置启用` 时显示。切换设置时编辑器打开状态下即时更新工具栏显隐。详见 `.trae/specs/add-toolbar-toggle-setting/`。
 44. **恢复出厂设置漏清 notebooks 表修复**：`ResetDatabase()` 原只清空 notes/tags/settings，未清 notebooks 表。`EnsureDefaultNotebook()` 只在表空时创建默认笔记本，导致旧笔记本残留。修复：`NotebookService` 新增 `ResetAll()` — 硬删除所有笔记本 → 重置 SQLite 自增序列 `DELETE FROM sqlite_sequence WHERE name='notebooks'` → 创建新默认笔记本（ID=1）。`app.go` 的 `ResetDatabase()` 中第 3 步调用。前端 `resetDatabase()` 中 `loadNotebooks()` 后设 `state.activeNotebookId = 1`。详见 `.trae/documents/fix-reset-database-notebooks.md`。
 45. **侧栏交互增强**：三项改进：(1) `toggleSidebar()` 改为 async，从折叠→展开时调用 `await loadNotebooks()` 从数据库刷新笔记本列表和计数，确保展开时数据最新。(2) `resetDatabase()` 执行后自动折叠侧栏并同步 localStorage + 菜单文字，用户展开时触发上述刷新逻辑。(3) `switchView()` 中非 grid 视图（settings/data/trash）自动折叠侧栏，这些页面与笔记本切换无关，收起后给内容区更多空间。
+46. **MD 语法手册页面**：更多菜单新增「MD 语法」页面（Ctrl+8 访问），展示 10 张 MD 语法卡片（标题/文本样式/链接与图片/列表/引用与代码块/表格/任务列表/分割线/转义字符），每张卡片左侧语法源码 + 右侧渲染预览双栏对照布局。使用 `marked.parse()` + `highlight.js` 在页面渲染时同步完成预览渲染（非 Worker）。预览区域与设置页/数据管理一致的主题跟随（CSS 变量联动）。10 个 `.md-ref-source` 脚本标签存储源码，10 个 `.md-ref-preview` 容器通过 `data-ref` 索引映射渲染结果。
+47. **「打开编辑器试试」按钮**：每张 MD 语法卡片底部添加 `.md-ref-try-btn` 按钮，点击后自动创建新笔记并预填标题（`[MD 语法] xxx`）和源码内容到编辑器。`openMdRefTryEditor()` 函数处理：`switchView('grid')` → `await openEditor(null)` 等待 cmEditor 初始化 → `setEditorContent(decoded)` 写入内容 → `state.noteType = 'markdown'` 设为 MD 模式 → 更新类型切换按钮/编辑预览切换/工具栏显隐。HTML 实体解码处理 `&gt;`/`&lt;`/`&amp;`/`&quot;`/`&#39;`。
+48. **MD 语法页面全主题适配**：所有 MD 语法卡片颜色从硬编码改为 `var(--xxx)` 主题变量：源码面板背景 `var(--bg-secondary)`、预览面板背景 `var(--card-bg)`、代码块字体 `var(--font-family)`、复制按钮背景 `var(--card-bg)`/边框 `var(--border)`、引用块底色 `var(--hover-bg)`、表格边框 `var(--border)`、标签 `var(--accent)` 配色。6 套主题（default/nord/monokai-pro/light/tokyo-night/dark）均自动适配。
 
 ---
 
@@ -704,10 +681,14 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **大文件全屏动画卡顿修复**：大文件（含大量代码块/表格的 Markdown）全屏/恢复时动画卡顿的根因是渲染完成前 DOM 重计算阻塞 transition。`contain: layout style` 方案因干扰浏览器滚动优化导致鼠标卡顿被回退。最终方案：全屏切换前 `panel.style.transition = 'none'` 临时禁用 CSS 过渡，`void panel.offsetHeight` 强制回流确保 class 切换后立即应用，再恢复 transition。全程零动画过渡，消除 DOM 布局阻塞导致的动画掉帧。
 - ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
 - ✅ **查看模式保存刷新列表**：从查看→编辑→返回查看时，保存后调 `loadNotes()` 刷新列表，解决列表不更新问题
-- ✅ **查看模式保存刷新列表**
 - ✅ **MD 格式化工具栏开关设置**：设置页新增 toggle 控制工具栏显隐，`md_toolbar_enabled` 存储键默认开启，持久化走后端+localStorage fallback 模式，切换即时生效带通知
 - ✅ **恢复出厂设置漏清 notebooks 表修复**：`NotebookService.ResetAll()` 硬删所有笔记本+重置自增序列+重建默认笔记本，`app.go` 和前端同步修改
 - ✅ **侧栏交互增强**：展开时刷新笔记本数据、重置后自动折叠、非网格视图自动折叠
+- ✅ **MD 语法手册页面**：10 张 MD 语法卡片源码+预览双栏对照，Ctrl+8 快捷访问，跟随 6 主题配色
+- ✅ **「打开编辑器试试」按钮**：MD 语法卡片底部按钮，点击自动创建 MD 笔记预填标题和源码内容
+- ✅ **MD 语法页面全主题适配**：代码块/面板/按钮/引用/表格全部使用 CSS 变量跟随主题切换
+- ✅ **代码块字体跟随全局字体**：MD 语法页面代码块 font-family 改用 `var(--font-family)` 联动全局字体设置
+- ✅ **Seed 工具增强**：笔记本 5→6，标签 5→7，笔记 22→38 条，每条带完整 Markdown 正文，时间跨度 30 天
 ---
 
 ## 九、关键记忆点
@@ -718,9 +699,9 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 56 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
-| **前端视图** | 8 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）|
-| **前端代码量** | ~5570 行 JS + ~4130 行 CSS + ~581 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
+| **前端视图** | 9 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
+| **前端代码量** | ~6303 行 JS + ~4925 行 CSS + ~651 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -728,7 +709,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
+| **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明 8=MD 语法手册；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + 数据操作/快速备份/数据目录三个卡片分区 |
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，VACUUM INTO 创建 SQLite 压缩副本 → fs.CopyEx 到用户选择路径，输出 .db 文件 |
@@ -745,17 +726,17 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **Ctrl+A/Ctrl+D 快捷键** | 全局阻止默认 Ctrl+A；批量模式下 Ctrl+A = 全选所有笔记、Ctrl+D = 取消全选 |
 | **lint 状态** | `golangci-lint run ./...` 0 issues（errcheck 等 7 个问题已全部修复）|
 | **Mock 数据** | `getMockNotes()` 3 条示例笔记，`getMockTags()` 3 个标签；通过 `mockNotes` 可变变量持久化修改 |
-| **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 24 条覆盖多领域的测试笔记 + 5 个标签 |
+| **Seed 工具** | `tools/seed/main.go` 默认注入 `~/.jot/data/jot.db`（支持命令行参数指定路径）；含 38 条覆盖多领域的测试笔记（含完整 Markdown 正文）+ 6 个笔记本 + 7 个标签 |
 | **右键菜单** | 纯文字无图标，`min-width: 120px` |
-| **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/帮助六个选项，分隔线分组，`min-width: 120px` |
-| **Spec 位置** | `.trae/specs/add-view-mode-toggle-from-edit/`、`.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成） |
+| **更多菜单** | 含笔记首页/展开/折叠侧栏/数据管理/回收站/设置/MD 语法/帮助七个选项，分隔线分组，`min-width: 120px` |
+| **Spec 位置** | `.trae/specs/add-view-mode-toggle-from-edit/`、`.trae/specs/add-card-note-app/`、`.trae/specs/add-data-management/`、`.trae/specs/add-font-settings/`、`.trae/specs/add-quick-note-mode/`、`.trae/specs/add-md-rendering/`、`.trae/specs/add-about-page/`、`.trae/specs/add-misc-improvements/`、`.trae/specs/enhance-interaction-animation/`、`.trae/specs/integrate-codemirror-6/`（CM6 集成已完成）、`.trae/specs/add-drag-drop-import/`（拖拽导入已完成）、`.trae/specs/lazy-content-loading/`（懒加载 Content 已完成）、`.trae/specs/fix-drag-drop-notebook-scope/`（拖拽导入笔记本作用域修正已完成）、`.trae/specs/fix-preview-scrollbar/`（预览模式滚动条修复已完成）、`.trae/specs/add-md-reference-page/`（MD 语法手册已完成）、`.trae/specs/add-md-ref-try-button/`（打开编辑器试试按钮已完成）、`.trae/specs/add-toolbar-toggle-setting/`（MD 工具栏开关已完成）|
 | **字体设置** | 设置页面新增「字体设置」分区，字体族下拉（搜索+↑↓/Enter/Escape 键盘导航）+ 大小预设/自定义。下拉选项采用延迟渲染策略：`updateFontSettingsUI()` 不调用 `renderFontFamilyOptions()`，仅用户首次点击下拉触发器时渲染 200+ 字体选项 DOM，避免首次打开设置页时大量字体节点参与布局导致 1-2 秒白屏 |
 | **字体枚举** | `fontutil/fonts_windows.go` 使用 Win32 GDI EnumFontFamiliesW API 直接枚举，不依赖第三方库 |
 | **配置存储** | `models/setting.go` KV 结构，`services/setting_service.go` Get/Set 读写 |
 | **CSS rem 适配** | 所有 font-size 已从 px 转为 rem，通过 `--font-size-base` CSS 变量控制等比缩放 |
 | **view-header 统一** | 设置/数据管理/回收站三个功能页的 view-header 均为 `← 返回` + 居中标题 + `view-controls` 结构，保证标题位置一致 |
 | **内容区居中** | 设置页 `settings-content` 为 `max-width: 600px` + 居中；数据管理 `data-content` 和回收站 `trash-list` 为 `max-width: 680px` + 居中 |
-| **数字键导航** | 键盘快捷键：Ctrl+1=首页(清空搜索)/Ctrl+2=展开侧栏/Ctrl+3=批量管理/Ctrl+4=数据管理/Ctrl+5=回收站/Ctrl+6=设置/Ctrl+7=帮助；不在输入框或编辑器中触发 |
+| **数字键导航** | 键盘快捷键：Ctrl+1=首页(清空搜索)/Ctrl+2=展开侧栏/Ctrl+3=批量管理/Ctrl+4=数据管理/Ctrl+5=回收站/Ctrl+6=设置/Ctrl+7=帮助/Ctrl+8=MD 语法；不在输入框或编辑器中触发 |
 | **排序设置** | 设置页「笔记排序」支持按更新时间/创建时间/名称排序，iOS 风格分段控件（3 等分滑动指示器），持久化到 Setting `sort_order`；后端 `GetAll`/`GetByTag` 动态构建 ORDER BY |
 | **分页大小** | 设置页 iOS 风格分段控件：20/40/60/80/100，选中色块带滑动动画，默认 20，持久化到 Setting `page_size` |
 | **懒加载** | 所有场景（启动/CRUD）只加载第 1 页，滚动到底部（<200px）自动追加下一页；Ctrl+End 一次加载所有剩余页；底部显示「共 X 条笔记」|
@@ -809,12 +790,12 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | | **方案**：改用 Frameless 模式完全移除原生标题栏，前端用 HTML/CSS 绘制自定义标题栏。topbar 同时承担窗口标题栏职责，右侧放置窗口控制按钮（─ □ ✕），与应用操作按钮（+ ✓ ☰）融为一体 |
 | | **实现**：1. main.go 启用 `Frameless: true` + `CSSDragProperty/Value` 2. index.html 删除独立 #windowTitleBar，窗口控制按钮直接放入 #topbar-actions 3. style.css 统一按钮样式（.topbar-btn），窗口控制按钮与应用按钮同风格 4. main.js 导入 Wails Runtime API，新增 initWindowControls() 绑定最小化/最大化/关闭事件，双击 topbar 空白区最大化/还原 5. 所有按钮加 `--wails-draggable: no-drag`，topbar 加 `--wails-draggable: drag` |
 | | **按钮布局演进**：最初 6 个按钮并排（+ ✓ ☰ ─ □ ✕）→ 去掉 +（底部 FAB 已有新建）→ ✓ 移入更多菜单（批量管理）→ 最终只剩 ☰ ─ □ ✕，☰ 在最右侧 |
-| | **快捷键更新**：Ctrl+数字键 1-7 导航（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 快捷键说明），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto）。`[`/`]` 随 FindReplaceManager 一并删除 |
+| | **快捷键更新**：Ctrl+数字键 1-8 导航（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 快捷键说明/8 MD 语法手册），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto）。`[`/`]` 随 FindReplaceManager 一并删除 |
 | | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), style.css (按钮样式), main.js (窗口控制 + 快捷键映射) |
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 搜索弹窗动画优化：层级错峰入场（遮罩→内容50ms延迟→结果项逐条）、遮罩 opacity+backdrop-filter 过渡、closing class 退出动画（结果项/遮罩/内容 150ms 并发）、transitionend 事件聚焦替代 setTimeout、prefers-reduced-motion 完整降级。详见 `.trae/specs/polish-search-modal-animation/`。② 时间筛选简化：移除日历弹窗（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单，保留 4 个快捷选项（今天/最近7天/最近30天/不限），后端 `startDate/endDate` 参数和 SQL `updated_at BETWEEN` 过滤不变。③ `fix-date-picker-auto-close` spec 被 `simplify-date-filter` 替代。详见 `.trae/specs/simplify-date-filter/`。
+> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 新增 MD 语法手册页面（10 张卡片源码+预览双栏对照、Ctrl+8 访问页面），详见 `.trae/specs/add-md-reference-page/`。② 新增「打开编辑器试试」按钮（每张卡片底部，点击自动创建 MD 笔记预填标题和源码内容），修复 async/await 时序和 noteType 覆盖问题，详见 `.trae/specs/add-md-ref-try-button/`。③ MD 语法页面全主题适配（6 套主题全部自动适配），代码块字体跟随全局字体设置。④ Seed 工具增强（笔记 22→38 条，笔记本 5→6，标签 5→7，每条带完整 Markdown 正文，时间跨度 30 天）。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -971,4 +952,18 @@ await loadXxxSetting();
 #### Step 5: 重置一致性 — 确保 `ResetDatabase` 后能回退到默认值
 - 使用上述模板后自动满足：`ResetDatabase` 调用后端 `DeleteAll()` 清空 settings 表 → 前端 `loadXxxSetting()` 读不到值 → 按默认值恢复
 - **不要**只使用 localStorage 存储，否则重置数据库后该设置值会残留，与其他设置行为不一致
+
+## 十三、新增记忆点（MD 语法手册页面）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **MD 语法页面视图** | 更多菜单新增「MD 语法」页面（`#viewMdRef`），通过 `switchView('md-ref')` 访问。Ctrl+8 快捷打开。`renderMdRefCards()` 在首次显示时同步渲染 10 张语法卡片（复用 `marked.parse()` + `highlight.js` 高亮），卡片数据存储在 10 个 `<script type="text/plain" class="md-ref-source">` 标签中 |
+| **MD 语法卡片布局** | 每张卡片分三部分：顶部 `.md-ref-badge` 分类标签（如「H 标题」「B 文本样式」「📋 列表」），中部 `.md-ref-panel` 双栏面板（左 `.md-ref-source-panel` 源码区 + 右 `.md-ref-preview-panel` 预览区），底部 `.md-ref-card-footnote` 脚注说明。10 张卡片覆盖：标题/文本样式/链接与图片/列表/引用与代码块/表格/任务列表/分割线/转义字符 |
+| **源码/预览双栏渲染** | 源码区使用 `<pre><code>` 展示（复制按钮在 hover 时显示），预览区通过 `marked.parse()` 渲染。`E$()` 函数在 `renderMdRefCards()` 末尾遍历 10 对 `.md-ref-source`/`.md-ref-preview`，源码取 `textContent.trim()` 后 `marked.parse()` 写入预览容器，然后 `hljs.highlightElement()` 高亮代码块。`b$()` 为源码面板的每个 `<pre>` 添加复制按钮 |
+| **「打开编辑器试试」按钮** | 每张卡片底部 `.md-ref-try-btn` 按钮，点击后 `openMdRefTryEditor(source, badgeText)`：解码 HTML 实体 → `switchView('grid')` → `await openEditor(null)` 等待 cmEditor 就绪 → 设置标题 `[MD 语法] xxx` → `setEditorContent(decoded)` 写入源码 → `state.noteType = 'markdown'` → 更新 UI（类型切换按钮/编辑预览切换/工具栏显隐）→ `cmEditor.focus()`。`setupMdRefTryButtons()` 在 `renderMdRefCards()` 末尾调用，防重复绑定（`_mdRefTryBound` 标志）|
+| **HTML 实体解码** | 源码可能含 HTML 实体（`&gt;`/`&lt;`/`&amp;`/`&quot;`/`&#39;`），`openMdRefTryEditor()` 中先 `.replace(/&gt;/g, '>')` 等 5 步解码再写入编辑器，确保 `>`（引用块）、`<` 等特殊字符正确显示 |
+| **MD 语法页面全主题适配** | 所有 `.md-ref-*` CSS 从硬编码颜色改为 `var(--xxx)` 主题变量：源码面板背景 `var(--bg-secondary)`、预览面板 `var(--card-bg)`、代码块字体 `var(--font-family)`、复制按钮背景 `var(--card-bg)`/边框 `var(--border)`/文字 `var(--text-muted)`、hover 背景 `var(--hover-bg)`、引用块底色 `var(--hover-bg)`、表格边框 `var(--border)`、标签 `.md-ref-badge` 继承 `var(--accent)` 配色、`<kbd>` 元素 `var(--bg-secondary)` 底色 + `var(--border)` 边框。6 套主题（default/nord/monokai-pro/light/tokyo-night/dark）均自动适配 |
+| **代码块字体跟随全局** | 源码面板 `<pre><code>` 和预览区 `<pre><code>` 的 `font-family` 从硬编码 `'SF Mono', SFMono-Regular, Consolas, ...` 改为 `var(--font-family)`，联动全局字体设置，切换字体后 MD 语法页面代码块同步更新 |
+| **「打开编辑器试试」async 时序修复** | 修复前：`openMdRefTryEditor()` 非 async，`openEditor(null)` 无 await 返回 Promise，`setEditorContent()` 在 `cmEditor===null` 时静默失败。同时 `openEditor` 内部将 `state.noteType` 默认设为 `'text'`，后续设置 `'markdown'` 但 UI 已渲染为 text 模式。修复后：函数改为 `async` + `await openEditor(null)`，cmEditor 就绪后再写入内容和覆盖 noteType + UI 状态 |
+| **Seed 工具增强** | `tools/seed/main.go` 从原来的 5 笔记本/5 标签/22 笔记增强为 6 笔记本（新增「随笔」）/7 标签（新增「技术」「随笔」）/38 条笔记。每条笔记含完整 Markdown 正文（标题/引用/代码块/表格/列表等混合内容），时间跨度覆盖 30 天（自动生成 `updated_at`）。`note_type` 字段在 text/markdown 之间均匀分配 |
 
