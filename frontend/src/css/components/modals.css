@@ -1,0 +1,786 @@
+/* ==========================================================================
+   Batch Tag Overlay (批量标签选择弹窗)
+   ========================================================================== */
+
+.batch-tag-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.batch-tag-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  width: 320px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalEnter 0.2s var(--anim-easing-spring) forwards;
+}
+
+.batch-tag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--divider);
+}
+
+.batch-tag-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: var(--transition);
+}
+
+.batch-tag-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.batch-tag-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  align-content: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.batch-tag-body::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.batch-tag-empty
+.batch-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--tag-color, #6B7280);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.batch-tag-chip:hover {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.batch-tag-chip:active {
+  transform: scale(0.95);
+}
+
+/* 移除模式：不可移除标签（不在选中笔记中） */
+.batch-tag-chip.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: saturate(0.3);
+  pointer-events: none;
+}
+
+/* 移除模式：已选中的待移除标签 */
+.batch-tag-chip.selected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--tag-color, #6B7280);
+  transform: scale(1.05);
+}
+
+.batch-tag-empty {
+  width: 100%;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.813rem;
+}
+
+/* 批量标签弹窗底部按钮区 */
+.batch-tag-footer {
+  padding: 0 20px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.batch-tag-confirm-btn {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.batch-tag-confirm-btn:hover {
+  opacity: 0.9;
+}
+
+.batch-tag-confirm-btn:active {
+  transform: scale(0.98);
+}
+
+/* ==========================================================================
+   Section E: Editor Modal
+   ========================================================================== */
+
+.editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.35s ease-out;
+}
+
+.editor-overlay.fullscreening {
+  top: 36px;
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.editor-panel {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 560px;
+  max-width: 90vw;
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.3s ease-out,
+              border-color 0.3s ease-out,
+              border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.editor-panel::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--accent-light, #fff)));
+  flex-shrink: 0;
+  transform-origin: center;
+  animation: editorBarEnter 0.35s var(--anim-easing-spring) 0.05s both;
+}
+
+@keyframes editorBarEnter {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* ==========================================================================
+   关于页面
+   ========================================================================== */
+
+.about-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+
+.about-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 400px;
+  max-width: 88vw;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.28),
+    0 0 1px rgba(0, 0, 0, 0.12);
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+}
+
+@keyframes aboutFadeIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 关闭按钮 */
+.about-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 0.813rem;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 1;
+  line-height: 1;
+}
+
+.about-close-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+/* 头部 */
+.about-header {
+  text-align: center;
+  padding: 40px 36px 16px;
+}
+
+.about-logo {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+  line-height: 1.1;
+}
+
+.about-subtitle {
+  font-size: 0.938rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* 主体 */
+.about-body {
+  padding: 8px 36px 28px;
+}
+
+.about-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0 0 28px;
+  text-align: center;
+}
+
+/* 信息区 - 链接行 */
+.about-info {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.about-info-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  transition: background 0.2s;
+}
+
+.about-info-row:hover {
+  background: rgba(var(--accent-rgb, 230, 126, 34), 0.08);
+}
+
+/* 链接图标 + 文字 */
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.813rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.about-link::before {
+  content: '';
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  /* 外链图标：箭头从方框伸出 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E67E22' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  flex-shrink: 0;
+}
+
+.about-link:hover {
+  opacity: 0.75;
+}
+
+/* 底部版本号 */
+.about-footer {
+  text-align: center;
+  padding: 16px 36px 32px;
+  border-top: 1px solid var(--border);
+}
+
+.about-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  letter-spacing: 0.3px;
+}
+
+/* ==========================================================================
+   快捷键页面（模态框）
+   ========================================================================== */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+
+.shortcuts-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 420px;
+  max-width: 88vw;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.28),
+    0 0 1px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  opacity: 0;
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.shortcuts-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.shortcuts-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.shortcuts-close-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.shortcuts-body {
+  padding: 16px 24px 24px;
+  max-height: 50vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.shortcuts-body::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.shortcuts-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider);
+  opacity: 0;
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-key {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.shortcut-key kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-family: var(--font-family);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.shortcut-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 24px;
+}
+
+/* ===== 自定义确认弹窗 ===== */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.confirm-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.confirm-dialog {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px 20px;
+  min-width: 320px;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+  transform: translateY(8px) scale(0.97);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.confirm-overlay.visible .confirm-dialog {
+  transform: translateY(0) scale(1);
+}
+.confirm-message {
+  font-size: 0.938rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  white-space: pre-line;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 确认对话框中的 checkbox 选项 */
+.confirm-option {
+  margin: -8px 0 16px 0;
+}
+
+.confirm-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.confirm-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.confirm-checkbox-label:hover {
+  color: var(--accent);
+}
+.confirm-btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background var(--transition),
+              border-color var(--transition);
+  user-select: none;
+}
+.confirm-btn:active {
+  transform: scale(0.96);
+}
+.confirm-cancel {
+  background: var(--card-bg);
+  color: var(--text-secondary);
+}
+.confirm-cancel:hover {
+  background: var(--hover-bg);
+  border-color: var(--text-muted);
+}
+.confirm-ok {
+  background: var(--danger, #ef4444);
+  color: #fff;
+  border-color: var(--danger, #ef4444);
+}
+.confirm-ok:hover {
+  background: var(--danger-hover, #dc2626);
+  border-color: var(--danger-hover, #dc2626);
+}
+.confirm-third {
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  border-color: var(--warning, #f59e0b);
+}
+.confirm-third:hover {
+  background: var(--warning-hover, #d97706);
+  border-color: var(--warning-hover, #d97706);
+}
+
+/* ==========================================================================
+   Section K: Notification System (replaces old Undo Toast)
+   ========================================================================== */
+
+.notification-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 380px;
+}
+
+.notification {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--card-bg, #1e1e2e);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  font-size: 0.875rem;
+  color: var(--text-primary, #e0e0e0);
+  animation: notifSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+}
+
+/* 左侧色标条 */
+.notification::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+}
+
+/* 类型色板 */
+.notification.success::before { background: #2ea043; }
+.notification.error::before { background: #ef4444; }
+
+/* ===== 拖拽文件导入遮罩 ===== */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.drop-overlay.active {
+  opacity: 1;
+}
+.drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 60px;
+  background: var(--card-bg, #1e1e2e);
+  border: 2px dashed var(--accent, #6c63ff);
+  border-radius: var(--radius-xl, 16px);
+  color: var(--accent, #6c63ff);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+}
+.drop-overlay-content p {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.notification.warning::before { background: #f59e0b; }
+.notification.info::before { background: #3b82f6; }
+
+.notification-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.notification.success .notification-icon { color: #2ea043; }
+.notification.error .notification-icon { color: #ef4444; }
+.notification.warning .notification-icon { color: #f59e0b; }
+.notification.info .notification-icon { color: #3b82f6; }
+
+.notification-msg {
+  flex: 1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.notification-undo-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--accent, #6366f1);
+  background: transparent;
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: background 0.15s, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+.notification-undo-btn:hover {
+  background: rgba(var(--accent-rgb, 99,102,241), 0.1);
+}
+.notification-undo-btn:active {
+  transform: scale(0.95);
+}
+
+.notification-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+.notification-close:hover {
+  background: rgba(128,128,128,0.15);
+  color: var(--text-primary, #e0e0e0);
+}
+
+/* 通知出场动画 */
+.notification.exit {
+  animation: notifSlideOut 0.2s ease-in forwards;
+}
+
+@keyframes notifSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(40px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes notifSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px) scale(0.96);
+  }
+}

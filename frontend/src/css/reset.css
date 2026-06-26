@@ -1,0 +1,36 @@
+/* 基础重置 */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+    background-color: var(--bg);
+    font-size: var(--font-size-base);
+    transition: background-color var(--anim-duration-slow) ease-out;
+}
+
+body {
+    margin: 0;
+    height: 100%;
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overscroll-behavior: none;
+    color: var(--text-primary);
+    background-color: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color var(--anim-duration-slow) ease-out,
+                color var(--anim-duration-slow) ease-out;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}

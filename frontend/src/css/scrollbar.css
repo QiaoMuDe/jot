@@ -1,0 +1,77 @@
+/* 全局滚动条：柔和融入背景 */
+
+/* WebKit (Chrome / Edge / WebView2) */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+::-webkit-scrollbar-button {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* 主内容区等特定容器：再强化一层防止 WebView2 绘制按钮 */
+#mainContent::-webkit-scrollbar-button,
+.search-results::-webkit-scrollbar-button,
+.data-content::-webkit-scrollbar-button,
+.search-modal-results::-webkit-scrollbar-button,
+.search-modal-filter-dropdown::-webkit-scrollbar-button {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
+#mainContent::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb,
+.data-content::-webkit-scrollbar-thumb {
+    background: transparent;
+    transition: background 0.4s ease;
+}
+
+#mainContent.scrolling::-webkit-scrollbar-thumb,
+.search-results.scrolling::-webkit-scrollbar-thumb,
+.data-content.scrolling::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+#mainContent:hover::-webkit-scrollbar-thumb,
+.search-results:hover::-webkit-scrollbar-thumb,
+.data-content:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 给 track 加一层极淡底色，让滚动条区域有存在感 */
+#mainContent::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track,
+.data-content::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+/* Firefox */
+#mainContent,
+.search-results,
+.data-content {
+    scrollbar-width: thin;
+    scrollbar-color: transparent var(--scrollbar-track);
+}
+
+#mainContent.scrolling,
+.search-results.scrolling,
+.data-content.scrolling {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}

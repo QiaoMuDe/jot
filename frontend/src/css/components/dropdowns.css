@@ -1,0 +1,225 @@
+/* 字体族下拉菜单 */
+.font-family-select {
+  position: relative;
+  flex: 1;
+  max-width: 280px;
+}
+
+.font-family-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.813rem;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  user-select: none;
+}
+
+.font-family-trigger:hover {
+  border-color: var(--accent-light);
+}
+
+.font-family-trigger.open {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.font-family-arrow {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.font-family-trigger.open .font-family-arrow {
+  transform: rotate(180deg);
+}
+
+.font-family-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 0 4px;
+  transition: max-height 0.2s ease-out, opacity 0.15s ease-out, padding 0.2s ease-out;
+  pointer-events: none;
+}
+
+.font-family-dropdown.open {
+  max-height: 300px;
+  opacity: 1;
+  overflow: visible;
+  padding: 4px 4px 0;
+  pointer-events: auto;
+}
+
+.font-family-search {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  outline: none;
+  background: var(--input-bg);
+  transition: var(--transition);
+  box-sizing: border-box;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.font-family-search:focus {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.font-family-options {
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 0;
+  /* 强制非 overlay 滚动条，使 ::-webkit-scrollbar 生效 */
+  scrollbar-gutter: stable;
+  /* Firefox 标准属性 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* WebKit / WebView2 自定义滚动条 */
+.font-family-options::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* 字体大小控制 */
+.font-size-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.font-size-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.font-size-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.font-size-btn:hover {
+  border-color: var(--accent-light);
+}
+
+.font-size-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.font-size-custom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.font-size-input {
+  width: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  outline: none;
+  background: var(--input-bg);
+  transition: var(--transition);
+  text-align: center;
+}
+
+.font-size-input:focus {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.font-size-unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* iOS 风格开关 */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: var(--radius-xl);
+  background: var(--border);
+  cursor: pointer;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.toggle-track:has(input:checked) {
+  background: var(--accent);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform var(--transition);
+  pointer-events: none;
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(20px);
+}
+
+.quick-note-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-left: 60px;
+}

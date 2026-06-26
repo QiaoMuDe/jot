@@ -1,5 +1,4 @@
-import './style.css';
-import './app.css';
+import './css/index.css';
 import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn, WindowFullscreen, WindowUnfullscreen, WindowIsFullscreen } from '../wailsjs/runtime/runtime.js';
 import { marked } from 'marked';
 import hljs from 'highlight.js';

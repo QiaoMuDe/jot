@@ -1,0 +1,294 @@
+/* ==========================================================================
+   Section F: Common Buttons
+   ========================================================================== */
+
+.btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: 0.813rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+}
+
+.btn-cancel {
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.btn-cancel:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.btn-save {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-save:hover {
+  background: var(--accent-dark);
+  filter: brightness(1.1);
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--accent);
+  padding: 4px 8px;
+  border: none;
+  font-size: 0.813rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Section G: Settings
+   ========================================================================== */
+
+.settings-content {
+  flex: 1;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.settings-section {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.settings-section-title {
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-family: var(--font-family);
+}
+
+/* 字体设置 */
+.font-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.font-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.font-setting-label {
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+/* 主题分段控件（6 等分） */
+.theme-segmented {
+    width: 320px;
+}
+
+.theme-segmented .segmented-indicator {
+    width: calc(16.66% - 2px); /* 6 等分 */
+}
+
+.font-family-option {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.813rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.font-family-option:hover {
+  background: var(--hover-bg);
+}
+
+.font-family-option.selected {
+  background: var(--accent-lighter);
+  font-weight: 600;
+}
+
+.font-family-option.highlighted {
+  background: var(--hover-bg);
+}
+
+.tag-management {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  font-size: 0.813rem;
+  color: #fff;
+  font-weight: 500;
+}
+
+.tag-delete-btn {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--tag-delete-bg);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  font-family: inherit;
+  padding: 0;
+}
+
+.tag-delete-btn svg {
+  width: 10px;
+  height: 10px;
+}
+
+.tag-delete-btn:hover {
+  background: var(--tag-delete-hover-bg);
+}
+
+.tag-add-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.813rem;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  transition: var(--transition);
+  background: var(--input-bg);
+}
+
+.settings-input:focus {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.settings-color-input {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  cursor: pointer;
+  background: none;
+}
+
+/* ==========================================================================
+   Section M: Sort Options & Page Size (Settings)
+   ========================================================================== */
+
+/* 排序分段控件（3 等分） */
+.sort-segmented {
+    width: 260px;
+}
+
+.sort-segmented .segmented-indicator {
+    width: calc(33.33% - 2px);
+}
+
+.page-size-control {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+/* iOS 风格分段控件 */
+.segmented-control {
+    display: flex;
+    position: relative;
+    width: 280px;
+    height: 38px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.segmented-indicator {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(20% - 2px);
+    height: calc(100% - 4px);
+    background: var(--accent);
+    border-radius: 18px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.segmented-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    z-index: 1;
+    transition: color 0.2s ease;
+    border-radius: 18px;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+.segmented-btn.active {
+    color: #fff;
+}
+
+.page-size-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 100px;
+}

@@ -1,0 +1,893 @@
+/* ==========================================================================
+   Section E: Editor Modal
+   ========================================================================== */
+
+.editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: backdrop-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.35s ease-out;
+}
+
+.editor-overlay.fullscreening {
+  top: 36px;
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.editor-panel {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 560px;
+  max-width: 90vw;
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.3s ease-out,
+              border-color 0.3s ease-out,
+              border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.editor-panel::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--accent-light, #fff)));
+  flex-shrink: 0;
+  transform-origin: center;
+  animation: editorBarEnter 0.35s var(--anim-easing-spring) 0.05s both;
+}
+
+@keyframes editorBarEnter {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* 全屏模式 */
+.editor-panel.fullscreen {
+  width: 100vw;
+  max-width: none;
+  height: calc(100vh - 36px);
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.editor-panel.fullscreen::before {
+  display: none;
+}
+
+#topbar.editor-fullscreen .topbar-dropdown {
+  opacity: 0;
+  transform: scale(0.8);
+  width: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 12px 0;
+}
+
+.editor-header h3 {
+  display: none;
+}
+
+.editor-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-header-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  line-height: 1;
+}
+
+.editor-header-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.editor-header-btn.fullscreen {
+  color: var(--accent);
+}
+
+.editor-body {
+  padding: 0 8px 8px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 编辑器编辑/预览区域容器 */
+.editor-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Markdown 格式化工具栏
+   ========================================================================== */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 0 0 4px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.editor-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.editor-toolbar-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.editor-toolbar-btn:active {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.editor-toolbar-btn svg {
+  display: block;
+}
+
+.editor-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-color);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* 标题下拉包装器 - 相对定位容器 */
+.editor-toolbar-btn-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* 标题下拉面板 */
+.heading-dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 140px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.heading-dropdown-item {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  cursor: pointer;
+  position: relative;
+  transition: none;
+}
+
+.heading-dropdown-item:hover {
+  background: var(--hover-bg);
+}
+
+.heading-dropdown-item:hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.hd-tag {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: serif;
+  color: var(--text-secondary);
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.hd-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-left: 8px;
+}
+
+/* 预览模式隐藏工具栏 */
+.editor-overlay[data-mode="preview"] .editor-toolbar {
+  display: none;
+}
+
+/* prefers-reduced-motion 降级 */
+@media (prefers-reduced-motion: reduce) {
+  .editor-toolbar-btn {
+    transition: none;
+  }
+  .heading-dropdown-panel {
+    transition: none;
+  }
+}
+
+/* 预览模式 */
+.editor-overlay[data-mode="preview"] .editor-textarea {
+  display: none;
+}
+
+.editor-overlay[data-mode="preview"] .md-rendered {
+  display: block !important;
+}
+
+/* 纯文本模式（默认，预览区隐藏） */
+.editor-overlay[data-mode="edit"] .editor-textarea {
+  display: flex;
+}
+
+.editor-overlay[data-mode="edit"] .md-rendered {
+  display: none !important;
+}
+
+.editor-input {
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  border-bottom: 1px solid transparent;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  outline: none;
+  font-family: var(--font-family);
+  margin-bottom: 16px;
+  transition: var(--transition);
+  background: transparent;
+}
+
+.editor-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.editor-textarea {
+  width: 100%;
+  padding: 0;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  flex: 1;
+  min-height: 0;
+  font-family: var(--font-family);
+  line-height: 1.7;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CM6 编辑器淡入（避免初始化前的白屏闪烁） */
+.cm-editor {
+  animation: cmFadeIn 0.15s ease-out forwards;
+}
+
+@keyframes cmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   CodeMirror 6 gutter 样式覆盖：防止水平滚动条覆盖行号区域
+   ========================================================================== */
+
+.cm-gutters {
+  background-color: var(--card-bg) !important;
+  z-index: 10;
+  position: relative;
+}
+
+/* ==========================================================================
+   CodeMirror 6 搜索面板样式覆盖
+   ========================================================================== */
+
+.cm-panel.cm-search {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.cm-panel.cm-search input,
+.cm-panel.cm-search label {
+  font-family: var(--font-family);
+  font-size: 0.813rem;
+  color: var(--text-primary);
+}
+
+.cm-panel.cm-search input[type=checkbox] {
+  accent-color: var(--accent);
+}
+
+.cm-panel.cm-search button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.editor-section {
+  margin: 2px 0 12px;
+}
+
+.editor-label {
+  display: block;
+  font-size: 0.688rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.tag-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+  border: 2px solid transparent;
+  /* 未选中：压暗 + 去饱和 */
+  filter: saturate(0.25) brightness(0.65);
+  opacity: 0.55;
+}
+
+.tag-chip:hover {
+  filter: saturate(0.5) brightness(0.8);
+  opacity: 0.75;
+}
+
+.tag-chip.active {
+  border-color: var(--accent);
+  filter: none;
+  opacity: 1;
+  /* 选中态：柔和外发光 */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.tag-chip.active::before {
+  font-weight: 600;
+}
+
+.tag-chip.clicked {
+  animation: scalePulse 0.25s ease;
+}
+
+/* ==========================================================================
+   预览区代码块复制按钮
+   ========================================================================== */
+
+.md-rendered pre {
+    position: relative;
+    margin: 1.2em 0;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    min-height: 52px;
+}
+
+/* ==========================================================================
+   预览区代码块复制按钮
+   ========================================================================== */
+
+.copy-code-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.copy-code-btn svg {
+    width: 12px;
+    height: 12px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.md-rendered pre:hover .copy-code-btn {
+    opacity: 1;
+}
+
+.copy-code-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    transform: scale(1.08);
+}
+
+/* 单行代码块：复制按钮垂直居中于右侧 */
+.copy-code-btn--single {
+    top: 50%;
+    transform: translateY(-50%);
+}
+.copy-code-btn--single:hover {
+    transform: translateY(-50%) scale(1.08);
+}
+
+.copy-code-btn.copied {
+    opacity: 1;
+    color: #28a745;
+    border-color: #28a745;
+}
+
+/* pre wrapper：保留用于管理连续代码块之间的间距 */
+.pre-wrapper {
+    position: relative;
+}
+
+/* 代码块语言标签：代码块外部右下角，主题自适应 */
+.code-lang-badge {
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.5;
+    border-radius: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 2;
+    user-select: none;
+}
+
+.pre-wrapper:hover .code-lang-badge {
+    opacity: 1;
+}
+
+/* 表格 wrapper：为复制按钮提供 absolute 定位容器 */
+.md-rendered .table-wrapper {
+    position: relative;
+    margin: 1.2em 0;
+}
+
+/* 表格复制按钮：悬停显示，表头行右侧居中定位（top 由 JS 根据 thead 中心计算） */
+.copy-table-btn {
+    position: absolute;
+    top: 0;
+    right: 6px;
+    transform: none;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.copy-table-btn svg {
+    width: 12px;
+    height: 12px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.md-rendered .table-wrapper:hover .copy-table-btn {
+    opacity: 1;
+}
+
+.copy-table-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    transform: scale(1.08);
+}
+
+.copy-table-btn.copied {
+    opacity: 1;
+    color: #28a745;
+    border-color: #28a745;
+}
+
+/* ==========================================================================
+   Markdown 渲染样式
+   ========================================================================== */
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 24px;
+  border-top: 1px solid var(--divider);
+}
+.editor-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.editor-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* 底部模式切换按钮组 */
+.editor-footer .editor-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-lg);
+  padding: 3px;
+}
+
+.editor-footer .mode-btn {
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editor-footer .mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.editor-footer .mode-btn.active {
+  background: var(--card-bg);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 笔记类型切换器（工具栏图标按钮，位于 header 全屏按钮左侧） */
+.editor-type-toggle {
+  font-size: 0.813rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+.editor-edit-time {
+  display: none;
+  font-size: 0.688rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.editor-view-mode .editor-edit-time {
+  display: block;
+}
+
+.editor-footer-btns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.editor-footer-btns .btn {
+  padding: 5px 14px;
+  font-size: 0.75rem;
+}
+
+.word-count {
+  font-size: 0.688rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.editor-input-readonly,
+.editor-textarea-readonly {
+  cursor: default;
+  background: transparent;
+}
+
+/* 编辑器内部滚动条：CM6 scroller 和 editor-body 精致微调样式 */
+/* 编辑器文本区滚动条：CM6 scroller 填满面板，精致微调融合 */
+.cm-scroller {
+  padding-right: 1px;
+  padding-bottom: 1px;
+}
+
+/* Firefox */
+.editor-textarea {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* ==========================================================================
+   Markdown 渲染样式
+   ========================================================================== */
+
+.md-rendered {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.5em 1rem 1rem 1.5rem;
+  font-size: 0.938rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+  /* 精致微调滚动条：Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.md-rendered::-webkit-scrollbar {
+  width: 6px;
+}
+.md-rendered::-webkit-scrollbar-track {
+  background: transparent;
+}
+.md-rendered::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+.md-rendered::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+.md-rendered::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* 预览加载状态：脉动"加载中…"提示 */
+.md-rendered-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  gap: 8px;
+  animation: mdLoadingPulse 1.2s ease-in-out infinite;
+}
+.md-rendered-loading::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: mdLoadingSpin 0.8s linear infinite;
+}
+@keyframes mdLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes mdLoadingPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.md-rendered h1,
+.md-rendered h2,
+.md-rendered h3,
+.md-rendered h4,
+.md-rendered h5,
+.md-rendered h6 {
+  margin: 1.5em 0 0.5em;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.md-rendered h1 { font-size: 1.6rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+.md-rendered h2 { font-size: 1.35rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
+.md-rendered h3 { font-size: 1.15rem; }
+
+.md-rendered p {
+  margin: 0.5em 0;
+}
+
+.md-rendered ul,
+.md-rendered ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.md-rendered li {
+  margin: 0.25em 0;
+}
+
+.md-rendered blockquote {
+  margin: 0.8em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-secondary);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+}
+
+.md-rendered code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.4em;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  color: var(--text-primary);
+}
+
+.md-rendered pre code {
+  display: block;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+}
+
+/* highlight.js 在浅色背景下的代码高亮适配 */
+.md-rendered .hljs {
+  background: transparent;
+  padding: 0;
+}
+
+.md-rendered table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8em 0;
+  font-size: 0.9rem;
+}
+
+.md-rendered th,
+.md-rendered td {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.md-rendered th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+}
+
+.md-rendered hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.md-rendered a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.md-rendered a:hover {
+  text-decoration: underline;
+}
+
+.md-rendered img {
+  max-width: 100%;
+  border-radius: 4px;
+  margin: 0.5em 0;
+}
+
+.md-rendered strong {
+  font-weight: 600;
+}
+
+.md-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* 深色主题——hljs 使用深色高亮主题时自动适配，此处保持语义一致 */
+[data-theme="dark"] .md-rendered pre {
+  background: var(--bg-secondary);
+}
+
+[data-theme="light"] .md-rendered pre {
+  background: #f6f8fa;
+}

@@ -1,0 +1,31 @@
+# Checklist
+
+- [x] `src/css/` 目录及 `src/css/components/` 子目录已创建
+- [x] `src/css/index.css` 入口文件已创建，@import 顺序正确
+- [x] `variables.css` 包含所有 :root 设计变量（亮/暗主题）
+- [x] `reset.css` 包含 `*`、`html`、`body`、`#app` 基础重置
+- [x] `scrollbar.css` 包含全局滚动条样式，已去重
+- [x] `animations.css` 包含动画工具类
+- [x] `components/topbar.css` 包含顶部栏样式
+- [x] `components/sidebar.css` 包含笔记本侧栏样式
+- [x] `components/main-content.css` 包含主内容区、视图、搜索结果样式
+- [x] `components/editor.css` 包含编辑器相关所有样式
+- [x] `components/search-modal.css` 包含搜索弹窗全部样式
+- [x] `components/modals.css` 包含 batch-tag、move-notebook、shortcuts 等弹窗样式
+- [x] `components/dropdowns.css` 包含下拉菜单、字体选择样式
+- [x] `components/data-view.css` 包含数据管理视图样式
+- [x] `components/md-reference.css` 包含 Markdown 引用页面样式
+- [x] `components/settings-panel.css` 包含设置面板样式
+- [x] `src/main.js` 中的 import 已更新为 `./css/index.css`
+- [x] `npx vite build` 构建成功，无错误
+- [x] 滚动条样式已去重，无重复的 `::-webkit-scrollbar` 规则
+- [x] 旧文件 `src/app.css` 和 `src/style.css` 已删除
+- [ ] **视觉回归验证**：首页笔记列表样式无误（亮色主题）
+- [ ] **视觉回归验证**：首页笔记列表样式无误（暗色主题）
+- [ ] **视觉回归验证**：编辑器页面样式无误（编辑模式 + 预览模式）
+- [ ] **视觉回归验证**：搜索弹窗样式无误
+- [ ] **视觉回归验证**：设置面板样式无误
+- [ ] **视觉回归验证**：数据管理视图样式无误
+- [ ] **视觉回归验证**：侧栏（展开/折叠）样式无误
+- [ ] **视觉回归验证**：batch-tag / shortcuts / move-notebook 弹窗样式无误
+- [ ] **视觉回归验证**：Markdown 引用页面样式无误
