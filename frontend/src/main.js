@@ -728,6 +728,13 @@ function switchView(view) {
                 break;
         }
 
+        // 非网格视图自动折叠侧栏（设置/数据管理/回收站与笔记本切换无关）
+        if (view !== 'grid' && !els.notebookSidebar?.classList.contains('collapsed')) {
+            els.notebookSidebar.classList.add('collapsed');
+            localStorage.setItem('jot_sidebar_collapsed', 'true');
+            updateSidebarMenuItem();
+        }
+
         // 使用 requestAnimationFrame 确保 class 切换在下一渲染帧生效
         requestAnimationFrame(() => {
             targetView.classList.add('view-enter');
@@ -2045,6 +2052,12 @@ async function resetDatabase() {
     await loadDataStats();
     // 重新加载笔记本列表（数据已重置，旧 counts 不再有效）
     await loadNotebooks();
+    // 重置后折叠侧栏，用户展开时自动触发刷新笔记本数据
+    if (els.notebookSidebar) {
+        els.notebookSidebar.classList.add('collapsed');
+        localStorage.setItem('jot_sidebar_collapsed', 'true');
+        updateSidebarMenuItem();
+    }
     // 重置后 activeNotebookId 设为新默认笔记本
     state.activeNotebookId = 1;
     // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
@@ -4969,14 +4982,19 @@ async function doDeleteNotebook(notebookId, deleteNotes) {
 /**
  * 切换侧栏折叠/展开
  */
-function toggleSidebar() {
+async function toggleSidebar() {
     const sidebar = els.notebookSidebar;
     if (!sidebar) return;
+    const wasCollapsed = sidebar.classList.contains('collapsed');
     const isCollapsed = sidebar.classList.toggle('collapsed');
     // localStorage 持久化
     try {
         localStorage.setItem('jot_sidebar_collapsed', String(isCollapsed));
     } catch (e) {}
+    // 从折叠→展开时刷新笔记本数据
+    if (wasCollapsed && !isCollapsed) {
+        await loadNotebooks();
+    }
 }
 
 /**

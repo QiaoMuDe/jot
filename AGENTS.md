@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-26（更新 3）
+> 生成日期: 2026-06-26（更新 4）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,7 +36,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6118 行（含 CM6 集成 + 搜索弹窗）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6158 行（含 CM6 集成 + 搜索弹窗）
 │   │   ├── style.css                   # 组件样式 ~4619 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~581 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
@@ -598,6 +598,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 42. **时间筛选简化（日历→下拉菜单）**：时间筛选从日历弹窗选择器改为简单的下拉菜单（和笔记本/标签筛选器一致）。移除了自定义日历组件（~520 行 JS+CSS），保留 4 个快捷选项（今天/最近7天/最近30天/不限）。后端 `SearchNotes` 的 `startDate, endDate string` 参数不变，SQL `updated_at BETWEEN` 过滤逻辑不变。详见 `.trae/specs/simplify-date-filter/`。
 43. **MD 格式化工具栏开关设置**：设置页「编辑器选项」新增「Markdown 笔记显示格式化工具栏」toggle（`mdToolbarToggle`），存储键 `md_toolbar_enabled`（默认 true）。**与其他设置项一致的持久化模式**：保存时优先写后端 `SetSetting('md_toolbar_enabled', ...)`，不可用时 fallback 到 localStorage；加载时通过 `loadToolbarSetting()` 从后端 `GetSetting` 读取，无记录时默认 true。重置数据库后 settings 表被清空，前端自动回退到默认值。工具栏显隐逻辑：仅 `markdown 笔记 + 编辑模式 + 设置启用` 时显示。切换设置时编辑器打开状态下即时更新工具栏显隐。详见 `.trae/specs/add-toolbar-toggle-setting/`。
 44. **恢复出厂设置漏清 notebooks 表修复**：`ResetDatabase()` 原只清空 notes/tags/settings，未清 notebooks 表。`EnsureDefaultNotebook()` 只在表空时创建默认笔记本，导致旧笔记本残留。修复：`NotebookService` 新增 `ResetAll()` — 硬删除所有笔记本 → 重置 SQLite 自增序列 `DELETE FROM sqlite_sequence WHERE name='notebooks'` → 创建新默认笔记本（ID=1）。`app.go` 的 `ResetDatabase()` 中第 3 步调用。前端 `resetDatabase()` 中 `loadNotebooks()` 后设 `state.activeNotebookId = 1`。详见 `.trae/documents/fix-reset-database-notebooks.md`。
+45. **侧栏交互增强**：三项改进：(1) `toggleSidebar()` 改为 async，从折叠→展开时调用 `await loadNotebooks()` 从数据库刷新笔记本列表和计数，确保展开时数据最新。(2) `resetDatabase()` 执行后自动折叠侧栏并同步 localStorage + 菜单文字，用户展开时触发上述刷新逻辑。(3) `switchView()` 中非 grid 视图（settings/data/trash）自动折叠侧栏，这些页面与笔记本切换无关，收起后给内容区更多空间。
 
 ---
 
@@ -706,6 +707,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **查看模式保存刷新列表**
 - ✅ **MD 格式化工具栏开关设置**：设置页新增 toggle 控制工具栏显隐，`md_toolbar_enabled` 存储键默认开启，持久化走后端+localStorage fallback 模式，切换即时生效带通知
 - ✅ **恢复出厂设置漏清 notebooks 表修复**：`NotebookService.ResetAll()` 硬删所有笔记本+重置自增序列+重建默认笔记本，`app.go` 和前端同步修改
+- ✅ **侧栏交互增强**：展开时刷新笔记本数据、重置后自动折叠、非网格视图自动折叠
 ---
 
 ## 九、关键记忆点
@@ -900,6 +902,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端日期过滤实现** | `app.go` 中 `SearchNotes` 签名从 `(keyword, page, pageSize, notebookID)` 改为 `(keyword, page, pageSize, notebookID, startDate, endDate)`。`note_service.go` 中 `Search()` 和 `SearchByNotebook()` 同步新增 `startDate, endDate string` 参数。非空时 SQL 追加 `AND updated_at BETWEEN ? AND ?`，前半部分 +" 00:00:00"，后半部分 +" 23:59:59"。Wails 绑定(JS/TS)自动更新。`go build ./...` + `npx vite build` 均通过 |
 | **MD 格式化工具栏开关设置** | 设置页「编辑器选项」新增 `#mdToolbarToggle`，存储键 `md_toolbar_enabled`（默认 true）。遵循「**后端优先 + localStorage fallback**」模式：`change` 事件先写 `SetSetting('md_toolbar_enabled', ...)` 后端，不可用时 fallback localStorage；`loadToolbarSetting()` 从后端 `GetSetting` 读取初始化 toggle checked，无记录默认 true。重置数据库后 settings 表被清空，自动回退到默认值。`populateEditor()` 和类型切换处的 toolbar 显隐逻辑增加 `tbEnabled` 判断。切换设置时若编辑器为 markdown 编辑态则即时更新 `els.editorToolbar.style.display`。纯文本/预览/只读模式不受影响 |
 | **恢复出厂设置漏清 notebooks 表修复** | 根因：`app.go` 中 `ResetDatabase()` 只清空 notes/tags/settings，未清 notebooks 表。`EnsureDefaultNotebook()` 仅在表空时创建默认笔记本，导致旧笔记本残留。修复：`notebook_service.go` 新增 `ResetAll()` — `Unscoped().Session(AllowGlobalUpdate).Delete` 硬删除 + `DELETE FROM sqlite_sequence WHERE name='notebooks'` 重置自增序列 + `Create(Name: "默认笔记本")` 重建（ID=1）。`app.go` 的 `ResetDatabase()` 中第 3 步调用。前端 `resetDatabase()` 中 `loadNotebooks()` 后设 `state.activeNotebookId = 1`。`go build ./...` + `npx vite build` 均通过 |
+| **侧栏交互增强** | 三项改进：(1) `toggleSidebar()` 改为 async，保存展开前状态 `wasCollapsed`，仅从折叠→展开时 `await loadNotebooks()` 刷新笔记本列表+计数（收起时不调），CSS 切换同步执行保持 UI 即时响应。Ctrl+2 和菜单点击均走此入口。(2) `resetDatabase()` 执行后 `loadNotebooks()` 下方折叠侧栏（`classList.add('collapsed')` + localStorage + `updateSidebarMenuItem()`），用户展开时触发刷新。(3) `switchView()` 的 `showTargetView()` 中非 grid 视图（settings/data/trash）检测 `!notebookSidebar.classList.contains('collapsed')` 后自动折叠，释放内容区空间。切回 grid 不自动展开，保持用户习惯 |
 
 ## 十二、设置页开发规范
 
