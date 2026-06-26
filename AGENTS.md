@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-26（已更新）
+> 生成日期: 2026-06-26（更新 3）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,8 +36,8 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5410 行（含 CM6 集成 + 搜索弹窗）
-│   │   ├── style.css                   # 组件样式 ~3930 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6118 行（含 CM6 集成 + 搜索弹窗）
+│   │   ├── style.css                   # 组件样式 ~4619 行（含 CM6 主题/语法高亮 + 搜索弹窗样式）
 │   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~581 行）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -596,6 +596,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 40. **搜索弹窗系统**：Ctrl+F 唤起 #searchModal 搜索弹窗替代原 topbar 搜索框。温色遮罩 rgba(45,42,36,0.32) + 2px 琥珀装饰条 + 圆角 20px 与编辑器模态对齐。搜索输入框 flex:1 无快捷键提示 chip。三栏过滤器（笔记本/标签/日期）带 chevron 图标 + activate 态四重指示（背景/文字/边框/chevron 旋转）。标签筛选支持 AND 语义客户端过滤。结果列表 8/12px padding 呼吸感 + hover 渐变+左边框 + selected --accent-light。keyword 高亮 --accent 文字+--accent-light 背景+字重 600。空状态 64×64 圆形图标+双行文案。底部"共 N 条 · ⏎ 打开"组合。
 41. **搜索弹窗动画优化**：打开动画层级错峰（遮罩 0ms → 内容 50ms delay → 结果项 80ms+ 逐条进场），遮罩 opacity + backdrop-filter 200ms ease-out 渐入。关闭用 `closing` class 触发退出动画：结果项 100ms fade + translateY(-6px)、遮罩 + 内容 150ms ease-in 并发完成。聚焦用 `transitionend` 事件替代 50ms setTimeout。`prefers-reduced-motion` 完整降级（所有transition/animation归零）。详见 `.trae/specs/polish-search-modal-animation/`。
 42. **时间筛选简化（日历→下拉菜单）**：时间筛选从日历弹窗选择器改为简单的下拉菜单（和笔记本/标签筛选器一致）。移除了自定义日历组件（~520 行 JS+CSS），保留 4 个快捷选项（今天/最近7天/最近30天/不限）。后端 `SearchNotes` 的 `startDate, endDate string` 参数不变，SQL `updated_at BETWEEN` 过滤逻辑不变。详见 `.trae/specs/simplify-date-filter/`。
+43. **MD 格式化工具栏开关设置**：设置页「编辑器选项」新增「Markdown 笔记显示格式化工具栏」toggle（`mdToolbarToggle`），存储键 `md_toolbar_enabled`（默认 true）。**与其他设置项一致的持久化模式**：保存时优先写后端 `SetSetting('md_toolbar_enabled', ...)`，不可用时 fallback 到 localStorage；加载时通过 `loadToolbarSetting()` 从后端 `GetSetting` 读取，无记录时默认 true。重置数据库后 settings 表被清空，前端自动回退到默认值。工具栏显隐逻辑：仅 `markdown 笔记 + 编辑模式 + 设置启用` 时显示。切换设置时编辑器打开状态下即时更新工具栏显隐。详见 `.trae/specs/add-toolbar-toggle-setting/`。
+44. **恢复出厂设置漏清 notebooks 表修复**：`ResetDatabase()` 原只清空 notes/tags/settings，未清 notebooks 表。`EnsureDefaultNotebook()` 只在表空时创建默认笔记本，导致旧笔记本残留。修复：`NotebookService` 新增 `ResetAll()` — 硬删除所有笔记本 → 重置 SQLite 自增序列 `DELETE FROM sqlite_sequence WHERE name='notebooks'` → 创建新默认笔记本（ID=1）。`app.go` 的 `ResetDatabase()` 中第 3 步调用。前端 `resetDatabase()` 中 `loadNotebooks()` 后设 `state.activeNotebookId = 1`。详见 `.trae/documents/fix-reset-database-notebooks.md`。
 
 ---
 
@@ -702,6 +704,8 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
 - ✅ **查看模式保存刷新列表**：从查看→编辑→返回查看时，保存后调 `loadNotes()` 刷新列表，解决列表不更新问题
 - ✅ **查看模式保存刷新列表**
+- ✅ **MD 格式化工具栏开关设置**：设置页新增 toggle 控制工具栏显隐，`md_toolbar_enabled` 存储键默认开启，持久化走后端+localStorage fallback 模式，切换即时生效带通知
+- ✅ **恢复出厂设置漏清 notebooks 表修复**：`NotebookService.ResetAll()` 硬删所有笔记本+重置自增序列+重建默认笔记本，`app.go` 和前端同步修改
 ---
 
 ## 九、关键记忆点
@@ -894,4 +898,74 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **_triggerFilterSearch** | 新增函数直接清除防抖定时器后同步设置 keyword/重置分页/立即执行 `searchModalLoadPage`，不走 200ms 防抖。替代原来 5 处 `dispatchEvent(new Event('input'))` 调用，消除筛选触发时防抖引起的选中项"跳回"问题 |
 | **时间筛选简化（日历→下拉菜单）** | 移除了日历弹窗选择器（~520 行 JS+CSS），改为与笔记本/标签一致的下拉菜单。`renderDateFilterDropdownSelection()` 渲染 4 个选项（今天/最近7天/最近30天/不限），复用 `_createFilterOption()` 和 `.search-modal-filter-dropdown` 样式。选中后设置 `state.searchModalDateStart/End` → `closeAllFilterDropdowns()` → `_triggerFilterSearch()` |
 | **后端日期过滤实现** | `app.go` 中 `SearchNotes` 签名从 `(keyword, page, pageSize, notebookID)` 改为 `(keyword, page, pageSize, notebookID, startDate, endDate)`。`note_service.go` 中 `Search()` 和 `SearchByNotebook()` 同步新增 `startDate, endDate string` 参数。非空时 SQL 追加 `AND updated_at BETWEEN ? AND ?`，前半部分 +" 00:00:00"，后半部分 +" 23:59:59"。Wails 绑定(JS/TS)自动更新。`go build ./...` + `npx vite build` 均通过 |
+| **MD 格式化工具栏开关设置** | 设置页「编辑器选项」新增 `#mdToolbarToggle`，存储键 `md_toolbar_enabled`（默认 true）。遵循「**后端优先 + localStorage fallback**」模式：`change` 事件先写 `SetSetting('md_toolbar_enabled', ...)` 后端，不可用时 fallback localStorage；`loadToolbarSetting()` 从后端 `GetSetting` 读取初始化 toggle checked，无记录默认 true。重置数据库后 settings 表被清空，自动回退到默认值。`populateEditor()` 和类型切换处的 toolbar 显隐逻辑增加 `tbEnabled` 判断。切换设置时若编辑器为 markdown 编辑态则即时更新 `els.editorToolbar.style.display`。纯文本/预览/只读模式不受影响 |
+| **恢复出厂设置漏清 notebooks 表修复** | 根因：`app.go` 中 `ResetDatabase()` 只清空 notes/tags/settings，未清 notebooks 表。`EnsureDefaultNotebook()` 仅在表空时创建默认笔记本，导致旧笔记本残留。修复：`notebook_service.go` 新增 `ResetAll()` — `Unscoped().Session(AllowGlobalUpdate).Delete` 硬删除 + `DELETE FROM sqlite_sequence WHERE name='notebooks'` 重置自增序列 + `Create(Name: "默认笔记本")` 重建（ID=1）。`app.go` 的 `ResetDatabase()` 中第 3 步调用。前端 `resetDatabase()` 中 `loadNotebooks()` 后设 `state.activeNotebookId = 1`。`go build ./...` + `npx vite build` 均通过 |
+
+## 十二、设置页开发规范
+
+### 新增设置项 Checklist
+
+在设置页新增一个设置项时，必须完成以下 5 步（按顺序）：
+
+#### Step 1: HTML — 在 `index.html` 中添加 toggle/控件
+- 找到对应的 `settings-section`，在合适位置插入控件
+- toggle 使用 `font-setting-row` + `toggle-switch` 结构
+- 控件 id 用驼峰命名（如 `mdToolbarToggle`）
+- 说明文字使用 `quick-note-hint` class
+
+#### Step 2: DOM 引用 — 在 `els` 对象中添加引用
+- 在 [main.js ~L480](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 的 `els` 定义中添加一行：
+  ```js
+  settingName: $('settingName'),
+  ```
+
+#### Step 3: 持久化 — 保存走后端优先 + localStorage fallback
+在 `initEventListeners()` 的对应设置区域中绑定 change 事件，**必须**用以下模板：
+
+```js
+els.settingToggle.addEventListener('change', async (e) => {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+            await window.go.main.App.SetSetting('setting_key', String(e.target.checked));
+            nm.show('设置已保存', 'success');
+        } else {
+            localStorage.setItem('setting_key', String(e.target.checked));
+            nm.show('设置已保存', 'success');
+        }
+    } catch (err) {
+        console.error('保存 XXX 设置失败:', err);
+    }
+    // [可选] 设置变更的即时生效逻辑
+});
+```
+
+#### Step 4: 初始化 — 创建 `loadXxxSetting()` 函数并在 `init()` 中调用
+在 main.js 底部（`loadMdHighlightSetting()` 附近）添加加载函数：
+
+```js
+async function loadXxxSetting() {
+    try {
+        let enabled = true; // 默认值
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('setting_key');
+            enabled = val !== 'false'; // 按需调整默认值判断
+        } else {
+            const local = localStorage.getItem('setting_key');
+            enabled = local !== 'false';
+        }
+        els.settingToggle.checked = enabled;
+    } catch (err) {
+        console.error('加载 XXX 设置失败:', err);
+    }
+}
+```
+
+在 `init()` 函数中（`loadMdHighlightSetting()` 之后）添加调用：
+```js
+await loadXxxSetting();
+```
+
+#### Step 5: 重置一致性 — 确保 `ResetDatabase` 后能回退到默认值
+- 使用上述模板后自动满足：`ResetDatabase` 调用后端 `DeleteAll()` 清空 settings 表 → 前端 `loadXxxSetting()` 读不到值 → 按默认值恢复
+- **不要**只使用 localStorage 存储，否则重置数据库后该设置值会残留，与其他设置行为不一致
 

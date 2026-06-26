@@ -480,6 +480,7 @@ const els = {
     tagList: $('tagList'),
     quickNoteToggle: $('quickNoteToggle'),
     mdHighlightToggle: $('mdHighlightToggle'),
+    mdToolbarToggle: $('mdToolbarToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -2044,6 +2045,8 @@ async function resetDatabase() {
     await loadDataStats();
     // 重新加载笔记本列表（数据已重置，旧 counts 不再有效）
     await loadNotebooks();
+    // 重置后 activeNotebookId 设为新默认笔记本
+    state.activeNotebookId = 1;
     // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
     switchView('grid');
     loadNotes();
@@ -2544,9 +2547,10 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
     els.editorModes.style.display = state.noteType === 'markdown' ? '' : 'none';
 
-    // 控制工具栏显示（仅 markdown 笔记显示）
+    // 控制工具栏显示（仅 markdown 笔记 + 编辑模式 + 设置启用时显示）
     if (els.editorToolbar) {
-        els.editorToolbar.style.display = (state.noteType === 'markdown' && !isReadOnly) ? 'flex' : 'none';
+        const tbEnabled = localStorage.getItem('md_toolbar_enabled') !== 'false';
+        els.editorToolbar.style.display = (state.noteType === 'markdown' && !isReadOnly && tbEnabled) ? 'flex' : 'none';
     }
 
     // 统一初始化编辑器模式为纯文本编辑（data-mode 值影响 flex 布局 CSS 选择器）
@@ -3909,9 +3913,10 @@ function initEventListeners() {
         els.editorTypeToggle.title = newType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
         // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
         els.editorModes.style.display = newType === 'markdown' ? '' : 'none';
-        // 同步工具栏显隐
+        // 同步工具栏显隐（额外检查设置开关）
         if (els.editorToolbar) {
-            els.editorToolbar.style.display = newType === 'markdown' ? 'flex' : 'none';
+            const tbEnabled = localStorage.getItem('md_toolbar_enabled') !== 'false';
+            els.editorToolbar.style.display = (newType === 'markdown' && tbEnabled) ? 'flex' : 'none';
         }
         // 切到纯文本时自动切回编辑模式
         if (newType === 'text') {
@@ -3960,6 +3965,27 @@ function initEventListeners() {
             }
         } catch (err) {
             console.error('保存快速笔记设置失败:', err);
+        }
+    });
+
+    // 工具栏显示开关
+    els.mdToolbarToggle.addEventListener('change', async (e) => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+                await window.go.main.App.SetSetting('md_toolbar_enabled', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            } else {
+                localStorage.setItem('md_toolbar_enabled', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            }
+        } catch (err) {
+            console.error('保存工具栏设置失败:', err);
+        }
+        // 编辑器打开时即时更新
+        if (els.editorPanel.style.display !== 'none' && state.noteType === 'markdown' && els.editorOverlay.dataset.mode === 'edit') {
+            if (els.editorToolbar) {
+                els.editorToolbar.style.display = e.target.checked ? 'flex' : 'none';
+            }
         }
     });
 
@@ -5646,6 +5672,7 @@ async function init() {
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
     await loadMdHighlightSetting();
+    await loadToolbarSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 加载笔记本列表（会设置默认选中）
@@ -5897,6 +5924,25 @@ async function loadMdHighlightSetting() {
         els.mdHighlightToggle.checked = enabled;
     } catch (err) {
         console.error('加载 MD 高亮设置失败:', err);
+    }
+}
+
+/**
+ * 加载 MD 格式化工具栏开关设置
+ */
+async function loadToolbarSetting() {
+    try {
+        let enabled = true;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('md_toolbar_enabled');
+            enabled = val !== 'false'; // 默认启用
+        } else {
+            const local = localStorage.getItem('md_toolbar_enabled');
+            enabled = local !== 'false';
+        }
+        els.mdToolbarToggle.checked = enabled;
+    } catch (err) {
+        console.error('加载工具栏设置失败:', err);
     }
 }
 

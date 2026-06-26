@@ -775,7 +775,11 @@ func (a *App) ResetDatabase() error {
 	if err := a.settingService.DeleteAll(); err != nil {
 		return err
 	}
-	// 3. 重新初始化默认标签
+	// 3. 清空所有笔记本，重建默认笔记本
+	if err := a.notebookService.ResetAll(); err != nil {
+		return err
+	}
+	// 4. 重新初始化默认标签
 	if err := services.InitDefaultTags(a.db); err != nil {
 		return err
 	}

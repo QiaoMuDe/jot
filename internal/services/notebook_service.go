@@ -113,6 +113,18 @@ func (s *NotebookService) Delete(id uint) error {
 	return nil
 }
 
+// ResetAll 清空所有笔记本（硬删除），重置自增序列，然后创建默认笔记本
+func (s *NotebookService) ResetAll() error {
+	// 硬删除所有笔记本
+	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Notebook{}).Error; err != nil {
+		return err
+	}
+	// 重置 SQLite 自增序列，确保下一个笔记本 ID 为 1
+	s.db.Exec("DELETE FROM sqlite_sequence WHERE name='notebooks'")
+	// 创建默认笔记本
+	return s.db.Create(&models.Notebook{Name: "默认笔记本"}).Error
+}
+
 // DeleteWithNotes 删除笔记本并永久删除其下所有笔记
 func (s *NotebookService) DeleteWithNotes(id uint) error {
 	if id == 1 {
