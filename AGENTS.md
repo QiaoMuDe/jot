@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-26（更新 5）
+> 生成日期: 2026-06-27（更新 6）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -37,8 +37,23 @@ jot/                                    # 项目根目录
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑 ~6303 行（含 CM6 集成 + 搜索弹窗 + MD 语法页面）
-│   │   ├── style.css                   # 组件样式 ~4990 行（含 CM6 主题/语法高亮 + MD 语法卡片样式 + 统一滚动条）
-│   │   └── app.css                     # 全局样式（reset/布局/滚动条 ~697 行）
+│   │   └── css/                        # 【CSS 模块化目录】原 style.css (~4990 行) + app.css (~697 行) 拆分
+│   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
+│   │       ├── variables.css           # 6 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
+│   │       ├── reset.css               # 全局 reset（box-sizing/body 边距/overscroll-behavior）
+│   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 主题变量联动
+│   │       ├── animations.css          # 13 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
+│   │       └── components/
+│   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮）
+│   │           ├── main-content.css    # 主内容区布局（卡片网格/视图容器/滚动）
+│   │           ├── sidebar.css         # 笔记本侧边栏三段式设计
+│   │           ├── editor.css          # 编辑器面板/CM6 主题/全屏/预览/代码块复制按钮
+│   │           ├── dropdowns.css       # 右键菜单/更多菜单/下拉选择器
+│   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层
+│   │           ├── settings-panel.css  # 设置页分段控件/开关/按钮
+│   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
+│   │           ├── data-view.css       # 数据管理统计卡片/操作卡片
+│   │           └── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -171,7 +186,7 @@ jot/                                    # 项目根目录
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend                          │
-│  (main.js / style.css / index.html)                  │
+│  (main.js / css/index.css / index.html)               │
 │   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站)          │
 │   ├─ 交互逻辑 (事件绑定/状态管理)                      │
 │   └─ Wails Bridge (window.go.main.App.*)              │
@@ -252,8 +267,7 @@ graph TD
 
     subgraph Frontend
         L[index.html] --> M[main.js]
-        M --> N[style.css]
-        M --> O[app.css]
+        M --> N[css/index.css]
         M --> P[wailsjs/go/main/App.js]
     end
 
@@ -634,7 +648,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 - ✅ **移除 Google Fonts CDN**：删除 DM Sans 字体依赖，默认字体改为 `system-ui, -apple-system, sans-serif`，完全无外部网络请求
 - ✅ **只读模式标签过滤**：查看页面标签只显示该笔记已添加的标签，不再展示全部标签
 - ✅ **README 精简**：删除内部 API 文档/使用示例/配置选项/项目结构/测试说明，聚焦用户视角的使用和安装
-- ✅ **CSS 清理**：删除 Section L 旧确认弹窗死代码（38 行）、删除 style.css 中重复的 `cardEnter` 关键帧（app.css 版本生效）、补齐 6 主题 `--bg-secondary`/`--text-tertiary` 变量（此前引用未定义）
+- ✅ **CSS 清理**：删除 Section L 旧确认弹窗死代码（38 行）、删除旧 style.css 中重复的 `cardEnter` 关键帧（旧 app.css 版本生效）、补齐 6 主题 `--bg-secondary`/`--text-tertiary` 变量（此前引用未定义）
 - ✅ **确认弹窗修复**：HTML 类名 `confirm-dialog-overlay` 指向已被删除的旧 CSS，修复为 `confirm-overlay` + 适配 CSS/JS，弹窗居中 + 模糊背景 + 淡入动画
 - ✅ **标签删除刷新笔记**：`deleteTag()` 末尾追加 `await loadNotes()`，删除标签后卡片网格立即更新，不再显示已删除的标签
 - ✅ **全屏动画优化**：CSS 去掉 `!important`，尺寸/圆角加入默认 transition；JS 移除 inline transition 逻辑 + transitionend 监听，纯 classList 切换；overlay 全屏态加深背景 + 升模糊至 10px；editor-body 过渡期间淡出/淡入防内容跳跃
@@ -704,7 +718,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 9 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
-| **前端代码量** | ~6303 行 JS + ~4990 行 CSS + ~697 行 CSS 全局样式（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~6303 行 JS + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -747,7 +761,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **PgDn 逻辑** | 已到底时直接调用 `loadMoreNotes()` 加载下一页（不走 scroll 事件）；未到底时设置 `_keyboardScroll` 标志阻止 scroll 监听器误触发 |
 | **ESC 逻辑** | 按 ESC 依次检查：关于页 → 关闭；全屏 → 退出全屏；编辑器打开 → `closeEditor()`；快捷键弹窗 → 关闭；批量模式 → 退出；搜索视图 → 清空回首页；其他子视图 → 回首页 |
 | **Sort & PageSize** | 后端 `GetAll`/`GetByTag` 接受 `sortBy` 参数动态 ORDER BY，新增 4 个绑定方法：`GetSortOrder`/`SetSortOrder`/`GetPageSize`/`SetPageSize` |
-| **主题系统** | 6 个主题：default（暖灰）、nord（北极蓝调）、monokai-pro（荧光粉墨）、light（亮白蓝强调）、tokyo-night（靛紫夜幕）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `app.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。设置页使用 iOS 风格分段控件（6 等分滑动指示器，宽度 320px），持久化到 Setting `theme`。分段控件动态计算按钮数，支持任意数量按钮 |
+| **主题系统** | 6 个主题：default（暖灰）、nord（北极蓝调）、monokai-pro（荧光粉墨）、light（亮白蓝强调）、tokyo-night（靛紫夜幕）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `css/variables.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。设置页使用 iOS 风格分段控件（6 等分滑动指示器，宽度 320px），持久化到 Setting `theme`。分段控件动态计算按钮数，支持任意数量按钮 |
 | **标签交互优化** | 编辑器标签点击态改为 DOM 类切换（`active`/`clicked`），不再整个重渲染 `renderTagSelector`。选中 → `filter:none + opacity:1 + ✓前缀 + box-shadow`；未选中 → `filter:saturate(0.25) brightness(0.65) + opacity:0.55`；点击脉冲动画 0.25s |
 | **编辑器滚动结构** | `.editor-panel` 固定 `height: 85vh`，`.editor-body` 做 flex 布局分配（无滚动），`.editor-textarea` 设为 `flex:1; overflow-y:auto` 独占滚动。textarea 不自带滚动高度（无 `rows`/`min-height` 限制，用 `flex:1; min-height:0` 填满空间）。Editor scrollbar 6px 半透明灰独立主题色 |
 | **悬浮按钮 FAB** | 右下角 `position: fixed`，z-index:100。`+`（`#fabNewNote`）始终可见，accent 圆底白字 44px；`↑`（`#backToTopBtn`）默认隐藏，主内容 scrollTop>300 淡入。hover scale(1.08)，active scale(0.95)。距右下角 28px，间距 12px，`+` 在下 |
@@ -791,14 +805,14 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | | **相关文件**：app.go (getThemeBackgroundColour, getWindowsOptions, ApplyWindowTheme, findMainWindow, setWindowAttribute), main.go (Windows 选项) |
 | **无边框窗口与自定义标题栏** | **问题**：Windows 原生标题栏失去焦点时变黑色（DWM 非激活状态默认行为），深色主题下反差极大 |
 | | **方案**：改用 Frameless 模式完全移除原生标题栏，前端用 HTML/CSS 绘制自定义标题栏。topbar 同时承担窗口标题栏职责，右侧放置窗口控制按钮（─ □ ✕），与应用操作按钮（+ ✓ ☰）融为一体 |
-| | **实现**：1. main.go 启用 `Frameless: true` + `CSSDragProperty/Value` 2. index.html 删除独立 #windowTitleBar，窗口控制按钮直接放入 #topbar-actions 3. style.css 统一按钮样式（.topbar-btn），窗口控制按钮与应用按钮同风格 4. main.js 导入 Wails Runtime API，新增 initWindowControls() 绑定最小化/最大化/关闭事件，双击 topbar 空白区最大化/还原 5. 所有按钮加 `--wails-draggable: no-drag`，topbar 加 `--wails-draggable: drag` |
+| | **实现**：1. main.go 启用 `Frameless: true` + `CSSDragProperty/Value` 2. index.html 删除独立 #windowTitleBar，窗口控制按钮直接放入 #topbar-actions 3. `css/components/topbar.css` 统一按钮样式（.topbar-btn），窗口控制按钮与应用按钮同风格 4. main.js 导入 Wails Runtime API，新增 initWindowControls() 绑定最小化/最大化/关闭事件，双击 topbar 空白区最大化/还原 5. 所有按钮加 `--wails-draggable: no-drag`，topbar 加 `--wails-draggable: drag` |
 | | **按钮布局演进**：最初 6 个按钮并排（+ ✓ ☰ ─ □ ✕）→ 去掉 +（底部 FAB 已有新建）→ ✓ 移入更多菜单（批量管理）→ 最终只剩 ☰ ─ □ ✕，☰ 在最右侧 |
 | | **快捷键更新**：Ctrl+数字键 1-8 导航（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 快捷键说明/8 MD 语法手册），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto）。`[`/`]` 随 FindReplaceManager 一并删除 |
-| | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), style.css (按钮样式), main.js (窗口控制 + 快捷键映射) |
+| | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), `css/components/topbar.css` (按钮样式), main.js (窗口控制 + 快捷键映射) |
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-26），本次更新内容：① 新增 MD 语法手册页面（10 张卡片源码+预览双栏对照、Ctrl+8 访问页面），详见 `.trae/specs/add-md-reference-page/`。② 新增「打开编辑器试试」按钮（每张卡片底部，点击自动创建 MD 笔记预填标题和源码内容），修复 async/await 时序和 noteType 覆盖问题，详见 `.trae/specs/add-md-ref-try-button/`。③ MD 语法页面全主题适配（6 套主题全部自动适配），代码块字体跟随全局字体设置。④ Seed 工具增强（笔记 22→38 条，笔记本 5→6，标签 5→7，每条带完整 Markdown 正文，时间跨度 30 天）。⑤ 统一应用滚动条样式（所有可滚动区域 6px 细条 + 主题变量联动 + 隐藏箭头按钮），详见 `.trae/specs/unify-app-scrollbars/`。
+> **报告结束** | 项目记忆已更新（2026-06-27），本次更新内容：① CSS 模块化拆分 — 旧 `style.css`（~4990 行）+ `app.css`（~697 行）拆分为 `src/css/` 目录下 5 个基础文件 + 10 个组件文件，`main.js` 通过 `import './css/index.css'` 统一引入。详见 `frontend/src/css/` 目录结构。② 更新 AGENTS.md 中所有旧 style.css/app.css 引用至新的 CSS 模块路径。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
@@ -815,7 +829,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **CM6 异步初始化修复** | 查看模式预览渲染先由 `editorContent` 字符串直接渲染（不依赖 CM6），CM6 初始化完成后若处于预览模式则二次刷新。已删除旧 320ms setTimeout 延迟，CM6 在面板动画启动前同步初始化 |
 | **CM6 反白闪屏** | CSS 添加 `animation: cmFadeIn 0.15s ease-out forwards` 在 `.cm-editor` 上，CM6 创建编辑器 DOM 时自动淡入。编辑器 `editor-textarea` 使用 `background: transparent` 避免白屏 |
 | **CM6 依赖包** | 新增 8 个主要包：`@codemirror/state@^6.5.0`、`@codemirror/view@^6.35.0`、`@codemirror/commands@^6.8.0`、`@codemirror/search@^6.5.0`、`@codemirror/lang-markdown@^6.3.0`、`@codemirror/language@^6.10.0`、`@codemirror/autocomplete@^6.18.0`、`@lezer/highlight@^1.2.0` |
-| **旧代码清理** | 删除 FindReplaceManager 类（~636 行）及所有 findReplace 引用（12 处变量 + 1 处 init 调用）。删除 style.css 中旧 Find Bar CSS（~140 行）。index.html 删除 `#findOverlay` div，`<textarea>` 替换为 `<div>` |
+| **旧代码清理** | 删除 FindReplaceManager 类（~636 行）及所有 findReplace 引用（12 处变量 + 1 处 init 调用）。删除旧 style.css 中 Find Bar CSS（~140 行）。index.html 删除 `#findOverlay` div，`<textarea>` 替换为 `<div>` |
 | **快捷键数字键** | 1-7 改为 Ctrl+数字键防止误触。快捷键说明页、下拉菜单 tooltip、侧栏动态 tooltip 同步更新。`[`/`]` 快捷键说明已移除 |
 | **字体联动** | CM6 通过 `EditorView.theme()` 中 `"&"` 的 `fontFamily`/ `fontSize` 绑定 `--cm-font-family` / `--cm-font-size` CSS 变量，字体设置实时同步 |
 | **CM6 Markdown 语法高亮** | 使用 `HighlightStyle.define([...])` + `syntaxHighlighting()` 扩展，引用 CSS 变量（`--accent`/`--text-primary`/`--text-muted`/`--text-secondary`/`--hover-bg`/`--border` 等）实现 6 主题联动。`jotHighlightStyle` 定义在 `initCodeMirror()` 上方，覆盖 16 种 tag：`heading1~6`（h1 最大最亮橙色，逐级递减）、`strong`（加粗）、`emphasis`（斜体）、`strikethrough`（删除线）、`link`（accent 色）、`url`（下划线）、`quote`（灰绿）、`monospace`（橙底）、`comment`（灰色斜体，代码块）、`list`（列表标记）、`contentSeparator`（水平线）、`escape`（转义符）、`character`（HTML 实体）、`labelName`（代码语言标签）、`string`（链接标题）、`processingInstruction`（语法标记符号）。不使用 `classHighlighter`（生成 `tok-xxx` 类名不匹配 CM6 DOM 结构）|
