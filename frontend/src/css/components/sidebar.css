@@ -82,6 +82,7 @@
   transition: opacity 0.15s ease;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
+  outline: none;
 }
 
 .sidebar-notebook-list::-webkit-scrollbar-button {
@@ -168,6 +169,13 @@
 
 .notebook-item:hover .notebook-name {
   color: var(--accent);
+}
+
+/* 键盘导航聚焦态 — 微弱的轮廓高亮 */
+.notebook-item.keyboard-focus {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: -1px;
 }
 
 /* 笔记数 badge — 精致药丸 */

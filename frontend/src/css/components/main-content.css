@@ -189,6 +189,8 @@
   border: 1px solid transparent;
   /* 初始透明，由 cardEnter 动画渐入 */
   opacity: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .note-card:hover {
@@ -219,6 +221,7 @@
 
 .card-body {
   padding: 16px 16px 0;
+  flex: 1;
 }
 
 .card-title {
@@ -341,6 +344,22 @@
 .note-card.pinned .pin-btn:hover {
   background: var(--accent-light);
   transform: scale(1.15);
+}
+
+/* 红色边框闪烁动画（拖拽导入新笔记标记） */
+@keyframes cardFlash {
+    0%   { border-color: transparent; opacity: 1; }
+    10%  { border-color: #EF4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.25); }
+    22%  { border-color: transparent; box-shadow: none; }
+    32%  { border-color: #EF4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.25); }
+    44%  { border-color: transparent; box-shadow: none; }
+    54%  { border-color: #EF4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.25); }
+    66%  { border-color: transparent; box-shadow: none; }
+    100% { border-color: transparent; opacity: 1; }
+}
+/* 闪烁后确保卡片保持可见（.note-card 默认 opacity: 0） */
+.note-card.flash-done {
+    opacity: 1;
 }
 
 /* 置顶按钮旋转动画 */

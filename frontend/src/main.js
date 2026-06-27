@@ -1157,6 +1157,65 @@ function showConfirmDialog(msg) {
     });
 }
 
+/** 笔记本侧栏键盘导航当前聚焦的索引（-1 表示无聚焦） */
+let notebookFocusIndex = -1;
+
+/**
+ * 处理笔记本侧栏键盘导航（上下键移动选择，回车切换）
+ */
+function handleNotebookListKeydown(e) {
+    const items = els.notebookList.querySelectorAll('.notebook-item');
+    if (!items || items.length === 0) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        // 计算下一个索引
+        const direction = e.key === 'ArrowDown' ? 1 : -1;
+        if (notebookFocusIndex === -1) {
+            // 首次聚焦，从当前 active 项开始，没有则从第一项开始
+            const activeIdx = Array.from(items).findIndex(item => item.classList.contains('active'));
+            notebookFocusIndex = activeIdx >= 0 ? activeIdx : 0;
+        } else {
+            notebookFocusIndex = Math.max(0, Math.min(items.length - 1, notebookFocusIndex + direction));
+        }
+        updateNotebookKeyboardFocus(items);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (notebookFocusIndex < 0 || notebookFocusIndex >= items.length) return;
+        const focusedItem = items[notebookFocusIndex];
+        const id = parseInt(focusedItem.dataset.notebookId);
+        if (id && id !== state.activeNotebookId) {
+            switchNotebook(id);
+        }
+    }
+}
+
+/**
+ * 更新笔记本列表的键盘聚焦高亮
+ */
+function updateNotebookKeyboardFocus(items) {
+    if (!items) items = els.notebookList.querySelectorAll('.notebook-item');
+    items.forEach((item, index) => {
+        item.classList.toggle('keyboard-focus', index === notebookFocusIndex);
+    });
+    // 滚动聚焦项到视口内
+    if (notebookFocusIndex >= 0 && items[notebookFocusIndex]) {
+        items[notebookFocusIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+/**
+ * 清除笔记本键盘聚焦（列表重新渲染后调用）
+ */
+function clearNotebookKeyboardFocus() {
+    if (els.notebookList) {
+        els.notebookList.querySelectorAll('.notebook-item.keyboard-focus').forEach(item => {
+            item.classList.remove('keyboard-focus');
+        });
+    }
+    notebookFocusIndex = -1;
+}
+
 /**
  * 显示保存确认对话框（退出程序前使用）
  * @param {string} msg - 提示信息
@@ -2223,7 +2282,7 @@ function renderCardGrid(animateMode, prevCount) {
     els.cardGrid.innerHTML = sorted
         .map(
             (note) => `
-        <div class="note-card${note.pinned ? ' pinned' : ''}${state.batchMode ? ' batch-mode' : ''}${state.selectedNoteIds.has(note.id) ? ' selected' : ''}" onclick="${state.batchMode ? `window.toggleNoteSelection(${note.id})` : `window.viewNote(${note.id})`}" oncontextmenu="${state.batchMode ? 'event.preventDefault()' : `event.preventDefault(); window.showContextMenu(event, ${note.id})`}">
+        <div class="note-card${note.pinned ? ' pinned' : ''}${state.batchMode ? ' batch-mode' : ''}${state.selectedNoteIds.has(note.id) ? ' selected' : ''}" data-id="${note.id}" onclick="${state.batchMode ? `window.toggleNoteSelection(${note.id})` : `window.viewNote(${note.id})`}" oncontextmenu="${state.batchMode ? 'event.preventDefault()' : `event.preventDefault(); window.showContextMenu(event, ${note.id})`}">
             <div class="card-body">
                 <div class="card-title">${escapeHtml(note.title || '无标题')}</div>
                 <div class="card-content">${escapeHtml(getSummary(note.content, 200))}</div>
@@ -4030,6 +4089,14 @@ function initEventListeners() {
     // 笔记本侧栏事件
     els.newNotebookBtn?.addEventListener('click', showNewNotebookDialog);
 
+    // 笔记本侧栏键盘导航
+    if (els.notebookList) {
+        els.notebookList.addEventListener('keydown', handleNotebookListKeydown);
+        els.notebookList.addEventListener('blur', () => {
+            clearNotebookKeyboardFocus();
+        });
+    }
+
     // 搜索弹窗事件绑定(替代原 topbar 搜索框)
     initSearchModalListeners();
 }
@@ -4721,6 +4788,8 @@ function renderNotebookList() {
 function renderListContent(noteCounts) {
     const list = els.notebookList;
     if (!list) return;
+    // 列表重新渲染，清除键盘聚焦
+    clearNotebookKeyboardFocus();
 
     // 默认笔记本始终排在最前面
     const sorted = [...state.notebooks].sort((a, b) => {
@@ -5885,6 +5954,31 @@ function initFileDrop() {
 /**
  * 处理拖拽文件导入（Wails OnFileDrop → 后端 ImportFiles）
  */
+/**
+ * 在卡片网格中闪烁指定笔记卡片（红色边框动画）
+ * @param {number[]} noteIds - 要闪烁的笔记 ID 数组
+ */
+function flashNoteCards(noteIds) {
+    if (!noteIds || noteIds.length === 0) return;
+    // 两次 requestAnimationFrame 确保 DOM 已渲染完毕
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            noteIds.forEach((id, index) => {
+                const card = els.cardGrid.querySelector(`.note-card[data-id="${id}"]`);
+                if (card) {
+                    card.style.animation = `cardFlash 3s ease-out forwards`;
+                    card.style.animationDelay = `${index * 150}ms`;
+                    card.addEventListener('animationend', function handler() {
+                        card.removeEventListener('animationend', handler);
+                        card.classList.add('flash-done');
+                        card.style.animation = '';
+                    });
+                }
+            });
+        });
+    });
+}
+
 async function handleFileDropPaths(paths, notebookId) {
     if (!paths || paths.length === 0) return;
 
@@ -5899,7 +5993,7 @@ async function handleFileDropPaths(paths, notebookId) {
 
         let successCount = 0;
         let failCount = 0;
-        let lastNoteId = null;
+        const importedNoteIds = [];
 
         for (const result of results) {
             const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
@@ -5909,7 +6003,7 @@ async function handleFileDropPaths(paths, notebookId) {
                 nm.show(`${label} ${result.error}`, 'warning');
             } else if (result.success) {
                 successCount++;
-                lastNoteId = result.note_id;
+                importedNoteIds.push(result.note_id);
             } else {
                 failCount++;
                 nm.show(`"${label}" ${result.error || '导入失败'}`, 'warning');
@@ -5925,7 +6019,8 @@ async function handleFileDropPaths(paths, notebookId) {
 
         await loadNotes();
         await loadNotebooks();
-        if (lastNoteId) openEditor(lastNoteId, true);
+        // 不再打开编辑器，改为红色边框闪烁标记导入的笔记
+        flashNoteCards(importedNoteIds);
     } catch (err) {
         console.error('批量导入失败:', err);
         nm.show('文件导入失败：' + (err.message || '未知错误'), 'error');
