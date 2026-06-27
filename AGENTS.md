@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-27（更新 6）
+> 生成日期: 2026-06-27（更新 7）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,7 +36,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 8 包 + marked + highlight.js）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6303 行（含 CM6 集成 + 搜索弹窗 + MD 语法页面）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6400 行（含 CM6 集成 + 搜索弹窗 + MD 语法页面 + TOC + 回到顶部）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css (~4990 行) + app.css (~697 行) 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
 │   │       ├── variables.css           # 6 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
@@ -1033,4 +1033,12 @@ await loadXxxSetting();
 | 记忆点 | 内容 |
 |--------|------|
 | **「返回查看模式」虚假通知** | 查看模式进入编辑 → 不做任何修改 → 点击"返回查看模式"时，原逻辑无条件调用 `App.UpdateNote()` + 弹出"笔记已更新"。修复后：在 `editorViewBtn` click handler 中新增 `state._editSnapshot` 比对（title/content/tags），无变更时跳过保存+通知，仅 `openEditor(noteId, true)` 静默切回。与 `closeEditorSafe()` 使用完全一致的比对逻辑（`.trim()` + `JSON.stringify` 排序标签数组）。详见 `.trae/documents/fix-editor-mode-switch-false-notification.md` |
+|
+| ## 十八、新增记忆点（MD 语法 TOC 两行网格 + 回到顶部按钮）
+| |
+| | 记忆点 | 内容 |
+| |--------|------|
+| | **TOC 两行网格布局（方案 C）** | MD 语法页面目录从 `flex-wrap` 水平排列改为 CSS Grid `grid-template-columns: repeat(5, auto)`，10 个 TOC 项按两行五列排布，`justify-content: center` + `justify-items: center` 居中对齐。窄屏（<768px）降为 3 列。每项加 `white-space: nowrap` 禁止换行。详见 `md-reference.css` `.md-ref-toc` |
+| | **TOC 选中态滚动自动清除** | 点击 TOC 项后通过 `window._tocScrolling` 标志 + 800ms `setTimeout` 保护平滑滚动期间不误清除 `.active`。用户手动滚动时（`_tocScrolling = false`），scroll handler 立即清除所有 TOC 项的 `.active` 类，避免过期高亮残留。详见 `main.js` `renderMdRefCards()` |
+| | **MD 语法页面回到顶部按钮** | 在 `#viewMdRef` 内添加 `#mdRefTopBtn` 固定定位按钮（样式同笔记首页 FAB）。滚动超过 300px 时淡入显示（`opacity` + `translateY` 过渡），点击 `els.mainContent.scrollTo({ top: 0, behavior: 'smooth' })` 平滑回到顶部。仅在 MD 语法视图可见时生效，不影响其他页面。详见 `md-reference.css` `.md-ref-top-btn` |
 

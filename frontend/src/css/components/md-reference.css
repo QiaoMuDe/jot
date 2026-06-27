@@ -35,6 +35,7 @@
     border-radius: 12px;
     opacity: 1;
     transform: translateY(0);
+    scroll-margin-top: 60px;
     transition: opacity 0.5s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
     animation: mdRefCardEnter 0.5s ease both;
     /* 不使用 overflow:hidden，避免 grid 布局下内容被裁剪 */
@@ -402,5 +403,94 @@
     }
     .md-ref-preview-panel .md-ref-preview {
         padding: 14px 16px;
+    }
+    .md-ref-toc {
+        padding: 0 0 12px;
+    }
+}
+
+/* ===== 锚点目录 (TOC) - 两行网格 ===== */
+.md-ref-toc {
+    display: grid;
+    grid-template-columns: repeat(5, auto);
+    gap: 6px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+    justify-content: center;
+    justify-items: center;
+}
+.md-ref-toc-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    user-select: none;
+    white-space: nowrap;
+}
+.md-ref-toc-item:hover {
+    background: rgba(var(--accent-rgb), 0.1);
+    border-color: var(--accent-light);
+    color: var(--accent);
+}
+.md-ref-toc-item.active {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* MD 语法页面回到顶部按钮 */
+.md-ref-top-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: all 0.25s ease;
+    z-index: 100;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.md-ref-top-btn.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.md-ref-top-btn:hover {
+    transform: scale(1.08) translateY(-1px);
+    color: var(--accent);
+    background: var(--hover-bg);
+    box-shadow: var(--shadow-elevated, var(--shadow-lg));
+}
+.md-ref-top-btn:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+    .md-ref-toc {
+        grid-template-columns: repeat(3, auto);
+        padding: 0 0 12px;
     }
 }

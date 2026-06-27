@@ -460,8 +460,20 @@
                 <div class="view-controls"></div>
             </div>
             <div class="md-ref-content" id="mdRefContent">
+                <div class="md-ref-toc">
+                    <a class="md-ref-toc-item" href="#md-ref-card--headings">⌗ 标题</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--text">𝐁 文本样式</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--links">🔗 链接与图片</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--lists">📋 列表</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--code">💻 代码块</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--blockquote">💬 引用</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--table">📊 表格</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--tasks">✅ 任务列表</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--hr">➖ 分割线</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--escape">\ 转义</a>
+                </div>
                 <!-- 卡片 1: 标题 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--headings">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">⌗ 标题 (Headings)</span>
                     </div>
@@ -488,7 +500,7 @@
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
-                        <div class="md-ref-card-footnote">使用 <kbd>Ctrl+1</kbd> ~ <kbd>Ctrl+6</kbd> 也可在编辑器中快速插入</div>
+                        <div class="md-ref-card-footnote">标题自动生成目录锚点，便于文档导航</div>
                         <button class="md-ref-try-btn">打开编辑器试试</button>
                     </div>
                     <script type="text/plain" class="md-ref-source"># 一级标题
@@ -500,7 +512,7 @@
                 </div>
 
                 <!-- 卡片 2: 文本样式 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--text">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">𝐁 文本样式</span>
                     </div>
@@ -526,7 +538,7 @@
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
-                        <div class="md-ref-card-footnote">快捷键：<kbd>Ctrl+B</kbd> 加粗 · <kbd>Ctrl+I</kbd> 斜体 · <kbd>Ctrl+U</kbd> 删除线</div>
+                        <div class="md-ref-card-footnote">在文本两侧添加对应标记即可应用样式</div>
                         <button class="md-ref-try-btn">打开编辑器试试</button>
                     </div>
                     <script type="text/plain" class="md-ref-source">**加粗文本**
@@ -537,7 +549,7 @@
                 </div>
 
                 <!-- 卡片 3: 链接与图片 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--links">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">🔗 链接与图片</span>
                     </div>
@@ -554,7 +566,7 @@
                             </div>
                             <pre><code>[访问 Jot 主页](https://example.com)
 [带标题的链接](https://example.com "点击访问")
-![替代文本](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=A+peaceful+mountain+landscape+with+a+lake+at+sunset+vivid+colors+realistic+photography&image_size=landscape_16_9)</code></pre>
+![替代文本](https://picsum.photos/seed/jot/400/240)</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
                             <div class="md-ref-preview" data-ref="2"></div>
@@ -564,13 +576,13 @@
                         <div class="md-ref-card-footnote">图片支持本地路径和网络链接，拖动图片到编辑器也可自动插入</div>
                         <button class="md-ref-try-btn">打开编辑器试试</button>
                     </div>
-                    <script type="text/plain" class="md-ref-source">[访问 Jot 主页](https://example.com)
+                    <script type="text/plain" class="md-ref-source">[普通链接](https://example.com)
 [带标题的链接](https://example.com "点击访问")
-![替代文本](https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=A+peaceful+mountain+landscape+with+a+lake+at+sunset+vivid+colors+realistic+photography&image_size=landscape_16_9)</script>
+![替代文本](https://picsum.photos/seed/jot/400/240)</script>
                 </div>
 
                 <!-- 卡片 4: 列表 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--lists">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">📋 列表</span>
                     </div>
@@ -613,7 +625,7 @@
                 </div>
 
                 <!-- 卡片 5: 代码块 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--code">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">💻 代码块</span>
                     </div>
@@ -664,7 +676,7 @@ console.log(greet("Jot"));
                 </div>
 
                 <!-- 卡片 6: 引用 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--blockquote">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">💬 引用</span>
                     </div>
@@ -696,18 +708,18 @@ console.log(greet("Jot"));
                         <div class="md-ref-card-footnote">使用 <kbd>&gt;</kbd> 符号创建引用块，可多层嵌套</div>
                         <button class="md-ref-try-btn">打开编辑器试试</button>
                     </div>
-                    <script type="text/plain" class="md-ref-source">&gt; 这是一段引用文本。
-&gt; 多行引用可以这样写。
+                    <script type="text/plain" class="md-ref-source">> 这是一段引用文本。
+> 多行引用可以这样写。
 
-&gt; 嵌套引用
-&gt;&gt; 这是嵌套的第二层
-&gt;&gt;&gt; 第三层引用
+> 嵌套引用
+>> 这是嵌套的第二层
+>>> 第三层引用
 
-&gt; **引用内也支持** `其他` *语法*</script>
+> **引用内也支持** `其他` *语法*</script>
                 </div>
 
                 <!-- 卡片 7: 表格 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--table">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">📊 表格</span>
                     </div>
@@ -744,7 +756,7 @@ console.log(greet("Jot"));
                 </div>
 
                 <!-- 卡片 8: 任务列表 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--tasks">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">✅ 任务列表</span>
                     </div>
@@ -779,7 +791,7 @@ console.log(greet("Jot"));
                 </div>
 
                 <!-- 卡片 9: 分割线 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--hr">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">➖ 分割线</span>
                     </div>
@@ -816,7 +828,7 @@ console.log(greet("Jot"));
                 </div>
 
                 <!-- 卡片 10: 转义字符 -->
-                <div class="md-ref-card">
+                <div class="md-ref-card" id="md-ref-card--escape">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">\ 转义字符</span>
                     </div>
@@ -850,6 +862,9 @@ console.log(greet("Jot"));
 \~\~这不是删除线\~\~</script>
                 </div>
             </div>
+            <button id="mdRefTopBtn" class="md-ref-top-btn" title="回到顶部">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
         </div>
     </main>
 

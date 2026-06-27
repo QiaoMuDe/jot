@@ -4591,6 +4591,50 @@ function renderMdRefCards() {
     setupRefCopyButtons();
     // 绑定「打开编辑器试试」按钮
     setupMdRefTryButtons();
+    // 绑定 TOC 平滑滚动
+    document.querySelectorAll('.md-ref-toc-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = item.getAttribute('href').slice(1);
+            const target = document.getElementById(targetId);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                document.querySelectorAll('.md-ref-toc-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+                // 标记正在 TOC 滚动中，期间不因 scroll 事件清除选中态
+                window._tocScrolling = true;
+                clearTimeout(window._tocScrollTimer);
+                window._tocScrollTimer = setTimeout(() => { window._tocScrolling = false; }, 800);
+            }
+        });
+    });
+
+    // 绑定 MD 参考页面回到顶部按钮
+    const mdRefTopBtn = document.getElementById('mdRefTopBtn');
+    if (mdRefTopBtn && !mdRefTopBtn._mdRefTopBound) {
+        mdRefTopBtn._mdRefTopBound = true;
+        mdRefTopBtn.addEventListener('click', () => {
+            els.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
+    // 滚动显示/隐藏回到顶部按钮 + 清除 TOC 选中态（只处理一次全局绑定）
+    if (!window._mdRefScrollBound) {
+        window._mdRefScrollBound = true;
+        els.mainContent.addEventListener('scroll', () => {
+            const view = document.getElementById('viewMdRef');
+            const btn = document.getElementById('mdRefTopBtn');
+            if (!view || !btn) return;
+            // 仅在 MD 语法视图可见时生效
+            if (view.offsetParent !== null) {
+                btn.classList.toggle('visible', els.mainContent.scrollTop > 300);
+                // 用户手动滚动时清除 TOC 选中态（避开 TOC 平滑滚动期间）
+                if (!window._tocScrolling) {
+                    document.querySelectorAll('.md-ref-toc-item').forEach(el => el.classList.remove('active'));
+                }
+            }
+        });
+    }
 }
 
 /**
