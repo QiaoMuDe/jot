@@ -89,6 +89,7 @@ jot/                                    # 项目根目录
     ├── add-quick-note-mode/          # 快速笔记模式规格
     ├── add-save-success-notification/ # 保存成功通知
     ├── add-search-filters/           # 搜索筛选器
+    ├── add-search-modal-sort-dropdown/ # 搜索弹窗排序下拉菜单（已完成）
     ├── add-sort-pagination/          # 排序分页设置
     ├── add-table-copy-button/        # 表格复制按钮
     ├── add-theme-system/             # 主题系统
@@ -154,7 +155,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应代码 | 核心输入 | 核心输出 |
 |----------|----------|----------|----------|----------|
 | **笔记 CRUD** | 创建/更新/查询/删除笔记 | `services/note_service.go` | 标题/内容/颜色/ID | Note 对象/错误 |
-| **笔记搜索** | 标题+内容 LIKE 模糊搜索 | `note_service.go:Search()` | 关键词/分页参数 | 笔记列表+总数 |
+| **笔记搜索** | 标题+内容 LIKE 模糊搜索，支持 3 种排序（updated_at/created_at/title，均 pinned DESC 优先）| `note_service.go:Search()` | 关键词/分页/sortBy 参数 | 笔记列表+总数 |
 | **笔记置顶** | 切换置顶状态 | `note_service.go:TogglePin()` | 笔记 ID | 更新后的笔记 |
 | **回收站** | 软删除/查看/恢复/永久删除 | `note_service.go:Delete/GetTrash/Restore/PermanentDelete` | 笔记 ID | 操作结果 |
 | **批量回收站操作** | 全部恢复/全部清空 | `note_service.go:RestoreAll/EmptyTrash` | — | 操作结果 |
@@ -167,7 +168,7 @@ jot/                                    # 项目根目录
 | **前端卡片渲染** | 卡片网格展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
-| **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期筛选器 | `frontend/src/main.js` | 关键词 + 过滤条件 | 搜索弹窗结果列表 |
+| **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期/排序筛选器（排序 3 选项：更新时间/创建时间/名称，均 pinned 优先） | `frontend/src/main.js` | 关键词 + 过滤条件 + sortBy | 搜索弹窗结果列表 |
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
@@ -331,14 +332,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
   → els.searchModalInput 自动聚焦
   → 用户输入文字 → 200ms 防抖
     → searchModalLoadPage(1, false)
-      → 调用 SearchNotes(kw, page, pageSize, notebookId, startDate, endDate)
+      → 调用 SearchNotes(kw, page, pageSize, notebookId, sortBy, startDate, endDate)
         → app.go:SearchNotes()
-          → noteService.Search(keyword, page, pageSize, notebookID, startDate, endDate)
+          → noteService.Search(keyword, page, pageSize, sortBy, notebookID, startDate, endDate)
             → GORM: WHERE (title LIKE '%kw%' OR content LIKE '%kw%')
                    AND notebook_id = ?
                    AND updated_at BETWEEN ? AND ?
                    AND deleted_at IS NULL
-            → ORDER BY pinned DESC, updated_at DESC
+            → ORDER BY buildSortOrder(sortBy)  -- 3 种: updated_at/created_at/title
             → Preload("Tags")
             → 返回 []Note + total
       → 客户端 AND 标签过滤（若选中标签）
@@ -351,6 +352,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 点击笔记本/日期筛选按钮 → 选择过滤条件 → _triggerFilterSearch()
   → 筛选条件同步到 state.searchModalNotebookId/startDate/endDate
+
+点击排序筛选按钮 → renderSortFilterDropdown()
+  → 3 选项（更新时间/创建时间/名称），单击切换 sortBy
+  → 立即更新 label + _triggerFilterSearch() 重新搜索
+  → 所有排序均保持 pinned DESC 优先
 
 点击标签 chip → searchByTag(tagId, tagName)
   → openSearchModal()
@@ -717,6 +723,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - ✅ **MD 语法页面全主题适配**：代码块/面板/按钮/引用/表格全部使用 CSS 变量跟随主题切换
 - ✅ **代码块字体跟随全局字体**：MD 语法页面代码块 font-family 改用 `var(--font-family)` 联动全局字体设置
 - ✅ **Seed 工具增强**：笔记本 5→6，标签 5→7，笔记 22→38 条，每条带完整 Markdown 正文，时间跨度 30 天
+- ✅ **搜索弹窗排序下拉菜单**：搜索弹窗新增排序筛选器，3 选项（更新时间/创建时间/名称），使用 `_createFilterOption()` 与笔记本/标签/日期筛选器样式一致。后端 `Search/SearchByNotebook` 新增 `sortBy string` 参数，`buildSortOrder(sortBy)` 动态构建 ORDER BY（均保持 `pinned DESC` 优先）。切换选项即时重新搜索不重置其他筛选条件。详见 `.trae/specs/add-search-modal-sort-dropdown/`
 ---
 
 ## 九、关键记忆点
@@ -727,14 +734,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
+| **绑定方法数** | 58 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
 | **前端代码量** | ~6303 行 JS + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
-| **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
-| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
+| **排序规则** | 默认 `pinned DESC, updated_at DESC`，搜索弹窗支持 3 种切换：updated_at / created_at / title（均 pinned 优先）|
+| **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期/排序），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
 | **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明 8=MD 语法手册；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |

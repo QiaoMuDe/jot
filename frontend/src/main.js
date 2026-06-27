@@ -387,6 +387,7 @@ const state = {
     searchModalDateStart: '',
     searchModalDateEnd: '',
     searchModalSelectedIndex: -1,
+    searchModalSortBy: 'updated_at',
 };
 
 
@@ -421,6 +422,9 @@ const els = {
     searchModalDateBtn: $('searchModalDateBtn'),
     searchModalDateLabel: $('searchModalDateLabel'),
     searchModalDateDropdown: $('searchModalDateDropdown'),
+    searchModalSortBtn: $('searchModalSortBtn'),
+    searchModalSortLabel: $('searchModalSortLabel'),
+    searchModalSortDropdown: $('searchModalSortDropdown'),
     // 更多菜单
     moreMenuBtn: $('moreMenuBtn'),
     moreMenu: $('moreMenu'),
@@ -5123,6 +5127,7 @@ function openSearchModal() {
     state.searchModalDateStart = '';
     state.searchModalDateEnd = '';
     state.searchModalSelectedIndex = -1;
+    state.searchModalSortBy = 'updated_at';
     // 重置 UI
     els.searchModalInput.value = '';
     els.searchModalResults.innerHTML = '';
@@ -5131,6 +5136,7 @@ function openSearchModal() {
     els.searchModalNotebookLabel.textContent = '全部';
     els.searchModalTagLabel.textContent = '全部';
     if (els.searchModalDateLabel) els.searchModalDateLabel.textContent = '不限';
+    if (els.searchModalSortLabel) els.searchModalSortLabel.textContent = '更新时间';
     // 重置键盘提示 chip 可见度
     if (els.searchModalHints) els.searchModalHints.classList.remove('dim');
     // 重置过滤器按钮 active 状态
@@ -5206,7 +5212,7 @@ async function searchModalLoadPage(page, append) {
             // 后端实际返回: {Items, Total, Page, PageSize}
             const startDate = state.searchModalDateStart || '';
             const endDate = state.searchModalDateEnd || '';
-            const result = await window.go.main.App.SearchNotes(kw, page, pageSize, notebookId, startDate, endDate);
+            const result = await window.go.main.App.SearchNotes(kw, page, pageSize, notebookId, state.searchModalSortBy, startDate, endDate);
             notes = (result && (result.Notes || result.items)) || [];
             total = (result && result.Total) || 0;
         } else {
@@ -5439,6 +5445,9 @@ function updateSearchModalFilterBtnActive() {
     if (els.searchModalDateBtn) {
         els.searchModalDateBtn.classList.toggle('active', state.searchModalDateStart !== '' && state.searchModalDateEnd !== '');
     }
+    if (els.searchModalSortBtn) {
+        els.searchModalSortBtn.classList.toggle('active', state.searchModalSortBy !== 'updated_at');
+    }
 }
 
 /**
@@ -5544,6 +5553,40 @@ function renderDateFilterDropdownSelection() {
 
 function closeSearchModalDatePicker() {
     // 日历已移除，无需操作
+}
+
+/**
+ * 渲染排序过滤器下拉选项
+ */
+function renderSortFilterDropdown() {
+    const dd = els.searchModalSortDropdown;
+    if (!dd) return;
+    dd.innerHTML = '';
+    const options = [
+        { value: 'updated_at', text: '更新时间' },
+        { value: 'created_at', text: '创建时间' },
+        { value: 'title', text: '名称' },
+    ];
+    options.forEach(opt => {
+        dd.appendChild(_createFilterOption({
+            text: opt.text,
+            selected: state.searchModalSortBy === opt.value,
+            dataValue: opt.value,
+            onClick: (e) => {
+                e.stopPropagation();
+                const sortBy = opt.value;
+                if (sortBy === state.searchModalSortBy) {
+                    closeAllFilterDropdowns();
+                    return;
+                }
+                state.searchModalSortBy = sortBy;
+                if (els.searchModalSortLabel) els.searchModalSortLabel.textContent = opt.text;
+                updateSearchModalFilterBtnActive();
+                closeAllFilterDropdowns();
+                _triggerFilterSearch();
+            }
+        }));
+    });
 }
 
 /**
@@ -5692,7 +5735,7 @@ function initSearchModalListeners() {
         }
     });
     // 三个过滤器按钮切换下拉
-    [els.searchModalNotebookBtn, els.searchModalTagBtn, els.searchModalDateBtn].forEach((btn) => {
+    [els.searchModalNotebookBtn, els.searchModalTagBtn, els.searchModalDateBtn, els.searchModalSortBtn].forEach((btn) => {
         if (!btn) return;
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -5706,6 +5749,7 @@ function initSearchModalListeners() {
                 if (filterType === 'notebook') renderNotebookFilterDropdown();
                 else if (filterType === 'tag') renderTagFilterDropdown();
                 else if (filterType === 'date') renderDateFilterDropdownSelection();
+                else if (filterType === 'sort') renderSortFilterDropdown();
                 filter.classList.add('open');
             }
         });

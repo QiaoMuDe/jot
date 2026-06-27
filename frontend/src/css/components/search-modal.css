@@ -249,6 +249,13 @@
 .search-modal-filter-option.selected .check-icon {
     opacity: 1;
 }
+.search-modal-filter-option.active {
+    color: var(--accent);
+    font-weight: 500;
+}
+.search-modal-filter-option.active .check-icon {
+    opacity: 1;
+}
 
 
 

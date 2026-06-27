@@ -161,7 +161,7 @@ func (s *NoteService) GetAllIDs() ([]uint, error) {
 }
 
 // Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页和日期范围筛选
-func (s *NoteService) Search(keyword string, page, pageSize int, startDate, endDate string) ([]models.Note, int64, error) {
+func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, startDate, endDate string) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -183,7 +183,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, startDate, endD
 
 	offset := (page - 1) * pageSize
 	if err := query.Select(noteThinSelect).
-		Order("pinned DESC, updated_at DESC").
+		Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -195,7 +195,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, startDate, endD
 }
 
 // SearchByNotebook 在指定笔记本范围内按关键词搜索，支持分页和日期范围筛选
-func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint, startDate, endDate string) ([]models.Note, int64, error) {
+func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint, sortBy string, startDate, endDate string) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -216,7 +216,7 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 
 	offset := (page - 1) * pageSize
 	if err := query.Select(noteThinSelect).
-		Order("pinned DESC, updated_at DESC").
+		Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
