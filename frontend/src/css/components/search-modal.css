@@ -52,7 +52,7 @@
     box-shadow: var(--shadow-xl);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     border-top: 2px solid var(--accent);
     transform: scale(0.96) translateY(-8px);
     opacity: 0;
@@ -426,14 +426,19 @@
     border-radius: var(--radius-sm);
     font-size: 0.688rem;
 }
+.search-modal-item-meta .search-modal-item-tag.filter-active {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-border);
+}
 .search-modal-item-snippet mark,
 .search-modal-item-title mark {
-    background: var(--accent-light);
-    color: var(--accent);
+    background: var(--danger-bg);
+    color: var(--danger);
     font-weight: 600;
     padding: 0 3px;
     border-radius: 2px;
-    border-bottom: 1px solid var(--accent);
+    border-bottom: 1px solid var(--danger);
 }
 
 /* ==========================================================================

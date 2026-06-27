@@ -166,15 +166,10 @@ func (s *NoteService) Search(keyword string, page, pageSize int, startDate, endD
 	var total int64
 
 	likePattern := "%" + keyword + "%"
-	tagSubquery := s.db.Table("note_tags").
-		Select("note_id").
-		Joins("JOIN tags ON tags.id = note_tags.tag_id").
-		Where("tags.name LIKE ?", likePattern)
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL").
-		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
-			Or("id IN (?)", tagSubquery))
+		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
 
 	// 日期范围过滤
 	if startDate != "" && endDate != "" {
@@ -205,15 +200,10 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	var total int64
 
 	likePattern := "%" + keyword + "%"
-	tagSubquery := s.db.Table("note_tags").
-		Select("note_id").
-		Joins("JOIN tags ON tags.id = note_tags.tag_id").
-		Where("tags.name LIKE ?", likePattern)
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
-		Where(s.db.Where("title LIKE ? OR content LIKE ?", likePattern, likePattern).
-			Or("id IN (?)", tagSubquery))
+		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
 
 	if startDate != "" && endDate != "" {
 		query = query.Where("updated_at BETWEEN ? AND ?",

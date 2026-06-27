@@ -669,7 +669,6 @@ function switchView(view) {
     // 视图映射
     const viewMap = {
         grid: els.viewGrid,
-        search: els.viewSearch,
         settings: els.viewSettings,
         data: els.viewData,
         trash: els.viewTrash,
@@ -4091,8 +4090,6 @@ function getScrollContainer() {
     switch (state.currentView) {
         case 'grid':
             return els.mainContent;
-        case 'search':
-            return els.searchResults;
         case 'data':
             return els.dataContent;
         case 'trash':
@@ -5327,7 +5324,8 @@ function renderSearchModalResults(notes, append) {
             if (tags && tags.length) {
                 tags.slice(0, 3).forEach(t => {
                     const tag = document.createElement('span');
-                    tag.className = 'search-modal-item-tag';
+                    const tagId = t.id || t.ID || 0;
+                    tag.className = 'search-modal-item-tag' + (state.searchModalTagIds && state.searchModalTagIds.has(tagId) ? ' filter-active' : '');
                     tag.textContent = '#' + (t.name || t.Name || '');
                     meta.appendChild(tag);
                 });
