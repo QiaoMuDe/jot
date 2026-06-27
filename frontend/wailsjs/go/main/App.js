@@ -214,6 +214,10 @@ export function UpdateNote(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['UpdateNote'](arg1, arg2, arg3, arg4);
 }
 
+export function UpdateNoteFileExt(arg1, arg2) {
+  return window['go']['main']['App']['UpdateNoteFileExt'](arg1, arg2);
+}
+
 export function UpdateTag(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateTag'](arg1, arg2, arg3);
 }

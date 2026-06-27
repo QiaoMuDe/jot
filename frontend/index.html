@@ -139,7 +139,7 @@
                 <div class="editor-panel" id="editorPanel">
                     <div class="editor-header">
                         <div class="editor-header-actions">
-                            <button class="editor-header-btn editor-type-toggle" id="editorTypeToggle" title="切换为 Markdown 格式">T</button>
+                            <button class="editor-header-btn editor-type-toggle" id="editorTypeToggle" title="切换为纯文本格式">M</button>
                             <button class="editor-header-btn" id="editorEditBtn" title="编辑笔记" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
                             <button class="editor-header-btn" id="editorViewBtn" title="返回查看模式" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
                             <button class="editor-header-btn" id="editorFullscreenBtn" title="全屏编辑"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
@@ -178,6 +178,7 @@
                     <div class="editor-footer">
                         <div class="editor-footer-left">
                             <span class="word-count" id="editorWordCount"></span>
+                            <span class="file-ext" id="editorFileExt" style="display:none"></span>
                         </div>
                         <div class="editor-modes" id="editorModes">
                             <button class="mode-btn active" data-mode="edit" title="纯文本编辑">纯文本</button>
@@ -193,6 +194,23 @@
                     </div>
                     <!-- 导入结果提示 -->
                     <div id="importResult" class="import-result" style="display: none;"></div>
+
+                    <!-- 后缀编辑对话框 -->
+                    <div id="fileExtDialog" class="file-ext-dialog" style="display:none;">
+                        <div class="file-ext-dialog-overlay"></div>
+                        <div class="file-ext-dialog-panel">
+                            <div class="file-ext-dialog-header">修改文件后缀</div>
+                            <div class="file-ext-dialog-body">
+                                <input type="text" id="fileExtInput" class="file-ext-input" spellcheck="false" placeholder=".md" />
+                                <div class="file-ext-hint">以 . 开头，如 .md、.txt、.py</div>
+                                <div id="fileExtError" class="file-ext-error" style="display:none;"></div>
+                            </div>
+                            <div class="file-ext-dialog-footer">
+                                <button id="fileExtCancelBtn" class="btn btn-cancel">取消</button>
+                                <button id="fileExtSaveBtn" class="btn btn-save">保存</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

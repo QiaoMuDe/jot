@@ -63,13 +63,18 @@ func (a *App) startup(ctx context.Context) {
 // ==================== Note 相关绑定方法 ====================
 
 // CreateNote 创建一条新笔记，归入指定笔记本
-func (a *App) CreateNote(title, content, noteType string, notebookID uint) (*models.Note, error) {
-	return a.noteService.CreateWithNotebook(title, content, noteType, notebookID)
+func (a *App) CreateNote(title, content, fileExt string, notebookID uint) (*models.Note, error) {
+	return a.noteService.CreateWithNotebook(title, content, fileExt, notebookID)
 }
 
 // UpdateNote 更新指定笔记的标题和内容
-func (a *App) UpdateNote(id uint, title, content, noteType string) (*models.Note, error) {
-	return a.noteService.Update(id, title, content, noteType)
+func (a *App) UpdateNote(id uint, title, content, fileExt string) (*models.Note, error) {
+	return a.noteService.Update(id, title, content, fileExt)
+}
+
+// UpdateNoteFileExt 更新指定笔记的文件后缀（不修改其他字段）
+func (a *App) UpdateNoteFileExt(id uint, fileExt string) (*models.Note, error) {
+	return a.noteService.UpdateFileExt(id, fileExt)
 }
 
 // DeleteNote 软删除指定笔记（移入回收站）
@@ -742,14 +747,14 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 			title = "untitled"
 		}
 
-		// 判断笔记类型：.md → markdown，其他 → text
-		noteType := "text"
-		if strings.EqualFold(ext, ".md") {
-			noteType = "markdown"
+		// 确定文件后缀：.md 文件保持 .md，其他文件按原始后缀处理
+		fileExt := ext
+		if fileExt == "" {
+			fileExt = ".txt"
 		}
 
 		// 创建笔记（归入指定笔记本）
-		note, err := a.noteService.CreateWithNotebook(title, string(content), noteType, notebookID)
+		note, err := a.noteService.CreateWithNotebook(title, string(content), fileExt, notebookID)
 		if err != nil {
 			result.Error = "创建笔记失败: " + err.Error()
 			results = append(results, result)

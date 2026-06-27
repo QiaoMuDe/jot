@@ -562,6 +562,109 @@
   white-space: nowrap;
 }
 
+/* 文件后缀显示 */
+.file-ext {
+  font-size: 0.688rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+.file-ext:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+.file-ext-readonly {
+  pointer-events: none;
+  cursor: default;
+}
+.file-ext-readonly:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+.file-ext::before {
+  content: '| ';
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* 文件后缀编辑对话框 */
+.file-ext-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.file-ext-dialog-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+}
+.file-ext-dialog-panel {
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  width: 320px;
+  max-width: 90vw;
+  animation: fileExtDialogIn 0.2s ease;
+}
+@keyframes fileExtDialogIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.file-ext-dialog-header {
+  padding: 16px 20px 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.file-ext-dialog-body {
+  padding: 14px 20px 0;
+}
+.file-ext-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: var(--font-family);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+.file-ext-input:focus {
+  border-color: var(--accent);
+}
+.file-ext-hint {
+  font-size: 0.688rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.file-ext-error {
+  font-size: 0.688rem;
+  color: var(--danger, #EF4444);
+  margin-top: 6px;
+}
+.file-ext-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 18px;
+}
+.file-ext-dialog-footer .btn {
+  padding: 5px 14px;
+  font-size: 0.75rem;
+}
+
 .editor-input-readonly,
 .editor-textarea-readonly {
   cursor: default;

@@ -511,6 +511,7 @@ const els = {
 
     // 字数统计
     editorWordCount: $('editorWordCount'),
+    editorFileExt: $('editorFileExt'),
     editorEditTime: $('editorEditTime'),
 
     // 通知容器
@@ -954,7 +955,7 @@ async function createNote() {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNote) {
-            const note = await window.go.main.App.CreateNote(title, content, state.noteType, state.activeNotebookId);
+            const note = await window.go.main.App.CreateNote(title, content, els.editorFileExt.textContent, state.activeNotebookId);
             // 为笔记添加标签
             if (note && note.id && state.selectedTags.length > 0) {
                 for (const tagId of state.selectedTags) {
@@ -971,7 +972,6 @@ async function createNote() {
                 id: Date.now(),
                 title: title,
                 content: content,
-                note_type: state.noteType,
                 notebook_id: state.activeNotebookId,
                 pinned: false,
                 created_at: new Date().toISOString(),
@@ -1001,7 +1001,7 @@ async function updateNote(id) {
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
-            await window.go.main.App.UpdateNote(id, title, content, state.noteType);
+            await window.go.main.App.UpdateNote(id, title, content, els.editorFileExt.textContent);
             // 更新笔记标签：先移除所有，再添加选中的
             const note = await window.go.main.App.GetNote(id);
             if (note && note.tags) {
@@ -1018,7 +1018,6 @@ async function updateNote(id) {
             if (note) {
                 note.title = title;
                 note.content = content;
-                note.note_type = state.noteType;
                 note.updated_at = new Date().toISOString();
                 note.tags = state.tags.filter((t) => state.selectedTags.includes(t.id));
             }
@@ -2454,12 +2453,129 @@ function getEditorContent() {
  * 更新字数统计
  */
 function updateWordCount() {
-    const title = els.editorNoteTitle.value || '';
     const content = getEditorContent();
-    const text = title + content;
-    const charCount = text.length;
-    const wordCount = text.replace(/[\s]/g, '').length;
-    els.editorWordCount.textContent = `字数：${wordCount} ｜ 字符：${charCount}`;
+    const charCount = content.length;
+    const wordCount = content.replace(/[\s]/g, '').length;
+    const ext = els.editorFileExt.textContent || '.txt';
+    els.editorWordCount.textContent = `${wordCount} 个字数 | ${charCount} 个字符 | ${ext}`;
+}
+
+/** 更新状态栏文件后缀显示 */
+function updateFileExtDisplay(ext) {
+    els.editorFileExt.textContent = ext || '';
+}
+
+
+
+/** 打开后缀编辑对话框（仅编辑/新建模式可用） */
+function openFileExtDialog() {
+    const viewEditor = document.getElementById('viewEditor');
+    // 查看模式（只读）下忽略点击
+    if (viewEditor && viewEditor.classList.contains('active') && els.editorSaveBtn.style.display === 'none') {
+        return;
+    }
+    const currentExt = els.editorFileExt.textContent;
+    document.getElementById('fileExtInput').value = currentExt;
+    document.getElementById('fileExtError').style.display = 'none';
+    document.getElementById('fileExtError').textContent = '';
+    document.getElementById('fileExtDialog').style.display = 'flex';
+    // 自动聚焦并选中后缀名部分（不含点）
+    const input = document.getElementById('fileExtInput');
+    input.focus();
+    const dotIdx = currentExt.indexOf('.');
+    if (dotIdx >= 0) {
+        input.setSelectionRange(dotIdx + 1, currentExt.length);
+    } else {
+        input.select();
+    }
+}
+
+/** 关闭后缀编辑对话框 */
+function closeFileExtDialog() {
+    document.getElementById('fileExtDialog').style.display = 'none';
+}
+
+/** 保存后缀编辑 */
+async function saveFileExt() {
+    const input = document.getElementById('fileExtInput');
+    const errorEl = document.getElementById('fileExtError');
+    let value = input.value.trim();
+
+    // 校验
+    if (!value) {
+        errorEl.textContent = '后缀不能为空';
+        errorEl.style.display = '';
+        input.focus();
+        return;
+    }
+    if (!value.startsWith('.')) {
+        value = '.' + value;
+    }
+    if (!/^\.[a-zA-Z0-9_]{1,9}$/.test(value)) {
+        errorEl.textContent = '后缀以 . 开头，只能包含字母、数字、下划线（1-9 位）';
+        errorEl.style.display = '';
+        input.focus();
+        return;
+    }
+
+    // 保存到后端（已有笔记时）
+    if (state.editingNoteId) {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNoteFileExt) {
+                await window.go.main.App.UpdateNoteFileExt(state.editingNoteId, value);
+            }
+        } catch (err) {
+            console.error('更新后缀失败:', err);
+            errorEl.textContent = '保存失败，请重试';
+            errorEl.style.display = '';
+            return;
+        }
+    }
+
+    // 更新显示
+    els.editorFileExt.textContent = value;
+    closeFileExtDialog();
+
+    // 根据新后缀同步编辑器 UI
+    const isMd = value.toLowerCase() === '.md';
+    els.editorModes.style.display = isMd ? '' : 'none';
+    if (!isMd) {
+        switchEditorMode('edit');
+    }
+    // 刷新字数统计显示
+    updateWordCount();
+}
+
+/** 快速切换笔记类型（.md ↔ .txt），更新按钮显示并保存到后端 */
+async function toggleFileExt() {
+    const currentExt = els.editorFileExt.textContent || '.txt';
+    const newExt = currentExt === '.md' ? '.txt' : '.md';
+    els.editorFileExt.textContent = newExt;
+
+    // 更新按钮显示
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.textContent = newExt === '.md' ? 'M' : 'T';
+        els.editorTypeToggle.title = newExt === '.md' ? '切换为纯文本格式' : '切换为 Markdown 格式';
+    }
+
+    // 同步编辑器 UI（编辑/预览模式按钮可见性）
+    els.editorModes.style.display = newExt === '.md' ? '' : 'none';
+    if (newExt !== '.md') {
+        switchEditorMode('edit');
+    }
+
+    // 保存到后端（已有笔记时）
+    if (state.editingNoteId) {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNoteFileExt) {
+                await window.go.main.App.UpdateNoteFileExt(state.editingNoteId, newExt);
+            }
+        } catch (err) {
+            console.error('更新后缀失败:', err);
+        }
+    }
+    // 刷新字数统计显示
+    updateWordCount();
 }
 
 /**
@@ -2521,16 +2637,22 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     els.editorEditBtn.style.display = isReadOnly ? '' : 'none';
     // 从查看模式进入编辑时显示"返回查看模式"按钮
     els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
+    // 只读模式禁用后缀点击（查看模式不可点击，编辑/新建模式可点击）
+    els.editorFileExt.classList.toggle('file-ext-readonly', !!isReadOnly);
 
-    // 设置笔记类型
-    state.noteType = (noteData && noteData.note_type) || 'text';
-    // 更新类型切换按钮文字和 tooltip
+    // Markdown 模式显示底部「编辑/预览」切换按钮，纯文本模式隐藏
+    const ext = (noteData && noteData.file_ext) || '.txt';
+    const isMd = ext === '.md';
+    els.editorModes.style.display = isMd ? '' : 'none';
+
+    // 设置文件后缀显示
+    updateFileExtDisplay(ext);
+
+    // 初始化类型切换按钮显示
     if (els.editorTypeToggle) {
-        els.editorTypeToggle.textContent = state.noteType === 'text' ? 'T' : 'M';
-        els.editorTypeToggle.title = state.noteType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
+        els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
+        els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
     }
-    // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
-    els.editorModes.style.display = state.noteType === 'markdown' ? '' : 'none';
 
     // 统一初始化编辑器模式为纯文本编辑（data-mode 值影响 flex 布局 CSS 选择器）
     // 后续各分支根据情况可 override：查看+Markdown → 'preview'
@@ -2539,7 +2661,7 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     // 查看模式：显示最近编辑时间 + 按类型选择渲染方式
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
-        if (state.noteType === 'text') {
+        if (els.editorFileExt.textContent !== '.md') {
             // 纯文本：CM6 自动以只读模式展示（data-mode 已由默认值 'edit' 覆盖）
             els.mdRendered.style.display = 'none';
         } else {
@@ -2574,8 +2696,6 @@ async function openEditor(noteId, readOnly, startFullscreen) {
         switchEditorMode('edit');
     }
 
-    // 字数统计
-    updateWordCount();
     // 标题输入监听（CM6 内容变化由 ViewUpdate listener 自动处理）
     if (!isReadOnly) {
         els.editorNoteTitle.addEventListener('input', onEditorInput);
@@ -2598,8 +2718,10 @@ async function openEditor(noteId, readOnly, startFullscreen) {
 
     // 先初始化 CM6（此时编辑器 opacity: 0，用户还看不到）
     // Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定
-    const useMdHighlight = state.noteType === 'markdown' || els.mdHighlightToggle.checked;
+    const useMdHighlight = els.editorFileExt.textContent === '.md' || els.mdHighlightToggle.checked;
     initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useMdHighlight);
+    // 字数统计（需在 CM6 初始化之后，否则 getEditorContent 返回空）
+    updateWordCount();
     // 编辑模式下记录快照，用于蒙层点击判断内容是否有改动
     if (!isReadOnly && state.editingNoteId) {
         state._editSnapshot = {
@@ -2962,9 +3084,9 @@ async function saveEditorContent() {
     if (!window.go || !window.go.main || !window.go.main.App) return;
     try {
         if (state.editingNoteId) {
-            await window.go.main.App.UpdateNote(state.editingNoteId, title, content, state.noteType);
+            await window.go.main.App.UpdateNote(state.editingNoteId, title, content, els.editorFileExt.textContent);
         } else if (window.go.main.App.CreateNote) {
-            await window.go.main.App.CreateNote(title, content, state.noteType, state.activeNotebookId);
+            await window.go.main.App.CreateNote(title, content, els.editorFileExt.textContent, state.activeNotebookId);
         }
     } catch (err) {
         console.error('退出前保存失败:', err);
@@ -3035,6 +3157,8 @@ function closeEditor() {
         state._defaultNewNoteTitle = null;
         // 字数归零
         els.editorWordCount.textContent = '';
+        // 清除文件后缀显示
+        els.editorFileExt.textContent = '';
         // 重置 Markdown 渲染/编辑显示状态
         els.mdRendered.style.display = 'none';
         els.mdRendered.innerHTML = '';
@@ -3821,6 +3945,7 @@ function initEventListeners() {
 
     // 编辑器
     els.editorCloseBtn.addEventListener('click', closeEditorSafe);
+    els.editorTypeToggle?.addEventListener('click', toggleFileExt);
     els.editorEditBtn.addEventListener('click', () => {
         const noteId = state.editingNoteId;
         if (noteId) {
@@ -3853,7 +3978,7 @@ function initEventListeners() {
         // 有变更：保存 + 通知 + 切回查看模式
         if (title && window.go?.main?.App?.UpdateNote) {
             try {
-                await window.go.main.App.UpdateNote(noteId, title, content, state.noteType);
+                await window.go.main.App.UpdateNote(noteId, title, content, els.editorFileExt.textContent);
                 // 更新标签：先移除所有标签再重新添加选中的
                 const note = await window.go.main.App.GetNote(noteId);
                 if (note?.tags) {
@@ -3874,7 +3999,6 @@ function initEventListeners() {
         if (cached) {
             cached.title = title;
             cached.content = content;
-            cached.note_type = state.noteType;
             cached.updated_at = new Date().toISOString();
         }
         state._editSnapshot = null;
@@ -3899,21 +4023,6 @@ function initEventListeners() {
     // 编辑器模式切换（纯文本/分栏/预览）
     els.editorModeBtns.forEach(btn => {
         btn.addEventListener('click', () => switchEditorMode(btn.dataset.mode));
-    });
-
-    // 笔记类型切换（纯文本/Markdown）— 单按钮 T/M 切换
-    els.editorTypeToggle.addEventListener('click', () => {
-        const newType = state.noteType === 'text' ? 'markdown' : 'text';
-        state.noteType = newType;
-        // 更新按钮文字和 tooltip
-        els.editorTypeToggle.textContent = newType === 'text' ? 'T' : 'M';
-        els.editorTypeToggle.title = newType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
-        // 纯文本模式隐藏底部「编辑/预览」切换按钮，Markdown 模式显示
-        els.editorModes.style.display = newType === 'markdown' ? '' : 'none';
-        // 切到纯文本时自动切回编辑模式
-        if (newType === 'text') {
-            switchEditorMode('edit');
-        }
     });
 
     // 标签管理
@@ -4066,6 +4175,19 @@ function initEventListeners() {
         });
     }
 
+    // 文件后缀编辑对话框事件
+    els.editorFileExt.addEventListener('click', openFileExtDialog);
+    document.getElementById('fileExtSaveBtn').addEventListener('click', saveFileExt);
+    document.getElementById('fileExtCancelBtn').addEventListener('click', closeFileExtDialog);
+    document.getElementById('fileExtInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveFileExt();
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            closeFileExtDialog();
+        }
+    });
+    document.querySelector('.file-ext-dialog-overlay').addEventListener('click', closeFileExtDialog);
+
     // 搜索弹窗事件绑定(替代原 topbar 搜索框)
     initSearchModalListeners();
 }
@@ -4199,7 +4321,7 @@ async function handleKeyboardNavigation(e) {
     }
 
     // Ctrl+L: 编辑器打开时切换编辑/预览模式（仅 Markdown 模式支持）
-    if (e.ctrlKey && (e.key === 'l' || e.key === 'L') && els.viewEditor.classList.contains('active') && state.noteType === 'markdown') {
+    if (e.ctrlKey && (e.key === 'l' || e.key === 'L') && els.viewEditor.classList.contains('active') && els.editorFileExt.textContent === '.md') {
         e.preventDefault();
         const current = els.editorOverlay.dataset.mode;
         switchEditorMode(current === 'preview' ? 'edit' : 'preview');
@@ -4721,11 +4843,11 @@ async function openMdRefTryEditor(source, badgeText) {
     els.editorNoteTitle.value = `[MD 语法] ${badgeText}`;
     setEditorContent(decoded);
     // 设为 Markdown 类型（覆盖 openEditor 内部默认的 'text'）
-    state.noteType = 'markdown';
+    els.editorFileExt.textContent = '.md';
     // 更新类型切换按钮文字和 tooltip
     if (els.editorTypeToggle) {
         els.editorTypeToggle.textContent = 'M';
-        els.editorTypeToggle.title = state.noteType === 'text' ? '切换为 Markdown 格式' : '切换为纯文本格式';
+        els.editorTypeToggle.title = '切换为纯文本格式';
     }
     // 显示「编辑/预览」切换按钮（仅 Markdown 模式显示）
     els.editorModes.style.display = '';

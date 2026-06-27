@@ -52,10 +52,6 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("初始化默认标签失败: %w", err)
 	}
 
-	// 迁移存量笔记的 file_ext 字段（首次新增该列时回填）
-	db.Model(&models.Note{}).Where("file_ext IS NULL OR file_ext = ''").
-		Update("file_ext", gorm.Expr("CASE WHEN note_type = 'markdown' THEN '.md' ELSE '.txt' END"))
-
 	return db, nil
 }
 

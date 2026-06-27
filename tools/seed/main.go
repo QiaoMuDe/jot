@@ -143,7 +143,7 @@ func seedNotes(db *gorm.DB, tags []models.Tag, notebooks []models.Notebook) []mo
 		Content      string
 		Pinned       bool
 		DaysAgo      int
-		NoteType     string
+		FileExt      string
 		NotebookName string
 	}
 
@@ -171,7 +171,7 @@ Jot 是一个温暖、精致的桌面端卡片式笔记应用。
 `,
 			Pinned:       true,
 			DaysAgo:      0,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "默认笔记本",
 		},
 
@@ -202,7 +202,7 @@ Jot 是一个温暖、精致的桌面端卡片式笔记应用。
 `,
 			Pinned:       true,
 			DaysAgo:      1,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -229,7 +229,7 @@ Jot 是一个温暖、精致的桌面端卡片式笔记应用。
 `,
 			Pinned:       false,
 			DaysAgo:      3,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -279,7 +279,7 @@ CREATE TABLE settlement_order (
 `,
 			Pinned:       false,
 			DaysAgo:      5,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -305,7 +305,7 @@ CREATE TABLE settlement_order (
 `,
 			Pinned:       false,
 			DaysAgo:      7,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -334,7 +334,7 @@ CREATE TABLE settlement_order (
 `,
 			Pinned:       false,
 			DaysAgo:      10,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -359,7 +359,7 @@ CREATE TABLE settlement_order (
 `,
 			Pinned:       false,
 			DaysAgo:      12,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -392,7 +392,7 @@ func Backward(s []int) func(func(int) bool) {
 `,
 			Pinned:       false,
 			DaysAgo:      14,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -421,7 +421,7 @@ func Backward(s []int) func(func(int) bool) {
 `,
 			Pinned:       false,
 			DaysAgo:      16,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 		{
@@ -445,7 +445,7 @@ func Backward(s []int) func(func(int) bool) {
 `,
 			Pinned:       false,
 			DaysAgo:      19,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "工作",
 		},
 
@@ -491,7 +491,7 @@ fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
 `,
 			Pinned:       true,
 			DaysAgo:      1,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -545,7 +545,7 @@ func lengthOfLIS(nums []int) int {
 `,
 			Pinned:       false,
 			DaysAgo:      4,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -573,7 +573,7 @@ func lengthOfLIS(nums []int) int {
 `,
 			Pinned:       false,
 			DaysAgo:      6,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -610,7 +610,7 @@ kubectl port-forward svc/<svc> 8080:80
 `,
 			Pinned:       false,
 			DaysAgo:      8,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -639,7 +639,7 @@ kubectl port-forward svc/<svc> 8080:80
 `,
 			Pinned:       false,
 			DaysAgo:      11,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -665,7 +665,7 @@ kubectl port-forward svc/<svc> 8080:80
 `,
 			Pinned:       false,
 			DaysAgo:      13,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -700,7 +700,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      15,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "学习",
 		},
 		{
@@ -726,7 +726,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      18,
-			NoteType:     "text",
+			FileExt:      ".txt",
 			NotebookName: "学习",
 		},
 
@@ -756,7 +756,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      2,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -780,7 +780,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      4,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -804,7 +804,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      6,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -836,7 +836,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      9,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -862,7 +862,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      11,
-			NoteType:     "text",
+			FileExt:      ".txt",
 			NotebookName: "生活",
 		},
 		{
@@ -887,7 +887,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      13,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -919,7 +919,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      16,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "生活",
 		},
 		{
@@ -941,7 +941,7 @@ QUIC Packet
 `,
 			Pinned:       false,
 			DaysAgo:      19,
-			NoteType:     "text",
+			FileExt:      ".txt",
 			NotebookName: "生活",
 		},
 
@@ -976,7 +976,7 @@ QUIC Packet
 `,
 			Pinned:       true,
 			DaysAgo:      0,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1011,7 +1011,7 @@ CREATE VIRTUAL TABLE notes_fts USING FTS5(title, content);
 `,
 			Pinned:       false,
 			DaysAgo:      3,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1050,7 +1050,7 @@ interface NoteTemplate {
 `,
 			Pinned:       false,
 			DaysAgo:      6,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1105,7 +1105,7 @@ CREATE TABLE note_tags (
 `,
 			Pinned:       false,
 			DaysAgo:      9,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1150,7 +1150,7 @@ jobs:
 `,
 			Pinned:       false,
 			DaysAgo:      12,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1190,7 +1190,7 @@ jobs:
 `,
 			Pinned:       false,
 			DaysAgo:      15,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1219,7 +1219,7 @@ jobs:
 `,
 			Pinned:       false,
 			DaysAgo:      18,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 		{
@@ -1248,7 +1248,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      21,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "个人项目",
 		},
 
@@ -1280,7 +1280,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      2,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "随笔",
 		},
 		{
@@ -1310,7 +1310,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      5,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "随笔",
 		},
 		{
@@ -1345,7 +1345,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      7,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "随笔",
 		},
 		{
@@ -1376,7 +1376,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      10,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "随笔",
 		},
 		{
@@ -1408,7 +1408,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      14,
-			NoteType:     "text",
+			FileExt:      ".txt",
 			NotebookName: "随笔",
 		},
 		{
@@ -1441,7 +1441,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      17,
-			NoteType:     "markdown",
+			FileExt:      ".md",
 			NotebookName: "随笔",
 		},
 		{
@@ -1476,7 +1476,7 @@ Permission is hereby granted...
 `,
 			Pinned:       false,
 			DaysAgo:      20,
-			NoteType:     "text",
+			FileExt:      ".txt",
 			NotebookName: "随笔",
 		},
 	}
@@ -1491,15 +1491,10 @@ Permission is hereby granted...
 			notebookID = notebookMap["默认笔记本"]
 		}
 
-		fileExt := ".txt"
-		if nd.NoteType == "markdown" {
-			fileExt = ".md"
-		}
 		note := models.Note{
 			Title:      nd.Title,
 			Content:    nd.Content,
-			NoteType:   nd.NoteType,
-			FileExt:    fileExt,
+			FileExt:    nd.FileExt,
 			Pinned:     nd.Pinned,
 			NotebookID: notebookID,
 			CreatedAt:  createdAt,

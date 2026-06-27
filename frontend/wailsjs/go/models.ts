@@ -106,7 +106,6 @@ export namespace models {
 	    id: number;
 	    title: string;
 	    content: string;
-	    note_type: string;
 	    file_ext: string;
 	    pinned: boolean;
 	    notebook_id: number;
@@ -126,7 +125,6 @@ export namespace models {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.content = source["content"];
-	        this.note_type = source["note_type"];
 	        this.file_ext = source["file_ext"];
 	        this.pinned = source["pinned"];
 	        this.notebook_id = source["notebook_id"];

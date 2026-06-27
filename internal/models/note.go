@@ -11,7 +11,6 @@ type Note struct {
 	ID         uint           `gorm:"primaryKey" json:"id"`
 	Title      string         `gorm:"size:200" json:"title"`
 	Content    string         `gorm:"type:text" json:"content"`
-	NoteType   string         `gorm:"size:20;default:text" json:"note_type"`
 	FileExt    string         `gorm:"size:10;default:.txt" json:"file_ext"`
 	Pinned     bool           `gorm:"default:false" json:"pinned"`
 	NotebookID uint           `gorm:"default:0;index" json:"notebook_id"`
