@@ -167,11 +167,11 @@ jot/                                    # 项目根目录
 | **前端卡片渲染** | 卡片网格展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
-| **前端搜索交互** | 输入框 250ms 防抖自动搜索，支持标题/内容/标签 | `frontend/src/main.js` | 关键词 | 搜索结果列表 |
+| **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期筛选器 | `frontend/src/main.js` | 关键词 + 过滤条件 | 搜索弹窗结果列表 |
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
-| **标签搜索** | 点击标签 chip 触发按标签名搜索 | `frontend/src/main.js:searchByTag()` | 标签名 | 搜索结果列表 |
+| **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
 | **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+数字键 1-7 导航 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
 | **打开外链** | 调用 runtime.BrowserOpenURL 在默认浏览器打开链接 | `app.go:OpenProjectURL()` | URL 字符串 | — |
@@ -327,28 +327,39 @@ graph TD
 #### 4.2.2 笔记搜索流程
 
 ```
-Ctrl+F / 用户点击搜索框 → 输入框聚焦
-用户在搜索框输入文字 → 250ms 防抖
-  → searchNotes(keyword, 'input')
-    → 前端调用 SearchNotes(kw, 1, 100)
-      → app.go:SearchNotes()
-        → noteService.Search(keyword, page, pageSize)
-          → GORM: WHERE title LIKE '%kw%' OR content LIKE '%kw%'
-                 AND deleted_at IS NULL
-          → ORDER BY pinned DESC, updated_at DESC
-          → Preload("Tags")
-          → 返回 []Note + total
-    → 接收 PaginatedResult.Items
-    → renderSearchResults(results, keyword)
-      → 关键词高亮 (highlightText)
-      → 渲染搜索结果列表（含可点击标签）
-    → switchView('search')                  // 切换到搜索列表视图
+Ctrl+F / Ctrl+K → 打开搜索弹窗
+  → els.searchModalInput 自动聚焦
+  → 用户输入文字 → 200ms 防抖
+    → searchModalLoadPage(1, false)
+      → 调用 SearchNotes(kw, page, pageSize, notebookId, startDate, endDate)
+        → app.go:SearchNotes()
+          → noteService.Search(keyword, page, pageSize, notebookID, startDate, endDate)
+            → GORM: WHERE (title LIKE '%kw%' OR content LIKE '%kw%')
+                   AND notebook_id = ?
+                   AND updated_at BETWEEN ? AND ?
+                   AND deleted_at IS NULL
+            → ORDER BY pinned DESC, updated_at DESC
+            → Preload("Tags")
+            → 返回 []Note + total
+      → 客户端 AND 标签过滤（若选中标签）
+      → 渲染搜索弹窗结果列表（含标签/笔记本/时间信息）
+      → ↑↓/⏎ 键盘导航打开笔记
 
-清空搜索框 → 返回网格视图
+点击标签筛选按钮 → renderTagFilterDropdown()
+  → 多选标签（AND 语义）
+  → _triggerFilterSearch() 立即重新搜索
 
-点击标签 chip → searchByTag(tagName)
-  → 设置搜索框值 → searchNotes(tagName, 'tag')
+点击笔记本/日期筛选按钮 → 选择过滤条件 → _triggerFilterSearch()
+  → 筛选条件同步到 state.searchModalNotebookId/startDate/endDate
+
+点击标签 chip → searchByTag(tagId, tagName)
+  → openSearchModal()
+  → 预选该标签: state.searchModalTagIds = new Set([tagId])
+  → updateTagFilterLabel() + _triggerFilterSearch()
+  → 搜索弹窗显示该标签下所有笔记
 ```
+
+**注意**：旧版 topbar 搜索框 + `searchNotes()` + `renderSearchResults()` + `#viewSearch` 视图已移除，全部搜索功能统一由搜索弹窗完成。
 
 #### 4.2.3 笔记查看与右键菜单流程
 
@@ -717,7 +728,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 57 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
-| **前端视图** | 9 个：卡片网格、编辑器（模态框）、搜索结果、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
+| **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
 | **前端代码量** | ~6303 行 JS + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
@@ -725,7 +736,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **排序规则** | `pinned DESC, updated_at DESC`（置顶优先，最新在前） |
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
-| **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/搜索/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
+| **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
 | **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明 8=MD 语法手册；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + 数据操作/快速备份/数据目录三个卡片分区 |
@@ -759,7 +770,7 @@ Ctrl+F / 用户点击搜索框 → 输入框聚焦
 | **懒加载** | 所有场景（启动/CRUD）只加载第 1 页，滚动到底部（<200px）自动追加下一页；Ctrl+End 一次加载所有剩余页；底部显示「共 X 条笔记」|
 | **加载动画** | CSS 圆环旋转动画（0.8s/infinite），最少显示 1 秒，确保可见 |
 | **PgDn 逻辑** | 已到底时直接调用 `loadMoreNotes()` 加载下一页（不走 scroll 事件）；未到底时设置 `_keyboardScroll` 标志阻止 scroll 监听器误触发 |
-| **ESC 逻辑** | 按 ESC 依次检查：关于页 → 关闭；全屏 → 退出全屏；编辑器打开 → `closeEditor()`；快捷键弹窗 → 关闭；批量模式 → 退出；搜索视图 → 清空回首页；其他子视图 → 回首页 |
+| **ESC 逻辑** | 按 ESC 依次检查：关于页 → 关闭；全屏 → 退出全屏；编辑器打开 → `closeEditor()`；快捷键弹窗 → 关闭；批量模式 → 退出；其他子视图 → 回首页 |
 | **Sort & PageSize** | 后端 `GetAll`/`GetByTag` 接受 `sortBy` 参数动态 ORDER BY，新增 4 个绑定方法：`GetSortOrder`/`SetSortOrder`/`GetPageSize`/`SetPageSize` |
 | **主题系统** | 6 个主题：default（暖灰）、nord（北极蓝调）、monokai-pro（荧光粉墨）、light（亮白蓝强调）、tokyo-night（靛紫夜幕）、dark（纯黑琥珀强调）。CSS 变量体系统一在 `css/variables.css` 的 `:root`/`[data-theme]` 中，切换通过 `document.documentElement.setAttribute('data-theme', name)`。设置页使用 iOS 风格分段控件（6 等分滑动指示器，宽度 320px），持久化到 Setting `theme`。分段控件动态计算按钮数，支持任意数量按钮 |
 | **标签交互优化** | 编辑器标签点击态改为 DOM 类切换（`active`/`clicked`），不再整个重渲染 `renderTagSelector`。选中 → `filter:none + opacity:1 + ✓前缀 + box-shadow`；未选中 → `filter:saturate(0.25) brightness(0.65) + opacity:0.55`；点击脉冲动画 0.25s |

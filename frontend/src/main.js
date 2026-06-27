@@ -427,7 +427,6 @@ const els = {
 
     // 视图
     viewGrid: $('viewGrid'),
-    viewSearch: $('viewSearch'),
     viewSettings: $('viewSettings'),
     viewData: $('viewData'),
     viewTrash: $('viewTrash'),
@@ -438,12 +437,6 @@ const els = {
     cardGrid: $('cardGrid'),
     skeletonGrid: $('skeletonGrid'),
     emptyNotes: $('emptyNotes'),
-    emptySearch: $('emptySearch'),
-
-    // 搜索
-    searchResults: $('searchResults'),
-    resultCount: $('resultCount'),
-    searchBackBtn: $('searchBackBtn'),
 
     // 编辑器
     editorOverlay: $('editorOverlay'),
@@ -1187,38 +1180,6 @@ function showSaveConfirmDialog(msg) {
             if (e.target === els.confirmDialog) cleanup('cancel');
         };
     });
-}
-
-/**
- * 搜索笔记
- */
-async function searchNotes(keyword, source) {
-    const kw = keyword.trim();
-    if (!kw) {
-        switchView('grid');
-        return;
-    }
-
-    state.searchKeyword = kw;
-    state.searchSource = source || 'input';
-
-    try {
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.SearchNotes) {
-            const result = await window.go.main.App.SearchNotes(kw, 1, 100, state.activeNotebookId);
-            renderSearchResults((result && result.items) || [], kw);
-        } else {
-            console.warn('SearchNotes 未绑定，模拟搜索');
-            const results = state.notes.filter(
-                (n) => n.title.toLowerCase().includes(kw.toLowerCase()) ||
-                    (n.content && n.content.toLowerCase().includes(kw.toLowerCase()))
-            );
-            renderSearchResults(results, kw);
-        }
-    } catch (err) {
-        console.error('搜索失败:', err);
-        renderSearchResults([], kw);
-    }
-    switchView('search');
 }
 
 /**
@@ -2269,7 +2230,7 @@ function renderCardGrid(animateMode, prevCount) {
                     ${(note.tags || [])
                         .map(
                             (tag) =>
-                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="${state.batchMode ? `event.stopPropagation()` : `event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')`}">${escapeHtml(tag.name)}</span>`
+                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="${state.batchMode ? `event.stopPropagation()` : `event.stopPropagation(); window.searchByTag(${tag.id}, '${escapeHtml(tag.name)}')`}">${escapeHtml(tag.name)}</span>`
                         )
                         .join('')}
                 </div>
@@ -2324,42 +2285,6 @@ function renderCardGrid(animateMode, prevCount) {
         footer.textContent = `共 ${totalNotes} 条笔记`;
         gridContainer.after(footer);
     }
-}
-
-/**
- * 渲染搜索结果
- */
-function renderSearchResults(results, keyword) {
-    els.resultCount.textContent = `找到 ${results.length} 条结果`;
-
-    if (results.length === 0) {
-        // 隐藏搜索结果列表，显示空搜索状态
-        els.searchResults.style.display = 'none';
-        if (els.emptySearch) els.emptySearch.style.display = 'flex';
-        return;
-    }
-
-    // 有结果时：隐藏空搜索状态，显示搜索结果列表
-    if (els.emptySearch) els.emptySearch.style.display = 'none';
-    els.searchResults.style.display = '';
-
-    els.searchResults.innerHTML = results
-        .map(
-            (note) => `
-        <div class="search-result-item" onclick="window.viewNote(${note.id})" oncontextmenu="event.preventDefault(); window.showContextMenu(event, ${note.id})">
-            <div class="result-title">${highlightText(escapeHtml(note.title || '无标题'), keyword)}</div>
-            <div class="result-snippet">${highlightText(escapeHtml(getSummary(note.content, 150)), keyword)}</div>
-            <div class="result-time">${formatTime(note.updated_at || note.created_at)}</div>
-            ${(note.tags || []).length > 0 ? `
-            <div class="result-tags">
-                ${(note.tags || []).map(tag =>
-                    `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="event.stopPropagation(); window.searchByTag('${escapeHtml(tag.name)}')">${escapeHtml(tag.name)}</span>`
-                ).join('')}
-            </div>` : ''}
-        </div>
-        `
-        )
-        .join('');
 }
 
 /**
@@ -3319,16 +3244,14 @@ window.deleteTag = async function (id) {
 };
 
 /**
- * 按标签搜索（全局）- 改为打开搜索弹窗并预填关键字
+ * 按标签搜索（全局）- 打开搜索弹窗并预选该标签作为过滤器
  */
-window.searchByTag = function (tagName) {
-    // 打开搜索弹窗(替代原 topbar 搜索框聚焦)
+window.searchByTag = function (tagId, tagName) {
     openSearchModal();
-    if (els.searchModalInput) {
-        els.searchModalInput.value = tagName;
-        // 触发搜索
-        handleSearchModalInput();
-    }
+    state.searchModalTagIds = new Set([tagId]);
+    updateTagFilterLabel();
+    updateSearchModalFilterBtnActive();
+    _triggerFilterSearch();
 };
 
 /* ===== 批量管理函数 ===== */
@@ -4451,7 +4374,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, els.searchResults, els.dataContent].filter(Boolean);
+    const containers = [els.mainContent, els.dataContent].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', () => {

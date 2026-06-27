@@ -65,89 +65,8 @@
   color: var(--text-primary);
 }
 
-.search-results {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 32px;
-  /* 与主内容区一致的滚动条空间预留 */
-  scrollbar-gutter: stable;
-  /* 负边距抵消父容器 #mainContent 的 scrollbar-gutter 预留空间（8px），让滚动条贴靠窗口右边缘 */
-  margin-right: -8px;
-}
-
-/* 搜索视图消除右侧内边距，让 scrollbar 靠右 */
-#viewSearch.view {
-  padding-right: 0;
-}
-
 #viewData.view {
   padding-right: 0;
-}
-
-.result-count {
-  font-size: 0.813rem;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-
-.search-result-item {
-  background: var(--card-bg);
-  border-radius: var(--radius-xl);
-  padding: 16px 20px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: var(--transition);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid transparent;
-}
-
-.search-result-item:hover {
-  box-shadow: var(--shadow-md);
-  border-color: var(--border);
-}
-
-.result-title {
-  font-size: 0.938rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-  line-height: 1.4;
-}
-
-.result-title .highlight {
-  background: var(--accent-light);
-  padding: 0 2px;
-  border-radius: 2px;
-  color: var(--text-primary);
-}
-
-.result-snippet {
-  font-size: 0.813rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.result-snippet .highlight {
-  background: var(--accent-light);
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-.result-time {
-  font-size: 0.688rem;
-  color: var(--text-muted);
-  margin-top: 8px;
-}
-
-.result-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
 }
 
 /* ---------- 增强空状态样式 ---------- */
