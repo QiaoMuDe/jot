@@ -1491,10 +1491,15 @@ Permission is hereby granted...
 			notebookID = notebookMap["默认笔记本"]
 		}
 
+		fileExt := ".txt"
+		if nd.NoteType == "markdown" {
+			fileExt = ".md"
+		}
 		note := models.Note{
 			Title:      nd.Title,
 			Content:    nd.Content,
 			NoteType:   nd.NoteType,
+			FileExt:    fileExt,
 			Pinned:     nd.Pinned,
 			NotebookID: notebookID,
 			CreatedAt:  createdAt,

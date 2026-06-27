@@ -107,6 +107,7 @@ export namespace models {
 	    title: string;
 	    content: string;
 	    note_type: string;
+	    file_ext: string;
 	    pinned: boolean;
 	    notebook_id: number;
 	    // Go type: time
@@ -126,6 +127,7 @@ export namespace models {
 	        this.title = source["title"];
 	        this.content = source["content"];
 	        this.note_type = source["note_type"];
+	        this.file_ext = source["file_ext"];
 	        this.pinned = source["pinned"];
 	        this.notebook_id = source["notebook_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);

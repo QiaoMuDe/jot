@@ -491,7 +491,7 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 		return "", fmt.Errorf("笔记不存在: %w", err)
 	}
 
-	defaultName := sanitizeFilename(note.Title) + ".md"
+	defaultName := sanitizeFilename(note.Title) + note.FileExt
 	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "导出笔记为 Markdown",
 		DefaultFilename: defaultName,

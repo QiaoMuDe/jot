@@ -82,6 +82,7 @@ jot/                                    # 项目根目录
     ├── add-md-reference-page/        # MD 语法手册页面（已完成）
     ├── add-md-rendering/             # Markdown 渲染查看规格
     ├── add-misc-improvements/        # 杂项优化规格
+    ├── add-note-file-ext/            # 笔记文件后缀字段（.txt/.md）
     ├── add-note-type/                # 笔记类型（纯文本/Markdown）
     ├── add-notebook-system/          # 笔记本系统
     ├── add-notes-move-notebook/      # 笔记迁移笔记本
@@ -678,13 +679,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
 - ✅ **批量标签操作**：批量工具栏新增 +标签/-标签 按钮；点击弹出标签选择弹窗（毛玻璃背景 + 弹入动画），所有标签以彩色圆点展示；添加/移除模式统一为「点击标签切换选中态 → 确认按钮执行」；底部确认按钮显示已选数量；移除模式不可移除标签灰色禁用；操作后不退出批量模式保持选中状态；空态提示「当前选中的笔记中没有可移除的标签」
 - ✅ **设置页首次打开白屏修复**：根因为 `updateFontSettingsUI()` 调用 `renderFontFamilyOptions()` 在首次显示时创建 200+ 带 `style="font-family:..."` 的字体选项 DOM 节点，浏览器首次布局计算耗时 1-2 秒。修复：`updateFontSettingsUI()` 移除 `renderFontFamilyOptions()` 调用，改为仅在用户点击下拉触发器时渲染（已有点击处理逻辑），设置页首次打开不再含大量字体节点参与布局，白屏消除
-- ✅ **笔记类型功能**：Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种类型。新建笔记默认选中「纯文本」（text）。纯文本模式底部隐藏「编辑/预览」切换按钮（`#editorModes`），仅显示纯文本编辑区。查看模式：`note_type="text"` 或 `""` 时内容以 `<pre>` 原始格式显示跳过 marked 解析；`note_type="markdown"` 走现有渲染流程。创建/更新笔记时 `note_type` 字段随请求写入，旧笔记 `note_type=""` 默认按 text 处理
+- ✅ **笔记类型功能**：Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种类型。新建笔记默认选中「纯文本」（text）。纯文本模式底部隐藏「编辑/预览」切换按钮（`#editorModes`），仅显示纯文本编辑区。查看模式：`note_type="text"` 或 `""` 时内容以 `<pre>` 原始格式显示跳过 marked 解析；`note_type="markdown"` 走现有渲染流程。创建/更新笔记时 `note_type` 字段随请求写入，旧笔记 `note_type=""` 默认按 text 处理。配套新增 `FileExt string` 字段（`.txt`/`.md`），由后端自动从 `note_type` 推导写入，前端零改动
 - ✅ **笔记类型切换器位置重构**：类型切换器从 footer 底部（与模式切换器冲突）移到 header 标题行右侧紧凑胶囊（`.editor-title-row`），再重构为 header 工具栏中的 32×32 T/M 图标按钮（`#editorTypeToggle`），与全屏/关闭按钮同尺寸同风格。查看只读模式隐藏
 - ✅ **置顶按钮重新设计**：从旧 `.card-pin-badge` 左侧指示器 + hover 显示按钮改为始终可见的圆形图标按钮（`border-radius: 50%`）。分 4 级透明度：默认 20% → 卡片 hover 50% → 按钮自身 hover 100% + 放大 1.15x → 已置顶 100% + `accent-lighter` 背景 + 阴影。star 使用字体加粗区分状态
 - ✅ **置顶操作局部更新**：`togglePin()` 切换后不再 `await loadNotes()` 全量重载，改为本地更新 `state.notes` + `renderCardGrid('none')`，省掉后端请求和整页入场动画
 - ✅ **批量模式 pin 按钮可见**：批量模式下 pin 按钮不再 `display: none`，与 checkbox 并存显示；添加 `.disabled` class（`pointer-events: none`），退出批量模式恢复交互
 - ✅ **批量置顶/取消置顶**：后端 `note_service.go` 新增 `BatchPinNotes(ids []uint, pin bool)` + `app.go` 绑定。批量操作栏新增 `#batchPinBtn` 按钮；`updateBatchBar()` 根据选中笔记状态动态切换文字（全部已置顶→"取消置顶"，否则→"置顶"）；`batchPinSelected()` 调用后端 + 本地同步 + 通知提示
 - ✅ **Seed 工具 note_type**：`tools/seed/main.go` 24 条模拟笔记 50/50 分配 text/markdown 类型（含 Checklist/纯列表的为 text，含 headings/代码块/表格的为 markdown）
+- ✅ **笔记 FileExt 字段**：Note 模型新增 `FileExt string` 字段（`gorm:"size:10;default:.txt"`），存储文件后缀 `.txt`/`.md`。后端 `fileExtFromNoteType()` 自动推导：`"markdown"` → `.md`，其他 → `.txt`。`CreateWithNotebook`/`Update` 中自动写入。AutoMigrate 后一次性迁移存量数据（`CASE WHEN note_type='markdown' THEN '.md' ELSE '.txt' END`）。`noteThinSelect` 新增 `file_ext` 列供前端读取。`ExportNoteAsMarkdown` 改用 `note.FileExt` 拼接默认文件名，不再硬编码 `.md`。Seed 工具同步写入 `FileExt`。前端零改动（无新增绑定方法）。详见 `.trae/specs/add-note-file-ext/`
 - ✅ **笔记本侧边栏三段式设计**：Header（--card-bg 56px + 标题 + `+` 按钮）→ List（--bg-secondary，书签隐喻笔记本项）→ Footer（color-mix 55/45 铺平，无圆角无 padding）。6 主题自适应，折叠动画防文字换行
 - ✅ **笔记本 CRUD 系统**：NotebookService 7 方法（Create/Update/Delete/DeleteWithNotes/GetAll/GetAllNotesCount/EnsureDefaultNotebook）。默认笔记本（ID=1）不可删不可改名。重命名防同名检测
 - ✅ **删除笔记本连带选项**：自定义确认弹窗内嵌 checkbox，勾选→硬删除笔记+软删笔记本，不勾选→笔记迁到默认笔记本。删除活跃笔记本后自动回默认首页
@@ -738,7 +740,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
 | **前端代码量** | ~6303 行 JS + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
-| **核心字段** | Note: id/title/content/color/pinned/created_at/updated_at/deleted_at/tags |
+| **核心字段** | Note: id/title/content/note_type/file_ext/pinned/notebook_id/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
 | **排序规则** | 默认 `pinned DESC, updated_at DESC`，搜索弹窗支持 3 种切换：updated_at / created_at / title（均 pinned 优先）|
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期/排序），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
@@ -810,7 +812,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **置顶不更新时间** | 后端 `TogglePin` 使用 `s.db.Model(note).UpdateColumn("pinned", note.Pinned)`，GORM 的 `UpdateColumn` 不触发 `BeforeUpdate` hook，`UpdatedAt` 保持不变 |
 | **右键导出 Markdown** | 右键菜单「导出」→ `ExportNoteAsMarkdown(id)` → 标题特殊符号/空白→下划线（`\ / : * ? " < > \|`）→ `runtime.SaveFileDialog` 默认文件名 `标题.md` → `os.WriteFile` 写入 `# 标题\n\n内容`，成功/失败通知 |
 | **批量标签操作** | 批量工具栏 +标签/-标签 按钮。点击打开 `.batch-tag-overlay`（毛玻璃 + 居中弹入动画）。添加/移除模式统一流程：全部标签以 `.batch-tag-chip` 展示（彩色圆点，移除模式不可移除标签加 `.disabled` 灰色禁用）→ 点击切换 `.selected` 态（双环高亮边框）→ 底部确认按钮显示已选数量 → 执行后 `loadNotes()` 刷新但**不退出批量模式、不清空选择**。移除模式空态：选中笔记无任何标签时通知提示，不弹窗。后端 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes` 遍历笔记 IDs 逐个操作 |
-| **笔记类型（NoteType）** | Note 模型新增 `NoteType string` 字段（`gorm:"size:20;default:text"`），支持 `"text"`（纯文本）和 `"markdown"`（Markdown）两种。新建笔记默认 `"text"`。类型切换器为 header 工具栏 T/M 图标按钮（`#editorTypeToggle`，32×32，与全屏按钮同风格），查看只读模式隐藏。纯文本模式隐藏底部「编辑/预览」切换按钮（`#editorModes`），查看模式 text/`<pre>` 原始显示跳过 marked，markdown 走现有渲染。旧笔记 `note_type=""` 默认按 text 处理。创建/更新由前端传入 `noteType` 参数 |
+| **笔记类型（NoteType + FileExt）** | Note 模型 `NoteType string`（`"text"`/`"markdown"`）+ `FileExt string`（`.txt`/`.md`）双字段。类型切换器为 header 工具栏 T/M 图标按钮（`#editorTypeToggle`，32×32），查看模式隐藏。纯文本隐藏「编辑/预览」切换按钮。`FileExt` 由后端自动从 `NoteType` 推导：`fileExtFromNoteType()` 中 `markdown→.md` / 其他→`.txt`。`CreateWithNotebook`/`Update` 自动写入。存量数据启动时一次性迁移。`noteThinSelect` 含 `file_ext` 列。导出用 `note.FileExt` 拼接文件名 |
 | **置顶按钮** | 圆形图标按钮（`border-radius: 50%`），始终可见，分 4 级透明度：默认 20% → 卡片 hover 50% → 按钮 hover 100% + 放大 1.15x → 已置顶 100% + accent-lighter 背景 + 阴影。置顶操作 `togglePin()` 局部 `renderCardGrid('none')` 不再重载全部笔记 |
 | **批量置顶** | 后端 `BatchPinNotes(ids, pin)` + 前端 `#batchPinBtn`。按钮文字动态：全部已置顶→「取消置顶」，否则→「置顶」。批量模式下 pin 按钮可见但 `pointer-events: none` 禁止交互 |
 | **笔记本侧边栏三段式设计** | Header（`--card-bg`，56px 与 topbar 对齐，标题 + `+` 按钮）→ List（`--bg-secondary`，书签隐喻笔记本项 + badge 药丸计数器）→ Footer（`color-mix(55% bg-secondary + 45% card-bg)`，新建按钮铺满无圆角）。`color-mix()` 实现 6 主题自适应，无需硬编码各主题颜色 |
@@ -856,7 +858,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **纯文本编辑器 MD 高亮开关** | 设置键 `md_highlight_plain`（默认 true）。HTML 添加 `#mdHighlightToggle`，JS 添加 `els.mdHighlightToggle` DOM 引用 + `loadMdHighlightSetting()`（读取后端/回退 localStorage）+ toggle `change` 事件自动保存。`initCodeMirror()` 第三参数 `useMdHighlight`，条件性添加 `markdown()` + `syntaxHighlighting(jotHighlightStyle)`。`openEditor()` 中逻辑：`const useMdHighlight = state.noteType === 'markdown' \|\| els.mdHighlightToggle.checked` — Markdown 笔记始终启用，纯文本按设置决定 |
 | **查看页编辑按钮** | header 工具栏中 `#editorEditBtn`（✎ 空心铅笔），仅在查看模式（isReadOnly=true）下显示（`els.editorEditBtn.style.display = isReadOnly ? '' : 'none'`）。位置在 `#editorFullscreenBtn` 左侧。点击事件：直接调用 `openEditor(noteId, false)` 原地切换为编辑模式——**不走 closeEditor()**，因为 closeEditor 内部 200ms setTimeout 动画回调会隐藏面板，导致 openEditor 先显示后又被隐藏（闪烁后消失）。initCodeMirror() 内部会销毁旧只读实例并创建新的可编辑实例 |
 | **拖拽文件导入** | Wails 层面：`main.go` 需添加 `DragAndDrop: &options.DragAndDrop{EnableFileDrop: true}`（缺失则 OnFileDrop 回调永不触发）。前端 `initFileDrop()` 使用 `_dragCounter` 模式控制 `#dropOverlay` 遮罩（dragenter ++ / dragleave --），HTML5 drop 事件仅 `preventDefault` + 重置遮罩，不处理文件。文件处理由 `window.runtime.OnFileDrop(cb, false)` 接手，回调签名 `(x, y, paths)` 返回文件路径数组。`OnFileDrop` 回调调用 `handleFileDropPaths(paths, state.activeNotebookId)` 传递当前笔记本 ID。后端 `ImportFiles(paths, notebookID uint)` 统一处理：os.Stat 检测目录拒绝、fs.IsBinaryPath(p) 读前 8000 字节检测二进制、os.ReadFile 读取内容、CreateWithNotebook(title, content, noteType, notebookID) 创建笔记到指定笔记本。多文件批量导入，单文件 10MB 限制。完成通知 + 刷新列表 + 打开最后一条查看页 |
-| **懒加载 Content** | `note_service.go` 中定义 `noteThinSelect` 常量 (`"id, title, SUBSTR(content, 1, 200) AS content, note_type, pinned, notebook_id, created_at, updated_at"`)，`GetAllByNotebook()`、`Search()`、`SearchByNotebook()` 三个列表/搜索查询方法在执行 `Find(&notes)` 前调用 `.Select(noteThinSelect)`。`LIKE %keyword%` 的 WHERE 子句不受 Select 影响（仅限制 RETURN 列）。Tags 的 `Preload` 在 GORM 中独立生成子查询，不受主查询 Select 影响。新增 `GetNoteContent(id)` 方法：`s.db.Model(&Note{}).Where("id=? AND deleted_at IS NULL", id).Select("content").Take(&content)` 单行查询仅返回文本。`app.go` 新增同名方法暴露给前端。前端 `openEditor()` 中：注释掉直接 `editorContent = note.content`，改为 `await GetNoteContent(noteId)` 按需加载完整内容注入 CM6 和 Markdown 预览。|
+| **懒加载 Content** | `note_service.go` 中定义 `noteThinSelect` 常量 (`"id, title, SUBSTR(content, 1, 200) AS content, note_type, file_ext, pinned, notebook_id, created_at, updated_at"`)，`GetAllByNotebook()`、`Search()`、`SearchByNotebook()` 三个列表/搜索查询方法在执行 `Find(&notes)` 前调用 `.Select(noteThinSelect)`。`LIKE %keyword%` 的 WHERE 子句不受 Select 影响（仅限制 RETURN 列）。Tags 的 `Preload` 在 GORM 中独立生成子查询，不受主查询 Select 影响。新增 `GetNoteContent(id)` 方法：`s.db.Model(&Note{}).Where("id=? AND deleted_at IS NULL", id).Select("content").Take(&content)` 单行查询仅返回文本。`app.go` 新增同名方法暴露给前端。前端 `openEditor()` 中：注释掉直接 `editorContent = note.content`，改为 `await GetNoteContent(noteId)` 按需加载完整内容注入 CM6 和 Markdown 预览。|
 | **空标题校验** | `createNote()` 和 `updateNote()` 入口检查 `if (!title)` → `nm.show('标题不能为空，请输入标题后再保存', 'warning')` + return，阻止空标题保存 |
 | **重置数据库刷新侧边栏** | `resetDatabase()` 成功后追加 `await loadNotebooks()` 调用（位于 `loadDataStats()` 之后、`switchView('grid')` 之前），解决重置后笔记本侧边栏仍显示旧计数的问题 |
 | **复制功能逻辑** | `copyNote(id)` 在前端直接拼接标题和内容：`const text = (note.title ? note.title + '\n\n' : '') + (note.content || '')`，通过 `navigator.clipboard.writeText(text)` 写入剪贴板。与导出功能 `ExportNoteAsMarkdown` 类似（也是标题+内容组合），但导出走后端生成 .md 文件 |
@@ -1000,7 +1002,7 @@ await loadXxxSetting();
 | **MD 语法页面全主题适配** | 所有 `.md-ref-*` CSS 从硬编码颜色改为 `var(--xxx)` 主题变量：源码面板背景 `var(--bg-secondary)`、预览面板 `var(--card-bg)`、代码块字体 `var(--font-family)`、复制按钮背景 `var(--card-bg)`/边框 `var(--border)`/文字 `var(--text-muted)`、hover 背景 `var(--hover-bg)`、引用块底色 `var(--hover-bg)`、表格边框 `var(--border)`、标签 `.md-ref-badge` 继承 `var(--accent)` 配色、`<kbd>` 元素 `var(--bg-secondary)` 底色 + `var(--border)` 边框。6 套主题（default/nord/monokai-pro/light/tokyo-night/dark）均自动适配 |
 | **代码块字体跟随全局** | 源码面板 `<pre><code>` 和预览区 `<pre><code>` 的 `font-family` 从硬编码 `'SF Mono', SFMono-Regular, Consolas, ...` 改为 `var(--font-family)`，联动全局字体设置，切换字体后 MD 语法页面代码块同步更新 |
 | **「打开编辑器试试」async 时序修复** | 修复前：`openMdRefTryEditor()` 非 async，`openEditor(null)` 无 await 返回 Promise，`setEditorContent()` 在 `cmEditor===null` 时静默失败。同时 `openEditor` 内部将 `state.noteType` 默认设为 `'text'`，后续设置 `'markdown'` 但 UI 已渲染为 text 模式。修复后：函数改为 `async` + `await openEditor(null)`，cmEditor 就绪后再写入内容和覆盖 noteType + UI 状态 |
-| **Seed 工具增强** | `tools/seed/main.go` 从原来的 5 笔记本/5 标签/22 笔记增强为 6 笔记本（新增「随笔」）/7 标签（新增「技术」「随笔」）/38 条笔记。每条笔记含完整 Markdown 正文（标题/引用/代码块/表格/列表等混合内容），时间跨度覆盖 30 天（自动生成 `updated_at`）。`note_type` 字段在 text/markdown 之间均匀分配 |
+| **Seed 工具增强** | `tools/seed/main.go` 从原来的 5 笔记本/5 标签/22 笔记增强为 6 笔记本（新增「随笔」）/7 标签（新增「技术」「随笔」）/38 条笔记。每条笔记含完整 Markdown 正文（标题/引用/代码块/表格/列表等混合内容），时间跨度覆盖 30 天（自动生成 `updated_at`）。`note_type` 字段在 text/markdown 之间均匀分配，`file_ext` 同步按 note_type 写入 `.txt`/`.md` |
 
 ## 十四、新增记忆点（搜索弹窗 UI 修复与菜单调整）
 

@@ -44,6 +44,7 @@ func (s *NoteService) Update(id uint, title, content, noteType string) (*models.
 		note.Content = content
 	}
 	note.NoteType = noteType
+	note.FileExt = fileExtFromNoteType(noteType)
 	if err := s.db.Save(note).Error; err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func buildSortOrder(sortBy string) string {
 }
 
 // noteThinSelect 列表/搜索查询时使用的 Select，排除全量 Content，替换为前 200 字符用于卡片预览
-const noteThinSelect = "id, title, SUBSTR(content, 1, 200) AS content, note_type, pinned, notebook_id, created_at, updated_at"
+const noteThinSelect = "id, title, SUBSTR(content, 1, 200) AS content, note_type, file_ext, pinned, notebook_id, created_at, updated_at"
 
 // GetAll 分页获取未删除的笔记列表（不过滤 notebook_id），按指定排序方式排列，返回列表与总数
 func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, int64, error) {
@@ -456,12 +457,21 @@ func (s *NoteService) BatchMoveToNotebook(noteIDs []uint, targetNotebookID uint)
 	return nil
 }
 
+// fileExtFromNoteType 根据 noteType 推导文件后缀
+func fileExtFromNoteType(noteType string) string {
+	if noteType == "markdown" {
+		return ".md"
+	}
+	return ".txt"
+}
+
 // CreateWithNotebook 创建一条新笔记并指定所属笔记本，返回创建后的笔记对象
 func (s *NoteService) CreateWithNotebook(title, content, noteType string, notebookID uint) (*models.Note, error) {
 	note := models.Note{
 		Title:      title,
 		Content:    content,
 		NoteType:   noteType,
+		FileExt:    fileExtFromNoteType(noteType),
 		NotebookID: notebookID,
 	}
 	if err := s.db.Create(&note).Error; err != nil {
