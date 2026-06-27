@@ -3831,41 +3831,55 @@ function initEventListeners() {
     });
     els.editorViewBtn.addEventListener('click', async () => {
         const noteId = state.editingNoteId;
-        if (noteId) {
-            // 先保存当前内容再切回查看模式
-            const title = els.editorNoteTitle.value.trim();
-            const content = getEditorContent().trim();
-            if (title && window.go?.main?.App?.UpdateNote) {
-                try {
-                    await window.go.main.App.UpdateNote(noteId, title, content, state.noteType);
-                    // 更新标签
-                    const note = await window.go.main.App.GetNote(noteId);
-                    if (note?.tags) {
-                        for (const t of note.tags) {
-                            try { await window.go.main.App.RemoveTagFromNote(noteId, t.id); } catch (e) {}
-                        }
-                    }
-                    for (const tagId of state.selectedTags) {
-                        try { await window.go.main.App.AddTagToNote(noteId, tagId); } catch (e) {}
-                    }
-                } catch (err) {
-                    console.error('保存失败:', err);
-                }
-            }
-            state.enteredFromViewMode = false;
-            nm.show('笔记已更新', 'success');
-            // 同步更新 state.notes 中的本地缓存，避免 loadNotes() 全量刷新
-            const cached = state.notes.find(n => n.id === noteId);
-            if (cached) {
-                cached.title = title;
-                cached.content = content;
-                cached.note_type = state.noteType;
-                cached.updated_at = new Date().toISOString();
-            }
-            state._editSnapshot = null;
+        if (!noteId) return;
+
+        const snapshot = state._editSnapshot;
+        const title = els.editorNoteTitle.value.trim();
+        const content = getEditorContent().trim();
+        const currentTags = [...state.selectedTags].sort();
+
+        // 变更检测：无修改则静默切回查看模式
+        const tagsChanged = snapshot ? JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags) : true;
+        const hasChanged = !snapshot || title !== snapshot.title || content !== snapshot.content || tagsChanged;
+
+        state.enteredFromViewMode = false;
+
+        if (!hasChanged) {
+            // 无变更：直接切回查看模式，不弹通知
             openEditor(noteId, true);
-            await loadNotes();
+            return;
         }
+
+        // 有变更：保存 + 通知 + 切回查看模式
+        if (title && window.go?.main?.App?.UpdateNote) {
+            try {
+                await window.go.main.App.UpdateNote(noteId, title, content, state.noteType);
+                // 更新标签：先移除所有标签再重新添加选中的
+                const note = await window.go.main.App.GetNote(noteId);
+                if (note?.tags) {
+                    for (const t of note.tags) {
+                        try { await window.go.main.App.RemoveTagFromNote(noteId, t.id); } catch (e) {}
+                    }
+                }
+                for (const tagId of state.selectedTags) {
+                    try { await window.go.main.App.AddTagToNote(noteId, tagId); } catch (e) {}
+                }
+            } catch (err) {
+                console.error('保存失败:', err);
+            }
+        }
+        nm.show('笔记已更新', 'success');
+        // 同步更新 state.notes 中的本地缓存，避免 loadNotes() 全量刷新
+        const cached = state.notes.find(n => n.id === noteId);
+        if (cached) {
+            cached.title = title;
+            cached.content = content;
+            cached.note_type = state.noteType;
+            cached.updated_at = new Date().toISOString();
+        }
+        state._editSnapshot = null;
+        openEditor(noteId, true);
+        await loadNotes();
     });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
     els.editorCancelBtn.addEventListener('click', closeEditorSafe);
