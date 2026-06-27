@@ -154,52 +154,7 @@
                             </div>
                         </div>
                         <div class="editor-panes" style="position:relative;">
-                            <div class="editor-toolbar" id="editorToolbar">
-                                <button class="editor-toolbar-btn" id="tbBold" title="加粗 (Ctrl+B)">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbItalic" title="斜体 (Ctrl+I)">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbStrikethrough" title="删除线 (Ctrl+U)">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 4.9C16.2 3.7 14.3 3 12 3c-4.4 0-6.5 2.5-6.5 5.5 0 3.5 4 4.5 7 5.5"/><path d="M6.7 19.1C7.8 20.3 9.7 21 12 21c4.4 0 6.5-2.5 6.5-5.5 0-1.5-.5-2.8-1.5-3.8"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbCode" title="行内代码">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                                </button>
-                                <div class="editor-toolbar-divider"></div>
-                                <div class="editor-toolbar-btn-wrapper" id="tbHeadingWrapper">
-                                    <button class="editor-toolbar-btn" id="tbHeading" title="标题">
-                                        <span style="font-size:13px;font-weight:700;font-family:serif;">H</span>
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:1px;"><polyline points="6 9 12 15 18 9"/></svg>
-                                    </button>
-                                    <div class="heading-dropdown-panel" id="headingDropdown" style="display:none;">
-                                        <div class="heading-dropdown-item" data-level="1"><span class="hd-tag">H1</span><span class="hd-label">标题 1</span></div>
-                                        <div class="heading-dropdown-item" data-level="2"><span class="hd-tag">H2</span><span class="hd-label">标题 2</span></div>
-                                        <div class="heading-dropdown-item" data-level="3"><span class="hd-tag">H3</span><span class="hd-label">标题 3</span></div>
-                                        <div class="heading-dropdown-item" data-level="4"><span class="hd-tag">H4</span><span class="hd-label">标题 4</span></div>
-                                        <div class="heading-dropdown-item" data-level="5"><span class="hd-tag">H5</span><span class="hd-label">标题 5</span></div>
-                                        <div class="heading-dropdown-item" data-level="6"><span class="hd-tag">H6</span><span class="hd-label">标题 6</span></div>
-                                    </div>
-                                </div>
-                                <div class="editor-toolbar-divider"></div>
-                                <button class="editor-toolbar-btn" id="tbLink" title="链接">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbImage" title="图片">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbList" title="无序列表">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                                </button>
-                                <button class="editor-toolbar-btn" id="tbQuote" title="引用">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/></svg>
-                                </button>
-                                <div class="editor-toolbar-divider"></div>
-                                <button class="editor-toolbar-btn" id="tbHr" title="分割线">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><polyline points="8 8 12 4 16 8"/><polyline points="8 16 12 20 16 16"/></svg>
-                                </button>
-                            </div>
+
                             <div id="editorNoteContent" class="editor-textarea"></div>
                             <div id="mdRendered" class="md-rendered" style="display:none"></div>
                         </div>
@@ -332,16 +287,6 @@
                             </div>
                         </div>
                         <div class="quick-note-hint">开启后，纯文本笔记也会显示 Markdown 语法高亮（标题、加粗、代码等）</div>
-                        <div class="font-setting-row" style="margin-top: 8px;">
-                            <label class="font-setting-label">Markdown 笔记显示格式化工具栏</label>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="mdToolbarToggle">
-                                <label class="toggle-track" for="mdToolbarToggle">
-                                    <span class="toggle-thumb"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="quick-note-hint">开启后，Markdown 笔记编辑时在顶部显示格式化工具栏（加粗、标题、链接等）</div>
                     </div>
                 </div>
                 <!-- 标签管理 -->
