@@ -537,7 +537,8 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 		Title:           "导出笔记为 Markdown",
 		DefaultFilename: defaultName,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Markdown (*.md)", Pattern: "*.md"},
+			{DisplayName: "笔记文件 (*" + note.FileExt + ")", Pattern: "*" + note.FileExt},
+			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
 		},
 	})
 	if err != nil {
