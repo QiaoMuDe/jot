@@ -16,6 +16,10 @@ import { jotTheme, getHighlightExtension, codeHighlightThemeNames, codeHighlight
 // 数据管理模块
 import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir } from './js/data-management.js';
 
+// 回收站页面模块
+import { loadTrashNotes } from './js/trash-page.js';
+// restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
+
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
     breaks: true,
@@ -277,7 +281,6 @@ const nm = new NotificationManager();
 const state = {
     notes: [],
     tags: [],
-    trashNotes: [],
     currentView: 'grid',       // grid | search | settings | data | trash
     _isFullscreen: false,
     editingNoteId: null,        // null = 新建, number = 编辑
@@ -1711,169 +1714,6 @@ async function deleteTag(id) {
     nm.show('标签已删除', 'success');
 }
 
-/**
- * 加载回收站笔记
- */
-async function loadTrashNotes() {
-    try {
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetTrashNotes) {
-            const result = await window.go.main.App.GetTrashNotes(1, 100);
-            state.trashNotes = (result && result.items) || [];
-        } else {
-            console.warn('GetTrashNotes 未绑定');
-            state.trashNotes = [];
-        }
-    } catch (err) {
-        console.error('加载回收站失败:', err);
-        state.trashNotes = [];
-    }
-    renderTrashList();
-}
-
-/**
- * 恢复笔记（带动画）
- */
-async function restoreNote(id) {
-    // 先对 DOM 元素应用 shrinkOut 动画
-    const item = els.trashListInner.querySelector(`.trash-item[data-id="${id}"]`);
-    if (item) {
-        item.style.animation = 'shrinkOut 0.2s ease-out forwards';
-        await new Promise(resolve => {
-            item.addEventListener('animationend', resolve, { once: true });
-        });
-    }
-    try {
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreNote) {
-            await window.go.main.App.RestoreNote(id);
-        } else {
-            console.warn('RestoreNote 未绑定');
-        }
-    } catch (err) {
-        console.error('恢复笔记失败:', err);
-    }
-    await loadTrashNotes();
-    await loadNotes();
-    await loadNotebooks();
-    nm.show('笔记已恢复', 'success');
-}
-
-/**
- * 全部恢复回收站笔记（带动画）
- */
-async function restoreAllNotes() {
-    if (!state.trashNotes || state.trashNotes.length === 0) {
-        nm.show('回收站为空', 'info');
-        return;
-    }
-    const confirmed = await showConfirmDialog('确定要恢复回收站中的所有笔记吗？');
-    if (!confirmed) return;
-
-    // 所有项依次收缩淡出（30ms 延迟）
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    const restorePromises = Array.from(items).map((item, index) => {
-        return new Promise(resolve => {
-            item.style.animation = `shrinkOut 0.2s ease-out forwards`;
-            item.style.animationDelay = `${index * 30}ms`;
-            item.addEventListener('animationend', resolve, { once: true });
-        });
-    });
-    await Promise.all(restorePromises);
-
-    try {
-        // 先获取回收站中的笔记 ID，用于撤销操作
-        let trashedIds = [];
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetTrashNotes) {
-            const result = await window.go.main.App.GetTrashNotes(1, 99999);
-            if (result && result.Items) {
-                trashedIds = result.Items.map(n => n.ID || n.id);
-            }
-        }
-
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreAllNotes) {
-            await window.go.main.App.RestoreAllNotes();
-        } else {
-            console.warn('RestoreAllNotes 未绑定');
-        }
-
-        if (trashedIds.length > 0) {
-            nm.showUndo(`已恢复 ${trashedIds.length} 条笔记`, () => undoDelete(trashedIds));
-        } else {
-            nm.show('已恢复所有笔记', 'success');
-        }
-    } catch (err) {
-        console.error('全部恢复失败:', err);
-        nm.show('恢复失败', 'error');
-    }
-    await loadTrashNotes();
-    await loadNotes();
-    await loadNotebooks();
-}
-
-/**
- * 清空回收站（永久删除所有，带动画）
- */
-async function emptyTrash() {
-    if (!state.trashNotes || state.trashNotes.length === 0) {
-        nm.show('回收站为空', 'info');
-        return;
-    }
-    const confirmed = await showConfirmDialog('确定要永久清空回收站中的所有笔记吗？此操作不可撤销。');
-    if (!confirmed) return;
-
-    // 所有项依次收缩淡出 + 红色闪烁（30ms 延迟）
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    const emptyPromises = Array.from(items).map((item, index) => {
-        return new Promise(resolve => {
-            item.style.animation = `shrinkOut 0.25s ease-out forwards, dangerFlash 0.25s ease-out forwards`;
-            item.style.animationDelay = `${index * 30}ms`;
-            item.addEventListener('animationend', resolve, { once: true });
-        });
-    });
-    await Promise.all(emptyPromises);
-
-    try {
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.EmptyTrash) {
-            await window.go.main.App.EmptyTrash();
-        } else {
-            console.warn('EmptyTrash 未绑定');
-        }
-        nm.show('回收站已清空', 'info');
-    } catch (err) {
-        console.error('清空回收站失败:', err);
-        nm.show('清空失败', 'error');
-    }
-    await loadTrashNotes();
-    await loadNotes();
-}
-
-/**
- * 永久删除笔记（带动画）
- */
-async function permanentDeleteNote(id) {
-    // 先对 DOM 元素应用 shrinkOut 动画 + 红色闪烁
-    const item = els.trashListInner.querySelector(`.trash-item[data-id="${id}"]`);
-    if (item) {
-        item.style.animation = 'shrinkOut 0.25s ease-out forwards, dangerFlash 0.25s ease-out forwards';
-        await new Promise(resolve => {
-            item.addEventListener('animationend', resolve, { once: true });
-        });
-    }
-    try {
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.PermanentDeleteNote) {
-            await window.go.main.App.PermanentDeleteNote(id);
-        } else {
-            console.warn('PermanentDeleteNote 未绑定');
-        }
-        nm.show('笔记已永久删除', 'info');
-    } catch (err) {
-        console.error('永久删除失败:', err);
-        nm.show('删除失败', 'error');
-    }
-    await loadTrashNotes();
-}
-
-// 数据管理函数已移至 src/js/data-management.js
-
 /* ===== 渲染函数 ===== */
 
 /**
@@ -2055,46 +1895,6 @@ function renderTagSelector(readOnly) {
         `
         )
         .join('');
-}
-
-/**
- * 渲染回收站列表（带交错入场动画）
- */
-function renderTrashList() {
-    if (state.trashNotes.length === 0) {
-        els.trashListInner.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">${SVGS.trash}</div>
-                <p class="empty-state-title">回收站为空</p>
-                <p class="empty-state-desc">删除的笔记会出现在这里</p>
-            </div>
-        `;
-        return;
-    }
-
-    els.trashListInner.innerHTML = state.trashNotes
-        .map(
-            (note) => `
-        <div class="trash-item" data-id="${note.id}">
-            <div class="trash-item-info">
-                <div class="trash-item-title">${escapeHtml(note.title || '无标题')}</div>
-                <div class="trash-item-time">删除于 ${formatTime(note.deleted_at || note.updated_at)}</div>
-            </div>
-            <div class="trash-item-actions">
-                <button class="btn btn-restore btn-sm" onclick="event.stopPropagation(); window.restoreNote(${note.id})">恢复</button>
-                <button class="btn btn-perm-delete btn-sm" onclick="event.stopPropagation(); window.permanentDeleteNote(${note.id})">永久删除</button>
-            </div>
-        </div>
-        `
-        )
-        .join('');
-
-    // 交错入场动画
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    items.forEach((item, index) => {
-        item.style.animation = `viewEnter 0.25s ease-out forwards`;
-        item.style.animationDelay = `${index * 30}ms`;
-    });
 }
 
 /* ===== 编辑器函数 ===== */
@@ -3028,20 +2828,6 @@ window.toggleEditorTag = function (tagId, el) {
 };
 
 /**
- * 恢复笔记（全局）
- */
-window.restoreNote = async function (id) {
-    await restoreNote(id);
-};
-
-/**
- * 永久删除笔记（全局）
- */
-window.permanentDeleteNote = async function (id) {
-    await permanentDeleteNote(id);
-};
-
-/**
  * 删除标签（全局）
  */
 window.deleteTag = async function (id) {
@@ -3675,8 +3461,8 @@ function initEventListeners() {
     els.trashBackBtn.addEventListener('click', () => {
         switchView('grid');
     });
-    els.restoreAllBtn.addEventListener('click', restoreAllNotes);
-    els.emptyTrashBtn.addEventListener('click', emptyTrash);
+    els.restoreAllBtn.addEventListener('click', window.restoreAllNotes);
+    els.emptyTrashBtn.addEventListener('click', window.emptyTrash);
 
     // 数据管理按钮
     els.dataBackBtn.addEventListener('click', () => {
@@ -6037,7 +5823,7 @@ function initCodeHighlightThemeSettings() {
     });
 }
 
-// 将内部引用暴露到 window，供 data-management.js 模块使用
+// 将内部引用暴露到 window，供 data-management.js / trash-page.js 模块使用
 window.els = els;
 window.nm = nm;
 window.SVGS = SVGS;
@@ -6048,6 +5834,7 @@ window.loadTags = loadTags;
 window.loadNotebooks = loadNotebooks;
 window.switchView = switchView;
 window.updateSidebarMenuItem = updateSidebarMenuItem;
+window.undoDelete = undoDelete;
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

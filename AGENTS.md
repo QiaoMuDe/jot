@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-28（更新 14）
+> 生成日期: 2026-06-28（更新 15）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,10 +36,11 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6100 行（含 CM6 集成 + 搜索弹窗 + 数据管理 + MD 语法页面 + TOC + 回到顶部）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5700 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + TOC + 回到顶部；数据管理页/回收站页已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（两套配色 + 46+ 语言解析器映射）
-│   │   │   └── data-management.js      # 【新增】数据管理页面模块（10 个函数，从 main.js 提取）
+│   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数，从 main.js 提取）
+│   │   │   └── trash-page.js           # 【新增】回收站页面模块（6 个函数，从 main.js 提取）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css (~4990 行) + app.css (~697 行) 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
 │   │       ├── variables.css           # 6 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
@@ -742,7 +743,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 58 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
-| **前端代码量** | ~6303 行 JS + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~5700 行 JS（main.js 已拆分数据管理/回收站模块到 `src/js/`） + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/file_ext/pinned/notebook_id/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -834,10 +835,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | | **快捷键更新**：Ctrl+数字键 1-8 导航（1 笔记首页/2 展开侧栏/3 批量管理/4 数据管理/5 回收站/6 设置/7 快捷键说明/8 MD 语法手册），快捷键说明页改为可滚动列表（max-height: 50vh + overflow-y: auto）。`[`/`]` 随 FindReplaceManager 一并删除 |
 | | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), `css/components/topbar.css` (按钮样式), main.js (窗口控制 + 快捷键映射) |
 | **main.js 按页面拆分（数据管理模块提取）** | **背景**：`main.js` 已膨胀至 ~237KB / ~6400 行，难以维护。**方案**：按页面维度拆分 JS 代码，优先提取**数据管理页面**相关逻辑到独立文件。**实现**：创建 `frontend/src/js/data-management.js`（ES Module），通过 `export` 导出 10 个函数（`animateCountUp`/`loadDataStats`/`resetDatabase`/`vacuumDatabase`/`openDataDir`/`exportData`/`importData`/`loadBackupInfo`/`backupToDir`/`restoreFromDir`，~285 行）。`main.js` 用 `import { ... } from './js/data-management.js'` 引入。共享依赖（`els`/`nm`/`SVGS`/`state`/`showConfirmDialog`/`loadNotes`/`loadTags`/`loadNotebooks`/`switchView`/`updateSidebarMenuItem`）通过 `window` 对象桥接。`vite build` 验证通过（268 模块零错误）。`main.js` 从 ~6400 行缩减至 ~6100 行。详见 `.trae/specs/extract-data-management/` |
+| **main.js 按页面拆分（回收站页面模块提取）** | **背景**：`main.js` 进一步拆分（从 ~6100 行缩减至 ~5700 行）。**方案**：将**回收站页面**相关逻辑提取为独立模块。**实现**：创建 `frontend/src/js/trash-page.js`（ES Module），包含 6 个函数（`loadTrashNotes`/`restoreNote`/`restoreAllNotes`/`emptyTrash`/`permanentDeleteNote`/`renderTrashList`，~245 行），自包含 `escapeHtml`/`formatTime` 工具函数和局部 `trashNotes` 状态。通过 `window.restoreNote`/`window.permanentDeleteNote`/`window.restoreAllNotes`/`window.emptyTrash` 暴露给 HTML 模板 onclick 调用。`main.js` 用 `import { loadTrashNotes } from './js/trash-page.js'` 引入。`window.undoDelete` 被模块引用，从 main.js 同步暴露。共享依赖（`els`/`nm`/`SVGS`/`showConfirmDialog`/`loadNotes`/`loadNotebooks`/`switchView`/`undoDelete`）通过 `window` 桥接。删除 main.js 中 `state.trashNotes` 定义和 6 个废弃的 window 包装函数。`vite build` 验证通过（269 模块零错误）。详见 `.trae/specs/extract-trash-page/` |
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-28），本次更新内容：① ~ CSS 模块化拆分 — 旧 `style.css`（~4990 行）+ `app.css`（~697 行）拆分为 `src/css/` 目录下 5 个基础文件 + 10 个组件文件，`main.js` 通过 `import './css/index.css'` 统一引入。详见 `frontend/src/css/` 目录结构。② 更新 AGENTS.md 中所有旧 style.css/app.css 引用至新的 CSS 模块路径。③ CM6 通用语法高亮独立模块 — 提取 `frontend/src/js/cm6-syntax-highlight.js`，定义两套配色（mdHighlightStyle + codeHighlightStyle Monokai Dimmed），通过 `langMap` 映射覆盖 110+ 扩展名 / 46+ 语言（6 个原生 Lezer 包 + 37+ legacy-modes 兜底），`getHighlightExtension()` 工厂函数按后缀动态注入高亮。目录结构新增 `src/js/`，`package.json` 新增 7 个 CM6 依赖包。④ CM6 语法高亮 3 项修复（commonLisp/CoffeeScript/vbScript 导入命名/ sql 工厂函数需调用）— 详见「十、新增记忆点」末尾。⑤ 代码高亮主题系统 — `codeHighlightThemes` 对象、`getHighlightExtension(fileExt, themeName)` 签名修改、设置页新增代码高亮主题选项（默认 Monokai / Dark+ / Light+ / One Dark Pro / GitHub Dark 共 5 个），`main.js` 新增 `loadCodeHighlightThemeSetting()`/`applyCodeHighlightTheme()`/`saveCodeHighlightThemeSetting()`/`initCodeHighlightThemeSettings()` 4 个函数。⑥ 代码高亮主题选择器从分段控件改为下拉菜单 — `index.html` 中 `#codeHighlightThemeControl` 从 `.segmented-control` 替换为 `.theme-select` 下拉结构，`dropdowns.css` 新增 `.theme-select-*` 全套样式，`main.js` 重写 `applyCodeHighlightThemeUI()`（改为设置 trigger 文本 + 同步 `.active` 类）和 `initCodeHighlightThemeSettings()`（改为绑定 trigger click/dropdown item click/document click）。⑦ 修复下拉菜单事件监听器累加 bug — `initCodeHighlightThemeSettings()` 在设置页每次打开时都会调用（第 616 行 `case 'settings'`），导致 trigger/document 的点击监听不断累加，造成菜单不弹出（多组 toggle 轮流开关）和重复通知（N 次打开→N 个通知）。修复：添加 `_codeHighlightThemeInited` 标记，首次调用后即跳过。⑧ main.js 按页面拆分（数据管理模块提取）— 将 ~6400 行 main.js 中数据管理页面的 10 个函数（~285 行）提取为独立 ES Module `frontend/src/js/data-management.js`，通过 `export`/`import` + `window` 桥接共享依赖，`vite build` 零错误通过。main.js 缩减至 ~6100 行。详见 `.trae/specs/extract-data-management/`。
+> **报告结束** | 项目记忆已更新（2026-06-28），本次更新内容：⑨ main.js 按页面拆分（回收站页面模块提取）— 将 ~6100 行 main.js 中回收站页面的 6 个函数（~245 行）提取为独立 ES Module `frontend/src/js/trash-page.js`，自包含 `escapeHtml`/`formatTime` 工具函数和局部 `trashNotes` 状态。通过 `window` 暴露 4 个全局函数供 onclick 调用。`main.js` 缩减至 ~5700 行。`vite build` 零错误通过（269 模块）。详见 `.trae/specs/extract-trash-page/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
