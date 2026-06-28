@@ -744,7 +744,7 @@ const codeHighlightThemeNames = Object.freeze([
  * 主题名称 → 显示文案映射
  */
 const codeHighlightThemeLabels = Object.freeze({
-    'monokai-dimmed': '默认 Monokai',
+    'monokai-dimmed': 'Monokai',
     'vscode-dark-plus': 'Dark+',
     'vscode-light-plus': 'Light+',
     'one-dark-pro': 'One Dark Pro',

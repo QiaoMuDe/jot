@@ -223,3 +223,105 @@
   line-height: 1.4;
   padding-left: 60px;
 }
+
+/* 代码高亮主题下拉菜单 */
+.theme-select {
+  position: relative;
+  flex: 1;
+  max-width: 200px;
+}
+
+.theme-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  cursor: pointer;
+  transition: border-color var(--transition);
+  font-size: 0.813rem;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  user-select: none;
+  gap: 8px;
+}
+
+.theme-select-trigger:hover {
+  border-color: var(--accent-light);
+}
+
+.theme-select-trigger.open {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.theme-select-arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.theme-select-trigger.open .theme-select-arrow {
+  transform: rotate(180deg);
+}
+
+.theme-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 0;
+  transition: max-height 0.2s ease-out, opacity 0.15s ease-out;
+  pointer-events: none;
+}
+
+.theme-select-dropdown.open {
+  max-height: 300px;
+  opacity: 1;
+  padding: 4px;
+  pointer-events: auto;
+  overflow-y: auto;
+}
+
+.theme-select-item {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.813rem;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+  user-select: none;
+}
+
+.theme-select-item:hover {
+  background: var(--hover-bg);
+}
+
+.theme-select-item.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+.theme-select-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--hover-bg);
+}
+
+.theme-select-item.active:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.5);
+  outline-offset: -2px;
+  background: var(--accent);
+}

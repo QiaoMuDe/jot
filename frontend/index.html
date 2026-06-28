@@ -307,13 +307,18 @@
                         <div class="quick-note-hint">关闭后所有笔记不再显示代码语法高亮</div>
                         <div class="font-setting-row">
                             <label class="font-setting-label">代码高亮主题</label>
-                            <div class="segmented-control" id="codeHighlightThemeControl">
-                                <div class="segmented-indicator" id="codeHighlightThemeIndicator"></div>
-                                <button class="segmented-btn active" data-theme-value="monokai-dimmed">默认 Monokai</button>
-                                <button class="segmented-btn" data-theme-value="vscode-dark-plus">Dark+</button>
-                                <button class="segmented-btn" data-theme-value="vscode-light-plus">Light+</button>
-                                <button class="segmented-btn" data-theme-value="one-dark-pro">One Dark Pro</button>
-                                <button class="segmented-btn" data-theme-value="github-dark">GitHub Dark</button>
+                            <div class="theme-select" id="codeHighlightThemeControl">
+                                <div class="theme-select-trigger" id="codeHighlightThemeTrigger">
+                                    <span id="codeHighlightThemeLabel">Monokai</span>
+                                    <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
+                                <div class="theme-select-dropdown" id="codeHighlightThemeDropdown">
+                                    <div class="theme-select-item" data-theme-value="monokai-dimmed">Monokai</div>
+                                    <div class="theme-select-item" data-theme-value="vscode-dark-plus">Dark+</div>
+                                    <div class="theme-select-item" data-theme-value="vscode-light-plus">Light+</div>
+                                    <div class="theme-select-item" data-theme-value="one-dark-pro">One Dark Pro</div>
+                                    <div class="theme-select-item" data-theme-value="github-dark">GitHub Dark</div>
+                                </div>
                             </div>
                         </div>
                     </div>

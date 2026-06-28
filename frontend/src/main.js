@@ -6220,22 +6220,17 @@ async function loadCodeHighlightThemeSetting() {
  * @param {string} themeName
  */
 function applyCodeHighlightThemeUI(themeName) {
-    const control = document.getElementById('codeHighlightThemeControl');
-    if (!control) return;
-    const btns = control.querySelectorAll('.segmented-btn');
-    btns.forEach(btn => {
-        const isActive = btn.dataset.themeValue === themeName;
-        btn.classList.toggle('active', isActive);
-        if (isActive) {
-            const index = Array.from(btns).indexOf(btn);
-            const cw = control.offsetWidth;
-            const segW = (cw - btns.length * 4) / btns.length;
-            const indicator = document.getElementById('codeHighlightThemeIndicator');
-            if (indicator) {
-                indicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
-            }
-        }
-    });
+    const label = document.getElementById('codeHighlightThemeLabel');
+    if (!label) return;
+    const displayLabel = codeHighlightThemeLabels[themeName] || themeName;
+    label.textContent = displayLabel;
+    // 同步下拉菜单选中态
+    const dropdown = document.getElementById('codeHighlightThemeDropdown');
+    if (dropdown) {
+        dropdown.querySelectorAll('.theme-select-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.themeValue === themeName);
+        });
+    }
 }
 
 /**
@@ -6275,29 +6270,45 @@ async function saveCodeHighlightThemeSetting(themeName) {
     nm.show('代码高亮主题已保存', 'success');
 }
 
+let _codeHighlightThemeInited = false;
+
 /**
- * 初始化代码高亮主题设置（绑定分段控件事件）
+ * 初始化代码高亮主题设置（绑定下拉菜单事件）
+ * 只执行一次，避免事件监听器累加。
  */
 function initCodeHighlightThemeSettings() {
-    const control = document.getElementById('codeHighlightThemeControl');
-    if (!control) return;
-    control.querySelectorAll('.segmented-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const theme = btn.dataset.themeValue;
+    if (_codeHighlightThemeInited) return;
+    _codeHighlightThemeInited = true;
+
+    const trigger = document.getElementById('codeHighlightThemeTrigger');
+    const dropdown = document.getElementById('codeHighlightThemeDropdown');
+    const items = dropdown?.querySelectorAll('.theme-select-item');
+    if (!trigger || !dropdown || !items) return;
+
+    // 点击触发按钮切换下拉菜单
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        trigger.classList.toggle('open');
+        dropdown.classList.toggle('open');
+    });
+
+    // 点击选项切换主题
+    items.forEach(item => {
+        item.addEventListener('click', async () => {
+            const theme = item.dataset.themeValue;
             if (!theme) return;
-            control.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const btns = Array.from(control.querySelectorAll('.segmented-btn'));
-            const index = btns.indexOf(btn);
-            const cw = control.offsetWidth;
-            const segW = (cw - btns.length * 4) / btns.length;
-            const indicator = document.getElementById('codeHighlightThemeIndicator');
-            if (indicator) {
-                indicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
-            }
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+            applyCodeHighlightThemeUI(theme);
             applyCodeHighlightTheme(theme);
             await saveCodeHighlightThemeSetting(theme);
         });
+    });
+
+    // 点击外部关闭下拉菜单
+    document.addEventListener('click', () => {
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
     });
 }
 
