@@ -1715,8 +1715,7 @@ function updateWordCount() {
     const content = getEditorContent();
     const charCount = content.length;
     const wordCount = content.replace(/[\s]/g, '').length;
-    const ext = els.editorFileExt.textContent || '.txt';
-    els.editorWordCount.textContent = `${wordCount} 个字数 | ${charCount} 个字符 | ${ext}`;
+    els.editorWordCount.textContent = `${wordCount} 个字数 | ${charCount} 个字符`;
 }
 
 /** 更新状态栏文件后缀显示 */
@@ -1787,8 +1786,24 @@ async function saveFileExt() {
     if (!isMd) {
         switchEditorMode('edit');
     }
+    // 同步顶部 T/M 切换按钮显示
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
+        els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
+    }
     // 刷新字数统计显示
     updateWordCount();
+
+    // 重新初始化 CM6 刷新语法高亮
+    if (cmEditor) {
+        const container = els.editorNoteContent;
+        const content = cmEditor.state.doc.toString();
+        const isReadOnly = els.editorSaveBtn.style.display === 'none';
+        cmEditor.destroy();
+        cmEditor = null;
+        const useSyntaxHighlight = els.mdHighlightToggle.checked;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme);
+    }
 }
 
 /** 快速切换笔记类型（.md ↔ .txt），更新按钮显示并保存到后端 */
@@ -1811,6 +1826,17 @@ async function toggleFileExt() {
 
     // 刷新字数统计显示
     updateWordCount();
+
+    // 重新初始化 CM6 刷新语法高亮
+    if (cmEditor) {
+        const container = els.editorNoteContent;
+        const content = cmEditor.state.doc.toString();
+        const isReadOnly = els.editorSaveBtn.style.display === 'none';
+        cmEditor.destroy();
+        cmEditor = null;
+        const useSyntaxHighlight = els.mdHighlightToggle.checked;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, newExt, codeHighlightTheme);
+    }
 }
 
 /**
