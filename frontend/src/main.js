@@ -2435,21 +2435,7 @@ async function saveFileExt() {
         return;
     }
 
-    // 保存到后端（已有笔记时）
-    if (state.editingNoteId) {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNoteFileExt) {
-                await window.go.main.App.UpdateNoteFileExt(state.editingNoteId, value);
-            }
-        } catch (err) {
-            console.error('更新后缀失败:', err);
-            errorEl.textContent = '保存失败，请重试';
-            errorEl.style.display = '';
-            return;
-        }
-    }
-
-    // 更新显示
+    // 更新显示（不立即保存到后端，随主保存一起提交）
     els.editorFileExt.textContent = value;
     closeFileExtDialog();
 
@@ -2481,16 +2467,6 @@ async function toggleFileExt() {
         switchEditorMode('edit');
     }
 
-    // 保存到后端（已有笔记时）
-    if (state.editingNoteId) {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNoteFileExt) {
-                await window.go.main.App.UpdateNoteFileExt(state.editingNoteId, newExt);
-            }
-        } catch (err) {
-            console.error('更新后缀失败:', err);
-        }
-    }
     // 刷新字数统计显示
     updateWordCount();
 }
@@ -2643,7 +2619,8 @@ async function openEditor(noteId, readOnly, startFullscreen) {
         state._editSnapshot = {
             title: els.editorNoteTitle.value.trim(),
             content: getEditorContent().trim(),
-            tags: [...state.selectedTags].sort()
+            tags: [...state.selectedTags].sort(),
+            fileExt: els.editorFileExt.textContent
         };
     }
     // CM6 就绪后刷新预览（解决查看模式下 CM6 初始化前预览无法渲染的问题）
@@ -3017,7 +2994,10 @@ async function handleAppExit() {
     if (els.viewEditor.classList.contains('active') && els.editorSaveBtn.style.display !== 'none') {
         const title = els.editorNoteTitle.value.trim();
         const content = getEditorContent().trim();
-        if (title && content) {
+        const snapshot = state._editSnapshot;
+        const extChanged = snapshot ? els.editorFileExt.textContent !== snapshot.fileExt : false;
+        // 有内容变更、后缀变更 或 有内容 → 询问是否保存
+        if ((title && content) || extChanged) {
             const action = await showSaveConfirmDialog('笔记内容尚未保存，退出前是否保存？');
             if (action === 'cancel') return;               // 取消：不退出
             if (action === 'save') {
@@ -3113,7 +3093,8 @@ async function closeEditorSafe() {
             const currentContent = getEditorContent().trim();
             const currentTags = [...state.selectedTags].sort();
             const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
-            if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged) {
+            const extChanged = els.editorFileExt.textContent !== snapshot.fileExt;
+            if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged && !extChanged) {
                 closeEditor();
                 return;
             }
@@ -3881,7 +3862,8 @@ function initEventListeners() {
 
         // 变更检测：无修改则静默切回查看模式
         const tagsChanged = snapshot ? JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags) : true;
-        const hasChanged = !snapshot || title !== snapshot.title || content !== snapshot.content || tagsChanged;
+        const extChanged = snapshot ? els.editorFileExt.textContent !== snapshot.fileExt : true;
+        const hasChanged = !snapshot || title !== snapshot.title || content !== snapshot.content || tagsChanged || extChanged;
 
         state.enteredFromViewMode = false;
 
@@ -3915,6 +3897,7 @@ function initEventListeners() {
         if (cached) {
             cached.title = title;
             cached.content = content;
+            cached.file_ext = els.editorFileExt.textContent;
             cached.updated_at = new Date().toISOString();
         }
         state._editSnapshot = null;

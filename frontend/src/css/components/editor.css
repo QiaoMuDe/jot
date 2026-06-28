@@ -128,7 +128,7 @@
 }
 
 .editor-body {
-  padding: 0 8px 8px;
+  padding: 0 20px 10px;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -153,6 +153,15 @@
 
 .editor-overlay[data-mode="preview"] .md-rendered {
   display: block !important;
+}
+
+/* 预览模式下压缩标签与正文之间的间距 */
+.editor-overlay[data-mode="preview"] .editor-section {
+  margin-bottom: 2px;
+}
+
+.editor-overlay[data-mode="preview"] .md-rendered {
+  padding-top: 0.1em;
 }
 
 /* 纯文本模式（默认，预览区隐藏） */
