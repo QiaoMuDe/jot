@@ -388,6 +388,11 @@ func (s *NoteService) ExportBackup(destPath string) error {
 	return s.db.Exec("VACUUM INTO ?", destPath).Error
 }
 
+// Vacuum 执行 SQLite VACUUM 命令，重建数据库文件以回收已删除数据占用的磁盘空间
+func (s *NoteService) Vacuum() error {
+	return s.db.Exec("VACUUM").Error
+}
+
 // GetAllNoteIDsByNotebook 获取指定笔记本中所有未删除笔记的 ID 数组
 func (s *NoteService) GetAllNoteIDsByNotebook(notebookID uint) ([]uint, error) {
 	var ids []uint

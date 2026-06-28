@@ -113,3 +113,5 @@ export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Prom
 export function UpdateNoteFileExt(arg1:number,arg2:string):Promise<models.Note>;
 
 export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Tag>;
+
+export function VacuumDatabase():Promise<string>;

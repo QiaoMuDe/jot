@@ -412,6 +412,7 @@ const els = {
     importDataBtn: $('importDataBtn'),
     importResult: $('importResult'),
     resetAllBtn: $('resetAllBtn'),
+    vacuumDbBtn: $('vacuumDbBtn'),
     openDataDirBtn: $('openDataDirBtn'),
     dataContent: $('dataContent'),
     statTotalNotes: $('statTotalNotes'),
@@ -1987,6 +1988,24 @@ async function resetDatabase() {
     // 切回首页并刷新笔记列表，确保显示的笔记是最新状态
     switchView('grid');
     loadNotes();
+}
+
+/**
+ * 数据库瘦身：执行 VACUUM 回收磁盘空间
+ */
+async function vacuumDatabase() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.VacuumDatabase) {
+            const msg = await window.go.main.App.VacuumDatabase();
+            nm.show(msg, 'success');
+            await loadDataStats();
+        } else {
+            nm.show('数据库瘦身功能不可用', 'error');
+        }
+    } catch (err) {
+        console.error('数据库瘦身失败:', err);
+        nm.show('数据库瘦身失败：' + err.message, 'error');
+    }
 }
 
 /**
@@ -3947,6 +3966,7 @@ function initEventListeners() {
     els.backupBtn?.addEventListener('click', backupToDir);
     els.restoreBtn?.addEventListener('click', restoreFromDir);
     els.resetAllBtn.addEventListener('click', resetDatabase);
+    els.vacuumDbBtn.addEventListener('click', vacuumDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
 
     els.mdRefBackBtn.addEventListener('click', () => {

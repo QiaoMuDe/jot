@@ -249,6 +249,42 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 	return stats, nil
 }
 
+// VacuumDatabase 对当前数据库执行 VACUUM 瘦身操作，返回释放的空间大小
+func (a *App) VacuumDatabase() (string, error) {
+	// 获取瘦身前数据库文件大小
+	dbPath, _ := database.DefaultDBPath()
+	var beforeSize int64
+	if fi, err := os.Stat(dbPath); err == nil {
+		beforeSize = fi.Size()
+	}
+
+	if err := a.noteService.Vacuum(); err != nil {
+		return "", fmt.Errorf("数据库瘦身失败: %w", err)
+	}
+
+	// 获取瘦身后数据库文件大小
+	var afterSize int64
+	if fi, err := os.Stat(dbPath); err == nil {
+		afterSize = fi.Size()
+	}
+
+	saved := beforeSize - afterSize
+	if saved < 0 {
+		saved = 0
+	}
+	var savedStr string
+	switch {
+	case saved < 1024:
+		savedStr = fmt.Sprintf("%d B", saved)
+	case saved < 1024*1024:
+		savedStr = fmt.Sprintf("%.1f KB", float64(saved)/1024)
+	default:
+		savedStr = fmt.Sprintf("%.1f MB", float64(saved)/(1024*1024))
+	}
+
+	return fmt.Sprintf("数据库瘦身完成，释放了 %s 空间", savedStr), nil
+}
+
 // ExportDataWithDialog 弹出保存对话框，使用 VACUUM INTO 创建数据库压缩副本到用户选择的位置
 func (a *App) ExportDataWithDialog() (string, error) {
 	// 创建临时路径用于 VACUUM INTO 输出

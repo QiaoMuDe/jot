@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-28（更新 10）
+> 生成日期: 2026-06-28（更新 11）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 57 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 58 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -27,7 +27,7 @@ jot/                                    # 项目根目录
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   └── setting.go                  # Setting 实体（KV 配置）
 │   └── services/
-│       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + GetAllIDs
+│       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
@@ -1074,4 +1074,11 @@ await loadXxxSetting();
 || **返回查看后缀不同步修复** | 查看模式按钮保存后更新本地缓存 `state.notes` 时遗漏 `file_ext`，导致 `openEditor(noteId, true)` 从本地缓存读到旧后缀（如 `.md`），预期走纯文本却走 Markdown 预览分支。修复：在 `if (cached) { ... }` 块中增加 `cached.file_ext = els.editorFileExt.textContent` |
 || **预览模式标签与正文间距压缩** | 查看模式预览、编辑模式预览中标签区域与渲染内容之间留白过大。在 `editor.css` 中新增两条 `.editor-overlay[data-mode="preview"]` 专用规则：`.editor-section { margin-bottom: 2px }`、`.md-rendered { padding-top: 0.1em }`，合计间隙从 ~20px 缩减至 ~3-4px，仅预览模式生效 |
 || **标题标签左间距增大** | `.editor-body` 的 `padding` 从 `0 8px 8px` 改为 `0 20px 10px`，左右内边距从 8px 扩至 20px，标题和标签不再紧贴左边缘。所有模式（查看/编辑/新建）同步生效 |
+|
+|## 二十、新增记忆点（数据库瘦身 VACUUM）
+|
+|| 记忆点 | 内容 |
+||--------|------|
+|| **数据库瘦身按钮** | 数据管理页面新增"数据库瘦身"按钮（`#vacuumDbBtn`），点击后后端执行 SQLite `VACUUM` 命令重建数据库文件，回收已删除数据占用的磁盘空间。瘦身前/后分别读取文件大小，计算释放空间并通过通知提示用户。完成后自动刷新统计卡片。详见 `.trae/specs/add-db-vacuum/` |
+|| **后端 Vacuum() 方法** | `note_service.go` 新增 `Vacuum()` 方法，调用 `s.db.Exec("VACUUM")`。`app.go` 新增 `VacuumDatabase()` 绑定方法，读取执行前后文件大小并格式化为可读的释放空间提示（B/KB/MB） |
 
