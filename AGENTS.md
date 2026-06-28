@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-28（更新 15）
+> 生成日期: 2026-06-28（更新 16）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -36,11 +36,14 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5700 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + TOC + 回到顶部；数据管理页/回收站页已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5460 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + TOC + 回到顶部；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（两套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数，从 main.js 提取）
-│   │   │   └── trash-page.js           # 【新增】回收站页面模块（6 个函数，从 main.js 提取）
+│   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
+│   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
+│   │   │   ├── notification.js         # NotificationManager 通知类 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
+│   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css (~4990 行) + app.css (~697 行) 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
 │   │       ├── variables.css           # 6 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
@@ -185,7 +188,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
-| **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/main.js:NotificationManager` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
+| **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
 ### 2.3 模块分层图
 
@@ -717,7 +720,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - ✅ **全屏快捷键绑定**：编辑器全屏绑定 `Ctrl+E`（编辑器打开时有效），窗口 OS 全屏绑定 `F11`（全局有效），两者独立不冲突。导入 Wails runtime 的 `WindowFullscreen/WindowUnfullscreen/WindowIsFullscreen` 实现窗口全屏。详见 `.trae/documents/add-fullscreen-keyboard-shortcuts.md`
 - ✅ **快速笔记启动跳过动画**：`openEditor(null, false, true)` 的 `startFullscreen` 分支先 `panel.style.transition='none'` 禁用 CSS 过渡，再添加 `.fullscreen` class，`void panel.offsetHeight` 强制回流确保生效后恢复 transition。同时覆盖 `overlay/panel` 的 `opacity: 1`、`transform: scale(1)` 避免 CSS 初始状态 `opacity:0/scale(0.85)` 导致面板不可见。全程零动画，快速笔记启动瞬间全屏显示。详见 `.trae/specs/skip-quicknote-animation-on-start/`
 - ✅ **Ctrl+Q 退出 + 关闭按钮保存笔记**：提取 `saveEditorContent()` 共用函数，新增 `showSaveConfirmDialog()` 三选一对话框（保存并退出/不保存/取消）和 `handleAppExit()` 统一退出流程（有未保存内容时弹对话框，选「取消」不退出，选「保存」调 `UpdateNote()`/`CreateNote()`（新建笔记直接创建），选「不保存」直接 `Quit()`）。`handleKeyboardNavigation` 改为 `async` 并添加 `Ctrl+Q` 全局快捷键；窗口关闭按钮（×）改用 `handleAppExit()`。HTML 确认对话框新增`confirm-third`按钮，CSS 新增`.confirm-third`黄色警告样式。详见 `.trae/documents/add-ctrl-q-quit-shortcut.md`
-- ✅ **Web Worker 离线程预览渲染**：创建 `preview-worker.js`（ESM Worker），使用 `marked.parse()` 在独立线程中解析 Markdown，主线程仅做 DOM 操作。`updatePreview()` 重构为：哈希缓存（内容未变直接复用 DOM）→ Worker 异步渲染（显示 loading 动画）→ Worker 正忙/不可用时回退到主线程同步渲染。大文件预览不再阻塞 UI，编辑器在全屏/滚动/模式切换时保持流畅。详见 `.trae/specs/add-web-worker-rendering/`
+- ✅ **Web Worker 离线程预览渲染**：创建 `js/preview-worker.js`（ESM Worker），使用 `marked.parse()` 在独立线程中解析 Markdown，主线程仅做 DOM 操作。`updatePreview()` 重构为：哈希缓存（内容未变直接复用 DOM）→ Worker 异步渲染（显示 loading 动画）→ Worker 正忙/不可用时回退到主线程同步渲染。大文件预览不再阻塞 UI，编辑器在全屏/滚动/模式切换时保持流畅。详见 `.trae/specs/add-web-worker-rendering/`
 - ✅ **大文件全屏动画卡顿修复**：大文件（含大量代码块/表格的 Markdown）全屏/恢复时动画卡顿的根因是渲染完成前 DOM 重计算阻塞 transition。`contain: layout style` 方案因干扰浏览器滚动优化导致鼠标卡顿被回退。最终方案：全屏切换前 `panel.style.transition = 'none'` 临时禁用 CSS 过渡，`void panel.offsetHeight` 强制回流确保 class 切换后立即应用，再恢复 transition。全程零动画过渡，消除 DOM 布局阻塞导致的动画掉帧。
 - ✅ **蒙层点击保存确认**：点击编辑器蒙层（空白区域）不再直接关闭编辑器。编辑模式下通过前端快照对比（标题+内容+标签）判断是否有实际改动，新建模式下内容非空即提示。有未保存内容时弹出三选一确认对话框（保存/不保存/取消），保存调 `createNote()`/`updateNote()` 确保笔记真正创建和列表刷新。详见 `.trae/documents/add-save-prompt-on-overlay-click.md`
 - ✅ **查看模式保存刷新列表**：从查看→编辑→返回查看时，保存后调 `loadNotes()` 刷新列表，解决列表不更新问题
@@ -743,7 +746,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
 | **绑定方法数** | 58 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
 | **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
-| **前端代码量** | ~5700 行 JS（main.js 已拆分数据管理/回收站模块到 `src/js/`） + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **前端代码量** | ~5460 行 JS（main.js 已拆分数据管理/回收站/常量工具函数/通知+模拟数据到 `src/js/`，共 6 个模块） + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/file_ext/pinned/notebook_id/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -836,10 +839,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | | **相关文件**：main.go (Frameless 配置), index.html (topbar 结构), `css/components/topbar.css` (按钮样式), main.js (窗口控制 + 快捷键映射) |
 | **main.js 按页面拆分（数据管理模块提取）** | **背景**：`main.js` 已膨胀至 ~237KB / ~6400 行，难以维护。**方案**：按页面维度拆分 JS 代码，优先提取**数据管理页面**相关逻辑到独立文件。**实现**：创建 `frontend/src/js/data-management.js`（ES Module），通过 `export` 导出 10 个函数（`animateCountUp`/`loadDataStats`/`resetDatabase`/`vacuumDatabase`/`openDataDir`/`exportData`/`importData`/`loadBackupInfo`/`backupToDir`/`restoreFromDir`，~285 行）。`main.js` 用 `import { ... } from './js/data-management.js'` 引入。共享依赖（`els`/`nm`/`SVGS`/`state`/`showConfirmDialog`/`loadNotes`/`loadTags`/`loadNotebooks`/`switchView`/`updateSidebarMenuItem`）通过 `window` 对象桥接。`vite build` 验证通过（268 模块零错误）。`main.js` 从 ~6400 行缩减至 ~6100 行。详见 `.trae/specs/extract-data-management/` |
 | **main.js 按页面拆分（回收站页面模块提取）** | **背景**：`main.js` 进一步拆分（从 ~6100 行缩减至 ~5700 行）。**方案**：将**回收站页面**相关逻辑提取为独立模块。**实现**：创建 `frontend/src/js/trash-page.js`（ES Module），包含 6 个函数（`loadTrashNotes`/`restoreNote`/`restoreAllNotes`/`emptyTrash`/`permanentDeleteNote`/`renderTrashList`，~245 行），自包含 `escapeHtml`/`formatTime` 工具函数和局部 `trashNotes` 状态。通过 `window.restoreNote`/`window.permanentDeleteNote`/`window.restoreAllNotes`/`window.emptyTrash` 暴露给 HTML 模板 onclick 调用。`main.js` 用 `import { loadTrashNotes } from './js/trash-page.js'` 引入。`window.undoDelete` 被模块引用，从 main.js 同步暴露。共享依赖（`els`/`nm`/`SVGS`/`showConfirmDialog`/`loadNotes`/`loadNotebooks`/`switchView`/`undoDelete`）通过 `window` 桥接。删除 main.js 中 `state.trashNotes` 定义和 6 个废弃的 window 包装函数。`vite build` 验证通过（269 模块零错误）。详见 `.trae/specs/extract-trash-page/` |
+| **main.js 提取常量/工具函数/通知/模拟数据 + 迁移 preview-worker** | **背景**：`main.js` 仍有 ~5700 行。**方案**：将无状态依赖的 `SVGS` 图标常量 + 4 个纯工具函数（`formatTime`/`highlightText`/`getSummary`/`debounce`）提取为 `js/constants.js`（~90 行）；`NotificationManager` 类 + 模拟数据（`getMockNotes`/`getMockTags`）提取为 `js/notification.js`（~150 行）；`preview-worker.js` 从 `src/` 移入 `js/`。使用 ES Module named export/import，main.js 中所有引用写法不变。`resetPagination` 留在 main.js。`vite build` 通过（271 模块零错误）。详见 `.trae/specs/split-main-js-into-modules/` |
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-28），本次更新内容：⑨ main.js 按页面拆分（回收站页面模块提取）— 将 ~6100 行 main.js 中回收站页面的 6 个函数（~245 行）提取为独立 ES Module `frontend/src/js/trash-page.js`，自包含 `escapeHtml`/`formatTime` 工具函数和局部 `trashNotes` 状态。通过 `window` 暴露 4 个全局函数供 onclick 调用。`main.js` 缩减至 ~5700 行。`vite build` 零错误通过（269 模块）。详见 `.trae/specs/extract-trash-page/`。
+> **报告结束** | 项目记忆已更新（2026-06-28），本次更新内容：⑩ main.js 拆分（常量工具函数/通知类/模拟数据提取 + preview-worker 迁移）— 将 `SVGS` + 4 个工具函数提取为 `js/constants.js`（~90 行），`NotificationManager` + 模拟数据提取为 `js/notification.js`（~150 行），`preview-worker.js` 从 `src/` 移入 `js/`。main.js 从 ~5700 行缩减至 ~5460 行。`vite build` 零错误通过（271 模块）。详见 `.trae/specs/split-main-js-into-modules/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 

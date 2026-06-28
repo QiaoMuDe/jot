@@ -13,6 +13,10 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } 
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
 import { jotTheme, getHighlightExtension, codeHighlightThemeNames, codeHighlightThemeLabels } from './js/cm6-syntax-highlight.js';
 
+// 独立模块
+import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/constants.js';
+import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
+
 // 数据管理模块
 import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir } from './js/data-management.js';
 
@@ -26,156 +30,8 @@ marked.setOptions({
     gfm: true,
 });
 
-/* ===== SVG 图标常量集 ===== */
-/**
- * Lucide 风格 SVG 图标常量（24x24 viewBox, 1.5px stroke, currentColor）
- * 所有图标继承父元素 color, 适配明暗主题
- */
-const SVGS = {
-    // 窗口控制
-    windowMinimize: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-    windowMaximize: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>`,
-    windowRestore: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="14" height="14" rx="2" ry="2"/><path d="M5 17V5a2 2 0 0 1 2-2h12"/></svg>`,
-    windowClose: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
 
-    // 编辑器
-    editorFullscreen: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
-    editorExitFullscreen: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`,
-    edit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`,
 
-    // 置顶（星标）
-    pinFilled: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-    pinOutline: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-
-    // 操作按钮
-    plus: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-    backToTop: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
-    menu: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
-    search: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
-
-    // 导航箭头
-    chevronDown: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`,
-    chevronUp: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>`,
-    arrowLeft: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
-
-    // 状态符号
-    checkmark: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-    xmark: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-    warning: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-    info: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
-    undo: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
-
-    // 数据管理
-    download: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-    upload: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
-    save: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`,
-    folder: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
-
-    // 杂项
-    trash: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
-    tag: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
-    copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-};
-
-/* ===== 统一通知系统 ===== */
-
-/**
- * 右上角浮动通知管理器
- * 单例模式，全局可引用
- */
-class NotificationManager {
-    constructor() {
-        this.container = document.getElementById('notificationContainer');
-        if (!this.container) {
-            this.container = document.createElement('div');
-            this.container.id = 'notificationContainer';
-            this.container.className = 'notification-container';
-            document.body.appendChild(this.container);
-        }
-    }
-
-    /**
-     * 显示通知
-     * @param {string} message - 通知内容
-     * @param {string} type - 类型：'success' | 'error' | 'warning' | 'info'
-     * @param {number} duration - 自动消失毫秒数（默认 3000）
-     */
-    show(message, type = 'info', duration = 3000) {
-        const el = document.createElement('div');
-        el.className = `notification ${type}`;
-
-        const iconSvg = { success: SVGS.checkmark, error: SVGS.windowClose, warning: SVGS.warning, info: SVGS.info };
-        el.innerHTML = `
-            <span class="notification-icon">${iconSvg[type] || SVGS.info}</span>
-            <span class="notification-msg">${this._esc(message)}</span>
-            <button class="notification-close" aria-label="关闭">${SVGS.windowClose}</button>
-        `;
-
-        this.container.appendChild(el);
-
-        // 关闭按钮
-        el.querySelector('.notification-close').addEventListener('click', () => this._dismiss(el));
-
-        // 自动消失
-        const timer = setTimeout(() => this._dismiss(el), duration);
-        el._timer = timer;
-
-        return el;
-    }
-
-    /**
-     * 显示可撤销通知
-     * @param {string} message - 通知内容
-     * @param {Function} onUndo - 点击撤销的回调函数
-     * @param {number} duration - 自动消失毫秒数（默认 5000）
-     */
-    showUndo(message, onUndo, duration = 5000) {
-        const el = document.createElement('div');
-        el.className = 'notification undo';
-        el.innerHTML = `
-            <span class="notification-icon" style="color:var(--accent,#6366f1)">${SVGS.undo}</span>
-            <span class="notification-msg">${this._esc(message)}</span>
-            <button class="notification-undo-btn">撤销</button>
-        `;
-
-        this.container.appendChild(el);
-
-        // 撤销按钮
-        el.querySelector('.notification-undo-btn').addEventListener('click', () => {
-            if (typeof onUndo === 'function') onUndo();
-            this._dismiss(el);
-        });
-
-        // 自动消失
-        const timer = setTimeout(() => this._dismiss(el), duration);
-        el._timer = timer;
-
-        return el;
-    }
-
-    /**
-     * 手动销毁通知
-     */
-    _dismiss(el) {
-        if (el._dismissing) return;
-        el._dismissing = true;
-        clearTimeout(el._timer);
-        el.classList.add('exit');
-        el.addEventListener('animationend', () => {
-            if (el.parentNode) el.parentNode.removeChild(el);
-        }, { once: true });
-    }
-
-    /**
-     * HTML 转义
-     */
-    _esc(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-}
 
 /* ===== CodeMirror 6 集成 ===== */
 
@@ -500,61 +356,6 @@ const els = {
     moveNotebookEmpty: $('moveNotebookEmpty'),
     batchMoveBtn: $('batchMoveBtn'),
 };
-
-/* ===== 工具函数 ===== */
-
-/**
- * 格式化时间戳为可读字符串
- */
-function formatTime(isoString) {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes} 分钟前`;
-    if (hours < 24) return `${hours} 小时前`;
-    if (days < 7) return `${days} 天前`;
-
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
-/**
- * 高亮搜索关键词
- */
-function highlightText(text, keyword) {
-    if (!keyword || !text) return text || '';
-    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escaped})`, 'gi');
-    return text.replace(regex, '<span class="highlight">$1</span>');
-}
-
-/**
- * 获取纯文本摘要
- */
-function getSummary(text, maxLen = 100) {
-    if (!text) return '';
-    const cleaned = text.replace(/<[^>]*>/g, '').trim();
-    return cleaned.length > maxLen ? cleaned.slice(0, maxLen) + '...' : cleaned;
-}
-
-/**
- * 防抖工具函数
- */
-function debounce(fn, delay) {
-    let timer;
-    return function (...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), delay);
-    };
-}
 
 /**
  * 重置分页状态
@@ -2230,7 +2031,7 @@ let _previewWorkerLoading = false;
 function initPreviewWorker() {
     try {
         _previewWorker = new Worker(
-            new URL('./preview-worker.js', import.meta.url),
+            new URL('./js/preview-worker.js', import.meta.url),
             { type: 'module' }
         );
         _previewWorker.onmessage = function (e) {
@@ -3617,57 +3418,6 @@ function initEventListeners() {
 
     // 搜索弹窗事件绑定(替代原 topbar 搜索框)
     initSearchModalListeners();
-}
-
-/* ===== 模拟数据（后端未绑定时使用） ===== */
-
-// Mock 数据的可变副本，确保修改可持久化
-let mockNotes = null;
-
-function getMockNotes() {
-    return [
-        {
-            id: 1,
-            title: '欢迎使用 jot',
-            content: '这是一条示例笔记。你可以在这里记录你的想法、灵感、待办事项等。\n\n点击左侧 "+" 按钮创建新笔记，或点击笔记进行编辑。',
-            pinned: true,
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-            updated_at: new Date(Date.now() - 1800000).toISOString(),
-            tags: [
-                { id: 1, name: '入门', color: '#6366f1' },
-            ],
-        },
-        {
-            id: 2,
-            title: '设计思路',
-            content: 'jot 是一款简洁的笔记应用，采用双栏布局设计。\n左侧导航栏包含搜索、笔记列表和设置。\n右侧主内容区展示笔记卡片网格。',
-            pinned: false,
-            created_at: new Date(Date.now() - 86400000).toISOString(),
-            updated_at: new Date(Date.now() - 43200000).toISOString(),
-            tags: [
-                { id: 2, name: '设计', color: '#8b5cf6' },
-            ],
-        },
-        {
-            id: 3,
-            title: '待办事项',
-            content: '- 实现后端 CRUD\n- 实现前端布局\n- 联调测试',
-            pinned: false,
-            created_at: new Date(Date.now() - 172800000).toISOString(),
-            updated_at: new Date(Date.now() - 86400000).toISOString(),
-            tags: [
-                { id: 3, name: '待办', color: '#f59e0b' },
-            ],
-        },
-    ];
-}
-
-function getMockTags() {
-    return [
-        { id: 1, name: '入门', color: '#6366f1' },
-        { id: 2, name: '设计', color: '#8b5cf6' },
-        { id: 3, name: '待办', color: '#f59e0b' },
-    ];
 }
 
 /* ===== 键盘快捷键导航 ===== */
