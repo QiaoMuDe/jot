@@ -238,6 +238,310 @@ const codeHighlightStyle = HighlightStyle.define([
 ]);
 
 /* ======================================================================== */
+/* VS Code Dark+ 主题                                                       */
+/* ======================================================================== */
+
+const vscodeDarkPlusHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#569CD6', fontWeight: '600' },
+    { tag: [tags.keyword, tags.operator], color: '#569CD6', fontWeight: '600' },
+    { tag: [tags.keyword, tags.modifier], color: '#569CD6', fontWeight: '600' },
+    { tag: [tags.keyword, tags.typeName], color: '#569CD6', fontWeight: '600' },
+    { tag: tags.controlKeyword, color: '#569CD6', fontWeight: '600' },
+    { tag: tags.moduleKeyword, color: '#569CD6', fontWeight: '600' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#4EC9B0' },
+    { tag: tags.className, color: '#4EC9B0', fontWeight: '700' },
+
+    // ── 函数 ──
+    { tag: tags.definition(tags.variableName), color: '#DCDCAA', fontWeight: '600' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: 'var(--text-primary)' },
+    { tag: tags.definition(tags.variableName), color: 'var(--text-primary)' },
+    { tag: tags.propertyName, color: '#9CDCFE' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#B5CEA8' },
+    { tag: tags.string, color: '#CE9178' },
+    { tag: tags.special(tags.string), color: '#CE9178', fontWeight: '600' },
+    { tag: tags.regexp, color: '#D16969', background: 'rgba(209,105,105,0.1)', borderRadius: '2px' },
+    { tag: tags.atom, color: '#569CD6' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#6A9955', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#6A9955', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: '#D4D4D4' },
+    { tag: tags.arithmeticOperator, color: '#D4D4D4' },
+    { tag: tags.logicOperator, color: '#D4D4D4' },
+    { tag: tags.compareOperator, color: '#D4D4D4' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#9CDCFE' },
+    { tag: tags.attributeValue, color: '#CE9178' },
+    { tag: tags.tagName, color: '#569CD6' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#DCDCAA', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#D7BA7D', fontWeight: '600' },
+    { tag: tags.character, color: '#CE9178' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
+/* VS Code Light+ 主题                                                      */
+/* ======================================================================== */
+
+const vscodeLightPlusHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#0000FF', fontWeight: '600' },
+    { tag: [tags.keyword, tags.operator], color: '#0000FF', fontWeight: '600' },
+    { tag: [tags.keyword, tags.modifier], color: '#0000FF', fontWeight: '600' },
+    { tag: [tags.keyword, tags.typeName], color: '#0000FF', fontWeight: '600' },
+    { tag: tags.controlKeyword, color: '#0000FF', fontWeight: '600' },
+    { tag: tags.moduleKeyword, color: '#0000FF', fontWeight: '600' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#267F99' },
+    { tag: tags.className, color: '#267F99', fontWeight: '700' },
+
+    // ── 函数 ──
+    { tag: tags.definition(tags.variableName), color: '#795E26', fontWeight: '600' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: 'var(--text-primary)' },
+    { tag: tags.definition(tags.variableName), color: 'var(--text-primary)' },
+    { tag: tags.propertyName, color: '#001080' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#098658' },
+    { tag: tags.string, color: '#A31515' },
+    { tag: tags.special(tags.string), color: '#A31515', fontWeight: '600' },
+    { tag: tags.regexp, color: '#811F3F', background: 'rgba(129,31,63,0.1)', borderRadius: '2px' },
+    { tag: tags.atom, color: '#0000FF' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#008000', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#008000', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: 'var(--text-primary)' },
+    { tag: tags.arithmeticOperator, color: 'var(--text-primary)' },
+    { tag: tags.logicOperator, color: 'var(--text-primary)' },
+    { tag: tags.compareOperator, color: 'var(--text-primary)' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#001080' },
+    { tag: tags.attributeValue, color: '#A31515' },
+    { tag: tags.tagName, color: '#0000FF' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#795E26', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#0000FF', fontWeight: '600' },
+    { tag: tags.character, color: '#A31515' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
+/* One Dark Pro 主题                                                        */
+/* ======================================================================== */
+
+const oneDarkProHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#C678DD', fontWeight: '600' },
+    { tag: [tags.keyword, tags.operator], color: '#C678DD', fontWeight: '600' },
+    { tag: [tags.keyword, tags.modifier], color: '#C678DD', fontWeight: '600' },
+    { tag: [tags.keyword, tags.typeName], color: '#C678DD', fontWeight: '600' },
+    { tag: tags.controlKeyword, color: '#C678DD', fontWeight: '600' },
+    { tag: tags.moduleKeyword, color: '#C678DD', fontWeight: '600' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#E5C07B' },
+    { tag: tags.className, color: '#E5C07B', fontWeight: '700' },
+
+    // ── 函数 ──
+    { tag: tags.definition(tags.variableName), color: '#61AFEF', fontWeight: '600' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: 'var(--text-primary)' },
+    { tag: tags.definition(tags.variableName), color: 'var(--text-primary)' },
+    { tag: tags.propertyName, color: '#E06C75' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#D19A66' },
+    { tag: tags.string, color: '#98C379' },
+    { tag: tags.special(tags.string), color: '#98C379', fontWeight: '600' },
+    { tag: tags.regexp, color: '#98C379', background: 'rgba(152,195,121,0.1)', borderRadius: '2px' },
+    { tag: tags.atom, color: '#C678DD' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#5C6370', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#5C6370', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: '#ABB2BF' },
+    { tag: tags.arithmeticOperator, color: '#ABB2BF' },
+    { tag: tags.logicOperator, color: '#ABB2BF' },
+    { tag: tags.compareOperator, color: '#ABB2BF' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#E06C75' },
+    { tag: tags.attributeValue, color: '#98C379' },
+    { tag: tags.tagName, color: '#E06C75' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#ABB2BF', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#ABB2BF', fontWeight: '600' },
+    { tag: tags.character, color: '#98C379' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
+/* GitHub Dark 主题                                                         */
+/* ======================================================================== */
+
+const githubDarkHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#FF7B72', fontWeight: '600' },
+    { tag: [tags.keyword, tags.operator], color: '#FF7B72', fontWeight: '600' },
+    { tag: [tags.keyword, tags.modifier], color: '#FF7B72', fontWeight: '600' },
+    { tag: [tags.keyword, tags.typeName], color: '#FF7B72', fontWeight: '600' },
+    { tag: tags.controlKeyword, color: '#FF7B72', fontWeight: '600' },
+    { tag: tags.moduleKeyword, color: '#FF7B72', fontWeight: '600' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#FFA657' },
+    { tag: tags.className, color: '#FFA657', fontWeight: '700' },
+
+    // ── 函数 ──
+    { tag: tags.definition(tags.variableName), color: '#D2A8FF', fontWeight: '600' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: 'var(--text-primary)' },
+    { tag: tags.definition(tags.variableName), color: 'var(--text-primary)' },
+    { tag: tags.propertyName, color: '#79C0FF' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#79C0FF' },
+    { tag: tags.string, color: '#A5D6FF' },
+    { tag: tags.special(tags.string), color: '#A5D6FF', fontWeight: '600' },
+    { tag: tags.regexp, color: '#A5D6FF', background: 'rgba(165,214,255,0.1)', borderRadius: '2px' },
+    { tag: tags.atom, color: '#FF7B72' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#8B949E', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#8B949E', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: '#FF7B72' },
+    { tag: tags.arithmeticOperator, color: '#FF7B72' },
+    { tag: tags.logicOperator, color: '#FF7B72' },
+    { tag: tags.compareOperator, color: '#FF7B72' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#FFA657' },
+    { tag: tags.attributeValue, color: '#A5D6FF' },
+    { tag: tags.tagName, color: '#7EE787' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#FF7B72', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#FF7B72', fontWeight: '600' },
+    { tag: tags.character, color: '#A5D6FF' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
 /* 语言解析器映射表                                                       */
 /* ======================================================================== */
 
@@ -421,11 +725,19 @@ const langMap = {
  */
 const codeHighlightThemes = {
     'monokai-dimmed': codeHighlightStyle,
+    'vscode-dark-plus': vscodeDarkPlusHighlightStyle,
+    'vscode-light-plus': vscodeLightPlusHighlightStyle,
+    'one-dark-pro': oneDarkProHighlightStyle,
+    'github-dark': githubDarkHighlightStyle,
 };
 
 /** 主题名称列表，用于设置页分段控件渲染 */
 const codeHighlightThemeNames = Object.freeze([
     'monokai-dimmed',
+    'vscode-dark-plus',
+    'vscode-light-plus',
+    'one-dark-pro',
+    'github-dark',
 ]);
 
 /**
@@ -433,6 +745,10 @@ const codeHighlightThemeNames = Object.freeze([
  */
 const codeHighlightThemeLabels = Object.freeze({
     'monokai-dimmed': '默认 Monokai',
+    'vscode-dark-plus': 'Dark+',
+    'vscode-light-plus': 'Light+',
+    'one-dark-pro': 'One Dark Pro',
+    'github-dark': 'GitHub Dark',
 });
 
 /* ======================================================================== */
