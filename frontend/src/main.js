@@ -11,7 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, setSearchQuery, SearchQuery } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } from '@codemirror/autocomplete';
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
-import { jotTheme, getHighlightExtension } from './js/cm6-syntax-highlight.js';
+import { jotTheme, getHighlightExtension, codeHighlightThemeNames, codeHighlightThemeLabels } from './js/cm6-syntax-highlight.js';
 
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
@@ -177,6 +177,9 @@ class NotificationManager {
  */
 let cmEditor = null;
 
+/** 当前代码高亮主题名称 */
+let codeHighlightTheme = 'monokai-dimmed';
+
 /**
  * 初始化 CodeMirror 6 编辑器
  * @param {HTMLElement} container - 挂载容器
@@ -186,7 +189,7 @@ let cmEditor = null;
  * @param {string} [fileExt='.md'] - 文件扩展名（含前导点号），用于选择语言解析器
  * @returns {EditorView}
  */
-function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md') {
+function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md', themeName = 'monokai-dimmed') {
     const extensions = [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -211,7 +214,7 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         ]),
         closeBrackets(),
         autocompletion(),
-        ...(useSyntaxHighlight ? getHighlightExtension(fileExt) : []),
+        ...(useSyntaxHighlight ? getHighlightExtension(fileExt, themeName) : []),
         highlightSelectionMatches(),
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
@@ -610,6 +613,7 @@ function switchView(view) {
                 loadSortSettings();
                 loadPageSizeSetting();
                 loadSyntaxHighlightSetting();
+                initCodeHighlightThemeSettings();
                 loadTags();
                 break;
             case 'data':
@@ -2631,7 +2635,7 @@ async function openEditor(noteId, readOnly, startFullscreen) {
 
     // 先初始化 CM6（此时编辑器 opacity: 0，用户还看不到）
     const useSyntaxHighlight = els.mdHighlightToggle.checked;
-    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent);
+    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, codeHighlightTheme);
     // 字数统计（需在 CM6 初始化之后，否则 getEditorContent 返回空）
     updateWordCount();
     // 编辑模式下记录快照，用于蒙层点击判断内容是否有改动
@@ -5909,6 +5913,7 @@ async function init() {
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
     await loadSyntaxHighlightSetting();
+    await loadCodeHighlightThemeSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 加载笔记本列表（会设置默认选中）
@@ -6189,7 +6194,112 @@ async function loadSyntaxHighlightSetting() {
     }
 }
 
+/**
+ * 加载代码高亮主题设置
+ */
+async function loadCodeHighlightThemeSetting() {
+    try {
+        let theme = 'monokai-dimmed';
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('code_highlight_theme');
+            if (val) theme = val;
+        } else {
+            theme = localStorage.getItem('code_highlight_theme') || 'monokai-dimmed';
+        }
+        codeHighlightTheme = theme;
+        // 同步 UI 分段控件状态
+        applyCodeHighlightThemeUI(theme);
+    } catch (err) {
+        console.error('加载代码高亮主题设置失败:', err);
+        codeHighlightTheme = 'monokai-dimmed';
+    }
+}
 
+/**
+ * 同步代码高亮主题分段控件 UI 状态
+ * @param {string} themeName
+ */
+function applyCodeHighlightThemeUI(themeName) {
+    const control = document.getElementById('codeHighlightThemeControl');
+    if (!control) return;
+    const btns = control.querySelectorAll('.segmented-btn');
+    btns.forEach(btn => {
+        const isActive = btn.dataset.themeValue === themeName;
+        btn.classList.toggle('active', isActive);
+        if (isActive) {
+            const index = Array.from(btns).indexOf(btn);
+            const cw = control.offsetWidth;
+            const segW = (cw - btns.length * 4) / btns.length;
+            const indicator = document.getElementById('codeHighlightThemeIndicator');
+            if (indicator) {
+                indicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
+            }
+        }
+    });
+}
+
+/**
+ * 应用代码高亮主题（若编辑器已打开则销毁重创建）
+ * @param {string} themeName
+ */
+function applyCodeHighlightTheme(themeName) {
+    codeHighlightTheme = themeName;
+    // 若编辑器已打开，销毁重创建
+    if (cmEditor) {
+        const container = els.editorNoteContent;
+        const content = cmEditor.state.doc.toString();
+        const isReadOnly = !(els.notePlaceholder && els.notePlaceholder.textContent === '');
+        cmEditor.destroy();
+        cmEditor = null;
+        // 从设置中获取当前的 useSyntaxHighlight
+        const useSyntaxHighlight = els.mdHighlightToggle.checked;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, themeName);
+    }
+}
+
+/**
+ * 保存代码高亮主题设置
+ * @param {string} themeName
+ */
+async function saveCodeHighlightThemeSetting(themeName) {
+    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+        try {
+            await window.go.main.App.SetSetting('code_highlight_theme', themeName);
+        } catch (err) {
+            console.error('保存代码高亮主题设置失败:', err);
+            localStorage.setItem('code_highlight_theme', themeName);
+        }
+    } else {
+        localStorage.setItem('code_highlight_theme', themeName);
+    }
+    nm.show('代码高亮主题已保存', 'success');
+}
+
+/**
+ * 初始化代码高亮主题设置（绑定分段控件事件）
+ */
+function initCodeHighlightThemeSettings() {
+    const control = document.getElementById('codeHighlightThemeControl');
+    if (!control) return;
+    control.querySelectorAll('.segmented-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const theme = btn.dataset.themeValue;
+            if (!theme) return;
+            control.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const btns = Array.from(control.querySelectorAll('.segmented-btn'));
+            const index = btns.indexOf(btn);
+            const cw = control.offsetWidth;
+            const segW = (cw - btns.length * 4) / btns.length;
+            const indicator = document.getElementById('codeHighlightThemeIndicator');
+            if (indicator) {
+                indicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
+            }
+            applyCodeHighlightTheme(theme);
+            await saveCodeHighlightThemeSetting(theme);
+        });
+    });
+}
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

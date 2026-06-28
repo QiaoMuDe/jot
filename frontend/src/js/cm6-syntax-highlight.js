@@ -47,7 +47,7 @@ import { ruby } from '@codemirror/legacy-modes/mode/ruby';
 import { rust } from '@codemirror/legacy-modes/mode/rust';
 import { scheme } from '@codemirror/legacy-modes/mode/scheme';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
-import { sql } from '@codemirror/legacy-modes/mode/sql';
+import { standardSQL } from '@codemirror/legacy-modes/mode/sql';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { stylus } from '@codemirror/legacy-modes/mode/stylus';
 import { swift } from '@codemirror/legacy-modes/mode/swift';
@@ -365,7 +365,7 @@ const langMap = {
     '.sml':     () => StreamLanguage.define(sml),
     '.sparql':  () => StreamLanguage.define(sparql),
     '.spec':    () => StreamLanguage.define(rpmSpec),
-    '.sql':     () => StreamLanguage.define(sql),
+    '.sql':     () => StreamLanguage.define(standardSQL),
     '.st':      () => StreamLanguage.define(smalltalk),
     '.styl':    () => StreamLanguage.define(stylus),
     '.swift':   () => StreamLanguage.define(swift),
@@ -406,6 +406,36 @@ const langMap = {
 };
 
 /* ======================================================================== */
+/* 代码高亮主题系统                                                        */
+/* ======================================================================== */
+
+/**
+ * 代码高亮主题映射表
+ *
+ * key = 主题名称（用于设置存储和 UI 选择）
+ * value = HighlightStyle 实例
+ *
+ * 当前内置主题：
+ *   'monokai-dimmed' — Monokai Dimmed 风格（默认）
+ *   后续在此对象中新增 key 即可自动展现在设置页。
+ */
+const codeHighlightThemes = {
+    'monokai-dimmed': codeHighlightStyle,
+};
+
+/** 主题名称列表，用于设置页分段控件渲染 */
+const codeHighlightThemeNames = Object.freeze([
+    'monokai-dimmed',
+]);
+
+/**
+ * 主题名称 → 显示文案映射
+ */
+const codeHighlightThemeLabels = Object.freeze({
+    'monokai-dimmed': '默认 Monokai',
+});
+
+/* ======================================================================== */
 /* 工厂函数                                                               */
 /* ======================================================================== */
 
@@ -413,17 +443,22 @@ const langMap = {
  * 根据文件扩展名获取 CM6 语法高亮扩展数组
  *
  * @param {string} fileExt - 文件扩展名（如 '.js', '.py', '.md'），包含前导点号
+ * @param {string} [themeName='monokai-dimmed'] - 代码高亮主题名称，未知值回退到默认
  * @returns {Array} CM6 扩展数组，无匹配时返回空数组（纯文本，无高亮）
  */
-export function getHighlightExtension(fileExt) {
+export function getHighlightExtension(fileExt, themeName = 'monokai-dimmed') {
     const langFn = langMap[fileExt];
     if (!langFn) return [];
 
-    // .md 使用 MD 专属配色
+    // 选择代码高亮主题，未知名称回退到默认
+    const highlightStyle = codeHighlightThemes[themeName] || codeHighlightThemes['monokai-dimmed'];
+
+    // .md 使用 MD 专属配色，其他使用代码主题配色
     if (fileExt === '.md') {
         return [langFn(), syntaxHighlighting(mdHighlightStyle)];
     }
 
-    // 其他语言使用代码通用配色
-    return [langFn(), syntaxHighlighting(codeHighlightStyle)];
+    return [langFn(), syntaxHighlighting(highlightStyle)];
 }
+
+export { codeHighlightStyle, codeHighlightThemeNames, codeHighlightThemeLabels };
