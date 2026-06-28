@@ -1,0 +1,23 @@
+# Tasks
+
+- [x] Task 1: 重写 `index.html` 数据管理区域 HTML 结构
+  - 统计卡片区：保持 5 张 stat-card，class 不变，微调 padding 和内联结构
+  - 移除现有的 `data-section-card` 包装器，改为扁平化的 section 布局
+  - 操作列表区：每个功能组用一个 `<div class="data-action-list">` 包裹
+  - 每行使用 `<button class="data-action-row">` 替代 `.data-action-btn`，结构：icon + label/desc + chevron
+  - 危险操作独立为底部区域
+  - 保留所有按钮的 id（exportDataBtn, importDataBtn, vacuumDbBtn, resetAllBtn, openDataDirBtn, backupBtn, restoreBtn, backupInfo）
+- [x] Task 2: 重写 `data-view.css` 全部样式
+  - 删除 `.data-action-btn`、`.dab-icon`、`.dab-text`、`.dab-desc` 旧样式
+  - 新增 `.data-action-list`：纵向 flex，gap 0，无背景/边框
+  - 新增 `.data-action-row`：flex row，height 48px，padding 0 16px，gap 12px，icon 20×20px，右侧 `›` 伪元素箭头
+  - 新增 `.data-action-row-danger`：红色文本
+  - 新增分隔线 `.data-list-divider`：左侧缩进 48px 的 1px border
+  - 危险区独立样式 `.data-danger-zone`：顶部红色虚线边框
+  - 统计卡片：padding 缩小，移除 hover 位移
+  - 响应式适配：窄屏时隐藏 desc 文本
+- [x] Task 3: 验证构建和功能
+  - `npx vite build` 通过
+  - 统计卡片正确显示 5 个数值
+  - 所有操作按钮点击正常工作（导出/导入/瘦身/备份/还原/打开目录/重置）
+  - 窄屏布局适配正常

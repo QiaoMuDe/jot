@@ -412,63 +412,91 @@
                     </div>
                 </div>
 
-                <!-- 第二层：数据操作 -->
-                <div class="data-section data-section-card">
-                    <h3 class="data-section-title">数据操作</h3>
-                    <div class="data-actions">
-                        <div class="data-actions-row">
-                            <button class="data-action-btn" id="exportDataBtn">
-                                <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-                                <span class="dab-text">导出数据</span>
-                                <span class="dab-desc">将当前数据库完整备份为 .db 文件</span>
-                            </button>
-                            <button class="data-action-btn" id="importDataBtn">
-                                <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
-                                <span class="dab-text">导入数据</span>
-                                <span class="dab-desc">从 .db 文件还原数据库备份</span>
-                            </button>
-                        </div>
-                        <button class="data-action-btn data-action-btn-danger" id="resetAllBtn">
-                            <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
-                            <span class="dab-text">恢复出厂设置</span>
-                            <span class="dab-desc">清空所有笔记、标签和设置</span>
-                        </button>
-                        <button class="data-action-btn" id="vacuumDbBtn">
-                            <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
-                            <span class="dab-text">数据库瘦身</span>
-                            <span class="dab-desc">回收已删除数据占用的磁盘空间</span>
-                        </button>
-                    </div>
+                <!-- 第二层：操作列表 -->
+                <h3 class="data-section-title">数据操作</h3>
+
+                <!-- 数据迁移 -->
+                <div class="data-action-list" data-group="迁移">
+                    <button class="data-action-row" id="exportDataBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">导出数据</span>
+                            <span class="dar-desc">备份为 .db 文件</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
+                    <div class="dar-divider"></div>
+                    <button class="data-action-row" id="importDataBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">导入数据</span>
+                            <span class="dar-desc">从备份文件还原</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
+                </div>
+
+                <!-- 数据库维护 -->
+                <div class="data-action-list" data-group="维护">
+                    <button class="data-action-row" id="vacuumDbBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">数据库瘦身</span>
+                            <span class="dar-desc">回收已删除数据占用的空间</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
+                    <div class="dar-divider"></div>
+                    <button class="data-action-row" id="openDataDirBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">打开数据目录</span>
+                            <span class="dar-desc">查看数据库文件</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
                 </div>
 
                 <!-- 快速备份 -->
-                <div class="data-section data-section-card backup-section">
-                    <h3 class="data-section-title">快速备份</h3>
-                    <div class="backup-info" id="backupInfo">暂无备份</div>
-                    <div class="data-actions-row">
-                        <button class="data-action-btn" id="backupBtn">
-                            <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
-                            <span class="dab-text">一键备份</span>
-                            <span class="dab-desc">覆盖上次备份</span>
-                        </button>
-                        <button class="data-action-btn" id="restoreBtn">
-                            <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
-                            <span class="dab-text">一键还原</span>
-                            <span class="dab-desc">恢复至最新备份</span>
-                        </button>
+                <div class="data-action-list" data-group="备份">
+                    <div class="data-action-row data-action-row-info" id="backupInfo">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">备份状态</span>
+                            <span class="dar-desc" id="backupStatusText">暂无备份</span>
+                        </span>
                     </div>
+                    <div class="dar-divider"></div>
+                    <button class="data-action-row" id="backupBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">一键备份</span>
+                            <span class="dar-desc">覆盖上次备份</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
+                    <div class="dar-divider"></div>
+                    <button class="data-action-row" id="restoreBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">一键还原</span>
+                            <span class="dar-desc">恢复至最新备份</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
                 </div>
 
-                <!-- 第三层：数据目录 -->
-                <div class="data-section data-section-card">
-                    <h3 class="data-section-title">数据目录</h3>
-                    <div class="data-actions single-action">
-                        <button class="data-action-btn" id="openDataDirBtn">
-                            <span class="dab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
-                            <span class="dab-text">打开数据目录</span>
-                            <span class="dab-desc">在文件管理器中查看数据库文件</span>
-                        </button>
-                    </div>
+                <!-- 危险操作 -->
+                <div class="data-danger-zone">
+                    <div class="data-danger-divider"></div>
+                    <button class="data-action-row data-action-row-danger" id="resetAllBtn">
+                        <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                        <span class="dar-body">
+                            <span class="dar-label">恢复出厂设置</span>
+                            <span class="dar-desc">清空所有笔记、标签和设置</span>
+                        </span>
+                        <span class="dar-chevron">&rsaquo;</span>
+                    </button>
                 </div>
                 </div>
             </div>

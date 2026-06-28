@@ -425,6 +425,7 @@ const els = {
     backupBtn: $('backupBtn'),
     restoreBtn: $('restoreBtn'),
     backupInfo: $('backupInfo'),
+    backupStatusText: $('backupStatusText'),
 
     // 字数统计
     editorWordCount: $('editorWordCount'),
@@ -2076,17 +2077,17 @@ async function loadBackupInfo() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetBackupInfo) {
             const info = await window.go.main.App.GetBackupInfo();
             if (info && info.file_name) {
-                els.backupInfo.innerHTML = `<span style="color:var(--success,#2ea043)">&#10003; 已有备份</span> \u2014 ${info.file_time}，${info.file_size}`;
                 els.backupInfo.classList.add('has-backup');
+                els.backupStatusText.textContent = `${info.file_time}，${info.file_size}`;
             } else {
-                els.backupInfo.textContent = '暂无备份';
                 els.backupInfo.classList.remove('has-backup');
+                els.backupStatusText.textContent = '暂无备份';
             }
         }
     } catch (err) {
         console.error('加载备份信息失败:', err);
-        els.backupInfo.textContent = '暂无备份';
         els.backupInfo.classList.remove('has-backup');
+        els.backupStatusText.textContent = '暂无备份';
     }
 }
 
@@ -2095,9 +2096,10 @@ async function loadBackupInfo() {
  */
 async function backupToDir() {
     const btn = els.backupBtn;
-    const origText = btn.innerHTML;
+    const labelEl = btn.querySelector('.dar-label');
+    const origText = labelEl ? labelEl.textContent : '';
     btn.disabled = true;
-    btn.innerHTML = '<span class="dab-text" style="opacity:0.7">⏳ 备份中…</span>';
+    if (labelEl) labelEl.textContent = '⏳ 备份中…';
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.BackupToDir) {
             const msg = await window.go.main.App.BackupToDir();
@@ -2113,7 +2115,7 @@ async function backupToDir() {
         nm.show('备份失败：' + (err.message || String(err)), 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = origText;
+        if (labelEl) labelEl.textContent = origText;
     }
 }
 
@@ -2122,13 +2124,14 @@ async function backupToDir() {
  */
 async function restoreFromDir() {
     const btn = els.restoreBtn;
+    const labelEl = btn.querySelector('.dar-label');
+    const origText = labelEl ? labelEl.textContent : '';
     // 自定义确认弹窗
     const confirmed = await showConfirmDialog('确定要从最新备份恢复数据吗？当前所有笔记将被替换为备份内容，此操作不可撤销。');
     if (!confirmed) return;
 
-    const origText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="dab-text" style="opacity:0.7">⏳ 还原中…</span>';
+    if (labelEl) labelEl.textContent = '⏳ 还原中…';
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.RestoreFromDir) {
             const result = await window.go.main.App.RestoreFromDir();
@@ -2148,7 +2151,7 @@ async function restoreFromDir() {
         nm.show('还原失败：' + (err.message || String(err)), 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = origText;
+        if (labelEl) labelEl.textContent = origText;
     }
 }
 
