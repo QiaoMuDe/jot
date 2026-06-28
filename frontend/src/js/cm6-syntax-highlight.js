@@ -23,18 +23,39 @@ import { EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
 // @codemirror/legacy-modes 兜底语言
-import { cpp, csharp, dart, java, scala } from '@codemirror/legacy-modes/mode/clike';
+import { cpp, csharp, dart, java, kotlin, scala } from '@codemirror/legacy-modes/mode/clike';
+import { clojure } from '@codemirror/legacy-modes/mode/clojure';
+import { cmake } from '@codemirror/legacy-modes/mode/cmake';
+import { diff } from '@codemirror/legacy-modes/mode/diff';
 import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
+import { elm } from '@codemirror/legacy-modes/mode/elm';
+import { erlang } from '@codemirror/legacy-modes/mode/erlang';
+import { fortran } from '@codemirror/legacy-modes/mode/fortran';
 import { go } from '@codemirror/legacy-modes/mode/go';
+import { groovy } from '@codemirror/legacy-modes/mode/groovy';
 import { haskell } from '@codemirror/legacy-modes/mode/haskell';
+import { julia } from '@codemirror/legacy-modes/mode/julia';
 import { lua } from '@codemirror/legacy-modes/mode/lua';
+import { fSharp, oCaml, sml } from '@codemirror/legacy-modes/mode/mllike';
+import { nginx } from '@codemirror/legacy-modes/mode/nginx';
 import { perl } from '@codemirror/legacy-modes/mode/perl';
 import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
+import { protobuf } from '@codemirror/legacy-modes/mode/protobuf';
+import { pug } from '@codemirror/legacy-modes/mode/pug';
+import { r } from '@codemirror/legacy-modes/mode/r';
 import { ruby } from '@codemirror/legacy-modes/mode/ruby';
 import { rust } from '@codemirror/legacy-modes/mode/rust';
+import { scheme } from '@codemirror/legacy-modes/mode/scheme';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { sql } from '@codemirror/legacy-modes/mode/sql';
+import { stex } from '@codemirror/legacy-modes/mode/stex';
+import { stylus } from '@codemirror/legacy-modes/mode/stylus';
 import { swift } from '@codemirror/legacy-modes/mode/swift';
+import { tcl } from '@codemirror/legacy-modes/mode/tcl';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
+import { vb } from '@codemirror/legacy-modes/mode/vb';
+import { verilog } from '@codemirror/legacy-modes/mode/verilog';
+import { vhdl } from '@codemirror/legacy-modes/mode/vhdl';
 import { xml } from '@codemirror/legacy-modes/mode/xml';
 import { yaml } from '@codemirror/legacy-modes/mode/yaml';
 
@@ -245,33 +266,143 @@ const langMap = {
     '.py':      () => python(),
 
     // —— 兜底解析器（@codemirror/legacy-modes + StreamLanguage） ——
-    '.go':      () => StreamLanguage.define(go),
-    '.sql':     () => StreamLanguage.define(sql),
-    '.sh':      () => StreamLanguage.define(shell),
-    '.bash':    () => StreamLanguage.define(shell),
-    '.zsh':     () => StreamLanguage.define(shell),
-    '.yaml':    () => StreamLanguage.define(yaml),
-    '.yml':     () => StreamLanguage.define(yaml),
-    '.xml':     () => StreamLanguage.define(xml),
-    '.svg':     () => StreamLanguage.define(xml),
-    '.rs':      () => StreamLanguage.define(rust),
-    '.rb':      () => StreamLanguage.define(ruby),
-    '.swift':   () => StreamLanguage.define(swift),
-    '.pl':      () => StreamLanguage.define(perl),
-    '.pm':      () => StreamLanguage.define(perl),
-    '.lua':     () => StreamLanguage.define(lua),
-    '.hs':      () => StreamLanguage.define(haskell),
-    '.ps1':     () => StreamLanguage.define(powerShell),
-    '.dockerfile': () => StreamLanguage.define(dockerFile),
+    '.apl':     () => StreamLanguage.define(apl),
+    '.asn1':    () => StreamLanguage.define(asn1),
+    '.b':       () => StreamLanguage.define(brainfuck),
+    '.bf':      () => StreamLanguage.define(brainfuck),
+    '.cbl':     () => StreamLanguage.define(cobol),
+    '.cl':      () => StreamLanguage.define(commonLisp),
+    '.clj':     () => StreamLanguage.define(clojure),
+    '.cljs':    () => StreamLanguage.define(clojure),
+    '.cljc':    () => StreamLanguage.define(clojure),
+    '.cmake':   () => StreamLanguage.define(cmake),
+    '.coffee':  () => StreamLanguage.define(coffeescript),
+    '.cob':     () => StreamLanguage.define(cobol),
+    '.cr':      () => StreamLanguage.define(crystal),
+    '.cql':     () => StreamLanguage.define(cypher),
+    '.cypher':  () => StreamLanguage.define(cypher),
     '.c':       () => StreamLanguage.define(cpp),
     '.h':       () => StreamLanguage.define(cpp),
     '.cpp':     () => StreamLanguage.define(cpp),
     '.cxx':     () => StreamLanguage.define(cpp),
     '.hpp':     () => StreamLanguage.define(cpp),
-    '.java':    () => StreamLanguage.define(java),
     '.cs':      () => StreamLanguage.define(csharp),
-    '.scala':   () => StreamLanguage.define(scala),
+    '.d':       () => StreamLanguage.define(d),
     '.dart':    () => StreamLanguage.define(dart),
+    '.diff':    () => StreamLanguage.define(diff),
+    '.patch':   () => StreamLanguage.define(diff),
+    '.dy':      () => StreamLanguage.define(dylan),
+    '.dylan':   () => StreamLanguage.define(dylan),
+    '.e':       () => StreamLanguage.define(eiffel),
+    '.ebnf':    () => StreamLanguage.define(ebnf),
+    '.ecl':     () => StreamLanguage.define(ecl),
+    '.elm':     () => StreamLanguage.define(elm),
+    '.erl':     () => StreamLanguage.define(erlang),
+    '.hrl':     () => StreamLanguage.define(erlang),
+    '.f':       () => StreamLanguage.define(fortran),
+    '.f90':     () => StreamLanguage.define(fortran),
+    '.f95':     () => StreamLanguage.define(fortran),
+    '.factor':  () => StreamLanguage.define(factor),
+    '.fcl':     () => StreamLanguage.define(fcl),
+    '.feature': () => StreamLanguage.define(gherkin),
+    '.forth':   () => StreamLanguage.define(forth),
+    '.fth':     () => StreamLanguage.define(forth),
+    '.fs':      () => StreamLanguage.define(fSharp),
+    '.fsx':     () => StreamLanguage.define(fSharp),
+    '.go':      () => StreamLanguage.define(go),
+    '.groovy':  () => StreamLanguage.define(groovy),
+    '.gvy':     () => StreamLanguage.define(groovy),
+    '.haxe':    () => StreamLanguage.define(haxe),
+    '.hxml':    () => StreamLanguage.define(hxml),
+    '.hs':      () => StreamLanguage.define(haskell),
+    '.http':    () => StreamLanguage.define(http),
+    '.idl':     () => StreamLanguage.define(idl),
+    '.j2':      () => StreamLanguage.define(jinja2),
+    '.java':    () => StreamLanguage.define(java),
+    '.jinja':   () => StreamLanguage.define(jinja2),
+    '.jinja2':  () => StreamLanguage.define(jinja2),
+    '.jl':      () => StreamLanguage.define(julia),
+    '.kt':      () => StreamLanguage.define(kotlin),
+    '.kts':     () => StreamLanguage.define(kotlin),
+    '.lisp':    () => StreamLanguage.define(commonLisp),
+    '.ls':      () => StreamLanguage.define(liveScript),
+    '.lua':     () => StreamLanguage.define(lua),
+    '.ml':      () => StreamLanguage.define(oCaml),
+    '.mli':     () => StreamLanguage.define(oCaml),
+    '.mo':      () => StreamLanguage.define(modelica),
+    '.msc':     () => StreamLanguage.define(mscgen),
+    '.msgenny': () => StreamLanguage.define(msgenny),
+    '.mumps':   () => StreamLanguage.define(mumps),
+    '.nginx':   () => StreamLanguage.define(nginx),
+    '.nsi':     () => StreamLanguage.define(nsis),
+    '.nsh':     () => StreamLanguage.define(nsis),
+    '.oz':      () => StreamLanguage.define(oz),
+    '.pas':     () => StreamLanguage.define(pascal),
+    '.pegjs':   () => StreamLanguage.define(pegjs),
+    '.pig':     () => StreamLanguage.define(pig),
+    '.pl':      () => StreamLanguage.define(perl),
+    '.pm':      () => StreamLanguage.define(perl),
+    '.properties': () => StreamLanguage.define(properties),
+    '.proto':   () => StreamLanguage.define(protobuf),
+    '.ps1':     () => StreamLanguage.define(powerShell),
+    '.pp':      () => StreamLanguage.define(pascal),
+    '.pug':     () => StreamLanguage.define(pug),
+    '.q':       () => StreamLanguage.define(q),
+    '.r':       () => StreamLanguage.define(r),
+    '.R':       () => StreamLanguage.define(r),
+    '.rb':      () => StreamLanguage.define(ruby),
+    '.rq':      () => StreamLanguage.define(sparql),
+    '.rs':      () => StreamLanguage.define(rust),
+    '.sas':     () => StreamLanguage.define(sas),
+    '.sass':    () => StreamLanguage.define(sass),
+    '.scala':   () => StreamLanguage.define(scala),
+    '.scm':     () => StreamLanguage.define(scheme),
+    '.ss':      () => StreamLanguage.define(scheme),
+    '.sh':      () => StreamLanguage.define(shell),
+    '.bash':    () => StreamLanguage.define(shell),
+    '.zsh':     () => StreamLanguage.define(shell),
+    '.sieve':   () => StreamLanguage.define(sieve),
+    '.sml':     () => StreamLanguage.define(sml),
+    '.sparql':  () => StreamLanguage.define(sparql),
+    '.spec':    () => StreamLanguage.define(rpmSpec),
+    '.sql':     () => StreamLanguage.define(sql),
+    '.st':      () => StreamLanguage.define(smalltalk),
+    '.styl':    () => StreamLanguage.define(stylus),
+    '.swift':   () => StreamLanguage.define(swift),
+    '.tcl':     () => StreamLanguage.define(tcl),
+    '.textile': () => StreamLanguage.define(textile),
+    '.tid':     () => StreamLanguage.define(tiddlyWiki),
+    '.tiki':    () => StreamLanguage.define(tiki),
+    '.toml':    () => StreamLanguage.define(toml),
+    '.troff':   () => StreamLanguage.define(troff),
+    '.ttcn':    () => StreamLanguage.define(ttcn),
+    '.ttcncfg': () => StreamLanguage.define(ttcnCfg),
+    '.ttl':     () => StreamLanguage.define(turtle),
+    '.tex':     () => StreamLanguage.define(stex),
+    '.sty':     () => StreamLanguage.define(stex),
+    '.cls':     () => StreamLanguage.define(stex),
+    '.vb':      () => StreamLanguage.define(vb),
+    '.vbs':     () => StreamLanguage.define(vbScript),
+    '.v':       () => StreamLanguage.define(verilog),
+    '.vhdl':    () => StreamLanguage.define(vhdl),
+    '.vhd':     () => StreamLanguage.define(vhdl),
+    '.vm':      () => StreamLanguage.define(velocity),
+    '.vtl':     () => StreamLanguage.define(velocity),
+    '.wast':    () => StreamLanguage.define(wast),
+    '.wat':     () => StreamLanguage.define(wast),
+    '.webidl':  () => StreamLanguage.define(webIDL),
+    '.xq':      () => StreamLanguage.define(xQuery),
+    '.xquery':  () => StreamLanguage.define(xQuery),
+    '.xqy':     () => StreamLanguage.define(xQuery),
+    '.xml':     () => StreamLanguage.define(xml),
+    '.svg':     () => StreamLanguage.define(xml),
+    '.xu':      () => StreamLanguage.define(xu),
+    '.yacas':   () => StreamLanguage.define(yacas),
+    '.yaml':    () => StreamLanguage.define(yaml),
+    '.yml':     () => StreamLanguage.define(yaml),
+    '.ys':      () => StreamLanguage.define(yacas),
+    '.z80':     () => StreamLanguage.define(z80),
+    '.dockerfile': () => StreamLanguage.define(dockerFile),
 };
 
 /* ======================================================================== */
