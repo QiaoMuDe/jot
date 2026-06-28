@@ -11,7 +11,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, setSearchQuery, SearchQuery } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } from '@codemirror/autocomplete';
 import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
-import { jotTheme, mdHighlight } from './js/cm6-syntax-highlight.js';
+import { jotTheme, getHighlightExtension } from './js/cm6-syntax-highlight.js';
 
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
@@ -182,10 +182,11 @@ let cmEditor = null;
  * @param {HTMLElement} container - 挂载容器
  * @param {string} content - 初始内容
  * @param {boolean} readOnly - 是否只读
- * @param {boolean} useMdHighlight - 是否启用 MD 语法高亮
+ * @param {boolean} useSyntaxHighlight - 是否启用语法高亮
+ * @param {string} [fileExt='.md'] - 文件扩展名（含前导点号），用于选择语言解析器
  * @returns {EditorView}
  */
-function initCodeMirror(container, content = '', readOnly = false, useMdHighlight = true) {
+function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md') {
     const extensions = [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -210,7 +211,7 @@ function initCodeMirror(container, content = '', readOnly = false, useMdHighligh
         ]),
         closeBrackets(),
         autocompletion(),
-        ...(useMdHighlight ? mdHighlight : []),
+        ...(useSyntaxHighlight ? getHighlightExtension(fileExt) : []),
         highlightSelectionMatches(),
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
@@ -608,7 +609,7 @@ function switchView(view) {
                 loadThemeSetting();
                 loadSortSettings();
                 loadPageSizeSetting();
-                loadMdHighlightSetting();
+                loadSyntaxHighlightSetting();
                 loadTags();
                 break;
             case 'data':
@@ -2629,9 +2630,8 @@ async function openEditor(noteId, readOnly, startFullscreen) {
     els.viewEditor.classList.add('active');
 
     // 先初始化 CM6（此时编辑器 opacity: 0，用户还看不到）
-    // Markdown 笔记始终启用 MD 语法高亮，纯文本笔记根据设置决定
-    const useMdHighlight = els.editorFileExt.textContent === '.md' || els.mdHighlightToggle.checked;
-    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useMdHighlight);
+    const useSyntaxHighlight = els.mdHighlightToggle.checked;
+    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent);
     // 字数统计（需在 CM6 初始化之后，否则 getEditorContent 返回空）
     updateWordCount();
     // 编辑模式下记录快照，用于蒙层点击判断内容是否有改动
@@ -3985,18 +3985,18 @@ function initEventListeners() {
         }
     });
 
-    // 纯文本 MD 高亮开关
+    // 语法高亮开关
     els.mdHighlightToggle.addEventListener('change', async (e) => {
         try {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-                await window.go.main.App.SetSetting('md_highlight_plain', String(e.target.checked));
+                await window.go.main.App.SetSetting('cm_syntax_highlight', String(e.target.checked));
                 nm.show('设置已保存', 'success');
             } else {
-                localStorage.setItem('md_highlight_plain', String(e.target.checked));
+                localStorage.setItem('cm_syntax_highlight', String(e.target.checked));
                 nm.show('设置已保存', 'success');
             }
         } catch (err) {
-            console.error('保存 MD 高亮设置失败:', err);
+            console.error('保存语法高亮设置失败:', err);
         }
     });
 
@@ -5908,7 +5908,7 @@ async function init() {
     await initSortSettings();
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
-    await loadMdHighlightSetting();
+    await loadSyntaxHighlightSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 加载笔记本列表（会设置默认选中）
@@ -6171,21 +6171,21 @@ async function loadQuickNoteSetting() {
 }
 
 /**
- * 加载纯文本 MD 语法高亮设置
+ * 加载 CM6 语法高亮设置
  */
-async function loadMdHighlightSetting() {
+async function loadSyntaxHighlightSetting() {
     try {
         let enabled = true;
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-            const val = await window.go.main.App.GetSetting('md_highlight_plain');
+            const val = await window.go.main.App.GetSetting('cm_syntax_highlight');
             enabled = val !== 'false'; // 默认启用
         } else {
-            const local = localStorage.getItem('md_highlight_plain');
+            const local = localStorage.getItem('cm_syntax_highlight');
             enabled = local !== 'false';
         }
         els.mdHighlightToggle.checked = enabled;
     } catch (err) {
-        console.error('加载 MD 高亮设置失败:', err);
+        console.error('加载语法高亮设置失败:', err);
     }
 }
 
