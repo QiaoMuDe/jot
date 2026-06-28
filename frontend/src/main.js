@@ -725,6 +725,18 @@ async function updateNote(id) {
         return;
     }
 
+    // 脏检测：有快照且内容无变更 → 跳过保存直接关闭
+    const snapshot = state._editSnapshot;
+    if (snapshot) {
+        const currentTags = [...state.selectedTags].sort();
+        const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
+        const extChanged = els.editorFileExt.textContent !== snapshot.fileExt;
+        if (title === snapshot.title && content === snapshot.content && !tagsChanged && !extChanged) {
+            closeEditor();
+            return;
+        }
+    }
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.UpdateNote) {
             await window.go.main.App.UpdateNote(id, title, content, els.editorFileExt.textContent);
