@@ -60,11 +60,17 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	return svc.Set("ai_model", cfg.Model)
 }
 
+// thinkingParam 思考模式参数
+type thinkingParam struct {
+	Type string `json:"type"`
+}
+
 // chatRequest 表示 Chat Completion 请求体
 type chatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
+	Model    string         `json:"model"`
+	Messages []Message      `json:"messages"`
+	Stream   bool           `json:"stream"`
+	Thinking *thinkingParam `json:"thinking,omitempty"`
 }
 
 // chatResponse 表示 Chat Completion 响应体
@@ -130,7 +136,7 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 // CallAIStream 流式调用 OpenAI 兼容的 Chat Completion API
 // 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
 // onThinking 用于深度思考模型的 reasoning_content 字段
-func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
+func (a *AIService) CallAIStream(messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
 	cfg := a.GetConfig()
 
 	type streamChoice struct {
@@ -148,6 +154,11 @@ func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onThi
 		Model:    cfg.Model,
 		Messages: messages,
 		Stream:   true,
+	}
+	if thinkingEnabled {
+		body.Thinking = &thinkingParam{Type: "enabled"}
+	} else {
+		body.Thinking = &thinkingParam{Type: "disabled"}
 	}
 
 	var fullContent strings.Builder

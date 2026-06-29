@@ -22,7 +22,7 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
-export function CallAIStream(arg1:Array<services.Message>):Promise<void>;
+export function CallAIStream(arg1:Array<services.Message>,arg2:boolean):Promise<void>;
 
 export function ClearAISessionMessages(arg1:number):Promise<void>;
 

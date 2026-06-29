@@ -482,3 +482,32 @@
 .ai-status.loading {
     color: var(--text-muted);
 }
+
+/* ── 联网搜索（复用 ai-chat.css 的 toggle-switch 样式）── */
+.ai-setting-search-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    max-width: 380px;
+    cursor: pointer;
+}
+
+.ai-setting-search-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* 设置页 toggle switch 覆盖样式（已有 .ai-chat-toggle-switch） */
+.font-setting-row .ai-chat-toggle-switch {
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.font-setting-row .ai-chat-toggle-switch.active {
+    background: var(--accent);
+}
+
+.font-setting-row .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
+    left: 14px;
+}

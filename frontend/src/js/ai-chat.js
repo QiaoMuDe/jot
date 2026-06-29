@@ -19,6 +19,66 @@ let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
 
+// 模型选择器状态
+let modelTrigger = null;
+let modelDropdown = null;
+let modelLabel = null;
+let modelList = [];
+
+// 深度思考状态
+let searchToggle = null;
+let enableThinking = false;
+
+/**
+ * 加载模型配置到选择器 UI
+ */
+async function loadModelSelector(cfg) {
+    const model = cfg?.model || '--';
+    if (modelLabel) modelLabel.textContent = model;
+}
+
+/**
+ * 打开下拉并填充模型列表
+ */
+async function openModelDropdown() {
+    if (!modelDropdown) return;
+    if (modelList.length === 0) {
+        try {
+            const cfg = await window.go.main.App.GetAIConfig();
+            if (cfg.base_url && cfg.api_key) {
+                modelList = await window.go.main.App.FetchAIModels(cfg.base_url, cfg.api_key);
+            }
+        } catch (_) {}
+    }
+    renderModelDropdown();
+    modelDropdown.classList.add('open');
+}
+
+function renderModelDropdown() {
+    if (!modelDropdown || !modelLabel) return;
+    const current = modelLabel.textContent;
+    modelDropdown.innerHTML = modelList.map(m =>
+        `<div class="theme-select-item${m === current ? ' active' : ''}" data-model="${m}">${m}</div>`
+    ).join('');
+}
+
+/**
+ * 切换模型并保存
+ */
+async function switchModel(model) {
+    if (!modelLabel || !modelDropdown || !model) return;
+    try {
+        const cfg = await window.go.main.App.GetAIConfig();
+        cfg.model = model;
+        await window.go.main.App.SaveAIConfig(cfg);
+        modelLabel.textContent = model;
+        // 同步设置页
+        const settingsLabel = document.getElementById('aiModelLabel');
+        if (settingsLabel) settingsLabel.textContent = model;
+        modelDropdown.classList.remove('open');
+    } catch (_) {}
+}
+
 /**
  * 初始化 AI 对话页面
  */
@@ -31,6 +91,16 @@ export function initAIChat() {
     clearBtnEl = document.getElementById('aiChatClearBtn');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
+
+    // 模型选择器
+    modelTrigger = document.getElementById('aiChatModelTrigger');
+    modelDropdown = document.getElementById('aiChatModelDropdown');
+    modelLabel = document.getElementById('aiChatModelLabel');
+    modelList = [];
+
+    // 深度思考
+    searchToggle = document.getElementById('aiChatSearchToggle');
+    enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
 
     if (!messagesEl) return;
     bindEvents();
@@ -115,6 +185,39 @@ function bindEvents() {
             toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
             toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
             localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
+        });
+    }
+
+    // ── 模型选择器事件 ──
+    if (modelTrigger && modelDropdown) {
+        modelTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (modelDropdown.classList.contains('open')) {
+                modelDropdown.classList.remove('open');
+            } else {
+                openModelDropdown();
+            }
+        });
+
+        modelDropdown.addEventListener('click', (e) => {
+            const item = e.target.closest('.theme-select-item');
+            if (item) switchModel(item.dataset.model);
+        });
+
+        document.addEventListener('click', () => modelDropdown.classList.remove('open'));
+    }
+
+    // ── 深度思考切换 ──
+    if (searchToggle) {
+        if (enableThinking) searchToggle.classList.add('active');
+        searchToggle.addEventListener('click', () => {
+            enableThinking = searchToggle.classList.toggle('active');
+            localStorage.setItem('ai_thinking_enabled', String(enableThinking));
+            // 同步设置页 toggle
+            const settingToggle = document.getElementById('aiSettingSearchToggle');
+            if (settingToggle) {
+                settingToggle.classList.toggle('active', enableThinking);
+            }
         });
     }
 }
@@ -376,7 +479,10 @@ function startStreaming() {
         if (!thinkingDetails) {
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
-            thinkingDetails.open = true;
+            thinkingDetails.open = localStorage.getItem('ai_cot_collapsed') !== 'true';
+            thinkingDetails.addEventListener('toggle', () => {
+                localStorage.setItem('ai_cot_collapsed', thinkingDetails.open ? 'false' : 'true');
+            });
             const summary = document.createElement('summary');
             summary.className = 'thinking-summary';
             summary.textContent = '💭 思考过程';
@@ -438,7 +544,7 @@ function startStreaming() {
     unsubs.push(unsubError);
 
     try {
-        window.go.main.App.CallAIStream(chatHistory);
+        window.go.main.App.CallAIStream(chatHistory, enableThinking);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -504,7 +610,10 @@ function addMessage(content, role, reasoningContent) {
     if (role === 'assistant' && reasoningContent) {
         const details = document.createElement('details');
         details.className = 'thinking-details';
-        details.open = true;
+        details.open = localStorage.getItem('ai_cot_collapsed') !== 'true';
+        details.addEventListener('toggle', () => {
+            localStorage.setItem('ai_cot_collapsed', details.open ? 'false' : 'true');
+        });
         const summary = document.createElement('summary');
         summary.className = 'thinking-summary';
         summary.textContent = '💭 已思考';
@@ -577,6 +686,7 @@ export async function onAIChatViewActivated() {
             return;
         }
         hideEmptyState();
+        loadModelSelector(cfg);
         await loadSessionList();
 
         // 仅在未激活会话时才自动加载第一个

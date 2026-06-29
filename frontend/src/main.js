@@ -373,7 +373,6 @@ const els = {
     aiTestURLBtn: $('aiTestURLBtn'),
     aiAPIKeyToggle: $('aiAPIKeyToggle'),
     aiFetchModelsBtn: $('aiFetchModelsBtn'),
-    aiSaveConfigBtn: $('aiSaveConfigBtn'),
 };
 
 /**
@@ -447,6 +446,10 @@ function switchView(view) {
                 initCodeHighlightThemeSettings();
                 initCodePreview();
                 loadTags();
+                loadAISettings();
+                // 每次进入设置页 Key 输入框默认隐藏
+                els.aiAPIKey.type = 'password';
+                els.aiAPIKeyToggle.textContent = '👁';
                 break;
             case 'data':
                 loadDataStats();
@@ -1559,6 +1562,13 @@ async function loadAISettings() {
             addModelDropdownItem(cfg.model, true);
         }
     } catch (_) { /* 静默失败 */ }
+
+    // 深度思考状态
+    const settingToggle = document.getElementById('aiSettingSearchToggle');
+    const enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
+    if (settingToggle) {
+        if (enabled) settingToggle.classList.add('active');
+    }
 }
 
 async function initAISettings() {
@@ -1576,6 +1586,7 @@ async function initAISettings() {
     });
 
     // 点击模型项
+    // ── 自动保存 ▸ 选择模型 ──
     dropdown.addEventListener('click', (e) => {
         const item = e.target.closest('.theme-select-item');
         if (!item) return;
@@ -1586,6 +1597,7 @@ async function initAISettings() {
         els.aiModelLabel.textContent = model;
         dropdown.classList.remove('open');
         trigger.classList.remove('open');
+        saveAIConfig();
     });
 
     // 点击外部关闭
@@ -1656,43 +1668,45 @@ async function initAISettings() {
         }
     });
 
-    // 保存配置
-    els.aiSaveConfigBtn.addEventListener('click', async () => {
+    // ── 保存 AI 配置 ──
+    async function saveAIConfig() {
         const url = els.aiBaseURL.value.trim();
         const key = els.aiAPIKey.value.trim();
         const model = els.aiModelLabel.textContent;
         const hasItems = els.aiModelDropdown.children.length > 0;
 
-        if (!url) {
-            setAIStatus('aiConfigStatus', '请输入 API 地址', 'error');
-            nm.show('请填写 API 地址', 'warning');
-            return;
-        }
-        if (!key) {
-            setAIStatus('aiConfigStatus', '请输入 API Key', 'error');
-            nm.show('请填写 API Key', 'warning');
-            return;
-        }
-        if (!hasItems || model === '-- 请先获取模型列表 --') {
-            setAIStatus('aiConfigStatus', '请先获取并选择模型', 'error');
-            nm.show('请先获取并选择一个模型', 'warning');
-            return;
-        }
-        if (!model) {
-            setAIStatus('aiConfigStatus', '请选择模型', 'error');
-            nm.show('请先获取并选择一个模型', 'warning');
-            return;
-        }
+        if (!url || !key) return; // 未填完不保存
+        if (!hasItems || model === '-- 请先获取模型列表 --' || !model) return;
 
         try {
             await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model });
-            setAIStatus('aiConfigStatus', '✓ 配置已保存', 'success');
             nm.show('AI 配置已保存', 'success');
         } catch (e) {
-            setAIStatus('aiConfigStatus', '✗ 保存失败: ' + e, 'error');
             nm.show('保存配置失败: ' + e, 'error');
         }
-    });
+    }
+
+    // ── 自动保存 ▸ URL 输入完成 ──
+    els.aiBaseURL.addEventListener('change', () => saveAIConfig());
+    // ── 自动保存 ▸ Key 输入完成 ──
+    els.aiAPIKey.addEventListener('change', () => saveAIConfig());
+
+    // 深度思考切换
+    const settingSearchLine = document.getElementById('aiSettingSearchLine');
+    if (settingSearchLine) {
+        settingSearchLine.addEventListener('click', () => {
+            const toggleSwitch = document.getElementById('aiSettingSearchToggle');
+            if (!toggleSwitch) return;
+            const isActive = toggleSwitch.classList.toggle('active');
+            localStorage.setItem('ai_thinking_enabled', String(isActive));
+            nm.show(isActive ? '深度思考已开启' : '深度思考已关闭', isActive ? 'success' : 'info');
+            // 同步工具栏 toggle
+            const toolbarToggle = document.getElementById('aiChatSearchToggle');
+            if (toolbarToggle) {
+                toolbarToggle.classList.toggle('active', isActive);
+            }
+        });
+    }
 }
 
 /**

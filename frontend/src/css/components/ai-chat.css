@@ -263,15 +263,150 @@
 /* ── 输入区 ── */
 .ai-chat-input-area {
     display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    padding: 12px 20px 16px;
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 20px 16px;
     border-top: 1px solid var(--border);
     background: var(--bg);
     max-width: 900px;
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
+}
+
+/* 工具栏行（模型选择器 + 联网搜索） */
+.ai-chat-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 0 0 6px 0;
+    gap: 12px;
+}
+
+/* 模型选择器容器 */
+.ai-chat-model-select {
+    position: relative;
+}
+
+/* 联网搜索切换 */
+.ai-chat-search-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s;
+}
+
+.ai-chat-search-toggle:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+.ai-chat-search-toggle svg {
+    flex-shrink: 0;
+}
+
+.ai-chat-toggle-switch {
+    width: 28px;
+    height: 16px;
+    border-radius: 10px;
+    background: var(--border);
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.ai-chat-search-toggle.active .ai-chat-toggle-switch {
+    background: var(--accent);
+}
+
+.ai-chat-toggle-knob {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--bg);
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.ai-chat-search-toggle.active .ai-chat-toggle-knob {
+    left: 14px;
+}
+
+/* trigger 按钮 */
+.ai-chat-model-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s;
+}
+
+.ai-chat-model-trigger:hover {
+    color: var(--accent);
+    background: var(--hover-bg);
+}
+
+.ai-chat-model-trigger svg {
+    flex-shrink: 0;
+}
+
+/* dropdown — 从 trigger 下方弹出 */
+.ai-chat-model-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 4px;
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px var(--shadow);
+    display: none;
+    z-index: 20;
+}
+
+.ai-chat-model-dropdown.open {
+    display: block;
+}
+
+.ai-chat-model-dropdown .theme-select-item {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.ai-chat-model-dropdown .theme-select-item:hover {
+    background: var(--hover-bg);
+    color: var(--accent);
+}
+
+.ai-chat-model-dropdown .theme-select-item.active {
+    color: var(--accent);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* 输入框行 */
+.ai-chat-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
 }
 
 .ai-chat-input {

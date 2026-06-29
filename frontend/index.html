@@ -390,7 +390,7 @@
                             <label class="font-setting-label" style="min-width:72px;">API Key</label>
                             <div style="display:flex;gap:6px;flex:1;max-width:380px;">
                                 <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." style="flex:1;" autocomplete="off" />
-                                <button id="aiAPIKeyToggle" class="btn btn-sm" style="flex-shrink:0;min-width:32px;" title="显示/隐藏">👁</button>
+                                <button id="aiAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;min-width:32px;" title="显示/隐藏">👁</button>
                             </div>
                         </div>
                         <!-- Model -->
@@ -404,15 +404,17 @@
                                     </div>
                                     <div class="theme-select-dropdown" id="aiModelDropdown"></div>
                                 </div>
-                                <button id="aiFetchModelsBtn" class="btn btn-sm" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
+                                <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
                             </div>
                         </div>
-                        <!-- 保存按钮 -->
-                        <div class="font-setting-row" style="margin-top:4px;">
-                            <label class="font-setting-label" style="min-width:72px;"></label>
-                            <div style="display:flex;gap:8px;align-items:center;">
-                                <button id="aiSaveConfigBtn" class="btn btn-save">保存配置</button>
-                                <span id="aiConfigStatus" class="ai-status" style="display:none;"></span>
+                        <!-- 深度思考 -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">深度思考</label>
+                            <div class="ai-setting-search-line" id="aiSettingSearchLine">
+                                <span class="ai-setting-search-desc">发送消息时启用深度思考</span>
+                                <div class="ai-chat-toggle-switch" id="aiSettingSearchToggle">
+                                    <div class="ai-chat-toggle-knob"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -653,10 +655,27 @@
                     <div id="aiChatMessages" class="ai-chat-messages" style="display:none;"></div>
                     <!-- 输入区 -->
                     <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
-                        <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
-                        <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                        </button>
+                        <div class="ai-chat-toolbar">
+                            <div class="ai-chat-model-select">
+                                <div class="ai-chat-model-trigger" id="aiChatModelTrigger">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                    <span id="aiChatModelLabel">--</span>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
+                                <div class="ai-chat-model-dropdown" id="aiChatModelDropdown"></div>
+                            </div>
+                            <div class="ai-chat-search-toggle" id="aiChatSearchToggle" title="深度思考">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.65 4.65 0 0 1 8.91 14"/></svg>
+                                <span>深度思考</span>
+                                <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
+                            </div>
+                        </div>
+                        <div class="ai-chat-input-row">
+                            <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
+                            <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

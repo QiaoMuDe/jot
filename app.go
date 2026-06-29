@@ -510,9 +510,9 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(messages []services.Message) {
+func (a *App) CallAIStream(messages []services.Message, thinkingEnabled bool) {
 	var fullThinking strings.Builder
-	go a.aiService.CallAIStream(messages,
+	go a.aiService.CallAIStream(messages, thinkingEnabled,
 		func(chunk string) {
 			runtime.EventsEmit(a.ctx, "ai:stream-chunk", chunk)
 		},
