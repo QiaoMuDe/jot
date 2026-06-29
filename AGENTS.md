@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-29（更新 18）
+> 生成日期: 2026-06-29（更新 19）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 58 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 59 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -30,17 +30,19 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
+│       ├── ai_service.go               # AI 对话（OpenAI 兼容 API 调用 + 流式 SSE 解析）
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，单栏布局 + 6 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5460 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + TOC + 回到顶部；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5460 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -60,7 +62,8 @@ jot/                                    # 项目根目录
 │   │           ├── settings-panel.css  # 设置页分段控件/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理统计卡片/操作卡片
-│   │           └── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
+│   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
+│   │           └── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -124,6 +127,7 @@ jot/                                    # 项目根目录
     ├── refine-search-modal-ui/       # 搜索弹窗 UI 优化
     ├── remove-auto-save-draft/       # 移除草稿自动保存
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
+    ├── replace-quikchat-with-custom-ai-chat/ # 自实现 AI 对话组件 + 流式输出（已完成）
     ├── restructure-internal-packages/ # 内部包重构
     ├── simplicity-date-filter/         # 时间筛选简化（日历→下拉菜单）
     ├── skip-quicknote-animation-on-start/ # 快速笔记启动跳过动画
@@ -177,17 +181,19 @@ jot/                                    # 项目根目录
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
 | **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期/排序筛选器（排序 3 选项：更新时间/创建时间/名称，均 pinned 优先） | `frontend/src/main.js` | 关键词 + 过滤条件 + sortBy | 搜索弹窗结果列表 |
-| **前端导航切换** | 网格/搜索/设置/数据管理/回收站视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
+| **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
-| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+数字键 1-7 导航 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
+| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+数字键 1-9 导航 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
 | **打开外链** | 调用 runtime.BrowserOpenURL 在默认浏览器打开链接 | `app.go:OpenProjectURL()` | URL 字符串 | — |
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
+| **AI 对话** | OpenAI 兼容 API 流式对话（自实现聊天引擎 + SSE 流式输出 + Markdown/代码高亮渲染） | `services/ai_service.go` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
 ### 2.3 模块分层图
@@ -744,9 +750,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **技术栈** | Wails v2 + Go 1.26 + GORM v1.31 + glebarez/sqlite + 原生 HTML/CSS/JS |
 | **数据库** | SQLite（`~/.jot/data/jot.db`），免 CGO 纯 Go 驱动，路径由 `DefaultDBPath()` 统一获取 |
 | **后端结构** | `main.go → app.go → services/ → models/` + `database/` + `fontutil/` |
-| **绑定方法数** | 58 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关）|
-| **前端视图** | 8 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册|
-| **前端代码量** | ~5460 行 JS（main.js 已拆分数据管理/回收站/常量工具函数/通知+模拟数据到 `src/js/`，共 6 个模块） + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
+| **绑定方法数** | 59 个（19 个 Note 相关 + 6 个 Tag 相关 + 6 个 Notebook 相关 + 2 个迁移 + 6 个数据管理 + 3 个字体设置 + 4 个排序/分页设置 + 2 个关于页面 + 3 个备份还原 + SearchNotes + GetNotesByNotebook 等搜索相关 + CallAI/CallAIStream/FetchModels/SaveAIConfig/GetAIConfig/TestBaseURL 共 6 个 AI 相关）|
+| **前端视图** | 9 个：卡片网格、编辑器（模态框）、设置、数据管理、回收站、关于页面（覆盖层）、快捷键说明（覆盖层）、MD 语法手册、AI 助手|
+| **前端代码量** | ~5460 行 JS（main.js 已拆分数据管理/回收站/AI 对话/常量工具函数/通知+模拟数据到 `src/js/`，共 7 个模块） + CSS 已拆分至 `src/css/`（含 6 主题 CSS 变量 + 20+ keyframes 动画）|
 | **数据流向** | 用户操作 → JS 事件 → Wails Bridge → app.go → Service → GORM → SQLite |
 | **核心字段** | Note: id/title/content/file_ext/pinned/notebook_id/created_at/updated_at/deleted_at/tags |
 | **接口风格** | RESTful 风格方法命名（CRUD + Search + Toggle + GetTrash + Restore + Stats + Export/Import）|
@@ -754,7 +760,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **交互特点** | 左击查看（只读），右击菜单（查看/编辑/置顶/删除），Ctrl+F 唤起搜索弹窗（替代原 topbar 搜索框），筛选器（笔记本/标签/日期/排序），↑↓/⏎ 键盘导航搜索结果，Ctrl+N 新建笔记 |
 | **卡片操作** | 右上角 hover 只显示置顶按钮，编辑/删除移至右键菜单（纯文字无图标） |
 | **布局** | topbar（品牌/搜索框/新建/+更多菜单），主内容区（卡片网格/设置/数据管理/回收站视图）；设置/数据管理/回收站页面的 view-header 结构统一（`← 返回` + 居中标题 + view-controls），内容区均设置 `max-width` + `margin: 0 auto` 居中 |
-| **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明 8=MD 语法手册；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
+| **键盘快捷键** | Ctrl+F 唤起搜索弹窗 / Ctrl+H 编辑器内查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp 上翻 / PgDn 下翻或触底加载下一页 / Ctrl+Home 顶部 / Ctrl+End 加载全部并到底 / E 退出子视图回首页 / Ctrl+数字键 1=笔记首页 2=展开/折叠侧栏 3=批量管理 4=数据管理 5=回收站 6=设置 7=快捷键说明 8=MD 语法手册 9=AI 助手；编辑器打开时 Ctrl+Home/End 和 PgUp/PgDn 不拦截，交由 CM6 原生处理 |
 | **回收站** | 通过顶部 ☰ → 回收站 进入，支持全部恢复/全部清空 |
 | **数据管理** | 通过顶部 ☰ → 数据管理 进入，含统计卡片 + 数据操作/快速备份/数据目录三个卡片分区 |
 | **导出** | `ExportDataWithDialog()` 调用 `runtime.SaveFileDialog`，VACUUM INTO 创建 SQLite 压缩副本 → fs.CopyEx 到用户选择路径，输出 .db 文件 |
@@ -843,7 +849,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-> **报告结束** | 项目记忆已更新（2026-06-28），本次更新内容：⑩ main.js 拆分（常量工具函数/通知类/模拟数据提取 + preview-worker 迁移）— 将 `SVGS` + 4 个工具函数提取为 `js/constants.js`（~90 行），`NotificationManager` + 模拟数据提取为 `js/notification.js`（~150 行），`preview-worker.js` 从 `src/` 移入 `js/`。main.js 从 ~5700 行缩减至 ~5460 行。`vite build` 零错误通过（271 模块）。详见 `.trae/specs/split-main-js-into-modules/`。
+> **报告结束** | 项目记忆已更新（2026-06-29），本次更新内容：⑪ AI 对话功能 — 自实现聊天引擎替换 QuikChat，支持流式输出（Go SSE 解析 + Wails EventsEmit 推送），使用 marked + highlight.js 渲染 Markdown 和代码高亮。更多菜单底部新增 AI 助手入口（Ctrl+9 快捷键），快捷键说明页同步更新。前端新增 `js/ai-chat.js` + `css/components/ai-chat.css`，后端新增 `services/ai_service.go`（CallAI/CallAIStream/FetchModels/TestBaseURL/SaveConfig/GetConfig），app.go 绑定数增至 59 个。详见 `.trae/specs/replace-quikchat-with-custom-ai-chat/`。
 
 ## 十、新增记忆点（CodeMirror 6 集成）
 
