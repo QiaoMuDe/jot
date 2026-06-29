@@ -26,3 +26,17 @@ type ImportResult struct {
 	SkippedCount int    `json:"skipped_count"`
 	Message      string `json:"message"`
 }
+
+// NoteRefInfo 笔记引用信息，用于前端 chip 展示
+type NoteRefInfo struct {
+	ID           uint   `json:"id"`
+	Title        string `json:"title"`
+	Truncated    bool   `json:"truncated"`
+	NotebookName string `json:"notebook_name"`
+}
+
+// NoteRefContext 笔记引用上下文，后端一次性完成截断并返回
+type NoteRefContext struct {
+	Notes   []NoteRefInfo `json:"notes"`
+	Context string        `json:"context"`
+}

@@ -100,6 +100,12 @@ func (a *App) GetNoteContent(id uint) (string, error) {
 	return a.noteService.GetNoteContent(id)
 }
 
+// GetNoteRefContext 构建笔记引用上下文。
+// 后端一次性完成：查库 → 截断 → 拼装，返回每条笔记信息和完整 context 文本。
+func (a *App) GetNoteRefContext(ids []uint) (*services.NoteRefContext, error) {
+	return a.noteService.BuildNoteRefContext(ids)
+}
+
 // GetNotes 分页获取未删除的笔记列表，支持指定排序方式和笔记本筛选
 func (a *App) GetNotes(page, pageSize int, sortBy string, notebookID uint) (*services.PaginatedResult, error) {
 	var notes []models.Note

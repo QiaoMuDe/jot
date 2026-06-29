@@ -564,6 +564,7 @@ async function switchSession(id) {
 
     // 切换会话时清空笔记引用
     referencedNotes = [];
+    cachedRefContext = '';
     updateRefChips();
 
     try {
@@ -618,6 +619,7 @@ async function createSession() {
     messagesEl.innerHTML = '';
     hideEmptyState();
     referencedNotes = [];
+    cachedRefContext = '';
     updateRefChips();
 
     await loadSessionList();
@@ -666,10 +668,10 @@ async function onSend() {
     if (userMsgEl) userMsgEl.appendChild(createMsgActions(text, 'user'));
     chatHistory.push({ role: 'user', content: text });
 
-    // 构建笔记引用上下文
+    // 构建笔记引用上下文（后端已处理截断）
     let systemContext = '';
     if (referencedNotes.length > 0) {
-        systemContext = await buildNoteContext();
+        systemContext = await getNoteContext();
     }
 
     startStreaming(false, systemContext);
@@ -1098,8 +1100,8 @@ async function handleRegenerate(msgEl) {
 
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */
 
-/** 上下文内容最大字符数 */
-const MAX_CONTEXT_CHARS = 8000;
+/** 缓存的引用上下文（后端已拼装好） */
+let cachedRefContext = '';
 const DOC_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
 const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
@@ -1383,40 +1385,24 @@ async function confirmNoteSelection() {
     const selectedIds = Object.keys(_refTempSelected);
     if (selectedIds.length === 0) return;
 
-    // 获取选中笔记的详细信息（从列表 DOM 或重新搜索）
     try {
-        const newNotes = [];
-        for (const id of selectedIds) {
-            // 查看是否已在 referencedNotes 中
-            const existing = referencedNotes.find(n => String(n.id) === id);
-            if (existing) {
-                newNotes.push(existing);
-                continue;
-            }
-            // 从列表元素中获取信息
-            const item = refList?.querySelector(`.ai-note-ref-item[data-id="${id}"]`);
-            const titleEl = item?.querySelector('.ai-note-ref-item-title');
-            const metaEl = item?.querySelector('.ai-note-ref-item-meta');
-            const title = titleEl?.textContent || '无标题';
-            const metaText = metaEl?.textContent || '';
-            const notebookName = metaText.replace(/🕐.*$/, '').replace('📓', '').trim() || '';
-            newNotes.push({ id: parseInt(id), title, notebook_name: notebookName });
+        const ids = selectedIds.map(id => parseInt(id));
+        // 后端一次性完成查询、截断、拼装
+        const refContext = await window.go.main.App.GetNoteRefContext(ids);
+
+        if (!refContext) {
+            console.error('confirmNoteSelection: refContext is null');
+            return;
         }
 
         // 合并：保留未取消的旧引用 + 新增的
-        const finalNotes = [];
-        const newIds = new Set(selectedIds);
-        referencedNotes.forEach(n => {
-            if (newIds.has(String(n.id))) {
-                // 已经在 newNotes 中，跳过
-            } else {
-                finalNotes.push(n);
-            }
-        });
-        newNotes.forEach(n => finalNotes.push(n));
-        referencedNotes = finalNotes;
-    } catch (_) {
-        /* 静默 */
+        const newIds = new Set(ids);
+        const keepNotes = referencedNotes.filter(n => !newIds.has(n.id));
+        referencedNotes = [...keepNotes, ...refContext.notes];
+        cachedRefContext = refContext.context;
+    } catch (e) {
+        console.error('confirmNoteSelection 失败:', e);
+        return;
     }
 
     closeNoteRefModal();
@@ -1439,9 +1425,11 @@ function updateRefChips() {
     refBtn.classList.add('has-ref');
     refChips.innerHTML = referencedNotes.map(n => {
         const title = n.title || '无标题';
+        const truncTip = n.truncated ? '<span class="ai-chat-ref-chip-trunc">(内容已截断)</span>' : '';
         return `<div class="ai-chat-ref-chip" data-id="${n.id}">
             <span class="ai-chat-ref-chip-icon">${DOC_ICON}</span>
             <span class="ai-chat-ref-chip-title" title="${title.replace(/"/g, '&quot;')}">${title}</span>
+            ${truncTip}
             <button class="ai-chat-ref-chip-remove" data-id="${n.id}" title="移除引用">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -1455,6 +1443,8 @@ function updateRefChips() {
             removeRefNote(btn.dataset.id);
         });
     });
+
+    // chips 区域已包含后端返回的截断状态，无需异步刷新
 }
 
 /**
@@ -1463,52 +1453,30 @@ function updateRefChips() {
  */
 function removeRefNote(id) {
     referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
+    cachedRefContext = ''; // 清除缓存
     updateRefChips();
 }
 
 /**
- * 构建笔记引用上下文，作为 system message 内容
- * 读取每条笔记的完整内容，拼装成一段文字
+ * 获取笔记引用上下文（直接使用后端拼装好的结果）
  * @returns {Promise<string>} 拼装后的上下文内容，无引用时返回空字符串
  */
-async function buildNoteContext() {
+async function getNoteContext() {
     if (referencedNotes.length === 0) return '';
 
-    let parts = [];
-    let totalLen = 0;
-    const MAX_PER_NOTE = 4000; // 单条笔记最大字符数
+    if (cachedRefContext) return cachedRefContext;
 
-    for (const ref of referencedNotes) {
-        try {
-            const content = await window.go.main.App.GetNoteContent(ref.id);
-            if (!content) continue;
-
-            let noteText = content;
-            // 单条笔记截断
-            if (noteText.length > MAX_PER_NOTE) {
-                noteText = noteText.substring(0, MAX_PER_NOTE) + '\n...(内容已截断)';
-            }
-
-            const block = `--- 📄 《${ref.title}》 ---\n${noteText}`;
-            // 总长度截断
-            if (totalLen + block.length > MAX_CONTEXT_CHARS) {
-                parts.push(`--- 📄 《${ref.title}》 ---\n...(内容已截断，超出上下文长度限制)`);
-                break;
-            }
-
-            parts.push(block);
-            totalLen += block.length;
-        } catch (_) {
-            // 读取失败则跳过
-            parts.push(`--- 📄 《${ref.title}》 ---\n(内容读取失败)`);
-        }
+    // 缓存不存在（如之前清除过），重新从后端获取
+    const ids = referencedNotes.map(n => n.id);
+    try {
+        const refContext = await window.go.main.App.GetNoteRefContext(ids);
+        referencedNotes = refContext.notes;
+        cachedRefContext = refContext.context;
+        updateRefChips();
+        return refContext.context;
+    } catch (_) {
+        return '';
     }
-
-    if (parts.length === 0) return '';
-
-    const header = '以下是用户引用的笔记，请作为回答的参考上下文：\n\n';
-    const footer = '\n\n请基于以上笔记内容回答用户的问题。如果笔记内容不足以回答，请如实说明。';
-    return header + parts.join('\n\n') + footer;
 }
 
 /**

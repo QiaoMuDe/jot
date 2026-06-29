@@ -146,6 +146,10 @@ export function GetNoteIDsByNotebook(arg1) {
   return window['go']['main']['App']['GetNoteIDsByNotebook'](arg1);
 }
 
+export function GetNoteRefContext(arg1) {
+  return window['go']['main']['App']['GetNoteRefContext'](arg1);
+}
+
 export function GetNotebookNoteCounts() {
   return window['go']['main']['App']['GetNotebookNoteCounts']();
 }

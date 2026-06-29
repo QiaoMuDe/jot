@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 	"jot/internal/models"
@@ -101,6 +102,80 @@ func (s *NoteService) GetNoteContent(id uint) (string, error) {
 		return "", err
 	}
 	return content, nil
+}
+
+// BuildNoteRefContext 构建笔记引用上下文。
+// 后端一次性完成：查库 → 逐条截断(4000字/条) → 总长度截断(8000字) → 拼装 context 字符串。
+// 返回每条笔记的引用信息(含截断状态)和拼装好的上下文文本。
+func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
+	if len(ids) == 0 {
+		return &NoteRefContext{Notes: []NoteRefInfo{}, Context: ""}, nil
+	}
+
+	// 联表查询：笔记 + 笔记本名称
+	type noteRow struct {
+		ID           uint
+		Title        string
+		Content      string
+		NotebookName string
+	}
+	var rows []noteRow
+	if err := s.db.Table("notes").
+		Select("notes.id, notes.title, notes.content, COALESCE(notebooks.name, '') as notebook_name").
+		Joins("LEFT JOIN notebooks ON notes.notebook_id = notebooks.id").
+		Where("notes.id IN ? AND notes.deleted_at IS NULL", ids).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("query note ref rows: %w", err)
+	}
+
+	const maxPerNote = 4000    // 单条笔记最大字符数
+	const maxTotalChars = 8000 // 总上下文最大字符数
+
+	notes := make([]NoteRefInfo, 0, len(rows))
+	var parts []string
+	totalLen := 0
+
+	for _, row := range rows {
+		// 截断单条笔记内容
+		noteText := row.Content
+		truncated := len(noteText) > maxPerNote
+		if truncated {
+			noteText = noteText[:maxPerNote] + "\n...(内容已截断)"
+		}
+
+		block := fmt.Sprintf("--- 📄 《%s》 ---\n%s", row.Title, noteText)
+
+		// 总长度截断
+		if totalLen+len(block) > maxTotalChars {
+			parts = append(parts, fmt.Sprintf("--- 📄 《%s》 ---\n...(内容已截断，超出上下文长度限制)", row.Title))
+			notes = append(notes, NoteRefInfo{
+				ID:           row.ID,
+				Title:        row.Title,
+				Truncated:    true,
+				NotebookName: row.NotebookName,
+			})
+			// 剩余笔记不再处理
+			break
+		}
+
+		parts = append(parts, block)
+		totalLen += len(block)
+		notes = append(notes, NoteRefInfo{
+			ID:           row.ID,
+			Title:        row.Title,
+			Truncated:    truncated,
+			NotebookName: row.NotebookName,
+		})
+	}
+
+	header := "以下是用户引用的笔记，请作为回答的参考上下文：\n\n"
+	footer := "\n\n请基于以上笔记内容回答用户的问题。如果笔记内容不足以回答，请如实说明。"
+	contextStr := header + strings.Join(parts, "\n\n") + footer
+
+	return &NoteRefContext{
+		Notes:   notes,
+		Context: contextStr,
+	}, nil
 }
 
 // buildSortOrder 根据 sortBy 参数构建 ORDER BY 子句
