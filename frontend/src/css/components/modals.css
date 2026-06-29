@@ -453,13 +453,12 @@
   display: none !important;
 }
 
-.shortcuts-section {
+.shortcut-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--divider);
-  opacity: 0;
 }
 
 .shortcut-row:last-child {
@@ -491,7 +490,6 @@
   color: var(--text-secondary);
   text-align: right;
   flex-shrink: 0;
-  margin-left: 24px;
 }
 
 /* ===== 自定义确认弹窗 ===== */

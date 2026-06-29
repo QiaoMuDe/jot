@@ -3936,7 +3936,11 @@ async function handleKeyboardNavigation(e) {
                 return;
             case '7':
                 e.preventDefault();
-                openShortcuts();
+                if (els.shortcutsView.style.display !== 'none') {
+                    closeShortcuts();
+                } else {
+                    openShortcuts();
+                }
                 return;
             case '8':
                 e.preventDefault();
