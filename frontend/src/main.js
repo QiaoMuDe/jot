@@ -1686,10 +1686,30 @@ async function initAISettings() {
         }
     }
 
-    // ── 自动保存 ▸ URL 输入完成 ──
-    els.aiBaseURL.addEventListener('change', () => saveAIConfig());
-    // ── 自动保存 ▸ Key 输入完成 ──
-    els.aiAPIKey.addEventListener('change', () => saveAIConfig());
+    // ── 自动保存 ▸ URL 输入完成（独立保存，不依赖其他字段） ──
+    els.aiBaseURL.addEventListener('change', async () => {
+        const url = els.aiBaseURL.value.trim();
+        try {
+            const cfg = await window.go.main.App.GetAIConfig();
+            cfg.base_url = url;
+            await window.go.main.App.SaveAIConfig(cfg);
+            nm.show('AI 配置已保存', 'success');
+        } catch (e) {
+            nm.show('保存配置失败: ' + e, 'error');
+        }
+    });
+    // ── 自动保存 ▸ Key 输入完成（独立保存，不依赖其他字段） ──
+    els.aiAPIKey.addEventListener('change', async () => {
+        const key = els.aiAPIKey.value.trim();
+        try {
+            const cfg = await window.go.main.App.GetAIConfig();
+            cfg.api_key = key;
+            await window.go.main.App.SaveAIConfig(cfg);
+            nm.show('AI 配置已保存', 'success');
+        } catch (e) {
+            nm.show('保存配置失败: ' + e, 'error');
+        }
+    });
 
     // 深度思考切换
     const settingSearchLine = document.getElementById('aiSettingSearchLine');
