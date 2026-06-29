@@ -38,6 +38,7 @@ release_name = '{{app_name}}_windows_amd64_{{git_version}}.zip'
 desc = '构建程序'
 # 命令列表
 cmds = [
+    'cd frontend && npm install && npm run build',
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean'
 ]
 # 任务工作目录
@@ -77,6 +78,7 @@ internal = false
 desc = '发布程序'
 # 命令列表
 cmds = [
+    'cd frontend && npm install && npm run build',
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean -nsis',
     'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
     'fck rm -f {{exe_path}}',
@@ -100,6 +102,7 @@ internal = false
 desc = '运行程序'
 # 命令列表
 cmds = [
+    'cd frontend && npm install && npm run build',
     'wails build -debug -ldflags "{{ldflags}}" -o {{exe_name}} -clean',
     '{{exe_path}}'
 ]

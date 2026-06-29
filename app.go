@@ -534,7 +534,7 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 
 	defaultName := sanitizeFilename(note.Title) + note.FileExt
 	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "导出笔记为 Markdown",
+		Title:           "导出笔记",
 		DefaultFilename: defaultName,
 		Filters: []runtime.FileFilter{
 			{DisplayName: "笔记文件 (*" + note.FileExt + ")", Pattern: "*" + note.FileExt},
@@ -548,17 +548,37 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 		return "已取消", nil
 	}
 
-	content := fmt.Sprintf("# %s\n\n%s", note.Title, note.Content)
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(note.Content), 0644); err != nil {
 		return "", fmt.Errorf("写入文件失败: %w", err)
 	}
 
 	return "导出成功：" + filePath, nil
 }
 
-// sanitizeFilename 将笔记标题中的特殊符号和空白替换为下划线，生成安全的文件名
+// sanitizeFilename 清理笔记标题，生成安全的文件名
+// 白名单策略：仅保留英文字母、数字、中文、中文标点及安全符号，其余字符（emoji、特殊符号等）全部移除
 func sanitizeFilename(title string) string {
-	name := strings.TrimSpace(title)
+	// step1: 白名单过滤 — 只保留英文、中文、数字、安全符号
+	var b strings.Builder
+	b.Grow(len(title))
+	for _, r := range title {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r >= 0x4e00 && r <= 0x9fff, // CJK 统一表意文字
+			r >= 0x3000 && r <= 0x303f, // CJK 符号和标点
+			r == '-' || r == '_' || r == '.' || r == '(' || r == ')' ||
+				r == '[' || r == ']' || r == '{' || r == '}' || r == ',' ||
+				r == ';' || r == '!' || r == '?' || r == '+' || r == '=' ||
+				r == '~' || r == '@' || r == '#' || r == '&' || r == ' ':
+			b.WriteRune(r)
+		}
+	}
+	name := b.String()
+
+	// step2: 原有清洗流程
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return "untitled"
 	}
