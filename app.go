@@ -579,6 +579,34 @@ func (a *App) ClearAISessionMessages(sessionID uint) error {
 	return a.aiService.ClearAISessionMessages(sessionID)
 }
 
+// SaveAIMessageAsNote 将 AI 消息内容保存为笔记（归入默认笔记本）
+func (a *App) SaveAIMessageAsNote(content string) (*models.Note, error) {
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("内容不能为空")
+	}
+	// 自动生成标题：取第一行，截断到 50 字符
+	title := generateNoteTitle(content)
+	// 保存到默认笔记本（id=1）
+	return a.noteService.CreateWithNotebook(title, content, ".md", 1)
+}
+
+// generateNoteTitle 从内容中自动生成笔记标题
+func generateNoteTitle(content string) string {
+	// 取第一个有内容的行，去掉首尾空白
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			// 截断到 50 字符
+			runes := []rune(trimmed)
+			if len(runes) > 50 {
+				return string(runes[:50]) + "..."
+			}
+			return trimmed
+		}
+	}
+	return "AI 回复"
+}
+
 // GetSystemFonts 获取系统已安装的字体族列表
 func (a *App) GetSystemFonts() []string {
 	return fontutil.GetFonts()
@@ -649,6 +677,67 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 	}
 
 	if err := os.WriteFile(filePath, []byte(note.Content), 0644); err != nil {
+		return "", fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	return "导出成功：" + filePath, nil
+}
+
+// ExportAISessionAsMarkdown 导出 AI 对话为 Markdown 文件
+func (a *App) ExportAISessionAsMarkdown(sessionID uint) (string, error) {
+	// 获取会话标题
+	var session models.AISession
+	if err := a.db.First(&session, sessionID).Error; err != nil {
+		return "", fmt.Errorf("对话不存在: %w", err)
+	}
+
+	// 获取会话消息
+	messages := a.aiService.LoadAISessionMessages(sessionID)
+
+	// 构建 Markdown 内容
+	var buf strings.Builder
+	buf.WriteString("# " + session.Title + "\n\n---\n\n")
+
+	for i, msg := range messages {
+		if i > 0 {
+			buf.WriteString("---\n\n")
+		}
+
+		switch msg.Role {
+		case "user":
+			buf.WriteString("**User**:\n" + msg.Content + "\n\n")
+		case "assistant":
+			buf.WriteString("**AI Assistant**:\n")
+			if msg.ReasoningContent != "" {
+				buf.WriteString("> 思考过程：\n")
+				for _, line := range strings.Split(msg.ReasoningContent, "\n") {
+					buf.WriteString("> " + line + "\n")
+				}
+				buf.WriteString("\n")
+			}
+			buf.WriteString(msg.Content + "\n\n")
+		}
+	}
+
+	// 弹出保存对话框
+	defaultName := sanitizeFilename(session.Title) + ".md"
+	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "导出对话",
+		DefaultFilename: defaultName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Markdown 文件 (*.md)", Pattern: "*.md"},
+			{DisplayName: "所有文件 (*.*)", Pattern: "*.*"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if filePath == "" {
+		return "已取消", nil
+	}
+
+	// 写入文件
+	if err := os.WriteFile(filePath, []byte(buf.String()), 0644); err != nil {
 		return "", fmt.Errorf("写入文件失败: %w", err)
 	}
 

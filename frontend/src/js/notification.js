@@ -77,6 +77,56 @@ export class NotificationManager {
     }
 
     /**
+     * 显示带动作按钮的通知
+     * @param {string} message - 通知内容
+     * @param {string} type - 类型：'success' | 'error' | 'warning' | 'info'
+     * @param {Array<{text:string, callback:Function}>} actions - 动作按钮数组
+     * @param {number} duration - 自动消失毫秒数（默认 5000）
+     */
+    showAction(message, type, actions, duration = 5000) {
+        const el = document.createElement('div');
+        el.className = `notification ${type}`;
+        const SVGS = window.SVGS;
+        const iconSvg = { success: SVGS.checkmark, error: SVGS.windowClose, warning: SVGS.warning, info: SVGS.info };
+        el.innerHTML = `
+            <span class="notification-icon">${iconSvg[type] || SVGS.info}</span>
+            <span class="notification-msg">${this._esc(message)}</span>
+        `;
+
+        // 追加动作按钮
+        if (Array.isArray(actions)) {
+            const actionsContainer = document.createElement('span');
+            actionsContainer.className = 'notification-actions';
+            actions.forEach(action => {
+                const btn = document.createElement('button');
+                btn.className = 'notification-action-btn';
+                btn.textContent = action.text;
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (typeof action.callback === 'function') action.callback();
+                    this._dismiss(el);
+                });
+                actionsContainer.appendChild(btn);
+            });
+            el.appendChild(actionsContainer);
+        }
+
+        // 关闭按钮
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'notification-close';
+        closeBtn.innerHTML = SVGS.windowClose;
+        closeBtn.setAttribute('aria-label', '关闭');
+        closeBtn.addEventListener('click', () => this._dismiss(el));
+        el.appendChild(closeBtn);
+
+        this.container.appendChild(el);
+
+        const timer = setTimeout(() => this._dismiss(el), duration);
+        el._timer = timer;
+        return el;
+    }
+
+    /**
      * 手动销毁通知
      */
     _dismiss(el) {
@@ -105,6 +155,11 @@ window.showNotification = (msg, type = 'info', duration) => {
     // 复用已存在的全局通知管理器实例，避免重复创建
     if (!window.__nm) window.__nm = new NotificationManager();
     window.__nm.show(msg, type, duration);
+};
+
+window.showActionNotification = (msg, type, actions, duration) => {
+    if (!window.__nm) window.__nm = new NotificationManager();
+    window.__nm.showAction(msg, type, actions, duration);
 };
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */

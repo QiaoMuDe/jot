@@ -48,6 +48,8 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function EmptyTrash():Promise<void>;
 
+export function ExportAISessionAsMarkdown(arg1:number):Promise<string>;
+
 export function ExportDataWithDialog():Promise<string>;
 
 export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
@@ -121,6 +123,8 @@ export function RestoreFromDir():Promise<services.ImportResult>;
 export function RestoreNote(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
+
+export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 
 export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
 

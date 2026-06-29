@@ -6035,6 +6035,7 @@ window.loadNotes = loadNotes;
 window.loadTags = loadTags;
 window.loadNotebooks = loadNotebooks;
 window.switchView = switchView;
+window.openEditor = openEditor;
 window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
 window.loadThemeSetting = loadThemeSetting;

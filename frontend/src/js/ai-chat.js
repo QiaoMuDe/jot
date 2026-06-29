@@ -21,6 +21,9 @@ let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
 let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
+let sessionContextMenu = null; // AI 会话右键菜单
+let _contextSessionId = null;  // 右键菜单当前会话 ID
+let _contextTitleEl = null;    // 右键菜单当前会话标题元素
 let _aiStreamGen = 0;          // 流式 generation 计数器，跨流防串扰
 
 // 模型选择器状态
@@ -109,6 +112,9 @@ export function initAIChat() {
     enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
 
     if (!messagesEl) return;
+
+    sessionContextMenu = document.getElementById('aiSessionContextMenu');
+
     bindEvents();
 }
 
@@ -183,16 +189,16 @@ function bindEvents() {
         const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
         const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
-        // 恢复保存的状态（默认折叠）
+        // 恢复保存的状态（默认展开）
         const saved = localStorage.getItem('ai_sidebar_collapsed');
         if (saved === 'false') {
-            sidebar.classList.remove('collapsed');
-            toggleBtn.innerHTML = chevronRight;
-            toggleBtn.title = '折叠侧栏';
-        } else {
             sidebar.classList.add('collapsed');
             toggleBtn.innerHTML = chevronLeft;
             toggleBtn.title = '展开侧栏';
+        } else {
+            sidebar.classList.remove('collapsed');
+            toggleBtn.innerHTML = chevronRight;
+            toggleBtn.title = '折叠侧栏';
         }
 
         toggleBtn.addEventListener('click', () => {
@@ -243,6 +249,45 @@ function bindEvents() {
             }
         });
     }
+
+    // 点击菜单外区域关闭右键菜单
+    document.addEventListener('click', (e) => {
+        if (sessionContextMenu && !sessionContextMenu.contains(e.target)) {
+            closeSessionContextMenu();
+        }
+    });
+
+    // Escape 关闭右键菜单
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeSessionContextMenu();
+    });
+
+    // 右键菜单项点击
+    if (sessionContextMenu) {
+        sessionContextMenu.addEventListener('click', async (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            const sessionId = _contextSessionId;
+            const titleEl = _contextTitleEl;
+
+            closeSessionContextMenu();
+
+            if (action === 'rename') {
+                // 触发内联编辑
+                startInlineEdit(titleEl, sessionId);
+            } else if (action === 'export') {
+                try {
+                    const result = await window.go.main.App.ExportAISessionAsMarkdown(sessionId);
+                    if (result && result !== '已取消') {
+                        window.showNotification?.(result, 'success');
+                    }
+                } catch (e) {
+                    window.showNotification?.('导出失败: ' + (e.message || e), 'error');
+                }
+            }
+        });
+    }
 }
 
 /* ── 会话侧栏管理 ── */
@@ -257,6 +302,55 @@ async function loadSessionList() {
         sessions = [];
     }
     renderSessionList();
+}
+
+/**
+ * 启动会话标题内联编辑
+ * @param {HTMLElement} titleEl - 标题元素
+ * @param {number} sessionId - 会话 ID
+ */
+function startInlineEdit(titleEl, sessionId) {
+    if (isStreaming) return;
+    if (!titleEl) return;
+    const orig = titleEl.textContent;
+    titleEl.contentEditable = 'true';
+    titleEl.focus();
+    // 全选
+    const range = document.createRange();
+    range.selectNodeContents(titleEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const finish = async () => {
+        titleEl.contentEditable = 'false';
+        const newTitle = titleEl.textContent.trim();
+        if (newTitle && newTitle !== orig) {
+            try {
+                await window.go.main.App.RenameAISession(sessionId, newTitle);
+                // 也更新本地 sessions 数组中的标题
+                const s = sessions.find(s => s.id === sessionId);
+                if (s) s.title = newTitle;
+                titleEl.title = newTitle;
+            } catch (_) {
+                titleEl.textContent = orig;
+            }
+        } else {
+            titleEl.textContent = orig;
+        }
+    };
+
+    titleEl.addEventListener('blur', finish, { once: true });
+    titleEl.addEventListener('keydown', (ke) => {
+        if (ke.key === 'Enter') {
+            ke.preventDefault();
+            titleEl.blur();
+        }
+        if (ke.key === 'Escape') {
+            titleEl.textContent = orig;
+            titleEl.contentEditable = 'false';
+        }
+    }, { once: true });
 }
 
 /**
@@ -310,46 +404,7 @@ function renderSessionList() {
         });
 
         // 双击内联编辑
-        title.addEventListener('dblclick', () => {
-            if (isStreaming) return;
-            const orig = title.textContent;
-            title.contentEditable = 'true';
-            title.focus();
-            // 全选
-            const range = document.createRange();
-            range.selectNodeContents(title);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-
-            const finish = async () => {
-                title.contentEditable = 'false';
-                const newTitle = title.textContent.trim();
-                if (newTitle && newTitle !== orig) {
-                    try {
-                        await window.go.main.App.RenameAISession(s.id, newTitle);
-                        s.title = newTitle;
-                        title.title = newTitle;
-                    } catch (_) {
-                        title.textContent = orig;
-                    }
-                } else {
-                    title.textContent = orig;
-                }
-            };
-
-            title.addEventListener('blur', finish, { once: true });
-            title.addEventListener('keydown', (ke) => {
-                if (ke.key === 'Enter') {
-                    ke.preventDefault();
-                    title.blur();
-                }
-                if (ke.key === 'Escape') {
-                    title.textContent = orig;
-                    title.contentEditable = 'false';
-                }
-            }, { once: true });
-        });
+        title.addEventListener('dblclick', () => startInlineEdit(title, s.id));
 
         // 删除会话
         delBtn.addEventListener('click', async (e) => {
@@ -378,6 +433,9 @@ function renderSessionList() {
                 switchSession(sessions[0].id);
             }
         });
+
+        // 右键菜单
+        item.addEventListener('contextmenu', showSessionContextMenu);
 
         sessionListEl.appendChild(item);
     });
@@ -780,6 +838,35 @@ function showEmptyState() {
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = 'none';
 }
 
+/**
+ * 关闭 AI 会话右键菜单
+ */
+function closeSessionContextMenu() {
+    if (sessionContextMenu) sessionContextMenu.classList.remove('active');
+}
+
+/**
+ * 右键菜单显示/定位
+ */
+function showSessionContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!sessionContextMenu) return;
+
+    // 定位到鼠标位置
+    const x = e.clientX;
+    const y = e.clientY;
+    sessionContextMenu.style.left = x + 'px';
+    sessionContextMenu.style.top = y + 'px';
+
+    // 保存当前右键的会话 ID 和标题元素
+    const item = e.currentTarget;
+    _contextSessionId = parseInt(item.dataset.id);
+    _contextTitleEl = item.querySelector('.ai-session-item-title');
+
+    sessionContextMenu.classList.add('active');
+}
+
 function hideEmptyState() {
     if (!emptyEl) return;
     emptyEl.style.display = 'none';
@@ -810,6 +897,25 @@ function createMsgActions(content, role) {
     container.appendChild(copyBtn);
 
     if (role === 'assistant') {
+        // 保存为笔记（仅 AI 回复）
+        const saveBtn = document.createElement('button');
+        saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+        saveBtn.title = '保存为笔记';
+        saveBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try {
+                const note = await window.go.main.App.SaveAIMessageAsNote(content);
+                if (note && note.id) {
+                    window.showActionNotification?.('笔记已创建', 'success', [
+                        { text: '查看', callback: async () => { window.switchView('grid'); await window.loadNotes(); window.openEditor(note.id, true); } }
+                    ]);
+                }
+            } catch (e) {
+                window.showNotification?.('保存失败: ' + (e.message || e), 'error');
+            }
+        });
+        container.appendChild(saveBtn);
+
         const regenBtn = document.createElement('button');
         regenBtn.innerHTML = REGEN_ICON;
         regenBtn.title = '重新生成';

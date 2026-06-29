@@ -90,6 +90,10 @@ export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
 }
 
+export function ExportAISessionAsMarkdown(arg1) {
+  return window['go']['main']['App']['ExportAISessionAsMarkdown'](arg1);
+}
+
 export function ExportDataWithDialog() {
   return window['go']['main']['App']['ExportDataWithDialog']();
 }
@@ -236,6 +240,10 @@ export function RestoreNote(arg1) {
 
 export function SaveAIConfig(arg1) {
   return window['go']['main']['App']['SaveAIConfig'](arg1);
+}
+
+export function SaveAIMessageAsNote(arg1) {
+  return window['go']['main']['App']['SaveAIMessageAsNote'](arg1);
 }
 
 export function SaveAIMessages(arg1, arg2) {

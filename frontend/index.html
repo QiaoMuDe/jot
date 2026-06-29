@@ -622,7 +622,7 @@
             </div>
             <div class="ai-chat-layout">
                 <!-- 左侧会话侧栏 -->
-                <div class="ai-session-sidebar collapsed">
+                <div class="ai-session-sidebar">
                     <div class="ai-session-sidebar-header">
                         <span class="ai-session-sidebar-title">会话</span>
                         <button id="aiSessionNewBtn" class="ai-session-new-btn" title="新建会话">+</button>
@@ -1176,6 +1176,13 @@ console.log(greet("Jot"));
             <div class="context-menu-item" data-action="pin">置顶</div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item danger" data-action="delete">删除</div>
+        </div>
+
+        <!-- AI 会话右键菜单 -->
+        <div id="aiSessionContextMenu" class="ai-session-context-menu">
+            <div class="context-menu-item" data-action="rename">重命名</div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="export">导出</div>
         </div>
 
         <!-- 关于页面 -->
