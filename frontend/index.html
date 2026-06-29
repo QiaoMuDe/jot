@@ -657,6 +657,10 @@
                     <!-- 输入区 -->
                     <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
                         <div class="ai-chat-toolbar">
+                            <button class="ai-chat-toolbar-btn" id="aiChatRefBtn" title="引用笔记">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                <span>引用</span>
+                            </button>
                             <div class="ai-chat-model-select">
                                 <div class="ai-chat-model-trigger" id="aiChatModelTrigger">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -671,6 +675,10 @@
                                 <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
                             </div>
                         </div>
+                        <!-- 已引用笔记 chips 栏 -->
+                        <div id="aiChatRefBar" class="ai-chat-ref-bar" style="display:none;">
+                            <div id="aiChatRefChips" class="ai-chat-ref-chips"></div>
+                        </div>
                         <div class="ai-chat-input-row">
                             <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
                             <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
@@ -680,6 +688,54 @@
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 笔记引用选择浮层 -->
+        <div id="aiNoteRefModal" class="ai-note-ref-modal" style="display:none;">
+            <div class="ai-note-ref-overlay" id="aiNoteRefOverlay"></div>
+            <div class="ai-note-ref-panel">
+                <div class="ai-note-ref-header">
+                    <h3 class="ai-note-ref-title">引用笔记</h3>
+                    <button class="ai-note-ref-close" id="aiNoteRefClose" aria-label="关闭">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="ai-note-ref-search-row">
+                    <div class="ai-note-ref-search-field">
+                        <svg class="ai-note-ref-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="aiNoteRefSearch" class="ai-note-ref-search-input" placeholder="搜索笔记标题..." autocomplete="off" spellcheck="false" />
+                        <button class="ai-note-ref-search-clear" id="aiNoteRefSearchClear" aria-label="清除搜索">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <select id="aiNoteRefNotebook" class="ai-note-ref-notebook-select">
+                        <option value="0">全部笔记本</option>
+                    </select>
+                </div>
+                <div class="ai-note-ref-list-wrap">
+                    <div class="ai-note-ref-list" id="aiNoteRefList">
+                        <!-- 骨架屏：首次加载时显示 -->
+                        <div class="ai-note-ref-skeleton" id="aiNoteRefSkeleton">
+                            <div class="ai-note-ref-sk-item" style="--i:0"><div class="ai-note-ref-sk-check"></div><div class="ai-note-ref-sk-lines"><div class="ai-note-ref-sk-line" style="width:68%"></div><div class="ai-note-ref-sk-line" style="width:42%"></div></div></div>
+                            <div class="ai-note-ref-sk-item" style="--i:1"><div class="ai-note-ref-sk-check"></div><div class="ai-note-ref-sk-lines"><div class="ai-note-ref-sk-line" style="width:55%"></div><div class="ai-note-ref-sk-line" style="width:38%"></div></div></div>
+                            <div class="ai-note-ref-sk-item" style="--i:2"><div class="ai-note-ref-sk-check"></div><div class="ai-note-ref-sk-lines"><div class="ai-note-ref-sk-line" style="width:72%"></div><div class="ai-note-ref-sk-line" style="width:45%"></div></div></div>
+                            <div class="ai-note-ref-sk-item" style="--i:3"><div class="ai-note-ref-sk-check"></div><div class="ai-note-ref-sk-lines"><div class="ai-note-ref-sk-line" style="width:61%"></div><div class="ai-note-ref-sk-line" style="width:35%"></div></div></div>
+                            <div class="ai-note-ref-sk-item" style="--i:4"><div class="ai-note-ref-sk-check"></div><div class="ai-note-ref-sk-lines"><div class="ai-note-ref-sk-line" style="width:58%"></div><div class="ai-note-ref-sk-line" style="width:40%"></div></div></div>
+                        </div>
+                    </div>
+                    <!-- 加载覆盖层（二次搜索时显示） -->
+                    <div class="ai-note-ref-loading-overlay" id="aiNoteRefLoadingOverlay">
+                        <div class="ai-note-ref-loader-ring"></div>
+                    </div>
+                </div>
+                <div class="ai-note-ref-footer">
+                    <span class="ai-note-ref-count" id="aiNoteRefCount">已选 0 篇</span>
+                    <div class="ai-note-ref-actions">
+                        <button class="btn btn-cancel btn-sm" id="aiNoteRefCancel">取消</button>
+                        <button class="btn btn-save btn-sm" id="aiNoteRefConfirm">确认引用</button>
                     </div>
                 </div>
             </div>

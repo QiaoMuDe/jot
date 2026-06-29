@@ -36,6 +36,33 @@ let modelList = [];
 let searchToggle = null;
 let enableThinking = false;
 
+// 笔记引用状态
+let referencedNotes = [];       // { id, title, notebook_name }
+
+// 笔记引用选择浮层 DOM
+let refBtn = null;              // #aiChatRefBtn
+let refBar = null;              // #aiChatRefBar
+let refChips = null;            // #aiChatRefChips
+let refModal = null;            // #aiNoteRefModal
+let refOverlay = null;          // #aiNoteRefOverlay
+let refSearch = null;           // #aiNoteRefSearch
+let refNotebook = null;         // #aiNoteRefNotebook
+let refList = null;             // #aiNoteRefList
+let refCount = null;            // #aiNoteRefCount
+let refConfirm = null;          // #aiNoteRefConfirm
+let refCancel = null;           // #aiNoteRefCancel
+let refClose = null;            // #aiNoteRefClose
+let refSkeleton = null;         // #aiNoteRefSkeleton
+let refLoadingOverlay = null;   // #aiNoteRefLoadingOverlay
+let refSearchClear = null;      // #aiNoteRefSearchClear
+let _refSearchTimer = null;     // 搜索 debounce 定时器
+let _refTempSelected = {};      // 浮层中临时选中状态 { [id]: true }
+let _refListLoaded = false;     // 是否已加载过列表（首次用骨架屏，后续用 overlay）
+let _refCurrentPage = 1;        // 当前页码
+let _refTotalItems = 0;         // 匹配总数
+let _refPageSize = 20;          // 每页条数（从设置读取）
+let _refLoading = false;        // 是否正在加载中
+
 /**
  * 加载模型配置到选择器 UI
  */
@@ -110,6 +137,24 @@ export function initAIChat() {
     // 深度思考
     searchToggle = document.getElementById('aiChatSearchToggle');
     enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
+
+    // 笔记引用
+    refBtn = document.getElementById('aiChatRefBtn');
+    refBar = document.getElementById('aiChatRefBar');
+    refChips = document.getElementById('aiChatRefChips');
+    refModal = document.getElementById('aiNoteRefModal');
+    refOverlay = document.getElementById('aiNoteRefOverlay');
+    refSearch = document.getElementById('aiNoteRefSearch');
+    refNotebook = document.getElementById('aiNoteRefNotebook');
+    refList = document.getElementById('aiNoteRefList');
+    refCount = document.getElementById('aiNoteRefCount');
+    refConfirm = document.getElementById('aiNoteRefConfirm');
+    refCancel = document.getElementById('aiNoteRefCancel');
+    refClose = document.getElementById('aiNoteRefClose');
+    refSkeleton = document.getElementById('aiNoteRefSkeleton');
+    refLoadingOverlay = document.getElementById('aiNoteRefLoadingOverlay');
+    refSearchClear = document.getElementById('aiNoteRefSearchClear');
+    _refListLoaded = false;
 
     if (!messagesEl) return;
 
@@ -250,16 +295,86 @@ function bindEvents() {
         });
     }
 
+    // ── 笔记引用按钮 ──
+    if (refBtn) {
+        refBtn.addEventListener('click', openNoteRefModal);
+    }
+
+    // ── 笔记引用浮层 ──
+    if (refOverlay) {
+        refOverlay.addEventListener('click', closeNoteRefModal);
+    }
+    if (refClose) {
+        refClose.addEventListener('click', closeNoteRefModal);
+    }
+    if (refCancel) {
+        refCancel.addEventListener('click', closeNoteRefModal);
+    }
+    if (refConfirm) {
+        refConfirm.addEventListener('click', confirmNoteSelection);
+    }
+    if (refSearch) {
+        refSearch.addEventListener('input', () => {
+            clearTimeout(_refSearchTimer);
+            _refSearchTimer = setTimeout(loadNoteList, 300);
+        });
+        // Enter 键触发搜索
+        refSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                clearTimeout(_refSearchTimer);
+                loadNoteList();
+            }
+        });
+    }
+    if (refNotebook) {
+        refNotebook.addEventListener('change', () => loadNoteList(false));
+    }
+    if (refSearchClear) {
+        refSearchClear.addEventListener('click', () => {
+            if (refSearch) {
+                refSearch.value = '';
+                refSearch.focus();
+            }
+            refSearchClear.classList.remove('visible');
+            loadNoteList();
+        });
+    }
+    // 搜索输入时切换清除按钮可见性
+    if (refSearch) {
+        refSearch.addEventListener('input', () => {
+            refSearchClear?.classList.toggle('visible', refSearch.value.length > 0);
+        });
+    }
+
+    // 浮层列表点击切换选中
+    if (refList) {
+        refList.addEventListener('click', (e) => {
+            const loadMore = e.target.closest('.ai-note-ref-load-more');
+            if (loadMore) {
+                loadNoteList(true);
+                return;
+            }
+            const item = e.target.closest('.ai-note-ref-item');
+            if (item) toggleNoteSelection(item.dataset.id);
+        });
+    }
+
     // 点击菜单外区域关闭右键菜单
     document.addEventListener('click', (e) => {
         if (sessionContextMenu && !sessionContextMenu.contains(e.target)) {
             closeSessionContextMenu();
         }
+        // 关闭笔记引用浮层（点击 overlay 外部不关闭）
     });
 
-    // Escape 关闭右键菜单
+    // Escape 关闭右键菜单 & 笔记引用浮层
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeSessionContextMenu();
+        if (e.key === 'Escape') {
+            closeSessionContextMenu();
+            if (refModal && refModal.style.display !== 'none') {
+                closeNoteRefModal();
+            }
+        }
     });
 
     // 右键菜单项点击
@@ -447,6 +562,10 @@ function renderSessionList() {
 async function switchSession(id) {
     if (isStreaming || id === activeSessionId) return;
 
+    // 切换会话时清空笔记引用
+    referencedNotes = [];
+    updateRefChips();
+
     try {
         activeSessionId = id;
         const msgs = await window.go.main.App.LoadAISessionMessages(id);
@@ -498,6 +617,8 @@ async function createSession() {
     chatHistory = [];
     messagesEl.innerHTML = '';
     hideEmptyState();
+    referencedNotes = [];
+    updateRefChips();
 
     await loadSessionList();
     scrollToBottom();
@@ -545,13 +666,21 @@ async function onSend() {
     if (userMsgEl) userMsgEl.appendChild(createMsgActions(text, 'user'));
     chatHistory.push({ role: 'user', content: text });
 
-    startStreaming();
+    // 构建笔记引用上下文
+    let systemContext = '';
+    if (referencedNotes.length > 0) {
+        systemContext = await buildNoteContext();
+    }
+
+    startStreaming(false, systemContext);
 }
 
 /**
  * 启动流式输出
+ * @param {boolean} isRegenerate - 是否再生
+ * @param {string} systemContext - 可选的 system prompt / 笔记上下文，拼入 messages 开头但不存库
  */
-function startStreaming(isRegenerate = false) {
+function startStreaming(isRegenerate = false, systemContext = '') {
     if (isStreaming) return;
     isStreaming = true;
 
@@ -666,8 +795,14 @@ function startStreaming(isRegenerate = false) {
     });
     unsubs.push(unsubError);
 
+    // 构建发送给 API 的消息列表（system 上下文 + 历史对话）
+    let messages = chatHistory;
+    if (systemContext) {
+        messages = [{ role: 'system', content: systemContext }, ...chatHistory];
+    }
+
     try {
-        window.go.main.App.CallAIStream(myGen, chatHistory, enableThinking);
+        window.go.main.App.CallAIStream(myGen, messages, enableThinking);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -959,4 +1094,438 @@ async function handleRegenerate(msgEl) {
     } catch (_) { /* 静默 */ }
 
     startStreaming(true);
+}
+
+/* ── 笔记引用 ═══════════════════════════════════════════════════ */
+
+/** 上下文内容最大字符数 */
+const MAX_CONTEXT_CHARS = 8000;
+const DOC_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+/**
+ * 打开笔记引用选择浮层
+ */
+async function openNoteRefModal() {
+    if (!refModal) return;
+    _refTempSelected = {};
+    // 以已有引用笔记预填选中状态
+    referencedNotes.forEach(n => { _refTempSelected[n.id] = true; });
+
+    refModal.style.display = 'flex';
+
+    // 重置搜索/筛选
+    if (refSearch) refSearch.value = '';
+    if (refSearchClear) refSearchClear.classList.remove('visible');
+    if (refNotebook) refNotebook.value = '0';
+
+    // 读取分页设置
+    await loadRefPageSize();
+
+    _refListLoaded = false;
+    _refCurrentPage = 1;
+    _refTotalItems = 0;
+    _refLoading = false;
+    // 骨架屏默认可见
+    if (refSkeleton) refSkeleton.classList.remove('hidden');
+    if (refLoadingOverlay) refLoadingOverlay.classList.remove('active');
+
+    // 并行加载笔记本选项和笔记列表
+    await Promise.all([
+        loadAllNotebooks(),
+        loadNoteList()
+    ]);
+
+    // 焦点到搜索框
+    setTimeout(() => refSearch?.focus(), 150);
+}
+
+/**
+ * 从设置中读取分页大小
+ */
+async function loadRefPageSize() {
+    _refPageSize = 20;
+    try {
+        if (window.go?.main?.App?.GetPageSize) {
+            const saved = await window.go.main.App.GetPageSize();
+            if (saved && saved >= 10 && saved <= 100) {
+                _refPageSize = saved;
+            }
+        }
+    } catch (_) { /* 使用默认值 */ }
+}
+
+/**
+ * 关闭笔记引用选择浮层
+ */
+function closeNoteRefModal() {
+    if (!refModal) return;
+    refModal.style.display = 'none';
+    _refTempSelected = {};
+}
+
+/**
+ * 加载所有笔记本到筛选下拉框
+ */
+async function loadAllNotebooks() {
+    if (!refNotebook) return;
+    try {
+        const notebooks = await window.go.main.App.GetAllNotebooks() || [];
+        const currentVal = refNotebook.value;
+        refNotebook.innerHTML = '<option value="0">全部笔记本</option>' +
+            notebooks.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+        refNotebook.value = currentVal;
+    } catch (_) {
+        /* 静默 */
+    }
+}
+
+/**
+ * 加载笔记列表（根据当前搜索关键词和笔记本筛选）
+ * 加载策略：
+ *   - 首次加载：显示骨架屏，数据到达后替换
+ *   - 二次加载：保留旧列表，显示半透明 overlay + 旋转环，数据到达后替换
+ *   - 点击加载更多: 追加到列表末尾
+ */
+async function loadNoteList(append = false) {
+    if (!refList || _refLoading) return;
+    _refLoading = true;
+
+    const query = refSearch?.value.trim() || '';
+    const notebookId = parseInt(refNotebook?.value || '0');
+    const page = append ? _refCurrentPage + 1 : 1;
+
+    // 首次 → 骨架屏；二次刷新 → overlay；追加不显示 loading
+    if (!append) {
+        if (_refListLoaded && refLoadingOverlay) {
+            refLoadingOverlay.classList.add('active');
+        }
+    }
+
+    try {
+        let result;
+        if (query || notebookId > 0) {
+            result = await window.go.main.App.SearchNotes(query, page, _refPageSize, notebookId, 'updated_at', '', '');
+        } else {
+            result = await window.go.main.App.GetNotes(page, _refPageSize, 'updated_at', 0);
+        }
+        const notes = result?.items || [];
+        _refTotalItems = result?.total || 0;
+
+        if (append) {
+            _refCurrentPage = page;
+            appendToList(notes);
+        } else {
+             // 隐藏骨架屏 / overlay
+             if (refSkeleton) refSkeleton.classList.add('hidden');
+             if (refLoadingOverlay) refLoadingOverlay.classList.remove('active');
+
+             _refCurrentPage = 1;
+             renderNoteList(notes);
+             _refListLoaded = true;
+         }
+    } catch (e) {
+        if (!append) {
+            if (refSkeleton) refSkeleton.classList.add('hidden');
+            if (refLoadingOverlay) refLoadingOverlay.classList.remove('active');
+            if (!_refListLoaded) {
+                refList.innerHTML = '<div class="ai-note-ref-empty">加载失败</div>';
+            }
+        }
+    } finally {
+        _refLoading = false;
+    }
+}
+
+/**
+ * 渲染笔记列表
+ * @param {Array} notes - 笔记列表
+ */
+function renderNoteList(notes) {
+    if (!refList) return;
+    if (!notes || notes.length === 0) {
+        refList.innerHTML = '<div class="ai-note-ref-empty">暂无匹配的笔记</div>';
+        updateRefCount();
+        return;
+    }
+
+    // 高亮搜索关键词
+    const query = (refSearch?.value.trim() || '').toLowerCase();
+
+    let html = notes.map((note, idx) => {
+        const isSelected = !!_refTempSelected[note.id];
+        let title = note.title || '无标题';
+        if (query && title.toLowerCase().includes(query)) {
+            const i = title.toLowerCase().indexOf(query);
+            title = title.substring(0, i) + '<span class="highlight">' + title.substring(i, i + query.length) + '</span>' + title.substring(i + query.length);
+        }
+        const date = note.updated_at ? formatDate(note.updated_at) : '';
+        return `<div class="ai-note-ref-item${isSelected ? ' selected' : ''}" data-id="${note.id}" style="--i:${idx}">
+            <div class="ai-note-ref-item-check">${CHECK_SVG}</div>
+            <div class="ai-note-ref-item-info">
+                <div class="ai-note-ref-item-title">${title}</div>
+                <div class="ai-note-ref-item-meta">
+                    ${date ? `<span>🕐 ${date}</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // 底部加载更多按钮
+    if (_refTotalItems > _refPageSize) {
+        html += buildLoadMoreBtn();
+    }
+
+    refList.innerHTML = html;
+    updateRefCount();
+}
+
+/**
+ * 追加笔记到列表末尾（加载更多）
+ * @param {Array} notes - 新加载的笔记列表
+ */
+function appendToList(notes) {
+    if (!refList || !notes || notes.length === 0) {
+        // 没有更多数据，移除加载更多按钮
+        const loadMore = refList.querySelector('.ai-note-ref-load-more');
+        if (loadMore) loadMore.remove();
+        return;
+    }
+
+    // 移除已有的加载更多按钮
+    const oldBtn = refList.querySelector('.ai-note-ref-load-more');
+    if (oldBtn) oldBtn.remove();
+
+    const query = (refSearch?.value.trim() || '').toLowerCase();
+    const startIdx = (_refCurrentPage - 1) * _refPageSize; // items already shown
+
+    const fragment = document.createElement('div');
+    fragment.innerHTML = notes.map((note, idx) => {
+        const isSelected = !!_refTempSelected[note.id];
+        let title = note.title || '无标题';
+        if (query && title.toLowerCase().includes(query)) {
+            const i = title.toLowerCase().indexOf(query);
+            title = title.substring(0, i) + '<span class="highlight">' + title.substring(i, i + query.length) + '</span>' + title.substring(i + query.length);
+        }
+        const date = note.updated_at ? formatDate(note.updated_at) : '';
+        return `<div class="ai-note-ref-item${isSelected ? ' selected' : ''}" data-id="${note.id}" style="--i:${startIdx + idx}">
+            <div class="ai-note-ref-item-check">${CHECK_SVG}</div>
+            <div class="ai-note-ref-item-info">
+                <div class="ai-note-ref-item-title">${title}</div>
+                <div class="ai-note-ref-item-meta">
+                    ${date ? `<span>🕐 ${date}</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // 追加新条目
+    while (fragment.firstChild) {
+        refList.appendChild(fragment.firstChild);
+    }
+
+    // 底部加载更多按钮（如果还有更多）
+    if (_refCurrentPage * _refPageSize < _refTotalItems) {
+        refList.insertAdjacentHTML('beforeend', buildLoadMoreBtn());
+    }
+
+    updateRefCount();
+}
+
+/**
+ * 构建「加载更多」按钮的 HTML
+ */
+function buildLoadMoreBtn() {
+    const remaining = _refTotalItems - (_refCurrentPage * _refPageSize);
+    return `<div class="ai-note-ref-load-more">
+        <span class="ai-note-ref-load-more-text">加载更多（剩余 ${remaining} 条）</span>
+    </div>`;
+}
+
+/**
+ * 切换笔记选中状态
+ * @param {string|number} id - 笔记 ID
+ */
+function toggleNoteSelection(id) {
+    if (!id) return;
+    if (_refTempSelected[id]) {
+        delete _refTempSelected[id];
+    } else {
+        _refTempSelected[id] = true;
+    }
+    // 仅更新选中态（不重新加载列表，保留滚动位置）
+    const items = refList.querySelectorAll('.ai-note-ref-item');
+    items.forEach(item => {
+        if (item.dataset.id === id) {
+            item.classList.toggle('selected');
+        }
+    });
+    updateRefCount();
+}
+
+/**
+ * 更新浮层底部的已选计数
+ */
+function updateRefCount() {
+    if (!refCount) return;
+    const count = Object.keys(_refTempSelected).length;
+    refCount.textContent = `已选 ${count} 篇`;
+    if (refConfirm) {
+        refConfirm.disabled = count === 0;
+        refConfirm.style.opacity = count === 0 ? '0.5' : '1';
+    }
+}
+
+/**
+ * 确认笔记选择，更新 chips
+ */
+async function confirmNoteSelection() {
+    const selectedIds = Object.keys(_refTempSelected);
+    if (selectedIds.length === 0) return;
+
+    // 获取选中笔记的详细信息（从列表 DOM 或重新搜索）
+    try {
+        const newNotes = [];
+        for (const id of selectedIds) {
+            // 查看是否已在 referencedNotes 中
+            const existing = referencedNotes.find(n => String(n.id) === id);
+            if (existing) {
+                newNotes.push(existing);
+                continue;
+            }
+            // 从列表元素中获取信息
+            const item = refList?.querySelector(`.ai-note-ref-item[data-id="${id}"]`);
+            const titleEl = item?.querySelector('.ai-note-ref-item-title');
+            const metaEl = item?.querySelector('.ai-note-ref-item-meta');
+            const title = titleEl?.textContent || '无标题';
+            const metaText = metaEl?.textContent || '';
+            const notebookName = metaText.replace(/🕐.*$/, '').replace('📓', '').trim() || '';
+            newNotes.push({ id: parseInt(id), title, notebook_name: notebookName });
+        }
+
+        // 合并：保留未取消的旧引用 + 新增的
+        const finalNotes = [];
+        const newIds = new Set(selectedIds);
+        referencedNotes.forEach(n => {
+            if (newIds.has(String(n.id))) {
+                // 已经在 newNotes 中，跳过
+            } else {
+                finalNotes.push(n);
+            }
+        });
+        newNotes.forEach(n => finalNotes.push(n));
+        referencedNotes = finalNotes;
+    } catch (_) {
+        /* 静默 */
+    }
+
+    closeNoteRefModal();
+    updateRefChips();
+}
+
+/**
+ * 更新引用笔记 chips 显示
+ */
+function updateRefChips() {
+    if (!refChips || !refBar || !refBtn) return;
+
+    if (referencedNotes.length === 0) {
+        refBar.style.display = 'none';
+        refBtn.classList.remove('has-ref');
+        return;
+    }
+
+    refBar.style.display = '';
+    refBtn.classList.add('has-ref');
+    refChips.innerHTML = referencedNotes.map(n => {
+        const title = n.title || '无标题';
+        return `<div class="ai-chat-ref-chip" data-id="${n.id}">
+            <span class="ai-chat-ref-chip-icon">${DOC_ICON}</span>
+            <span class="ai-chat-ref-chip-title" title="${title.replace(/"/g, '&quot;')}">${title}</span>
+            <button class="ai-chat-ref-chip-remove" data-id="${n.id}" title="移除引用">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>`;
+    }).join('');
+
+    // 绑定移除事件
+    refChips.querySelectorAll('.ai-chat-ref-chip-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeRefNote(btn.dataset.id);
+        });
+    });
+}
+
+/**
+ * 移除单条引用笔记
+ * @param {string|number} id - 笔记 ID
+ */
+function removeRefNote(id) {
+    referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
+    updateRefChips();
+}
+
+/**
+ * 构建笔记引用上下文，作为 system message 内容
+ * 读取每条笔记的完整内容，拼装成一段文字
+ * @returns {Promise<string>} 拼装后的上下文内容，无引用时返回空字符串
+ */
+async function buildNoteContext() {
+    if (referencedNotes.length === 0) return '';
+
+    let parts = [];
+    let totalLen = 0;
+    const MAX_PER_NOTE = 4000; // 单条笔记最大字符数
+
+    for (const ref of referencedNotes) {
+        try {
+            const content = await window.go.main.App.GetNoteContent(ref.id);
+            if (!content) continue;
+
+            let noteText = content;
+            // 单条笔记截断
+            if (noteText.length > MAX_PER_NOTE) {
+                noteText = noteText.substring(0, MAX_PER_NOTE) + '\n...(内容已截断)';
+            }
+
+            const block = `--- 📄 《${ref.title}》 ---\n${noteText}`;
+            // 总长度截断
+            if (totalLen + block.length > MAX_CONTEXT_CHARS) {
+                parts.push(`--- 📄 《${ref.title}》 ---\n...(内容已截断，超出上下文长度限制)`);
+                break;
+            }
+
+            parts.push(block);
+            totalLen += block.length;
+        } catch (_) {
+            // 读取失败则跳过
+            parts.push(`--- 📄 《${ref.title}》 ---\n(内容读取失败)`);
+        }
+    }
+
+    if (parts.length === 0) return '';
+
+    const header = '以下是用户引用的笔记，请作为回答的参考上下文：\n\n';
+    const footer = '\n\n请基于以上笔记内容回答用户的问题。如果笔记内容不足以回答，请如实说明。';
+    return header + parts.join('\n\n') + footer;
+}
+
+/**
+ * 格式化日期为简短显示
+ * @param {string} dateStr - ISO 日期字符串
+ * @returns {string}
+ */
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diff = (now - d) / 1000;
+        if (diff < 86400) return '今天';
+        if (diff < 172800) return '昨天';
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+    } catch (_) {
+        return '';
+    }
 }
