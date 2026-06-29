@@ -24,6 +24,20 @@ export function animateCountUp(element, targetValue, duration = 300) {
 }
 
 /**
+ * 重新加载所有设置（恢复出厂/导入/还原后调用）
+ */
+async function reloadSettings() {
+    window.loadThemeSetting?.();
+    window.loadFontSettings?.();
+    window.loadSortSettings?.();
+    window.loadPageSizeSetting?.();
+    window.loadQuickNoteSetting?.();
+    window.loadSyntaxHighlightSetting?.();
+    window.loadCodeHighlightThemeSetting?.();
+    window.loadAISettings?.();
+}
+
+/**
  * 加载数据统计概览
  */
 export async function loadDataStats() {
@@ -110,6 +124,8 @@ export async function resetDatabase() {
     await loadDataStats();
     // 重新加载笔记本列表（数据已重置，旧 counts 不再有效）
     window.loadNotebooks();
+    // 重置后重新应用默认设置
+    reloadSettings();
     // 重置后折叠侧栏，用户展开时自动触发刷新笔记本数据
     if (els.notebookSidebar) {
         els.notebookSidebar.classList.add('collapsed');
@@ -194,6 +210,7 @@ export async function importData() {
                     window.loadNotes();
                     loadDataStats();
                     window.loadTags();
+                    reloadSettings();
                 }
             }
         } else {
@@ -280,6 +297,7 @@ export async function restoreFromDir() {
                     window.loadNotes();
                     loadDataStats();
                     window.loadTags();
+                    reloadSettings();
                 }
             }
         } else {

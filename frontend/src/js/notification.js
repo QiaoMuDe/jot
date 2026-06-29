@@ -101,6 +101,11 @@ export class NotificationManager {
 }
 
 window.NotificationManager = NotificationManager;
+window.showNotification = (msg, type = 'info', duration) => {
+    // 复用已存在的全局通知管理器实例，避免重复创建
+    if (!window.__nm) window.__nm = new NotificationManager();
+    window.__nm.show(msg, type, duration);
+};
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
 

@@ -1546,17 +1546,23 @@ async function initSortSettings() {
 }
 
 // ── AI 配置初始化 ──
-async function initAISettings() {
-    // 加载已保存配置
-    const cfg = await window.go.main.App.GetAIConfig();
-    els.aiBaseURL.value = cfg.base_url || '';
-    els.aiAPIKey.value = cfg.api_key || '';
+async function loadAISettings() {
+    try {
+        const cfg = await window.go.main.App.GetAIConfig();
+        els.aiBaseURL.value = cfg.base_url || '';
+        els.aiAPIKey.value = cfg.api_key || '';
 
-    // 填充已保存的模型
-    if (cfg.model) {
-        els.aiModelLabel.textContent = cfg.model;
-        addModelDropdownItem(cfg.model, true);
-    }
+        // 清空并填充已保存的模型
+        els.aiModelDropdown.innerHTML = '';
+        if (cfg.model) {
+            els.aiModelLabel.textContent = cfg.model;
+            addModelDropdownItem(cfg.model, true);
+        }
+    } catch (_) { /* 静默失败 */ }
+}
+
+async function initAISettings() {
+    await loadAISettings();
 
     // ---- 模型下拉菜单事件 ----
     const trigger = els.aiModelTrigger;
@@ -5991,6 +5997,14 @@ window.loadNotebooks = loadNotebooks;
 window.switchView = switchView;
 window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
+window.loadThemeSetting = loadThemeSetting;
+window.loadFontSettings = loadFontSettings;
+window.loadSortSettings = loadSortSettings;
+window.loadPageSizeSetting = loadPageSizeSetting;
+window.loadQuickNoteSetting = loadQuickNoteSetting;
+window.loadSyntaxHighlightSetting = loadSyntaxHighlightSetting;
+window.loadCodeHighlightThemeSetting = loadCodeHighlightThemeSetting;
+window.loadAISettings = loadAISettings;
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

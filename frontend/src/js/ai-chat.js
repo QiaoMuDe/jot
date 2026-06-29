@@ -49,17 +49,19 @@ function bindEvents() {
     // 清空当前对话
     if (clearBtnEl) {
         clearBtnEl.addEventListener('click', async () => {
-            if (activeSessionId === null || messagesEl.children.length === 0) return;
+            if (activeSessionId === null || messagesEl.children.length === 0) {
+                window.showNotification?.('当前没有对话可以清空', 'info');
+                return;
+            }
             const confirmed = await window.showConfirmDialog('确定清空当前对话吗？');
             if (!confirmed) return;
 
             try {
                 await window.go.main.App.ClearAISessionMessages(activeSessionId);
-            } catch (_) { /* 忽略 */ }
+            } catch (_) { /* 静态失败 */ }
 
             messagesEl.innerHTML = '';
             chatHistory = [];
-            updateClearBtn();
             scrollToBottom();
         });
     }
@@ -224,7 +226,6 @@ function renderSessionList() {
                 activeSessionId = null;
                 chatHistory = [];
                 messagesEl.innerHTML = '';
-                updateClearBtn();
             }
 
             await loadSessionList();
@@ -258,7 +259,6 @@ async function switchSession(id) {
         messagesEl.innerHTML = '';
 
         if (!msgs || msgs.length === 0) {
-            updateClearBtn();
             renderSessionList();
             scrollToBottom();
             return;
@@ -277,7 +277,6 @@ async function switchSession(id) {
         });
 
         renderSessionList();
-        updateClearBtn();
         scrollToBottom();
     } catch (_) { /* 静默失败 */ }
 }
@@ -299,7 +298,6 @@ async function createSession() {
     activeSessionId = id;
     chatHistory = [];
     messagesEl.innerHTML = '';
-    updateClearBtn();
     hideEmptyState();
 
     await loadSessionList();
@@ -427,7 +425,6 @@ function startStreaming() {
         // 自动保存消息到数据库
         saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
 
-        updateClearBtn();
         scrollToBottom();
     });
     unsubs.push(unsubDone);
@@ -568,14 +565,6 @@ function scrollToBottom() {
 }
 
 /**
- * 更新清空按钮状态
- */
-function updateClearBtn() {
-    if (!clearBtnEl) return;
-    clearBtnEl.style.display = messagesEl.children.length === 0 ? 'none' : '';
-}
-
-/**
  * 视图激活时调用
  */
 export async function onAIChatViewActivated() {
@@ -619,7 +608,6 @@ function hideEmptyState() {
     if (messagesEl) messagesEl.style.display = '';
     if (inputAreaEl) inputAreaEl.style.display = '';
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = '';
-    updateClearBtn();
 }
 
 /* ── SVG 图标 ── */
