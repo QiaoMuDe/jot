@@ -1,0 +1,21 @@
+# Checklist
+
+- [x] 后端 AI Service 实现了 OpenAI 兼容格式 API 调用（`${base_url}/chat/completions`）
+- [x] 「测试 URL」按钮可检测 `${base_url}/models` 连通性
+- [x] 「获取模型列表」按钮拉取模型 ID 列表并填充下拉菜单
+- [x] AI 配置可通过设置页保存和读取（Base URL / API Key / Model）
+- [x] 设置页「AI 助手」section 包含 Base URL(+测试按钮)、API Key(+显示/隐藏切换)、Model(+获取列表按钮)
+- [x] API Key 输入框为密码类型，带显示/隐藏切换
+- [x] AI 对话作为独立页面视图（`#viewAiChat`），可通过更多菜单和快捷键进入
+- [x] 对话页面有返回按钮 + 「AI 助手」标题 + 清空对话按钮
+- [x] QuikChat 已通过 npm 安装并在 `ai-chat.js` 中 ESM 导入
+- [x] QuikChat Markdown 渲染正常工作（加粗/代码/列表/表格）
+- [x] QuikChat 样式已通过 `ai-chat.css` 覆盖适配 Jot 主题变量
+- [x] 对话页面中用户发送消息后 AI 返回回复
+- [x] 发送消息时 QuikChat 显示 typing indicator 加载态
+- [x] 「附加上上下文」按钮可附加当前笔记内容到对话
+- [x] 「插入到编辑器」按钮将 AI 回复插入 CM6 编辑器
+- [x] 未配置 AI 时页面显示提示和「前往设置」链接
+- [x] 更多菜单中包含「AI 助手」条目（快捷键提示 Ctrl+Shift+F）
+- [x] 快捷键 Ctrl+Shift+F 切换到 AI 对话页面
+- [x] AI 对话逻辑在 `frontend/src/js/ai-chat.js` 独立文件中维护

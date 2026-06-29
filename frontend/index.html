@@ -49,6 +49,8 @@
                     <div class="dropdown-item" data-action="help" title="Ctrl+7 快捷键说明">快捷键说明</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="md-ref" title="Ctrl+8 MD 语法">MD 语法</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" data-action="ai-chat" title="Ctrl+9 AI 助手">AI 助手</div>
                 </div>
             </div>
             <div class="topbar-brand">
@@ -366,6 +368,50 @@
                         <div class="code-preview" id="codePreview"></div>
                     </div>
                 </div>
+                <!-- AI 助手 -->
+                <div class="settings-section">
+                    <h3 class="settings-section-title">AI 助手</h3>
+                    <div class="font-settings">
+                        <!-- Base URL -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">API 地址</label>
+                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
+                                <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" style="flex:1;" />
+                                <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试 URL</button>
+                            </div>
+                        </div>
+                        <!-- API Key -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">API Key</label>
+                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
+                                <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." style="flex:1;" autocomplete="off" />
+                                <button id="aiAPIKeyToggle" class="btn btn-sm" style="flex-shrink:0;min-width:32px;" title="显示/隐藏">👁</button>
+                            </div>
+                        </div>
+                        <!-- Model -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">模型</label>
+                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
+                                <div class="theme-select" id="aiModelSelect" style="max-width:none;">
+                                    <div class="theme-select-trigger" id="aiModelTrigger">
+                                        <span id="aiModelLabel">-- 请先获取模型列表 --</span>
+                                        <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </div>
+                                    <div class="theme-select-dropdown" id="aiModelDropdown"></div>
+                                </div>
+                                <button id="aiFetchModelsBtn" class="btn btn-sm" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
+                            </div>
+                        </div>
+                        <!-- 保存按钮 -->
+                        <div class="font-setting-row" style="margin-top:4px;">
+                            <label class="font-setting-label" style="min-width:72px;"></label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <button id="aiSaveConfigBtn" class="btn btn-save">保存配置</button>
+                                <span id="aiConfigStatus" class="ai-status" style="display:none;"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- 标签管理 -->
                 <div class="settings-section">
                     <h3 class="settings-section-title">标签管理</h3>
@@ -558,6 +604,37 @@
             <div class="trash-list" id="trashList">
                 <div class="trash-list-inner" id="trashListInner">
                     <!-- 回收站笔记由 JS 动态渲染 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图 7: AI 对话页面 -->
+        <div id="viewAiChat" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="aiChatBackBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> 返回</button>
+                <h2 class="view-title">AI 助手</h2>
+                <div class="view-controls">
+                    <button class="btn btn-sm btn-save" id="aiChatClearBtn">清空对话</button>
+                </div>
+            </div>
+            <div class="ai-chat-content">
+                <!-- 未配置 AI 时的提示 -->
+                <div id="aiChatEmpty" class="ai-chat-empty">
+                    <div class="ai-chat-empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    </div>
+                    <p class="ai-chat-empty-title">尚未配置 AI 服务</p>
+                    <p class="ai-chat-empty-desc">请在设置中配置 API 后再使用 AI 助手</p>
+                    <button class="btn btn-save" id="aiChatGoSettings">前往设置</button>
+                </div>
+                <!-- 消息列表 -->
+                <div id="aiChatMessages" class="ai-chat-messages" style="display:none;"></div>
+                <!-- 输入区 -->
+                <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
+                    <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
+                    <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
                 </div>
             </div>
         </div>

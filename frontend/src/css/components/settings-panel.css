@@ -462,3 +462,23 @@
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* ── AI 配置状态 ── */
+.ai-status {
+    font-size: 0.8rem;
+    padding: 4px 0 0 0;
+    margin-left: 60px; /* 对齐 font-setting-label 后的输入区 */
+    transition: opacity 0.15s;
+}
+
+.ai-status.success {
+    color: var(--success, #22c55e);
+}
+
+.ai-status.error {
+    color: var(--error, #ef4444);
+}
+
+.ai-status.loading {
+    color: var(--text-muted);
+}

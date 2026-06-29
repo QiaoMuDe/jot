@@ -25,6 +25,9 @@ import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataD
 import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
 
+// AI 对话页面模块
+import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
+
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
     breaks: true,
@@ -211,6 +214,7 @@ const els = {
     viewData: $('viewData'),
     viewTrash: $('viewTrash'),
     viewMdRef: $('viewMdRef'),
+    viewAiChat: $('viewAiChat'),
     viewEditor: $('viewEditor'),
     editorPanel: $('editorPanel'),
 
@@ -358,6 +362,17 @@ const els = {
     moveNotebookClose: $('moveNotebookClose'),
     moveNotebookEmpty: $('moveNotebookEmpty'),
     batchMoveBtn: $('batchMoveBtn'),
+
+    // AI 配置
+    aiBaseURL: $('aiBaseURL'),
+    aiAPIKey: $('aiAPIKey'),
+    aiModelTrigger: $('aiModelTrigger'),
+    aiModelDropdown: $('aiModelDropdown'),
+    aiModelLabel: $('aiModelLabel'),
+    aiTestURLBtn: $('aiTestURLBtn'),
+    aiAPIKeyToggle: $('aiAPIKeyToggle'),
+    aiFetchModelsBtn: $('aiFetchModelsBtn'),
+    aiSaveConfigBtn: $('aiSaveConfigBtn'),
 };
 
 /**
@@ -389,6 +404,7 @@ function switchView(view) {
         data: els.viewData,
         trash: els.viewTrash,
         'md-ref': els.viewMdRef,
+        'ai-chat': els.viewAiChat,
     };
     const targetView = viewMap[view];
     if (!targetView || _viewAnimating) return;
@@ -437,6 +453,10 @@ function switchView(view) {
                 break;
             case 'md-ref':
                 try { renderMdRefCards(); } catch (e) { console.warn('MD 语法手册渲染失败:', e); }
+                break;
+            case 'ai-chat':
+                // 使用 setTimeout 确保 DOM 已更新
+                setTimeout(() => onAIChatViewActivated(), 50);
                 break;
         }
 
@@ -1522,6 +1542,170 @@ async function initSortSettings() {
     }
 }
 
+// ── AI 配置初始化 ──
+async function initAISettings() {
+    // 加载已保存配置
+    const cfg = await window.go.main.App.GetAIConfig();
+    els.aiBaseURL.value = cfg.base_url || '';
+    els.aiAPIKey.value = cfg.api_key || '';
+
+    // 填充已保存的模型
+    if (cfg.model) {
+        els.aiModelLabel.textContent = cfg.model;
+        addModelDropdownItem(cfg.model, true);
+    }
+
+    // ---- 模型下拉菜单事件 ----
+    const trigger = els.aiModelTrigger;
+    const dropdown = els.aiModelDropdown;
+
+    // 点击触发按钮切换下拉菜单
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        trigger.classList.toggle('open');
+        dropdown.classList.toggle('open');
+    });
+
+    // 点击模型项
+    dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.theme-select-item');
+        if (!item) return;
+        const model = item.dataset.modelValue;
+        if (!model) return;
+        dropdown.querySelectorAll('.theme-select-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        els.aiModelLabel.textContent = model;
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', () => {
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+    });
+
+    // 测试 URL 连通性
+    els.aiTestURLBtn.addEventListener('click', async () => {
+        const url = els.aiBaseURL.value.trim();
+        if (!url) {
+            nm.show('请先填写 API 地址', 'warning');
+            return;
+        }
+        try {
+            const ok = await window.go.main.App.TestAIBaseURL(url, els.aiAPIKey.value.trim());
+            if (ok) {
+                nm.show('API 地址连接成功', 'success');
+            } else {
+                nm.show('API 地址连接失败，请检查地址', 'warning');
+            }
+        } catch (e) {
+            nm.show('连接失败: ' + e, 'error');
+        }
+    });
+
+    // API Key 显示/隐藏切换
+    els.aiAPIKeyToggle.addEventListener('click', () => {
+        const input = els.aiAPIKey;
+        if (input.type === 'password') {
+            input.type = 'text';
+            els.aiAPIKeyToggle.textContent = '🙈';
+        } else {
+            input.type = 'password';
+            els.aiAPIKeyToggle.textContent = '👁';
+        }
+    });
+
+    // 获取模型列表
+    els.aiFetchModelsBtn.addEventListener('click', async () => {
+        const url = els.aiBaseURL.value.trim();
+        const key = els.aiAPIKey.value.trim();
+        if (!url || !key) {
+            nm.show('请先填写 API 地址和 API Key', 'warning');
+            return;
+        }
+        try {
+            const models = await window.go.main.App.FetchAIModels(url, key);
+            if (models && models.length > 0) {
+                els.aiModelDropdown.innerHTML = '';
+                const savedModel = (await window.go.main.App.GetAIConfig()).model;
+                let hasActive = false;
+                for (const m of models) {
+                    const active = m === savedModel;
+                    if (active) hasActive = true;
+                    addModelDropdownItem(m, active);
+                }
+                if (!hasActive) {
+                    els.aiModelLabel.textContent = models[0];
+                }
+                nm.show(`已获取 ${models.length} 个模型`, 'success');
+            } else {
+                nm.show('未获取到可用模型', 'warning');
+            }
+        } catch (e) {
+            nm.show('获取模型列表失败: ' + e, 'error');
+        }
+    });
+
+    // 保存配置
+    els.aiSaveConfigBtn.addEventListener('click', async () => {
+        const url = els.aiBaseURL.value.trim();
+        const key = els.aiAPIKey.value.trim();
+        const model = els.aiModelLabel.textContent;
+        const hasItems = els.aiModelDropdown.children.length > 0;
+
+        if (!url) {
+            setAIStatus('aiConfigStatus', '请输入 API 地址', 'error');
+            nm.show('请填写 API 地址', 'warning');
+            return;
+        }
+        if (!key) {
+            setAIStatus('aiConfigStatus', '请输入 API Key', 'error');
+            nm.show('请填写 API Key', 'warning');
+            return;
+        }
+        if (!hasItems || model === '-- 请先获取模型列表 --') {
+            setAIStatus('aiConfigStatus', '请先获取并选择模型', 'error');
+            nm.show('请先获取并选择一个模型', 'warning');
+            return;
+        }
+        if (!model) {
+            setAIStatus('aiConfigStatus', '请选择模型', 'error');
+            nm.show('请先获取并选择一个模型', 'warning');
+            return;
+        }
+
+        try {
+            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model });
+            setAIStatus('aiConfigStatus', '✓ 配置已保存', 'success');
+            nm.show('AI 配置已保存', 'success');
+        } catch (e) {
+            setAIStatus('aiConfigStatus', '✗ 保存失败: ' + e, 'error');
+            nm.show('保存配置失败: ' + e, 'error');
+        }
+    });
+}
+
+/**
+ * 向模型下拉菜单添加一个选项
+ */
+function addModelDropdownItem(model, active) {
+    const item = document.createElement('div');
+    item.className = 'theme-select-item' + (active ? ' active' : '');
+    item.dataset.modelValue = model;
+    item.textContent = model;
+    els.aiModelDropdown.appendChild(item);
+}
+
+// 辅助函数: 设置状态提示
+function setAIStatus(elId, msg, type) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'ai-status ' + type;
+    el.style.display = '';
+}
+
 /**
  * 加载已保存的排序方式
  */
@@ -1781,6 +1965,18 @@ function renderTagSelector(readOnly) {
 function getEditorContent() {
     return cmEditor ? cmEditor.state.doc.toString() : '';
 }
+
+// 暴露给外部模块（如 ai-chat.js）
+window.getEditorContent = getEditorContent;
+
+/**
+ * 在 CM6 编辑器光标位置插入文本
+ */
+window.insertTextToEditor = function(text) {
+    if (!cmEditor) return;
+    cmEditor.dispatch(cmEditor.state.replaceSelection(text));
+    cmEditor.focus();
+};
 
 /**
  * 更新字数统计
@@ -3256,6 +3452,8 @@ function initEventListeners() {
                 loadTrashNotes();
             } else if (item.dataset.action === 'md-ref') {
                 switchView('md-ref');
+            } else if (item.dataset.action === 'ai-chat') {
+                switchView('ai-chat');
             } else if (item.dataset.action === 'help') {
                 openShortcuts();
             }
@@ -3730,6 +3928,10 @@ async function handleKeyboardNavigation(e) {
                 e.preventDefault();
                 switchView('md-ref');
                 return;
+            case '9':
+                e.preventDefault();
+                switchView('ai-chat');
+                return;
         }
     }
 
@@ -3954,6 +4156,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 6', desc: '设置' },
         { key: 'Ctrl + 7', desc: '快捷键说明' },
         { key: 'Ctrl + 8', desc: 'MD 语法' },
+        { key: 'Ctrl + 9', desc: 'AI 助手' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
@@ -5271,6 +5474,7 @@ async function init() {
     await loadThemeSetting();
     await loadFontSettings();
     await initSortSettings();
+    initAISettings();
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
     await loadSyntaxHighlightSetting();
@@ -5291,6 +5495,8 @@ async function init() {
     initWindowControls();
     // 注册文件拖拽导入
     initFileDrop();
+    // 初始化 AI 对话页面
+    initAIChat();
 }
 
 /**

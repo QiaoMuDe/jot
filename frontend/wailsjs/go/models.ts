@@ -199,6 +199,22 @@ export namespace models {
 
 export namespace services {
 	
+	export class AIConfig {
+	    base_url: string;
+	    api_key: string;
+	    model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.base_url = source["base_url"];
+	        this.api_key = source["api_key"];
+	        this.model = source["model"];
+	    }
+	}
 	export class DataStats {
 	    total_notes: number;
 	    trashed_notes: number;
@@ -239,6 +255,20 @@ export namespace services {
 	        this.fail_count = source["fail_count"];
 	        this.skipped_count = source["skipped_count"];
 	        this.message = source["message"];
+	    }
+	}
+	export class Message {
+	    role: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Message(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.content = source["content"];
 	    }
 	}
 	export class PaginatedResult {

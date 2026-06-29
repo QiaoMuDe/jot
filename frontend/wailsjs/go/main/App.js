@@ -34,6 +34,14 @@ export function BatchRestoreNotes(arg1) {
   return window['go']['main']['App']['BatchRestoreNotes'](arg1);
 }
 
+export function CallAI(arg1) {
+  return window['go']['main']['App']['CallAI'](arg1);
+}
+
+export function CallAIStream(arg1) {
+  return window['go']['main']['App']['CallAIStream'](arg1);
+}
+
 export function CreateNote(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3, arg4);
 }
@@ -72,6 +80,14 @@ export function ExportDataWithDialog() {
 
 export function ExportNoteAsMarkdown(arg1) {
   return window['go']['main']['App']['ExportNoteAsMarkdown'](arg1);
+}
+
+export function FetchAIModels(arg1, arg2) {
+  return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
+}
+
+export function GetAIConfig() {
+  return window['go']['main']['App']['GetAIConfig']();
 }
 
 export function GetAllNoteIDs() {
@@ -190,6 +206,10 @@ export function RestoreNote(arg1) {
   return window['go']['main']['App']['RestoreNote'](arg1);
 }
 
+export function SaveAIConfig(arg1) {
+  return window['go']['main']['App']['SaveAIConfig'](arg1);
+}
+
 export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
@@ -204,6 +224,10 @@ export function SetSetting(arg1, arg2) {
 
 export function SetSortOrder(arg1) {
   return window['go']['main']['App']['SetSortOrder'](arg1);
+}
+
+export function TestAIBaseURL(arg1, arg2) {
+  return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
 }
 
 export function TogglePinNote(arg1) {

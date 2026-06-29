@@ -29,6 +29,7 @@ type App struct {
 	tagService      *services.TagService
 	settingService  *services.SettingService
 	notebookService *services.NotebookService
+	aiService       *services.AIService
 }
 
 // NewApp creates a new App application struct
@@ -47,6 +48,7 @@ func NewApp() *App {
 		tagService:      services.NewTagService(db),
 		settingService:  services.NewSettingService(db),
 		notebookService: services.NewNotebookService(db),
+		aiService:       services.NewAIService(db),
 	}
 }
 
@@ -381,6 +383,7 @@ func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 	a.noteService = services.NewNoteService(newDB)
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
+	a.aiService = services.NewAIService(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -477,6 +480,48 @@ func (a *App) GetSetting(key string) string {
 // SetSetting 设置指定 key 的配置值
 func (a *App) SetSetting(key, value string) error {
 	return a.settingService.Set(key, value)
+}
+
+// ==================== AI 相关绑定方法 ====================
+
+// GetAIConfig 获取 AI 服务配置
+func (a *App) GetAIConfig() services.AIConfig {
+	return a.aiService.GetConfig()
+}
+
+// SaveAIConfig 保存 AI 服务配置
+func (a *App) SaveAIConfig(cfg services.AIConfig) error {
+	return a.aiService.SaveConfig(cfg)
+}
+
+// TestAIBaseURL 测试 AI Base URL 连通性
+func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
+	return a.aiService.TestBaseURL(baseURL, apiKey)
+}
+
+// FetchAIModels 获取可用模型列表
+func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
+	return a.aiService.FetchModels(baseURL, apiKey)
+}
+
+// CallAI 调用 AI 对话接口
+func (a *App) CallAI(messages []services.Message) (string, error) {
+	return a.aiService.CallAI(messages)
+}
+
+// CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
+func (a *App) CallAIStream(messages []services.Message) {
+	go a.aiService.CallAIStream(messages,
+		func(chunk string) {
+			runtime.EventsEmit(a.ctx, "ai:stream-chunk", chunk)
+		},
+		func(content string) {
+			runtime.EventsEmit(a.ctx, "ai:stream-done", content)
+		},
+		func(err string) {
+			runtime.EventsEmit(a.ctx, "ai:stream-error", err)
+		},
+	)
 }
 
 // GetSystemFonts 获取系统已安装的字体族列表
@@ -696,6 +741,7 @@ func (a *App) RestoreFromDir() (*services.ImportResult, error) {
 	a.noteService = services.NewNoteService(newDB)
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
+	a.aiService = services.NewAIService(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -863,5 +909,6 @@ func (a *App) reconnectDB(dbPath string) error {
 	a.noteService = services.NewNoteService(db)
 	a.tagService = services.NewTagService(db)
 	a.settingService = services.NewSettingService(db)
+	a.aiService = services.NewAIService(db)
 	return nil
 }
