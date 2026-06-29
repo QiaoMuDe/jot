@@ -24,11 +24,17 @@ export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
 export function CallAIStream(arg1:Array<services.Message>):Promise<void>;
 
+export function ClearAISessionMessages(arg1:number):Promise<void>;
+
+export function CreateAISession():Promise<number>;
+
 export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Promise<models.Note>;
 
 export function CreateNotebook(arg1:string):Promise<models.Notebook>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
+
+export function DeleteAISession(arg1:number):Promise<void>;
 
 export function DeleteNote(arg1:number):Promise<void>;
 
@@ -47,6 +53,8 @@ export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetAIConfig():Promise<services.AIConfig>;
+
+export function GetAISessions():Promise<Array<services.AISessionSummary>>;
 
 export function GetAllNoteIDs():Promise<Array<number>>;
 
@@ -86,6 +94,8 @@ export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
 export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
 
+export function LoadAISessionMessages(arg1:number):Promise<Array<services.Message>>;
+
 export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
 
 export function OpenDataDir():Promise<void>;
@@ -95,6 +105,8 @@ export function OpenProjectURL(arg1:string):Promise<string>;
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
+
+export function RenameAISession(arg1:number,arg2:string):Promise<void>;
 
 export function RenameNotebook(arg1:number,arg2:string):Promise<models.Notebook>;
 
@@ -107,6 +119,8 @@ export function RestoreFromDir():Promise<services.ImportResult>;
 export function RestoreNote(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
+
+export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string):Promise<services.PaginatedResult>;
 

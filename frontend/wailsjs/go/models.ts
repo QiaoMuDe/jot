@@ -215,6 +215,28 @@ export namespace services {
 	        this.model = source["model"];
 	    }
 	}
+	export class AISessionSummary {
+	    id: number;
+	    title: string;
+	    last_message: string;
+	    message_count: number;
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISessionSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.last_message = source["last_message"];
+	        this.message_count = source["message_count"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
 	export class DataStats {
 	    total_notes: number;
 	    trashed_notes: number;
@@ -260,6 +282,7 @@ export namespace services {
 	export class Message {
 	    role: string;
 	    content: string;
+	    reasoning_content: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -269,6 +292,7 @@ export namespace services {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
 	        this.content = source["content"];
+	        this.reasoning_content = source["reasoning_content"];
 	    }
 	}
 	export class PaginatedResult {

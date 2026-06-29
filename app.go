@@ -511,17 +511,60 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
 func (a *App) CallAIStream(messages []services.Message) {
+	var fullThinking strings.Builder
 	go a.aiService.CallAIStream(messages,
 		func(chunk string) {
 			runtime.EventsEmit(a.ctx, "ai:stream-chunk", chunk)
 		},
+		func(thinking string) {
+			fullThinking.WriteString(thinking)
+			runtime.EventsEmit(a.ctx, "ai:stream-thinking", thinking)
+		},
 		func(content string) {
 			runtime.EventsEmit(a.ctx, "ai:stream-done", content)
+			if fullThinking.Len() > 0 {
+				runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
+			}
 		},
 		func(err string) {
 			runtime.EventsEmit(a.ctx, "ai:stream-error", err)
 		},
 	)
+}
+
+// GetAISessions 获取 AI 会话列表
+func (a *App) GetAISessions() []services.AISessionSummary {
+	return a.aiService.GetAISessions()
+}
+
+// CreateAISession 创建新 AI 会话，返回会话 ID
+func (a *App) CreateAISession() uint {
+	return a.aiService.CreateAISession()
+}
+
+// DeleteAISession 删除 AI 会话及所有消息
+func (a *App) DeleteAISession(id uint) error {
+	return a.aiService.DeleteAISession(id)
+}
+
+// RenameAISession 重命名 AI 会话
+func (a *App) RenameAISession(id uint, title string) error {
+	return a.aiService.RenameAISession(id, title)
+}
+
+// LoadAISessionMessages 加载 AI 会话的所有消息
+func (a *App) LoadAISessionMessages(id uint) []services.Message {
+	return a.aiService.LoadAISessionMessages(id)
+}
+
+// SaveAIMessages 保存一轮 AI 对话消息到指定会话
+func (a *App) SaveAIMessages(sessionID uint, messages []services.Message) error {
+	return a.aiService.SaveAIMessages(sessionID, messages)
+}
+
+// ClearAISessionMessages 清空 AI 会话的所有消息（不删会话）
+func (a *App) ClearAISessionMessages(sessionID uint) error {
+	return a.aiService.ClearAISessionMessages(sessionID)
 }
 
 // GetSystemFonts 获取系统已安装的字体族列表

@@ -27,6 +27,11 @@
             </div>
         </aside>
 
+        <!-- 侧栏折叠/展开按钮 -->
+        <button id="notebookSidebarToggle" class="notebook-sidebar-toggle" title="展开侧栏">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
         <!-- 主内容区 -->
         <div class="main-content-area">
 
@@ -613,28 +618,46 @@
             <div class="view-header">
                 <button class="back-btn" id="aiChatBackBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> 返回</button>
                 <h2 class="view-title">AI 助手</h2>
-                <div class="view-controls">
-                    <button class="btn btn-sm btn-save" id="aiChatClearBtn">清空对话</button>
-                </div>
+                <div class="view-controls"></div>
             </div>
-            <div class="ai-chat-content">
-                <!-- 未配置 AI 时的提示 -->
-                <div id="aiChatEmpty" class="ai-chat-empty">
-                    <div class="ai-chat-empty-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <div class="ai-chat-layout">
+                <!-- 左侧会话侧栏 -->
+                <div class="ai-session-sidebar collapsed">
+                    <div class="ai-session-sidebar-header">
+                        <span class="ai-session-sidebar-title">会话</span>
+                        <button id="aiSessionNewBtn" class="ai-session-new-btn" title="新建会话">+</button>
                     </div>
-                    <p class="ai-chat-empty-title">尚未配置 AI 服务</p>
-                    <p class="ai-chat-empty-desc">请在设置中配置 API 后再使用 AI 助手</p>
-                    <button class="btn btn-save" id="aiChatGoSettings">前往设置</button>
+                    <div id="aiSessionList" class="ai-session-list">
+                        <!-- 由 JS 动态渲染 -->
+                    </div>
+                    <div class="ai-session-sidebar-footer">
+                        <button id="aiChatClearBtn" class="ai-session-clear-btn">清空当前对话</button>
+                    </div>
                 </div>
-                <!-- 消息列表 -->
-                <div id="aiChatMessages" class="ai-chat-messages" style="display:none;"></div>
-                <!-- 输入区 -->
-                <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
-                    <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
-                    <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    </button>
+                <!-- 侧栏折叠/展开按钮（侧栏外部，避免 overflow:hidden 裁剪） -->
+                <button id="aiSidebarToggle" class="ai-sidebar-toggle" title="展开侧栏">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <!-- 右侧对话区 -->
+                <div class="ai-chat-content">
+                    <!-- 未配置 AI 时的提示 -->
+                    <div id="aiChatEmpty" class="ai-chat-empty">
+                        <div class="ai-chat-empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                        </div>
+                        <p class="ai-chat-empty-title">尚未配置 AI 服务</p>
+                        <p class="ai-chat-empty-desc">请在设置中配置 API 后再使用 AI 助手</p>
+                        <button class="btn btn-save" id="aiChatGoSettings">前往设置</button>
+                    </div>
+                    <!-- 消息列表 -->
+                    <div id="aiChatMessages" class="ai-chat-messages" style="display:none;"></div>
+                    <!-- 输入区 -->
+                    <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
+                        <textarea id="aiChatInput" class="ai-chat-input" placeholder="输入消息..." rows="1"></textarea>
+                        <button id="aiChatSendBtn" class="ai-chat-send-btn" disabled aria-label="发送">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

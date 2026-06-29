@@ -42,6 +42,14 @@ export function CallAIStream(arg1) {
   return window['go']['main']['App']['CallAIStream'](arg1);
 }
 
+export function ClearAISessionMessages(arg1) {
+  return window['go']['main']['App']['ClearAISessionMessages'](arg1);
+}
+
+export function CreateAISession() {
+  return window['go']['main']['App']['CreateAISession']();
+}
+
 export function CreateNote(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3, arg4);
 }
@@ -52,6 +60,10 @@ export function CreateNotebook(arg1) {
 
 export function CreateTag(arg1, arg2) {
   return window['go']['main']['App']['CreateTag'](arg1, arg2);
+}
+
+export function DeleteAISession(arg1) {
+  return window['go']['main']['App']['DeleteAISession'](arg1);
 }
 
 export function DeleteNote(arg1) {
@@ -88,6 +100,10 @@ export function FetchAIModels(arg1, arg2) {
 
 export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
+}
+
+export function GetAISessions() {
+  return window['go']['main']['App']['GetAISessions']();
 }
 
 export function GetAllNoteIDs() {
@@ -166,6 +182,10 @@ export function ImportFiles(arg1, arg2) {
   return window['go']['main']['App']['ImportFiles'](arg1, arg2);
 }
 
+export function LoadAISessionMessages(arg1) {
+  return window['go']['main']['App']['LoadAISessionMessages'](arg1);
+}
+
 export function MoveNoteToNotebook(arg1, arg2) {
   return window['go']['main']['App']['MoveNoteToNotebook'](arg1, arg2);
 }
@@ -184,6 +204,10 @@ export function PermanentDeleteNote(arg1) {
 
 export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
+}
+
+export function RenameAISession(arg1, arg2) {
+  return window['go']['main']['App']['RenameAISession'](arg1, arg2);
 }
 
 export function RenameNotebook(arg1, arg2) {
@@ -208,6 +232,10 @@ export function RestoreNote(arg1) {
 
 export function SaveAIConfig(arg1) {
   return window['go']['main']['App']['SaveAIConfig'](arg1);
+}
+
+export function SaveAIMessages(arg1, arg2) {
+  return window['go']['main']['App']['SaveAIMessages'](arg1, arg2);
 }
 
 export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {

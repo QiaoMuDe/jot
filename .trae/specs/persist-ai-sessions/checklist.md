@@ -1,0 +1,26 @@
+# Checklist
+
+- [x] AISession 模型正确定义，字段与 spec 一致
+- [x] AIMessage 模型正确定义，字段与 spec 一致，SessionID 有外键索引
+- [x] `database/db.go` 中 `AutoMigrate` 包含两个新模型
+- [x] `ai_service.go` 实现 `GetAISessions()` 返回列表含最后消息摘要
+- [x] `ai_service.go` 实现 `CreateAISession()` 返回新会话 ID
+- [x] `ai_service.go` 实现 `DeleteAISession(id)` 级联删除消息
+- [x] `ai_service.go` 实现 `RenameAISession(id, title)`
+- [x] `ai_service.go` 实现 `LoadAISessionMessages(id)` 按时间升序返回
+- [x] `ai_service.go` 实现 `SaveAIMessages(sessionID, messages)` 批量保存 + 自动标题
+- [x] `app.go` 新增 7 个绑定方法且正确注册
+- [x] `index.html` AI 助手视图改为左右分栏布局
+- [x] 左侧会话侧栏包含新建按钮 + 会话列表 + 清空按钮
+- [x] `ai-chat.css` 会话侧栏样式完整（高亮、hover、删除按钮）
+- [x] 前端初始化时调用 `GetAISessions()` 加载侧栏
+- [x] 点击会话项切换时加载对应消息
+- [x] 新建会话切换到空状态
+- [x] 删除会话后正确刷新侧栏
+- [x] 流输出完成后自动保存消息到数据库
+- [x] 会话标题自动取首条用户消息前 30 字
+- [x] 双击会话标题可内联编辑重命名
+- [x] 切回 AI 助手视图自动恢复上次激活的会话
+- [x] 清空对话只删消息不删会话
+- [x] `wails build -s` 编译通过
+- [x] `npx vite build` 前端构建通过

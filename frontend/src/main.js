@@ -353,6 +353,7 @@ const els = {
     notebookList: $('notebookList'),
     newNotebookBtn: $('newNotebookBtn'),
     notebookSidebar: $('notebookSidebar'),
+    notebookSidebarToggle: $('notebookSidebarToggle'),
 
     // 移动到弹窗
     moveNotebookDialog: $('moveNotebookDialog'),
@@ -421,6 +422,8 @@ function switchView(view) {
 
     // 悬浮操作按钮仅在网格视图显示
     els.fabGroup.style.display = view === 'grid' ? '' : 'none';
+    // 笔记本侧栏折叠按钮仅在网格视图显示
+    els.notebookSidebarToggle.style.display = view === 'grid' ? '' : 'none';
 
     _viewAnimating = true;
 
@@ -3416,6 +3419,12 @@ function initEventListeners() {
         els.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
+    // 笔记本侧栏折叠/展开按钮
+    els.notebookSidebarToggle?.addEventListener('click', () => {
+        toggleSidebar();
+        updateNotebookSidebarToggleBtn();
+    });
+
     // 更多菜单按钮
     els.moreMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3439,7 +3448,6 @@ function initEventListeners() {
                 loadNotes();
             } else if (item.dataset.action === 'sidebar-toggle') {
                 toggleSidebar();
-                updateSidebarMenuItem();
             } else if (item.dataset.action === 'batch-mode') {
                 switchView('grid');
                 toggleBatchMode();
@@ -4012,7 +4020,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, els.dataContent].filter(Boolean);
+    const containers = [els.mainContent, els.dataContent, document.querySelector('.ai-chat-messages')].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', () => {
@@ -4741,6 +4749,8 @@ async function toggleSidebar() {
     if (wasCollapsed && !isCollapsed) {
         await loadNotebooks();
     }
+    updateSidebarMenuItem();
+    updateNotebookSidebarToggleBtn();
 }
 
 /**
@@ -4756,6 +4766,19 @@ function updateSidebarMenuItem() {
 }
 
 /**
+ * 更新笔记本侧栏折叠按钮图标
+ */
+function updateNotebookSidebarToggleBtn() {
+    const btn = els.notebookSidebarToggle;
+    if (!btn) return;
+    const isCollapsed = els.notebookSidebar?.classList.contains('collapsed');
+    const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+    const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    btn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
+    btn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
+}
+
+/**
  * 恢复侧栏折叠状态（默认收起）
  */
 function restoreSidebarState() {
@@ -4767,6 +4790,7 @@ function restoreSidebarState() {
             if (sidebar) sidebar.classList.add('collapsed');
         }
         updateSidebarMenuItem();
+        updateNotebookSidebarToggleBtn();
     } catch (e) {}
 }
 

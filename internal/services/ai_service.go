@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"jot/internal/models"
 )
 
 // Message 表示 AI 对话中的一条消息
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role             string `json:"role"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content"`
 }
 
 // AIConfig 表示 AI 服务配置
@@ -126,13 +128,15 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 }
 
 // CallAIStream 流式调用 OpenAI 兼容的 Chat Completion API
-// 通过 onChunk/onDone/onError 回调逐块推送内容
-func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onDone func(string), onError func(string)) {
+// 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
+// onThinking 用于深度思考模型的 reasoning_content 字段
+func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
 	cfg := a.GetConfig()
 
 	type streamChoice struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		Index int `json:"index"`
 	}
@@ -147,6 +151,7 @@ func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onDon
 	}
 
 	var fullContent strings.Builder
+	var fullThinking strings.Builder
 
 	reqBody, err := json.Marshal(body)
 	if err != nil {
@@ -209,6 +214,14 @@ func (a *AIService) CallAIStream(messages []Message, onChunk func(string), onDon
 			if chunk != "" {
 				fullContent.WriteString(chunk)
 				onChunk(chunk)
+			}
+
+			thinking := sr.Choices[0].Delta.ReasoningContent
+			if thinking != "" {
+				fullThinking.WriteString(thinking)
+				if onThinking != nil {
+					onThinking(thinking)
+				}
 			}
 		}
 	}
@@ -282,4 +295,127 @@ func (a *AIService) FetchModels(baseURL, apiKey string) ([]string, error) {
 	}
 
 	return models, nil
+}
+
+// AISessionSummary 会话列表项（含最后一条消息摘要）
+type AISessionSummary struct {
+	ID           uint   `json:"id"`
+	Title        string `json:"title"`
+	LastMessage  string `json:"last_message"`
+	MessageCount int    `json:"message_count"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+// GetAISessions 获取所有会话，按 updated_at DESC 排序，附带最后一条消息摘要
+func (a *AIService) GetAISessions() []AISessionSummary {
+	var sessions []models.AISession
+	a.db.Order("updated_at DESC").Find(&sessions)
+
+	result := make([]AISessionSummary, 0, len(sessions))
+	for _, s := range sessions {
+		summary := AISessionSummary{
+			ID:        s.ID,
+			Title:     s.Title,
+			CreatedAt: s.CreatedAt.Format("2006-01-02 15:04"),
+			UpdatedAt: s.UpdatedAt.Format("2006-01-02 15:04"),
+		}
+
+		// 查消息数
+		var count int64
+		a.db.Model(&models.AIMessage{}).Where("session_id = ?", s.ID).Count(&count)
+		summary.MessageCount = int(count)
+
+		// 取最后一条消息内容（截断作为摘要）
+		var lastMsg models.AIMessage
+		if err := a.db.Where("session_id = ?", s.ID).Order("created_at DESC").First(&lastMsg).Error; err == nil {
+			text := lastMsg.Content
+			if len([]rune(text)) > 60 {
+				text = string([]rune(text)[:60]) + "..."
+			}
+			summary.LastMessage = text
+		}
+
+		result = append(result, summary)
+	}
+	return result
+}
+
+// CreateAISession 创建新会话，返回会话 ID
+func (a *AIService) CreateAISession() uint {
+	session := models.AISession{Title: "新对话"}
+	a.db.Create(&session)
+	return session.ID
+}
+
+// DeleteAISession 删除会话及其所有消息
+func (a *AIService) DeleteAISession(id uint) error {
+	// 级联删除消息
+	if err := a.db.Where("session_id = ?", id).Delete(&models.AIMessage{}).Error; err != nil {
+		return err
+	}
+	return a.db.Delete(&models.AISession{}, id).Error
+}
+
+// RenameAISession 重命名会话
+func (a *AIService) RenameAISession(id uint, title string) error {
+	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
+}
+
+// LoadAISessionMessages 加载会话的所有消息（按 created_at ASC）
+func (a *AIService) LoadAISessionMessages(id uint) []Message {
+	var msgs []models.AIMessage
+	a.db.Where("session_id = ?", id).Order("created_at ASC").Find(&msgs)
+
+	result := make([]Message, len(msgs))
+	for i, m := range msgs {
+		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent}
+	}
+	return result
+}
+
+// SaveAIMessages 保存一轮对话消息（user + assistant）到指定会话
+// 同时更新会话 updated_at，如果是首轮对话则自动生成标题
+func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
+	now := time.Now()
+
+	for _, msg := range messages {
+		m := models.AIMessage{
+			SessionID:        sessionID,
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+		}
+		if err := a.db.Create(&m).Error; err != nil {
+			return err
+		}
+	}
+
+	// 更新会话 updated_at
+	a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", now)
+
+	// 如果是首轮对话，自动生成标题（取第一条 user 消息前 30 字）
+	var session models.AISession
+	if err := a.db.First(&session, sessionID).Error; err != nil {
+		return err
+	}
+	if session.Title == "新对话" {
+		for _, msg := range messages {
+			if msg.Role == "user" {
+				title := msg.Content
+				runes := []rune(title)
+				if len(runes) > 30 {
+					title = string(runes[:30]) + "..."
+				}
+				return a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error
+			}
+		}
+	}
+
+	return nil
+}
+
+// ClearAISessionMessages 清空指定会话的所有消息（不删除会话本身）
+func (a *AIService) ClearAISessionMessages(sessionID uint) error {
+	return a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
 }
