@@ -377,7 +377,6 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 // SaveAIMessages 保存一轮对话消息（user + assistant）到指定会话
 // 同时更新会话 updated_at，如果是首轮对话则自动生成标题
 func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
-	now := time.Now()
 
 	for _, msg := range messages {
 		m := models.AIMessage{
@@ -392,7 +391,9 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 	}
 
 	// 更新会话 updated_at
-	a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", now)
+	var s models.AISession
+	a.db.First(&s, sessionID)
+	a.db.Model(&s).Update("updated_at", time.Now())
 
 	// 如果是首轮对话，自动生成标题（取第一条 user 消息前 30 字）
 	var session models.AISession
