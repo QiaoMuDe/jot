@@ -52,7 +52,7 @@
     box-shadow: var(--shadow-xl);
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;
     border-top: 2px solid var(--accent);
     transform: scale(0.96) translateY(-8px);
     opacity: 0;

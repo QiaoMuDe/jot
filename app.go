@@ -134,16 +134,16 @@ func (a *App) GetAllNoteIDs() ([]uint, error) {
 	return a.noteService.GetAllIDs()
 }
 
-// SearchNotes 按关键词搜索笔记（标题/内容），支持分页、笔记本筛选和日期范围
-func (a *App) SearchNotes(keyword string, page, pageSize int, notebookID uint, sortBy string, startDate, endDate string) (*services.PaginatedResult, error) {
+// SearchNotes 按关键词搜索笔记（标题/内容），支持分页、笔记本筛选、日期范围和标签 AND 过滤
+func (a *App) SearchNotes(keyword string, page, pageSize int, notebookID uint, sortBy string, startDate, endDate string, tagIDs []uint) (*services.PaginatedResult, error) {
 	var notes []models.Note
 	var total int64
 	var err error
 
 	if notebookID > 0 {
-		notes, total, err = a.noteService.SearchByNotebook(keyword, page, pageSize, notebookID, sortBy, startDate, endDate)
+		notes, total, err = a.noteService.SearchByNotebook(keyword, page, pageSize, notebookID, sortBy, startDate, endDate, tagIDs)
 	} else {
-		notes, total, err = a.noteService.Search(keyword, page, pageSize, sortBy, startDate, endDate)
+		notes, total, err = a.noteService.Search(keyword, page, pageSize, sortBy, startDate, endDate, tagIDs)
 	}
 	if err != nil {
 		return nil, err

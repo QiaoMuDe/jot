@@ -731,6 +731,14 @@
                     <select id="aiNoteRefNotebook" class="ai-note-ref-notebook-select">
                         <option value="0">全部笔记本</option>
                     </select>
+                    <!-- 标签筛选 -->
+                    <div class="ai-note-ref-filter" id="aiNoteRefTagFilter">
+                        <button class="ai-note-ref-filter-btn" id="aiNoteRefTagBtn">
+                            <span id="aiNoteRefTagLabel">标签</span>
+                            <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="ai-note-ref-filter-dropdown" id="aiNoteRefTagDropdown"></div>
+                    </div>
                 </div>
                 <div class="ai-note-ref-list-wrap">
                     <div class="ai-note-ref-list" id="aiNoteRefList">
@@ -746,6 +754,10 @@
                     <!-- 加载覆盖层（二次搜索时显示） -->
                     <div class="ai-note-ref-loading-overlay" id="aiNoteRefLoadingOverlay">
                         <div class="ai-note-ref-loader-ring"></div>
+                    </div>
+                    <!-- 底部加载指示器（滚动追加时显示） -->
+                    <div class="ai-note-ref-list-loader" id="aiNoteRefListLoader">
+                        <span class="loading-spinner"></span> 加载中...
                     </div>
                 </div>
                 <div class="ai-note-ref-footer">

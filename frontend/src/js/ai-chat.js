@@ -55,6 +55,11 @@ let refClose = null;            // #aiNoteRefClose
 let refSkeleton = null;         // #aiNoteRefSkeleton
 let refLoadingOverlay = null;   // #aiNoteRefLoadingOverlay
 let refSearchClear = null;      // #aiNoteRefSearchClear
+let refListWrap = null;         // .ai-note-ref-list-wrap（滚动容器）
+let refTagBtn = null;           // #aiNoteRefTagBtn
+let refTagLabel = null;         // #aiNoteRefTagLabel
+let refTagDropdown = null;      // #aiNoteRefTagDropdown
+let refTagFilter = null;        // #aiNoteRefTagFilter
 let _refSearchTimer = null;     // 搜索 debounce 定时器
 let _refTempSelected = {};      // 浮层中临时选中状态 { [id]: true }
 let _refListLoaded = false;     // 是否已加载过列表（首次用骨架屏，后续用 overlay）
@@ -62,6 +67,11 @@ let _refCurrentPage = 1;        // 当前页码
 let _refTotalItems = 0;         // 匹配总数
 let _refPageSize = 20;          // 每页条数（从设置读取）
 let _refLoading = false;        // 是否正在加载中
+let _refPendingRefresh = false; // 待刷新标志（笔记本/搜索切换时若被 _refLoading 阻塞，设此标志待重试）
+let _pageSizeLoaded = false;    // 分页大小是否已缓存
+let _notebooksCache = null;     // 笔记本下拉选项缓存
+let _refTagIds = new Set();     // 已选标签 ID 集合
+let _tagsCache = null;          // 标签列表缓存
 
 /**
  * 加载模型配置到选择器 UI
@@ -147,6 +157,7 @@ export function initAIChat() {
     refSearch = document.getElementById('aiNoteRefSearch');
     refNotebook = document.getElementById('aiNoteRefNotebook');
     refList = document.getElementById('aiNoteRefList');
+    refListWrap = document.querySelector('.ai-note-ref-list-wrap');
     refCount = document.getElementById('aiNoteRefCount');
     refConfirm = document.getElementById('aiNoteRefConfirm');
     refCancel = document.getElementById('aiNoteRefCancel');
@@ -154,6 +165,10 @@ export function initAIChat() {
     refSkeleton = document.getElementById('aiNoteRefSkeleton');
     refLoadingOverlay = document.getElementById('aiNoteRefLoadingOverlay');
     refSearchClear = document.getElementById('aiNoteRefSearchClear');
+    refTagBtn = document.getElementById('aiNoteRefTagBtn');
+    refTagLabel = document.getElementById('aiNoteRefTagLabel');
+    refTagDropdown = document.getElementById('aiNoteRefTagDropdown');
+    refTagFilter = document.getElementById('aiNoteRefTagFilter');
     _refListLoaded = false;
 
     if (!messagesEl) return;
@@ -316,7 +331,7 @@ function bindEvents() {
     if (refSearch) {
         refSearch.addEventListener('input', () => {
             clearTimeout(_refSearchTimer);
-            _refSearchTimer = setTimeout(loadNoteList, 300);
+            _refSearchTimer = setTimeout(loadNoteList, 200);
         });
         // Enter 键触发搜索
         refSearch.addEventListener('keydown', (e) => {
@@ -327,7 +342,10 @@ function bindEvents() {
         });
     }
     if (refNotebook) {
-        refNotebook.addEventListener('change', () => loadNoteList(false));
+        refNotebook.addEventListener('change', () => {
+            console.log('[RefNotebook] change event fired, value:', refNotebook.value);
+            loadNoteList(false);
+        });
     }
     if (refSearchClear) {
         refSearchClear.addEventListener('click', () => {
@@ -346,16 +364,21 @@ function bindEvents() {
         });
     }
 
-    // 浮层列表点击切换选中
+    // 浮层列表点击切换选中 + 滚动到底部自动加载更多
     if (refList) {
         refList.addEventListener('click', (e) => {
-            const loadMore = e.target.closest('.ai-note-ref-load-more');
-            if (loadMore) {
-                loadNoteList(true);
-                return;
-            }
             const item = e.target.closest('.ai-note-ref-item');
             if (item) toggleNoteSelection(item.dataset.id);
+        });
+    }
+    if (refListWrap) {
+        refListWrap.addEventListener('scroll', () => {
+            const el = refListWrap;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
+                if (!_refLoading && _refCurrentPage * _refPageSize < _refTotalItems) {
+                    loadNoteList(true);
+                }
+            }
         });
     }
 
@@ -403,6 +426,23 @@ function bindEvents() {
             }
         });
     }
+
+    // ── 笔记引用浮层标签筛选 ──
+    if (refTagBtn) {
+        refTagBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            refTagFilter.classList.toggle('open');
+            if (refTagFilter.classList.contains('open')) {
+                renderRefTagDropdown();
+            }
+        });
+    }
+    // 点击外部关闭标签下拉
+    document.addEventListener('click', (e) => {
+        if (refTagFilter && !refTagFilter.contains(e.target)) {
+            refTagFilter.classList.remove('open');
+        }
+    });
 }
 
 /* ── 会话侧栏管理 ── */
@@ -1128,13 +1168,20 @@ async function openNoteRefModal() {
     _refCurrentPage = 1;
     _refTotalItems = 0;
     _refLoading = false;
+    _refPendingRefresh = false;
+    _refTagIds.clear();
+    if (refTagLabel) refTagLabel.textContent = '标签';
+    if (refTagBtn) refTagBtn.classList.remove('active');
+    // 重置滚动位置
+    if (refListWrap) refListWrap.scrollTop = 0;
     // 骨架屏默认可见
     if (refSkeleton) refSkeleton.classList.remove('hidden');
     if (refLoadingOverlay) refLoadingOverlay.classList.remove('active');
 
-    // 并行加载笔记本选项和笔记列表
+    // 并行加载笔记本选项、标签和笔记列表
     await Promise.all([
         loadAllNotebooks(),
+        loadAllRefTags(),
         loadNoteList()
     ]);
 
@@ -1143,9 +1190,10 @@ async function openNoteRefModal() {
 }
 
 /**
- * 从设置中读取分页大小
+ * 从设置中读取分页大小（带缓存，仅首次调用时向后端请求）
  */
 async function loadRefPageSize() {
+    if (_pageSizeLoaded) return;
     _refPageSize = 20;
     try {
         if (window.go?.main?.App?.GetPageSize) {
@@ -1154,6 +1202,7 @@ async function loadRefPageSize() {
                 _refPageSize = saved;
             }
         }
+        _pageSizeLoaded = true;
     } catch (_) { /* 使用默认值 */ }
 }
 
@@ -1167,18 +1216,102 @@ function closeNoteRefModal() {
 }
 
 /**
- * 加载所有笔记本到筛选下拉框
+ * 加载所有笔记本到筛选下拉框（带缓存，仅首次调用时向后端请求）
  */
 async function loadAllNotebooks() {
     if (!refNotebook) return;
     try {
+        if (_notebooksCache) {
+            rebuildNotebookOptions();
+            return;
+        }
         const notebooks = await window.go.main.App.GetAllNotebooks() || [];
-        const currentVal = refNotebook.value;
-        refNotebook.innerHTML = '<option value="0">全部笔记本</option>' +
-            notebooks.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
-        refNotebook.value = currentVal;
+        _notebooksCache = notebooks;
+        rebuildNotebookOptions();
     } catch (_) {
         /* 静默 */
+    }
+}
+
+/**
+ * 使用缓存的笔记本列表重建下拉选项
+ */
+function rebuildNotebookOptions() {
+    if (!refNotebook || !_notebooksCache) return;
+    const currentVal = refNotebook.value;
+    refNotebook.innerHTML = '<option value="0">全部笔记本</option>' +
+        _notebooksCache.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
+    refNotebook.value = currentVal;
+}
+
+/**
+ * 加载所有标签到缓存（带缓存，仅首次调用时向后端请求）
+ */
+async function loadAllRefTags() {
+    try {
+        if (_tagsCache) return;
+        const tags = await window.go.main.App.GetAllTags() || [];
+        _tagsCache = tags;
+    } catch (_) { /* 静默 */ }
+}
+
+/**
+ * 渲染标签筛选下拉菜单
+ */
+function renderRefTagDropdown() {
+    if (!refTagDropdown) return;
+    const tags = _tagsCache || [];
+    let html = '';
+    // "全部"选项
+    const allSelected = _refTagIds.size === 0;
+    html += `<div class="ai-note-ref-filter-option${allSelected ? ' selected' : ''}" data-tag-id="all">全部</div>`;
+    // 各标签选项
+    tags.forEach(tag => {
+        const selected = _refTagIds.has(tag.id);
+        html += `<div class="ai-note-ref-filter-option${selected ? ' selected' : ''}" data-tag-id="${tag.id}">#${tag.name || ''}</div>`;
+    });
+    refTagDropdown.innerHTML = html;
+
+    // 绑定点击事件
+    refTagDropdown.querySelectorAll('.ai-note-ref-filter-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tagId = opt.dataset.tagId;
+            if (tagId === 'all') {
+                _refTagIds.clear();
+            } else {
+                const id = parseInt(tagId);
+                if (_refTagIds.has(id)) {
+                    _refTagIds.delete(id);
+                } else {
+                    _refTagIds.add(id);
+                }
+            }
+            // 关闭下拉
+            if (refTagFilter) refTagFilter.classList.remove('open');
+            // 更新按钮 active 样式 + label
+            updateRefTagFilterBtn();
+            // 刷新列表
+            loadNoteList();
+        });
+    });
+}
+
+/**
+ * 更新标签筛选按钮状态
+ */
+function updateRefTagFilterBtn() {
+    if (!refTagBtn || !refTagLabel) return;
+    const count = _refTagIds.size;
+    refTagBtn.classList.toggle('active', count > 0);
+    if (count === 0) {
+        refTagLabel.textContent = '标签';
+    } else if (count === 1) {
+        const id = Array.from(_refTagIds)[0];
+        const tag = (_tagsCache || []).find(t => t.id === id);
+        refTagLabel.textContent = '#' + (tag ? tag.name : '');
+    } else {
+        refTagLabel.textContent = count + ' 个标签';
     }
 }
 
@@ -1190,29 +1323,47 @@ async function loadAllNotebooks() {
  *   - 点击加载更多: 追加到列表末尾
  */
 async function loadNoteList(append = false) {
-    if (!refList || _refLoading) return;
+    if (!refList) {
+        console.warn('[loadNoteList] refList is null, abort');
+        return;
+    }
+    // 若正在加载中：非追加调用（笔记本/搜索切换）设待刷新标志，追加调用（滚动）直接略过
+    if (_refLoading) {
+        console.log('[loadNoteList] _refLoading is true, set pendingRefresh=', !append);
+        if (!append) _refPendingRefresh = true;
+        return;
+    }
     _refLoading = true;
 
     const query = refSearch?.value.trim() || '';
     const notebookId = parseInt(refNotebook?.value || '0');
     const page = append ? _refCurrentPage + 1 : 1;
+    console.log('[loadNoteList] proceeding: append=', append, 'query=', query, 'notebookId=', notebookId, 'page=', page, '_refListLoaded=', _refListLoaded);
 
-    // 首次 → 骨架屏；二次刷新 → overlay；追加不显示 loading
+    // 首次 → 骨架屏；二次刷新 → overlay；追加显示加载指示器
     if (!append) {
         if (_refListLoaded && refLoadingOverlay) {
             refLoadingOverlay.classList.add('active');
         }
+    } else {
+        // 显示列表底部加载指示器
+        const loader = document.getElementById('aiNoteRefListLoader');
+        if (loader) loader.classList.add('visible');
     }
 
     try {
         let result;
-        if (query || notebookId > 0) {
-            result = await window.go.main.App.SearchNotes(query, page, _refPageSize, notebookId, 'updated_at', '', '');
+        if (query || notebookId > 0 || _refTagIds.size > 0) {
+            console.log('[loadNoteList] calling SearchNotes with notebookId=', notebookId);
+            const tagIds = _refTagIds.size > 0 ? Array.from(_refTagIds) : [];
+            result = await window.go.main.App.SearchNotes(query, page, _refPageSize, notebookId, 'updated_at', '', '', tagIds);
         } else {
+            console.log('[loadNoteList] calling GetNotes (no filter)');
             result = await window.go.main.App.GetNotes(page, _refPageSize, 'updated_at', 0);
         }
         const notes = result?.items || [];
         _refTotalItems = result?.total || 0;
+        console.log('[loadNoteList] API result: notes.length=', notes.length, 'total=', _refTotalItems);
 
         if (append) {
             _refCurrentPage = page;
@@ -1227,6 +1378,11 @@ async function loadNoteList(append = false) {
              _refListLoaded = true;
          }
     } catch (e) {
+        console.error('[loadNoteList] API error:', e);
+        // 隐藏加载指示器
+        const loader = document.getElementById('aiNoteRefListLoader');
+        if (loader) loader.classList.remove('visible');
+
         if (!append) {
             if (refSkeleton) refSkeleton.classList.add('hidden');
             if (refLoadingOverlay) refLoadingOverlay.classList.remove('active');
@@ -1235,7 +1391,14 @@ async function loadNoteList(append = false) {
             }
         }
     } finally {
+        console.log('[loadNoteList] finally: _refPendingRefresh=', _refPendingRefresh);
         _refLoading = false;
+        // 若在加载期间有待刷新的筛选变更（切换笔记本/搜索），自动重试
+        if (_refPendingRefresh) {
+            _refPendingRefresh = false;
+            console.log('[loadNoteList] retrying due to pendingRefresh');
+            loadNoteList();
+        }
     }
 }
 
@@ -1262,21 +1425,23 @@ function renderNoteList(notes) {
             title = title.substring(0, i) + '<span class="highlight">' + title.substring(i, i + query.length) + '</span>' + title.substring(i + query.length);
         }
         const date = note.updated_at ? formatDate(note.updated_at) : '';
+        const tags = note.tags || note.Tags || [];
+        const tagsHtml = tags.length > 0
+            ? tags.slice(0, 3).map(t => {
+                const tagId = t.id || t.ID || 0;
+                const active = _refTagIds.has(tagId) ? ' filter-active' : '';
+                return `<span class="ai-note-ref-item-tag${active}">#${t.name || t.Name || ''}</span>`;
+              }).join('') : '';
         return `<div class="ai-note-ref-item${isSelected ? ' selected' : ''}" data-id="${note.id}" style="--i:${idx}">
             <div class="ai-note-ref-item-check">${CHECK_SVG}</div>
             <div class="ai-note-ref-item-info">
                 <div class="ai-note-ref-item-title">${title}</div>
                 <div class="ai-note-ref-item-meta">
-                    ${date ? `<span>🕐 ${date}</span>` : ''}
+                    ${date ? `<span>🕐 ${date}</span>` : ''}${tagsHtml}
                 </div>
             </div>
         </div>`;
     }).join('');
-
-    // 底部加载更多按钮
-    if (_refTotalItems > _refPageSize) {
-        html += buildLoadMoreBtn();
-    }
 
     refList.innerHTML = html;
     updateRefCount();
@@ -1288,15 +1453,8 @@ function renderNoteList(notes) {
  */
 function appendToList(notes) {
     if (!refList || !notes || notes.length === 0) {
-        // 没有更多数据，移除加载更多按钮
-        const loadMore = refList.querySelector('.ai-note-ref-load-more');
-        if (loadMore) loadMore.remove();
         return;
     }
-
-    // 移除已有的加载更多按钮
-    const oldBtn = refList.querySelector('.ai-note-ref-load-more');
-    if (oldBtn) oldBtn.remove();
 
     const query = (refSearch?.value.trim() || '').toLowerCase();
     const startIdx = (_refCurrentPage - 1) * _refPageSize; // items already shown
@@ -1310,12 +1468,19 @@ function appendToList(notes) {
             title = title.substring(0, i) + '<span class="highlight">' + title.substring(i, i + query.length) + '</span>' + title.substring(i + query.length);
         }
         const date = note.updated_at ? formatDate(note.updated_at) : '';
-        return `<div class="ai-note-ref-item${isSelected ? ' selected' : ''}" data-id="${note.id}" style="--i:${startIdx + idx}">
+        const tags = note.tags || note.Tags || [];
+        const tagsHtml = tags.length > 0
+            ? tags.slice(0, 3).map(t => {
+                const tagId = t.id || t.ID || 0;
+                const active = _refTagIds.has(tagId) ? ' filter-active' : '';
+                return `<span class="ai-note-ref-item-tag${active}">#${t.name || t.Name || ''}</span>`;
+              }).join('') : '';
+        return `<div class="ai-note-ref-item${isSelected ? ' selected' : ''}" data-id="${note.id}" style="--i:${startIdx + idx};animation:none;opacity:1;transform:translateY(0)">
             <div class="ai-note-ref-item-check">${CHECK_SVG}</div>
             <div class="ai-note-ref-item-info">
                 <div class="ai-note-ref-item-title">${title}</div>
                 <div class="ai-note-ref-item-meta">
-                    ${date ? `<span>🕐 ${date}</span>` : ''}
+                    ${date ? `<span>🕐 ${date}</span>` : ''}${tagsHtml}
                 </div>
             </div>
         </div>`;
@@ -1326,22 +1491,11 @@ function appendToList(notes) {
         refList.appendChild(fragment.firstChild);
     }
 
-    // 底部加载更多按钮（如果还有更多）
-    if (_refCurrentPage * _refPageSize < _refTotalItems) {
-        refList.insertAdjacentHTML('beforeend', buildLoadMoreBtn());
-    }
+    // 先追加条目再隐藏加载器，避免 DOM 空隙导致白闪
+    const loader = document.getElementById('aiNoteRefListLoader');
+    if (loader) loader.classList.remove('visible');
 
     updateRefCount();
-}
-
-/**
- * 构建「加载更多」按钮的 HTML
- */
-function buildLoadMoreBtn() {
-    const remaining = _refTotalItems - (_refCurrentPage * _refPageSize);
-    return `<div class="ai-note-ref-load-more">
-        <span class="ai-note-ref-load-more-text">加载更多（剩余 ${remaining} 条）</span>
-    </div>`;
 }
 
 /**

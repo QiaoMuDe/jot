@@ -5075,37 +5075,21 @@ async function searchModalLoadPage(page, append) {
             // 后端实际返回: {Items, Total, Page, PageSize}
             const startDate = state.searchModalDateStart || '';
             const endDate = state.searchModalDateEnd || '';
-            const result = await window.go.main.App.SearchNotes(kw, page, pageSize, notebookId, state.searchModalSortBy, startDate, endDate);
-            notes = (result && (result.Notes || result.items)) || [];
-            total = (result && result.Total) || 0;
+            const tagIds = state.searchModalTagIds && state.searchModalTagIds.size > 0
+                ? Array.from(state.searchModalTagIds)
+                : [];
+            const result = await window.go.main.App.SearchNotes(kw, page, pageSize, notebookId, state.searchModalSortBy, startDate, endDate, tagIds);
+            notes = result?.items || [];
+            total = result?.total || 0;
         } else {
             console.warn('SearchNotes 未绑定');
             notes = [];
             total = 0;
         }
-        // 标签过滤(后端暂不支持,在客户端按 AND 语义过滤:笔记需包含所有选中标签)
-        if (state.searchModalTagIds && state.searchModalTagIds.size > 0) {
-            const selectedTagIds = state.searchModalTagIds;
-            notes = notes.filter(n => {
-                const noteTags = n.tags || n.Tags || [];
-                if (!Array.isArray(noteTags) || noteTags.length === 0) return false;
-                // AND 语义:笔记必须包含所有选中标签
-                return Array.from(selectedTagIds).every(tagId =>
-                    noteTags.some(t => (t.id !== undefined ? t.id : t.ID) === tagId)
-                );
-            });
-        }
-        // 标签过滤后,total 基于当前页(无法准确知道总数,使用当前已加载的累计)
-        if (state.searchModalTagIds && state.searchModalTagIds.size > 0) {
-            // 客户端过滤后,不再翻页(hasMore 设为 false),total 至少为已加载的数
-            state.searchModalHasMore = false;
-            const totalAfterFilter = (page - 1) * pageSize + notes.length;
-            state.searchModalTotal = totalAfterFilter;
-        } else {
-            state.searchModalTotal = total;
-            const loaded = (page - 1) * pageSize + notes.length;
-            state.searchModalHasMore = loaded < total;
-        }
+        // 后端已支持标签 AND 过滤,此处不再需要客户端过滤
+        state.searchModalTotal = total;
+        const loaded = (page - 1) * pageSize + notes.length;
+        state.searchModalHasMore = loaded < total;
         renderSearchModalResults(notes, append);
         // 底部状态
         if (page > 1 && !state.searchModalHasMore) {

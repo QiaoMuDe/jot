@@ -246,8 +246,8 @@ func (s *NoteService) GetAllIDs() ([]uint, error) {
 	return ids, nil
 }
 
-// Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页和日期范围筛选
-func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, startDate, endDate string) ([]models.Note, int64, error) {
+// Search 按标题或内容关键词模糊搜索未删除的笔记，支持分页、日期范围筛选和标签 AND 过滤
+func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, startDate, endDate string, tagIDs []uint) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -261,6 +261,16 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 	if startDate != "" && endDate != "" {
 		query = query.Where("updated_at BETWEEN ? AND ?",
 			startDate+" 00:00:00", endDate+" 23:59:59")
+	}
+
+	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
+	if len(tagIDs) > 0 {
+		subQuery := s.db.Table("note_tags").
+			Select("note_id").
+			Where("tag_id IN ?", tagIDs).
+			Group("note_id").
+			Having("COUNT(DISTINCT tag_id) = ?", len(tagIDs))
+		query = query.Where("id IN (?)", subQuery)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -280,8 +290,8 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 	return notes, total, nil
 }
 
-// SearchByNotebook 在指定笔记本范围内按关键词搜索，支持分页和日期范围筛选
-func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint, sortBy string, startDate, endDate string) ([]models.Note, int64, error) {
+// SearchByNotebook 在指定笔记本范围内按关键词搜索，支持分页、日期范围筛选和标签 AND 过滤
+func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, notebookID uint, sortBy string, startDate, endDate string, tagIDs []uint) ([]models.Note, int64, error) {
 	var notes []models.Note
 	var total int64
 
@@ -294,6 +304,16 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	if startDate != "" && endDate != "" {
 		query = query.Where("updated_at BETWEEN ? AND ?",
 			startDate+" 00:00:00", endDate+" 23:59:59")
+	}
+
+	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
+	if len(tagIDs) > 0 {
+		subQuery := s.db.Table("note_tags").
+			Select("note_id").
+			Where("tag_id IN ?", tagIDs).
+			Group("note_id").
+			Having("COUNT(DISTINCT tag_id) = ?", len(tagIDs))
+		query = query.Where("id IN (?)", subQuery)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
