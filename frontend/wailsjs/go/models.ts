@@ -283,6 +283,8 @@ export namespace services {
 	    role: string;
 	    content: string;
 	    reasoning_content: string;
+	    thinking_elapsed: number;
+	    total_elapsed: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -293,6 +295,8 @@ export namespace services {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.reasoning_content = source["reasoning_content"];
+	        this.thinking_elapsed = source["thinking_elapsed"];
+	        this.total_elapsed = source["total_elapsed"];
 	    }
 	}
 	export class NoteRefInfo {

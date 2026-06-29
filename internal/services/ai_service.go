@@ -18,9 +18,11 @@ import (
 
 // Message 表示 AI 对话中的一条消息
 type Message struct {
-	Role             string `json:"role"`
-	Content          string `json:"content"`
-	ReasoningContent string `json:"reasoning_content"`
+	Role             string  `json:"role"`
+	Content          string  `json:"content"`
+	ReasoningContent string  `json:"reasoning_content"`
+	ThinkingElapsed  float64 `json:"thinking_elapsed"`
+	TotalElapsed     float64 `json:"total_elapsed"`
 }
 
 // AIConfig 表示 AI 服务配置
@@ -138,8 +140,13 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 // CallAIStream 流式调用 OpenAI 兼容的 Chat Completion API
 // 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
 // onThinking 用于深度思考模型的 reasoning_content 字段
-func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
+func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, float64, float64), onError func(string)) {
 	cfg := a.GetConfig()
+
+	streamStart := time.Now()
+	var thinkingStart time.Time
+	var thinkingEnd time.Time
+	var hasThinking bool
 
 	type streamChoice struct {
 		Delta struct {
@@ -200,7 +207,7 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 	for {
 		select {
 		case <-ctx.Done():
-			onDone(fullContent.String())
+			onDone(fullContent.String(), 0, 0)
 			return
 		default:
 		}
@@ -232,12 +239,19 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 		if len(sr.Choices) > 0 {
 			chunk := sr.Choices[0].Delta.Content
 			if chunk != "" {
+				if hasThinking && thinkingEnd.IsZero() {
+					thinkingEnd = time.Now()
+				}
 				fullContent.WriteString(chunk)
 				onChunk(chunk)
 			}
 
 			thinking := sr.Choices[0].Delta.ReasoningContent
 			if thinking != "" {
+				if !hasThinking {
+					thinkingStart = time.Now()
+					hasThinking = true
+				}
 				fullThinking.WriteString(thinking)
 				if onThinking != nil {
 					onThinking(thinking)
@@ -246,7 +260,12 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 		}
 	}
 
-	onDone(fullContent.String())
+	var elapsedThinking float64
+	if hasThinking && !thinkingEnd.IsZero() {
+		elapsedThinking = thinkingEnd.Sub(thinkingStart).Seconds()
+	}
+	elapsedTotal := time.Since(streamStart).Seconds()
+	onDone(fullContent.String(), elapsedThinking, elapsedTotal)
 }
 
 // TestBaseURL 测试 Base URL 连通性（带 API Key 认证，5 秒超时）
@@ -389,7 +408,7 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent}
+		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed}
 	}
 	return result
 }
@@ -405,6 +424,8 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
+			ThinkingElapsed:  msg.ThinkingElapsed,
+			TotalElapsed:     msg.TotalElapsed,
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {

@@ -558,8 +558,8 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			fullThinking.WriteString(thinking)
 			runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
 		},
-		func(content string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content)
+		func(content string, elapsedThinking, elapsedTotal float64) {
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal)
 			if fullThinking.Len() > 0 {
 				runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
 			}

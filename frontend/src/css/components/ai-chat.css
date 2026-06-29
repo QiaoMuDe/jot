@@ -187,6 +187,11 @@
     color: var(--text-primary);
 }
 
+/* pre wrapper：为语言标签提供绝对定位容器 */
+.ai-msg-assistant .pre-wrapper {
+    position: relative;
+}
+
 /* 行内代码 */
 .ai-msg-assistant code {
     background: var(--input-bg);
@@ -197,11 +202,53 @@
     color: var(--text-primary);
 }
 
-/* 代码语言标签 */
-.ai-msg-assistant .code-lang-badge {
+/* 代码复制按钮：pre-wrapper 右上角，悬浮显现 */
+.ai-msg-assistant .code-copy-btn {
     position: absolute;
     top: 4px;
     right: 8px;
+    background: var(--hover-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    z-index: 1;
+    color: var(--text-muted);
+}
+.ai-msg-assistant pre:hover .code-copy-btn,
+.ai-msg-assistant .code-copy-btn:hover {
+    opacity: 1;
+}
+/* 多行代码块：复制按钮悬浮放大 */
+.ai-msg-assistant .code-copy-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    transform: scale(1.08);
+}
+.ai-msg-assistant .code-copy-btn.copied {
+    color: #16a34a;
+    border-color: #16a34a;
+    opacity: 1;
+}
+/* 单行代码块：复制按钮右侧垂直居中 */
+.ai-msg-assistant .code-copy-btn--single {
+    top: 50%;
+    transform: translateY(-50%);
+}
+.ai-msg-assistant .code-copy-btn--single:hover {
+    transform: translateY(-50%) scale(1.08);
+}
+
+/* 代码语言标签：pre 外部右下角，悬浮显现 */
+.ai-msg-assistant .code-lang-badge {
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    margin-top: 4px;
     font-size: 0.7rem;
     color: var(--text-muted);
     font-family: inherit;
@@ -209,6 +256,12 @@
     background: var(--hover-bg);
     padding: 1px 6px;
     border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+.ai-msg-assistant .pre-wrapper:hover .code-lang-badge {
+    opacity: 1;
 }
 
 /* ── 表格 ── */
@@ -1617,4 +1670,14 @@
 .ai-note-ref-actions {
     display: flex;
     gap: 8px;
+}
+
+/* ── 消息耗时标签 ── */
+.ai-msg-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-align: right;
+    user-select: none;
+    line-height: 1.3;
 }

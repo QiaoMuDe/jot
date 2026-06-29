@@ -176,6 +176,12 @@ export function initAIChat() {
     sessionContextMenu = document.getElementById('aiSessionContextMenu');
 
     bindEvents();
+
+    // 一次性初始化 Marked 选项（高亮在 renderMarkdown 中用 hljs.highlightElement 后处理）
+    marked.setOptions({
+        breaks: true,
+        gfm: true
+    });
 }
 
 /**
@@ -630,7 +636,7 @@ async function switchSession(id) {
                 const userMsgEl = messagesEl.lastElementChild;
                 if (userMsgEl) userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '');
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0);
                 el.appendChild(createMsgActions(msg.content, 'assistant'));
             }
         });
@@ -751,11 +757,34 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     let thinkingDetails = null;
     let thinkingContentEl = null;
+    let _thinkingStartedAt = 0;
+    let _thinkingTimer = null;
     let unsubs = [];
+
+    /** 更新思维链实时计时摘要 */
+    function updateThinkingTimer() {
+        if (_thinkingStartedAt <= 0) return;
+        const elapsed = (Date.now() - _thinkingStartedAt) / 1000;
+        const summary = thinkingDetails?.querySelector('.thinking-summary');
+        if (summary) summary.textContent = '💭 思考中 ' + elapsed.toFixed(1) + ' 秒';
+    }
+
+    /** 停止实时计时，设为最终态 */
+    function stopThinkingTimer(finalElapsed) {
+        if (_thinkingTimer) {
+            clearInterval(_thinkingTimer);
+            _thinkingTimer = null;
+        }
+        if (finalElapsed > 0 && thinkingDetails) {
+            const summary = thinkingDetails.querySelector('.thinking-summary');
+            if (summary) summary.textContent = '💭 已思考 ' + finalElapsed.toFixed(1) + ' 秒';
+        }
+    }
 
     const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
         if (streamGen !== myGen) return; // 属于旧流，丢弃
         if (!thinkingDetails) {
+            _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
             thinkingDetails.open = localStorage.getItem('ai_cot_collapsed') !== 'true';
@@ -764,12 +793,14 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             });
             const summary = document.createElement('summary');
             summary.className = 'thinking-summary';
-            summary.textContent = '💭 思考过程';
+            summary.textContent = '💭 思考中';
             thinkingDetails.appendChild(summary);
             thinkingContentEl = document.createElement('div');
             thinkingContentEl.className = 'thinking-content';
             thinkingDetails.appendChild(thinkingContentEl);
             streamingEl.insertBefore(thinkingDetails, contentDiv);
+            // 启动实时计时器（每 200ms 更新）
+            _thinkingTimer = setInterval(updateThinkingTimer, 200);
         }
         streamingThinking += chunk;
         thinkingContentEl.textContent = streamingThinking;
@@ -782,15 +813,20 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (!hasReceivedChunk) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
+            // 首个正文 chunk 到达 → 思考结束，停止计时并更新摘要
+            if (streamingThinking && _thinkingStartedAt > 0) {
+                stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
+            }
         }
         streamingContent += chunk;
-        contentDiv.textContent = streamingContent;
+        contentDiv.innerHTML = marked.parse(streamingContent);
         scrollToBottom();
     });
     unsubs.push(unsubChunk);
 
-    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent) => {
+    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent, elapsedThinking, elapsedTotal) => {
         if (streamGen !== myGen) return; // 属于旧流，丢弃
+        stopThinkingTimer(0); // 清理计时器，摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
         isStreaming = false;
 
@@ -804,9 +840,19 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         const finalContent = streamingContent || fullContent;
         renderMarkdown(contentDiv, finalContent);
 
+        // 添加总耗时标签
+        if (elapsedTotal > 0) {
+            const timeEl = document.createElement('div');
+            timeEl.className = 'ai-msg-time';
+            timeEl.textContent = '⏱ 总耗时 ' + elapsedTotal.toFixed(1) + ' 秒';
+            streamingEl.insertBefore(timeEl, streamingEl.querySelector('.ai-msg-actions'));
+        }
+
         if (thinkingDetails && thinkingContentEl && streamingThinking) {
             const summary = thinkingDetails.querySelector('.thinking-summary');
-            if (summary) summary.textContent = '💭 已思考';
+            if (summary) {
+                summary.textContent = elapsedThinking > 0 ? '💭 已思考 ' + elapsedThinking.toFixed(1) + ' 秒' : '💭 已思考';
+            }
             renderMarkdown(thinkingContentEl, streamingThinking);
         }
 
@@ -816,9 +862,9 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         // 自动保存消息到数据库
         if (isRegenerate) {
             // 再生模式：user 消息已在 handleRegenerate 中重保存，只存 assistant
-            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
+            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         } else {
-            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
+            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         }
 
         scrollToBottom();
@@ -827,6 +873,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     const unsubError = window.runtime.EventsOn('ai:stream-error', (streamGen, err) => {
         if (streamGen !== myGen) return; // 属于旧流，丢弃
+        stopThinkingTimer(0); // 清理计时器
         unsubs.forEach(fn => fn());
         isStreaming = false;
         // 恢复发送按钮，隐藏停止按钮
@@ -874,27 +921,55 @@ async function saveSessionMessages(roundMessages) {
  * 渲染 Markdown + 代码高亮
  */
 function renderMarkdown(el, content) {
-    marked.setOptions({
-        breaks: true,
-        gfm: true,
-        highlight: function(code, lang) {
-            if (lang && hljs.getLanguage(lang)) {
-                try { return hljs.highlight(code, { language: lang }).value; } catch (_) {}
-            }
-            try { return hljs.highlightAuto(code).value; } catch (_) {}
-            return code;
-        }
-    });
     el.innerHTML = marked.parse(content);
-    el.querySelectorAll('pre code').forEach((codeEl) => {
-        const pre = codeEl.parentElement;
-        const lang = codeEl.className.match(/language-(\w+)/);
+
+    // 后处理高亮：对每个标注了语言的代码块执行 hljs.highlightElement
+    el.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
+        try { hljs.highlightElement(block); } catch (_) {}
+    });
+
+    el.querySelectorAll('pre').forEach((pre) => {
+        // 避免重复包装
+        if (pre.parentNode.classList.contains('pre-wrapper')) return;
+
+        const code = pre.querySelector('code');
+        if (!code) return;
+
+        // 复制按钮（先放 pre 内部，和笔记预览模式一致）
+        const copyBtn = document.createElement('button');
+        const isSingleLine = code && !code.textContent.trim().includes('\n');
+        copyBtn.className = 'code-copy-btn' + (isSingleLine ? ' code-copy-btn--single' : '');
+        copyBtn.textContent = '复制';
+        copyBtn.title = '复制代码';
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(code.textContent);
+                copyBtn.classList.add('copied');
+                copyBtn.textContent = '已复制';
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtn.textContent = '复制';
+                }, 1500);
+            } catch (_) {
+                copyBtn.textContent = '失败';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
+            }
+        });
+        pre.appendChild(copyBtn);
+
+        // 语言标签（需 wrapper 作定位容器）
+        const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
+        const lang = langClass ? langClass.replace('language-', '') : '';
         if (lang) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'pre-wrapper';
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(pre);
+
             const badge = document.createElement('span');
             badge.className = 'code-lang-badge';
-            badge.textContent = lang[1];
-            pre.style.position = 'relative';
-            pre.appendChild(badge);
+            badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
+            wrapper.appendChild(badge);
         }
     });
 }
@@ -905,7 +980,7 @@ function renderMarkdown(el, content) {
  * @param {'user'|'assistant'} role - 角色
  * @param {string} [reasoningContent] - 思维链内容（可选）
  */
-function addMessage(content, role, reasoningContent) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
 
@@ -919,7 +994,7 @@ function addMessage(content, role, reasoningContent) {
         });
         const summary = document.createElement('summary');
         summary.className = 'thinking-summary';
-        summary.textContent = '💭 已思考';
+        summary.textContent = thinkingElapsed > 0 ? '💭 已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '💭 已思考';
         details.appendChild(summary);
         const thinkingEl = document.createElement('div');
         thinkingEl.className = 'thinking-content';
@@ -936,6 +1011,14 @@ function addMessage(content, role, reasoningContent) {
         contentEl.textContent = content;
     }
     el.appendChild(contentEl);
+
+    // 显示总耗时（仅历史消息有时耗数据）
+    if (totalElapsed > 0) {
+        const timeEl = document.createElement('div');
+        timeEl.className = 'ai-msg-time';
+        timeEl.textContent = '⏱ 总耗时 ' + totalElapsed.toFixed(1) + ' 秒';
+        el.appendChild(timeEl);
+    }
 
     messagesEl.appendChild(el);
     scrollToBottom();
