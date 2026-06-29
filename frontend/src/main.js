@@ -7,6 +7,7 @@ import 'highlight.js/styles/github.css';
 // CodeMirror 6 导入
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightSpecialChars, drawSelection, highlightActiveLine, placeholder, scrollPastEnd } from '@codemirror/view';
+import { javascript } from '@codemirror/lang-javascript';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches, openSearchPanel, setSearchQuery, SearchQuery } from '@codemirror/search';
 import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } from '@codemirror/autocomplete';
@@ -247,9 +248,11 @@ const els = {
     fontFamilyDisplay: $('fontFamilyDisplay'),
     fontFamilyDropdown: $('fontFamilyDropdown'),
     fontFamilySearch: $('fontFamilySearch'),
-    // 主题设置（分段控件）
+    // 主题设置（下拉菜单）
     themeControl: $('themeControl'),
-    themeIndicator: $('themeIndicator'),
+    themeTrigger: $('themeTrigger'),
+    themeDropdown: $('themeDropdown'),
+    themeLabel: $('themeLabel'),
     // 分页设置
     pageSizeControl: $('pageSizeControl'),
     pageSizeIndicator: $('pageSizeIndicator'),
@@ -423,6 +426,7 @@ function switchView(view) {
                 loadPageSizeSetting();
                 loadSyntaxHighlightSetting();
                 initCodeHighlightThemeSettings();
+                initCodePreview();
                 loadTags();
                 break;
             case 'data':
@@ -1173,22 +1177,70 @@ async function saveFontSetting(key, value) {
  * 应用指定主题
  * @param {string} themeName - 'default' | 'light' | 'dark'
  */
+/** 代码高亮主题配对映射：系统主题 → 推荐代码高亮主题 */
+const codeHighlightThemePairing = {
+    'catppuccin-latte': 'catppuccin-mocha',
+    'catppuccin-mocha': 'catppuccin-mocha',
+    'gruvbox-dark': 'gruvbox-dark',
+    'gruvbox-light': 'gruvbox-dark',
+    'ayu-mirage': 'ayu-mirage',
+    'dracula': 'dracula',
+    'default': 'monokai-dimmed',
+    'nord': 'monokai-dimmed',
+    'monokai-pro': 'monokai-dimmed',
+    'light': 'github-light',
+    'tokyo-night': 'github-dark',
+    'dark': 'github-dark',
+};
+
+const themeLabels = {
+    'default': '默认',
+    'catppuccin-latte': '暖咖',
+    'nord': '北极',
+    'gruvbox-light': '旧纸',
+    'light': '浅色',
+    'gruvbox-dark': '陈酿',
+    'monokai-pro': '粉墨',
+    'ayu-mirage': '暮光',
+    'tokyo-night': '夜幕',
+    'catppuccin-mocha': '暖夜',
+    'dark': '深色',
+    'dracula': '德古拉',
+};
+
 function applyTheme(themeName) {
     document.documentElement.setAttribute('data-theme', themeName);
-    // 同步分段控件选中状态和指示器位置
-    if (els.themeControl) {
-        const btns = els.themeControl.querySelectorAll('.segmented-btn');
-        btns.forEach(btn => {
-            const isActive = btn.dataset.themeValue === themeName;
-            btn.classList.toggle('active', isActive);
-            if (isActive && els.themeIndicator) {
-                const index = Array.from(btns).indexOf(btn);
-                const cw = els.themeControl.offsetWidth;
-                const segW = (cw - btns.length * 4) / btns.length;
-                els.themeIndicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
-            }
+    // 同步下拉菜单标签和选中态
+    if (els.themeLabel) {
+        els.themeLabel.textContent = themeLabels[themeName] || themeName;
+    }
+    if (els.themeDropdown) {
+        els.themeDropdown.querySelectorAll('.theme-select-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.themeValue === themeName);
         });
     }
+    // 更新代码高亮主题下拉菜单配对标记
+    updateCodeHighlightThemePairing(themeName);
+}
+
+/**
+ * 更新代码高亮主题下拉菜单中的配对标记
+ * 在推荐配对项旁添加星标提示
+ * @param {string} themeName - 当前系统主题名称
+ */
+function updateCodeHighlightThemePairing(themeName) {
+    const dropdown = document.getElementById('codeHighlightThemeDropdown');
+    if (!dropdown) return;
+    const paired = codeHighlightThemePairing[themeName];
+    dropdown.querySelectorAll('.theme-select-item').forEach(item => {
+        const val = item.dataset.themeValue;
+        // 移除旧标记
+        item.innerHTML = item.innerHTML.replace(/^✦\s*/, '');
+        // 添加配对标记
+        if (val === paired && paired) {
+            item.innerHTML = '✦ ' + item.innerHTML;
+        }
+    });
 }
 
 /**
@@ -1229,33 +1281,43 @@ async function saveThemeSetting(themeName) {
     nm.show('主题设置已保存', 'success');
 }
 
+let _themeInited = false;
+
 /**
- * 初始化主题设置分段控件事件
+ * 初始化主题设置下拉菜单事件
  */
 function initThemeSettings() {
-    if (!els.themeControl) return;
+    if (_themeInited) return;
+    _themeInited = true;
 
-    // 点击分段按钮切换主题
-    els.themeControl.querySelectorAll('.segmented-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const theme = btn.dataset.themeValue;
+    const trigger = els.themeTrigger;
+    const dropdown = els.themeDropdown;
+    const items = dropdown?.querySelectorAll('.theme-select-item');
+    if (!trigger || !dropdown || !items) return;
+
+    // 点击触发按钮切换下拉菜单
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        trigger.classList.toggle('open');
+        dropdown.classList.toggle('open');
+    });
+
+    // 点击选项切换主题
+    items.forEach(item => {
+        item.addEventListener('click', async () => {
+            const theme = item.dataset.themeValue;
             if (!theme) return;
-            // 更新 active 状态
-            els.themeControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            // 移动指示器
-            const btns = Array.from(els.themeControl.querySelectorAll('.segmented-btn'));
-            const index = btns.indexOf(btn);
-            const cw = els.themeControl.offsetWidth;
-            const segW = (cw - btns.length * 4) / btns.length;
-            if (els.themeIndicator) {
-                els.themeIndicator.style.transform = `translateX(${2 + index * (segW + 4)}px)`;
-            }
-            // 应用并保存
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
             applyTheme(theme);
             await saveThemeSetting(theme);
-
         });
+    });
+
+    // 点击外部关闭下拉菜单
+    document.addEventListener('click', () => {
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
     });
 }
 
@@ -5549,6 +5611,13 @@ function applyCodeHighlightTheme(themeName) {
         const useSyntaxHighlight = els.mdHighlightToggle.checked;
         initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, themeName);
     }
+    // 同步更新设置页代码预览
+    if (_codePreviewInited) {
+        const container = document.getElementById('codePreview');
+        if (container) {
+            buildCodePreview(container, themeName);
+        }
+    }
 }
 
 /**
@@ -5608,6 +5677,75 @@ function initCodeHighlightThemeSettings() {
     document.addEventListener('click', () => {
         dropdown.classList.remove('open');
         trigger.classList.remove('open');
+    });
+}
+
+let _codePreviewInited = false;
+let _codePreviewEditor = null;
+
+function initCodePreview() {
+    if (_codePreviewInited) return;
+    _codePreviewInited = true;
+
+    const container = document.getElementById('codePreview');
+    if (!container) return;
+
+    buildCodePreview(container, codeHighlightTheme);
+}
+
+function buildCodePreview(container, themeName) {
+    // 销毁旧实例
+    if (_codePreviewEditor) {
+        _codePreviewEditor.destroy();
+        _codePreviewEditor = null;
+    }
+
+    const previewCode = [
+        'import { useState, useEffect } from "react";',
+        '',
+        'function Counter() {',
+        '  const [count, setCount] = useState(0);',
+        '',
+        '  useEffect(() => {',
+        '    // Auto-increment every second',
+        '    const timer = setInterval(() => {',
+        '      setCount(prev => prev + 1);',
+        '    }, 1000);',
+        '    return () => clearInterval(timer);',
+        '  }, []);',
+        '',
+        '  if (count > 10) {',
+        '    console.warn("Count exceeded limit!");',
+        '  }',
+        '',
+        '  return <div>{count}</div>;',
+        '}',
+    ].join('\n');
+
+    const extensions = [
+        javascript(),
+        EditorView.editable.of(false),
+        EditorView.theme({
+            '&': { height: 'auto', maxHeight: '200px', backgroundColor: 'transparent' },
+            '.cm-scroller': { overflow: 'auto', fontFamily: 'Consolas, Monaco, monospace', fontSize: '12px' },
+            '.cm-gutters': { display: 'none' },
+            '.cm-line': { padding: '0 2px' },
+            '.cm-editor': { outline: 'none' },
+            '&.cm-focused': { outline: 'none' },
+        }),
+    ];
+
+    const highlightExt = getHighlightExtension('.js', themeName);
+    if (highlightExt.length > 0) extensions.push(...highlightExt);
+
+    const state = EditorState.create({
+        doc: previewCode,
+        extensions,
+    });
+
+    _codePreviewEditor = new EditorView({
+        state,
+        parent: container,
     });
 }
 

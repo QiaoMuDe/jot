@@ -102,15 +102,6 @@
   flex-shrink: 0;
 }
 
-/* 主题分段控件（6 等分） */
-.theme-segmented {
-    width: 320px;
-}
-
-.theme-segmented .segmented-indicator {
-    width: calc(16.66% - 2px); /* 6 等分 */
-}
-
 .font-family-option {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
@@ -291,4 +282,183 @@
     color: var(--text-secondary);
     white-space: nowrap;
     min-width: 100px;
+}
+
+/* ==========================================================================
+   Section N: Theme Preview (Settings) — Mini UI Card + Scrollable Code Preview
+   ========================================================================== */
+
+/* ── 系统主题迷你 UI 预览卡片 ── */
+.theme-preview {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.theme-preview-card {
+    background: var(--bg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: background 0.2s;
+}
+
+/* 伪工具栏 */
+.tp-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--topbar-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.tp-toolbar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+}
+
+.tp-toolbar-title {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* 伪内容 */
+.tp-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tp-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.tp-card-line {
+    height: 5px;
+    border-radius: 3px;
+}
+
+.tp-card-title {
+    width: 55%;
+    height: 7px;
+    background: var(--text-primary);
+    opacity: 0.5;
+    border-radius: 3px;
+}
+
+.tp-card-body {
+    width: 100%;
+    background: var(--text-primary);
+    opacity: 0.15;
+    border-radius: 3px;
+}
+
+.tp-card-body.short {
+    width: 38%;
+}
+
+.tp-card-body:nth-child(3) {
+    width: 72%;
+}
+
+/* 伪操作按钮 */
+.tp-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.tp-btn {
+    height: 18px;
+    border-radius: 4px;
+    flex: 1;
+}
+
+.tp-btn-primary {
+    background: var(--accent);
+}
+
+.tp-btn-secondary {
+    background: var(--hover-bg);
+    border: 1px solid var(--border);
+}
+
+/* 语义色指示器行 */
+.tp-semantic-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    padding-top: 6px;
+    border-top: 1px solid var(--divider);
+}
+
+.tp-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+/* ── 代码高亮预览（可滚动） ── */
+.code-preview {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.code-preview .cm-editor {
+    height: auto;
+    max-height: 200px;
+    background: var(--input-bg);
+}
+
+.code-preview .cm-editor .cm-scroller {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px;
+    overflow: auto;
+}
+
+.code-preview .cm-editor .cm-gutters {
+    display: none;
+}
+
+.code-preview .cm-editor.cm-focused {
+    outline: none;
+}
+
+/* 代码预览自定义滚动条 */
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
 }

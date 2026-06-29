@@ -263,14 +263,50 @@
                     <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">主题</label>
-                            <div class="segmented-control theme-segmented" id="themeControl">
-                                <div class="segmented-indicator" id="themeIndicator"></div>
-                                <button class="segmented-btn active" data-theme-value="default">默认</button>
-                                <button class="segmented-btn" data-theme-value="nord">北极</button>
-                                <button class="segmented-btn" data-theme-value="monokai-pro">粉墨</button>
-                                <button class="segmented-btn" data-theme-value="light">浅色</button>
-                                <button class="segmented-btn" data-theme-value="tokyo-night">夜幕</button>
-                                <button class="segmented-btn" data-theme-value="dark">深色</button>
+                            <div class="theme-select" id="themeControl">
+                                <div class="theme-select-trigger" id="themeTrigger">
+                                    <span id="themeLabel">默认</span>
+                                    <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
+                                <div class="theme-select-dropdown" id="themeDropdown">
+                                    <div class="theme-select-item active" data-theme-value="default">默认</div>
+                                    <div class="theme-select-item" data-theme-value="catppuccin-latte">暖咖</div>
+                                    <div class="theme-select-item" data-theme-value="nord">北极</div>
+                                    <div class="theme-select-item" data-theme-value="gruvbox-light">旧纸</div>
+                                    <div class="theme-select-item" data-theme-value="light">浅色</div>
+                                    <div class="theme-select-item" data-theme-value="gruvbox-dark">陈酿</div>
+                                    <div class="theme-select-item" data-theme-value="monokai-pro">粉墨</div>
+                                    <div class="theme-select-item" data-theme-value="ayu-mirage">暮光</div>
+                                    <div class="theme-select-item" data-theme-value="tokyo-night">夜幕</div>
+                                    <div class="theme-select-item" data-theme-value="catppuccin-mocha">暖夜</div>
+                                    <div class="theme-select-item" data-theme-value="dark">深色</div>
+                                    <div class="theme-select-item" data-theme-value="dracula">德古拉</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="theme-preview" id="themePreview">
+                            <div class="theme-preview-card">
+                                <div class="tp-toolbar">
+                                    <span class="tp-toolbar-dot"></span>
+                                    <span class="tp-toolbar-title">笔记标题</span>
+                                </div>
+                                <div class="tp-body">
+                                    <div class="tp-card">
+                                        <div class="tp-card-line tp-card-title"></div>
+                                        <div class="tp-card-line tp-card-body"></div>
+                                        <div class="tp-card-line tp-card-body short"></div>
+                                    </div>
+                                    <div class="tp-actions">
+                                        <span class="tp-btn tp-btn-primary"></span>
+                                        <span class="tp-btn tp-btn-secondary"></span>
+                                    </div>
+                                </div>
+                                <div class="tp-semantic-row">
+                                    <span class="tp-dot" style="background:var(--success)"></span>
+                                    <span class="tp-dot" style="background:var(--warning)"></span>
+                                    <span class="tp-dot" style="background:var(--error)"></span>
+                                    <span class="tp-dot" style="background:var(--accent)"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -318,9 +354,16 @@
                                     <div class="theme-select-item" data-theme-value="vscode-light-plus">Light+</div>
                                     <div class="theme-select-item" data-theme-value="one-dark-pro">One Dark Pro</div>
                                     <div class="theme-select-item" data-theme-value="github-dark">GitHub Dark</div>
+                                    <div class="theme-select-item" data-theme-value="catppuccin-mocha">Catppuccin</div>
+                                    <div class="theme-select-item" data-theme-value="gruvbox-dark">Gruvbox</div>
+                                    <div class="theme-select-item" data-theme-value="dracula">Dracula</div>
+                                    <div class="theme-select-item" data-theme-value="ayu-mirage">Ayu Mirage</div>
+                                    <div class="theme-select-item" data-theme-value="material-palenight">Material</div>
+                                    <div class="theme-select-item" data-theme-value="github-light">GitHub Light</div>
                                 </div>
                             </div>
                         </div>
+                        <div class="code-preview" id="codePreview"></div>
                     </div>
                 </div>
                 <!-- 标签管理 -->
