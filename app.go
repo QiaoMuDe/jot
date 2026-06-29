@@ -30,6 +30,7 @@ type App struct {
 	settingService  *services.SettingService
 	notebookService *services.NotebookService
 	aiService       *services.AIService
+	aiStreamCancel  context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -510,26 +511,37 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(messages []services.Message, thinkingEnabled bool) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool) {
+	ctx, cancel := context.WithCancel(context.Background())
+	a.aiStreamCancel = cancel
+
 	var fullThinking strings.Builder
-	go a.aiService.CallAIStream(messages, thinkingEnabled,
+	go a.aiService.CallAIStream(ctx, messages, thinkingEnabled,
 		func(chunk string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-chunk", chunk)
+			runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
 		},
 		func(thinking string) {
 			fullThinking.WriteString(thinking)
-			runtime.EventsEmit(a.ctx, "ai:stream-thinking", thinking)
+			runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
 		},
 		func(content string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-done", content)
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content)
 			if fullThinking.Len() > 0 {
 				runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
 			}
 		},
 		func(err string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-error", err)
+			runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
 		},
 	)
+}
+
+// CancelAIStream 取消当前正在进行的 AI 流式调用
+func (a *App) CancelAIStream() {
+	if a.aiStreamCancel != nil {
+		a.aiStreamCancel()
+		a.aiStreamCancel = nil
+	}
 }
 
 // GetAISessions 获取 AI 会话列表

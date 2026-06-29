@@ -464,6 +464,28 @@
     cursor: not-allowed;
 }
 
+/* ── 停止生成按钮 ── */
+.ai-chat-stop-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: var(--error, #ef4444);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, opacity 0.15s;
+    opacity: 0.85;
+}
+
+.ai-chat-stop-btn:hover {
+    background: #dc2626;
+    opacity: 1;
+}
+
 /* ── 空状态 ── */
 .ai-chat-empty {
     flex: 1;
@@ -800,4 +822,38 @@
 .ai-session-sidebar.collapsed ~ .ai-sidebar-toggle {
     left: 0;
     border-left: none;
+}
+
+/* ── 对话搜索 ── */
+.ai-session-search-wrap {
+    padding: 0 10px 8px;
+}
+
+.ai-session-search {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg-secondary);
+    color: var(--text);
+    font-size: 0.8rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.ai-session-search:focus {
+    border-color: var(--accent);
+}
+
+.ai-session-search::placeholder {
+    color: var(--text-muted);
+}
+
+/* ── 搜索高亮 ── */
+.ai-search-highlight {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 2px;
 }

@@ -3,6 +3,7 @@ package services
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
 	"jot/internal/models"
+
+	"gorm.io/gorm"
 )
 
 // Message 表示 AI 对话中的一条消息
@@ -136,7 +138,7 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 // CallAIStream 流式调用 OpenAI 兼容的 Chat Completion API
 // 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
 // onThinking 用于深度思考模型的 reasoning_content 字段
-func (a *AIService) CallAIStream(messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
+func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string), onError func(string)) {
 	cfg := a.GetConfig()
 
 	type streamChoice struct {
@@ -196,6 +198,13 @@ func (a *AIService) CallAIStream(messages []Message, thinkingEnabled bool, onChu
 
 	reader := bufio.NewReader(resp.Body)
 	for {
+		select {
+		case <-ctx.Done():
+			onDone(fullContent.String())
+			return
+		default:
+		}
+
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
@@ -387,14 +396,16 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 // SaveAIMessages 保存一轮对话消息（user + assistant）到指定会话
 // 同时更新会话 updated_at，如果是首轮对话则自动生成标题
+// 使用显式 CreatedAt 偏移确保同轮消息时间戳严格递增，避免 ORDER BY 歧义
 func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
-
-	for _, msg := range messages {
+	now := time.Now()
+	for i, msg := range messages {
 		m := models.AIMessage{
 			SessionID:        sessionID,
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
+			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {
 			return err

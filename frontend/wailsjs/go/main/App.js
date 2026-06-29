@@ -38,8 +38,12 @@ export function CallAI(arg1) {
   return window['go']['main']['App']['CallAI'](arg1);
 }
 
-export function CallAIStream(arg1, arg2) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2);
+export function CallAIStream(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3);
+}
+
+export function CancelAIStream() {
+  return window['go']['main']['App']['CancelAIStream']();
 }
 
 export function ClearAISessionMessages(arg1) {

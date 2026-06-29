@@ -10,6 +10,7 @@ let sendBtnEl = null;         // #aiChatSendBtn
 let emptyEl = null;           // #aiChatEmpty
 let inputAreaEl = null;       // #aiChatInputArea
 let clearBtnEl = null;        // #aiChatClearBtn
+let stopBtnEl = null;         // #aiChatStopBtn
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 
@@ -17,7 +18,10 @@ let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let chatHistory = [];          // 当前会话的消息（发送给模型用）
 let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
+let sessionSearchQuery = '';
+let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
+let _aiStreamGen = 0;          // 流式 generation 计数器，跨流防串扰
 
 // 模型选择器状态
 let modelTrigger = null;
@@ -89,8 +93,10 @@ export function initAIChat() {
     emptyEl = document.getElementById('aiChatEmpty');
     inputAreaEl = document.getElementById('aiChatInputArea');
     clearBtnEl = document.getElementById('aiChatClearBtn');
+    stopBtnEl = document.getElementById('aiChatStopBtn');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
+    sessionSearchEl = document.getElementById('aiSessionSearch');
 
     // 模型选择器
     modelTrigger = document.getElementById('aiChatModelTrigger');
@@ -161,6 +167,15 @@ function bindEvents() {
         sendBtnEl.addEventListener('click', onSend);
     }
 
+    // 停止生成
+    if (stopBtnEl) {
+        stopBtnEl.addEventListener('click', async () => {
+            try {
+                await window.go.main.App.CancelAIStream();
+            } catch (_) {}
+        });
+    }
+
     // 侧栏折叠/展开
     const toggleBtn = document.getElementById('aiSidebarToggle');
     const sidebar = document.querySelector('.ai-session-sidebar');
@@ -185,6 +200,14 @@ function bindEvents() {
             toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
             toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
             localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
+        });
+    }
+
+    // 对话搜索
+    if (sessionSearchEl) {
+        sessionSearchEl.addEventListener('input', () => {
+            sessionSearchQuery = sessionSearchEl.value.trim().toLowerCase();
+            renderSessionList();
         });
     }
 
@@ -242,20 +265,35 @@ async function loadSessionList() {
 function renderSessionList() {
     if (!sessionListEl) return;
 
-    if (sessions.length === 0) {
+    // 对话搜索过滤
+    let filteredSessions = sessions;
+    if (sessionSearchQuery) {
+        filteredSessions = sessions.filter(s => s.title.toLowerCase().includes(sessionSearchQuery));
+    }
+
+    if (filteredSessions.length === 0) {
         sessionListEl.innerHTML = '<div class="ai-session-empty">暂无会话</div>';
         return;
     }
 
     sessionListEl.innerHTML = '';
-    sessions.forEach(s => {
+    filteredSessions.forEach(s => {
         const item = document.createElement('div');
         item.className = 'ai-session-item' + (s.id === activeSessionId ? ' active' : '');
         item.dataset.id = s.id;
 
         const title = document.createElement('span');
         title.className = 'ai-session-item-title';
-        title.textContent = s.title;
+        // 搜索关键词高亮
+        if (sessionSearchQuery && s.title.toLowerCase().includes(sessionSearchQuery)) {
+            const idx = s.title.toLowerCase().indexOf(sessionSearchQuery);
+            const before = s.title.substring(0, idx);
+            const match = s.title.substring(idx, idx + sessionSearchQuery.length);
+            const after = s.title.substring(idx + sessionSearchQuery.length);
+            title.innerHTML = before + '<mark class="ai-search-highlight">' + match + '</mark>' + after;
+        } else {
+            title.textContent = s.title;
+        }
         title.title = s.title;
         item.appendChild(title);
 
@@ -455,9 +493,20 @@ async function onSend() {
 /**
  * 启动流式输出
  */
-function startStreaming() {
+function startStreaming(isRegenerate = false) {
     if (isStreaming) return;
     isStreaming = true;
+
+    // 递增 generation，后续事件回调据此判断是否属于当前流
+    _aiStreamGen++;
+    const myGen = _aiStreamGen;
+
+    // 清除该事件名下所有旧监听器，防止残留
+    window.runtime.EventsOff('ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking');
+
+    // 显示停止按钮，隐藏发送按钮
+    if (stopBtnEl) stopBtnEl.style.display = '';
+    if (sendBtnEl) sendBtnEl.style.display = 'none';
 
     let streamingContent = '';
     let streamingThinking = '';
@@ -475,7 +524,8 @@ function startStreaming() {
     let thinkingContentEl = null;
     let unsubs = [];
 
-    const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', chunk => {
+    const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
+        if (streamGen !== myGen) return; // 属于旧流，丢弃
         if (!thinkingDetails) {
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
@@ -498,7 +548,8 @@ function startStreaming() {
     });
     unsubs.push(unsubThinking);
 
-    const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', chunk => {
+    const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
+        if (streamGen !== myGen) return; // 属于旧流，丢弃
         if (!hasReceivedChunk) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
@@ -509,9 +560,14 @@ function startStreaming() {
     });
     unsubs.push(unsubChunk);
 
-    const unsubDone = window.runtime.EventsOn('ai:stream-done', fullContent => {
+    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent) => {
+        if (streamGen !== myGen) return; // 属于旧流，丢弃
         unsubs.forEach(fn => fn());
         isStreaming = false;
+
+        // 恢复发送按钮，隐藏停止按钮
+        if (stopBtnEl) stopBtnEl.style.display = 'none';
+        if (sendBtnEl) sendBtnEl.style.display = '';
 
         if (!hasReceivedChunk) contentDiv.innerHTML = '';
         if (streamingContent === '' && fullContent) streamingContent = fullContent;
@@ -529,25 +585,37 @@ function startStreaming() {
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant'));
 
         // 自动保存消息到数据库
-        saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
+        if (isRegenerate) {
+            // 再生模式：user 消息已在 handleRegenerate 中重保存，只存 assistant
+            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
+        } else {
+            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '' }]);
+        }
 
         scrollToBottom();
     });
     unsubs.push(unsubDone);
 
-    const unsubError = window.runtime.EventsOn('ai:stream-error', err => {
+    const unsubError = window.runtime.EventsOn('ai:stream-error', (streamGen, err) => {
+        if (streamGen !== myGen) return; // 属于旧流，丢弃
         unsubs.forEach(fn => fn());
         isStreaming = false;
+        // 恢复发送按钮，隐藏停止按钮
+        if (stopBtnEl) stopBtnEl.style.display = 'none';
+        if (sendBtnEl) sendBtnEl.style.display = '';
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
         addErrorMessage(err);
     });
     unsubs.push(unsubError);
 
     try {
-        window.go.main.App.CallAIStream(chatHistory, enableThinking);
+        window.go.main.App.CallAIStream(myGen, chatHistory, enableThinking);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
+        // 恢复发送按钮，隐藏停止按钮
+        if (stopBtnEl) stopBtnEl.style.display = 'none';
+        if (sendBtnEl) sendBtnEl.style.display = '';
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
         addErrorMessage('流式调用失败: ' + (e.message || e));
     }
@@ -766,7 +834,7 @@ function handleCopy(text, btn) {
     }).catch(() => {});
 }
 
-function handleRegenerate(msgEl) {
+async function handleRegenerate(msgEl) {
     if (!msgEl || !msgEl.parentNode || isStreaming) return;
 
     const children = Array.from(messagesEl.children);
@@ -776,5 +844,13 @@ function handleRegenerate(msgEl) {
     chatHistory.splice(idx);
     children.slice(idx).forEach(el => el.remove());
 
-    startStreaming();
+    // 清空该会话的 DB 消息，重新保存截断后的 chatHistory，避免再生导致 user 消息重复
+    try {
+        await window.go.main.App.ClearAISessionMessages(activeSessionId);
+        if (chatHistory.length > 0) {
+            await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+        }
+    } catch (_) { /* 静默 */ }
+
+    startStreaming(true);
 }
