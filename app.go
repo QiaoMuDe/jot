@@ -43,11 +43,12 @@ func NewApp() *App {
 	if err != nil {
 		panic(err)
 	}
+	settingService := services.NewSettingService(db)
 	return &App{
 		db:              db,
-		noteService:     services.NewNoteService(db),
+		noteService:     services.NewNoteService(db, settingService),
 		tagService:      services.NewTagService(db),
-		settingService:  services.NewSettingService(db),
+		settingService:  settingService,
 		notebookService: services.NewNotebookService(db),
 		aiService:       services.NewAIService(db),
 	}
@@ -387,7 +388,7 @@ func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 
 	// Step 5: 重建服务
 	a.db = newDB
-	a.noteService = services.NewNoteService(newDB)
+	a.noteService = services.NewNoteService(newDB, a.settingService)
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
 	a.aiService = services.NewAIService(newDB)
@@ -487,6 +488,33 @@ func (a *App) GetSetting(key string) string {
 // SetSetting 设置指定 key 的配置值
 func (a *App) SetSetting(key, value string) error {
 	return a.settingService.Set(key, value)
+}
+
+// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 1000
+func (a *App) GetAIRefMaxChars() int {
+	val := a.settingService.Get("ai_ref_max_chars")
+	if val == "" {
+		return 1000
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n <= 0 {
+		return 1000
+	}
+	if n > 50000 {
+		return 50000
+	}
+	return n
+}
+
+// SetAIRefMaxChars 设置 AI 引用笔记截断字数，含范围校验（1-50000）
+func (a *App) SetAIRefMaxChars(chars int) error {
+	if chars <= 0 {
+		return fmt.Errorf("截断字数必须大于 0")
+	}
+	if chars > 50000 {
+		return fmt.Errorf("截断字数不能超过 50000")
+	}
+	return a.settingService.Set("ai_ref_max_chars", strconv.Itoa(chars))
 }
 
 // ==================== AI 相关绑定方法 ====================
@@ -888,7 +916,7 @@ func (a *App) RestoreFromDir() (*services.ImportResult, error) {
 
 	// Step 5: 重建服务
 	a.db = newDB
-	a.noteService = services.NewNoteService(newDB)
+	a.noteService = services.NewNoteService(newDB, a.settingService)
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
 	a.aiService = services.NewAIService(newDB)
@@ -1056,7 +1084,7 @@ func (a *App) reconnectDB(dbPath string) error {
 		return fmt.Errorf("数据库重连失败: %w", err)
 	}
 	a.db = db
-	a.noteService = services.NewNoteService(db)
+	a.noteService = services.NewNoteService(db, a.settingService)
 	a.tagService = services.NewTagService(db)
 	a.settingService = services.NewSettingService(db)
 	a.aiService = services.NewAIService(db)

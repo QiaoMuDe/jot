@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -11,12 +12,13 @@ import (
 
 // NoteService 封装笔记相关的业务逻辑操作
 type NoteService struct {
-	db *gorm.DB
+	db             *gorm.DB
+	settingService *SettingService
 }
 
 // NewNoteService 创建一个新的 NoteService 实例
-func NewNoteService(db *gorm.DB) *NoteService {
-	return &NoteService{db: db}
+func NewNoteService(db *gorm.DB, settingService *SettingService) *NoteService {
+	return &NoteService{db: db, settingService: settingService}
 }
 
 // Create 创建一条新笔记，返回创建后的笔记对象
@@ -128,7 +130,14 @@ func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
 		return nil, fmt.Errorf("query note ref rows: %w", err)
 	}
 
-	const maxPerNote = 4000    // 单条笔记最大字符数
+	// 从设置动态读取单条笔记截断字数，默认 1000
+	maxPerNote := 1000
+	if s.settingService != nil {
+		val := s.settingService.Get("ai_ref_max_chars")
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			maxPerNote = n
+		}
+	}
 	const maxTotalChars = 8000 // 总上下文最大字符数
 
 	notes := make([]NoteRefInfo, 0, len(rows))

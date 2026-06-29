@@ -5,7 +5,7 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 
 // CodeMirror 6 导入
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightSpecialChars, drawSelection, highlightActiveLine, placeholder, scrollPastEnd } from '@codemirror/view';
 import { javascript } from '@codemirror/lang-javascript';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -43,6 +43,7 @@ marked.setOptions({
  * CodeMirror 6 编辑器实例（全局单例）
  */
 let cmEditor = null;
+let cmReadOnlyCompartment = null;
 
 /** 当前代码高亮主题名称 */
 let codeHighlightTheme = 'monokai-dimmed';
@@ -57,6 +58,8 @@ let codeHighlightTheme = 'monokai-dimmed';
  * @returns {EditorView}
  */
 function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md', themeName = 'monokai-dimmed') {
+    // 每次初始化创建新的 Compartment（旧实例销毁后旧 compartment 随之失效）
+    cmReadOnlyCompartment = new Compartment();
     const extensions = [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -85,7 +88,7 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         highlightSelectionMatches(),
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
-        EditorState.readOnly.of(readOnly),
+        cmReadOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         // 监听内容变化以触发自动保存和字数更新
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -110,6 +113,72 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
     });
 
     return cmEditor;
+}
+
+/**
+ * 切换 CM6 编辑器只读状态（不重建实例，避免闪烁）
+ * @param {boolean} readOnly
+ */
+function setCMReadOnly(readOnly) {
+    if (cmEditor && cmReadOnlyCompartment) {
+        cmEditor.dispatch({
+            effects: cmReadOnlyCompartment.reconfigure(EditorState.readOnly.of(readOnly))
+        });
+    }
+}
+
+/**
+ * 内联切换编辑器查看/编辑模式，不重建 CM6 实例，避免闪烁
+ * @param {boolean} readOnly - true=查看模式, false=编辑模式
+ */
+function switchEditorReadOnly(readOnly) {
+    // 切换标题只读状态
+    els.editorNoteTitle.readOnly = readOnly;
+    els.editorNoteTitle.classList.toggle('editor-input-readonly', readOnly);
+    // 切换按钮显隐
+    els.editorSaveBtn.style.display = readOnly ? 'none' : '';
+    els.editorCancelBtn.style.display = readOnly ? 'none' : '';
+    els.editorPanel.classList.toggle('editor-view-mode', readOnly);
+    if (els.editorTypeToggle) {
+        els.editorTypeToggle.style.display = readOnly ? 'none' : '';
+    }
+    els.editorEditBtn.style.display = readOnly ? '' : 'none';
+    els.editorViewBtn.style.display = (!readOnly && state.enteredFromViewMode) ? '' : 'none';
+    els.editorFileExt.classList.toggle('file-ext-readonly', readOnly);
+    // 切换标签选择器只读
+    renderTagSelector(readOnly);
+    // 切换 CM6 只读状态
+    setCMReadOnly(readOnly);
+    // Markdown 笔记：自动切换预览/编辑模式
+    const isMd = els.editorFileExt.textContent === '.md';
+    if (isMd && readOnly) {
+        // 查看模式 → Markdown 预览
+        els.editorOverlay.dataset.mode = 'preview';
+        els.editorModeBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === 'preview');
+        });
+        // 从 CM6 获取最新内容渲染预览
+        if (getEditorContent().trim()) {
+            els.mdRendered.innerHTML = marked.parse(getEditorContent());
+            _applyPreviewDOMHelpers();
+        } else {
+            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+        }
+    } else if (isMd) {
+        // 编辑模式 → 切回纯文本编辑
+        switchEditorMode('edit');
+    }
+    // 编辑模式记录快照，查看模式清除快照
+    if (!readOnly) {
+        state._editSnapshot = {
+            title: els.editorNoteTitle.value.trim(),
+            content: getEditorContent().trim(),
+            tags: [...state.selectedTags].sort(),
+            fileExt: els.editorFileExt.textContent
+        };
+    } else {
+        state._editSnapshot = null;
+    }
 }
 
 /**
@@ -244,6 +313,7 @@ const els = {
     tagList: $('tagList'),
     quickNoteToggle: $('quickNoteToggle'),
     mdHighlightToggle: $('mdHighlightToggle'),
+    noteOpenFullscreenToggle: $('noteOpenFullscreenToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -1569,6 +1639,15 @@ async function loadAISettings() {
     if (settingToggle) {
         if (enabled) settingToggle.classList.add('active');
     }
+
+    // 引用截断字数
+    const refMaxChars = document.getElementById('aiRefMaxChars');
+    if (refMaxChars) {
+        try {
+            const val = await window.go.main.App.GetAIRefMaxChars();
+            refMaxChars.value = val;
+        } catch (_) { /* 使用 HTML 默认值 1000 */ }
+    }
 }
 
 async function initAISettings() {
@@ -1724,6 +1803,25 @@ async function initAISettings() {
             const toolbarToggle = document.getElementById('aiChatSearchToggle');
             if (toolbarToggle) {
                 toolbarToggle.classList.toggle('active', isActive);
+            }
+        });
+    }
+
+    // ── 引用截断字数自动保存 ──
+    const refMaxChars = document.getElementById('aiRefMaxChars');
+    if (refMaxChars) {
+        refMaxChars.addEventListener('change', async () => {
+            const val = parseInt(refMaxChars.value);
+            if (isNaN(val) || val < 1) {
+                refMaxChars.value = 1000;
+                nm.show('截断字数必须大于 0，已重置为 1000', 'warning');
+                return;
+            }
+            try {
+                await window.go.main.App.SetAIRefMaxChars(val);
+                nm.show('引用截断字数已保存', 'success');
+            } catch (e) {
+                nm.show('保存失败: ' + e, 'error');
             }
         });
     }
@@ -2849,14 +2947,14 @@ function hideContextMenu() {
  * 打开笔记（编辑模式）
  */
 window.openNote = function (id) {
-    openEditor(id, false);
+    openEditor(id, false, getNoteOpenFullscreen());
 };
 
 /**
  * 查看笔记（只读模式）
  */
 window.viewNote = function (id) {
-    openEditor(id, true);
+    openEditor(id, true, getNoteOpenFullscreen());
 };
 
 /**
@@ -3451,7 +3549,7 @@ function initEventListeners() {
 
     // 浮动新建按钮
     els.fabNewNote.addEventListener('click', () => {
-        openEditor(null);
+        openEditor(null, false, getNoteOpenFullscreen());
     });
 
     // 回到顶部
@@ -3521,8 +3619,8 @@ function initEventListeners() {
         const noteId = state.editingNoteId;
         if (noteId) {
             state.enteredFromViewMode = true;
-            // 原地切换为编辑模式，不走 closeEditor（避免动画 setTimeout 冲突）
-            openEditor(noteId, false);
+            // 内联切换为编辑模式，不重建 CM6 实例，避免闪烁
+            switchEditorReadOnly(false);
         }
     });
     els.editorViewBtn.addEventListener('click', async () => {
@@ -3542,8 +3640,8 @@ function initEventListeners() {
         state.enteredFromViewMode = false;
 
         if (!hasChanged) {
-            // 无变更：直接切回查看模式，不弹通知
-            openEditor(noteId, true);
+            // 无变更：直接切回查看模式，不弹通知（内联切换，避免闪烁）
+            switchEditorReadOnly(true);
             return;
         }
 
@@ -3575,7 +3673,8 @@ function initEventListeners() {
             cached.updated_at = new Date().toISOString();
         }
         state._editSnapshot = null;
-        openEditor(noteId, true);
+        // 内联切回查看模式，不重建 CM6 实例，避免闪烁
+        switchEditorReadOnly(true);
         await loadNotes();
     });
     els.editorFullscreenBtn.addEventListener('click', toggleEditorFullscreen);
@@ -3659,6 +3758,21 @@ function initEventListeners() {
             }
         } catch (err) {
             console.error('保存语法高亮设置失败:', err);
+        }
+    });
+
+    // 全屏打开笔记开关
+    els.noteOpenFullscreenToggle.addEventListener('change', async (e) => {
+        try {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
+                await window.go.main.App.SetSetting('note_open_fullscreen', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            } else {
+                localStorage.setItem('note_open_fullscreen', String(e.target.checked));
+                nm.show('设置已保存', 'success');
+            }
+        } catch (err) {
+            console.error('保存全屏打开设置失败:', err);
         }
     });
 
@@ -3838,7 +3952,7 @@ async function handleKeyboardNavigation(e) {
     if (e.ctrlKey && e.key === 'n') {
         e.preventDefault();
         if (!els.viewEditor.classList.contains('active')) {
-            openEditor(null);
+            openEditor(null, false, getNoteOpenFullscreen());
         }
         return;
     }
@@ -5175,7 +5289,7 @@ async function _openNoteFromSearch(noteId, notebookId) {
         renderNotebookList();
     }
     if (typeof openEditor === 'function') {
-        openEditor(noteId, true);
+        openEditor(noteId, true, getNoteOpenFullscreen());
     } else {
         window.viewNote(noteId);
     }
@@ -5548,6 +5662,7 @@ async function init() {
     // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
     await loadQuickNoteSetting();
     await loadSyntaxHighlightSetting();
+    await loadNoteOpenFullscreenSetting();
     await loadCodeHighlightThemeSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
@@ -5832,6 +5947,29 @@ async function loadSyntaxHighlightSetting() {
 }
 
 /**
+ * 加载笔记全屏打开设置
+ */
+window.loadNoteOpenFullscreenSetting = async function () {
+    try {
+        let enabled = false;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
+            const val = await window.go.main.App.GetSetting('note_open_fullscreen');
+            enabled = val === 'true';
+        } else {
+            enabled = localStorage.getItem('note_open_fullscreen') === 'true';
+        }
+        els.noteOpenFullscreenToggle.checked = enabled;
+    } catch (_) {}
+};
+
+/**
+ * 检查是否应以全屏模式打开笔记
+ */
+function getNoteOpenFullscreen() {
+    return els.noteOpenFullscreenToggle?.checked || false;
+}
+
+/**
  * 加载代码高亮主题设置
  */
 async function loadCodeHighlightThemeSetting() {
@@ -6044,6 +6182,7 @@ window.loadSortSettings = loadSortSettings;
 window.loadPageSizeSetting = loadPageSizeSetting;
 window.loadQuickNoteSetting = loadQuickNoteSetting;
 window.loadSyntaxHighlightSetting = loadSyntaxHighlightSetting;
+window.loadNoteOpenFullscreenSetting = loadNoteOpenFullscreenSetting;
 window.loadCodeHighlightThemeSetting = loadCodeHighlightThemeSetting;
 window.loadAISettings = loadAISettings;
 

@@ -347,6 +347,15 @@
                         </div>
                         <div class="quick-note-hint">关闭后所有笔记不再显示代码语法高亮</div>
                         <div class="font-setting-row">
+                            <label class="font-setting-label">全屏打开</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="noteOpenFullscreenToggle">
+                                <label class="toggle-track" for="noteOpenFullscreenToggle">
+                                    <span class="toggle-thumb"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="font-setting-row">
                             <label class="font-setting-label">代码高亮主题</label>
                             <div class="theme-select" id="codeHighlightThemeControl">
                                 <div class="theme-select-trigger" id="codeHighlightThemeTrigger">
@@ -413,6 +422,14 @@
                                 <div class="ai-chat-toggle-switch" id="aiSettingSearchToggle">
                                     <div class="ai-chat-toggle-knob"></div>
                                 </div>
+                            </div>
+                        </div>
+                        <!-- 引用截断字数 -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">引用截断</label>
+                            <div style="display:flex;gap:6px;flex:1;max-width:380px;align-items:center;">
+                                <input type="number" id="aiRefMaxChars" class="settings-input" value="1000" min="1" max="50000" style="flex:1;width:100px;" />
+                                <span style="color:var(--text-muted);font-size:0.78rem;white-space:nowrap;">字符/条</span>
                             </div>
                         </div>
                     </div>

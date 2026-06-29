@@ -110,6 +110,10 @@ export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
 
+export function GetAIRefMaxChars() {
+  return window['go']['main']['App']['GetAIRefMaxChars']();
+}
+
 export function GetAISessions() {
   return window['go']['main']['App']['GetAISessions']();
 }
@@ -256,6 +260,10 @@ export function SaveAIMessages(arg1, arg2) {
 
 export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
+export function SetAIRefMaxChars(arg1) {
+  return window['go']['main']['App']['SetAIRefMaxChars'](arg1);
 }
 
 export function SetPageSize(arg1) {
