@@ -141,7 +141,7 @@ button :only-child:is(svg) {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 6px;
-  min-width: 120px;
+  min-width: 150px;
   z-index: 2000;
   opacity: 0;
   transform: scale(0.85);
@@ -176,8 +176,18 @@ button :only-child:is(svg) {
   background: var(--hover-bg);
 }
 
+.dropdown-item svg {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.dropdown-item:hover svg {
+  opacity: 0.8;
+}
+
 .dropdown-divider {
   height: 1px;
   background: var(--border);
   margin: 4px 8px;
+  opacity: 0.6;
 }
