@@ -171,16 +171,7 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 
 	msgContents := convertMessages(messages)
 
-	opts := []llms.CallOption{
-		llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
-			text := string(chunk)
-			if text != "" {
-				fullContent.WriteString(text)
-				onChunk(text)
-			}
-			return nil
-		}),
-	}
+	var opts []llms.CallOption
 
 	if thinkingEnabled {
 		opts = append(opts,
@@ -210,6 +201,17 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 				Mode:           llms.ThinkingModeAuto,
 				StreamThinking: true,
 				ReturnThinking: true,
+			}),
+		)
+	} else {
+		opts = append(opts,
+			llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
+				text := string(chunk)
+				if text != "" {
+					fullContent.WriteString(text)
+					onChunk(text)
+				}
+				return nil
 			}),
 		)
 	}

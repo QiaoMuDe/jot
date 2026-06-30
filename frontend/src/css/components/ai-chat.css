@@ -749,8 +749,9 @@
 }
 
 #viewAiChat .view-header {
-    padding: 24px 32px 0;
-    margin-left: 0;
+    padding: 24px 0 0;
+    margin-bottom: 24px;
+    margin-left: 16px;
 }
 
 .ai-chat-layout {

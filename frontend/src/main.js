@@ -1639,15 +1639,28 @@ async function loadAISettings() {
             const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
             els.aiProviderLabel.textContent = labels[provider] || 'OpenAI 兼容';
         }
-        updateProviderUI();
+        // 仅更新"获取列表"按钮状态，不覆盖已保存的 URL
+        const canFetch = provider === 'openai' || provider === 'ollama';
+        if (els.aiFetchModelsBtn) {
+            els.aiFetchModelsBtn.disabled = !canFetch;
+            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
+            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
+        }
+    } catch (e) {
+        console.warn('loadAISettings: provider/URL loading error', e);
+    }
 
-        // 清空并填充已保存的模型
+    // 独立加载模型：避免前面 UI 异常导致模型设置丢失
+    try {
+        const cfg = await window.go.main.App.GetAIConfig();
         els.aiModelDropdown.innerHTML = '';
         if (cfg.model) {
             els.aiModelLabel.textContent = cfg.model;
             addModelDropdownItem(cfg.model, true);
         }
-    } catch (_) { /* 静默失败 */ }
+    } catch (e) {
+        console.warn('loadAISettings: model loading error', e);
+    }
 
     // 深度思考状态
     const settingToggle = document.getElementById('aiSettingSearchToggle');
@@ -1663,6 +1676,39 @@ async function loadAISettings() {
             const val = await window.go.main.App.GetAIRefMaxChars();
             refMaxChars.value = val;
         } catch (_) { /* 使用 HTML 默认值 1000 */ }
+    }
+}
+
+// ── 全局 AI 辅助函数 ──
+function getActiveProvider() {
+    const dropdown = els.aiProviderDropdown;
+    const active = dropdown?.querySelector('.theme-select-item.active');
+    return active?.dataset.providerValue || 'openai';
+}
+
+function setActiveProvider(value) {
+    const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
+    const dropdown = els.aiProviderDropdown;
+    dropdown.querySelectorAll('.theme-select-item').forEach(i => i.classList.remove('active'));
+    const target = dropdown?.querySelector(`[data-provider-value="${value}"]`);
+    if (target) target.classList.add('active');
+    if (els.aiProviderLabel) els.aiProviderLabel.textContent = labels[value] || value;
+}
+
+function updateProviderUI() {
+    const provider = getActiveProvider();
+    const defaultURLs = {
+        openai: 'https://api.openai.com/v1',
+        ollama: 'http://localhost:11434',
+    };
+    if (els.aiBaseURL && defaultURLs[provider]) {
+        els.aiBaseURL.value = defaultURLs[provider];
+    }
+    const canFetch = provider === 'openai' || provider === 'ollama';
+    if (els.aiFetchModelsBtn) {
+        els.aiFetchModelsBtn.disabled = !canFetch;
+        els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
+        els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
     }
 }
 
@@ -1706,39 +1752,6 @@ async function initAISettings() {
     const provTrigger = els.aiProviderTrigger;
     const provDropdown = els.aiProviderDropdown;
 
-    // 获取当前选中的服务商值
-    function getActiveProvider() {
-        const active = provDropdown?.querySelector('.theme-select-item.active');
-        return active?.dataset.providerValue || 'openai';
-    }
-
-    // 切换选中项并触发更新
-    function setActiveProvider(value) {
-        const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
-        provDropdown.querySelectorAll('.theme-select-item').forEach(i => i.classList.remove('active'));
-        const target = provDropdown?.querySelector(`[data-provider-value="${value}"]`);
-        if (target) target.classList.add('active');
-        if (els.aiProviderLabel) els.aiProviderLabel.textContent = labels[value] || value;
-    }
-
-    // 更新服务商相关 UI
-    function updateProviderUI() {
-        const provider = getActiveProvider();
-        const defaultURLs = {
-            openai: 'https://api.openai.com/v1',
-            ollama: 'http://localhost:11434',
-        };
-        if (els.aiBaseURL && defaultURLs[provider]) {
-            els.aiBaseURL.value = defaultURLs[provider];
-        }
-        const canFetch = provider === 'openai' || provider === 'ollama';
-        if (els.aiFetchModelsBtn) {
-            els.aiFetchModelsBtn.disabled = !canFetch;
-            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
-            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
-        }
-    }
-
     if (provTrigger && provDropdown) {
         // 点击触发按钮切换下拉菜单
         provTrigger.addEventListener('click', (e) => {
@@ -1758,6 +1771,18 @@ async function initAISettings() {
             provTrigger.classList.remove('open');
             // 更新 UI 并保存
             updateProviderUI();
+            // 切换服务商时：如果 URL 为空或匹配旧默认值，则填入新默认 URL
+            const defaultURLs = {
+                openai: 'https://api.openai.com/v1',
+                ollama: 'http://localhost:11434',
+            };
+            const oldDefaults = { openai: 'https://api.openai.com/v1', ollama: 'http://localhost:11434' };
+            const currentURL = els.aiBaseURL.value.trim();
+            // 反向映射：判断当前 URL 是否属于某个服务商的默认值
+            const isOldDefault = Object.values(oldDefaults).includes(currentURL);
+            if (!currentURL || isOldDefault) {
+                els.aiBaseURL.value = defaultURLs[value] || currentURL;
+            }
             els.aiModelDropdown.innerHTML = '';
             els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
             const cfg = { base_url: els.aiBaseURL.value.trim(), api_key: els.aiAPIKey.value.trim(), model: '', provider: value };
@@ -1828,15 +1853,12 @@ async function initAISettings() {
             if (models && models.length > 0) {
                 els.aiModelDropdown.innerHTML = '';
                 const savedModel = (await window.go.main.App.GetAIConfig()).model;
-                let hasActive = false;
                 for (const m of models) {
-                    const active = m === savedModel;
-                    if (active) hasActive = true;
-                    addModelDropdownItem(m, active);
+                    addModelDropdownItem(m, m === savedModel);
                 }
-                if (!hasActive) {
-                    els.aiModelLabel.textContent = models[0];
-                }
+                // 将第一个模型设为标签并保存，避免"显示了但没保存"
+                els.aiModelLabel.textContent = models[0];
+                saveAIConfig();
                 nm.show(`已获取 ${models.length} 个模型`, 'success');
             } else {
                 nm.show('未获取到可用模型', 'warning');

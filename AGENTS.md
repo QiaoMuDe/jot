@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 30）
+> 生成日期: 2026-06-30（更新 31）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1009,3 +1009,16 @@ await loadXxxSetting();
 | **后端测试/模型获取适配** | `TestConnection()` 按 provider 分支：openai → `GET /v1/models`，ollama → `GET /api/tags`。`FetchModels()`：openai → 调 `/v1/models` 接口，ollama → 调 `/api/tags`。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
 | **前端设置页服务商选择器** | AI 设置区新增「服务商」自定义下拉选择器（`.theme-select` 样式），选项：OpenAI 兼容 / Ollama。切换时自动填入默认 URL（`https://api.openai.com/v1` / `http://localhost:11434`）、清空模型下拉、自动保存配置到后端。Base URL 输入框在 Ollama 时必填，OpenAI 时 URL+Key 联合校验。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **前端加载/保存适配 Provider** | `loadAISettings()` 读取 `cfg.provider` 设置下拉活跃项。`saveAIConfig()` 读取下拉值作为 `provider` 字段。URL/Key change 事件独立保存时同步携带 `provider`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+|
+|## 五十、新增记忆点（AI 设置页模型/URL/服务商加载修复）
+|
+|| 记忆点 | 内容 |
+||--------|------|
+|| **AI 回复结巴问题根因** | LangChainGo v0.1.14 的 OpenAI provider 在 `chat.go#L652-L663` 中对每个 SSE chunk **依次调用** `StreamingFunc` 和 `StreamingReasoningFunc`。当 `thinkingEnabled=true` 时两个回调都被设置，content 被重复处理一次 → 字符翻倍（如"哈哈喽喽！！我是我是通通义义千千问问"）。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) `CallAIStream` |
+|| **结巴修复：回调二选一** | 修改 opts 构造逻辑：思考模式仅用 `WithStreamingReasoningFunc` + `WithThinking`，非思考模式仅用 `WithStreamingFunc`。不再同时设置两个回调，避免 content 重复处理。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+|| **AI 助手返回按钮位置统一** | 3 次迭代最终定位：`#viewAiChat .view-header { padding: 24px 0 0; margin-bottom: 24px; margin-left: 16px }`。上下左右与标准页面一致（padding-top 替代 view 的 padding，margin-left 16px 匹配标准页面 `32-16=16px`）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+|| **loadAISettings 模型不显示根因** | `loadAISettings()` 中 `updateProviderUI()` 抛出 `ReferenceError`（该函数定义在 `initAISettings` 局部作用域中，但 `loadAISettings` 是全局函数），异常导致整个 try-catch 块被静默跳过，模型加载代码（`if (cfg.model) { els.aiModelLabel.textContent = cfg.model }`）永远不执行。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `loadAISettings()` |
+|| **loadAISettings 修复措施一** | 将单一 try-catch 拆分为两个独立块：第一个块处理 URL/API Key/服务商/`updateProviderUI`，异常仅 console.warn；第二个块独立调用 `GetAIConfig()` 加载模型。catch 从静默 `(_) { /* 静默失败 */ }` 改为 `(e) { console.warn('...', e) }`，不再吞错误。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1627-L1657) |
+|| **loadAISettings 修复措施二** | `updateProviderUI()`、`getActiveProvider()`、`setActiveProvider()` 三个函数从 `initAISettings()` 局部作用域提升到全局作用域。局部变量引用 `provDropdown` 改为全局 `els.aiProviderDropdown`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1677-L1707) |
+|| **URL 被默认值覆盖修复** | `loadAISettings()` 中调用 `updateProviderUI()` 会用默认 URL（`https://api.openai.com/v1` / `http://localhost:11434`）覆盖已保存的 `cfg.base_url`。修复：在 `loadAISettings` 中去掉 `updateProviderUI()` 调用，改为仅内联更新"获取列表"按钮的可用状态。`updateProviderUI()` 仅在切换服务商时由 `initAISettings` 的事件处理器调用。详见 [main.js#L1642-L1648](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+|| **获取模型自动填充并保存** | 点击"获取列表"后，将第一个模型设为标签文本（`els.aiModelLabel.textContent = models[0]`）并立即调用 `saveAIConfig()` 持久化到数据库，避免标签显示但库里未设置的不一致问题。详见 [main.js#L1855-L1856](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
