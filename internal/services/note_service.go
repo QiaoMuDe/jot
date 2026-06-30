@@ -138,7 +138,7 @@ func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
 			maxPerNote = n
 		}
 	}
-	const maxTotalChars = 8000 // 总上下文最大字符数
+	const maxTotalChars = 10 * 1024 * 1024 // 总上下文最大字节数（10MB）
 
 	notes := make([]NoteRefInfo, 0, len(rows))
 	var parts []string
