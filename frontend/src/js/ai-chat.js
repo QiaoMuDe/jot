@@ -46,6 +46,9 @@ let enableWebSearch = false;
 // 笔记引用状态
 let referencedNotes = [];       // { id, title, notebook_name }
 
+// 追问引用
+let followUpRef = '';           // 被追问的 AI 回复完整内容
+
 // 笔记引用选择浮层 DOM
 let refBtn = null;              // #aiChatRefBtn
 let refBar = null;              // #aiChatRefBar
@@ -689,6 +692,16 @@ function bindEvents() {
     if (refConfirm) {
         refConfirm.addEventListener('click', confirmNoteSelection);
     }
+
+    // ── 追问引用栏关闭按钮 ──
+    const followUpClose = document.getElementById('aiChatFollowUpClose');
+    if (followUpClose) {
+        followUpClose.addEventListener('click', () => {
+            followUpRef = '';
+            const bar = document.getElementById('aiChatFollowUpBar');
+            if (bar) bar.style.display = 'none';
+        });
+    }
     if (refSearch) {
         refSearch.addEventListener('input', () => {
             clearTimeout(_refSearchTimer);
@@ -1325,6 +1338,14 @@ async function onSend() {
         systemContext = await getNoteContext();
     }
 
+    // 追问引用注入 system context
+    if (followUpRef) {
+        const refText = '用户正在追问以下内容：\n' + followUpRef.slice(0, 500);
+        systemContext = systemContext
+            ? systemContext + '\n\n' + refText
+            : refText;
+    }
+
     startStreaming(false, systemContext);
 }
 
@@ -1543,6 +1564,11 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         }
 
         scrollToBottom();
+
+        // 发送完成, 清理追问引用
+        followUpRef = '';
+        const followUpBar = document.getElementById('aiChatFollowUpBar');
+        if (followUpBar) followUpBar.style.display = 'none';
     });
     unsubs.push(unsubDone);
 
@@ -1556,6 +1582,10 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (sendBtnEl) sendBtnEl.style.display = '';
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
         addErrorMessage(err);
+        // 出错也清理追问引用
+        followUpRef = '';
+        const fb = document.getElementById('aiChatFollowUpBar');
+        if (fb) fb.style.display = 'none';
     });
     unsubs.push(unsubError);
 
@@ -1992,6 +2022,26 @@ function createMsgActions(content, role) {
             handleRegenerate(container.parentElement);
         });
         container.appendChild(regenBtn);
+
+        // 追问：在输入区域顶部显示引用栏
+        const followUpBtn = document.createElement('button');
+        followUpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+        followUpBtn.title = '追问此条回复';
+        followUpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            try {
+                const safeContent = String(content || '');
+                const excerpt = safeContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                followUpRef = safeContent;
+                const bar = document.getElementById('aiChatFollowUpBar');
+                const text = document.getElementById('aiChatFollowUpText');
+                if (bar && text) {
+                    text.textContent = '引用: ' + excerpt + (safeContent.length > 80 ? '…' : '');
+                    bar.style.display = 'flex';
+                }
+            } catch (_) {}
+        });
+        container.appendChild(followUpBtn);
     }
 
     return container;

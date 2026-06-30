@@ -1413,6 +1413,49 @@
     color: var(--accent);
 }
 
+/* ── 追问引用栏 ── */
+.ai-chat-followup-bar {
+    display: flex;
+    align-items: center;
+    padding: 4px 0 6px 0;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+.ai-chat-followup-text {
+    flex: 1;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 6px;
+    border-left: 3px solid var(--accent);
+}
+
+.ai-chat-followup-close {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+}
+
+.ai-chat-followup-close:hover {
+    background: color-mix(in srgb, var(--error, #e53e3e) 12%, transparent);
+    color: var(--error, #e53e3e);
+}
+
 /* ── 引用笔记 chips 栏 ── */
 .ai-chat-ref-bar {
     display: flex;

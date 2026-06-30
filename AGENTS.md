@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 38）
+> 生成日期: 2026-06-30（更新 39）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1152,4 +1152,14 @@ await loadXxxSetting();
 | **CSS 来源面板** | `.search-sources` 带边框圆角、二级背景色。`summary` accent 色，hover 高亮。`.search-sources-snippet` 3 行 `-webkit-line-clamp` 截断。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **Tavily Key 显示/隐藏** | 设置页联网搜索 Key 输入框新增眼睛切换按钮（`#aiTavilyToggleBtn`），与上方 AI API Key 的切换按钮样式统一：`btn btn-sm btn-save`，`👁`/`🙈` emoji 切换。固定 `width:32px; text-align:center` 防止 emoji 宽度不同导致布局抖动。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **涉及文件** | [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+## 六十二、新增记忆点（追问引用栏重构）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **追问引用栏** | 追问按钮点击后不再在输入框内注入引用文本，改为在输入区域顶部（toolbar 上方）显示浮动引用栏 `#aiChatFollowUpBar`。栏内左侧显示缩略文本（80 字符截断 + accent 色竖线装饰），右侧 `&times;` 按钮可取消。`followUpRef` 变量存储完整引用内容。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **引用注入 system message** | `onSend()` 中，笔记引用上下文之后插入追问引用：`用户正在追问以下内容：\n` + `followUpRef.slice(0, 500)`。追问引用和笔记引用可共存，在 `systemContext` 中 `\n\n` 拼接。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `onSend()` |
+| **发送后自动清理** | 流式输出完成（`unsubDone`）或出错（`unsubError`）时自动清空 `followUpRef` 并隐藏引用栏，无需用户手动关闭。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **CSS 样式** | `.ai-chat-followup-bar`：flex 行，底部 border 分隔线，`gap: 8px`。`.ai-chat-followup-text`：`text-overflow: ellipsis` 单行截断，`border-left: 3px solid var(--accent)` 竖线装饰。`.ai-chat-followup-close`：20px 圆形按钮，hover 变红色背景和文字。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
