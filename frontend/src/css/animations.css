@@ -146,6 +146,23 @@
     to   { opacity: 1; transform: scale(1); }
 }
 
+/* Pulse click (for button/title click feedback) */
+@keyframes pulseClick {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.12); }
+    60%  { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+
+.anim-pulse {
+    animation: pulseClick 0.35s var(--anim-easing-spring) forwards;
+}
+
+/* Cursor blink (for typewriter) */
+@keyframes cursor-blink {
+    50% { opacity: 0; }
+}
+
 /* ==========================================================================
    Reduced Motion — 无障碍降级
    ========================================================================== */

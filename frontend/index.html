@@ -650,14 +650,14 @@
         <div id="viewAiChat" class="view">
             <div class="view-header">
                 <button class="back-btn" id="aiChatBackBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> 返回</button>
-                <h2 class="view-title">AI 助手</h2>
+                <h2 class="view-title" id="aiChatTitle">AI 助手</h2>
                 <div class="view-controls"></div>
             </div>
             <div class="ai-chat-layout">
                 <!-- 左侧会话侧栏 -->
                 <div class="ai-session-sidebar">
                     <div class="ai-session-sidebar-header">
-                        <span class="ai-session-sidebar-title">会话</span>
+                        <span class="ai-session-sidebar-title" id="aiSessionTitle">会话</span>
                         <button id="aiSessionNewBtn" class="ai-session-new-btn" title="新建会话">+</button>
                     </div>
                     <div class="ai-session-search-wrap">
@@ -687,6 +687,10 @@
                     </div>
                     <!-- 消息列表 -->
                     <div id="aiChatMessages" class="ai-chat-messages" style="display:none;"></div>
+                    <!-- 空对话指引 -->
+                    <div id="aiChatWelcome" class="ai-chat-welcome" style="display:none;">
+                        <p class="ai-chat-welcome-text"></p>
+                    </div>
                     <!-- 输入区 -->
                     <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
                         <div class="ai-chat-toolbar">

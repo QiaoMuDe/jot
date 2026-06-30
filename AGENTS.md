@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 33）
+> 生成日期: 2026-06-30（更新 34）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1057,4 +1057,16 @@ await loadXxxSetting();
 | **更多菜单左间距** | `.dropdown-menu` 的 `left` 从 `0` 改为 `8px`，使下拉菜单与左边框保持间距，不贴边。详见 [topbar.css#L151](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css) |
 | **新建笔记本按钮贴右** | `.sidebar-header-add-btn` 宽度/高度从 `28px` 增至 `44px`，`border-radius: 0` 直角。`.sidebar-header` 右 padding 从 `10px` 改为 `0`，按钮紧贴侧栏右边缘。详见 [sidebar.css#L218-L219](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/sidebar.css) |
 | **顶栏按钮风格统一** | 左侧更多按钮、右侧窗口控制按钮均为 44px 宽、36px 高、直角边框，与 Frameless 窗口的 Windows 原生标题栏风格一致。所有改动均为纯 CSS，不涉及 HTML/JS 修改 |
+
+## 五十四、新增记忆点（AI 对话交互增强与欢迎语打字机）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **侧栏滚动条修复** | `.ai-session-list` 添加 `scrollbar-width: thin`、`::-webkit-scrollbar: 6px`，解决滚动条闪烁消失问题。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **新建会话按钮尺寸** | `.ai-session-new-btn` 从 26×26px 增大到 36×36px，保持圆角边框和背景。详见 [ai-chat.css#L808-L828](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **双击标题新建会话** | "会话"标题 (#aiSessionTitle) 和 "AI 助手"标题 (#aiChatTitle) 添加 `dblclick` 事件监听 → `createSession()`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **会话标题字体放大** | `.ai-session-sidebar-title` 字号从 `0.82rem` 增大到 `0.9rem`。详见 [ai-chat.css#L800](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **交互反馈动画** | ① `+` 按钮 `:active` 缩放 0.92；② 标题双击施加 `pulseClick` 脉冲动画（1→1.12→0.95→1，弹簧缓动）；③ 新会话条目 `slideInNew` 入场动画（translateY(-12px) + scale(0.95)）。详见 [animations.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/animations.css) [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **空会话保护** | `createSession()` 开头新增检查：`activeSessionId !== null && chatHistory.length === 0` 时 return，防止空会话堆积。详见 [ai-chat.js#L688](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **空对话欢迎语** | 对话区无消息时居中显示随机欢迎语，打字机效果循环（逐字 90ms → 停留 2.5s → 逐字擦除 40ms → 等待 1.5s → 重选重打）。6 条随机文案，`font-size: 1.35rem; font-weight: 700`，右侧有 `var(--accent)` 色闪烁游标。详见 [ai-chat.css#L655-L669](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) [ai-chat.js#L1250-L1288](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 

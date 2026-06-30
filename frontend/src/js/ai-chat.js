@@ -8,11 +8,13 @@ let messagesEl = null;        // #aiChatMessages
 let inputEl = null;           // #aiChatInput
 let sendBtnEl = null;         // #aiChatSendBtn
 let emptyEl = null;           // #aiChatEmpty
+let welcomeEl = null;         // #aiChatWelcome
 let inputAreaEl = null;       // #aiChatInputArea
 let clearBtnEl = null;        // #aiChatClearBtn
 let stopBtnEl = null;         // #aiChatStopBtn
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
+let sessionTitleEl = null;    // #aiSessionTitle
 
 // 状态
 let chatHistory = [];          // 当前会话的消息（发送给模型用）
@@ -131,11 +133,13 @@ export function initAIChat() {
     inputEl = document.getElementById('aiChatInput');
     sendBtnEl = document.getElementById('aiChatSendBtn');
     emptyEl = document.getElementById('aiChatEmpty');
+    welcomeEl = document.getElementById('aiChatWelcome');
     inputAreaEl = document.getElementById('aiChatInputArea');
     clearBtnEl = document.getElementById('aiChatClearBtn');
     stopBtnEl = document.getElementById('aiChatStopBtn');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
+    sessionTitleEl = document.getElementById('aiSessionTitle');
     sessionSearchEl = document.getElementById('aiSessionSearch');
 
     // 模型选择器
@@ -216,7 +220,27 @@ function bindEvents() {
 
     // 新建会话
     if (sessionNewBtnEl) {
-        sessionNewBtnEl.addEventListener('click', createSession);
+        sessionNewBtnEl.addEventListener('click', () => {
+            triggerPulseFeedback(sessionNewBtnEl);
+            createSession();
+        });
+    }
+
+    // 双击标题新建会话
+    if (sessionTitleEl) {
+        sessionTitleEl.addEventListener('dblclick', () => {
+            triggerPulseFeedback(sessionTitleEl);
+            createSession();
+        });
+    }
+
+    // 双击 AI 助手标题新建会话
+    const aiChatTitleEl = document.getElementById('aiChatTitle');
+    if (aiChatTitleEl) {
+        aiChatTitleEl.addEventListener('dblclick', () => {
+            triggerPulseFeedback(aiChatTitleEl);
+            createSession();
+        });
     }
 
     // 前往设置
@@ -625,11 +649,13 @@ async function switchSession(id) {
 
         if (!msgs || msgs.length === 0) {
             renderSessionList();
+            showWelcome();
             scrollToBottom();
             return;
         }
 
-        // 按原始顺序渲染，role 直接从服务端返回
+        // 有消息时隐藏欢迎语
+        hideWelcome();
         msgs.forEach(msg => {
             if (msg.role === 'user') {
                 addMessage(msg.content, 'user');
@@ -647,10 +673,23 @@ async function switchSession(id) {
 }
 
 /**
+ * 触发按钮脉冲反馈动画
+ */
+function triggerPulseFeedback(el) {
+    if (!el) return;
+    el.classList.remove('anim-pulse');
+    void el.offsetWidth; // 强制回流以重播动画
+    el.classList.add('anim-pulse');
+}
+
+/**
  * 创建新会话
  */
 async function createSession() {
     if (isStreaming) return;
+
+    // 当前会话为空（无消息）时不允许新建，避免空会话堆积
+    if (activeSessionId !== null && chatHistory.length === 0) return;
 
     let id;
     try {
@@ -664,11 +703,19 @@ async function createSession() {
     chatHistory = [];
     messagesEl.innerHTML = '';
     hideEmptyState();
+    showWelcome();
     referencedNotes = [];
     cachedRefContext = '';
     updateRefChips();
 
     await loadSessionList();
+
+    // 为新条目添加入场动画（列表第一项是最新的）
+    const items = sessionListEl.querySelectorAll('.ai-session-item');
+    if (items.length > 0) {
+        items[0].classList.add('anim-slide-in');
+    }
+
     scrollToBottom();
 }
 
@@ -708,6 +755,8 @@ async function onSend() {
     inputEl.value = '';
     inputEl.style.height = 'auto';
     sendBtnEl.disabled = true;
+
+    hideWelcome();
 
     addMessage(text, 'user');
     const userMsgEl = messagesEl.lastElementChild;
@@ -1168,6 +1217,86 @@ function hideEmptyState() {
     if (messagesEl) messagesEl.style.display = '';
     if (inputAreaEl) inputAreaEl.style.display = '';
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = '';
+    hideWelcome();
+}
+
+let typewriterTimer = null;
+
+/**
+ * 显示空对话欢迎语
+ */
+function showWelcome() {
+    if (!welcomeEl) return;
+    if (emptyEl) emptyEl.style.display = 'none';
+    welcomeEl.style.display = '';
+    if (messagesEl) messagesEl.style.display = 'none';
+    if (inputAreaEl) inputAreaEl.style.display = '';
+    startTypewriter();
+}
+
+/**
+ * 隐藏空对话欢迎语
+ */
+function hideWelcome() {
+    if (!welcomeEl) return;
+    welcomeEl.style.display = 'none';
+    if (messagesEl) messagesEl.style.display = '';
+    stopTypewriter();
+}
+
+/**
+ * 打字机效果：逐字打印 → 暂停 → 逐字擦除 → 循环
+ */
+function startTypewriter() {
+    const el = welcomeEl?.querySelector('.ai-chat-welcome-text');
+    if (!el) return;
+
+    const MESSAGES = [
+        '有什么我能帮你的吗？',
+        '今天想写点什么？',
+        '有什么想法，随时告诉我',
+        '开始记录你的灵感吧',
+        '准备好了就告诉我',
+        '随便聊聊也可以',
+    ];
+
+    let text = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+    let i = 0, erasing = false;
+
+    function tick() {
+        if (!erasing) {
+            if (i < text.length) {
+                el.textContent = text.substring(0, ++i);
+                typewriterTimer = setTimeout(tick, 90);
+            } else {
+                erasing = true;
+                typewriterTimer = setTimeout(tick, 2500);
+            }
+        } else {
+            if (i > 0) {
+                el.textContent = text.substring(0, --i);
+                typewriterTimer = setTimeout(tick, 40);
+            } else {
+                // 擦完重新选一条随机消息
+                text = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+                erasing = false;
+                typewriterTimer = setTimeout(tick, 1500);
+            }
+        }
+    }
+
+    el.textContent = '';
+    i = 0; erasing = false;
+    typewriterTimer = setTimeout(tick, 400);
+}
+
+function stopTypewriter() {
+    if (typewriterTimer !== null) {
+        clearTimeout(typewriterTimer);
+        typewriterTimer = null;
+    }
+    const el = welcomeEl?.querySelector('.ai-chat-welcome-text');
+    if (el) el.textContent = '';
 }
 
 /* ── SVG 图标 ── */
