@@ -2033,3 +2033,11 @@
 .ai-session-item.anim-slide-in {
     animation: slideInNew 0.3s var(--anim-easing-out) forwards;
 }
+
+/* ── 上下文大小指示器 ── */
+.ai-context-size {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    user-select: none;
+}

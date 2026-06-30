@@ -15,6 +15,7 @@ let stopBtnEl = null;         // #aiChatStopBtn
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let sessionTitleEl = null;    // #aiSessionTitle
+let contextSizeEl = null;     // #aiChatContextSize
 
 // 状态
 let chatHistory = [];          // 当前会话的消息 (发送给模型用) 
@@ -357,6 +358,7 @@ export function initAIChat() {
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
     sessionTitleEl = document.getElementById('aiSessionTitle');
     sessionSearchEl = document.getElementById('aiSessionSearch');
+    contextSizeEl = document.getElementById('aiChatContextSize');
 
     // 模型选择器
     modelTrigger = document.getElementById('aiChatModelTrigger');
@@ -411,6 +413,35 @@ export function initAIChat() {
     });
 }
 
+/* ── 上下文大小 ── */
+
+/** 粗略估算文本的 token 数（中英文混合场景） */
+function estimateTokens(text) {
+    if (!text) return 0;
+    const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+    const otherChars = text.length - chineseChars;
+    return Math.ceil(chineseChars / 1.5 + otherChars / 4);
+}
+
+/** 格式化 token 数为可读字符串 */
+function formatTokens(count) {
+    if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+    return String(count);
+}
+
+/** 更新上下文大小指示器 */
+function updateContextSize() {
+    if (!contextSizeEl) return;
+    const total = chatHistory.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
+    if (total === 0) {
+        contextSizeEl.textContent = '';
+        contextSizeEl.style.display = 'none';
+    } else {
+        contextSizeEl.textContent = formatTokens(total) + ' tokens';
+        contextSizeEl.style.display = '';
+    }
+}
+
 /**
  * 绑定所有事件
  */
@@ -437,6 +468,7 @@ function bindEvents() {
 
             messagesEl.innerHTML = '';
             chatHistory = [];
+            updateContextSize();
             scrollToBottom();
         });
     }
@@ -973,6 +1005,7 @@ async function switchSession(id) {
         if (!msgs || msgs.length === 0) {
             renderSessionList();
             showWelcome();
+            updateContextSize();
             scrollToBottom();
             return;
         }
@@ -991,6 +1024,7 @@ async function switchSession(id) {
         });
 
         renderSessionList();
+        updateContextSize();
         scrollToBottom();
         inputEl?.focus();
     } catch (_) { /* 静默失败 */ }
@@ -1025,6 +1059,7 @@ async function createSession() {
     // 清空当前状态
     activeSessionId = id;
     chatHistory = [];
+    updateContextSize();
     messagesEl.innerHTML = '';
     hideEmptyState();
     showWelcome();
@@ -1195,6 +1230,7 @@ async function onSend() {
     const userMsgEl = messagesEl.lastElementChild;
     if (userMsgEl) userMsgEl.appendChild(createMsgActions(text, 'user'));
     chatHistory.push({ role: 'user', content: text });
+    updateContextSize();
 
     // 构建笔记引用上下文 (后端已处理截断) 
     let systemContext = '';
@@ -1339,6 +1375,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         }
 
         chatHistory.push({ role: 'assistant', content: finalContent });
+        updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant'));
 
         // 自动保存消息到数据库
@@ -1813,6 +1850,7 @@ async function handleRegenerate(msgEl) {
     if (idx === -1) return;
 
     chatHistory.splice(idx);
+    updateContextSize();
     children.slice(idx).forEach(el => el.remove());
 
     // 清空该会话的 DB 消息, 重新保存截断后的 chatHistory, 避免再生导致 user 消息重复

@@ -1098,3 +1098,14 @@ await loadXxxSetting();
 | **答疑 → 解题答疑** | 原"答疑"技能（`tutor`）菜单名和 chip 标签从二字改为四字"解题答疑"，内部 ID 不变。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) chip 渲染分支 |
 | **技能完整列表** | 更多技能目前共 9 项：翻译、编程、写作、解题答疑、需求规格、文本润色、内容摘要、文案生成、工作总结。全部互斥激活，切换/新建会话自动重置 |
 
+## 五十八、新增记忆点（上下文大小显示组件）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能** | AI 助手头部标题栏右侧显示当前对话的 token 估算值（如 `12.4K tokens`），空对话时自动隐藏 |
+| **放置位置** | `#viewAiChat .view-header .view-controls`（原为空容器，零布局影响） |
+| **估算方案** | 纯前端字符估算，中文字符按 1.5 字/token、其他字符按 4 字/token 粗略计算，无 npm 依赖 |
+| **更新时机** | 共 7 个触发点：`onSend()` 用户消息推送后、`startStreaming` stream-done 回调中 assistant 消息推送后、`switchSession()` 切换会话（含空/非空）、`createSession()` 新建会话、clearBtn 清空对话、`handleRegenerate()` 重新生成截断 |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 添加 `<span id="aiChatContextSize" class="ai-context-size">`；[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) 新增 `.ai-context-size` 样式；[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 新增 `estimateTokens()`、`formatTokens()`、`updateContextSize()` 三个函数 + DOM 引用 |
+| **性能** | 每次计算耗时 < 1ms（仅正则匹配 + 乘除法），无需 Web Worker |
+
