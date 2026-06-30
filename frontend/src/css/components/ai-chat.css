@@ -471,6 +471,225 @@
     overflow: hidden;
 }
 
+/* ── 卡片召回折叠面板 ── */
+.recall-cards {
+    margin: 12px 0 4px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.recall-cards summary {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 500;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.recall-cards summary:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.recall-cards[open] summary {
+    border-bottom: 1px solid var(--border);
+    background: var(--hover-bg, rgba(128, 128, 128, 0.05));
+}
+
+.recall-cards-content {
+    padding: 4px 8px;
+}
+
+.recall-cards-item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s, box-shadow 0.12s;
+    margin: 2px 0;
+}
+
+.recall-cards-item:hover {
+    background: var(--hover-bg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.recall-cards-item:active {
+    background: color-mix(in srgb, var(--accent) 8%, var(--hover-bg));
+}
+
+.recall-cards-item-title {
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.12s;
+}
+
+.recall-cards-item:hover .recall-cards-item-title {
+    color: var(--accent-dark, var(--accent));
+}
+
+.recall-cards-item-title-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: color 0.12s;
+    display: flex;
+    align-items: center;
+}
+
+.recall-cards-item:hover .recall-cards-item-title-icon {
+    color: var(--accent);
+}
+
+.recall-cards-snippet {
+    margin: 4px 0 0 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    padding-left: 22px;
+}
+
+/* ── 卡片召回预览浮层 ── */
+.ai-card-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: card-preview-fade-in 0.18s ease-out both;
+}
+
+@keyframes card-preview-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.ai-card-preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.ai-card-preview-panel {
+    position: relative;
+    width: 600px;
+    max-width: 90vw;
+    max-height: 80vh;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: card-preview-panel-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes card-preview-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ai-card-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.ai-card-preview-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    padding-right: 12px;
+}
+
+.ai-card-preview-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.ai-card-preview-close:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+.ai-card-preview-content {
+    padding: 20px 24px;
+    overflow-y: auto;
+    font-size: 0.88rem;
+    line-height: 1.75;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 卡片预览内的 Markdown 渲染：覆盖编辑器 .md-rendered 带来的布局冲突 */
+.ai-card-preview-content.md-rendered {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+    min-height: 0;
+}
+.ai-card-preview-content.md-rendered::-webkit-scrollbar {
+    width: 6px;
+}
+.ai-card-preview-content.md-rendered::-webkit-scrollbar-track {
+    background: transparent;
+}
+.ai-card-preview-content.md-rendered::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+}
+.ai-card-preview-content.md-rendered::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+/* 去除编辑器预览的额外内边距 */
+.ai-card-preview-content.md-rendered .md-rendered-loading {
+    padding: 0;
+    min-height: 160px;
+}
+
 /* ── 输入区 ── */
 .ai-chat-input-area {
     display: flex;

@@ -465,6 +465,22 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- 卡片召回 -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">卡片召回</label>
+                            <div style="display:flex;flex-direction:column;gap:6px;flex:1;max-width:380px;">
+                                <div class="ai-setting-search-line" id="aiSettingCardRecallLine">
+                                    <span class="ai-setting-search-desc">发送消息时自动召回相关笔记</span>
+                                    <div class="ai-chat-toggle-switch" id="aiSettingCardRecallToggle">
+                                        <div class="ai-chat-toggle-knob"></div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <input type="number" id="aiSettingCardRecallLimit" class="settings-input" value="3" min="1" max="10" style="flex:1;width:80px;" />
+                                    <span style="color:var(--text-muted);font-size:0.78rem;white-space:nowrap;">条/次</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <!-- 标签管理 -->
@@ -738,6 +754,11 @@
                                 <span>联网搜索</span>
                                 <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
                             </div>
+                            <div class="ai-chat-search-toggle" id="aiChatCardRecallToggle" title="卡片召回">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                                <span>卡片召回</span>
+                                <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
+                            </div>
                             <!-- 更多技能 -->
                             <div class="ai-chat-skills-wrap">
                                 <button class="ai-chat-toolbar-btn" id="aiChatMoreSkillsBtn" title="更多技能">
@@ -879,6 +900,20 @@
                         <button class="btn btn-save btn-sm" id="aiNoteRefConfirm">确认引用</button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 卡片召回预览浮层 -->
+        <div id="aiCardPreviewModal" class="ai-card-preview-modal" style="display:none;">
+            <div class="ai-card-preview-overlay" id="aiCardPreviewOverlay"></div>
+            <div class="ai-card-preview-panel">
+                <div class="ai-card-preview-header">
+                    <h2 class="ai-card-preview-title"></h2>
+                    <button class="ai-card-preview-close" id="aiCardPreviewClose" aria-label="关闭">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="ai-card-preview-content"></div>
             </div>
         </div>
 

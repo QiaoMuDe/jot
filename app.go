@@ -566,7 +566,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -625,6 +625,49 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 		// 通知前端搜索完成，关闭搜索动画
 		if searching {
 			runtime.EventsEmit(a.ctx, "ai:search-status", "done")
+		}
+
+		// 卡片召回（在联网搜索之后执行）
+		if cardRecallEnabled {
+			var query string
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "user" {
+					query = messages[i].Content
+					break
+				}
+			}
+			if query != "" {
+				// 从 localStorage 读取召回条数（默认 3）
+				recallLimit := 3
+				if a.settingService != nil {
+					if val := a.settingService.Get("ai_card_recall_limit"); val != "" {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 10 {
+							recallLimit = n
+						}
+					}
+				}
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
+				if recallResult != nil {
+					// 注入格式化文本到 system role
+					found := false
+					for i := range messages {
+						if messages[i].Role == "system" {
+							messages[i].Content = messages[i].Content + "\n\n" + recallResult.FormattedText
+							found = true
+							break
+						}
+					}
+					if !found {
+						messages = append([]services.Message{{Role: "system", Content: recallResult.FormattedText}}, messages...)
+					}
+
+					// 发射结构化卡片数据给前端
+					if len(recallResult.Cards) > 0 {
+						cardsJSON, _ := json.Marshal(recallResult.Cards)
+						runtime.EventsEmit(a.ctx, "ai:recall-cards", string(cardsJSON))
+					}
+				}
+			}
 		}
 
 		// 如果已被用户取消（停止按钮），不再继续调用 LLM，避免白调用

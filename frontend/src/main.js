@@ -1681,6 +1681,18 @@ async function loadAISettings() {
         webSearchToggle.classList.add('active');
     }
 
+    // 卡片召回配置
+    const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
+    const cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
+    if (cardRecallToggle && cardRecallEnabled) {
+        cardRecallToggle.classList.add('active');
+    }
+    const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
+    if (cardRecallLimit) {
+        const saved = localStorage.getItem('ai_card_recall_limit');
+        if (saved) cardRecallLimit.value = saved;
+    }
+
     // 引用截断字数
     const refMaxChars = document.getElementById('aiRefMaxChars');
     if (refMaxChars) {
@@ -2010,6 +2022,46 @@ async function initAISettings() {
             const toolbarToggle = document.getElementById('aiChatWebSearchToggle');
             if (toolbarToggle) {
                 toolbarToggle.classList.toggle('active', isActive);
+            }
+        });
+    }
+
+    // ── 卡片召回切换 ──
+    const settingCardRecallLine = document.getElementById('aiSettingCardRecallLine');
+    if (settingCardRecallLine) {
+        settingCardRecallLine.addEventListener('click', () => {
+            const toggleSwitch = document.getElementById('aiSettingCardRecallToggle');
+            if (!toggleSwitch) return;
+            const isActive = toggleSwitch.classList.toggle('active');
+            localStorage.setItem('ai_card_recall_enabled', String(isActive));
+            nm.show(isActive ? '卡片召回已开启' : '卡片召回已关闭', isActive ? 'success' : 'info');
+            // 同步工具栏 toggle
+            const toolbarToggle = document.getElementById('aiChatCardRecallToggle');
+            if (toolbarToggle) {
+                toolbarToggle.classList.toggle('active', isActive);
+            }
+        });
+    }
+
+    // ── 卡片召回条数保存 ──
+    const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
+    if (cardRecallLimit) {
+        cardRecallLimit.addEventListener('change', async (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val) || val < 1) {
+                val = 3;
+                e.target.value = 3;
+            }
+            if (val > 10) {
+                val = 10;
+                e.target.value = 10;
+            }
+            localStorage.setItem('ai_card_recall_limit', String(val));
+            try {
+                await window.go.main.App.SetSetting('ai_card_recall_limit', String(val));
+                nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
+            } catch (err) {
+                nm.show('保存失败: ' + err, 'error');
             }
         });
     }

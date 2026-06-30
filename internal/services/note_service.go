@@ -594,4 +594,35 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 	return &note, nil
 }
 
+// SearchFull 多关键词 OR 搜索笔记标题和内容，返回完整内容（非 200 字截断）
+// 用于卡片召回功能
+func (s *NoteService) SearchFull(keywords []string, limit int) ([]models.Note, error) {
+	if len(keywords) == 0 {
+		return nil, nil
+	}
+
+	var notes []models.Note
+
+	// 构建多关键词 OR 条件
+	var conditions []string
+	var args []interface{}
+	for _, kw := range keywords {
+		likePattern := "%" + kw + "%"
+		conditions = append(conditions, "title LIKE ? OR content LIKE ?")
+		args = append(args, likePattern, likePattern)
+	}
+
+	query := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL").
+		Where(strings.Join(conditions, " OR "), args...).
+		Order("updated_at DESC").
+		Limit(limit)
+
+	if err := query.Find(&notes).Error; err != nil {
+		return nil, err
+	}
+
+	return notes, nil
+}
+
 // SearchByNotebook 在指定笔记本范围内按标题或内容关键词

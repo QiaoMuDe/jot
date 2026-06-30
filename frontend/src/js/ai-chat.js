@@ -43,6 +43,10 @@ let enableThinking = false;
 let webSearchToggle = null;
 let enableWebSearch = false;
 
+// 卡片召回状态
+let cardRecallToggle = null;
+let enableCardRecall = false;
+
 // 笔记引用状态
 let referencedNotes = [];       // { id, title, notebook_name }
 
@@ -431,6 +435,10 @@ export function initAIChat() {
     webSearchToggle = document.getElementById('aiChatWebSearchToggle');
     enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
 
+    // 卡片召回
+    cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
+    enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
+
     // 笔记引用
     refBtn = document.getElementById('aiChatRefBtn');
     refBar = document.getElementById('aiChatRefBar');
@@ -674,6 +682,20 @@ function bindEvents() {
         });
     }
 
+    // ── 卡片召回切换 ──
+    if (cardRecallToggle) {
+        if (enableCardRecall) cardRecallToggle.classList.add('active');
+        cardRecallToggle.addEventListener('click', () => {
+            enableCardRecall = cardRecallToggle.classList.toggle('active');
+            localStorage.setItem('ai_card_recall_enabled', String(enableCardRecall));
+            // 同步设置页 toggle
+            const settingToggle = document.getElementById('aiSettingCardRecallToggle');
+            if (settingToggle) {
+                settingToggle.classList.toggle('active', enableCardRecall);
+            }
+        });
+    }
+
     // ── 笔记引用按钮 ──
     if (refBtn) {
         refBtn.addEventListener('click', openNoteRefModal);
@@ -691,6 +713,21 @@ function bindEvents() {
     }
     if (refConfirm) {
         refConfirm.addEventListener('click', confirmNoteSelection);
+    }
+
+    // ── 卡片预览浮层 ──
+    const previewModal = document.getElementById('aiCardPreviewModal');
+    const previewOverlay = document.getElementById('aiCardPreviewOverlay');
+    const previewClose = document.getElementById('aiCardPreviewClose');
+    if (previewOverlay) {
+        previewOverlay.addEventListener('click', () => {
+            if (previewModal) previewModal.style.display = 'none';
+        });
+    }
+    if (previewClose) {
+        previewClose.addEventListener('click', () => {
+            if (previewModal) previewModal.style.display = 'none';
+        });
     }
 
     // ── 追问引用栏关闭按钮 ──
@@ -1364,7 +1401,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:recall-cards'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -1376,6 +1413,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     let streamingThinking = '';
     let hasReceivedChunk = false;
     let searchSources = null;
+    let recallCards = null;
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -1460,6 +1498,14 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         } catch (_) {}
     });
     unsubs.push(unsubSources);
+
+    // 卡片召回数据（结构化卡片列表，AI 回复结束后展示）
+    const unsubRecall = window.runtime.EventsOn('ai:recall-cards', (cardsJSON) => {
+        try {
+            recallCards = JSON.parse(cardsJSON);
+        } catch (_) {}
+    });
+    unsubs.push(unsubRecall);
 
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
@@ -1563,6 +1609,53 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             }
         }
 
+        // 展示卡片召回折叠面板
+        if (recallCards && recallCards.length > 0) {
+            const details = document.createElement('details');
+            details.className = 'recall-cards';
+            details.open = false;
+            const summary = document.createElement('summary');
+            summary.className = 'recall-cards-summary';
+            summary.textContent = '📄 召回笔记 (' + recallCards.length + ' 篇)';
+            details.appendChild(summary);
+            const list = document.createElement('div');
+            list.className = 'recall-cards-content';
+            recallCards.forEach(function(card) {
+                const item = document.createElement('div');
+                item.className = 'recall-cards-item';
+                item.addEventListener('click', (function(c) {
+                    return function(e) {
+                        e.preventDefault();
+                        openCardPreview(c);
+                    };
+                })(card));
+                const titleRow = document.createElement('div');
+                titleRow.className = 'recall-cards-item-title';
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'recall-cards-item-title-icon';
+                iconSpan.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
+                titleRow.appendChild(iconSpan);
+                const titleSpan = document.createElement('span');
+                titleSpan.textContent = card.title;
+                titleRow.appendChild(titleSpan);
+                item.appendChild(titleRow);
+                if (card.content) {
+                    const snippet = document.createElement('p');
+                    snippet.className = 'recall-cards-snippet';
+                    snippet.textContent = card.content.length > 100 ? card.content.slice(0, 100) + '...' : card.content;
+                    item.appendChild(snippet);
+                }
+                list.appendChild(item);
+            });
+            details.appendChild(list);
+            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+            if (actionsEl) {
+                streamingEl.insertBefore(details, actionsEl);
+            } else {
+                streamingEl.appendChild(details);
+            }
+        }
+
         scrollToBottom();
 
         // 发送完成, 清理追问引用
@@ -1601,7 +1694,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     }
 
     try {
-        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch);
+        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch, enableCardRecall);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -2612,5 +2705,88 @@ function formatDate(dateStr) {
         return `${d.getMonth() + 1}/${d.getDate()}`;
     } catch (_) {
         return '';
+    }
+}
+
+/** 当前卡片预览 Worker 实例，用于中断前一次渲染 */
+let _cardPreviewWorker = null;
+
+/**
+ * 打开卡片预览浮层
+ * - .md / .markdown 文件：Web Worker 离线程渲染 + 加载动画
+ * - 其他格式：直接显示纯文本
+ */
+function openCardPreview(card) {
+    const modal = document.getElementById('aiCardPreviewModal');
+    if (!modal) return;
+    const titleEl = modal.querySelector('.ai-card-preview-title');
+    const contentEl = modal.querySelector('.ai-card-preview-content');
+    if (titleEl) titleEl.textContent = card.title;
+
+    // 终止前一次的 Worker（如有）
+    if (_cardPreviewWorker) {
+        _cardPreviewWorker.terminate();
+        _cardPreviewWorker = null;
+    }
+
+    const isMd = card.file_ext === '.md' || card.file_ext === '.markdown';
+
+    if (isMd && contentEl) {
+        contentEl.classList.add('md-rendered');
+        // 显示加载动画
+        contentEl.innerHTML = '<div class="md-rendered-loading">渲染中…</div>';
+        contentEl.scrollTop = 0;
+        modal.style.display = '';
+
+        // Web Worker 离线程渲染
+        try {
+            const worker = new Worker(
+                new URL('./preview-worker.js', import.meta.url),
+                { type: 'module' }
+            );
+            _cardPreviewWorker = worker;
+            worker.onmessage = function (e) {
+                const { html, error } = e.data;
+                if (error) {
+                    console.warn('Preview Worker error:', error);
+                    contentEl.textContent = card.content;
+                } else {
+                    contentEl.innerHTML = html;
+                    // 代码高亮后处理
+                    contentEl.querySelectorAll('pre code').forEach((block) => {
+                        try { hljs.highlightElement(block); } catch (_) {}
+                    });
+                }
+                worker.terminate();
+                if (_cardPreviewWorker === worker) {
+                    _cardPreviewWorker = null;
+                }
+            };
+            worker.onerror = function (err) {
+                console.warn('Preview Worker failed:', err);
+                contentEl.textContent = card.content;
+                worker.terminate();
+                if (_cardPreviewWorker === worker) {
+                    _cardPreviewWorker = null;
+                }
+            };
+            worker.postMessage(card.content);
+        } catch (err) {
+            // Worker 初始化失败 → 主线程回退
+            console.warn('Preview Worker init failed, fallback to main thread:', err);
+            contentEl.innerHTML = marked.parse(card.content);
+            contentEl.querySelectorAll('pre code').forEach((block) => {
+                try { hljs.highlightElement(block); } catch (_) {}
+            });
+            modal.style.display = '';
+        }
+    } else {
+        // 纯文本：移除 md-rendered 类，直接显示
+        if (contentEl) {
+            contentEl.classList.remove('md-rendered');
+            contentEl.textContent = card.content;
+            contentEl.scrollTop = 0;
+        }
+        modal.style.display = '';
     }
 }
