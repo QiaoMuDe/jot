@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 32）
+> 生成日期: 2026-06-30（更新 33）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -126,6 +126,7 @@ jot/                                    # 项目根目录
     ├── polish-search-modal-animation/ # 搜索弹窗动画优化
     ├── redesign-data-management/     # 数据管理页面 UI 重构与动画增强
     ├── redesign-ui/                  # UI 重新设计
+    ├── redesign-ai-session-sidebar/  # AI 会话侧边栏重新设计（已完成）
     ├── refine-search-modal-ui/       # 搜索弹窗 UI 优化
     ├── remove-auto-save-draft/       # 移除草稿自动保存
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
@@ -1031,3 +1032,17 @@ await loadXxxSetting();
 || **问题背景** | 数据管理页面右侧滚动条不是全屏的（只出现在内容区域内部），而回收站、笔记、设置页面的滚动条都是从页面顶部到底部的全屏滚动条，滚动体验不一致 |
 || **根因** | `data-view.css` 中 `.data-content` 有 `overflow-y: auto` 和 `scrollbar-gutter: stable`，创建了内部滚动容器，而其他页面（`.trash-list`/`.settings-content`）无此属性，依赖 `#mainContent` 的全屏滚动 |
 || **修复方案** | ① 移除 `.data-content` 的 `overflow-y: auto` 和 `scrollbar-gutter: stable`，保持 `flex: 1` 让内容自然流入 `#mainContent`。② 从 `scrollbar.css` 中移除所有 `.data-content` 引用。③ `main.js` 中 `getScrollContainer()` 的 data 视图从返回 `els.dataContent` 改为 `els.mainContent`。④ `initScrollbarAutoHide()` 容器列表移除 `els.dataContent`。⑤ 移除 `#viewData.view` 的 `padding-right: 0` 特殊规则，与其他视图保持一致的 `32px` 右内边距。详见 `.trae/specs/fix-data-page-scrollbar/` |
+1029→
+1030→|## 五十二、新增记忆点（AI 会话侧边栏重新设计）
+1031→|
+1032→|| 记忆点 | 内容 |
+1033→||--------|------|
+1034→|| **侧边栏宽度微调** | `.ai-session-sidebar` 宽度从 220px 增加至 230px，折叠按钮位置同步从 left: 220px 调整为 left: 230px，提升条目文字可读性 |
+1035→|| **间距体系全面压缩** | header 区域 padding 从 10px 12px 压缩为 8px 10px，搜索框区域 padding 从 8px 10px 8px 压缩为 6px 10px 4px，footer 区域 padding 从 8px 10px 压缩为 6px 10px，整体布局更紧凑 |
+1036→|| **搜索框紧凑化** | 搜索输入框 padding 从 5px 8px 压缩至 4px 8px，整体高度缩小与新的间距体系匹配 |
+1037→|| **活跃条目左侧 accent 竖条指示器** | `.ai-session-item.active` 新增 `::before` 伪元素：左侧 2px 宽 `var(--accent)` 竖条（left: 0, top: 2px, bottom: 2px, border-radius: 0 1px 1px 0），与背景色 `color-mix(in srgb, var(--accent) 12%, transparent)` 共同标识当前选中会话 |
+1038→|| **条目间高度一致性修复** | 默认条目增加 `border: 1px solid transparent` 预占位，活跃条目的 border 改为只改 `border-color`（不复写整个 border），从根本上消除了活跃/非活跃间的高度差跳动（~2px） |
+1039→|| **删除按钮 hover 挤压感消除** | 删除按钮尺寸从 20px 调整为 18px，与标题行高（`0.82rem × 1.4 ≈ 18.4px`）基本一致，hover 出现时 `align-items: center` 不再重新计算垂直居中位置 |
+1040→|| **右侧空白极致压缩** | 列表容器 padding-right 和条目 padding-right 从 4px 逐步减至 1px，活跃条目右侧边框到侧边栏边缘的距离仅 2px（1px border + 1px 容器 padding） |
+1041→|| **空状态样式** | 新增 `.ai-session-empty` 规则：居中、`color: var(--text-muted)`、字号 0.82rem、上边距 24px |
+1042→|| **核心文件** | `frontend/src/css/components/ai-chat.css` — 纯 CSS 改动，无 JS/HTML 变更。详见 `.trae/specs/redesign-ai-session-sidebar/` |

@@ -312,6 +312,10 @@
   user-select: none;
 }
 
+.theme-select-item + .theme-select-item {
+  margin-top: 4px;
+}
+
 .theme-select-item:hover {
   background: var(--hover-bg);
 }
