@@ -740,6 +740,11 @@ func (a *App) ClearAISessionMessages(sessionID uint) error {
 	return a.aiService.ClearAISessionMessages(sessionID)
 }
 
+// UpdateSessionContextTokens 更新会话的上下文 Token 数
+func (a *App) UpdateSessionContextTokens(sessionID uint, tokens int) error {
+	return a.aiService.UpdateSessionContextTokens(sessionID, tokens)
+}
+
 // SaveAIMessageAsNote 将 AI 消息内容保存为笔记（归入默认笔记本）
 func (a *App) SaveAIMessageAsNote(content string) (*models.Note, error) {
 	if strings.TrimSpace(content) == "" {

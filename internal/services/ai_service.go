@@ -426,12 +426,13 @@ func fetchOllamaModels(cfg AIConfig) ([]string, error) {
 
 // AISessionSummary 会话列表项（含最后一条消息摘要）
 type AISessionSummary struct {
-	ID           uint   `json:"id"`
-	Title        string `json:"title"`
-	LastMessage  string `json:"last_message"`
-	MessageCount int    `json:"message_count"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	ID            uint   `json:"id"`
+	Title         string `json:"title"`
+	ContextTokens int    `json:"context_tokens"`
+	LastMessage   string `json:"last_message"`
+	MessageCount  int    `json:"message_count"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 // GetAISessions 获取所有会话，按 updated_at DESC 排序，附带最后一条消息摘要
@@ -442,10 +443,11 @@ func (a *AIService) GetAISessions() []AISessionSummary {
 	result := make([]AISessionSummary, 0, len(sessions))
 	for _, s := range sessions {
 		summary := AISessionSummary{
-			ID:        s.ID,
-			Title:     s.Title,
-			CreatedAt: s.CreatedAt.Format("2006-01-02 15:04"),
-			UpdatedAt: s.UpdatedAt.Format("2006-01-02 15:04"),
+			ID:            s.ID,
+			Title:         s.Title,
+			ContextTokens: s.ContextTokens,
+			CreatedAt:     s.CreatedAt.Format("2006-01-02 15:04"),
+			UpdatedAt:     s.UpdatedAt.Format("2006-01-02 15:04"),
 		}
 
 		// 查消息数
@@ -487,6 +489,11 @@ func (a *AIService) DeleteAISession(id uint) error {
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
 	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
+}
+
+// UpdateSessionContextTokens 更新会话的上下文 Token 数
+func (a *AIService) UpdateSessionContextTokens(sessionID uint, tokens int) error {
+	return a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("context_tokens", tokens).Error
 }
 
 // LoadAISessionMessages 加载会话的所有消息（按 created_at ASC）

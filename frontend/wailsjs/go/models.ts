@@ -222,6 +222,7 @@ export namespace services {
 	export class AISessionSummary {
 	    id: number;
 	    title: string;
+	    context_tokens: number;
 	    last_message: string;
 	    message_count: number;
 	    created_at: string;
@@ -235,6 +236,7 @@ export namespace services {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.title = source["title"];
+	        this.context_tokens = source["context_tokens"];
 	        this.last_message = source["last_message"];
 	        this.message_count = source["message_count"];
 	        this.created_at = source["created_at"];

@@ -519,8 +519,8 @@ function formatTokens(count) {
     return String(count);
 }
 
-/** 更新上下文大小指示器 */
-function updateContextSize() {
+/** 更新上下文大小指示器（消息变更时调用，自动持久化到数据库） */
+async function updateContextSize() {
     if (!contextSizeEl) return;
     const total = chatHistory.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
     if (total === 0) {
@@ -529,6 +529,12 @@ function updateContextSize() {
     } else {
         contextSizeEl.textContent = formatTokens(total) + ' tokens';
         contextSizeEl.style.display = '';
+    }
+    // 持久化到数据库（仅在活跃会话且有 token 时）
+    if (activeSessionId && total > 0) {
+        try {
+            await window.go.main.App.UpdateSessionContextTokens(activeSessionId, total);
+        } catch (_) { /* 静默失败 */ }
     }
 }
 
@@ -991,6 +997,9 @@ function bindEvents() {
 async function loadSessionList() {
     try {
         sessions = await window.go.main.App.GetAISessions() || [];
+        // 构建会话 Token 数查找表，供切换会话时直接显示
+        window._sessionTokens = {};
+        sessions.forEach(s => { window._sessionTokens[s.id] = s.context_tokens || 0; });
     } catch (_) {
         sessions = [];
     }
@@ -1179,7 +1188,19 @@ async function switchSession(id) {
         });
 
         renderSessionList();
-        updateContextSize();
+
+        // 从数据库加载已保存的 Token 数直接显示（不再重算）
+        const savedTokens = window._sessionTokens?.[id] || 0;
+        if (contextSizeEl) {
+            if (savedTokens > 0) {
+                contextSizeEl.style.display = '';
+                contextSizeEl.textContent = formatTokens(savedTokens) + ' tokens';
+            } else {
+                contextSizeEl.style.display = 'none';
+                contextSizeEl.textContent = '';
+            }
+        }
+
         scrollToBottom();
         inputEl?.focus();
     } catch (_) { /* 静默失败 */ }

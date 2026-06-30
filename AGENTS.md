@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 40）
+> 生成日期: 2026-07-01（更新 41）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1189,4 +1189,15 @@ await loadXxxSetting();
 | **按钮高度统一** | 新增 CSS 规则 `.ai-setting-control .btn-sm, .tag-add-form .btn-sm { height: 36px; display: inline-flex; align-items: center }`，使设置页所有输入框旁边的按钮高度与 `.settings-input` 一致。详见 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
 | **清理废弃 CSS** | 移除不再使用的 `.ai-setting-sub-item`（padding-left + margin-top）和 `.ai-setting-stack`（flex column + gap）CSS 类。详见 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 六十五、AI 会话 Token 数持久化
+
+| 记忆点 | 内容 |
+|--------|------|
+| **会话模型加字段** | `AISession` 新增 `ContextTokens int` 字段（GORM `default:0`），AutoMigrate 自动建列。详见 [ai_session.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session.go) |
+| **新增后端 API** | `AIService.UpdateSessionContextTokens(sessionID, tokens)` 更新 `ais_sessions` 表的 `context_tokens` 字段；`App.UpdateSessionContextTokens()` 绑定暴露给前端。详见 [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **AISessionSummary 携带 Token** | `AISessionSummary` 新增 `ContextTokens int` 字段，`GetAISessions()` 构造 summary 时填入 `session.ContextTokens`，前端加载会话列表时一并获取。详见 [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **切换会话从库加载 Token** | `loadSessionList()` 构建 `window._sessionTokens` 查找表（key 为 session ID）；`switchSession()` 直接从查找表读取 DB 保存的 token 值显示，不再调用 `updateContextSize()` 重算。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **消息变更时写入数据库** | `updateContextSize()` 改为 `async`，每轮计算完 token 数后自动调用 `UpdateSessionContextTokens` 写入数据库。调用时机：发送消息、接收回复、清空对话、再生、新建会话。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **决策记录：不存搜索来源和召回卡片** | 联网搜索的来源（Tavily 返回的 URL/标题/摘要）和召回的笔记（`referencedNotes` + `cachedRefContext`）属于瞬时上下文，数据量大且无对应 UI 消费场景，不推荐持久化到数据库。详见六十四节分析。 |
 

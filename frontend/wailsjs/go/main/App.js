@@ -298,6 +298,10 @@ export function UpdateNoteFileExt(arg1, arg2) {
   return window['go']['main']['App']['UpdateNoteFileExt'](arg1, arg2);
 }
 
+export function UpdateSessionContextTokens(arg1, arg2) {
+  return window['go']['main']['App']['UpdateSessionContextTokens'](arg1, arg2);
+}
+
 export function UpdateTag(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateTag'](arg1, arg2, arg3);
 }
