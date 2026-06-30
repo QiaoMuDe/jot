@@ -1,8 +1,8 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 29）
+> 生成日期: 2026-06-30（更新 30）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
-> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）
+> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
 ---
 
@@ -32,7 +32,7 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 对话（OpenAI 兼容 API 调用 + 流式 SSE 解析 + 深度思考模式 + 会话持久化 CRUD + 消息管理）
+│       ├── ai_service.go               # AI 对话（LangChainGo 统一接口，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考模式 + 会话持久化 CRUD + 消息管理）
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -195,7 +195,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
-| **AI 对话** | OpenAI 兼容 API 流式对话（自实现聊天引擎 + SSE 流式输出 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | LangChainGo 统一接口，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -378,7 +378,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **编辑器** | CodeMirror 6 | @codemirror/view v6.26 | 笔记编辑器 |
 | **Markdown 解析** | marked | v12.0 | Markdown → HTML 渲染 |
 | **代码高亮** | highlight.js | v11.10 | 代码块语法高亮 |
-| **AI 对话** | OpenAI 兼容 API | — | SSE 流式对话接口 |
+| **AI 对话** | LangChainGo | github.com/tmc/langchaingo v0.1.14 | 统一 LLM 接口，支持 OpenAI 兼容 + Ollama 双 Provider |
 | **本地存储** | localStorage | — | UI 状态持久化（主题/侧栏状态等） |
 
 ### 5.2 技术栈选型评价
@@ -453,7 +453,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
-5. **自实现 AI 对话引擎**：完全自实现（非第三方库），SSE 流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠
+5. **自实现 AI 对话引擎（LangChainGo 驱动）**：基于 LangChainGo 统一 LLM 接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠。Provider 通过前端设置页下拉切换，配置自动持久化。
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
@@ -530,7 +530,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 6. **CSS 变量系统**：全局使用 `var(--xxx)` 定义主题变量，AI 对话页面全组件（气泡/侧栏/输入区/按钮）联动 12 套主题
 
-7. **OpenAI 兼容 API 调用**：`CallAI`（非流式）+ `CallAIStream`（流式），`chatRequest` 结构体含 `Stream bool` 字段。思考型模型需调 `stream: true` 才能触发流式输出。`bufio.Scanner` 拆分 SSE 行（`data: [DONE]` 终止），JSON 解析使用 `json.NewDecoder` 单对象模式
+7. **LangChainGo 统一 AI 接口**：`CallAIStream` 使用 `llms.GenerateContent` + `WithStreamingFunc`/`WithStreamingReasoningFunc` 统一流式输出。`createLLM()` 工厂函数根据 `provider` 字段创建对应 LLM 实例：`openai.New()`（OpenAI 兼容，含 BaseURL/Token/Model 配置）或 `ollama.New()`（Ollama 本地，含 ServerURL/Model 配置）。前端设置页新增「服务商」下拉选择器，切换时自动填充默认 URL、清空模型、保存配置。
 
 8. **消息渲染与气泡**：`addMessage()` 创建消息气泡 DOM，AI 侧使用 `marked.parse()` 渲染 Markdown（含 `hljs.highlightElement()` 代码高亮），用户侧以 `<pre class="ai-user-msg">` 转义纯文本。打字指示器内嵌到 `msg-content` 内部（不独立建气泡）
 
@@ -998,3 +998,14 @@ await loadXxxSetting();
 | **修复 1：`scrollbar-color` 缺失** | 父容器 `.ai-chat-messages` 设有 `scrollbar-color: transparent transparent`（auto-hide 透明），虽然此属性不继承，但 Chromium 中父容器的透明色会通过 `::-webkit-scrollbar` 系统影响子元素滚动条渲染。修复：给 pre 显式设置 `scrollbar-color: var(--scrollbar-thumb) transparent; scrollbar-width: thin`，与编辑器 `.md-rendered` 完全一致，确保独立控制滚动条颜色。详见 [ai-chat.css#L182-L183](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **修复 2：`height: auto` 无效值** | `.ai-msg-assistant pre::-webkit-scrollbar { height: auto }` 对水平滚动条是非法值，Chromium 默认回退为 0，导致水平滚动条不可见。修复：改为 `height: 6px`（正确水平滚动条高度值），与全局 `::-webkit-scrollbar` 一致。详见 [ai-chat.css#L188](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **修复 3：`display: block` 按钮冲突** | 全局规则 `::-webkit-scrollbar-button { display: none !important }` 隐藏滚动条按钮，pre 却 override 为 `display: block !important` + 零尺寸。Chromium 分配按钮空间但无内容渲染，干扰滚动条绘制。修复：`display: none !important`，与全局规则一致。详见 [ai-chat.css#L203-L206](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+## 四十九、新增记忆点（LangChainGo 迁移 + 多 Provider 支持）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **后端 AI 库替换** | 从手写 `net/http` + `bufio.Reader` 手动解析 SSE 流替换为 `github.com/tmc/langchaingo v0.1.14`。`CallAIStream` 使用 `llms.GenerateContent` + `WithStreamingFunc` 统一流式接口，`WithStreamingReasoningFunc` + `WithThinking` 处理深度思考。`chatRequest` 结构体/`bufio.Scanner` SSE 解析/`[DONE]` 终止判断全部删除。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **AIConfig 新增 Provider 字段** | `AIConfig` 结构体新增 `Provider string \`json:"provider"\``，默认值 `"openai"`。`GetConfig()` 中如果库中无记录，返回含默认 Provider 的配置。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **createLLM 工厂函数** | `createLLM(ctx, cfg)` 根据 `cfg.Provider` 创建对应 LLM 实例：`"openai"` → `openai.New(opts...)`（WithBaseURL/WithToken/WithModel），`"ollama"` → `ollama.New(opts...)`（WithServerURL/WithModel）。异常 Provider 返回 `fmt.Errorf`。详见 [ai_service.go#L81-L107](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **后端测试/模型获取适配** | `TestConnection()` 按 provider 分支：openai → `GET /v1/models`，ollama → `GET /api/tags`。`FetchModels()`：openai → 调 `/v1/models` 接口，ollama → 调 `/api/tags`。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **前端设置页服务商选择器** | AI 设置区新增「服务商」自定义下拉选择器（`.theme-select` 样式），选项：OpenAI 兼容 / Ollama。切换时自动填入默认 URL（`https://api.openai.com/v1` / `http://localhost:11434`）、清空模型下拉、自动保存配置到后端。Base URL 输入框在 Ollama 时必填，OpenAI 时 URL+Key 联合校验。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **前端加载/保存适配 Provider** | `loadAISettings()` 读取 `cfg.provider` 设置下拉活跃项。`saveAIConfig()` 读取下拉值作为 `provider` 字段。URL/Key change 事件独立保存时同步携带 `provider`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
