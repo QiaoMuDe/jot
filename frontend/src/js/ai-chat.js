@@ -932,6 +932,9 @@ function renderMarkdown(el, content) {
         // 避免重复包装
         if (pre.parentNode.classList.contains('pre-wrapper')) return;
 
+        // 阻止代码块滚动事件冒泡到父容器（防止触发 .ai-chat-messages 的滚动条自动显隐）
+        pre.addEventListener('scroll', (e) => e.stopPropagation(), { passive: true });
+
         const code = pre.querySelector('code');
         if (!code) return;
 
@@ -971,6 +974,34 @@ function renderMarkdown(el, content) {
             badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
             wrapper.appendChild(badge);
         }
+    });
+
+    // 表格复制按钮
+    el.querySelectorAll('table').forEach((table) => {
+        const lastTh = table.querySelector('tr:first-child th:last-child');
+        if (!lastTh) return;
+        if (lastTh.querySelector('.table-copy-btn')) return;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'table-copy-btn';
+        copyBtn.textContent = '复制';
+        copyBtn.title = '复制表格';
+        copyBtn.addEventListener('click', async () => {
+            try {
+                const md = tableToMarkdown(table);
+                await navigator.clipboard.writeText(md);
+                copyBtn.classList.add('copied');
+                copyBtn.textContent = '✓ 已复制';
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtn.textContent = '复制';
+                }, 1500);
+            } catch (_) {
+                copyBtn.textContent = '✗ 复制失败';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 1000);
+            }
+        });
+        lastTh.appendChild(copyBtn);
     });
 }
 
@@ -1714,6 +1745,27 @@ async function getNoteContext() {
     } catch (_) {
         return '';
     }
+}
+
+/**
+ * HTML table 元素转 Markdown 表格文本
+ * @param {HTMLTableElement} tableEl
+ * @returns {string}
+ */
+function tableToMarkdown(tableEl) {
+    const rows = [];
+    const trs = tableEl.querySelectorAll('tr');
+    if (!trs.length) return '';
+    trs.forEach((tr, index) => {
+        const cells = tr.querySelectorAll('th, td');
+        const row = '| ' + Array.from(cells).map(c => c.textContent.trim()).join(' | ') + ' |';
+        rows.push(row);
+        if (index === 0 && tr.querySelector('th')) {
+            const sep = '| ' + Array.from(cells).map(() => '---').join(' | ') + ' |';
+            rows.push(sep);
+        }
+    });
+    return rows.join('\n');
 }
 
 /**

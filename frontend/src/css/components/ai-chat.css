@@ -174,9 +174,36 @@
     padding: 10px 12px;
     margin: 0.5em 0;
     overflow-x: auto;
+    overflow-y: hidden;
     position: relative;
     font-size: 0.82em;
     line-height: 1.5;
+    /* 与编辑器 .md-rendered 一致的滚动条控制 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+/* AI 代码块滚动条：与编辑器预览完全一致的实现 */
+.ai-msg-assistant pre::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.ai-msg-assistant pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+.ai-msg-assistant pre::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+}
+.ai-msg-assistant pre::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+.ai-msg-assistant pre::-webkit-scrollbar-corner {
+    background: transparent;
+}
+.ai-msg-assistant pre::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 .ai-msg-assistant pre code {
     background: none;
@@ -280,6 +307,50 @@
 .ai-msg-assistant th {
     background: var(--hover-bg);
     font-weight: 600;
+}
+
+/* AI 消息表格复制按钮：悬浮显现，位于首行最后一列表头内 */
+.ai-msg-assistant th:has(.table-copy-btn) {
+    position: relative;
+}
+
+.ai-msg-assistant .table-copy-btn {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.ai-msg-assistant .table-copy-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    transform: translateY(-50%) scale(1.08);
+}
+
+.ai-msg-assistant .table-copy-btn.copied {
+    opacity: 1;
+    color: #16a34a;
+    border-color: #16a34a;
+}
+
+/* 父级 tr hover 时显示复制按钮 */
+.ai-msg-assistant tr:hover .table-copy-btn {
+    opacity: 1;
 }
 
 /* 图片 */

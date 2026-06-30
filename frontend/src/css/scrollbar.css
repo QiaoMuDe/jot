@@ -12,6 +12,7 @@
 
 ::-webkit-scrollbar-thumb {
     border-radius: 3px;
+    background: var(--scrollbar-thumb);
 }
 
 ::-webkit-scrollbar-corner {

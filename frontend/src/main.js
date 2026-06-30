@@ -4181,7 +4181,9 @@ function initScrollbarAutoHide() {
     const containers = [els.mainContent, els.dataContent, document.querySelector('.ai-chat-messages')].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
-        container.addEventListener('scroll', () => {
+        container.addEventListener('scroll', (e) => {
+            // 忽略子元素冒泡上来的 scroll 事件，只处理容器自身的滚动
+            if (e.target !== container) return;
             container.classList.add('scrolling');
             clearTimeout(timer);
             timer = setTimeout(() => {
