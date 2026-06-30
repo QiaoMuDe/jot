@@ -107,10 +107,37 @@
     to   { transform: rotate(360deg) scale(1); }
 }
 
-/* Shrink out (for trash item removal) */
+/* Shrink out (for trash item removal) — 保留旧动画兼容 */
 @keyframes shrinkOut {
     from { opacity: 1; transform: scale(1); }
     to   { opacity: 0; transform: scale(0.8); }
+}
+
+/* Restore out — 向左滑出 + 缩小 + 渐隐（恢复动画） */
+@keyframes restoreOut {
+    0%   { opacity: 1; transform: translateX(0) scale(1); }
+    40%  { opacity: 1; transform: translateX(-8px) scale(1.02); }
+    100% { opacity: 0; transform: translateX(40px) scale(0.9); }
+}
+
+/* Delete out — 抖动 + 红闪 + 缩小 + 渐隐（永久删除动画） */
+@keyframes deleteOut {
+    0%   { opacity: 1; transform: translateX(0) scale(1); background-color: transparent; }
+    10%  { transform: translateX(-4px); background-color: var(--danger-bg); }
+    20%  { transform: translateX(4px); background-color: var(--danger-bg); }
+    30%  { transform: translateX(-4px); background-color: var(--danger-bg); }
+    40%  { transform: translateX(3px); background-color: var(--danger-bg); }
+    50%  { transform: translateX(-2px); background-color: transparent; opacity: 1; }
+    75%  { transform: translateX(0) scale(0.9); opacity: 0.5; }
+    100% { transform: translateX(0) scale(0.7); opacity: 0; }
+}
+
+/* Trash item entrance — 弹性弹入（带 overshoot） */
+@keyframes trashEnter {
+    0%   { opacity: 0; transform: translateY(16px) scale(0.95); }
+    60%  { opacity: 1; transform: translateY(-3px) scale(1.01); }
+    80%  { transform: translateY(1px) scale(0.998); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Pulse dot (for auto-save indicator) */

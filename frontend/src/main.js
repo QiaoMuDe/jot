@@ -5144,7 +5144,10 @@ function startInlineRename(notebookId, currentName) {
  */
 function showDeleteNotebookDialog(notebookId, notebookName) {
     const msg = `确定要删除笔记本「${notebookName}」吗？`;
-    const checkboxText = `同时永久删除该笔记本中的 ${state.notes.length} 条笔记（不进回收站）`;
+    // 从侧栏 badge 获取该笔记本下的真实笔记数（勿用 state.notes.length，它只是当前激活笔记本）
+    const badgeEl = els.notebookList.querySelector(`[data-notebook-id="${notebookId}"] .notebook-badge`);
+    const noteCount = parseInt(badgeEl?.textContent) || 0;
+    const checkboxText = `同时将该笔记本中的 ${noteCount} 条笔记移入回收站`;
 
     // 隐藏"不保存"按钮(仅三选一对话框使用)
     if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
@@ -5178,6 +5181,10 @@ function showDeleteNotebookDialog(notebookId, notebookName) {
 }
 
 async function doDeleteNotebook(notebookId, deleteNotes) {
+    // 在 DOM 被刷新前先捕获笔记本名称
+    const notebookEl = els.notebookList.querySelector(`[data-notebook-id="${notebookId}"]`);
+    const notebookName = notebookEl?.querySelector('.notebook-name')?.textContent || '';
+
     try {
         if (deleteNotes) {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteNotebookWithNotes) {
@@ -5197,8 +5204,8 @@ async function doDeleteNotebook(notebookId, deleteNotes) {
         }
         await loadNotebooks();
         await loadNotes();
-        const suffix = deleteNotes ? '及其笔记已永久删除' : '已删除';
-        nm.show(`笔记本「${els.notebookList.querySelector(`[data-notebook-id="${notebookId}"]`)?.querySelector('.notebook-name')?.textContent || ''}」${suffix}`, 'success');
+        const suffix = deleteNotes ? '及其笔记已移入回收站' : '已删除';
+        nm.show(`笔记本「${notebookName}」${suffix}`, 'success');
     } catch (err) {
         const msg = (typeof err === 'string' ? err : err?.message || '删除笔记本失败');
         console.error('删除笔记本失败:', msg);

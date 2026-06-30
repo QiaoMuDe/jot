@@ -48,6 +48,8 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function EmptyTrash():Promise<void>;
 
+export function EmptyTrashNotebooks():Promise<void>;
+
 export function ExportAISessionAsMarkdown(arg1:number):Promise<string>;
 
 export function ExportDataWithDialog():Promise<string>;
@@ -94,6 +96,8 @@ export function GetSortOrder():Promise<string>;
 
 export function GetSystemFonts():Promise<Array<string>>;
 
+export function GetTrashNotebooks(arg1:number,arg2:number):Promise<services.PaginatedResult>;
+
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
 export function GetVersion():Promise<string>;
@@ -112,6 +116,8 @@ export function OpenProjectURL(arg1:string):Promise<string>;
 
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 
+export function PermanentDeleteTrashNotebook(arg1:number):Promise<void>;
+
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
 
 export function RenameAISession(arg1:number,arg2:string):Promise<void>;
@@ -122,9 +128,13 @@ export function ResetDatabase():Promise<void>;
 
 export function RestoreAllNotes():Promise<void>;
 
+export function RestoreAllTrashNotebooks():Promise<void>;
+
 export function RestoreFromDir():Promise<services.ImportResult>;
 
 export function RestoreNote(arg1:number):Promise<void>;
+
+export function RestoreTrashNotebook(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
 

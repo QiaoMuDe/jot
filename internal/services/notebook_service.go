@@ -99,8 +99,8 @@ func (s *NotebookService) Delete(id uint) error {
 		return err
 	}
 
-	// 将其下所有笔记的 notebook_id 改为 1（默认笔记本）
-	if err := s.db.Model(&models.Note{}).
+	// 将其下所有笔记（含回收站）的 notebook_id 改为 1（默认笔记本）
+	if err := s.db.Unscoped().Model(&models.Note{}).
 		Where("notebook_id = ?", id).
 		Update("notebook_id", 1).Error; err != nil {
 		return err
@@ -125,7 +125,7 @@ func (s *NotebookService) ResetAll() error {
 	return s.db.Create(&models.Notebook{Name: "默认笔记本"}).Error
 }
 
-// DeleteWithNotes 删除笔记本并永久删除其下所有笔记
+// DeleteWithNotes 删除笔记本并将其下所有笔记移入回收站
 func (s *NotebookService) DeleteWithNotes(id uint) error {
 	if id == 1 {
 		return errors.New("默认笔记本不可删除")
@@ -140,8 +140,8 @@ func (s *NotebookService) DeleteWithNotes(id uint) error {
 		return err
 	}
 
-	// 永久删除笔记本下的所有笔记（硬删除，不进回收站）
-	if err := s.db.Unscoped().Where("notebook_id = ?", id).Delete(&models.Note{}).Error; err != nil {
+	// 软删除笔记本下的所有笔记（进回收站）
+	if err := s.db.Where("notebook_id = ?", id).Delete(&models.Note{}).Error; err != nil {
 		return err
 	}
 
@@ -213,4 +213,97 @@ func (s *NotebookService) EnsureDefaultNotebook() error {
 		}
 	}
 	return nil
+}
+
+// ===== 回收站操作（笔记本） =====
+
+// GetTrash 分页获取回收站中已软删除的笔记本列表
+func (s *NotebookService) GetTrash(page, pageSize int) ([]models.Notebook, int64, error) {
+	var notebooks []models.Notebook
+	var total int64
+
+	query := s.db.Model(&models.Notebook{}).Unscoped().Where("deleted_at IS NOT NULL")
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("deleted_at DESC").
+		Offset(offset).
+		Limit(pageSize).
+		Find(&notebooks).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return notebooks, total, nil
+}
+
+// RestoreFromTrash 从回收站恢复指定笔记本（取消软删除）
+func (s *NotebookService) RestoreFromTrash(id uint) error {
+	if id == 1 {
+		return errors.New("默认笔记本不可删除")
+	}
+
+	result := s.db.Unscoped().Model(&models.Notebook{}).Where("id = ?", id).Update("deleted_at", nil)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("notebook not found")
+	}
+	return nil
+}
+
+// PermanentDeleteFromTrash 从回收站永久删除指定笔记本（硬删除）
+// 回收站中引用该笔记本的笔记自动迁到默认笔记本
+func (s *NotebookService) PermanentDeleteFromTrash(id uint) error {
+	if id == 1 {
+		return errors.New("默认笔记本不可删除")
+	}
+
+	// 检查笔记本是否存在于回收站中
+	var notebook models.Notebook
+	if err := s.db.Unscoped().First(&notebook, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("notebook not found")
+		}
+		return err
+	}
+
+	// 将回收站中引用此笔记本的笔记迁到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("notebook_id = ? AND deleted_at IS NOT NULL", id).
+		Update("notebook_id", 1).Error; err != nil {
+		return err
+	}
+
+	// 硬删除笔记本
+	if err := s.db.Unscoped().Delete(&notebook).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+// RestoreAllFromTrash 恢复回收站中所有已软删除的笔记本
+func (s *NotebookService) RestoreAllFromTrash() error {
+	result := s.db.Unscoped().Model(&models.Notebook{}).
+		Where("deleted_at IS NOT NULL").
+		Update("deleted_at", nil)
+	return result.Error
+}
+
+// EmptyTrash 永久清空回收站中所有已软删除的笔记本
+// 回收站中引用这些笔记本的笔记自动迁到默认笔记本
+func (s *NotebookService) EmptyTrash() error {
+	// 将所有回收站笔记中引用已删除笔记本的 notebook_id 迁到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("notebook_id IN (SELECT id FROM notebooks WHERE deleted_at IS NOT NULL)").
+		Where("deleted_at IS NOT NULL").
+		Update("notebook_id", 1).Error; err != nil {
+		return err
+	}
+
+	// 硬删除所有已软删除的笔记本
+	result := s.db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.Notebook{})
+	return result.Error
 }

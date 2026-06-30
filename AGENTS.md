@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 42）
+> 生成日期: 2026-07-01（更新 43）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1225,4 +1225,33 @@ await loadXxxSetting();
 | **重设计入口动画** | `cardEnter` 从简单 `from/to` 改为 4 帧弹性弹入（0% 缩放+下移 → 60% 过冲 → 80% 微回弹 → 100% 到位）；时长 0.25s→0.4s，配合 `cubic-bezier(0.34, 1.56, 0.64, 1)` 弹簧缓动；`lastDelay` 同步 250→400。详见 [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css)、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
 | **关键 CSS 技巧** | 去掉 `.stat-card` 基类的 `opacity:0; transform:translateY(8px)`，入口动画由 `cardEnter` 的 `@keyframes` 独立控制；动画结束后清除内联 `animation` 恢复常显，class 动画（hover/抖动）不受内联 animation 干扰。详见 [data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css) |
 | **涉及文件** | [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css)、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js)、[animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css) |
+
+## 六十八、回收站支持笔记本条目
+
+| 记忆点 | 内容 |
+|--------|------|
+| **笔记本删除时笔记进回收站** | `NotebookService.DeleteWithNotes()` 从 `Unscoped().Delete()` 硬删除改为 `Delete()` 软删除（笔记进入回收站），不再永久丢失。详见 [notebook_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/notebook_service.go) |
+| **后端回收站笔记本 CRUD** | `NotebookService` 新增 5 个方法：`GetTrash()` 分页获取、`RestoreFromTrash()` 恢复、`PermanentDeleteFromTrash()` 永久删除（先迁移旗下笔记到默认笔记本）、`RestoreAllFromTrash()` 全部恢复、`EmptyTrash()` 全部清空（先迁移笔记）。详见 [notebook_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/notebook_service.go) |
+| **Wails 绑定** | `app.go` 新增 5 个绑定：`GetTrashNotebooks`、`RestoreTrashNotebook`、`PermanentDeleteTrashNotebook`、`RestoreAllTrashNotebooks`、`EmptyTrashNotebooks`。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **前端混合渲染** | `trash-page.js` 同时加载回收站笔记和回收站笔记本，按 deleted_at 倒序混合排列；用 SVG 图标区分类型（文件图标→笔记、书本图标→笔记本）；每种条目各有恢复和永久删除按钮；「全部恢复」/「全部清空」同时作用于笔记和笔记本。详见 [trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js) |
+| **对话框文案更新** | 删除笔记本时「同时永久删除该笔记本中的 N 条笔记（**不进回收站**）」改为「同时将该笔记本中的 N 条笔记**移入回收站**」。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [notebook_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/notebook_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js)、[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css) |
+
+## 六十九、回收站操作动画增强
+
+| 记忆点 | 内容 |
+|--------|------|
+| **新增关键帧动画** | `restoreOut`（先微缩放大→向右滑出+渐隐，0.3s）、`deleteOut`（抖动+红闪→缩小→消失，0.45s）、`trashEnter`（弹性弹入带 overshoot，0.35s，cubic-bezier 弹簧缓动）。详见 [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css) |
+| **恢复/删除条目动画** | 单个恢复使用 `restoreOut 0.3s`、永久删除使用 `deleteOut 0.45s`；全部恢复交错 40ms 步进 `restoreOut`、全部清空交错 50ms 步进 `deleteOut`。详见 [trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js) |
+| **列表入场动画** | 改用 `trashEnter` 弹性弹入，交错 40ms 步进，取代原来简单的 `viewEnter`。详见 [trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js) |
+| **按钮 hover/active 增强** | `.btn-restore` 和 `.btn-perm-delete` 添加 `translateY(-1px)` 上浮 + 增强投影（hover）；`scale(0.93)` 缩小反馈（active）；transition 使用弹簧曲线。详见 [main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css) |
+| **按钮点击脉冲反馈** | 点击恢复/删除按钮时触发 `pulseClick` 脉冲动画（缩放到 1.12→回弹到 1），通过事件委托绑定。详见 [trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js) |
+| **涉及文件** | [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css)、[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[trash-page.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/trash-page.js) |
+
+## 七十、修复项
+
+| 记忆点 | 内容 |
+|--------|------|
+| **笔记本删除通知名称为空** | 通知信息中笔记本名称本应从 DOM 获取，但 `loadNotebooks()` 重新渲染后已无对应元素。修复：在 `loadNotebooks()` 之前从 DOM 捕获名称到变量。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **删除笔记本确认弹窗笔记数错误** | `showDeleteNotebookDialog` 使用 `state.notes.length`（当前激活笔记本的笔记数）而非被删除笔记本的真实笔记数。修复：从侧栏 `.notebook-badge` DOM 元素读取真实笔记数。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 

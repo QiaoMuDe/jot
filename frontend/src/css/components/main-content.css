@@ -527,6 +527,33 @@
   min-width: 0;
 }
 
+.trash-item-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+}
+
+.trash-item-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.trash-item-icon.icon-note {
+  background: var(--accent-lighter);
+  color: var(--accent);
+}
+
+.trash-item-icon.icon-notebook {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent-dark);
+}
+
 .trash-item-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -556,11 +583,19 @@
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: var(--transition);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease,
+              background 0.2s ease;
 }
 
 .btn-restore:hover {
   background: var(--accent-light);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.btn-restore:active {
+  transform: scale(0.93);
 }
 
 .btn-perm-delete {
@@ -573,11 +608,19 @@
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: var(--transition);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease,
+              background 0.2s ease;
 }
 
 .btn-perm-delete:hover {
   background: var(--danger-bg);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+}
+
+.btn-perm-delete:active {
+  transform: scale(0.93);
 }
 
 /* 红色闪烁动画（永久删除确认） */

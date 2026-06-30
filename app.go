@@ -455,9 +455,43 @@ func (a *App) DeleteNotebook(id uint) error {
 	return a.notebookService.Delete(id)
 }
 
-// DeleteNotebookWithNotes 删除笔记本并永久删除其下所有笔记
+// DeleteNotebookWithNotes 删除笔记本并清空其下所有笔记
 func (a *App) DeleteNotebookWithNotes(id uint) error {
 	return a.notebookService.DeleteWithNotes(id)
+}
+
+// GetTrashNotebooks 分页获取回收站中已删除的笔记本列表
+func (a *App) GetTrashNotebooks(page, pageSize int) (*services.PaginatedResult, error) {
+	notebooks, total, err := a.notebookService.GetTrash(page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	return &services.PaginatedResult{
+		Items:    notebooks,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	}, nil
+}
+
+// RestoreTrashNotebook 从回收站恢复指定笔记本
+func (a *App) RestoreTrashNotebook(id uint) error {
+	return a.notebookService.RestoreFromTrash(id)
+}
+
+// PermanentDeleteTrashNotebook 从回收站永久删除指定笔记本
+func (a *App) PermanentDeleteTrashNotebook(id uint) error {
+	return a.notebookService.PermanentDeleteFromTrash(id)
+}
+
+// RestoreAllTrashNotebooks 恢复回收站中所有笔记本
+func (a *App) RestoreAllTrashNotebooks() error {
+	return a.notebookService.RestoreAllFromTrash()
+}
+
+// EmptyTrashNotebooks 清空回收站中所有笔记本
+func (a *App) EmptyTrashNotebooks() error {
+	return a.notebookService.EmptyTrash()
 }
 
 // MoveNoteToNotebook 将单条笔记移动到目标笔记本

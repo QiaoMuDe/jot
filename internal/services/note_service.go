@@ -370,6 +370,14 @@ func (s *NoteService) GetTrash(page, pageSize int) ([]models.Note, int64, error)
 
 // RestoreAll 批量恢复回收站中所有已软删除的笔记
 func (s *NoteService) RestoreAll() error {
+	// 先将 notebook_id 对应笔记本已不存在的笔记迁移到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("deleted_at IS NOT NULL").
+		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
+		Update("notebook_id", 1).Error; err != nil {
+		return err
+	}
+
 	result := s.db.Unscoped().Model(&models.Note{}).
 		Where("deleted_at IS NOT NULL").
 		Update("deleted_at", nil)
@@ -402,12 +410,39 @@ func (s *NoteService) BatchDelete(ids []uint) error {
 
 // BatchRestore 批量从回收站恢复指定 ID 数组的笔记
 func (s *NoteService) BatchRestore(ids []uint) error {
+	// 先将 notebook_id 对应笔记本已不存在的笔记迁移到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("id IN ?", ids).
+		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
+		Update("notebook_id", 1).Error; err != nil {
+		return err
+	}
+
 	result := s.db.Unscoped().Model(&models.Note{}).Where("id IN ?", ids).Update("deleted_at", nil)
 	return result.Error
 }
 
 // Restore 从回收站恢复指定 ID 的笔记（取消软删除）
 func (s *NoteService) Restore(id uint) error {
+	// 先获取笔记信息（含软删除）
+	var note models.Note
+	if err := s.db.Unscoped().First(&note, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("note not found")
+		}
+		return err
+	}
+
+	// 检查笔记本是否存在（未软删除）
+	var notebook models.Notebook
+	if err := s.db.Where("deleted_at IS NULL").First(&notebook, note.NotebookID).Error; err != nil {
+		// 笔记本不存在或已删除，迁移到默认笔记本（id=1）
+		if err := s.db.Unscoped().Model(&note).Update("notebook_id", 1).Error; err != nil {
+			return err
+		}
+	}
+
+	// 恢复笔记
 	result := s.db.Unscoped().Model(&models.Note{}).Where("id = ?", id).Update("deleted_at", nil)
 	if result.Error != nil {
 		return result.Error

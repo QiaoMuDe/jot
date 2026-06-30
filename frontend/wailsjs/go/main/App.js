@@ -90,6 +90,10 @@ export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
 }
 
+export function EmptyTrashNotebooks() {
+  return window['go']['main']['App']['EmptyTrashNotebooks']();
+}
+
 export function ExportAISessionAsMarkdown(arg1) {
   return window['go']['main']['App']['ExportAISessionAsMarkdown'](arg1);
 }
@@ -182,6 +186,10 @@ export function GetSystemFonts() {
   return window['go']['main']['App']['GetSystemFonts']();
 }
 
+export function GetTrashNotebooks(arg1, arg2) {
+  return window['go']['main']['App']['GetTrashNotebooks'](arg1, arg2);
+}
+
 export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
@@ -218,6 +226,10 @@ export function PermanentDeleteNote(arg1) {
   return window['go']['main']['App']['PermanentDeleteNote'](arg1);
 }
 
+export function PermanentDeleteTrashNotebook(arg1) {
+  return window['go']['main']['App']['PermanentDeleteTrashNotebook'](arg1);
+}
+
 export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
 }
@@ -238,12 +250,20 @@ export function RestoreAllNotes() {
   return window['go']['main']['App']['RestoreAllNotes']();
 }
 
+export function RestoreAllTrashNotebooks() {
+  return window['go']['main']['App']['RestoreAllTrashNotebooks']();
+}
+
 export function RestoreFromDir() {
   return window['go']['main']['App']['RestoreFromDir']();
 }
 
 export function RestoreNote(arg1) {
   return window['go']['main']['App']['RestoreNote'](arg1);
+}
+
+export function RestoreTrashNotebook(arg1) {
+  return window['go']['main']['App']['RestoreTrashNotebook'](arg1);
 }
 
 export function SaveAIConfig(arg1) {
