@@ -15,6 +15,8 @@ type DataStats struct {
 	PinnedNotes    int64  `json:"pinned_notes"`
 	TotalTags      int64  `json:"total_tags"`
 	TotalNotebooks int64  `json:"total_notebooks"`
+	AISessions     int64  `json:"ai_sessions"`
+	AIMessages     int64  `json:"ai_messages"`
 	DBSize         int64  `json:"db_size"`
 	DBSizeStr      string `json:"db_size_str"`
 }

@@ -359,6 +359,8 @@ const els = {
     statTrashedNotes: $('statTrashedNotes'),
     statTotalNotebooks: $('statTotalNotebooks'),
     statDBSize: $('statDBSize'),
+    statAISessions: $('statAISessions'),
+    statAIMessages: $('statAIMessages'),
 
     // 备份还原
     backupBtn: $('backupBtn'),

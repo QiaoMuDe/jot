@@ -1214,3 +1214,15 @@ await loadXxxSetting();
 | **边界状态管理** | 输入框为空 → 按钮 `disabled` 隐藏；流式输出开始 → `polishBtn.disabled = true`；发送消息后 → 重置按钮为「优化」+ `disabled`；打字机完成后 → 触发 `input` 事件重新检测单行/多行。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
+## 六十七、数据管理页统计卡片增强
+
+| 记忆点 | 内容 |
+|--------|------|
+| **新增 AI 会话/消息统计** | `DataStats` 新增 `AISessions` 和 `AIMessages` 字段；`AIService` 新增 `CountSessions()`（不含软删除）和 `CountMessages()` 方法；`GetDataStats()` 接入计数；前端新增 2 张 stat-card（AI 会话、AI 消息）；grid 从 `repeat(5, 1fr)` 改为 `repeat(7, 1fr)`。详见 [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css) |
+| **卡片顺序调整** | 数据库大小移至最右侧（第 7 列），顺序为：笔记总数 → 标签总数 → 回收站 → 笔记本数 → AI 会话 → AI 消息 → 数据库大小。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **Hover 浮动效果** | `.stat-card:hover` 添加 `transform: translateY(-4px)` 上浮 + 增强阴影（`0 4px 12px rgba(0,0,0,0.06)`），`.stat-card` 基类增加 `cursor: pointer` 和 `transition: transform 0.25s ease`。详见 [data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css) |
+| **点击抖动效果** | 新增 `@keyframes statCardShake`（±3px 左右交替抖动，0.45s）；`.data-stats` 事件委托绑定 click 事件，直接用 `card.style.animation` 内联覆盖入口动画，`animationend` 后清除恢复常显。`_statShakeInited` 守卫防重复绑定。详见 [data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css)、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **重设计入口动画** | `cardEnter` 从简单 `from/to` 改为 4 帧弹性弹入（0% 缩放+下移 → 60% 过冲 → 80% 微回弹 → 100% 到位）；时长 0.25s→0.4s，配合 `cubic-bezier(0.34, 1.56, 0.64, 1)` 弹簧缓动；`lastDelay` 同步 250→400。详见 [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css)、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **关键 CSS 技巧** | 去掉 `.stat-card` 基类的 `opacity:0; transform:translateY(8px)`，入口动画由 `cardEnter` 的 `@keyframes` 独立控制；动画结束后清除内联 `animation` 恢复常显，class 动画（hover/抖动）不受内联 animation 干扰。详见 [data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css) |
+| **涉及文件** | [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-view.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css)、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js)、[animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css) |
+

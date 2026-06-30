@@ -558,3 +558,17 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 func (a *AIService) ClearAISessionMessages(sessionID uint) error {
 	return a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
 }
+
+// CountSessions 获取 AI 会话总数（不含软删除）
+func (a *AIService) CountSessions() (int64, error) {
+	var count int64
+	err := a.db.Model(&models.AISession{}).Where("deleted_at IS NULL").Count(&count).Error
+	return count, err
+}
+
+// CountMessages 获取 AI 消息总数
+func (a *AIService) CountMessages() (int64, error) {
+	var count int64
+	err := a.db.Model(&models.AIMessage{}).Count(&count).Error
+	return count, err
+}

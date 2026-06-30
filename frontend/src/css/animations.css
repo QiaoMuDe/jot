@@ -50,10 +50,12 @@
     to   { opacity: 0; transform: translateY(-8px); }
 }
 
-/* Card entrance: staggered */
+/* Card entrance: staggered — 弹性弹入效果 */
 @keyframes cardEnter {
-    from { opacity: 0; transform: translateY(20px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    0%   { opacity: 0; transform: translateY(24px) scale(0.96); }
+    60%  { opacity: 1; transform: translateY(-2px) scale(1.005); }
+    80%  { transform: translateY(1px) scale(0.998); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Modal open: scale + fade */

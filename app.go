@@ -257,6 +257,12 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 			}
 		}
 	}
+	// AI 会话/消息统计
+	aiSessions, _ := a.aiService.CountSessions()
+	aiMessages, _ := a.aiService.CountMessages()
+	stats.AISessions = aiSessions
+	stats.AIMessages = aiMessages
+
 	return stats, nil
 }
 

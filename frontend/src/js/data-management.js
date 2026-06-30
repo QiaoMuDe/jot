@@ -1,5 +1,7 @@
 /* ===== 数据管理函数 ===== */
 
+let _statShakeInited = false; // 统计卡片点击抖动仅绑定一次
+
 /**
  * 数字递增动画（从 0 渐变到目标值）
  * @param {HTMLElement} element - 显示数字的元素
@@ -43,6 +45,7 @@ async function reloadSettings() {
 export async function loadDataStats() {
     const { els, state } = window;
     let totalNotes = 0, totalTags = 0, trashedNotes = 0, totalNotebooks = 0, dbSizeStr = '';
+    let aiSessions = 0, aiMessages = 0;
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
             const stats = await window.go.main.App.GetDataStats();
@@ -52,6 +55,8 @@ export async function loadDataStats() {
                 trashedNotes = stats.trashed_notes || 0;
                 totalNotebooks = stats.total_notebooks || 0;
                 dbSizeStr = stats.db_size_str || '';
+                aiSessions = stats.ai_sessions || 0;
+                aiMessages = stats.ai_messages || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -67,7 +72,7 @@ export async function loadDataStats() {
     const totalCards = statCards.length;
     if (totalCards > 0) {
         statCards.forEach((card, index) => {
-            card.style.animation = `cardEnter 0.25s ease-out forwards`;
+            card.style.animation = `cardEnter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards`;
             card.style.animationDelay = `${index * 80}ms`;
         });
     }
@@ -80,16 +85,38 @@ export async function loadDataStats() {
     els.statDBSize.textContent = dbSizeStr || '0';
 
     // 入场动画完成后启动 count-up（取最后一张卡片的动画结束时间）
-    const lastDelay = (totalCards > 0 ? (totalCards - 1) * 80 : 0) + 250;
+    const lastDelay = (totalCards > 0 ? (totalCards - 1) * 80 : 0) + 400;
     setTimeout(() => {
         animateCountUp(els.statTotalNotes, totalNotes);
         animateCountUp(els.statTotalTags, totalTags);
         animateCountUp(els.statTrashedNotes, trashedNotes);
         animateCountUp(els.statTotalNotebooks, totalNotebooks);
+        animateCountUp(els.statAISessions, aiSessions);
+        animateCountUp(els.statAIMessages, aiMessages);
     }, lastDelay + 50);
 
     // 加载备份信息
     loadBackupInfo();
+
+    // 统计卡片点击抖动反馈（仅绑定一次）
+    if (!_statShakeInited) {
+        _statShakeInited = true;
+        const grid = document.querySelector('.data-stats');
+        if (grid) {
+            grid.addEventListener('click', (e) => {
+                const card = e.target.closest('.stat-card');
+                if (card) {
+                    // 直接用内联 style 覆盖入口动画，避免 class 拼不过 inline animation
+                    card.style.animation = 'none';
+                    void card.offsetWidth;
+                    card.style.animation = 'statCardShake 0.45s ease';
+                    card.addEventListener('animationend', () => {
+                        card.style.animation = '';
+                    }, { once: true });
+                }
+            });
+        }
+    }
 }
 
 /**

@@ -249,6 +249,8 @@ export namespace services {
 	    pinned_notes: number;
 	    total_tags: number;
 	    total_notebooks: number;
+	    ai_sessions: number;
+	    ai_messages: number;
 	    db_size: number;
 	    db_size_str: string;
 	
@@ -263,6 +265,8 @@ export namespace services {
 	        this.pinned_notes = source["pinned_notes"];
 	        this.total_tags = source["total_tags"];
 	        this.total_notebooks = source["total_notebooks"];
+	        this.ai_sessions = source["ai_sessions"];
+	        this.ai_messages = source["ai_messages"];
 	        this.db_size = source["db_size"];
 	        this.db_size_str = source["db_size_str"];
 	    }
