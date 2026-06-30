@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 35）
+> 生成日期: 2026-06-30（更新 36）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1088,4 +1088,13 @@ await loadXxxSetting();
 |--------|------|
 | **AI 输入框自动聚焦** | `onAIChatViewActivated()` 末尾用 `setTimeout(() => inputEl?.focus(), 100)` 在视图入场动画完成后聚焦输入框。`switchSession()` 末尾用 `inputEl?.focus()` 在切换会话后立即聚焦。详见 [ai-chat.js#L1331](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **笔记首页启动聚焦（已放弃）** | 尝试过在 `renderCardGrid()`、`init()`、`EventsOn('wails:window:focus')`、`setTimeout(2000)` 等多处聚焦 `#viewGrid`，均因 Wails/WebView2 启动时 `document.hasFocus() === false`（WebView 控件无 OS 级键盘焦点）而失败。最终放弃首页聚焦，仅保留 AI 聊天输入框聚焦。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 无相关代码残留 |
+
+## 五十七、新增记忆点（更多技能批量扩展 — 4 项四字技能 + 互斥机制）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **批量新增 4 项四字技能** | 在"翻译、编程、写作、解题答疑、需求规格"基础上，新增"文本润色"（`polish`）、"内容摘要"（`summary`）、"文案生成"（`copywriting`）、"工作总结"（`report`）。每项从 4 个维度添加：HTML 菜单项、SKILL_PROMPTS、菜单点击分支、chip 渲染分支。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **技能互斥机制** | 所有技能同一时间只能激活一个。选择新技能时先清空 `activeSkills = {}` 再赋值。翻译方向选择（中文/英文）也遵循互斥。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `skillClick` 处理 |
+| **答疑 → 解题答疑** | 原"答疑"技能（`tutor`）菜单名和 chip 标签从二字改为四字"解题答疑"，内部 ID 不变。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) chip 渲染分支 |
+| **技能完整列表** | 更多技能目前共 9 项：翻译、编程、写作、解题答疑、需求规格、文本润色、内容摘要、文案生成、工作总结。全部互斥激活，切换/新建会话自动重置 |
 

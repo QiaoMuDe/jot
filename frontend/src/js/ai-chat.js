@@ -1,8 +1,8 @@
 /**
  * AI 对话模块 — 持久化多会话支持
  */
-import { marked } from 'marked';
 import hljs from 'highlight.js';
+import { marked } from 'marked';
 
 let messagesEl = null;        // #aiChatMessages
 let inputEl = null;           // #aiChatInput
@@ -17,7 +17,7 @@ let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let sessionTitleEl = null;    // #aiSessionTitle
 
 // 状态
-let chatHistory = [];          // 当前会话的消息（发送给模型用）
+let chatHistory = [];          // 当前会话的消息 (发送给模型用) 
 let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
@@ -26,7 +26,7 @@ let isStreaming = false;       // 正在流式输出时禁止切换/发送
 let sessionContextMenu = null; // AI 会话右键菜单
 let _contextSessionId = null;  // 右键菜单当前会话 ID
 let _contextTitleEl = null;    // 右键菜单当前会话标题元素
-let _aiStreamGen = 0;          // 流式 generation 计数器，跨流防串扰
+let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
 
 // 模型选择器状态
 let modelTrigger = null;
@@ -57,19 +57,19 @@ let refClose = null;            // #aiNoteRefClose
 let refSkeleton = null;         // #aiNoteRefSkeleton
 let refLoadingOverlay = null;   // #aiNoteRefLoadingOverlay
 let refSearchClear = null;      // #aiNoteRefSearchClear
-let refListWrap = null;         // .ai-note-ref-list-wrap（滚动容器）
+let refListWrap = null;         // .ai-note-ref-list-wrap (滚动容器) 
 let refTagBtn = null;           // #aiNoteRefTagBtn
 let refTagLabel = null;         // #aiNoteRefTagLabel
 let refTagDropdown = null;      // #aiNoteRefTagDropdown
 let refTagFilter = null;        // #aiNoteRefTagFilter
 let _refSearchTimer = null;     // 搜索 debounce 定时器
 let _refTempSelected = {};      // 浮层中临时选中状态 { [id]: true }
-let _refListLoaded = false;     // 是否已加载过列表（首次用骨架屏，后续用 overlay）
+let _refListLoaded = false;     // 是否已加载过列表 (首次用骨架屏, 后续用 overlay) 
 let _refCurrentPage = 1;        // 当前页码
 let _refTotalItems = 0;         // 匹配总数
-let _refPageSize = 20;          // 每页条数（从设置读取）
+let _refPageSize = 20;          // 每页条数 (从设置读取) 
 let _refLoading = false;        // 是否正在加载中
-let _refPendingRefresh = false; // 待刷新标志（笔记本/搜索切换时若被 _refLoading 阻塞，设此标志待重试）
+let _refPendingRefresh = false; // 待刷新标志 (笔记本/搜索切换时若被 _refLoading 阻塞, 设此标志待重试) 
 let _pageSizeLoaded = false;    // 分页大小是否已缓存
 let _notebooksCache = null;     // 笔记本下拉选项缓存
 let _refTagIds = new Set();     // 已选标签 ID 集合
@@ -92,23 +92,203 @@ const SKILL_PROMPTS = {
 将用户发送的每条消息精准翻译成中文。
 
 ## Guidelines
-- 准确传达原文含义、语气和风格，不增不减
-- 遵循中文语法规范和地道表达，避免翻译腔
+- 准确传达原文含义、语气和风格, 不增不减
+- 遵循中文语法规范和地道表达, 避免翻译腔
 - 专业术语保持行业通用译法
-- 只输出翻译结果，不添加任何解释、备注或额外内容
-- 如原文包含代码或专有名词（人名、地名、品牌名等），按中文惯例处理`,
+- 只输出翻译结果, 不添加任何解释、备注或额外内容
+- 如原文包含代码或专有名词 (人名、地名、品牌名等) , 按中文惯例处理`,
         to_english: `# Role: 专业翻译助手
 
 ## Core Task
 将用户发送的每条消息精准翻译成英文。
 
 ## Guidelines
-- 准确传达原文含义、语气和风格，不增不减
-- 遵循英文语法规范和地道表达，避免中式英语
+- 准确传达原文含义、语气和风格, 不增不减
+- 遵循英文语法规范和地道表达, 避免中式英语
 - 专业术语保持行业通用译法
-- 只输出翻译结果，不添加任何解释、备注或额外内容
-- 如原文包含代码或专有名词（人名、地名、品牌名等），按英文惯例处理`
-    }
+- 只输出翻译结果, 不添加任何解释、备注或额外内容
+- 如原文包含代码或专有名词 (人名、地名、品牌名等) , 按英文惯例处理`
+    },
+    coding: `# Role: 资深程序员
+
+## Core Task
+为用户提供专业的编程相关服务, 包括但不限于代码编写、调试修复、架构设计、技术方案评估和最佳实践建议。
+
+## Guidelines
+- 代码质量优先 :编写的代码应遵循对应语言的最佳实践, 注重可读性、可维护性和性能
+- 全面考虑 :对逻辑需要分析前置条件、边界情况和异常处理, 确保稳健性
+- 主动解释 :提供代码的同时解释关键设计思路和技术选型理由
+- 保持简洁 :尽量用简洁高效的代码解决问题, 避免过度设计
+- 格式规范 :代码块标注正确的语言类型, 便于高亮显示`,
+    writing: `# Role: 专业写作助手
+
+## Core Task
+协助用户完成各类写作任务, 包括但不限于文章、报告、邮件、文案、方案、故事创作等。
+
+## Guidelines
+- 根据用户需求明确文体和风格, 确保内容贴合场景
+- 结构清晰、逻辑连贯, 段落过渡自然
+- 用词准确、表达流畅, 避免冗余啰嗦
+- 如有需要, 主动提供多个版本供用户选择
+- 尊重用户意图, 以用户的想法为基础进行润色和扩展`,
+    tutor: `# Role: 解题导师
+
+## Core Task
+帮助用户解答各学科领域的题目和疑问, 提供清晰的解题思路、步骤推导和知识点讲解。
+
+## Guidelines
+- 先理解题目要求, 确认问题类型和已知条件
+- 分步骤展示解题过程, 逻辑清晰、推导严谨
+- 不仅给出答案, 更要解释"为什么"和"怎么想到的"
+- 对关键知识点进行延伸讲解, 帮助用户举一反三
+- 对于有多种解法的题目, 优先介绍最简洁或最通用的方法
+- 如遇用户理解困难, 主动换用更通俗的方式重新解释`,
+    reqspec: `# 角色定位
+你是一位世界级的软件需求分析师和项目规划专家, 现在处于专业的 Spec 模式下。你的唯一任务是根据用户提供的任何需求, 生成一套完整、可执行、可验收的三文档项目规范。
+
+# 核心原则
+1. 先规划, 后开发 :在用户明确确认所有文档之前, 绝对不编写任何代码
+2. 清晰明确 :所有内容必须具体、可量化、无歧义
+3. 粒度适中 :每个任务都应该在 1-4 小时内可以独立完成
+4. 边界清晰 :明确说明项目做什么, 更要明确说明不做什么
+5. 语言一致 :所有输出必须使用与用户输入完全相同的语言
+
+# 输出要求
+你必须严格按照以下格式生成三个独立的文档, 每个文档使用二级标题分隔。
+
+## 1. spec.md (功能规格说明书) 
+### 项目信息
+- 项目名称 :简洁明了的项目名称
+- 项目标识 :简短的英文标识符 (用于目录和文件命名) 
+- 创建日期 :YYYY-MM-DD
+
+### 项目背景与目标
+- 为什么要做这个项目？解决什么具体问题？
+- 项目成功的标准是什么？
+- 预期的用户和使用场景
+
+### 功能范围
+#### ✅ 必须实现的核心功能
+- 列出所有必须包含的功能点, 每个功能点用一句话清晰描述
+#### ⚠️ 可选实现的扩展功能
+- 列出可以后续迭代的功能点
+#### ❌ 明确不实现的功能
+- 列出所有不在本次项目范围内的功能, 避免范围蔓延
+
+### 核心功能详细描述
+对每个核心功能进行详细说明, 包括 :
+- 用户操作流程
+- 输入输出要求
+- 异常处理逻辑
+- 界面交互要求 (如有) 
+
+### 技术选型建议
+- 推荐的技术栈和理由
+- 推荐的项目结构
+- 需要注意的技术风险和解决方案
+
+### 非功能需求
+- 性能要求 :响应时间、并发量等
+- 兼容性要求 :支持的浏览器、操作系统等
+- 安全要求 :数据加密、权限控制等
+- 可维护性要求 :代码规范、注释要求等
+
+### 假设与依赖
+- 项目实施过程中依赖的外部条件
+- 做出的关键技术假设
+
+## 2. tasks.md (任务分解清单) 
+### 任务总览
+- 总任务数 :X 个
+- 预计总工时 :Y 小时
+- 关键路径 :列出影响项目整体进度的核心任务
+
+### 任务列表
+按照优先级从高到低、依赖关系从先到后排序, 每个任务包含 :
+| 任务ID | 任务名称 | 详细描述 | 预计工时 | 依赖任务 | 涉及文件 |
+|--------|----------|----------|----------|----------|----------|
+| T001   | 项目初始化 | 创建项目目录结构、配置基础环境 | 1h | 无 | package.json, README.md |
+| T002   | ... | ... | ... | ... | ... |
+
+### 任务执行顺序
+用文字清晰描述任务的执行顺序和依赖关系
+
+## 3. checklist.md (验收检查清单) 
+### 功能验收
+- [ ] 功能点1 :具体的验收标准
+- [ ] 功能点2 :具体的验收标准
+- [ ] ...
+
+### 代码质量
+- [ ] 代码符合项目统一的编码规范
+- [ ] 没有重复代码和冗余逻辑
+- [ ] 关键代码有清晰的注释
+- [ ] 所有变量和函数命名有意义
+
+### 测试要求
+- [ ] 核心功能有单元测试覆盖
+- [ ] 所有异常情况都有测试
+- [ ] 手动测试通过所有功能点
+
+### 部署与交付
+- [ ] 项目可以正常构建和运行
+- [ ] 有完整的 README 文档
+- [ ] 所有依赖都已明确列出
+
+# 工作流程
+1. 仔细分析用户的需求, 如有任何不明确的地方, 立即向用户提问澄清
+2. 严格按照上述格式生成三个文档
+3. 生成完成后, 询问用户是否需要修改或确认
+4. 只有在用户明确确认所有文档无误后, 才可以进入开发阶段
+5. 如果用户提出修改, 更新对应的文档并再次请求确认`,
+    polish: `# Role: 文本润色专家
+
+## Core Task
+对用户提供的文本进行润色优化, 修正语病、优化表达、提升可读性, 不改原文核心意思。
+
+## Guidelines
+- 保持原文风格和语气基调不变
+- 修正语法错误、标点误用和逻辑不通顺之处
+- 优化冗余表达, 使句子更简洁流畅
+- 对长句适当拆分, 对短句适当合并, 提升阅读节奏
+- 专业术语和专有名词保持原样不做替换
+- 只输出润色后的文本, 不添加解释或评价`,
+    summary: `# Role: 内容摘要专家
+
+## Core Task
+提取用户提供文本的核心要点, 生成结构清晰、重点突出的摘要。
+
+## Guidelines
+- 把握全文主旨, 识别关键论点和支撑论据
+- 摘要在原文 1/3 长度以内, 用尽可能少的文字传达核心信息
+- 按逻辑顺序组织摘要内容 (总→分 或 时间顺序等) 
+- 使用原文中的关键术语和概念, 保持准确性
+- 保持客观中立, 不添加个人评论或引申
+- 如文本类型特殊 (论文、新闻、故事等), 适配对应的摘要风格`,
+    copywriting: `# Role: 创意文案专家
+
+## Core Task
+根据用户需求创作各类营销文案, 包括广告语、产品描述、品牌故事、推广文案、社群文案等。
+
+## Guidelines
+- 明确文案目标和受众, 确保内容精准触达
+- 标题/开头要有吸引力, 能激发继续阅读的欲望
+- 语言简洁有力, 避免空泛套话
+- 突出卖点和差异化优势, 转化为用户利益点
+- 根据平台/媒介适配文案风格和长度
+- 如有需要, 主动提供多个版本供用户选择`,
+    report: `# Role: 工作总结专家
+
+## Core Task
+协助用户生成各类工作总结文档, 包括日报、周报、月报、述职报告、项目复盘等。
+
+## Guidelines
+- 先了解工作内容的时间范围和核心职责
+- 按成果导向组织内容, 突出关键产出和价值
+- 使用数据量化成果, 避免模糊表述
+- 结构化呈现 :按项目/时间/优先级分类均可
+- 对问题和不足客观描述, 侧重改进方案而非抱怨
+- 对下一步计划给出可执行的时间节点和关键目标`
 };
 
 /**
@@ -224,7 +404,7 @@ export function initAIChat() {
 
     bindEvents();
 
-    // 一次性初始化 Marked 选项（高亮在 renderMarkdown 中用 hljs.highlightElement 后处理）
+    // 一次性初始化 Marked 选项 (高亮在 renderMarkdown 中用 hljs.highlightElement 后处理) 
     marked.setOptions({
         breaks: true,
         gfm: true
@@ -322,7 +502,7 @@ function bindEvents() {
         const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
         const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
-        // 恢复保存的状态（默认展开）
+        // 恢复保存的状态 (默认展开) 
         const saved = localStorage.getItem('ai_sidebar_collapsed');
         if (saved === 'false') {
             sidebar.classList.add('collapsed');
@@ -477,6 +657,50 @@ function bindEvents() {
                         const isVisible = skillsTranslateOptions.style.display !== 'none';
                         skillsTranslateOptions.style.display = isVisible ? 'none' : '';
                     }
+                } else if (skill === 'coding') {
+                    // 直接激活编程技能 (无方向选择) , 先清空其他技能
+                    activeSkills = {};
+                    activeSkills.coding = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'writing') {
+                    // 直接激活写作技能, 先清空其他技能
+                    activeSkills = {};
+                    activeSkills.writing = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'tutor') {
+                    // 直接激活答疑技能, 先清空其他技能
+                    activeSkills = {};
+                    activeSkills.tutor = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'reqspec') {
+                    // 直接激活需求规格技能, 先清空其他技能
+                    activeSkills = {};
+                    activeSkills.reqspec = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'polish') {
+                    activeSkills = {};
+                    activeSkills.polish = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'summary') {
+                    activeSkills = {};
+                    activeSkills.summary = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'copywriting') {
+                    activeSkills = {};
+                    activeSkills.copywriting = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
+                } else if (skill === 'report') {
+                    activeSkills = {};
+                    activeSkills.report = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
                 }
                 return;
             }
@@ -487,7 +711,8 @@ function bindEvents() {
                 const radio = option.querySelector('input[type="radio"]');
                 if (radio) {
                     radio.checked = true;
-                    // 激活翻译技能
+                    // 激活翻译技能, 先清空其他技能
+                    activeSkills = {};
                     const dir = radio.value; // 'to_chinese' or 'to_english'
                     activeSkills.translate = { direction: dir };
                     renderSkillChips();
@@ -513,7 +738,7 @@ function bindEvents() {
         if (sessionContextMenu && !sessionContextMenu.contains(e.target)) {
             closeSessionContextMenu();
         }
-        // 关闭笔记引用浮层（点击 overlay 外部不关闭）
+        // 关闭笔记引用浮层 (点击 overlay 外部不关闭) 
     });
 
     // Escape 关闭右键菜单 & 笔记引用浮层
@@ -698,7 +923,7 @@ function renderSessionList() {
                 await window.go.main.App.DeleteAISession(s.id);
             } catch (_) { /* 忽略 */ }
 
-            // 如果删除的是当前会话，切换到最近会话或新建
+            // 如果删除的是当前会话, 切换到最近会话或新建
             if (s.id === activeSessionId) {
                 activeSessionId = null;
                 chatHistory = [];
@@ -706,7 +931,7 @@ function renderSessionList() {
             }
 
             await loadSessionList();
-            // 如果删除后没有会话了，自动新建一个
+            // 如果删除后没有会话了, 自动新建一个
             if (sessions.length === 0) {
                 await createSession();
             } else if (activeSessionId === null) {
@@ -739,7 +964,7 @@ async function switchSession(id) {
         activeSessionId = id;
         const msgs = await window.go.main.App.LoadAISessionMessages(id);
 
-        // 重建 chatHistory（只保留 role/content 供 API 使用）
+        // 重建 chatHistory (只保留 role/content 供 API 使用) 
         chatHistory = msgs ? msgs.map(msg => ({ role: msg.role, content: msg.content })) : [];
 
         // 清空消息列表
@@ -787,7 +1012,7 @@ function triggerPulseFeedback(el) {
 async function createSession() {
     if (isStreaming) return;
 
-    // 当前会话为空（无消息）时不允许新建，避免空会话堆积
+    // 当前会话为空 (无消息) 时不允许新建, 避免空会话堆积
     if (activeSessionId !== null && chatHistory.length === 0) return;
 
     let id;
@@ -811,7 +1036,7 @@ async function createSession() {
 
     await loadSessionList();
 
-    // 为新条目添加入场动画（列表第一项是最新的）
+    // 为新条目添加入场动画 (列表第一项是最新的) 
     const items = sessionListEl.querySelectorAll('.ai-session-item');
     if (items.length > 0) {
         items[0].classList.add('anim-slide-in');
@@ -862,6 +1087,54 @@ function renderSkillChips() {
                 <span class="ai-chat-skill-chip-label">${label}</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
+        } else if (skillId === 'coding') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+                <span class="ai-chat-skill-chip-label">编程</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'writing') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-label">写作</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'tutor') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                <span class="ai-chat-skill-chip-label">解题答疑</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'reqspec') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                <span class="ai-chat-skill-chip-label">需求规格</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'polish') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-label">文本润色</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'summary') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                <span class="ai-chat-skill-chip-label">内容摘要</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'copywriting') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-label">文案生成</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'report') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+                <span class="ai-chat-skill-chip-label">工作总结</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
         }
         return '';
     }).join('');
@@ -878,7 +1151,7 @@ function renderSkillChips() {
 }
 
 /**
- * 获取当前激活技能的系统提示词（按顺序拼接）
+ * 获取当前激活技能的系统提示词 (按顺序拼接) 
  * @returns {string}
  */
 function getSkillSystemPrompts() {
@@ -886,8 +1159,14 @@ function getSkillSystemPrompts() {
     if (keys.length === 0) return '';
     return keys.map(skillId => {
         const config = activeSkills[skillId];
-        if (SKILL_PROMPTS[skillId] && SKILL_PROMPTS[skillId][config.direction]) {
-            return SKILL_PROMPTS[skillId][config.direction];
+        const promptDef = SKILL_PROMPTS[skillId];
+        if (!promptDef) return '';
+        // 技能有无方向配置 :translate 这种有 { to_chinese, to_english }, coding 这种是直接字符串
+        if (typeof promptDef === 'string') {
+            return promptDef;
+        }
+        if (config && config.direction && promptDef[config.direction]) {
+            return promptDef[config.direction];
         }
         return '';
     }).filter(Boolean).join('\n\n');
@@ -900,7 +1179,7 @@ async function onSend() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
 
-    // 如果没有激活的会话，自动创建
+    // 如果没有激活的会话, 自动创建
     if (activeSessionId === null) {
         await createSession();
         if (activeSessionId === null) return;
@@ -917,7 +1196,7 @@ async function onSend() {
     if (userMsgEl) userMsgEl.appendChild(createMsgActions(text, 'user'));
     chatHistory.push({ role: 'user', content: text });
 
-    // 构建笔记引用上下文（后端已处理截断）
+    // 构建笔记引用上下文 (后端已处理截断) 
     let systemContext = '';
     if (referencedNotes.length > 0) {
         systemContext = await getNoteContext();
@@ -929,20 +1208,20 @@ async function onSend() {
 /**
  * 启动流式输出
  * @param {boolean} isRegenerate - 是否再生
- * @param {string} systemContext - 可选的 system prompt / 笔记上下文，拼入 messages 开头但不存库
+ * @param {string} systemContext - 可选的 system prompt / 笔记上下文, 拼入 messages 开头但不存库
  */
 function startStreaming(isRegenerate = false, systemContext = '') {
     if (isStreaming) return;
     isStreaming = true;
 
-    // 递增 generation，后续事件回调据此判断是否属于当前流
+    // 递增 generation, 后续事件回调据此判断是否属于当前流
     _aiStreamGen++;
     const myGen = _aiStreamGen;
 
-    // 清除该事件名下所有旧监听器，防止残留
+    // 清除该事件名下所有旧监听器, 防止残留
     window.runtime.EventsOff('ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking');
 
-    // 显示停止按钮，隐藏发送按钮
+    // 显示停止按钮, 隐藏发送按钮
     if (stopBtnEl) stopBtnEl.style.display = '';
     if (sendBtnEl) sendBtnEl.style.display = 'none';
 
@@ -972,7 +1251,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (summary) summary.textContent = '💭 思考中 ' + elapsed.toFixed(1) + ' 秒';
     }
 
-    /** 停止实时计时，设为最终态 */
+    /** 停止实时计时, 设为最终态 */
     function stopThinkingTimer(finalElapsed) {
         if (_thinkingTimer) {
             clearInterval(_thinkingTimer);
@@ -985,7 +1264,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     }
 
     const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
-        if (streamGen !== myGen) return; // 属于旧流，丢弃
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
         if (!thinkingDetails) {
             _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');
@@ -1002,7 +1281,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             thinkingContentEl.className = 'thinking-content';
             thinkingDetails.appendChild(thinkingContentEl);
             streamingEl.insertBefore(thinkingDetails, contentDiv);
-            // 启动实时计时器（每 200ms 更新）
+            // 启动实时计时器 (每 200ms 更新) 
             _thinkingTimer = setInterval(updateThinkingTimer, 200);
         }
         streamingThinking += chunk;
@@ -1012,11 +1291,11 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     unsubs.push(unsubThinking);
 
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
-        if (streamGen !== myGen) return; // 属于旧流，丢弃
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
         if (!hasReceivedChunk) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
-            // 首个正文 chunk 到达 → 思考结束，停止计时并更新摘要
+            // 首个正文 chunk 到达 → 思考结束, 停止计时并更新摘要
             if (streamingThinking && _thinkingStartedAt > 0) {
                 stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
             }
@@ -1028,12 +1307,12 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     unsubs.push(unsubChunk);
 
     const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent, elapsedThinking, elapsedTotal) => {
-        if (streamGen !== myGen) return; // 属于旧流，丢弃
-        stopThinkingTimer(0); // 清理计时器，摘要已在 chunk 中更新
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
         isStreaming = false;
 
-        // 恢复发送按钮，隐藏停止按钮
+        // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
 
@@ -1064,7 +1343,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
         // 自动保存消息到数据库
         if (isRegenerate) {
-            // 再生模式：user 消息已在 handleRegenerate 中重保存，只存 assistant
+            // 再生模式 :user 消息已在 handleRegenerate 中重保存, 只存 assistant
             saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         } else {
             saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
@@ -1075,11 +1354,11 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     unsubs.push(unsubDone);
 
     const unsubError = window.runtime.EventsOn('ai:stream-error', (streamGen, err) => {
-        if (streamGen !== myGen) return; // 属于旧流，丢弃
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器
         unsubs.forEach(fn => fn());
         isStreaming = false;
-        // 恢复发送按钮，隐藏停止按钮
+        // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
@@ -1087,7 +1366,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubError);
 
-    // 构建发送给 API 的消息列表（system 上下文 + 历史对话）
+    // 构建发送给 API 的消息列表 (system 上下文 + 历史对话) 
     let systemContent = systemContext || '';
     const skillPrompts = getSkillSystemPrompts();
     if (skillPrompts) {
@@ -1103,7 +1382,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
-        // 恢复发送按钮，隐藏停止按钮
+        // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
@@ -1131,7 +1410,7 @@ async function saveSessionMessages(roundMessages) {
 function renderMarkdown(el, content) {
     el.innerHTML = marked.parse(content);
 
-    // 后处理高亮：对每个标注了语言的代码块执行 hljs.highlightElement
+    // 后处理高亮 :对每个标注了语言的代码块执行 hljs.highlightElement
     el.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
         try { hljs.highlightElement(block); } catch (_) {}
     });
@@ -1140,13 +1419,13 @@ function renderMarkdown(el, content) {
         // 避免重复包装
         if (pre.parentNode.classList.contains('pre-wrapper')) return;
 
-        // 阻止代码块滚动事件冒泡到父容器（防止触发 .ai-chat-messages 的滚动条自动显隐）
+        // 阻止代码块滚动事件冒泡到父容器 (防止触发 .ai-chat-messages 的滚动条自动显隐) 
         pre.addEventListener('scroll', (e) => e.stopPropagation(), { passive: true });
 
         const code = pre.querySelector('code');
         if (!code) return;
 
-        // 复制按钮（先放 pre 内部，和笔记预览模式一致）
+        // 复制按钮 (先放 pre 内部, 和笔记预览模式一致) 
         const copyBtn = document.createElement('button');
         const isSingleLine = code && !code.textContent.trim().includes('\n');
         copyBtn.className = 'code-copy-btn' + (isSingleLine ? ' code-copy-btn--single' : '');
@@ -1168,7 +1447,7 @@ function renderMarkdown(el, content) {
         });
         pre.appendChild(copyBtn);
 
-        // 语言标签（需 wrapper 作定位容器）
+        // 语言标签 (需 wrapper 作定位容器) 
         const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
         const lang = langClass ? langClass.replace('language-', '') : '';
         if (lang) {
@@ -1214,16 +1493,16 @@ function renderMarkdown(el, content) {
 }
 
 /**
- * 添加消息气泡（不含操作按钮，调用方自行添加）
+ * 添加消息气泡 (不含操作按钮, 调用方自行添加) 
  * @param {string} content - 消息内容
  * @param {'user'|'assistant'} role - 角色
- * @param {string} [reasoningContent] - 思维链内容（可选）
+ * @param {string} [reasoningContent] - 思维链内容 (可选) 
  */
 function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
 
-    // 如果有思维链内容，先渲染可折叠思考区域
+    // 如果有思维链内容, 先渲染可折叠思考区域
     if (role === 'assistant' && reasoningContent) {
         const details = document.createElement('details');
         details.className = 'thinking-details';
@@ -1251,7 +1530,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     }
     el.appendChild(contentEl);
 
-    // 显示总耗时（仅历史消息有时耗数据）
+    // 显示总耗时 (仅历史消息有时耗数据) 
     if (totalElapsed > 0) {
         const timeEl = document.createElement('div');
         timeEl.className = 'ai-msg-time';
@@ -1407,7 +1686,7 @@ function hideWelcome() {
 }
 
 /**
- * 打字机效果：逐字打印 → 暂停 → 逐字擦除 → 循环
+ * 打字机效果 :逐字打印 → 暂停 → 逐字擦除 → 循环
  */
 function startTypewriter() {
     const el = welcomeEl?.querySelector('.ai-chat-welcome-text');
@@ -1416,7 +1695,7 @@ function startTypewriter() {
     const MESSAGES = [
         '有什么我能帮你的吗？',
         '今天想写点什么？',
-        '有什么想法，随时告诉我',
+        '有什么想法, 随时告诉我',
         '开始记录你的灵感吧',
         '准备好了就告诉我',
         '随便聊聊也可以',
@@ -1483,7 +1762,7 @@ function createMsgActions(content, role) {
     container.appendChild(copyBtn);
 
     if (role === 'assistant') {
-        // 保存为笔记（仅 AI 回复）
+        // 保存为笔记 (仅 AI 回复) 
         const saveBtn = document.createElement('button');
         saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
         saveBtn.title = '保存为笔记';
@@ -1536,7 +1815,7 @@ async function handleRegenerate(msgEl) {
     chatHistory.splice(idx);
     children.slice(idx).forEach(el => el.remove());
 
-    // 清空该会话的 DB 消息，重新保存截断后的 chatHistory，避免再生导致 user 消息重复
+    // 清空该会话的 DB 消息, 重新保存截断后的 chatHistory, 避免再生导致 user 消息重复
     try {
         await window.go.main.App.ClearAISessionMessages(activeSessionId);
         if (chatHistory.length > 0) {
@@ -1549,7 +1828,7 @@ async function handleRegenerate(msgEl) {
 
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */
 
-/** 缓存的引用上下文（后端已拼装好） */
+/** 缓存的引用上下文 (后端已拼装好)  */
 let cachedRefContext = '';
 const DOC_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
 const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -1599,7 +1878,7 @@ async function openNoteRefModal() {
 }
 
 /**
- * 从设置中读取分页大小（带缓存，仅首次调用时向后端请求）
+ * 从设置中读取分页大小 (带缓存, 仅首次调用时向后端请求) 
  */
 async function loadRefPageSize() {
     if (_pageSizeLoaded) return;
@@ -1625,7 +1904,7 @@ function closeNoteRefModal() {
 }
 
 /**
- * 加载所有笔记本到筛选下拉框（带缓存，仅首次调用时向后端请求）
+ * 加载所有笔记本到筛选下拉框 (带缓存, 仅首次调用时向后端请求) 
  */
 async function loadAllNotebooks() {
     if (!refNotebook) return;
@@ -1654,7 +1933,7 @@ function rebuildNotebookOptions() {
 }
 
 /**
- * 加载所有标签到缓存（带缓存，仅首次调用时向后端请求）
+ * 加载所有标签到缓存 (带缓存, 仅首次调用时向后端请求) 
  */
 async function loadAllRefTags() {
     try {
@@ -1725,10 +2004,10 @@ function updateRefTagFilterBtn() {
 }
 
 /**
- * 加载笔记列表（根据当前搜索关键词和笔记本筛选）
- * 加载策略：
- *   - 首次加载：显示骨架屏，数据到达后替换
- *   - 二次加载：保留旧列表，显示半透明 overlay + 旋转环，数据到达后替换
+ * 加载笔记列表 (根据当前搜索关键词和笔记本筛选) 
+ * 加载策略 :
+ *   - 首次加载 :显示骨架屏, 数据到达后替换
+ *   - 二次加载 :保留旧列表, 显示半透明 overlay + 旋转环, 数据到达后替换
  *   - 点击加载更多: 追加到列表末尾
  */
 async function loadNoteList(append = false) {
@@ -1736,7 +2015,7 @@ async function loadNoteList(append = false) {
         console.warn('[loadNoteList] refList is null, abort');
         return;
     }
-    // 若正在加载中：非追加调用（笔记本/搜索切换）设待刷新标志，追加调用（滚动）直接略过
+    // 若正在加载中 :非追加调用 (笔记本/搜索切换) 设待刷新标志, 追加调用 (滚动) 直接略过
     if (_refLoading) {
         console.log('[loadNoteList] _refLoading is true, set pendingRefresh=', !append);
         if (!append) _refPendingRefresh = true;
@@ -1749,7 +2028,7 @@ async function loadNoteList(append = false) {
     const page = append ? _refCurrentPage + 1 : 1;
     console.log('[loadNoteList] proceeding: append=', append, 'query=', query, 'notebookId=', notebookId, 'page=', page, '_refListLoaded=', _refListLoaded);
 
-    // 首次 → 骨架屏；二次刷新 → overlay；追加显示加载指示器
+    // 首次 → 骨架屏; 二次刷新 → overlay; 追加显示加载指示器
     if (!append) {
         if (_refListLoaded && refLoadingOverlay) {
             refLoadingOverlay.classList.add('active');
@@ -1802,7 +2081,7 @@ async function loadNoteList(append = false) {
     } finally {
         console.log('[loadNoteList] finally: _refPendingRefresh=', _refPendingRefresh);
         _refLoading = false;
-        // 若在加载期间有待刷新的筛选变更（切换笔记本/搜索），自动重试
+        // 若在加载期间有待刷新的筛选变更 (切换笔记本/搜索) , 自动重试
         if (_refPendingRefresh) {
             _refPendingRefresh = false;
             console.log('[loadNoteList] retrying due to pendingRefresh');
@@ -1857,7 +2136,7 @@ function renderNoteList(notes) {
 }
 
 /**
- * 追加笔记到列表末尾（加载更多）
+ * 追加笔记到列表末尾 (加载更多) 
  * @param {Array} notes - 新加载的笔记列表
  */
 function appendToList(notes) {
@@ -1900,7 +2179,7 @@ function appendToList(notes) {
         refList.appendChild(fragment.firstChild);
     }
 
-    // 先追加条目再隐藏加载器，避免 DOM 空隙导致白闪
+    // 先追加条目再隐藏加载器, 避免 DOM 空隙导致白闪
     const loader = document.getElementById('aiNoteRefListLoader');
     if (loader) loader.classList.remove('visible');
 
@@ -1918,7 +2197,7 @@ function toggleNoteSelection(id) {
     } else {
         _refTempSelected[id] = true;
     }
-    // 仅更新选中态（不重新加载列表，保留滚动位置）
+    // 仅更新选中态 (不重新加载列表, 保留滚动位置) 
     const items = refList.querySelectorAll('.ai-note-ref-item');
     items.forEach(item => {
         if (item.dataset.id === id) {
@@ -1942,7 +2221,7 @@ function updateRefCount() {
 }
 
 /**
- * 确认笔记选择，更新 chips
+ * 确认笔记选择, 更新 chips
  */
 async function confirmNoteSelection() {
     const selectedIds = Object.keys(_refTempSelected);
@@ -1958,7 +2237,7 @@ async function confirmNoteSelection() {
             return;
         }
 
-        // 合并：保留未取消的旧引用 + 新增的
+        // 合并 :保留未取消的旧引用 + 新增的
         const newIds = new Set(ids);
         const keepNotes = referencedNotes.filter(n => !newIds.has(n.id));
         referencedNotes = [...keepNotes, ...refContext.notes];
@@ -2007,7 +2286,7 @@ function updateRefChips() {
         });
     });
 
-    // chips 区域已包含后端返回的截断状态，无需异步刷新
+    // chips 区域已包含后端返回的截断状态, 无需异步刷新
 }
 
 /**
@@ -2021,15 +2300,15 @@ function removeRefNote(id) {
 }
 
 /**
- * 获取笔记引用上下文（直接使用后端拼装好的结果）
- * @returns {Promise<string>} 拼装后的上下文内容，无引用时返回空字符串
+ * 获取笔记引用上下文 (直接使用后端拼装好的结果) 
+ * @returns {Promise<string>} 拼装后的上下文内容, 无引用时返回空字符串
  */
 async function getNoteContext() {
     if (referencedNotes.length === 0) return '';
 
     if (cachedRefContext) return cachedRefContext;
 
-    // 缓存不存在（如之前清除过），重新从后端获取
+    // 缓存不存在 (如之前清除过) , 重新从后端获取
     const ids = referencedNotes.map(n => n.id);
     try {
         const refContext = await window.go.main.App.GetNoteRefContext(ids);
