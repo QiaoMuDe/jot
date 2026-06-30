@@ -1651,8 +1651,9 @@ async function loadAISettings() {
     }
 
     // 独立加载模型：避免前面 UI 异常导致模型设置丢失
+    let cfg;
     try {
-        const cfg = await window.go.main.App.GetAIConfig();
+        cfg = await window.go.main.App.GetAIConfig();
         els.aiModelDropdown.innerHTML = '';
         if (cfg.model) {
             els.aiModelLabel.textContent = cfg.model;
@@ -1667,6 +1668,17 @@ async function loadAISettings() {
     const enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
     if (settingToggle) {
         if (enabled) settingToggle.classList.add('active');
+    }
+
+    // 联网搜索配置
+    const tavilyKey = document.getElementById('aiTavilyApiKey');
+    if (tavilyKey && cfg.tavily_api_key) {
+        tavilyKey.value = cfg.tavily_api_key;
+    }
+    const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
+    const webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
+    if (webSearchToggle && webSearchEnabled) {
+        webSearchToggle.classList.add('active');
     }
 
     // 引用截断字数
@@ -1880,7 +1892,7 @@ async function initAISettings() {
         if (!hasItems || model === '-- 请先获取模型列表 --' || !model) return;
 
         try {
-            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model, provider });
+            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model, provider, tavily_api_key: document.getElementById('aiTavilyApiKey')?.value?.trim() || '' });
             nm.show('AI 配置已保存', 'success');
         } catch (e) {
             nm.show('保存配置失败: ' + e, 'error');
@@ -1925,6 +1937,62 @@ async function initAISettings() {
             nm.show(isActive ? '深度思考已开启' : '深度思考已关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatSearchToggle');
+            if (toolbarToggle) {
+                toolbarToggle.classList.toggle('active', isActive);
+            }
+        });
+    }
+
+    // ── Tavily API Key 自动保存 ──
+    const tavilyKey = document.getElementById('aiTavilyApiKey');
+    if (tavilyKey) {
+        tavilyKey.addEventListener('change', async () => {
+            const key = tavilyKey.value.trim();
+            try {
+                const cfg = await window.go.main.App.GetAIConfig();
+                cfg.tavily_api_key = key;
+                await window.go.main.App.SaveAIConfig(cfg);
+                nm.show(key ? 'Tavily API Key 已保存' : 'Tavily API Key 已清除', 'success');
+            } catch (e) {
+                nm.show('保存失败: ' + e, 'error');
+            }
+        });
+    }
+
+    // ── Tavily 测试连接 ──
+    const testBtn = document.getElementById('aiTestTavilyBtn');
+    if (testBtn) {
+        testBtn.addEventListener('click', async () => {
+            const key = document.getElementById('aiTavilyApiKey').value.trim();
+            if (!key) {
+                nm.show('请先输入 Tavily API Key', 'warning');
+                return;
+            }
+            testBtn.disabled = true;
+            testBtn.textContent = '测试中...';
+            try {
+                await window.go.main.App.TestTavilyConnection(key);
+                nm.show('连接成功！', 'success');
+            } catch (e) {
+                nm.show('连接失败: ' + (e.message || e), 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = '测试连接';
+            }
+        });
+    }
+
+    // ── 联网搜索默认开启切换 ──
+    const settingWebSearchLine = document.getElementById('aiSettingWebSearchLine');
+    if (settingWebSearchLine) {
+        settingWebSearchLine.addEventListener('click', () => {
+            const toggleSwitch = document.getElementById('aiSettingWebSearchToggle');
+            if (!toggleSwitch) return;
+            const isActive = toggleSwitch.classList.toggle('active');
+            localStorage.setItem('ai_web_search_enabled', String(isActive));
+            nm.show(isActive ? '联网搜索已默认开启' : '联网搜索已默认关闭', isActive ? 'success' : 'info');
+            // 同步工具栏 toggle
+            const toolbarToggle = document.getElementById('aiChatWebSearchToggle');
             if (toolbarToggle) {
                 toolbarToggle.classList.toggle('active', isActive);
             }

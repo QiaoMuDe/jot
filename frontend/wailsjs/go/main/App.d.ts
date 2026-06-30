@@ -22,7 +22,7 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
-export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boolean):Promise<void>;
+export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boolean,arg4:boolean):Promise<void>;
 
 export function CancelAIStream():Promise<void>;
 
@@ -143,6 +143,8 @@ export function SetSetting(arg1:string,arg2:string):Promise<void>;
 export function SetSortOrder(arg1:string):Promise<void>;
 
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
+
+export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 

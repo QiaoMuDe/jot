@@ -1,0 +1,14 @@
+- [x] Tavily Go 依赖添加成功，项目可正常编译
+- [x] `SearchWeb()` 函数结构正确，API 签名与 Tavily SDK 匹配
+- [x] Tavily 超时/失败时不阻塞对话流程
+- [x] `AIConfig` 包含 `TavilyAPIKey` 字段，读写 SettingService 正确
+- [x] `CallAIStream` 新增 `searchEnabled` 参数，前后端签名一致
+- [x] 设置页「Tavily API Key」输入框能正常保存和加载
+- [x] 设置页「测试连接」按钮存在且绑定 `TestTavilyConnection` binding
+- [x] 设置页「联网搜索默认开启」开关能正常保存状态
+- [x] AI 聊天头部「联网搜索」开关（id=aiChatWebSearchToggle）显示正常，切换生效
+- [x] 开关状态在 localStorage 持久化，刷新不丢失
+- [ ] 联网搜索开启时发送消息，AI 回复引用了搜索内容（需用户填入 Tavily Key 实测）
+- [ ] 联网搜索关闭时发送消息，AI 纯知识回复（无搜索内容）（需用户实测）
+- [x] 设置页开关与聊天头部开关状态双向同步
+- [x] AGENTS.md 已记录联网搜索功能

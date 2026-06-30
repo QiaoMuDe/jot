@@ -28,10 +28,11 @@ type Message struct {
 
 // AIConfig 表示 AI 服务配置
 type AIConfig struct {
-	Provider string `json:"provider"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"`
-	Model    string `json:"model"`
+	Provider     string `json:"provider"`
+	BaseURL      string `json:"base_url"`
+	APIKey       string `json:"api_key"`
+	Model        string `json:"model"`
+	TavilyAPIKey string `json:"tavily_api_key"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -52,10 +53,11 @@ func (a *AIService) GetConfig() AIConfig {
 		provider = "openai"
 	}
 	return AIConfig{
-		Provider: provider,
-		BaseURL:  svc.Get("ai_base_url"),
-		APIKey:   svc.Get("ai_api_key"),
-		Model:    svc.Get("ai_model"),
+		Provider:     provider,
+		BaseURL:      svc.Get("ai_base_url"),
+		APIKey:       svc.Get("ai_api_key"),
+		Model:        svc.Get("ai_model"),
+		TavilyAPIKey: svc.Get("tavily_api_key"),
 	}
 }
 
@@ -74,7 +76,10 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	if err := svc.Set("ai_api_key", cfg.APIKey); err != nil {
 		return err
 	}
-	return svc.Set("ai_model", cfg.Model)
+	if err := svc.Set("ai_model", cfg.Model); err != nil {
+		return err
+	}
+	return svc.Set("tavily_api_key", cfg.TavilyAPIKey)
 }
 
 // createLLM 根据配置创建 LangChainGo LLM 实例

@@ -39,6 +39,10 @@ let modelList = [];
 let searchToggle = null;
 let enableThinking = false;
 
+// 联网搜索状态
+let webSearchToggle = null;
+let enableWebSearch = false;
+
 // 笔记引用状态
 let referencedNotes = [];       // { id, title, notebook_name }
 
@@ -420,6 +424,10 @@ export function initAIChat() {
     searchToggle = document.getElementById('aiChatSearchToggle');
     enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
 
+    // 联网搜索
+    webSearchToggle = document.getElementById('aiChatWebSearchToggle');
+    enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
+
     // 笔记引用
     refBtn = document.getElementById('aiChatRefBtn');
     refBar = document.getElementById('aiChatRefBar');
@@ -571,6 +579,10 @@ function bindEvents() {
     // 停止生成
     if (stopBtnEl) {
         stopBtnEl.addEventListener('click', async () => {
+            // 先立即更新 UI，再通知后端取消
+            stopBtnEl.style.display = 'none';
+            if (sendBtnEl) sendBtnEl.style.display = '';
+            isStreaming = false;
             try {
                 await window.go.main.App.CancelAIStream();
             } catch (_) {}
@@ -641,6 +653,20 @@ function bindEvents() {
             const settingToggle = document.getElementById('aiSettingSearchToggle');
             if (settingToggle) {
                 settingToggle.classList.toggle('active', enableThinking);
+            }
+        });
+    }
+
+    // ── 联网搜索切换 ──
+    if (webSearchToggle) {
+        if (enableWebSearch) webSearchToggle.classList.add('active');
+        webSearchToggle.addEventListener('click', () => {
+            enableWebSearch = webSearchToggle.classList.toggle('active');
+            localStorage.setItem('ai_web_search_enabled', String(enableWebSearch));
+            // 同步设置页 toggle
+            const settingToggle = document.getElementById('aiSettingWebSearchToggle');
+            if (settingToggle) {
+                settingToggle.classList.toggle('active', enableWebSearch);
             }
         });
     }
@@ -1316,7 +1342,10 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     const myGen = _aiStreamGen;
 
     // 清除该事件名下所有旧监听器, 防止残留
-    window.runtime.EventsOff('ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking');
+    // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status'].forEach(function(name) {
+        window.runtime.EventsOff(name);
+    });
 
     // 显示停止按钮, 隐藏发送按钮
     if (stopBtnEl) stopBtnEl.style.display = '';
@@ -1386,6 +1415,21 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         scrollToBottom();
     });
     unsubs.push(unsubThinking);
+
+    // 联网搜索状态：显示/关闭搜索动画
+    const unsubSearch = window.runtime.EventsOn('ai:search-status', (status) => {
+        if (status === 'searching') {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(createSearchIndicator());
+        } else if (status === 'done') {
+            // 仅在尚未收到 stream chunk 时替换为打字点（搜索完成 → 等待 LLM 流式输出）
+            if (!hasReceivedChunk) {
+                contentDiv.innerHTML = '';
+                contentDiv.appendChild(createTypingDots());
+            }
+        }
+    });
+    unsubs.push(unsubSearch);
 
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
@@ -1476,7 +1520,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     }
 
     try {
-        window.go.main.App.CallAIStream(myGen, messages, enableThinking);
+        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -1652,6 +1696,16 @@ function createTypingDots() {
         dot.className = 'ai-typing-dot';
         el.appendChild(dot);
     }
+    return el;
+}
+
+/**
+ * 创建联网搜索动画指示器（旋转地球图标 + "正在联网搜索..."）
+ */
+function createSearchIndicator() {
+    const el = document.createElement('span');
+    el.className = 'ai-search-indicator';
+    el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>正在联网搜索...';
     return el;
 }
 

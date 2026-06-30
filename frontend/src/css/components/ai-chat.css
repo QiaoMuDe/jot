@@ -384,6 +384,27 @@
     30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* ── 联网搜索动画 ── */
+.ai-search-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    color: var(--accent);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.ai-search-indicator svg {
+    animation: ai-search-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes ai-search-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* ── 输入区 ── */
 .ai-chat-input-area {
     display: flex;

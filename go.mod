@@ -6,6 +6,7 @@ require (
 	gitee.com/MM-Q/go-kit v0.0.24
 	gitee.com/MM-Q/verman v0.0.19
 	github.com/glebarez/sqlite v1.11.0
+	github.com/hekmon/tavily v1.3.0
 	github.com/tmc/langchaingo v0.1.14
 	github.com/wailsapp/wails/v2 v2.12.0
 	gorm.io/gorm v1.31.1
@@ -21,6 +22,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
@@ -47,6 +49,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/time v0.11.0 // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect

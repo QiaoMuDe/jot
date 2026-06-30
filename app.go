@@ -537,6 +537,20 @@ func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
 	return a.aiService.TestConnection(cfg)
 }
 
+// TestTavilyConnection 测试 Tavily API Key 是否有效
+func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
+	if apiKey == "" {
+		return false, fmt.Errorf("API Key 不能为空")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result := services.SearchWeb(ctx, "test", apiKey)
+	if result == "" {
+		return false, fmt.Errorf("连接失败，请检查 API Key 是否正确")
+	}
+	return true, nil
+}
+
 // FetchAIModels 获取可用模型列表
 func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
 	cfg := a.aiService.GetConfig()
@@ -551,29 +565,86 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
 	var fullThinking strings.Builder
-	go a.aiService.CallAIStream(ctx, messages, thinkingEnabled,
-		func(chunk string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
-		},
-		func(thinking string) {
-			fullThinking.WriteString(thinking)
-			runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
-		},
-		func(content string, elapsedThinking, elapsedTotal float64) {
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal)
-			if fullThinking.Len() > 0 {
-				runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
+
+	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
+	var searching bool
+	if searchEnabled {
+		cfg := a.aiService.GetConfig()
+		if cfg.TavilyAPIKey != "" {
+			searching = true
+			runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+		}
+	}
+
+	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
+	go func() {
+		// 联网搜索（静默执行，搜索结果注入 system message，前端不展示）
+		if searchEnabled {
+			cfg := a.aiService.GetConfig()
+			if cfg.TavilyAPIKey != "" {
+				var query string
+				for i := len(messages) - 1; i >= 0; i-- {
+					if messages[i].Role == "user" {
+						query = messages[i].Content
+						break
+					}
+				}
+
+				if query != "" {
+					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey)
+					if searchResult != "" {
+						// 注入到 system role
+						found := false
+						for i := range messages {
+							if messages[i].Role == "system" {
+								messages[i].Content = messages[i].Content + "\n\n" + searchResult
+								found = true
+								break
+							}
+						}
+						if !found {
+							messages = append([]services.Message{{Role: "system", Content: searchResult}}, messages...)
+						}
+					}
+				}
 			}
-		},
-		func(err string) {
-			runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
-		},
-	)
+		}
+
+		// 通知前端搜索完成，关闭搜索动画
+		if searching {
+			runtime.EventsEmit(a.ctx, "ai:search-status", "done")
+		}
+
+		// 如果已被用户取消（停止按钮），不再继续调用 LLM，避免白调用
+		if ctx.Err() != nil {
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0)
+			return
+		}
+
+		a.aiService.CallAIStream(ctx, messages, thinkingEnabled,
+			func(chunk string) {
+				runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
+			},
+			func(thinking string) {
+				fullThinking.WriteString(thinking)
+				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
+			},
+			func(content string, elapsedThinking, elapsedTotal float64) {
+				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal)
+				if fullThinking.Len() > 0 {
+					runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
+				}
+			},
+			func(err string) {
+				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
+			},
+		)
+	}()
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用

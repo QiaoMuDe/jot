@@ -38,8 +38,8 @@ export function CallAI(arg1) {
   return window['go']['main']['App']['CallAI'](arg1);
 }
 
-export function CallAIStream(arg1, arg2, arg3) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3);
+export function CallAIStream(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4);
 }
 
 export function CancelAIStream() {
@@ -280,6 +280,10 @@ export function SetSortOrder(arg1) {
 
 export function TestAIBaseURL(arg1, arg2) {
   return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
+}
+
+export function TestTavilyConnection(arg1) {
+  return window['go']['main']['App']['TestTavilyConnection'](arg1);
 }
 
 export function TogglePinNote(arg1) {

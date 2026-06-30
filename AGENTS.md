@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 36）
+> 生成日期: 2026-06-30（更新 37）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -801,6 +801,17 @@ await loadXxxSetting();
 | **会话列表按最新排序** | `GetAISessions()` 按 `Order("updated_at DESC")` 查询。`SaveAIMessages()` 中更新 `updated_at` 改为先查记录 `a.db.First(&s, sessionID)` 再用 `Model(&s).Update("updated_at", time.Now())`，确保 GORM 正确处理时间戳。最新/最活跃的会话显示在列表顶部。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
 | **会话标题双击编辑** | 已存在于 `renderSessionList()` 中每个 `.ai-session-item-title` 绑定 `dblclick` 事件，`contentEditable` 内联编辑。Enter 确认/blur 自动保存/Escape 取消。调用 `window.go.main.App.RenameAISession(s.id, newTitle)` 持久化。详见 [ai-chat.js#L169-L208](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
+## 三十、新增记忆点（联网搜索 Tavily 集成）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **联网搜索功能** | 在 AI 聊天中新增「联网搜索」开关，开启后在发送消息时自动用 Tavily 搜索互联网，结果注入 system message。无需额外 Toggle 或者复杂设置。详见 [search_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/search_service.go) |
+| **SearchWeb 函数** | `internal/services/search_service.go` 中的 `SearchWeb(query, apiKey string) string` 函数，调用 Tavily API（advanced depth, 5 条结果），提取标题+URL+正文摘要，格式化为纯文本。Key 为空或 API 报错时静默返回空字符串，不阻塞对话流程。超时 5 秒。 |
+| **AIConfig 加 TavilyAPIKey** | `AIConfig` 结构体新增 `TavilyAPIKey string` 字段，通过 SettingService 的 `tavily_api_key` 键存储。`GetConfig()`/`SaveConfig()` 同步读写。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **CallAIStream 加 searchEnabled** | `App.CallAIStream(streamGen, messages, thinkingEnabled, searchEnabled)` 新增第 4 个 bool 参数。searchEnabled=true 时，从 chatHistory 提取最后一条 user 消息作 query，调用 `SearchWeb`，搜索结果追加到 system message（优先找现有 system，没有则新建）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **设置页配置** | 设置→AI 设置新增「联网搜索」区域：Tavily API Key 输入框（type=password，change 事件自动保存）、测试连接按钮、默认开启开关。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **前端联网搜索开关** | AI 聊天头部「深度思考」旁边新增「联网搜索」开关（id=aiChatWebSearchToggle），状态持久化到 localStorage(`ai_web_search_enabled`)。发送消息时 `enableWebSearch` 传给 `CallAIStream`。两个开关（设置页 + 工具栏）双向同步。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
 ---
 
 ## 三十、新增记忆点（清空按钮常显 + 重置导入还原刷新设置 + 通知全局函数 + AI 设置加载）
@@ -1118,4 +1129,15 @@ await loadXxxSetting();
 | **实现模式** | 完全遵循现有非翻译技能（如编程、写作）的纯前端模式：HTML 菜单项 → SKILL_PROMPTS 定义 → click 设置 `activeSkills` → chip 渲染显示 |
 | **prompt 设计** | 角色为"提示词工程专家"，生成含 Role/Core Task/Guidelines/Output Format 标准结构的 prompt，提供两个示例（翻译助手、周报助手），要求只输出 prompt 本身 |
 | **状态管理** | 技能互斥（激活时清空 `activeSkills = {}`），切换会话自动重置，纯前端注入 system message |
+
+## 六十、新增记忆点（联网搜索静默化 + 搜索动画重构）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **搜索静默化** | 移除所有 `runtime.EventsEmit("ai:search-status")` 搜索状态事件（searching/done/empty），搜索结果不再在前端展示。搜索仅在后端静默执行，结果注入 system message 后直接走 LLM 流式调用。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` |
+| **搜索动画重构** | 重新引入 `ai:search-status` 事件，但只用于播放搜索动画，不展示具体状态文本。`"searching"` 在主 goroutine（`go func()` 之前）发射，确保不被阻塞；`"done"` 在 goroutine 内搜索完成后发射。前端监听事件切换：`"searching"` → 旋转地球 SVG + 「正在联网搜索...」文字；`"done"` → 切回打字点（等待 LLM 流式）。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **取消时清理** | 用户点击停止按钮时，如果正处于搜索阶段，`ctx.Err() != nil` 提前 return 前发射 `ai:stream-done` 事件，确保前端恢复发送按钮/隐藏停止按钮，不留残影。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` |
+| **搜索取消链** | 停止按钮 → `CancelAIStream()` → 取消根 context → `SearchWeb` 中派生 `searchCtx` 立即取消 → Tavily HTTP 请求中止。`ctx.Err()` 检查在搜索完成后进行，避免白调 LLM。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
+| **CSS 新增** | `.ai-search-indicator` flex 行，accent 色文字，内联 SVG 带 `ai-search-spin` 0.8s 线性旋转动画。移除旧的 `.ai-search-status`（脉冲动画）和 `.ai-search-sources`（来源折叠面板）。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 

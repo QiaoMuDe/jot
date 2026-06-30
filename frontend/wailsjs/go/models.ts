@@ -204,6 +204,7 @@ export namespace services {
 	    base_url: string;
 	    api_key: string;
 	    model: string;
+	    tavily_api_key: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AIConfig(source);
@@ -215,6 +216,7 @@ export namespace services {
 	        this.base_url = source["base_url"];
 	        this.api_key = source["api_key"];
 	        this.model = source["model"];
+	        this.tavily_api_key = source["tavily_api_key"];
 	    }
 	}
 	export class AISessionSummary {

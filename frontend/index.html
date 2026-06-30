@@ -448,6 +448,22 @@
                                 <span style="color:var(--text-muted);font-size:0.78rem;white-space:nowrap;">字符/条</span>
                             </div>
                         </div>
+                        <!-- 联网搜索 (Tavily) -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">联网搜索</label>
+                            <div style="display:flex;flex-direction:column;gap:6px;flex:1;max-width:380px;">
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" style="flex:1;" />
+                                    <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                                </div>
+                                <div class="ai-setting-search-line" id="aiSettingWebSearchLine">
+                                    <span class="ai-setting-search-desc">发送消息时默认启用联网搜索</span>
+                                    <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
+                                        <div class="ai-chat-toggle-knob"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <!-- 标签管理 -->
@@ -709,6 +725,11 @@
                             <div class="ai-chat-search-toggle" id="aiChatSearchToggle" title="深度思考">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.65 4.65 0 0 1 8.91 14"/></svg>
                                 <span>深度思考</span>
+                                <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
+                            </div>
+                            <div class="ai-chat-search-toggle" id="aiChatWebSearchToggle" title="联网搜索">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                <span>联网搜索</span>
                                 <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
                             </div>
                             <!-- 更多技能 -->
