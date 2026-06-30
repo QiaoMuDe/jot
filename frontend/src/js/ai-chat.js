@@ -289,7 +289,57 @@ const SKILL_PROMPTS = {
 - 使用数据量化成果, 避免模糊表述
 - 结构化呈现 :按项目/时间/优先级分类均可
 - 对问题和不足客观描述, 侧重改进方案而非抱怨
-- 对下一步计划给出可执行的时间节点和关键目标`
+- 对下一步计划给出可执行的时间节点和关键目标`,
+    promptgen: `# Role: 提示词工程专家
+
+## Core Task
+根据用户的需求描述， 生成一个结构完整、开箱即用的提示词 (Prompt)。
+
+## Guidelines
+- 仔细理解用户的需求场景和目标
+- 生成的 prompt 必须包含以下结构：
+  1. **Role** — 定义 AI 的角色身份
+  2. **Core Task** — 清晰描述核心任务
+  3. **Guidelines** — 列出具体的执行规则和约束条件
+  4. **Output Format** — （如适用）指定输出格式
+- prompt 使用中文编写
+- 使用 Markdown 格式，层次清晰
+- 生成的 prompt 要**直接可用**，用户复制就能粘贴到任何 AI 工具中使用
+- 如果用户需求不明确，可以主动追问 1-2 个关键问题来澄清
+- 最终只输出 prompt 本身，不要添加额外的解释或说明
+
+## Examples
+
+**用户输入**: 帮我写一个翻译助手的 prompt
+
+**输出**:
+# Role: 专业翻译助手
+
+## Core Task
+将用户发送的内容翻译成指定语言。
+
+## Guidelines
+- 准确传达原文含义和语气
+- 遵循地道表达，避免翻译腔
+- 专业术语使用行业通用译法
+- 只输出翻译结果，不添加额外内容
+
+---
+
+**用户输入**: 我想要一个能帮我写周报的 prompt
+
+**输出**:
+# Role: 周报撰写助手
+
+## Core Task
+根据用户提供的工作内容，生成结构化的周报。
+
+## Guidelines
+- 用 bullet points 列出本周重点工作
+- 每个工作项包含：完成情况、关键成果
+- 使用正式、简洁的商务语气
+- 按重要性排序
+- 总字数控制在 300 字以内`
 };
 
 /**
@@ -733,6 +783,11 @@ function bindEvents() {
                     activeSkills.report = true;
                     renderSkillChips();
                     skillsDropdown.classList.remove('open');
+                } else if (skill === 'promptgen') {
+                    activeSkills = {};
+                    activeSkills.promptgen = true;
+                    renderSkillChips();
+                    skillsDropdown.classList.remove('open');
                 }
                 return;
             }
@@ -1168,6 +1223,12 @@ function renderSkillChips() {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
                 <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
                 <span class="ai-chat-skill-chip-label">工作总结</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        } else if (skillId === 'promptgen') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                <span class="ai-chat-skill-chip-label">提示词生成</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         }

@@ -1109,3 +1109,13 @@ await loadXxxSetting();
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 添加 `<span id="aiChatContextSize" class="ai-context-size">`；[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) 新增 `.ai-context-size` 样式；[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 新增 `estimateTokens()`、`formatTokens()`、`updateContextSize()` 三个函数 + DOM 引用 |
 | **性能** | 每次计算耗时 < 1ms（仅正则匹配 + 乘除法），无需 Web Worker |
 
+## 五十九、新增记忆点（提示词生成技能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能** | 在"更多技能"菜单中新增第 10 项技能"提示词生成"（`promptgen`），激活后 AI 变为提示词工程专家，根据用户的一句话描述生成结构完整、开箱即用的 prompt |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 新增 `.ai-chat-skills-item[data-skill="promptgen"]` 菜单项；[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) SKILL_PROMPTS 新增 `promptgen` 定义 + bindEvents click 分支 + renderSkillChips 分支 |
+| **实现模式** | 完全遵循现有非翻译技能（如编程、写作）的纯前端模式：HTML 菜单项 → SKILL_PROMPTS 定义 → click 设置 `activeSkills` → chip 渲染显示 |
+| **prompt 设计** | 角色为"提示词工程专家"，生成含 Role/Core Task/Guidelines/Output Format 标准结构的 prompt，提供两个示例（翻译助手、周报助手），要求只输出 prompt 本身 |
+| **状态管理** | 技能互斥（激活时清空 `activeSkills = {}`），切换会话自动重置，纯前端注入 system message |
+
