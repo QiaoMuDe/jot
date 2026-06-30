@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 34）
+> 生成日期: 2026-06-30（更新 35）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1069,4 +1069,23 @@ await loadXxxSetting();
 | **交互反馈动画** | ① `+` 按钮 `:active` 缩放 0.92；② 标题双击施加 `pulseClick` 脉冲动画（1→1.12→0.95→1，弹簧缓动）；③ 新会话条目 `slideInNew` 入场动画（translateY(-12px) + scale(0.95)）。详见 [animations.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/animations.css) [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **空会话保护** | `createSession()` 开头新增检查：`activeSessionId !== null && chatHistory.length === 0` 时 return，防止空会话堆积。详见 [ai-chat.js#L688](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **空对话欢迎语** | 对话区无消息时居中显示随机欢迎语，打字机效果循环（逐字 90ms → 停留 2.5s → 逐字擦除 40ms → 等待 1.5s → 重选重打）。6 条随机文案，`font-size: 1.35rem; font-weight: 700`，右侧有 `var(--accent)` 色闪烁游标。详见 [ai-chat.css#L655-L669](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) [ai-chat.js#L1250-L1288](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 五十五、新增记忆点（更多技能 — 翻译功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **更多技能下拉菜单** | AI 助手输入框工具栏末尾新增"更多技能"按钮（`#aiChatMoreSkillsBtn`），点击弹出底部下拉菜单（`.ai-skill-dropdown`），内含技能选项（如翻译）。详见 [index.html#L740](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **翻译技能** | 首个内置技能。菜单项为"翻译"，hover 展开方向选择区（radio 样式）："翻译为中文"（默认）、"翻译为英文"。选中文后弹出 `setTimeout` 带动画 + 技能激活。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSkillMenu()` |
+| **技能 chip 指示器** | 输入框上方显示激活的技能 chip（`.ai-skill-chip`），格式 `翻译 → 中文`，右上角 × 按钮取消。`activeSkills` 数组管理状态。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSkillChips()` |
+| **翻译 system prompt** | `SKILL_PROMPTS` 常量存储翻译提示词：中文版"请将用户输入的内容翻译成中文，只返回翻译结果，不要添加任何额外内容"；英文版类似。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **系统提示词注入** | `startStreaming()` 中构建 messages 时，调用 `getSkillSystemPrompts()` 将激活技能的 prompt 以 `role:system` 插入到消息数组头部（在笔记引用提示之后）。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `startStreaming()` |
+| **会话切换/新建重置技能** | `switchSession()` 和 `createSession()` 中重置 `activeSkills = []`、关闭下拉菜单、清空 chip。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **技能菜单 CSS** | 下拉菜单从底部弹出（`bottom: 100%; margin-bottom: 8px`），带阴影 + 圆角 + scaleY 动画。方向选择区用 `gap: 2px` 分隔，radio 圆点指示。chip 带 accent 色边框和 × 按钮。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) `.ai-skill-*` 样式块 |
+
+## 五十六、新增记忆点（自动聚焦 — AI 输入框）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **AI 输入框自动聚焦** | `onAIChatViewActivated()` 末尾用 `setTimeout(() => inputEl?.focus(), 100)` 在视图入场动画完成后聚焦输入框。`switchSession()` 末尾用 `inputEl?.focus()` 在切换会话后立即聚焦。详见 [ai-chat.js#L1331](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **笔记首页启动聚焦（已放弃）** | 尝试过在 `renderCardGrid()`、`init()`、`EventsOn('wails:window:focus')`、`setTimeout(2000)` 等多处聚焦 `#viewGrid`，均因 Wails/WebView2 启动时 `document.hasFocus() === false`（WebView 控件无 OS 级键盘焦点）而失败。最终放弃首页聚焦，仅保留 AI 聊天输入框聚焦。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 无相关代码残留 |
 

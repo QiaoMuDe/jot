@@ -75,6 +75,42 @@ let _notebooksCache = null;     // 笔记本下拉选项缓存
 let _refTagIds = new Set();     // 已选标签 ID 集合
 let _tagsCache = null;          // 标签列表缓存
 
+// 更多技能状态
+let activeSkills = {};           // 当前激活的技能 { skillId: { config } }
+let skillsBtn = null;            // #aiChatMoreSkillsBtn
+let skillsDropdown = null;       // #aiChatSkillsDropdown
+let skillsTranslateOptions = null; // #aiChatTranslateOptions
+let skillBar = null;             // #aiChatSkillBar
+let skillChips = null;           // #aiChatSkillChips
+
+// 技能 system prompts
+const SKILL_PROMPTS = {
+    translate: {
+        to_chinese: `# Role: 专业翻译助手
+
+## Core Task
+将用户发送的每条消息精准翻译成中文。
+
+## Guidelines
+- 准确传达原文含义、语气和风格，不增不减
+- 遵循中文语法规范和地道表达，避免翻译腔
+- 专业术语保持行业通用译法
+- 只输出翻译结果，不添加任何解释、备注或额外内容
+- 如原文包含代码或专有名词（人名、地名、品牌名等），按中文惯例处理`,
+        to_english: `# Role: 专业翻译助手
+
+## Core Task
+将用户发送的每条消息精准翻译成英文。
+
+## Guidelines
+- 准确传达原文含义、语气和风格，不增不减
+- 遵循英文语法规范和地道表达，避免中式英语
+- 专业术语保持行业通用译法
+- 只输出翻译结果，不添加任何解释、备注或额外内容
+- 如原文包含代码或专有名词（人名、地名、品牌名等），按英文惯例处理`
+    }
+};
+
 /**
  * 加载模型配置到选择器 UI
  */
@@ -174,6 +210,13 @@ export function initAIChat() {
     refTagDropdown = document.getElementById('aiNoteRefTagDropdown');
     refTagFilter = document.getElementById('aiNoteRefTagFilter');
     _refListLoaded = false;
+
+    // 更多技能
+    skillsBtn = document.getElementById('aiChatMoreSkillsBtn');
+    skillsDropdown = document.getElementById('aiChatSkillsDropdown');
+    skillsTranslateOptions = document.getElementById('aiChatTranslateOptions');
+    skillBar = document.getElementById('aiChatSkillBar');
+    skillChips = document.getElementById('aiChatSkillChips');
 
     if (!messagesEl) return;
 
@@ -412,6 +455,59 @@ function bindEvents() {
         });
     }
 
+    // ── 更多技能 ──
+    if (skillsBtn && skillsDropdown) {
+        skillsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            skillsDropdown.classList.toggle('open');
+            // 每次打开菜单时重置方向选择区的展开状态
+            if (!skillsDropdown.classList.contains('open')) {
+                if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+            }
+        });
+
+        // 点击技能菜单项
+        skillsDropdown.addEventListener('click', (e) => {
+            const item = e.target.closest('.ai-chat-skills-item');
+            if (item) {
+                const skill = item.dataset.skill;
+                if (skill === 'translate') {
+                    // 切换方向选择区展开/收起
+                    if (skillsTranslateOptions) {
+                        const isVisible = skillsTranslateOptions.style.display !== 'none';
+                        skillsTranslateOptions.style.display = isVisible ? 'none' : '';
+                    }
+                }
+                return;
+            }
+
+            // 点击方向选项
+            const option = e.target.closest('.ai-chat-skills-option');
+            if (option) {
+                const radio = option.querySelector('input[type="radio"]');
+                if (radio) {
+                    radio.checked = true;
+                    // 激活翻译技能
+                    const dir = radio.value; // 'to_chinese' or 'to_english'
+                    activeSkills.translate = { direction: dir };
+                    renderSkillChips();
+                    // 关闭整个菜单
+                    skillsDropdown.classList.remove('open');
+                    if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+                }
+                return;
+            }
+        });
+    }
+
+    // 点击外部关闭技能菜单
+    document.addEventListener('click', (e) => {
+        if (skillsDropdown && skillsBtn && !skillsBtn.contains(e.target) && !skillsDropdown.contains(e.target)) {
+            skillsDropdown.classList.remove('open');
+            if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+        }
+    });
+
     // 点击菜单外区域关闭右键菜单
     document.addEventListener('click', (e) => {
         if (sessionContextMenu && !sessionContextMenu.contains(e.target)) {
@@ -632,10 +728,12 @@ function renderSessionList() {
 async function switchSession(id) {
     if (isStreaming || id === activeSessionId) return;
 
-    // 切换会话时清空笔记引用
+    // 切换会话时清空笔记引用和技能
     referencedNotes = [];
     cachedRefContext = '';
     updateRefChips();
+    activeSkills = {};
+    renderSkillChips();
 
     try {
         activeSessionId = id;
@@ -669,6 +767,7 @@ async function switchSession(id) {
 
         renderSessionList();
         scrollToBottom();
+        inputEl?.focus();
     } catch (_) { /* 静默失败 */ }
 }
 
@@ -707,6 +806,8 @@ async function createSession() {
     referencedNotes = [];
     cachedRefContext = '';
     updateRefChips();
+    activeSkills = {};
+    renderSkillChips();
 
     await loadSessionList();
 
@@ -737,6 +838,59 @@ function onInputKeydown(e) {
 function autoResizeInput() {
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+}
+
+/* ── 更多技能 ── */
+
+/**
+ * 渲染技能 chip 指示器
+ */
+function renderSkillChips() {
+    if (!skillBar || !skillChips) return;
+    const keys = Object.keys(activeSkills);
+    if (keys.length === 0) {
+        skillBar.style.display = 'none';
+        return;
+    }
+    skillBar.style.display = '';
+    skillChips.innerHTML = keys.map(skillId => {
+        const config = activeSkills[skillId];
+        if (skillId === 'translate') {
+            const label = config.direction === 'to_english' ? '翻译 → 英文' : '翻译 → 中文';
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M8 11l3 3 5-5"/></svg></span>
+                <span class="ai-chat-skill-chip-label">${label}</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
+        }
+        return '';
+    }).join('');
+
+    // 绑定 chip 叉号点击事件
+    skillChips.querySelectorAll('.ai-chat-skill-chip-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const skill = btn.dataset.skill;
+            delete activeSkills[skill];
+            renderSkillChips();
+        });
+    });
+}
+
+/**
+ * 获取当前激活技能的系统提示词（按顺序拼接）
+ * @returns {string}
+ */
+function getSkillSystemPrompts() {
+    const keys = Object.keys(activeSkills);
+    if (keys.length === 0) return '';
+    return keys.map(skillId => {
+        const config = activeSkills[skillId];
+        if (SKILL_PROMPTS[skillId] && SKILL_PROMPTS[skillId][config.direction]) {
+            return SKILL_PROMPTS[skillId][config.direction];
+        }
+        return '';
+    }).filter(Boolean).join('\n\n');
 }
 
 /**
@@ -934,9 +1088,14 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     unsubs.push(unsubError);
 
     // 构建发送给 API 的消息列表（system 上下文 + 历史对话）
+    let systemContent = systemContext || '';
+    const skillPrompts = getSkillSystemPrompts();
+    if (skillPrompts) {
+        systemContent = systemContent ? systemContent + '\n\n' + skillPrompts : skillPrompts;
+    }
     let messages = chatHistory;
-    if (systemContext) {
-        messages = [{ role: 'system', content: systemContext }, ...chatHistory];
+    if (systemContent) {
+        messages = [{ role: 'system', content: systemContent }, ...chatHistory];
     }
 
     try {
@@ -1167,6 +1326,9 @@ export async function onAIChatViewActivated() {
                 await createSession();
             }
         }
+
+        // 视图入场动画完成后聚焦输入框
+        setTimeout(() => inputEl?.focus(), 100);
     } catch (_) {
         showEmptyState();
     }
