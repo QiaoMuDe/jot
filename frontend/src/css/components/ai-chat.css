@@ -405,6 +405,72 @@
     to { transform: rotate(360deg); }
 }
 
+/* ── 联网搜索来源折叠面板 ── */
+.search-sources {
+    margin: 12px 0 4px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.search-sources summary {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 500;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.search-sources summary:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.search-sources[open] summary {
+    border-bottom: 1px solid var(--border);
+    background: var(--hover-bg, rgba(128, 128, 128, 0.05));
+}
+
+.search-sources-content {
+    padding: 8px 12px;
+}
+
+.search-sources-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.search-sources-item:last-child {
+    border-bottom: none;
+}
+
+.search-sources-item a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.search-sources-item a:hover {
+    text-decoration: underline;
+}
+
+.search-sources-snippet {
+    margin: 4px 0 0 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 /* ── 输入区 ── */
 .ai-chat-input-area {
     display: flex;

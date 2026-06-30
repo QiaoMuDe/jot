@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 37）
+> 生成日期: 2026-06-30（更新 38）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1140,4 +1140,16 @@ await loadXxxSetting();
 | **搜索取消链** | 停止按钮 → `CancelAIStream()` → 取消根 context → `SearchWeb` 中派生 `searchCtx` 立即取消 → Tavily HTTP 请求中止。`ctx.Err()` 检查在搜索完成后进行，避免白调 LLM。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
 | **CSS 新增** | `.ai-search-indicator` flex 行，accent 色文字，内联 SVG 带 `ai-search-spin` 0.8s 线性旋转动画。移除旧的 `.ai-search-status`（脉冲动画）和 `.ai-search-sources`（来源折叠面板）。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+## 六十一、新增记忆点（联网搜索来源展示 + 切换键统一）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **SearchWeb 返回结构化数据** | `SearchWeb()` 返回类型从 `string` 改为 `*SearchWebResult`，包含 `FormattedText`（注入 system message）和 `Sources []SearchSource`（Title/URL/Content，用于前端展示）。失败返回 `nil`。新增 `SearchSource` 和 `SearchWebResult` 结构体。详见 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
+| **搜索来源事件** | 后端搜索成功后发射新事件 `ai:search-sources`，携带 `json.Marshal` 序列化的 `[]SearchSource`。前端 `startStreaming()` 中监听该事件，`JSON.parse` 存入 `searchSources` 变量。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **来源折叠面板** | `unsubDone` 回调中，如果 `searchSources` 有数据，在消息气泡底部（操作按钮前）插入 `<details class="search-sources">` 折叠面板。列表展示序号、标题链接（`<a>`）、内容摘要（3 行截断）。默认收起。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **浏览器打开链接** | 搜索来源链接点击时，通过 `window.runtime.BrowserOpenURL(url)` 在系统默认浏览器打开，而非 WebView2 内。拦截 `<a>` 默认事件实现。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `unsubDone` 回调 |
+| **CSS 来源面板** | `.search-sources` 带边框圆角、二级背景色。`summary` accent 色，hover 高亮。`.search-sources-snippet` 3 行 `-webkit-line-clamp` 截断。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **Tavily Key 显示/隐藏** | 设置页联网搜索 Key 输入框新增眼睛切换按钮（`#aiTavilyToggleBtn`），与上方 AI API Key 的切换按钮样式统一：`btn btn-sm btn-save`，`👁`/`🙈` emoji 切换。固定 `width:32px; text-align:center` 防止 emoji 宽度不同导致布局抖动。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 

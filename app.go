@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"jot/internal/database"
 	"jot/internal/fontutil"
@@ -545,7 +546,7 @@ func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	result := services.SearchWeb(ctx, "test", apiKey)
-	if result == "" {
+	if result == nil {
 		return false, fmt.Errorf("连接失败，请检查 API Key 是否正确")
 	}
 	return true, nil
@@ -597,18 +598,24 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 
 				if query != "" {
 					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey)
-					if searchResult != "" {
-						// 注入到 system role
+					if searchResult != nil {
+						// 注入格式化文本到 system role
 						found := false
 						for i := range messages {
 							if messages[i].Role == "system" {
-								messages[i].Content = messages[i].Content + "\n\n" + searchResult
+								messages[i].Content = messages[i].Content + "\n\n" + searchResult.FormattedText
 								found = true
 								break
 							}
 						}
 						if !found {
-							messages = append([]services.Message{{Role: "system", Content: searchResult}}, messages...)
+							messages = append([]services.Message{{Role: "system", Content: searchResult.FormattedText}}, messages...)
+						}
+
+						// 发射结构化来源数据给前端
+						if len(searchResult.Sources) > 0 {
+							sourcesJSON, _ := json.Marshal(searchResult.Sources)
+							runtime.EventsEmit(a.ctx, "ai:search-sources", string(sourcesJSON))
 						}
 					}
 				}

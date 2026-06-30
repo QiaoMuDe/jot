@@ -1343,7 +1343,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -1354,6 +1354,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     let streamingContent = '';
     let streamingThinking = '';
     let hasReceivedChunk = false;
+    let searchSources = null;
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -1431,6 +1432,14 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubSearch);
 
+    // 联网搜索来源数据（结构化来源列表，AI 回复结束后展示）
+    const unsubSources = window.runtime.EventsOn('ai:search-sources', (sourcesJSON) => {
+        try {
+            searchSources = JSON.parse(sourcesJSON);
+        } catch (_) {}
+    });
+    unsubs.push(unsubSources);
+
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         if (!hasReceivedChunk) {
@@ -1489,6 +1498,48 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         } else {
             saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
+        }
+
+        // 展示联网搜索来源折叠面板
+        if (searchSources && searchSources.length > 0) {
+            const details = document.createElement('details');
+            details.className = 'search-sources';
+            details.open = false;
+            const summary = document.createElement('summary');
+            summary.className = 'search-sources-summary';
+            summary.textContent = '🌐 搜索来源 (' + searchSources.length + ' 个)';
+            details.appendChild(summary);
+            const list = document.createElement('div');
+            list.className = 'search-sources-content';
+            searchSources.forEach(function(src, i) {
+                const item = document.createElement('div');
+                item.className = 'search-sources-item';
+                var link = document.createElement('a');
+                link.href = src.url;
+                link.textContent = (i + 1) + '. ' + src.title;
+                link.addEventListener('click', (function(url) {
+                    return function(e) {
+                        e.preventDefault();
+                        window.runtime.BrowserOpenURL(url);
+                    };
+                })(src.url));
+                item.appendChild(link);
+                if (src.content) {
+                    var snippet = document.createElement('p');
+                    snippet.className = 'search-sources-snippet';
+                    snippet.textContent = src.content;
+                    item.appendChild(snippet);
+                }
+                list.appendChild(item);
+            });
+            details.appendChild(list);
+            // 插入到操作按钮之前
+            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+            if (actionsEl) {
+                streamingEl.insertBefore(details, actionsEl);
+            } else {
+                streamingEl.appendChild(details);
+            }
         }
 
         scrollToBottom();

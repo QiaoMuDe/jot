@@ -1943,6 +1943,21 @@ async function initAISettings() {
         });
     }
 
+    // ── Tavily API Key 显示/隐藏切换 ──
+    const tavilyToggleBtn = document.getElementById('aiTavilyToggleBtn');
+    const tavilyKeyInput = document.getElementById('aiTavilyApiKey');
+    if (tavilyToggleBtn && tavilyKeyInput) {
+        tavilyToggleBtn.addEventListener('click', () => {
+            if (tavilyKeyInput.type === 'password') {
+                tavilyKeyInput.type = 'text';
+                tavilyToggleBtn.textContent = '🙈';
+            } else {
+                tavilyKeyInput.type = 'password';
+                tavilyToggleBtn.textContent = '👁';
+            }
+        });
+    }
+
     // ── Tavily API Key 自动保存 ──
     const tavilyKey = document.getElementById('aiTavilyApiKey');
     if (tavilyKey) {
