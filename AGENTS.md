@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 31）
+> 生成日期: 2026-06-30（更新 32）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -52,7 +52,7 @@ jot/                                    # 项目根目录
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
 │   │       ├── variables.css           # 12 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
 │   │       ├── reset.css               # 全局 reset（box-sizing/body 边距/overscroll-behavior）
-│   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 透明轨道 + 主题变量联动（含主内容区/搜索/数据管理/AI 对话消息列表）
+│   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 透明轨道 + 主题变量联动（含主内容区/搜索/AI 对话消息列表）
 │   │       ├── animations.css          # 13 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
 │   │       └── components/
 │   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮/更多菜单含图标）
@@ -131,6 +131,7 @@ jot/                                    # 项目根目录
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
     ├── replace-quikchat-with-custom-ai-chat/ # 自实现 AI 对话组件 + 流式输出（已完成）
     ├── fix-ai-sessions-and-collapsible-sidebar/ # AI 会话持久化 + 多会话 + 侧栏折叠（已完成）
+    ├── fix-data-page-scrollbar/          # 数据管理页面全屏滚动条修复（已完成）
     ├── restructure-internal-packages/ # 内部包重构
     ├── simplicity-date-filter/         # 时间筛选简化（日历→下拉菜单）
     ├── skip-quicknote-animation-on-start/ # 快速笔记启动跳过动画
@@ -1021,4 +1022,12 @@ await loadXxxSetting();
 || **loadAISettings 修复措施一** | 将单一 try-catch 拆分为两个独立块：第一个块处理 URL/API Key/服务商/`updateProviderUI`，异常仅 console.warn；第二个块独立调用 `GetAIConfig()` 加载模型。catch 从静默 `(_) { /* 静默失败 */ }` 改为 `(e) { console.warn('...', e) }`，不再吞错误。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1627-L1657) |
 || **loadAISettings 修复措施二** | `updateProviderUI()`、`getActiveProvider()`、`setActiveProvider()` 三个函数从 `initAISettings()` 局部作用域提升到全局作用域。局部变量引用 `provDropdown` 改为全局 `els.aiProviderDropdown`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1677-L1707) |
 || **URL 被默认值覆盖修复** | `loadAISettings()` 中调用 `updateProviderUI()` 会用默认 URL（`https://api.openai.com/v1` / `http://localhost:11434`）覆盖已保存的 `cfg.base_url`。修复：在 `loadAISettings` 中去掉 `updateProviderUI()` 调用，改为仅内联更新"获取列表"按钮的可用状态。`updateProviderUI()` 仅在切换服务商时由 `initAISettings` 的事件处理器调用。详见 [main.js#L1642-L1648](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
-|| **获取模型自动填充并保存** | 点击"获取列表"后，将第一个模型设为标签文本（`els.aiModelLabel.textContent = models[0]`）并立即调用 `saveAIConfig()` 持久化到数据库，避免标签显示但库里未设置的不一致问题。详见 [main.js#L1855-L1856](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+|| **获取模型自动填充并保存** | 点击"获取列表"后，将第一个模型设为标签文本（`els.aiModelLabel.textContent = models[0]`）并立即调用 `saveAIConfig()` 持久化到数据库，避免标签显示但库里未设置的不一致问题。详见 [main.js#L1855-L1856](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+|
+|## 五十一、新增记忆点（数据管理页面全屏滚动条修复）
+|
+|| 记忆点 | 内容 |
+||--------|------|
+|| **问题背景** | 数据管理页面右侧滚动条不是全屏的（只出现在内容区域内部），而回收站、笔记、设置页面的滚动条都是从页面顶部到底部的全屏滚动条，滚动体验不一致 |
+|| **根因** | `data-view.css` 中 `.data-content` 有 `overflow-y: auto` 和 `scrollbar-gutter: stable`，创建了内部滚动容器，而其他页面（`.trash-list`/`.settings-content`）无此属性，依赖 `#mainContent` 的全屏滚动 |
+|| **修复方案** | ① 移除 `.data-content` 的 `overflow-y: auto` 和 `scrollbar-gutter: stable`，保持 `flex: 1` 让内容自然流入 `#mainContent`。② 从 `scrollbar.css` 中移除所有 `.data-content` 引用。③ `main.js` 中 `getScrollContainer()` 的 data 视图从返回 `els.dataContent` 改为 `els.mainContent`。④ `initScrollbarAutoHide()` 容器列表移除 `els.dataContent`。⑤ 移除 `#viewData.view` 的 `padding-right: 0` 特殊规则，与其他视图保持一致的 `32px` 右内边距。详见 `.trae/specs/fix-data-page-scrollbar/` |

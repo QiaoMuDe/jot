@@ -65,9 +65,7 @@
   color: var(--text-primary);
 }
 
-#viewData.view {
-  padding-right: 0;
-}
+/* #viewData.view 使用 #mainContent 的全屏滚动条，无需特殊 padding */
 
 /* ---------- 增强空状态样式 ---------- */
 

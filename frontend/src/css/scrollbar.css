@@ -28,7 +28,6 @@
 /* 主内容区等特定容器：再强化一层防止 WebView2 绘制按钮 */
 #mainContent::-webkit-scrollbar-button,
 .search-results::-webkit-scrollbar-button,
-.data-content::-webkit-scrollbar-button,
 .search-modal-results::-webkit-scrollbar-button,
 .search-modal-filter-dropdown::-webkit-scrollbar-button,
 .ai-chat-messages::-webkit-scrollbar-button {
@@ -40,7 +39,6 @@
 /* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
 #mainContent::-webkit-scrollbar-thumb,
 .search-results::-webkit-scrollbar-thumb,
-.data-content::-webkit-scrollbar-thumb,
 .ai-chat-messages::-webkit-scrollbar-thumb {
     background: transparent;
     transition: background 0.4s ease;
@@ -48,14 +46,12 @@
 
 #mainContent.scrolling::-webkit-scrollbar-thumb,
 .search-results.scrolling::-webkit-scrollbar-thumb,
-.data-content.scrolling::-webkit-scrollbar-thumb,
 .ai-chat-messages.scrolling::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
 }
 
 #mainContent:hover::-webkit-scrollbar-thumb,
 .search-results:hover::-webkit-scrollbar-thumb,
-.data-content:hover::-webkit-scrollbar-thumb,
 .ai-chat-messages:hover::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-hover);
 }
@@ -63,7 +59,6 @@
 /* 给 track 加一层极淡底色，让滚动条区域有存在感 */
 #mainContent::-webkit-scrollbar-track,
 .search-results::-webkit-scrollbar-track,
-.data-content::-webkit-scrollbar-track,
 .ai-chat-messages::-webkit-scrollbar-track {
     background: transparent;
 }
@@ -71,7 +66,6 @@
 /* Firefox */
 #mainContent,
 .search-results,
-.data-content,
 .ai-chat-messages {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
@@ -79,7 +73,6 @@
 
 #mainContent.scrolling,
 .search-results.scrolling,
-.data-content.scrolling,
 .ai-chat-messages.scrolling {
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }

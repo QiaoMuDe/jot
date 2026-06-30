@@ -4012,9 +4012,7 @@ function initEventListeners() {
 function getScrollContainer() {
     switch (state.currentView) {
         case 'grid':
-            return els.mainContent;
         case 'data':
-            return els.dataContent;
         case 'trash':
             return els.mainContent;
         default:
@@ -4302,7 +4300,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, els.dataContent, document.querySelector('.ai-chat-messages')].filter(Boolean);
+    const containers = [els.mainContent, document.querySelector('.ai-chat-messages')].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', (e) => {
