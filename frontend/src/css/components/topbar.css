@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   transition: background-color 0.3s ease-out, border-color 0.3s ease-out, padding-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0 24px;
+  padding: 0 0 0 24px;
   gap: 16px;
   user-select: none;
   z-index: 100;
@@ -31,7 +31,13 @@
 }
 
 .topbar-left .topbar-dropdown {
-  margin-left: -12px;
+  margin-left: -24px;
+}
+
+.topbar-left #moreMenuBtn {
+  width: 44px;
+  height: 36px;
+  border-radius: 0;
 }
 
 .topbar-brand {
@@ -127,7 +133,13 @@ button :only-child:is(svg) {
               width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 窗口控制按钮样式（与 topbar-btn 一致，但独立选择器用于特殊 hover） */
+/* 窗口控制按钮样式（与 topbar-btn 一致，但独立选择器用于宽度和特殊 hover） */
+.topbar-actions .topbar-btn {
+  width: 44px;
+  height: 36px;
+  border-radius: 0;
+}
+
 .topbar-actions .topbar-btn.window-close:hover {
   background: #E81123;
   color: #FFFFFF;
@@ -136,7 +148,7 @@ button :only-child:is(svg) {
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  left: 8px;
   background: var(--card-bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);

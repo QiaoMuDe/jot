@@ -1046,3 +1046,15 @@ await loadXxxSetting();
 1040→|| **右侧空白极致压缩** | 列表容器 padding-right 和条目 padding-right 从 4px 逐步减至 1px，活跃条目右侧边框到侧边栏边缘的距离仅 2px（1px border + 1px 容器 padding） |
 1041→|| **空状态样式** | 新增 `.ai-session-empty` 规则：居中、`color: var(--text-muted)`、字号 0.82rem、上边距 24px |
 1042→|| **核心文件** | `frontend/src/css/components/ai-chat.css` — 纯 CSS 改动，无 JS/HTML 变更。详见 `.trae/specs/redesign-ai-session-sidebar/` |
+
+## 五十三、新增记忆点（顶栏与侧栏按钮布局调整）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **窗口控制按钮贴右** | `#topbar` padding 从 `0 24px` 改为 `0 0 0 24px`，移除右侧 24px 内边距，最小化/最大化/关闭按钮紧贴窗口右边缘。详见 [topbar.css#L15](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css) |
+| **窗口控制按钮尺寸** | `.topbar-actions .topbar-btn` 宽度从 `34px` 增至 `44px`，高度设为 `36px`（填满顶栏），`border-radius: 0` 直角风格。详见 [topbar.css#L137-L141](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css) |
+| **更多菜单按钮贴左** | `.topbar-left .topbar-dropdown` 的 `margin-left` 从 `-12px` 改为 `-24px`，抵消 `#topbar` 的 `padding-left: 24px`，按钮紧贴窗口左边缘。`#moreMenuBtn` 宽度 `44px`、高度 `36px`、`border-radius: 0`。详见 [topbar.css#L33-L39](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css) |
+| **更多菜单左间距** | `.dropdown-menu` 的 `left` 从 `0` 改为 `8px`，使下拉菜单与左边框保持间距，不贴边。详见 [topbar.css#L151](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css) |
+| **新建笔记本按钮贴右** | `.sidebar-header-add-btn` 宽度/高度从 `28px` 增至 `44px`，`border-radius: 0` 直角。`.sidebar-header` 右 padding 从 `10px` 改为 `0`，按钮紧贴侧栏右边缘。详见 [sidebar.css#L218-L219](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/sidebar.css) |
+| **顶栏按钮风格统一** | 左侧更多按钮、右侧窗口控制按钮均为 44px 宽、36px 高、直角边框，与 Frameless 窗口的 Windows 原生标题栏风格一致。所有改动均为纯 CSS，不涉及 HTML/JS 修改 |
+
