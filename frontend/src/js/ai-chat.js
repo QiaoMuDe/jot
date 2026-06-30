@@ -16,6 +16,8 @@ let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let sessionTitleEl = null;    // #aiSessionTitle
 let contextSizeEl = null;     // #aiChatContextSize
+let polishBtn = null;         // #aiChatPolishBtn
+let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 
 // 状态
 let chatHistory = [];          // 当前会话的消息 (发送给模型用) 
@@ -353,6 +355,21 @@ const SKILL_PROMPTS = {
 - 总字数控制在 300 字以内`
 };
 
+// 优化表达提示词（输入框内嵌按钮专用，与下拉菜单的「文本润色」技能区分）
+const OPTIMIZE_EXPRESSION_PROMPT = `# Role: 表达优化助手
+
+## Core Task
+对用户输入的文本进行表达优化，在保留原意的前提下使表达更清晰、自然、地道。
+
+## Guidelines
+- 保持原文的核心信息、事实和数据完全不变
+- 优化句式结构，使表达更流畅易读
+- 替换生硬、啰嗦或不通顺的措辞，提升自然度
+- 适当调整语气，使其更符合日常交流习惯
+- 专业术语和专有名词保持原样不做替换
+- 只输出优化后的文本，不添加任何解释、备注或额外内容
+- 如果原文已经表达得很好了，可以不做改动直接返回原文`;
+
 /**
  * 加载模型配置到选择器 UI
  */
@@ -420,6 +437,7 @@ export async function initAIChat() {
     sessionTitleEl = document.getElementById('aiSessionTitle');
     sessionSearchEl = document.getElementById('aiSessionSearch');
     contextSizeEl = document.getElementById('aiChatContextSize');
+    polishBtn = document.getElementById('aiChatPolishBtn');
 
     // 模型选择器
     modelTrigger = document.getElementById('aiChatModelTrigger');
@@ -603,7 +621,18 @@ function bindEvents() {
     // 输入框事件
     if (inputEl) {
         inputEl.addEventListener('input', () => {
-            sendBtnEl.disabled = inputEl.value.trim().length === 0;
+            const val = inputEl.value.trim();
+            sendBtnEl.disabled = val.length === 0;
+            if (polishBtn) {
+                if (val.length > 0 && !isStreaming) {
+                    polishBtn.disabled = false;
+                } else {
+                    polishBtn.disabled = true;
+                    polishBtn.classList.remove('is-revert');
+                    const txt = polishBtn.querySelector('.ai-chat-polish-text');
+                    if (txt) txt.textContent = '优化';
+                }
+            }
         });
         inputEl.addEventListener('keydown', onInputKeydown);
         inputEl.addEventListener('input', autoResizeInput);
@@ -621,9 +650,118 @@ function bindEvents() {
             stopBtnEl.style.display = 'none';
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
+            // 停止后恢复润色按钮状态
+            if (polishBtn) {
+                polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
+            }
             try {
                 await window.go.main.App.CancelAIStream();
             } catch (_) {}
+        });
+    }
+
+    // 优化表达按钮
+    if (polishBtn) {
+        polishBtn.addEventListener('click', async () => {
+            const text = inputEl.value.trim();
+            if (!text || isStreaming) return;
+
+            // 还原模式：恢复原文
+            if (polishBtn.classList.contains('is-revert')) {
+                inputEl.value = polishOriginalText;
+                inputEl.style.height = 'auto';
+                sendBtnEl.disabled = false;
+                polishBtn.classList.remove('is-revert');
+                polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
+                return;
+            }
+
+            // 保存原文快照
+            polishOriginalText = text;
+
+            // 进入加载态：遮罩禁用输入 + 按钮旋转动画
+            const wrap = polishBtn.closest('.ai-chat-input-wrap');
+            if (wrap) wrap.classList.add('is-loading');
+            polishBtn.classList.add('is-loading');
+            polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化中';
+            inputEl.blur();
+
+            try {
+                const result = await window.go.main.App.CallAI([
+                    { role: 'system', content: OPTIMIZE_EXPRESSION_PROMPT },
+                    { role: 'user', content: text }
+                ]);
+                if (result) {
+                    // 清除加载态
+                    if (wrap) wrap.classList.remove('is-loading');
+                    polishBtn.classList.remove('is-loading');
+                    polishBtn.querySelector('.ai-chat-polish-text').textContent = '还原';
+                    polishBtn.classList.add('is-revert');
+                    polishBtn.disabled = true;
+
+                    // 打字机效果逐字输出
+                    if (wrap) wrap.classList.add('is-typing');
+                    inputEl.value = '';
+                    inputEl.style.height = 'auto';
+                    await typewriterText(inputEl, result, 12);
+                    if (wrap) wrap.classList.remove('is-typing');
+
+                    polishBtn.disabled = false;
+                } else {
+                    // 结果为空，恢复
+                    if (wrap) wrap.classList.remove('is-loading');
+                    polishBtn.classList.remove('is-loading');
+                    polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
+                    polishBtn.disabled = false;
+                }
+            } catch (_) {
+                if (wrap) wrap.classList.remove('is-loading');
+                polishBtn.classList.remove('is-loading');
+                polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
+                polishBtn.disabled = false;
+            }
+        });
+    }
+
+    /**
+     * 打字机效果 - 逐字填入 textarea
+     * @param {HTMLTextAreaElement} el
+     * @param {string} text
+     * @param {number} msPerChar - 每字间隔(ms)
+     */
+    function typewriterText(el, text, msPerChar = 12) {
+        return new Promise(resolve => {
+            let idx = 0;
+            const len = text.length;
+            let finished = false;
+            function tick() {
+                if (finished) return;
+                if (idx >= len) {
+                    finished = true;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    resolve();
+                    return;
+                }
+                // 每次写入 1~3 个字符，看起来更自然
+                const step = Math.min(len - idx, 1 + Math.floor(Math.random() * 2));
+                idx += step;
+                el.value = text.slice(0, idx);
+                el.style.height = 'auto';
+                requestAnimationFrame(() => {
+                    setTimeout(tick, msPerChar + Math.random() * 6);
+                });
+            }
+            tick();
+            // 兜底：最长 6 秒强制完成
+            setTimeout(() => {
+                if (!finished) {
+                    finished = true;
+                    el.value = text;
+                    el.style.height = 'auto';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    resolve();
+                }
+            }, 6000);
         });
     }
 
@@ -1274,6 +1412,13 @@ function onInputKeydown(e) {
 function autoResizeInput() {
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+
+    // 检测单行/多行，切换按钮居中位置
+    const wrap = document.getElementById('aiChatPolishBtn')?.closest('.ai-chat-input-wrap');
+    if (wrap) {
+        const h = parseInt(inputEl.style.height) || 0;
+        wrap.classList.toggle('is-single-line', h <= 45);
+    }
 }
 
 /* ── 更多技能 ── */
@@ -1405,6 +1550,13 @@ async function onSend() {
     inputEl.value = '';
     inputEl.style.height = 'auto';
     sendBtnEl.disabled = true;
+    // 重置优化表达状态
+    if (polishBtn) {
+        polishBtn.classList.remove('is-revert');
+        polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
+        polishBtn.disabled = true;
+        polishOriginalText = '';
+    }
 
     hideWelcome();
 
@@ -1453,6 +1605,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     // 显示停止按钮, 隐藏发送按钮
     if (stopBtnEl) stopBtnEl.style.display = '';
     if (sendBtnEl) sendBtnEl.style.display = 'none';
+    if (polishBtn) polishBtn.disabled = true;
 
     let streamingContent = '';
     let streamingThinking = '';
@@ -1577,6 +1730,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
+        if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
 
         if (!hasReceivedChunk) contentDiv.innerHTML = '';
         if (streamingContent === '' && fullContent) streamingContent = fullContent;
@@ -1718,6 +1872,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
+        if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
         addErrorMessage(err);
         // 出错也清理追问引用
@@ -1746,6 +1901,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
+        if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
         addErrorMessage('流式调用失败: ' + (e.message || e));
     }

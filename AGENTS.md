@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 41）
+> 生成日期: 2026-07-01（更新 42）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1200,4 +1200,17 @@ await loadXxxSetting();
 | **切换会话从库加载 Token** | `loadSessionList()` 构建 `window._sessionTokens` 查找表（key 为 session ID）；`switchSession()` 直接从查找表读取 DB 保存的 token 值显示，不再调用 `updateContextSize()` 重算。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **消息变更时写入数据库** | `updateContextSize()` 改为 `async`，每轮计算完 token 数后自动调用 `UpdateSessionContextTokens` 写入数据库。调用时机：发送消息、接收回复、清空对话、再生、新建会话。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **决策记录：不存搜索来源和召回卡片** | 联网搜索的来源（Tavily 返回的 URL/标题/摘要）和召回的笔记（`referencedNotes` + `cachedRefContext`）属于瞬时上下文，数据量大且无对应 UI 消费场景，不推荐持久化到数据库。详见六十四节分析。 |
+
+## 六十六、AI 输入框内嵌优化表达按钮
+
+| 记忆点 | 内容 |
+|--------|------|
+| **HTML 结构变更** | textarea 外层包裹 `.ai-chat-input-wrap`（`position:relative; flex:1`），内嵌 `#aiChatPolishBtn` 按钮（SVG 编辑图标 + `<span>` 文字）。发送/停止按钮仍在 wrap 外部。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **CSS 定位与显现** | 按钮 `position:absolute; right:6px; top:6px` 默认右上角；`opacity:0` hover/focus 时显现；`disabled` 时 `opacity:0 !important` 完全隐藏。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **单行/多行位置切换** | `.ai-chat-input-wrap.is-single-line .ai-chat-polish-btn` 使用 `top:50%; transform:translateY(-50%)` 实现右侧垂直居中；`transition: top 0.15s, transform 0.15s` 平滑过渡。`autoResizeInput` 函数检测输入框高度（`<=45` 为单行）动态切换类。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **独立系统提示词** | `OPTIMIZE_EXPRESSION_PROMPT` 与「更多技能 → 文本润色」完全独立，聚焦于"表达优化"而非"文本润色"，输出更简洁。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **交互流程** | 点击「优化」→ 保存原文快照 → 加载态遮罩（`is-loading`）禁用输入 + 按钮旋转动画（`aiPolishSpin`）→ 调用 `CallAI` → 打字机效果逐字输出（`typewriterText`，1~3 字/步，最长 6 秒兜底）→ 按钮变为橙色「还原」。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **还原功能** | 点击「还原」恢复 `polishOriginalText`，重置按钮为「优化」状态。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **边界状态管理** | 输入框为空 → 按钮 `disabled` 隐藏；流式输出开始 → `polishBtn.disabled = true`；发送消息后 → 重置按钮为「优化」+ `disabled`；打字机完成后 → 触发 `input` 事件重新检测单行/多行。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 

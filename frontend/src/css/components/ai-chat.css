@@ -1026,6 +1026,114 @@
     align-items: flex-end;
 }
 
+/* 输入框包裹容器 */
+.ai-chat-input-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+}
+
+/* 加载态遮罩 - 禁用输入交互 */
+.ai-chat-input-wrap.is-loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
+    background: rgba(0,0,0,0.03);
+    z-index: 2;
+    pointer-events: all;
+}
+.ai-chat-input-wrap.is-loading .ai-chat-input {
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* 内嵌优化表达按钮 */
+.ai-chat-polish-btn {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s, top 0.15s, transform 0.15s;
+    user-select: none;
+    white-space: nowrap;
+    line-height: 1;
+    z-index: 3;
+}
+
+/* 单行时按钮右侧居中 */
+.ai-chat-input-wrap.is-single-line .ai-chat-polish-btn {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ai-chat-input-wrap:hover .ai-chat-polish-btn,
+.ai-chat-input:focus ~ .ai-chat-polish-btn {
+    opacity: 1;
+}
+
+.ai-chat-polish-btn:not(:disabled):hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-color: var(--accent);
+}
+
+.ai-chat-polish-btn:disabled:not(.is-loading) {
+    opacity: 0 !important;
+    cursor: not-allowed;
+}
+
+/* 加载态 - 按钮旋转动画 */
+.ai-chat-polish-btn.is-loading {
+    opacity: 1 !important;
+    color: var(--accent);
+    border-color: var(--accent);
+    pointer-events: none;
+}
+.ai-chat-polish-btn.is-loading .ai-chat-polish-icon {
+    animation: aiPolishSpin 0.7s linear infinite;
+}
+@keyframes aiPolishSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* 打字中 - 光标闪烁 */
+.ai-chat-input-wrap.is-typing .ai-chat-input {
+    caret-color: transparent;
+}
+.ai-chat-input-wrap.is-typing::before {
+    content: '';
+    position: absolute;
+    right: 36px;
+    bottom: 10px;
+    width: 2px;
+    height: 16px;
+    background: var(--accent);
+    z-index: 3;
+    animation: aiPolishBlink 0.6s step-end infinite;
+    border-radius: 1px;
+}
+@keyframes aiPolishBlink {
+    50% { opacity: 0; }
+}
+
+/* 还原状态 */
+.ai-chat-polish-btn.is-revert {
+    color: var(--warning, #e6a23c);
+    border-color: var(--warning, #e6a23c);
+    opacity: 1;
+}
+
 .ai-chat-input {
     flex: 1;
     min-height: 40px;
