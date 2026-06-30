@@ -406,7 +406,7 @@ async function switchModel(model) {
 /**
  * 初始化 AI 对话页面
  */
-export function initAIChat() {
+export async function initAIChat() {
     messagesEl = document.getElementById('aiChatMessages');
     inputEl = document.getElementById('aiChatInput');
     sendBtnEl = document.getElementById('aiChatSendBtn');
@@ -429,15 +429,36 @@ export function initAIChat() {
 
     // 深度思考
     searchToggle = document.getElementById('aiChatSearchToggle');
-    enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
+    enableThinking = false;
+    try {
+        const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
+        if (val !== '') enableThinking = val === 'true';
+        else enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
+    } catch (_) {
+        enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
+    }
 
     // 联网搜索
     webSearchToggle = document.getElementById('aiChatWebSearchToggle');
-    enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
+    enableWebSearch = false;
+    try {
+        const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
+        if (val !== '') enableWebSearch = val === 'true';
+        else enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
+    } catch (_) {
+        enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
+    }
 
     // 卡片召回
     cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
-    enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
+    enableCardRecall = false;
+    try {
+        const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
+        if (val !== '') enableCardRecall = val === 'true';
+        else enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
+    } catch (_) {
+        enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
+    }
 
     // 笔记引用
     refBtn = document.getElementById('aiChatRefBtn');
@@ -657,9 +678,10 @@ function bindEvents() {
     // ── 深度思考切换 ──
     if (searchToggle) {
         if (enableThinking) searchToggle.classList.add('active');
-        searchToggle.addEventListener('click', () => {
+        searchToggle.addEventListener('click', async () => {
             enableThinking = searchToggle.classList.toggle('active');
             localStorage.setItem('ai_thinking_enabled', String(enableThinking));
+            try { await window.go.main.App.SetSetting('ai_thinking_enabled', String(enableThinking)); } catch (_) {}
             // 同步设置页 toggle
             const settingToggle = document.getElementById('aiSettingSearchToggle');
             if (settingToggle) {
@@ -671,9 +693,10 @@ function bindEvents() {
     // ── 联网搜索切换 ──
     if (webSearchToggle) {
         if (enableWebSearch) webSearchToggle.classList.add('active');
-        webSearchToggle.addEventListener('click', () => {
+        webSearchToggle.addEventListener('click', async () => {
             enableWebSearch = webSearchToggle.classList.toggle('active');
             localStorage.setItem('ai_web_search_enabled', String(enableWebSearch));
+            try { await window.go.main.App.SetSetting('ai_web_search_enabled', String(enableWebSearch)); } catch (_) {}
             // 同步设置页 toggle
             const settingToggle = document.getElementById('aiSettingWebSearchToggle');
             if (settingToggle) {
@@ -685,9 +708,10 @@ function bindEvents() {
     // ── 卡片召回切换 ──
     if (cardRecallToggle) {
         if (enableCardRecall) cardRecallToggle.classList.add('active');
-        cardRecallToggle.addEventListener('click', () => {
+        cardRecallToggle.addEventListener('click', async () => {
             enableCardRecall = cardRecallToggle.classList.toggle('active');
             localStorage.setItem('ai_card_recall_enabled', String(enableCardRecall));
+            try { await window.go.main.App.SetSetting('ai_card_recall_enabled', String(enableCardRecall)); } catch (_) {}
             // 同步设置页 toggle
             const settingToggle = document.getElementById('aiSettingCardRecallToggle');
             if (settingToggle) {

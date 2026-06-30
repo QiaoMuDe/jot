@@ -529,3 +529,117 @@
 .font-setting-row .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
     left: 14px;
 }
+
+/* ==========================================================================
+   Section O: AI Settings Groups
+   ========================================================================== */
+
+.ai-settings-group {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+
+.ai-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-group-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ai-group-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-setting-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.ai-setting-item + .ai-setting-item {
+  margin-top: 12px;
+}
+
+.ai-setting-label {
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.ai-setting-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  max-width: 380px;
+}
+
+.ai-setting-control .btn-sm,
+.tag-add-form .btn-sm {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.ai-setting-control.ai-setting-control--full {
+  max-width: none;
+}
+
+.ai-setting-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.ai-setting-hint .ai-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ai-setting-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  max-width: 380px;
+  cursor: pointer;
+}
+
+.ai-setting-toggle-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ai-setting-toggle-row .ai-chat-toggle-switch {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ai-setting-toggle-row .ai-chat-toggle-switch.active {
+  background: var(--accent);
+}
+
+.ai-setting-toggle-row .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
+  left: 14px;
+}
+
+/* ——— End AI Settings ——— */

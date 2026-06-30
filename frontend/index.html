@@ -380,23 +380,27 @@
                         <div class="code-preview" id="codePreview"></div>
                     </div>
                 </div>
-                <!-- AI 助手 -->
+                <!-- AI 助手 - API 连接 -->
                 <div class="settings-section">
-                    <h3 class="settings-section-title">AI 助手</h3>
-                    <div class="font-settings">
+                        <div class="ai-group-header">
+                            <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
+                            </svg>
+                            <span class="ai-group-title">API 连接</span>
+                        </div>
                         <!-- Base URL -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">API 地址</label>
-                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
-                                <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" style="flex:1;" />
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">API 地址</span>
+                            <div class="ai-setting-control">
+                                <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
                                 <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试 URL</button>
                             </div>
                         </div>
                         <!-- 服务商 -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">服务商</label>
-                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
-                                <div class="theme-select" id="aiProviderSelect" style="max-width:none;">
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">服务商</span>
+                            <div class="ai-setting-control ai-setting-control--full">
+                                <div class="theme-select" id="aiProviderSelect">
                                     <div class="theme-select-trigger" id="aiProviderTrigger">
                                         <span id="aiProviderLabel">OpenAI 兼容</span>
                                         <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -409,18 +413,28 @@
                             </div>
                         </div>
                         <!-- API Key -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">API Key</label>
-                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
-                                <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." style="flex:1;" autocomplete="off" />
-                                <button id="aiAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:32px;text-align:center;padding:4px 0;" title="显示/隐藏">👁</button>
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">API Key</span>
+                            <div class="ai-setting-control">
+                                <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." autocomplete="off" />
+                                <button id="aiAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                    <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                    <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                        <line x1="1" y1="1" x2="23" y2="23"/>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                         <!-- Model -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">模型</label>
-                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
-                                <div class="theme-select" id="aiModelSelect" style="max-width:none;">
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">模型</span>
+                            <div class="ai-setting-control">
+                                <div class="theme-select" id="aiModelSelect" style="max-width:none;flex:1;">
                                     <div class="theme-select-trigger" id="aiModelTrigger">
                                         <span id="aiModelLabel">-- 请先获取模型列表 --</span>
                                         <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -430,55 +444,88 @@
                                 <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
                             </div>
                         </div>
-                        <!-- 深度思考 -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">深度思考</label>
-                            <div class="ai-setting-search-line" id="aiSettingSearchLine">
-                                <span class="ai-setting-search-desc">发送消息时启用深度思考</span>
-                                <div class="ai-chat-toggle-switch" id="aiSettingSearchToggle">
-                                    <div class="ai-chat-toggle-knob"></div>
-                                </div>
+                </div>
+
+                <!-- AI 助手 - 对话增强 -->
+                <div class="settings-section">
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z"/>
+                            <path d="M9 18h6"/><path d="M10 22h4"/>
+                        </svg>
+                        <span class="ai-group-title">对话增强</span>
+                    </div>
+                    <!-- 深度思考 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">深度思考</span>
+                        <div class="ai-setting-toggle-row" id="aiSettingSearchLine">
+                            <span class="ai-setting-toggle-desc">发送消息时启用深度思考</span>
+                            <div class="ai-chat-toggle-switch" id="aiSettingSearchToggle">
+                                <div class="ai-chat-toggle-knob"></div>
                             </div>
                         </div>
-                        <!-- 引用截断字数 -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">引用截断</label>
-                            <div style="display:flex;gap:6px;flex:1;max-width:380px;align-items:center;">
-                                <input type="number" id="aiRefMaxChars" class="settings-input" value="1000" min="1" max="50000" style="flex:1;width:100px;" />
-                                <span style="color:var(--text-muted);font-size:0.78rem;white-space:nowrap;">字符/条</span>
+                    </div>
+                    <!-- 引用截断字数 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">引用截断</span>
+                        <div class="ai-setting-control">
+                            <input type="number" id="aiRefMaxChars" class="settings-input" value="1000" min="1" max="50000" style="width:100px;" />
+                            <span class="ai-setting-hint" style="white-space:nowrap;">字符/条</span>
+                        </div>
+                    </div>
+                    <!-- 卡片召回 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">卡片召回</span>
+                        <div class="ai-setting-toggle-row" id="aiSettingCardRecallLine">
+                            <span class="ai-setting-toggle-desc">发送消息时自动召回相关笔记</span>
+                            <div class="ai-chat-toggle-switch" id="aiSettingCardRecallToggle">
+                                <div class="ai-chat-toggle-knob"></div>
                             </div>
                         </div>
-                        <!-- 联网搜索 (Tavily) -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">联网搜索</label>
-                            <div style="display:flex;flex-direction:column;gap:6px;flex:1;max-width:380px;">
-                                <div style="display:flex;gap:6px;align-items:center;">
-                                    <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" style="flex:1;" />
-                                    <button id="aiTavilyToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:32px;text-align:center;padding:4px 0;" title="显示/隐藏">👁</button>
-                                    <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
-                                </div>
-                                <div class="ai-setting-search-line" id="aiSettingWebSearchLine">
-                                    <span class="ai-setting-search-desc">发送消息时默认启用联网搜索</span>
-                                    <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
-                                        <div class="ai-chat-toggle-knob"></div>
-                                    </div>
-                                </div>
-                            </div>
+                    </div>
+                    <!-- 卡片召回数 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">卡片召回数</span>
+                        <div class="ai-setting-control">
+                            <input type="number" id="aiSettingCardRecallLimit" class="settings-input" value="3" min="1" max="10" style="width:80px;" />
+                            <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
                         </div>
-                        <!-- 卡片召回 -->
-                        <div class="font-setting-row">
-                            <label class="font-setting-label" style="min-width:72px;">卡片召回</label>
-                            <div style="display:flex;flex-direction:column;gap:6px;flex:1;max-width:380px;">
-                                <div class="ai-setting-search-line" id="aiSettingCardRecallLine">
-                                    <span class="ai-setting-search-desc">发送消息时自动召回相关笔记</span>
-                                    <div class="ai-chat-toggle-switch" id="aiSettingCardRecallToggle">
-                                        <div class="ai-chat-toggle-knob"></div>
-                                    </div>
-                                </div>
-                                <div style="display:flex;gap:6px;align-items:center;">
-                                    <input type="number" id="aiSettingCardRecallLimit" class="settings-input" value="3" min="1" max="10" style="flex:1;width:80px;" />
-                                    <span style="color:var(--text-muted);font-size:0.78rem;white-space:nowrap;">条/次</span>
-                                </div>
+                    </div>
+                </div>
+
+                <!-- AI 助手 - 联网搜索 -->
+                <div class="settings-section">
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <span class="ai-group-title">联网搜索</span>
+                    </div>
+                    <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
+                        <span class="ai-setting-label">API Key</span>
+                        <div class="ai-setting-control" style="max-width:380px;">
+                            <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" />
+                            <button id="aiTavilyToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                            <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                        </div>
+                        <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于联网搜索能力</span>
+                    </div>
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">默认开启</span>
+                        <div class="ai-setting-toggle-row" id="aiSettingWebSearchLine">
+                            <span class="ai-setting-toggle-desc">发送消息时默认启用联网搜索</span>
+                            <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
+                                <div class="ai-chat-toggle-knob"></div>
                             </div>
                         </div>
                     </div>

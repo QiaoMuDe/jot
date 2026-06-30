@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-06-30（更新 39）
+> 生成日期: 2026-07-01（更新 40）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1175,4 +1175,18 @@ await loadXxxSetting();
 | **召回卡片展示** | AI 回复完成后（`ai:stream-done`），`recallCards` 非空时在消息气泡底部插入 `<details class="recall-cards">` 折叠面板。卡片项使用卡片式设计：圆角 + hover 背景变色 + 左侧 layers 小图标，点击整个卡片区域触发预览，而非仅标题。样式复用 `.search-sources` 体系 + 独特增强。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 和 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **卡片预览浮层** | 点击召回卡片打开浮层 `#aiCardPreviewModal`。根据 `file_ext` 字段分流：`.md`/`.markdown` 文件使用 Web Worker（`preview-worker.js`）离线程渲染 Markdown（复用编辑器 `.md-rendered` 样式体系），渲染期间显示旋转加载动画，支持连续快速点击（前一次 Worker 自动 terminate）；其他格式直接显示纯文本。预览面板添加入场动画（fade-in + 缩放滑入）。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **涉及文件** | [recall_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/recall_service.go)、[note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[preview-worker.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/preview-worker.js) |
+
+## 六十四、AI 设置模块 UI 重构
+
+| 记忆点 | 内容 |
+|--------|------|
+| **独立卡片布局** | AI 设置从单一外层卡片（`#ai-settings-section`）拆分为 3 个独立 `settings-section` 卡片：API 连接、对话增强、联网搜索。每个卡片带有 SVG 图标标题头，与其他设置项（标签管理、排序等）层级平齐。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **设置项扁平化** | 移除 `.ai-setting-stack` 和 `.ai-setting-sub-item` 中间嵌套层。「卡片召回」拆分为两个独立设置项：卡片召回（label + toggle 开关）和卡片召回数（label + 数字输入），分别复用「深度思考」和「引用截断」的布局模式。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **数据库优先加载** | 修复 `loadAISettings()` 中 4 个设置项仅从 `localStorage` 读取的问题，改为优先调用 `GetSetting()` 从后端数据库加载，回退到 localStorage，最后使用 HTML 默认值。受影响的设置项：卡片召回数、深度思考、联网搜索、卡片召回启用。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) `loadAISettings()` |
+| **数据库同步写入** | 深度思考、联网搜索、卡片召回启用 3 个开关从仅 localStorage 读写改为同时写入数据库（`SetSetting()`）+ localStorage。设置页和 AI 工具栏的 toggle 均同步。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **Tavily 提示文字** | Tavily API Key 输入框下方添加提示「前往 [tavily.com](https://tavily.com) 注册获取 API Key，用于联网搜索能力」。链接通过 `window.runtime.BrowserOpenURL()` 在系统默认浏览器打开。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **SVG 图标切换按钮** | 两个 API Key 的显示/隐藏按钮从 `👁`/`🙈` emoji 改为双 SVG 图标：`<svg class="toggle-eye">`（睁眼）和 `<svg class="toggle-eye-off">`（闭眼+斜线）。按钮使用 `display:flex;align-items:center;justify-content:center` 确保图标始终居中，`width:40px;height:36px` 与输入框对齐。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **按钮高度统一** | 新增 CSS 规则 `.ai-setting-control .btn-sm, .tag-add-form .btn-sm { height: 36px; display: inline-flex; align-items: center }`，使设置页所有输入框旁边的按钮高度与 `.settings-input` 一致。详见 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **清理废弃 CSS** | 移除不再使用的 `.ai-setting-sub-item`（padding-left + margin-top）和 `.ai-setting-stack`（flex column + gap）CSS 类。详见 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 

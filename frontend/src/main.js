@@ -523,7 +523,10 @@ function switchView(view) {
                 loadAISettings();
                 // 每次进入设置页 Key 输入框默认隐藏
                 els.aiAPIKey.type = 'password';
-                els.aiAPIKeyToggle.textContent = '👁';
+                const initEye = els.aiAPIKeyToggle.querySelector('.toggle-eye');
+                const initEyeOff = els.aiAPIKeyToggle.querySelector('.toggle-eye-off');
+                if (initEye) initEye.style.display = '';
+                if (initEyeOff) initEyeOff.style.display = 'none';
                 break;
             case 'data':
                 loadDataStats();
@@ -1664,10 +1667,17 @@ async function loadAISettings() {
     }
 
     // 深度思考状态
-    const settingToggle = document.getElementById('aiSettingSearchToggle');
-    const enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
-    if (settingToggle) {
-        if (enabled) settingToggle.classList.add('active');
+    const searchToggle = document.getElementById('aiSettingSearchToggle');
+    if (searchToggle) {
+        let enabled = false;
+        try {
+            const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
+            if (val !== '') enabled = val === 'true';
+            else enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
+        } catch (_) {
+            enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
+        }
+        if (enabled) searchToggle.classList.add('active');
     }
 
     // 联网搜索配置
@@ -1676,21 +1686,45 @@ async function loadAISettings() {
         tavilyKey.value = cfg.tavily_api_key;
     }
     const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
-    const webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
-    if (webSearchToggle && webSearchEnabled) {
-        webSearchToggle.classList.add('active');
+    if (webSearchToggle) {
+        let webSearchEnabled = false;
+        try {
+            const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
+            if (val !== '') webSearchEnabled = val === 'true';
+            else webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
+        } catch (_) {
+            webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
+        }
+        if (webSearchEnabled) webSearchToggle.classList.add('active');
     }
 
     // 卡片召回配置
     const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
-    const cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
-    if (cardRecallToggle && cardRecallEnabled) {
-        cardRecallToggle.classList.add('active');
+    if (cardRecallToggle) {
+        let cardRecallEnabled = false;
+        try {
+            const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
+            if (val !== '') cardRecallEnabled = val === 'true';
+            else cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
+        } catch (_) {
+            cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
+        }
+        if (cardRecallEnabled) cardRecallToggle.classList.add('active');
     }
     const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
     if (cardRecallLimit) {
-        const saved = localStorage.getItem('ai_card_recall_limit');
-        if (saved) cardRecallLimit.value = saved;
+        try {
+            const val = await window.go.main.App.GetSetting('ai_card_recall_limit');
+            if (val) {
+                cardRecallLimit.value = val;
+            } else {
+                const saved = localStorage.getItem('ai_card_recall_limit');
+                if (saved) cardRecallLimit.value = saved;
+            }
+        } catch (_) {
+            const saved = localStorage.getItem('ai_card_recall_limit');
+            if (saved) cardRecallLimit.value = saved;
+        }
     }
 
     // 引用截断字数
@@ -1850,12 +1884,16 @@ async function initAISettings() {
     // API Key 显示/隐藏切换
     els.aiAPIKeyToggle.addEventListener('click', () => {
         const input = els.aiAPIKey;
+        const eye = els.aiAPIKeyToggle.querySelector('.toggle-eye');
+        const eyeOff = els.aiAPIKeyToggle.querySelector('.toggle-eye-off');
         if (input.type === 'password') {
             input.type = 'text';
-            els.aiAPIKeyToggle.textContent = '🙈';
+            eye.style.display = 'none';
+            eyeOff.style.display = '';
         } else {
             input.type = 'password';
-            els.aiAPIKeyToggle.textContent = '👁';
+            eye.style.display = '';
+            eyeOff.style.display = 'none';
         }
     });
 
@@ -1941,11 +1979,12 @@ async function initAISettings() {
     // 深度思考切换
     const settingSearchLine = document.getElementById('aiSettingSearchLine');
     if (settingSearchLine) {
-        settingSearchLine.addEventListener('click', () => {
+        settingSearchLine.addEventListener('click', async () => {
             const toggleSwitch = document.getElementById('aiSettingSearchToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
             localStorage.setItem('ai_thinking_enabled', String(isActive));
+            try { await window.go.main.App.SetSetting('ai_thinking_enabled', String(isActive)); } catch (_) {}
             nm.show(isActive ? '深度思考已开启' : '深度思考已关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatSearchToggle');
@@ -1955,17 +1994,30 @@ async function initAISettings() {
         });
     }
 
+    // ── Tavily 注册链接（通过系统浏览器打开） ──
+    const tavilyLink = document.querySelector('.tavily-link');
+    if (tavilyLink) {
+        tavilyLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.runtime.BrowserOpenURL('https://tavily.com');
+        });
+    }
+
     // ── Tavily API Key 显示/隐藏切换 ──
     const tavilyToggleBtn = document.getElementById('aiTavilyToggleBtn');
     const tavilyKeyInput = document.getElementById('aiTavilyApiKey');
     if (tavilyToggleBtn && tavilyKeyInput) {
         tavilyToggleBtn.addEventListener('click', () => {
+            const eye = tavilyToggleBtn.querySelector('.toggle-eye');
+            const eyeOff = tavilyToggleBtn.querySelector('.toggle-eye-off');
             if (tavilyKeyInput.type === 'password') {
                 tavilyKeyInput.type = 'text';
-                tavilyToggleBtn.textContent = '🙈';
+                eye.style.display = 'none';
+                eyeOff.style.display = '';
             } else {
                 tavilyKeyInput.type = 'password';
-                tavilyToggleBtn.textContent = '👁';
+                eye.style.display = '';
+                eyeOff.style.display = 'none';
             }
         });
     }
@@ -2012,11 +2064,12 @@ async function initAISettings() {
     // ── 联网搜索默认开启切换 ──
     const settingWebSearchLine = document.getElementById('aiSettingWebSearchLine');
     if (settingWebSearchLine) {
-        settingWebSearchLine.addEventListener('click', () => {
+        settingWebSearchLine.addEventListener('click', async () => {
             const toggleSwitch = document.getElementById('aiSettingWebSearchToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
             localStorage.setItem('ai_web_search_enabled', String(isActive));
+            try { await window.go.main.App.SetSetting('ai_web_search_enabled', String(isActive)); } catch (_) {}
             nm.show(isActive ? '联网搜索已默认开启' : '联网搜索已默认关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatWebSearchToggle');
@@ -2029,11 +2082,12 @@ async function initAISettings() {
     // ── 卡片召回切换 ──
     const settingCardRecallLine = document.getElementById('aiSettingCardRecallLine');
     if (settingCardRecallLine) {
-        settingCardRecallLine.addEventListener('click', () => {
+        settingCardRecallLine.addEventListener('click', async () => {
             const toggleSwitch = document.getElementById('aiSettingCardRecallToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
             localStorage.setItem('ai_card_recall_enabled', String(isActive));
+            try { await window.go.main.App.SetSetting('ai_card_recall_enabled', String(isActive)); } catch (_) {}
             nm.show(isActive ? '卡片召回已开启' : '卡片召回已关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatCardRecallToggle');
