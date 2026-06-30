@@ -437,6 +437,10 @@ const els = {
     // AI 配置
     aiBaseURL: $('aiBaseURL'),
     aiAPIKey: $('aiAPIKey'),
+    aiProviderSelect: $('aiProviderSelect'),
+    aiProviderTrigger: $('aiProviderTrigger'),
+    aiProviderDropdown: $('aiProviderDropdown'),
+    aiProviderLabel: $('aiProviderLabel'),
     aiModelTrigger: $('aiModelTrigger'),
     aiModelDropdown: $('aiModelDropdown'),
     aiModelLabel: $('aiModelLabel'),
@@ -1394,6 +1398,7 @@ function initThemeSettings() {
     // 点击触发按钮切换下拉菜单
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (dropdown.children.length === 0) return;
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
     });
@@ -1624,6 +1629,17 @@ async function loadAISettings() {
         const cfg = await window.go.main.App.GetAIConfig();
         els.aiBaseURL.value = cfg.base_url || '';
         els.aiAPIKey.value = cfg.api_key || '';
+        const provider = cfg.provider || 'openai';
+        // 设置服务商下拉选中态
+        if (els.aiProviderDropdown) {
+            const items = els.aiProviderDropdown.querySelectorAll('.theme-select-item');
+            items.forEach(item => item.classList.toggle('active', item.dataset.providerValue === provider));
+        }
+        if (els.aiProviderLabel) {
+            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
+            els.aiProviderLabel.textContent = labels[provider] || 'OpenAI 兼容';
+        }
+        updateProviderUI();
 
         // 清空并填充已保存的模型
         els.aiModelDropdown.innerHTML = '';
@@ -1660,6 +1676,7 @@ async function initAISettings() {
     // 点击触发按钮切换下拉菜单
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (dropdown.children.length === 0) return;
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
     });
@@ -1685,15 +1702,92 @@ async function initAISettings() {
         trigger.classList.remove('open');
     });
 
+    // ── 服务商下拉菜单事件 ──
+    const provTrigger = els.aiProviderTrigger;
+    const provDropdown = els.aiProviderDropdown;
+
+    // 获取当前选中的服务商值
+    function getActiveProvider() {
+        const active = provDropdown?.querySelector('.theme-select-item.active');
+        return active?.dataset.providerValue || 'openai';
+    }
+
+    // 切换选中项并触发更新
+    function setActiveProvider(value) {
+        const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
+        provDropdown.querySelectorAll('.theme-select-item').forEach(i => i.classList.remove('active'));
+        const target = provDropdown?.querySelector(`[data-provider-value="${value}"]`);
+        if (target) target.classList.add('active');
+        if (els.aiProviderLabel) els.aiProviderLabel.textContent = labels[value] || value;
+    }
+
+    // 更新服务商相关 UI
+    function updateProviderUI() {
+        const provider = getActiveProvider();
+        const defaultURLs = {
+            openai: 'https://api.openai.com/v1',
+            ollama: 'http://localhost:11434',
+        };
+        if (els.aiBaseURL && defaultURLs[provider]) {
+            els.aiBaseURL.value = defaultURLs[provider];
+        }
+        const canFetch = provider === 'openai' || provider === 'ollama';
+        if (els.aiFetchModelsBtn) {
+            els.aiFetchModelsBtn.disabled = !canFetch;
+            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
+            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
+        }
+    }
+
+    if (provTrigger && provDropdown) {
+        // 点击触发按钮切换下拉菜单
+        provTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            provTrigger.classList.toggle('open');
+            provDropdown.classList.toggle('open');
+        });
+
+        // 点击选项
+        provDropdown.addEventListener('click', (e) => {
+            const item = e.target.closest('.theme-select-item');
+            if (!item) return;
+            const value = item.dataset.providerValue;
+            if (!value) return;
+            setActiveProvider(value);
+            provDropdown.classList.remove('open');
+            provTrigger.classList.remove('open');
+            // 更新 UI 并保存
+            updateProviderUI();
+            els.aiModelDropdown.innerHTML = '';
+            els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
+            const cfg = { base_url: els.aiBaseURL.value.trim(), api_key: els.aiAPIKey.value.trim(), model: '', provider: value };
+            window.go.main.App.SaveAIConfig(cfg)
+                .then(() => nm.show('AI 配置已保存', 'success'))
+                .catch(() => {});
+        });
+
+        // 点击外部关闭
+        document.addEventListener('click', () => {
+            provDropdown.classList.remove('open');
+            provTrigger.classList.remove('open');
+        });
+    }
+
     // 测试 URL 连通性
     els.aiTestURLBtn.addEventListener('click', async () => {
         const url = els.aiBaseURL.value.trim();
+        const key = els.aiAPIKey.value.trim();
+        const provider = getActiveProvider();
         if (!url) {
             nm.show('请先填写 API 地址', 'warning');
             return;
         }
+        if (provider === 'openai' && !key) {
+            nm.show('请先填写 API Key', 'warning');
+            return;
+        }
         try {
-            const ok = await window.go.main.App.TestAIBaseURL(url, els.aiAPIKey.value.trim());
+            const ok = await window.go.main.App.TestAIBaseURL(url, key);
             if (ok) {
                 nm.show('API 地址连接成功', 'success');
             } else {
@@ -1720,8 +1814,13 @@ async function initAISettings() {
     els.aiFetchModelsBtn.addEventListener('click', async () => {
         const url = els.aiBaseURL.value.trim();
         const key = els.aiAPIKey.value.trim();
-        if (!url || !key) {
-            nm.show('请先填写 API 地址和 API Key', 'warning');
+        const provider = getActiveProvider();
+        if (!url) {
+            nm.show('请先填写 API 地址', 'warning');
+            return;
+        }
+        if (provider === 'openai' && !key) {
+            nm.show('请先填写 API Key', 'warning');
             return;
         }
         try {
@@ -1752,13 +1851,14 @@ async function initAISettings() {
         const url = els.aiBaseURL.value.trim();
         const key = els.aiAPIKey.value.trim();
         const model = els.aiModelLabel.textContent;
+        const provider = getActiveProvider();
         const hasItems = els.aiModelDropdown.children.length > 0;
 
         if (!url || !key) return; // 未填完不保存
         if (!hasItems || model === '-- 请先获取模型列表 --' || !model) return;
 
         try {
-            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model });
+            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model, provider });
             nm.show('AI 配置已保存', 'success');
         } catch (e) {
             nm.show('保存配置失败: ' + e, 'error');
@@ -1771,6 +1871,7 @@ async function initAISettings() {
         try {
             const cfg = await window.go.main.App.GetAIConfig();
             cfg.base_url = url;
+            cfg.provider = getActiveProvider();
             await window.go.main.App.SaveAIConfig(cfg);
             nm.show('AI 配置已保存', 'success');
         } catch (e) {
@@ -1783,6 +1884,7 @@ async function initAISettings() {
         try {
             const cfg = await window.go.main.App.GetAIConfig();
             cfg.api_key = key;
+            cfg.provider = getActiveProvider();
             await window.go.main.App.SaveAIConfig(cfg);
             nm.show('AI 配置已保存', 'success');
         } catch (e) {

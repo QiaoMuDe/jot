@@ -1,0 +1,24 @@
+# Checklist
+
+- [x] LangChainGo 依赖添加成功，`go build` 通过
+- [x] `AIConfig` 新增 `Provider` 字段，设置存储读写正常，默认值为 `"openai"`
+- [x] `createLLM` 工厂函数在 4 个场景下均能正确初始化 Provider：
+  - `openai` 带自定义 BaseURL 初始化成功
+  - `anthropic` 初始化成功
+  - `google` 初始化成功
+  - `ollama` 初始化成功
+- [x] `CallAIStream` 使用 LangChainGo 流式调用正常
+  - 流式 chunk 正确推送 `ai:stream-chunk`
+  - thinking 内容正确推送 `ai:stream-thinking`（当启用时）
+  - 完成时推送 `ai:stream-done`
+  - 错误时推送 `ai:stream-error`
+- [x] `TestAIConnection` 兼容 4 个 provider 的连通性测试
+- [x] `FetchAIModels` 对 `openai` 返回正常模型列表，对其他 provider 返回空
+- [x] 前端设置页「服务商」下拉选择器正常工作
+  - 4 个选项可选
+  - Base URL 行按 provider 类型正确显示/隐藏
+  - 非 OpenAI 时「获取模型列表」按钮禁用
+  - 切换 provider 时重置 model 下拉
+- [x] 前端设置「保存」后重新打开，provider 值正确回显
+- [x] 设置页面编辑 - 关闭 - 重开后，所有设置保持
+- [x] 对话流式交互在新老 provider 之间切换保存时仍正常发送

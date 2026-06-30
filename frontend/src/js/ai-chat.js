@@ -1098,7 +1098,11 @@ export async function onAIChatViewActivated() {
 
     try {
         const cfg = await window.go.main.App.GetAIConfig();
-        if (!cfg.api_key || !cfg.base_url) {
+        const provider = cfg.provider || 'openai';
+        const hasRequired = (provider === 'ollama')
+            ? !!cfg.base_url
+            : !!cfg.api_key;
+        if (!hasRequired) {
             showEmptyState();
             return;
         }

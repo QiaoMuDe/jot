@@ -531,12 +531,18 @@ func (a *App) SaveAIConfig(cfg services.AIConfig) error {
 
 // TestAIBaseURL 测试 AI Base URL 连通性
 func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
-	return a.aiService.TestBaseURL(baseURL, apiKey)
+	cfg := a.aiService.GetConfig()
+	cfg.BaseURL = baseURL
+	cfg.APIKey = apiKey
+	return a.aiService.TestConnection(cfg)
 }
 
 // FetchAIModels 获取可用模型列表
 func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
-	return a.aiService.FetchModels(baseURL, apiKey)
+	cfg := a.aiService.GetConfig()
+	cfg.BaseURL = baseURL
+	cfg.APIKey = apiKey
+	return a.aiService.FetchModels(cfg)
 }
 
 // CallAI 调用 AI 对话接口

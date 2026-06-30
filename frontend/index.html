@@ -392,6 +392,22 @@
                                 <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试 URL</button>
                             </div>
                         </div>
+                        <!-- 服务商 -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label" style="min-width:72px;">服务商</label>
+                            <div style="display:flex;gap:6px;flex:1;max-width:380px;">
+                                <div class="theme-select" id="aiProviderSelect" style="max-width:none;">
+                                    <div class="theme-select-trigger" id="aiProviderTrigger">
+                                        <span id="aiProviderLabel">OpenAI 兼容</span>
+                                        <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </div>
+                                    <div class="theme-select-dropdown" id="aiProviderDropdown">
+                                        <div class="theme-select-item active" data-provider-value="openai">OpenAI 兼容</div>
+                                        <div class="theme-select-item" data-provider-value="ollama">Ollama</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <!-- API Key -->
                         <div class="font-setting-row">
                             <label class="font-setting-label" style="min-width:72px;">API Key</label>

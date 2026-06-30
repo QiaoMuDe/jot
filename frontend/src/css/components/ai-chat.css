@@ -502,10 +502,18 @@
     box-shadow: 0 4px 12px var(--shadow);
     display: none;
     z-index: 20;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .ai-chat-model-dropdown.open {
     display: block;
+}
+
+.ai-chat-model-dropdown::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .ai-chat-model-dropdown .theme-select-item {

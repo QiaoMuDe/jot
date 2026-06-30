@@ -1,8 +1,6 @@
 package services
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +11,9 @@ import (
 
 	"jot/internal/models"
 
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/ollama"
+	"github.com/tmc/langchaingo/llms/openai"
 	"gorm.io/gorm"
 )
 
@@ -27,9 +28,10 @@ type Message struct {
 
 // AIConfig 表示 AI 服务配置
 type AIConfig struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
+	Provider string `json:"provider"`
+	BaseURL  string `json:"base_url"`
+	APIKey   string `json:"api_key"`
+	Model    string `json:"model"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -45,16 +47,27 @@ func NewAIService(db *gorm.DB) *AIService {
 // GetConfig 从 SettingService 读取 AI 配置
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
+	provider := svc.Get("ai_provider")
+	if provider == "" {
+		provider = "openai"
+	}
 	return AIConfig{
-		BaseURL: svc.Get("ai_base_url"),
-		APIKey:  svc.Get("ai_api_key"),
-		Model:   svc.Get("ai_model"),
+		Provider: provider,
+		BaseURL:  svc.Get("ai_base_url"),
+		APIKey:   svc.Get("ai_api_key"),
+		Model:    svc.Get("ai_model"),
 	}
 }
 
 // SaveConfig 保存 AI 配置到 SettingService
 func (a *AIService) SaveConfig(cfg AIConfig) error {
 	svc := NewSettingService(a.db)
+	if cfg.Provider == "" {
+		cfg.Provider = "openai"
+	}
+	if err := svc.Set("ai_provider", cfg.Provider); err != nil {
+		return err
+	}
 	if err := svc.Set("ai_base_url", cfg.BaseURL); err != nil {
 		return err
 	}
@@ -64,220 +77,187 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	return svc.Set("ai_model", cfg.Model)
 }
 
-// thinkingParam 思考模式参数
-type thinkingParam struct {
-	Type string `json:"type"`
+// createLLM 根据配置创建 LangChainGo LLM 实例
+func createLLM(ctx context.Context, cfg AIConfig) (llms.Model, error) {
+	switch cfg.Provider {
+	case "openai":
+		opts := []openai.Option{}
+		if cfg.BaseURL != "" {
+			opts = append(opts, openai.WithBaseURL(cfg.BaseURL))
+		}
+		if cfg.APIKey != "" {
+			opts = append(opts, openai.WithToken(cfg.APIKey))
+		}
+		if cfg.Model != "" {
+			opts = append(opts, openai.WithModel(cfg.Model))
+		}
+		return openai.New(opts...)
+	case "ollama":
+		opts := []ollama.Option{}
+		if cfg.BaseURL != "" {
+			opts = append(opts, ollama.WithServerURL(cfg.BaseURL))
+		}
+		if cfg.Model != "" {
+			opts = append(opts, ollama.WithModel(cfg.Model))
+		}
+		return ollama.New(opts...)
+	default:
+		return nil, fmt.Errorf("不支持的 AI 服务商: %s", cfg.Provider)
+	}
 }
 
-// chatRequest 表示 Chat Completion 请求体
-type chatRequest struct {
-	Model    string         `json:"model"`
-	Messages []Message      `json:"messages"`
-	Stream   bool           `json:"stream"`
-	Thinking *thinkingParam `json:"thinking,omitempty"`
+// convertMessages 将 services.Message 转换为 LangChainGo 的 MessageContent 列表
+func convertMessages(messages []Message) []llms.MessageContent {
+	result := make([]llms.MessageContent, 0, len(messages))
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			result = append(result, llms.TextParts(llms.ChatMessageTypeHuman, msg.Content))
+		case "assistant":
+			result = append(result, llms.TextParts(llms.ChatMessageTypeAI, msg.Content))
+		case "system":
+			result = append(result, llms.TextParts(llms.ChatMessageTypeSystem, msg.Content))
+		default:
+			result = append(result, llms.TextParts(llms.ChatMessageTypeHuman, msg.Content))
+		}
+	}
+	return result
 }
 
-// chatResponse 表示 Chat Completion 响应体
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-}
-
-// CallAI 调用 OpenAI 兼容的 Chat Completion API
+// CallAI 调用 AI 接口（非流式）
 func (a *AIService) CallAI(messages []Message) (string, error) {
 	cfg := a.GetConfig()
 
-	body := chatRequest{
-		Model:    cfg.Model,
-		Messages: messages,
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	reqBody, err := json.Marshal(body)
+	llm, err := createLLM(ctx, cfg)
 	if err != nil {
 		return "", fmt.Errorf("AI 调用失败: %w", err)
 	}
 
-	url := cfg.BaseURL + "/chat/completions"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
+	msgContents := convertMessages(messages)
+
+	resp, err := llm.GenerateContent(ctx, msgContents)
 	if err != nil {
 		return "", fmt.Errorf("AI 调用失败: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("AI 调用失败: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("AI 调用失败: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("AI 调用失败: HTTP %d", resp.StatusCode)
-	}
-
-	var chatResp chatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return "", fmt.Errorf("AI 调用失败: %w", err)
-	}
-
-	if len(chatResp.Choices) == 0 {
+	if len(resp.Choices) == 0 {
 		return "", fmt.Errorf("AI 调用失败: 响应中没有 choices")
 	}
 
-	return chatResp.Choices[0].Message.Content, nil
+	return resp.Choices[0].Content, nil
 }
 
-// CallAIStream 流式调用 OpenAI 兼容的 Chat Completion API
+// CallAIStream 流式调用 AI 接口
 // 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
 // onThinking 用于深度思考模型的 reasoning_content 字段
 func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, float64, float64), onError func(string)) {
 	cfg := a.GetConfig()
 
+	llm, err := createLLM(ctx, cfg)
+	if err != nil {
+		onError("创建 LLM 失败: " + err.Error())
+		return
+	}
+
 	streamStart := time.Now()
 	var thinkingStart time.Time
-	var thinkingEnd time.Time
 	var hasThinking bool
-
-	type streamChoice struct {
-		Delta struct {
-			Content          string `json:"content"`
-			ReasoningContent string `json:"reasoning_content"`
-		} `json:"delta"`
-		Index int `json:"index"`
-	}
-	type streamResponse struct {
-		Choices []streamChoice `json:"choices"`
-	}
-
-	body := chatRequest{
-		Model:    cfg.Model,
-		Messages: messages,
-		Stream:   true,
-	}
-	if thinkingEnabled {
-		body.Thinking = &thinkingParam{Type: "enabled"}
-	} else {
-		body.Thinking = &thinkingParam{Type: "disabled"}
-	}
 
 	var fullContent strings.Builder
 	var fullThinking strings.Builder
 
-	reqBody, err := json.Marshal(body)
-	if err != nil {
-		onError("请求序列化失败: " + err.Error())
-		return
-	}
+	msgContents := convertMessages(messages)
 
-	url := cfg.BaseURL + "/chat/completions"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
-	if err != nil {
-		onError("请求创建失败: " + err.Error())
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		onError("连接失败: " + err.Error())
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		onError(fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(bodyBytes)))
-		return
-	}
-
-	reader := bufio.NewReader(resp.Body)
-	for {
-		select {
-		case <-ctx.Done():
-			onDone(fullContent.String(), 0, 0)
-			return
-		default:
-		}
-
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
+	opts := []llms.CallOption{
+		llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
+			text := string(chunk)
+			if text != "" {
+				fullContent.WriteString(text)
+				onChunk(text)
 			}
-			onError("读取流失败: " + err.Error())
-			return
-		}
+			return nil
+		}),
+	}
 
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
-			break
-		}
-
-		var sr streamResponse
-		if err := json.Unmarshal([]byte(data), &sr); err != nil {
-			continue
-		}
-
-		if len(sr.Choices) > 0 {
-			chunk := sr.Choices[0].Delta.Content
-			if chunk != "" {
-				if hasThinking && thinkingEnd.IsZero() {
-					thinkingEnd = time.Now()
-				}
-				fullContent.WriteString(chunk)
-				onChunk(chunk)
-			}
-
-			thinking := sr.Choices[0].Delta.ReasoningContent
-			if thinking != "" {
+	if thinkingEnabled {
+		opts = append(opts,
+			llms.WithStreamingReasoningFunc(func(_ context.Context, reasoningChunk, chunk []byte) error {
 				if !hasThinking {
 					thinkingStart = time.Now()
 					hasThinking = true
 				}
-				fullThinking.WriteString(thinking)
-				if onThinking != nil {
-					onThinking(thinking)
+				rText := string(reasoningChunk)
+				if rText != "" {
+					fullThinking.WriteString(rText)
+					if onThinking != nil {
+						onThinking(rText)
+					}
 				}
-			}
+				// content may come alongside reasoning
+				if len(chunk) > 0 {
+					text := string(chunk)
+					if text != "" {
+						fullContent.WriteString(text)
+						onChunk(text)
+					}
+				}
+				return nil
+			}),
+			llms.WithThinking(&llms.ThinkingConfig{
+				Mode:           llms.ThinkingModeAuto,
+				StreamThinking: true,
+				ReturnThinking: true,
+			}),
+		)
+	}
+
+	_, err = llm.GenerateContent(ctx, msgContents, opts...)
+	if err != nil {
+		// 检查是否是 context.Canceled（用户取消）
+		if strings.Contains(err.Error(), "context canceled") {
+			onDone(fullContent.String(), 0, 0)
+			return
 		}
+		onError("AI 调用失败: " + err.Error())
+		return
 	}
 
 	var elapsedThinking float64
-	if hasThinking && !thinkingEnd.IsZero() {
-		elapsedThinking = thinkingEnd.Sub(thinkingStart).Seconds()
+	if hasThinking {
+		elapsedThinking = time.Since(thinkingStart).Seconds()
 	}
 	elapsedTotal := time.Since(streamStart).Seconds()
 	onDone(fullContent.String(), elapsedThinking, elapsedTotal)
 }
 
-// TestBaseURL 测试 Base URL 连通性（带 API Key 认证，5 秒超时）
-func (a *AIService) TestBaseURL(baseURL, apiKey string) (bool, error) {
-	url := baseURL + "/models"
+// TestConnection 测试 AI 服务连通性
+// - openai: 调用 /models 端点
+// - ollama: 调用 /api/tags 端点
+// - other: 尝试创建一个简单调用
+func (a *AIService) TestConnection(cfg AIConfig) (bool, error) {
+	switch cfg.Provider {
+	case "openai":
+		return testOpenAIConnection(cfg)
+	case "ollama":
+		return testOllamaConnection(cfg)
+	default:
+		return testGenericConnection(cfg)
+	}
+}
+
+// testOpenAIConnection 测试 OpenAI 兼容 API 的连通性
+func testOpenAIConnection(cfg AIConfig) (bool, error) {
+	url := cfg.BaseURL + "/models"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return false, fmt.Errorf("连接测试失败: %w", err)
 	}
 
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
+	if cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -290,6 +270,45 @@ func (a *AIService) TestBaseURL(baseURL, apiKey string) (bool, error) {
 	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
 }
 
+// testOllamaConnection 测试 Ollama 连通性（调用 /api/tags）
+func testOllamaConnection(cfg AIConfig) (bool, error) {
+	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	url := baseURL + "/api/tags"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("连接测试失败: %w", err)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("连接测试失败: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
+}
+
+// testGenericConnection 通过创建 LLM 并执行简单调用来测试连通性
+func testGenericConnection(cfg AIConfig) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	llm, err := createLLM(ctx, cfg)
+	if err != nil {
+		return false, fmt.Errorf("连接测试失败: %w", err)
+	}
+
+	_, err = llm.GenerateContent(ctx, []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeHuman, "test"),
+	}, llms.WithMaxTokens(1))
+	if err != nil {
+		return false, fmt.Errorf("连接测试失败: %w", err)
+	}
+
+	return true, nil
+}
+
 // modelsResponse 表示 /models 接口的响应体
 type modelsResponse struct {
 	Data []struct {
@@ -298,14 +317,31 @@ type modelsResponse struct {
 }
 
 // FetchModels 获取可用模型列表
-func (a *AIService) FetchModels(baseURL, apiKey string) ([]string, error) {
-	url := baseURL + "/models"
+// - openai: 调用 /models 端点
+// - ollama: 调用 /api/tags 端点
+// - other: 返回空列表
+func (a *AIService) FetchModels(cfg AIConfig) ([]string, error) {
+	switch cfg.Provider {
+	case "openai":
+		return fetchOpenAIModels(cfg)
+	case "ollama":
+		return fetchOllamaModels(cfg)
+	default:
+		return []string{}, nil
+	}
+}
+
+// fetchOpenAIModels 从 OpenAI 兼容 API 获取模型列表
+func fetchOpenAIModels(cfg AIConfig) ([]string, error) {
+	url := cfg.BaseURL + "/models"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
@@ -331,6 +367,51 @@ func (a *AIService) FetchModels(baseURL, apiKey string) ([]string, error) {
 	models := make([]string, 0, len(modelsResp.Data))
 	for _, item := range modelsResp.Data {
 		models = append(models, item.ID)
+	}
+
+	return models, nil
+}
+
+// ollamaTagResponse Ollama /api/tags 响应结构
+type ollamaTagResponse struct {
+	Models []struct {
+		Name string `json:"name"`
+	} `json:"models"`
+}
+
+// fetchOllamaModels 从 Ollama API 获取本地模型列表
+func fetchOllamaModels(cfg AIConfig) ([]string, error) {
+	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	url := baseURL + "/api/tags"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("获取模型列表失败: HTTP %d", resp.StatusCode)
+	}
+
+	var tagResp ollamaTagResponse
+	if err := json.Unmarshal(respBody, &tagResp); err != nil {
+		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	}
+
+	models := make([]string, 0, len(tagResp.Models))
+	for _, item := range tagResp.Models {
+		models = append(models, item.Name)
 	}
 
 	return models, nil
