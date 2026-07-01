@@ -419,6 +419,7 @@
     margin-bottom: 8px;
     justify-content: center;
     justify-items: center;
+    grid-column: 1 / -1;
 }
 .md-ref-toc-item {
     display: inline-flex;
