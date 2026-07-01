@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 53）
+> 生成日期: 2026-07-01（更新 54）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -44,7 +44,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息复制按钮 + 清空按钮常显 + 模型/深度思考切换）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -1319,6 +1319,18 @@ await loadXxxSetting();
 | **问题** | 预设弹窗和设置页的密码输入框在隐藏状态下，输入框右侧除了自定义眼睛按钮外，WebView2 原生也显示了一个内置密码显示眼睛，导致双眼睛图标重叠 |
 | **修复** | CSS 中通过 `::-ms-reveal` / `::-ms-clear`（`display:none`）隐藏 Edge/Chromium 原生密码显示按钮；`::-webkit-credentials-auto-fill-button`（`display:none`）隐藏自动填充按钮。覆盖 3 个输入框：`#presetModalKey`、`#aiAPIKey`、`#aiTavilyApiKey`。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
 | **涉及文件** | [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+
+## 八十、新增记忆点（AI 消息右键上下文菜单）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **HTML 元素** | `index.html` 中 `#aiSessionContextMenu` 之后新增 `#aiMsgContextMenu` 元素，复用 `.context-menu` 样式。菜单项通过 JS 动态生成。详见 [index.html#L1508](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **上下文变量** | `ai-chat.js` 新增 4 个状态变量：`aiMsgContextMenu`（菜单元素）、`_contextMsgContent`（右键消息内容）、`_contextMsgRole`（右键消息角色）、`_contextMsgEl`（右键消息元素）。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **showAiMsgContextMenu()** | 根据角色动态生成菜单项：用户消息→「复制」；AI 回复→「复制」「保存为笔记」「重新生成」「追问此条回复」。菜单位置跟随鼠标坐标，自动防止溢出视口。`event.preventDefault()` 阻止浏览器默认菜单。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **closeAiMsgContextMenu()** | 移除 `active` 类、清空 innerHTML、重置上下文变量。点击菜单外部、Escape 键、点击菜单项均触发关闭。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **bindMsgContextMenu()** | 为消息气泡绑定 `contextmenu` 事件 → 调用 `showAiMsgContextMenu`。在 3 处消息创建点调用：历史会话加载、用户消息发送、流式输出完成。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **事件集成** | 在 `initAIChat()` 的全局 `click` 监听器中新增 `aiMsgContextMenu` 外部点击关闭、`Escape` 键关闭。新增 `aiMsgContextMenu` 的 `click` 事件委托处理菜单项点击（`copy`/`save`/`regen`/`followUp`），各操作逻辑与 `createMsgActions()` 中悬浮按钮完全一致。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
 ## 七十七、新增记忆点（全屏宽度适配）
 
