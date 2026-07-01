@@ -228,9 +228,14 @@
                 <div class="view-controls"></div>
             </div>
             <div class="settings-content">
-                <!-- 字体设置 -->
+                <!-- 外观 -->
                 <div class="settings-section">
-                    <h3 class="settings-section-title">字体设置</h3>
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/>
+                        </svg>
+                        <span class="ai-group-title">外观</span>
+                    </div>
                     <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">字体</label>
@@ -260,12 +265,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <!-- 主题设置 -->
-                <div class="settings-section">
-                    <h3 class="settings-section-title">主题设置</h3>
-                    <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">主题</label>
                             <div class="theme-select" id="themeControl">
@@ -316,25 +315,15 @@
                         </div>
                     </div>
                 </div>
-                <!-- 快速笔记 -->
-                <div class="settings-section">
-                    <h3 class="settings-section-title">快速笔记</h3>
-                    <div class="font-settings">
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">启动快速笔记</label>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="quickNoteToggle">
-                                <label class="toggle-track" for="quickNoteToggle">
-                                    <span class="toggle-thumb"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="quick-note-hint">启用后，启动应用时自动打开全屏编辑器，方便快速记录</div>
-                    </div>
-                </div>
+
                 <!-- 纯文本 MD 高亮 -->
                 <div class="settings-section">
-                    <h3 class="settings-section-title">编辑器选项</h3>
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        <span class="ai-group-title">编辑器</span>
+                    </div>
                     <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">启用 CM6 语法高亮</label>
@@ -346,6 +335,17 @@
                             </div>
                         </div>
                         <div class="quick-note-hint">关闭后所有笔记不再显示代码语法高亮</div>
+                        <!-- 快速笔记 -->
+                        <div class="font-setting-row">
+                            <label class="font-setting-label">启动快速笔记</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="quickNoteToggle">
+                                <label class="toggle-track" for="quickNoteToggle">
+                                    <span class="toggle-thumb"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="quick-note-hint">启用后，启动应用时自动打开全屏编辑器，方便快速记录</div>
                         <div class="font-setting-row">
                             <label class="font-setting-label">全屏打开</label>
                             <div class="toggle-switch">
@@ -472,7 +472,7 @@
                             <path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z"/>
                             <path d="M9 18h6"/><path d="M10 22h4"/>
                         </svg>
-                        <span class="ai-group-title">对话增强</span>
+                        <span class="ai-group-title">对话与搜索</span>
                     </div>
                     <!-- 深度思考 -->
                     <div class="ai-setting-item">
@@ -510,48 +510,44 @@
                             <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
                         </div>
                     </div>
+                        <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
+                            <span class="ai-setting-label">API Key</span>
+                            <div class="ai-setting-control" style="max-width:380px;">
+                                <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" />
+                                <button id="aiTavilyToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                    <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                    <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                        <line x1="1" y1="1" x2="23" y2="23"/>
+                                    </svg>
+                                </button>
+                                <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                            </div>
+                            <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于联网搜索能力</span>
+                        </div>
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">默认开启</span>
+                            <div class="ai-setting-toggle-row" id="aiSettingWebSearchLine">
+                                <span class="ai-setting-toggle-desc">发送消息时默认启用联网搜索</span>
+                                <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
+                                    <div class="ai-chat-toggle-knob"></div>
+                                </div>
+                            </div>
+                        </div>
                 </div>
 
-                <!-- AI 助手 - 联网搜索 -->
+                <!-- 标签管理 -->
                 <div class="settings-section">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
                         </svg>
-                        <span class="ai-group-title">联网搜索</span>
+                        <span class="ai-group-title">标签管理</span>
                     </div>
-                    <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
-                        <span class="ai-setting-label">API Key</span>
-                        <div class="ai-setting-control" style="max-width:380px;">
-                            <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" />
-                            <button id="aiTavilyToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
-                                <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                                <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-                                    <line x1="1" y1="1" x2="23" y2="23"/>
-                                </svg>
-                            </button>
-                            <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
-                        </div>
-                        <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于联网搜索能力</span>
-                    </div>
-                    <div class="ai-setting-item">
-                        <span class="ai-setting-label">默认开启</span>
-                        <div class="ai-setting-toggle-row" id="aiSettingWebSearchLine">
-                            <span class="ai-setting-toggle-desc">发送消息时默认启用联网搜索</span>
-                            <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
-                                <div class="ai-chat-toggle-knob"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 标签管理 -->
-                <div class="settings-section">
-                    <h3 class="settings-section-title">标签管理</h3>
                     <div class="tag-management" id="tagManagement">
                         <div class="tag-list" id="tagList">
                             <!-- 标签列表由 JS 动态渲染 -->
@@ -563,33 +559,36 @@
                         </div>
                     </div>
                 </div>
-            <!-- 笔记排序 -->
-            <div class="settings-section">
-                <h3 class="settings-section-title">笔记排序</h3>
-                <div class="page-size-control">
-                    <div class="segmented-control sort-segmented" id="sortControl">
-                        <div class="segmented-indicator" id="sortIndicator"></div>
-                        <button class="segmented-btn active" data-sort-value="updated_at">更新时间</button>
-                        <button class="segmented-btn" data-sort-value="created_at">创建时间</button>
-                        <button class="segmented-btn" data-sort-value="title">名称</button>
+                <!-- 笔记列表 -->
+                <div class="settings-section">
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                        </svg>
+                        <span class="ai-group-title">笔记列表</span>
+                    </div>
+                    <div class="page-size-control">
+                        <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">排序方式</label>
+                        <div class="segmented-control sort-segmented" id="sortControl">
+                            <div class="segmented-indicator" id="sortIndicator"></div>
+                            <button class="segmented-btn active" data-sort-value="updated_at">更新时间</button>
+                            <button class="segmented-btn" data-sort-value="created_at">创建时间</button>
+                            <button class="segmented-btn" data-sort-value="title">名称</button>
+                        </div>
+                    </div>
+                    <div class="page-size-control" style="margin-top:16px;">
+                        <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">每页条数</label>
+                        <div class="segmented-control" id="pageSizeControl">
+                            <div class="segmented-indicator" id="pageSizeIndicator"></div>
+                            <button class="segmented-btn" data-value="20">20</button>
+                            <button class="segmented-btn" data-value="40">40</button>
+                            <button class="segmented-btn" data-value="60">60</button>
+                            <button class="segmented-btn" data-value="80">80</button>
+                            <button class="segmented-btn" data-value="100">100</button>
+                        </div>
+                        <span class="page-size-label" id="pageSizeLabel">20 条 / 页</span>
                     </div>
                 </div>
-            </div>
-            <!-- 分页大小 -->
-            <div class="settings-section">
-                <h3 class="settings-section-title">分页大小</h3>
-                <div class="page-size-control">
-                    <div class="segmented-control" id="pageSizeControl">
-                        <div class="segmented-indicator" id="pageSizeIndicator"></div>
-                        <button class="segmented-btn" data-value="20">20</button>
-                        <button class="segmented-btn" data-value="40">40</button>
-                        <button class="segmented-btn" data-value="60">60</button>
-                        <button class="segmented-btn" data-value="80">80</button>
-                        <button class="segmented-btn" data-value="100">100</button>
-                    </div>
-                    <span class="page-size-label" id="pageSizeLabel">20 条 / 页</span>
-                </div>
-            </div>
         </div>
     </div>
 

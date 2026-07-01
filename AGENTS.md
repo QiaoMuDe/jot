@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 50）
+> 生成日期: 2026-07-01（更新 51）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -196,7 +196,7 @@ jot/                                    # 项目根目录
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
-| **字体设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` | 字体名称/大小 | 更新 CSS 变量 |
+| **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
 | **AI 对话** | LangChainGo 统一接口，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
@@ -1180,7 +1180,7 @@ await loadXxxSetting();
 
 | 记忆点 | 内容 |
 |--------|------|
-| **独立卡片布局** | AI 设置从单一外层卡片（`#ai-settings-section`）拆分为 3 个独立 `settings-section` 卡片：API 连接、对话增强、联网搜索。每个卡片带有 SVG 图标标题头，与其他设置项（标签管理、排序等）层级平齐。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **独立卡片布局** | AI 设置从单一外层卡片（`#ai-settings-section`）拆分为 3 个独立 `settings-section` 卡片：API 连接、对话增强、联网搜索。每个卡片带有 SVG 图标标题头，与其他设置项（标签管理、排序等）层级平齐。**后经卡片重组**：联网搜索合并到对话增强（卡片标题改为"对话与搜索"），快速笔记合并到编辑器（标题改为"编辑器"），字体设置与主题设置合并为"外观"，排序和分页合并为"笔记列表"。最终 6 卡：外观、编辑器、API 连接、对话与搜索、标签管理、笔记列表。所有卡片统一使用 `.ai-group-header` + SVG 图标 + `.ai-group-title` 风格。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
 | **设置项扁平化** | 移除 `.ai-setting-stack` 和 `.ai-setting-sub-item` 中间嵌套层。「卡片召回」拆分为两个独立设置项：卡片召回（label + toggle 开关）和卡片召回数（label + 数字输入），分别复用「深度思考」和「引用截断」的布局模式。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
 | **数据库优先加载** | 修复 `loadAISettings()` 中 4 个设置项仅从 `localStorage` 读取的问题，改为优先调用 `GetSetting()` 从后端数据库加载，回退到 localStorage，最后使用 HTML 默认值。受影响的设置项：卡片召回数、深度思考、联网搜索、卡片召回启用。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) `loadAISettings()` |
 | **数据库同步写入** | 深度思考、联网搜索、卡片召回启用 3 个开关从仅 localStorage 读写改为同时写入数据库（`SetSetting()`）+ localStorage。设置页和 AI 工具栏的 toggle 均同步。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
