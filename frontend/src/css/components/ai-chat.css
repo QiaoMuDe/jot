@@ -708,11 +708,15 @@
     align-items: center;
     padding: 0 0 6px 0;
     gap: 12px;
+    flex-wrap: wrap;
+    row-gap: 6px;
 }
 
 /* 模型选择器容器 */
 .ai-chat-model-select {
     position: relative;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 /* 联网搜索切换 */
@@ -727,6 +731,7 @@
     cursor: pointer;
     user-select: none;
     transition: all 0.15s;
+    flex-shrink: 0;
 }
 
 .ai-chat-search-toggle:hover {
@@ -955,6 +960,15 @@
     cursor: pointer;
     user-select: none;
     transition: all 0.15s;
+    max-width: 140px;
+    overflow: hidden;
+}
+
+#aiChatModelLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .ai-chat-model-trigger:hover {

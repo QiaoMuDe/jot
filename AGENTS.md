@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 51）
+> 生成日期: 2026-07-01（更新 52）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1327,4 +1327,15 @@ await loadXxxSetting();
 | **AI 聊天输入区域全屏宽度适配** | 输入工具栏和输入框在全屏时未跟随父容器铺满，因 `.ai-input-area` 设置了 `max-width: 900px; margin: 0 auto` 限制了宽度。修复：移除 `max-width` 和 `margin`，左右 `padding` 从 `20px` 增大到 `32px`（配合 `.ai-chat-content` 的 `16px padding`，全屏时边缘留白舒适）。消息列表 `.ai-chat-messages` 保留 `max-width: 900px` 居中，气泡宽度不受影响。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **MD 参考页 TOC 跨列居中 + 宽屏双列** | `.md-ref-toc`（目录区域）新增 `grid-column: 1 / -1` 始终跨所有列，水平居中不受宽窄屏影响。分割线以下的卡片保持 `auto-fill` grid，宽屏时自动溢出到多列。详见 [md-reference.css#L423](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/md-reference.css#L423) |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[md-reference.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/md-reference.css) |
+
+## 七十八、新增记忆点（AI 聊天工具栏模型名溢出修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | AI 聊天输入框上方工具栏中，模型下拉触发器 `.ai-chat-model-trigger` 无宽度限制，当模型名称过长（如 `gpt-4-turbo-preview`）时，将右侧开关按钮（深度思考/联网搜索/卡片召回）挤到下一行，工具栏垂直错乱 |
+| **修复1：模型名文本截断** | 将 `text-overflow: ellipsis` 直接加到 `<span id="aiChatModelLabel">`（文本所在元素），配合 `overflow: hidden` + `white-space: nowrap` + `min-width: 0`（允许 flex 子项收缩）。父级 trigger 设置 `max-width: 140px` + `overflow: hidden` 约束整体宽度。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **修复2：开关按钮禁止收缩** | `.ai-chat-search-toggle` 添加 `flex-shrink: 0`，确保空间不足时开关按钮不被压缩。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **修复3：工具栏折行兜底** | `.ai-chat-toolbar` 添加 `flex-wrap: wrap` + `row-gap: 6px`，极端窄窗口时自然换行。`.ai-chat-model-select` 添加 `min-width: 0` + `flex-shrink: 1` 支持收缩。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **关键经验** | `text-overflow: ellipsis` 必须和文本在同一元素上。flex 容器（`display: flex`）的 `text-overflow` 对子元素的文本无效，因为 flex 子项是块级元素而非内联文本内容 |
+| **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 
