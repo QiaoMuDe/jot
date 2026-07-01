@@ -34,6 +34,8 @@ export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Prom
 
 export function CreateNotebook(arg1:string):Promise<models.Notebook>;
 
+export function CreateProfile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<models.APIProfile>;
+
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
 export function DeleteAISession(arg1:number):Promise<void>;
@@ -43,6 +45,8 @@ export function DeleteNote(arg1:number):Promise<void>;
 export function DeleteNotebook(arg1:number):Promise<void>;
 
 export function DeleteNotebookWithNotes(arg1:number):Promise<void>;
+
+export function DeleteProfile(arg1:number):Promise<void>;
 
 export function DeleteTag(arg1:number):Promise<void>;
 
@@ -89,6 +93,8 @@ export function GetNotes(arg1:number,arg2:number,arg3:string,arg4:number):Promis
 export function GetNotesByTag(arg1:number,arg2:number,arg3:number,arg4:string):Promise<services.PaginatedResult>;
 
 export function GetPageSize():Promise<number>;
+
+export function GetProfiles():Promise<Array<models.APIProfile>>;
 
 export function GetSetting(arg1:string):Promise<string>;
 
@@ -152,6 +158,8 @@ export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
 export function SetSortOrder(arg1:string):Promise<void>;
 
+export function SwitchProfile(arg1:number):Promise<void>;
+
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
@@ -161,6 +169,8 @@ export function TogglePinNote(arg1:number):Promise<models.Note>;
 export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Promise<models.Note>;
 
 export function UpdateNoteFileExt(arg1:number,arg2:string):Promise<models.Note>;
+
+export function UpdateProfile(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function UpdateSessionContextTokens(arg1:number,arg2:number):Promise<void>;
 

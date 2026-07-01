@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 46）
+> 生成日期: 2026-07-01（更新 47）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1282,4 +1282,22 @@ await loadXxxSetting();
 | **clearSettingModelSearch 适配 innerHTML** | 使用高亮后 item 可能被 `innerHTML` 修改过内容，清除搜索时需要从 `dataset.modelValue` 恢复 `textContent`，不再依赖 `dispatchEvent(new Event('input'))` 触发 handler。详见 [main.js#L1868](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1868) |
 | **涉及 CSS** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) `.ai-model-search-wrap` / `.ai-model-search` / `.ai-search-highlight`（复用） |
 | **涉及 JS** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+## 七十四、新增记忆点（API 配置预设 — 多 API 配置管理）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **新增数据表 api_profiles** | `APIProfile` 结构体（ID/Name/Provider/BaseURL/APIKey/IsDefault/IsActive/CreatedAt），GORM AutoMigrate 自动建表。详见 [api_profile.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/api_profile.go) |
+| **后端 Service 层** | `ProfileService` 提供 5 个方法：`ListProfiles()`、`CreateProfile()`、`UpdateProfile()`、`DeleteProfile()`（默认配置不可删除）、`SwitchProfile(id)`（写入 settings + 标记激活）。新增 `SetActive(id)`（仅改标记不碰 model）。详见 [profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go) |
+| **后端启动迁移** | 启动时检测 `api_profiles` 表有无记录且 settings 表有 `ai_base_url` 配置，零配置时自动从旧 settings 创建"默认配置"（`IsDefault: true`）并激活。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L60-L98) |
+| **SaveAIConfig 兜底** | 保存设置时检测无任何预设配置，自动创建"默认配置"并激活，确保首次配置的用户也能开箱即用。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L609-L619) |
+| **Wails 绑定** | `app.go` 新增 5 个绑定：`GetProfiles`、`CreateProfile`、`UpdateProfile`、`DeleteProfile`、`SwitchProfile`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L537-L560) |
+| **前端预设下拉** | 设置页 API 连接区顶部新增预设选择行：`<select>` 风格下拉（`.preset-selector`）+「新增」「管理」按钮。切换时调用 `SwitchProfile(id)` → 自动填充 URL/Key/服务商 → 重置模型下拉。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `switchProfile()` / `loadProfiles()` |
+| **前端预设管理** | 点击「管理」展开折叠面板 `#presetMgrBody`，列表展示各预设（服务商标签 + 名称 + URL），每行有编辑/删除按钮。「默认配置」永久不可删除（`$p.is_default` 隐藏删除按钮 + 后端保护）。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `renderPresetMgrList()` |
+| **新增/编辑弹窗** | 通过 `#presetModal` 弹窗新增或编辑预设。表单含：名称、服务商下拉（OpenAI/Ollama）、API URL、API Key（密文输入，集成眼睛切换）。编辑时自动回填。打开编辑时自动回填。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `savePresetModal()` / `openPresetEditModal()` |
+| **切换预设联动** | 切换预设后：后端清空 `ai_model` → setting 页下拉重置为 "-- 请先获取模型列表" → AI 聊天标签重置为 "--" → 模型列表缓存清空。通过 `profile-switched` 自定义事件同步到 AI 聊天视图。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **`is_active` 字段** | 数据库 `is_active` 标记当前激活的预设，切换时先清除所有再设当前为 true。下拉菜单根据 `is_active` 判定选中项，不依赖 URL/Key 值匹配（解决多预设同 URL+Key 时的选中问题）。详见 [profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go) `SwitchProfile()` |
+| **No 双向同步** | 用户手动修改设置页 URL/Key 保存时不同步回当前预设。编辑预设不自动写入当前设置。仅切换预设时单向写入 settings，避免用户临时测试被覆盖 |
+| **UI 细节** | 预设下拉、管理列表、弹窗服务商标签均有 `margin-right` 间隙；预设管理列表底部有 16px 间距不挤占后续配置；删除用 `showConfirmDialog()` 自定义弹窗（非 `confirm()`）；新增预设不自动切换；无模型时设置页模型下拉禁用并显示 "-- 请先获取模型列表"；AI 聊天无模型时点击自动获取。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [api_profile.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/api_profile.go)（新建）、[profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go)（新建）、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 

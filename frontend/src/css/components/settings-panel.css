@@ -643,3 +643,143 @@
 }
 
 /* ——— End AI Settings ——— */
+
+/* ── 通用 button 变体（用于设置页预设管理） ── */
+.btn-secondary {
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.btn-danger {
+  background: var(--error, #ef4444);
+  color: #fff;
+  border: 1px solid transparent;
+}
+.btn-danger:hover {
+  filter: brightness(1.15);
+}
+
+/* ── API 配置预设 ── */
+.preset-select-row {
+    margin-bottom: 16px;
+}
+
+.preset-select-row .ai-setting-control {
+    gap: 6px;
+}
+
+.preset-select-row #presetSelect {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 预设管理列表 */
+.preset-mgr-list {
+    margin-bottom: 16px;
+}
+
+/* 预设弹窗 */
+.preset-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.preset-modal {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    width: 420px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.preset-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.preset-modal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.preset-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.preset-modal-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.preset-modal-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.preset-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.preset-modal-field label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.preset-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+}
+
+/* 预设下拉项前缀标识 */
+.preset-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preset-provider-badge {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 500;
+    line-height: 1.5;
+    flex-shrink: 0;
+}

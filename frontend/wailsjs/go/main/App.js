@@ -62,6 +62,10 @@ export function CreateNotebook(arg1) {
   return window['go']['main']['App']['CreateNotebook'](arg1);
 }
 
+export function CreateProfile(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CreateProfile'](arg1, arg2, arg3, arg4);
+}
+
 export function CreateTag(arg1, arg2) {
   return window['go']['main']['App']['CreateTag'](arg1, arg2);
 }
@@ -80,6 +84,10 @@ export function DeleteNotebook(arg1) {
 
 export function DeleteNotebookWithNotes(arg1) {
   return window['go']['main']['App']['DeleteNotebookWithNotes'](arg1);
+}
+
+export function DeleteProfile(arg1) {
+  return window['go']['main']['App']['DeleteProfile'](arg1);
 }
 
 export function DeleteTag(arg1) {
@@ -172,6 +180,10 @@ export function GetNotesByTag(arg1, arg2, arg3, arg4) {
 
 export function GetPageSize() {
   return window['go']['main']['App']['GetPageSize']();
+}
+
+export function GetProfiles() {
+  return window['go']['main']['App']['GetProfiles']();
 }
 
 export function GetSetting(arg1) {
@@ -298,6 +310,10 @@ export function SetSortOrder(arg1) {
   return window['go']['main']['App']['SetSortOrder'](arg1);
 }
 
+export function SwitchProfile(arg1) {
+  return window['go']['main']['App']['SwitchProfile'](arg1);
+}
+
 export function TestAIBaseURL(arg1, arg2) {
   return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
 }
@@ -316,6 +332,10 @@ export function UpdateNote(arg1, arg2, arg3, arg4) {
 
 export function UpdateNoteFileExt(arg1, arg2) {
   return window['go']['main']['App']['UpdateNoteFileExt'](arg1, arg2);
+}
+
+export function UpdateProfile(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['UpdateProfile'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function UpdateSessionContextTokens(arg1, arg2) {

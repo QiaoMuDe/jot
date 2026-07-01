@@ -1743,6 +1743,9 @@ async function loadAISettings() {
             refMaxChars.value = val;
         } catch (_) { /* 使用 HTML 默认值 1000 */ }
     }
+
+    // 加载预设列表
+    await loadProfiles();
 }
 
 // ── 全局 AI 辅助函数 ──
@@ -1788,7 +1791,8 @@ async function initAISettings() {
     // 点击触发按钮切换下拉菜单
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (dropdown.children.length === 0) return;
+        const hasItems = dropdown.querySelectorAll('.theme-select-item').length > 0;
+        if (!hasItems) return;
         const wasOpen = dropdown.classList.contains('open');
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
@@ -2022,6 +2026,8 @@ async function initAISettings() {
         try {
             await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model, provider, tavily_api_key: document.getElementById('aiTavilyApiKey')?.value?.trim() || '' });
             nm.show('AI 配置已保存', 'success');
+            // 刷新预设下拉（可能自动创建了默认配置）
+            loadProfiles();
         } catch (e) {
             nm.show('保存配置失败: ' + e, 'error');
         }
@@ -2215,6 +2221,351 @@ async function initAISettings() {
                 nm.show('保存失败: ' + e, 'error');
             }
         });
+    }
+
+    // ── 预设下拉菜单事件 ──
+    const presetTrigger = document.getElementById('presetTrigger');
+    const presetDropdown = document.getElementById('presetDropdown');
+    if (presetTrigger && presetDropdown) {
+        presetTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            presetTrigger.classList.toggle('open');
+            presetDropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', () => {
+            presetDropdown.classList.remove('open');
+            presetTrigger.classList.remove('open');
+        });
+    }
+
+    // ── 新增/管理按钮事件 ──
+    document.getElementById('presetAddBtn')?.addEventListener('click', openAddProfileModal);
+    document.getElementById('presetMgrBtn')?.addEventListener('click', () => {
+        if (presetMgrExpanded) {
+            closePresetMgrList();
+        } else {
+            renderPresetMgrList();
+        }
+    });
+
+    // ── 预设弹窗事件 ──
+    document.getElementById('presetModalClose')?.addEventListener('click', closePresetModal);
+    document.getElementById('presetModalCancel')?.addEventListener('click', closePresetModal);
+    document.getElementById('presetModalSave')?.addEventListener('click', savePresetModal);
+    // 点击遮罩关闭弹窗
+    document.getElementById('presetModalOverlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closePresetModal();
+    });
+    // 弹窗内服务商下拉切换
+    document.getElementById('presetModalProviderTrigger')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dd = document.getElementById('presetModalProviderDropdown');
+        dd?.classList.toggle('open');
+    });
+    document.querySelectorAll('#presetModalProviderDropdown .theme-select-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('#presetModalProviderDropdown .theme-select-item').forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById('presetModalProviderLabel').textContent = item.textContent.trim();
+            document.getElementById('presetModalProviderDropdown')?.classList.remove('open');
+        });
+    });
+    // 点击弹窗遮罩关闭下拉
+    document.getElementById('presetModalOverlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            document.getElementById('presetModalProviderDropdown')?.classList.remove('open');
+        }
+    });
+    // 弹窗内 API Key 显示/隐藏切换
+    document.getElementById('presetModalKeyToggle')?.addEventListener('click', () => {
+        const input = document.getElementById('presetModalKey');
+        const eye = document.querySelector('#presetModalKeyToggle .toggle-eye');
+        const eyeOff = document.querySelector('#presetModalKeyToggle .toggle-eye-off');
+        if (input && eye && eyeOff) {
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.style.display = 'none';
+                eyeOff.style.display = '';
+            } else {
+                input.type = 'password';
+                eye.style.display = '';
+                eyeOff.style.display = 'none';
+            }
+        }
+    });
+}
+
+// ── API 配置预设管理 ──
+
+// 当前编辑的预设 ID（编辑模式用）
+let editingProfileId = null;
+
+// 管理列表是否已展开
+let presetMgrExpanded = false;
+let presetMgrContainer = null;
+
+// 加载预设列表到下拉
+async function loadProfiles() {
+    try {
+        const profiles = await window.go.main.App.GetProfiles();
+        const dropdown = document.getElementById('presetDropdown');
+        const label = document.getElementById('presetLabel');
+        if (!dropdown) return;
+        dropdown.innerHTML = '';
+        if (profiles.length === 0) {
+            label.textContent = '无预设配置';
+            return;
+        }
+        // 判断当前使用的配置匹配哪个预设
+        let activeId = null;
+        for (let p of profiles) {
+            const item = document.createElement('div');
+            item.className = 'theme-select-item';
+            item.dataset.profileId = p.id;
+            // 展示名称 + 服务商标识
+            const badge = document.createElement('span');
+            badge.className = 'preset-provider-badge';
+            badge.style.marginRight = '6px';
+            badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = p.name;
+            item.appendChild(badge);
+            item.appendChild(nameSpan);
+            if (p.is_active) {
+                activeId = p.id;
+                item.classList.add('active');
+            }
+            // 点击切换
+            item.addEventListener('click', () => switchProfile(p.id));
+            dropdown.appendChild(item);
+        }
+        label.textContent = activeId
+            ? (profiles.find(p => p.id === activeId)?.name || '选择预设')
+            : '选择预设';
+    } catch (e) {
+        console.warn('加载预设失败:', e);
+    }
+}
+
+// 切换预设
+async function switchProfile(id, silent) {
+    try {
+        await window.go.main.App.SwitchProfile(id);
+        // 刷新当前配置的输入框
+        const cfg = await window.go.main.App.GetAIConfig();
+        els.aiBaseURL.value = cfg.base_url || '';
+        els.aiAPIKey.value = cfg.api_key || '';
+        // 更新服务商下拉
+        if (els.aiProviderDropdown) {
+            const items = els.aiProviderDropdown.querySelectorAll('.theme-select-item');
+            items.forEach(item => item.classList.toggle('active', item.dataset.providerValue === cfg.provider));
+        }
+        if (els.aiProviderLabel) {
+            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
+            els.aiProviderLabel.textContent = labels[cfg.provider] || 'OpenAI 兼容';
+        }
+        // 重置模型下拉
+        els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
+        els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
+        // 同步清除 AI 聊天工具栏的模型
+        const chatLabel = document.getElementById('aiChatModelLabel');
+        if (chatLabel) chatLabel.textContent = '--';
+        // 通知 ai-chat 模块重置模型缓存
+        document.dispatchEvent(new CustomEvent('profile-switched'));
+        // 刷新预设下拉的选中态
+        await loadProfiles();
+        if (!silent) {
+            nm.show('已切换到配置预设', 'success');
+        }
+    } catch (e) {
+        nm.show('切换预设失败: ' + e, 'error');
+    }
+}
+
+// 打开新增预设弹窗
+function openAddProfileModal() {
+    editingProfileId = null;
+    document.getElementById('presetModalTitle').textContent = '新增配置';
+    document.getElementById('presetModalName').value = '';
+    document.getElementById('presetModalURL').value = els.aiBaseURL.value || '';
+    document.getElementById('presetModalKey').value = els.aiAPIKey.value || '';
+    // 重置服务商为当前选中的
+    const currentProvider = getActiveProvider();
+    const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
+    providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === currentProvider));
+    document.getElementById('presetModalProviderLabel').textContent =
+        currentProvider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
+    document.getElementById('presetModalOverlay').style.display = 'flex';
+    document.getElementById('presetModalName').focus();
+}
+
+// 打开编辑预设弹窗
+function openEditProfileModal(id, name, provider, baseURL, apiKey) {
+    editingProfileId = id;
+    document.getElementById('presetModalTitle').textContent = '编辑配置';
+    document.getElementById('presetModalName').value = name || '';
+    document.getElementById('presetModalURL').value = baseURL || '';
+    document.getElementById('presetModalKey').value = apiKey || '';
+    // 设置服务商
+    const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
+    providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === provider));
+    document.getElementById('presetModalProviderLabel').textContent =
+        provider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
+    document.getElementById('presetModalOverlay').style.display = 'flex';
+    document.getElementById('presetModalName').focus();
+}
+
+// 关闭预设弹窗
+function closePresetModal() {
+    document.getElementById('presetModalOverlay').style.display = 'none';
+    editingProfileId = null;
+}
+
+// 保存预设（新增或编辑）
+async function savePresetModal() {
+    const name = document.getElementById('presetModalName').value.trim();
+    const providerEl = document.querySelector('#presetModalProviderDropdown .theme-select-item.active');
+    const provider = providerEl ? providerEl.dataset.presetProvider : 'openai';
+    const baseURL = document.getElementById('presetModalURL').value.trim();
+    const apiKey = document.getElementById('presetModalKey').value.trim();
+    if (!name) { nm.show('请输入名称', 'error'); return; }
+    if (!baseURL) { nm.show('请输入 API 地址', 'error'); return; }
+    try {
+        if (editingProfileId) {
+            await window.go.main.App.UpdateProfile(editingProfileId, name, provider, baseURL, apiKey);
+            nm.show('配置已更新', 'success');
+        } else {
+            const profile = await window.go.main.App.CreateProfile(name, provider, baseURL, apiKey);
+            nm.show('配置已新增', 'success');
+        }
+        closePresetModal();
+        await loadProfiles();
+        // 如果管理列表展开，同步刷新
+        if (presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
+            renderPresetMgrList();
+        }
+    } catch (e) {
+        nm.show('保存失败: ' + e, 'error');
+    }
+}
+
+// 删除预设
+async function deleteProfile(id, name) {
+    const confirmed = await showConfirmDialog(`确定删除配置「${name}」吗？`);
+    if (!confirmed) return;
+    try {
+        await window.go.main.App.DeleteProfile(id);
+        nm.show('配置已删除', 'success');
+        await loadProfiles();
+        // 如果管理列表已展开，刷新它
+        if (presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
+            renderPresetMgrList();
+        }
+    } catch (e) {
+        nm.show('删除失败: ' + e, 'error');
+    }
+}
+
+// 渲染管理列表（展开在设置页内）
+function renderPresetMgrList() {
+    if (!presetMgrContainer) {
+        presetMgrContainer = document.createElement('div');
+        presetMgrContainer.className = 'preset-mgr-list';
+        presetMgrContainer.style.cssText = 'margin-top:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--input-bg);';
+        // 插入到管理按钮所在行的下方
+        const presetRow = document.querySelector('.preset-select-row');
+        if (presetRow) {
+            presetRow.after(presetMgrContainer);
+        } else {
+            const settingsSection = document.querySelector('.ai-setting-item.preset-select-row');
+            if (settingsSection) settingsSection.after(presetMgrContainer);
+        }
+    }
+    presetMgrContainer.innerHTML = '';
+    presetMgrExpanded = true;
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:0.85rem;font-weight:600;color:var(--text-primary);';
+    title.textContent = '配置预设管理';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-sm btn-secondary';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', closePresetMgrList);
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    presetMgrContainer.appendChild(header);
+
+    // 加载并显示预设列表
+    window.go.main.App.GetProfiles().then(profiles => {
+        if (profiles.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'text-align:center;padding:12px;color:var(--text-muted);font-size:0.8rem;';
+            empty.textContent = '暂无预设配置';
+            presetMgrContainer.appendChild(empty);
+            return;
+        }
+        profiles.forEach(p => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--radius-sm);gap:8px;';
+            row.style.borderBottom = '1px solid var(--border)';
+            // 信息区
+            const info = document.createElement('div');
+            info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
+            const nameRow = document.createElement('div');
+            nameRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+            const badge = document.createElement('span');
+            badge.className = 'preset-provider-badge';
+            badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
+            const nameSpan = document.createElement('strong');
+            nameSpan.style.cssText = 'font-size:0.85rem;color:var(--text-primary);';
+            nameSpan.textContent = p.name;
+            nameRow.appendChild(badge);
+            nameRow.appendChild(nameSpan);
+            const detail = document.createElement('div');
+            detail.style.cssText = 'font-size:0.75rem;color:var(--text-muted);';
+            detail.textContent = p.base_url;
+            info.appendChild(nameRow);
+            info.appendChild(detail);
+            // 操作区
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-sm btn-save';
+            editBtn.textContent = '编辑';
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openEditProfileModal(p.id, p.name, p.provider, p.base_url, p.api_key);
+            });
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn-sm btn-danger';
+            delBtn.textContent = '删除';
+            if (p.is_default) {
+                delBtn.style.display = 'none';
+            } else {
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteProfile(p.id, p.name);
+                });
+            }
+            actions.appendChild(editBtn);
+            actions.appendChild(delBtn);
+            row.appendChild(info);
+            row.appendChild(actions);
+            presetMgrContainer.appendChild(row);
+        });
+    }).catch(e => {
+        nm.show('加载失败: ' + e, 'error');
+    });
+}
+
+// 关闭管理列表
+function closePresetMgrList() {
+    presetMgrExpanded = false;
+    if (presetMgrContainer && presetMgrContainer.parentNode) {
+        presetMgrContainer.parentNode.removeChild(presetMgrContainer);
+        presetMgrContainer = null;
     }
 }
 

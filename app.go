@@ -31,6 +31,7 @@ type App struct {
 	settingService  *services.SettingService
 	notebookService *services.NotebookService
 	aiService       *services.AIService
+	profileService  *services.ProfileService
 	aiStreamCancel  context.CancelFunc
 }
 
@@ -52,6 +53,7 @@ func NewApp() *App {
 		settingService:  settingService,
 		notebookService: services.NewNotebookService(db),
 		aiService:       services.NewAIService(db),
+		profileService:  services.NewProfileService(db),
 	}
 }
 
@@ -62,6 +64,48 @@ func (a *App) startup(ctx context.Context) {
 	// 确保默认笔记本存在（首次启动自动创建）
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		fmt.Printf("初始化默认笔记本失败: %v\n", err)
+	}
+	// 迁移：已有配置但无预设时，自动创建"默认配置"
+	profiles := a.profileService.ListProfiles()
+	if len(profiles) == 0 {
+		baseURL := a.settingService.Get("ai_base_url")
+		if baseURL != "" {
+			provider := a.settingService.Get("ai_provider")
+			apiKey := a.settingService.Get("ai_api_key")
+			if provider == "" {
+				provider = "openai"
+			}
+			profile := a.profileService.CreateProfile("默认配置", provider, baseURL, apiKey, true)
+			// 标记为激活
+			if err := a.profileService.SwitchProfile(profile.ID); err != nil {
+				fmt.Printf("迁移警告：激活默认配置失败: %v\n", err)
+			}
+			fmt.Println("迁移完成：已从现有配置创建'默认配置'预设")
+		}
+	} else {
+		// 旧数据迁移：如有预设但无一激活，值匹配补标
+		hasActive := false
+		for _, p := range profiles {
+			if p.IsActive {
+				hasActive = true
+				break
+			}
+		}
+		if !hasActive {
+			baseURL := a.settingService.Get("ai_base_url")
+			apiKey := a.settingService.Get("ai_api_key")
+			if baseURL != "" {
+				for _, p := range profiles {
+					if p.BaseURL == baseURL && p.APIKey == apiKey {
+						if err := a.profileService.SwitchProfile(p.ID); err != nil {
+							fmt.Printf("迁移警告：标记激活预设失败: %v\n", err)
+						}
+						fmt.Println("迁移完成：已标记匹配预设为激活")
+						break
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -399,6 +443,7 @@ func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
 	a.aiService = services.NewAIService(newDB)
+	a.profileService = services.NewProfileService(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -565,9 +610,47 @@ func (a *App) GetAIConfig() services.AIConfig {
 	return a.aiService.GetConfig()
 }
 
-// SaveAIConfig 保存 AI 服务配置
+// SaveAIConfig 保存 AI 服务配置，无预设时自动创建默认配置
 func (a *App) SaveAIConfig(cfg services.AIConfig) error {
-	return a.aiService.SaveConfig(cfg)
+	if err := a.aiService.SaveConfig(cfg); err != nil {
+		return err
+	}
+	// 无预设时自动创建"默认配置"
+	profiles := a.profileService.ListProfiles()
+	if len(profiles) == 0 {
+		profile := a.profileService.CreateProfile("默认配置", cfg.Provider, cfg.BaseURL, cfg.APIKey, true)
+		if err := a.profileService.SetActive(profile.ID); err != nil {
+			fmt.Printf("警告：激活默认配置失败: %v\n", err)
+		}
+	}
+	return nil
+}
+
+// ==================== API 配置预设绑定 ====================
+
+// GetProfiles 获取所有 API 配置预设
+func (a *App) GetProfiles() []models.APIProfile {
+	return a.profileService.ListProfiles()
+}
+
+// CreateProfile 创建 API 配置预设
+func (a *App) CreateProfile(name, provider, baseURL, apiKey string) models.APIProfile {
+	return a.profileService.CreateProfile(name, provider, baseURL, apiKey)
+}
+
+// UpdateProfile 更新 API 配置预设
+func (a *App) UpdateProfile(id uint, name, provider, baseURL, apiKey string) error {
+	return a.profileService.UpdateProfile(id, name, provider, baseURL, apiKey)
+}
+
+// DeleteProfile 删除 API 配置预设
+func (a *App) DeleteProfile(id uint) error {
+	return a.profileService.DeleteProfile(id)
+}
+
+// SwitchProfile 切换 API 配置预设
+func (a *App) SwitchProfile(id uint) error {
+	return a.profileService.SwitchProfile(id)
 }
 
 // TestAIBaseURL 测试 AI Base URL 连通性
@@ -1092,6 +1175,7 @@ func (a *App) RestoreFromDir() (*services.ImportResult, error) {
 	a.tagService = services.NewTagService(newDB)
 	a.settingService = services.NewSettingService(newDB)
 	a.aiService = services.NewAIService(newDB)
+	a.profileService = services.NewProfileService(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -1260,5 +1344,6 @@ func (a *App) reconnectDB(dbPath string) error {
 	a.tagService = services.NewTagService(db)
 	a.settingService = services.NewSettingService(db)
 	a.aiService = services.NewAIService(db)
+	a.profileService = services.NewProfileService(db)
 	return nil
 }

@@ -879,6 +879,14 @@ function bindEvents() {
                 if (e.key === 'Enter') e.preventDefault();
             });
         }
+
+        // 监听预设切换事件，重置模型缓存
+        document.addEventListener('profile-switched', () => {
+            modelList = [];
+            if (modelLabel) modelLabel.textContent = '--';
+            // 清空已有列表项
+            modelDropdown?.querySelectorAll('.theme-select-item').forEach(el => el.remove());
+        });
     }
 
     function clearModelSearch() {

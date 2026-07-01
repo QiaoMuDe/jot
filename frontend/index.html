@@ -388,6 +388,21 @@
                             </svg>
                             <span class="ai-group-title">API 连接</span>
                         </div>
+                        <!-- 配置预设 -->
+                        <div class="ai-setting-item preset-select-row">
+                            <span class="ai-setting-label">配置预设</span>
+                            <div class="ai-setting-control">
+                                <div class="theme-select" id="presetSelect" style="max-width:none;flex:1;">
+                                    <div class="theme-select-trigger" id="presetTrigger">
+                                        <span id="presetLabel">无预设配置</span>
+                                        <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </div>
+                                    <div class="theme-select-dropdown" id="presetDropdown"></div>
+                                </div>
+                                <button id="presetAddBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">+ 新增</button>
+                                <button id="presetMgrBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">管理</button>
+                            </div>
+                        </div>
                         <!-- Base URL -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">API 地址</span>
@@ -1607,7 +1622,60 @@ console.log(greet("Jot"));
                 </div>
             </div>
         </div>
-</div>
+<!-- API 配置预设弹窗 -->
+        <div class="preset-modal-overlay" id="presetModalOverlay" style="display:none;">
+            <div class="preset-modal">
+                <div class="preset-modal-header">
+                    <span class="preset-modal-title" id="presetModalTitle">新增配置</span>
+                    <button class="preset-modal-close" id="presetModalClose">&times;</button>
+                </div>
+                <div class="preset-modal-body">
+                    <div class="preset-modal-field">
+                        <label>名称</label>
+                        <input type="text" id="presetModalName" class="settings-input" placeholder="如：DeepSeek、Ollama 本地" />
+                    </div>
+                    <div class="preset-modal-field">
+                        <label>服务商</label>
+                        <div class="theme-select" id="presetModalProvider" style="max-width:none;">
+                            <div class="theme-select-trigger" id="presetModalProviderTrigger">
+                                <span id="presetModalProviderLabel">OpenAI 兼容</span>
+                                <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                            <div class="theme-select-dropdown" id="presetModalProviderDropdown">
+                                <div class="theme-select-item active" data-preset-provider="openai">OpenAI 兼容</div>
+                                <div class="theme-select-item" data-preset-provider="ollama">Ollama</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="preset-modal-field">
+                        <label>API 地址</label>
+                        <input type="text" id="presetModalURL" class="settings-input" placeholder="https://api.openai.com/v1" />
+                    </div>
+                    <div class="preset-modal-field">
+                        <label>API Key</label>
+                        <div class="ai-setting-control">
+                            <input type="password" id="presetModalKey" class="settings-input" placeholder="sk-..." autocomplete="off" />
+                            <button id="presetModalKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="preset-modal-footer">
+                    <button class="btn btn-sm btn-secondary" id="presetModalCancel">取消</button>
+                    <button class="btn btn-sm btn-save" id="presetModalSave">保存</button>
+                </div>
+            </div>
+        </div>
+        </div>
 <script src="./src/main.js" type="module"></script>
 </body>
 </html>
