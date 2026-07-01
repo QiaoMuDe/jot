@@ -86,8 +86,8 @@ export const jotTheme = EditorView.theme({
         borderLeftColor: 'var(--accent)',
         borderLeftWidth: '2px',
     },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-        backgroundColor: 'var(--accent-light) !important',
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-selectionMatch': {
+        backgroundColor: 'var(--selection-bg, var(--accent-light)) !important',
     },
     '.cm-activeLine': {
         backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
@@ -144,7 +144,7 @@ const mdHighlightStyle = HighlightStyle.define([
     { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
     { tag: tags.comment, color: 'var(--text-muted)', fontStyle: 'italic' },
     { tag: tags.list, color: 'var(--accent)', fontWeight: '500' },
-    { tag: tags.contentSeparator, borderTop: '1px solid var(--border)', display: 'block', margin: '0.5em 0' },
+    { tag: tags.contentSeparator, color: 'var(--text-muted)' },
     { tag: tags.escape, color: 'var(--text-muted)', fontWeight: '600' },
     { tag: tags.character, color: 'var(--text-muted)' },
     { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },

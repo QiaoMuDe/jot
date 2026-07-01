@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 43）
+> 生成日期: 2026-07-01（更新 45）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1254,4 +1254,20 @@ await loadXxxSetting();
 |--------|------|
 | **笔记本删除通知名称为空** | 通知信息中笔记本名称本应从 DOM 获取，但 `loadNotebooks()` 重新渲染后已无对应元素。修复：在 `loadNotebooks()` 之前从 DOM 捕获名称到变量。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **删除笔记本确认弹窗笔记数错误** | `showDeleteNotebookDialog` 使用 `state.notes.length`（当前激活笔记本的笔记数）而非被删除笔记本的真实笔记数。修复：从侧栏 `.notebook-badge` DOM 元素读取真实笔记数。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+|
+|## 七十一、新增记忆点（CM6 编辑器 `---` 分割线渲染修复）
+||
+|| 记忆点 | 内容 |
+||--------|------|
+||**CM6 `---` 渲染成分割线导致错行** | `@codemirror/lang-markdown` 的 Lezer 解析器将 `---` 解析为 thematic break（`tags.contentSeparator`）。`mdHighlightStyle` 中为 `contentSeparator` 设置了 `display: block`、`borderTop: 1px solid var(--border)`、`margin: 0.5em 0`（[cm6-syntax-highlight.js#L147](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js#L147)），把 `---` 渲染成实体分割线，导致该行垂直空间远超一行文本，进而引发 CM6 行号与内容行对应关系错乱。行号点击跳行、跳转到底部错位等问题的根因均在此——独立于之前分析的行高不匹配问题。修复方式：移除块级盒子模型样式，改为仅高亮（`color: 'var(--text-muted)'`），编辑器内 `---` 保持与普通文本一致的行高。**原则：编辑器内不应渲染影响布局的视觉元素，分割线等应是预览模式的职责**。详见 [cm6-syntax-highlight.js#L147](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js#L147) |
+||
+|## 七十二、新增记忆点（CM6 选中背景色可见性修复）
+||
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | CM6 选中文字背景色使用 `--accent-light` 变量，在多个主题中与 `--card-bg` 过于接近，选中文字几乎看不出变化（tokyo-night/catppuccin-latte/ayu-mirage/dracula 等 7 个主题尤其严重） |
+| **方案** | 新增 `--selection-bg` CSS 变量，利用各主题已有的 `--accent-rgb` 用 `rgba()` 生成半透明强调色覆盖层。亮色主题（白底）使用 30% 透明度，暗色主题使用 45% 透明度，确保选中背景清晰可见。详见 [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css) |
+| **CM6 引用** | `jotTheme` 中 `.cm-selectionBackground` 从 `var(--accent-light)` 改为 `var(--selection-bg, var(--accent-light))`，回退兼容。同时新增 `.cm-selectionMatch` 共享同一规则。详见 [cm6-syntax-highlight.js#L89](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js#L89) |
+| **透明色调色逻辑** | 亮色主题（:root/default/light/nord/catppuccin-latte/gruvbox-light）→ `rgba(var(--accent-rgb), 0.30)`；暗色主题（dark/monokai-pro/tokyo-night/catppuccin-mocha/gruvbox-dark/ayu-mirage/dracula）→ `rgba(var(--accent-rgb), 0.45)`。利用 `--accent-rgb` 自动适配各主题强调色，无需逐个调色。详见 [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css) |
+| **涉及文件** | [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css)、[cm6-syntax-highlight.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js) |
 
