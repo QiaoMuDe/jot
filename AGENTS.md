@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 47）
+> 生成日期: 2026-07-01（更新 48）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1300,4 +1300,15 @@ await loadXxxSetting();
 | **No 双向同步** | 用户手动修改设置页 URL/Key 保存时不同步回当前预设。编辑预设不自动写入当前设置。仅切换预设时单向写入 settings，避免用户临时测试被覆盖 |
 | **UI 细节** | 预设下拉、管理列表、弹窗服务商标签均有 `margin-right` 间隙；预设管理列表底部有 16px 间距不挤占后续配置；删除用 `showConfirmDialog()` 自定义弹窗（非 `confirm()`）；新增预设不自动切换；无模型时设置页模型下拉禁用并显示 "-- 请先获取模型列表"；AI 聊天无模型时点击自动获取。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **涉及文件** | [api_profile.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/api_profile.go)（新建）、[profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go)（新建）、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 七十五、新增记忆点（设置页按钮 Loading 动画）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **按钮加载态辅助函数** | `main.js` 新增 `setBtnLoading(btn, loading, label)`：加载时保存原文字、加 `.btn-loading` 类、`disabled`、注入 SVG 双层圆环旋转图标（轨迹环 opacity=0.3 + 指针环 opacity=0.85，0.8s 匀速转）；完成后恢复文字和状态。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `setBtnLoading()` |
+| **CSS 按钮加载样式** | 新增 `.btn-loading`：`inline-flex` + `gap:6px` + `pointer-events:none` + `btnPulse` 脉冲呼吸动画（1.2s 循环 `brightness(1)→1.2→1`）。`.btn-spinner`：14px SVG 旋转动画 `btnSpin`（0.8s linear infinite）。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **三处按钮应用** | "测试 URL" → `测试中…`、"获取列表" → `获取中…"、"Tavily 测试连接" → `测试中…"（原手动设 `disabled` + `textContent` 已替换为统一 `setBtnLoading`）。均使用 `finally` 确保成功/失败都恢复。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 三个 click handler |
+| **预设弹窗 Key 默认隐藏** | `openAddProfileModal()` 和 `openEditProfileModal()` 每次打开时强制重置 API Key 输入框为 `type="password"` + 睁眼图标显示、闭眼图标隐藏，不记忆上次切换状态。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **golangci-lint errcheck 修复** | `app.go` 中 3 处未检查的错误返回值（`SwitchProfile` ×2、`SetActive` ×1）添加 `if err :=` 检查和 `fmt.Printf` 日志输出。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L80-L82) |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
 

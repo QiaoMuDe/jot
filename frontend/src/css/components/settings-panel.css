@@ -39,6 +39,33 @@
   filter: brightness(1.1);
 }
 
+/* 按钮加载状态 */
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  animation: btnPulse 1.2s ease-in-out infinite;
+}
+
+.btn-loading .btn-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  animation: btnSpin 0.8s linear infinite;
+}
+
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes btnPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
 .btn-link {
   background: transparent;
   color: var(--accent);

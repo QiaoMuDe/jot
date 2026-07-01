@@ -1934,6 +1934,31 @@ async function initAISettings() {
         });
     }
 
+    // ── 按钮加载状态 ──
+    function setBtnLoading(btn, loading, label) {
+        if (loading) {
+            btn.dataset.origText = btn.textContent;
+            btn.classList.add('btn-loading');
+            btn.disabled = true;
+            // 注入 spinner SVG
+            const spinner = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            spinner.setAttribute('class', 'btn-spinner');
+            spinner.setAttribute('viewBox', '0 0 24 24');
+            spinner.setAttribute('fill', 'none');
+            spinner.innerHTML = '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" opacity="0.3"/>' +
+                '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="-10" opacity="0.85"/>';
+            btn.prepend(spinner);
+            btn.childNodes[1].textContent = label || '处理中…';
+        } else {
+            btn.classList.remove('btn-loading');
+            btn.disabled = false;
+            const spinner = btn.querySelector('.btn-spinner');
+            if (spinner) spinner.remove();
+            if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+            delete btn.dataset.origText;
+        }
+    }
+
     // 测试 URL 连通性
     els.aiTestURLBtn.addEventListener('click', async () => {
         const url = els.aiBaseURL.value.trim();
@@ -1947,6 +1972,7 @@ async function initAISettings() {
             nm.show('请先填写 API Key', 'warning');
             return;
         }
+        setBtnLoading(els.aiTestURLBtn, true, '测试中…');
         try {
             const ok = await window.go.main.App.TestAIBaseURL(url, key);
             if (ok) {
@@ -1956,6 +1982,8 @@ async function initAISettings() {
             }
         } catch (e) {
             nm.show('连接失败: ' + e, 'error');
+        } finally {
+            setBtnLoading(els.aiTestURLBtn, false);
         }
     });
 
@@ -1988,6 +2016,7 @@ async function initAISettings() {
             nm.show('请先填写 API Key', 'warning');
             return;
         }
+        setBtnLoading(els.aiFetchModelsBtn, true, '获取中…');
         try {
             const models = await window.go.main.App.FetchAIModels(url, key);
             if (models && models.length > 0) {
@@ -2009,6 +2038,8 @@ async function initAISettings() {
             }
         } catch (e) {
             nm.show('获取模型列表失败: ' + e, 'error');
+        } finally {
+            setBtnLoading(els.aiFetchModelsBtn, false);
         }
     });
 
@@ -2131,16 +2162,14 @@ async function initAISettings() {
                 nm.show('请先输入 Tavily API Key', 'warning');
                 return;
             }
-            testBtn.disabled = true;
-            testBtn.textContent = '测试中...';
+            setBtnLoading(testBtn, true, '测试中…');
             try {
                 await window.go.main.App.TestTavilyConnection(key);
                 nm.show('连接成功！', 'success');
             } catch (e) {
                 nm.show('连接失败: ' + (e.message || e), 'error');
             } finally {
-                testBtn.disabled = false;
-                testBtn.textContent = '测试连接';
+                setBtnLoading(testBtn, false);
             }
         });
     }
@@ -2389,6 +2418,15 @@ function openAddProfileModal() {
     document.getElementById('presetModalName').value = '';
     document.getElementById('presetModalURL').value = els.aiBaseURL.value || '';
     document.getElementById('presetModalKey').value = els.aiAPIKey.value || '';
+    // 重置 Key 为隐藏状态
+    var keyInput = document.getElementById('presetModalKey');
+    var eye = document.querySelector('#presetModalKeyToggle .toggle-eye');
+    var eyeOff = document.querySelector('#presetModalKeyToggle .toggle-eye-off');
+    if (keyInput && eye && eyeOff) {
+        keyInput.type = 'password';
+        eye.style.display = '';
+        eyeOff.style.display = 'none';
+    }
     // 重置服务商为当前选中的
     const currentProvider = getActiveProvider();
     const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
@@ -2406,6 +2444,15 @@ function openEditProfileModal(id, name, provider, baseURL, apiKey) {
     document.getElementById('presetModalName').value = name || '';
     document.getElementById('presetModalURL').value = baseURL || '';
     document.getElementById('presetModalKey').value = apiKey || '';
+    // 重置 Key 为隐藏状态
+    var keyInput = document.getElementById('presetModalKey');
+    var eye = document.querySelector('#presetModalKeyToggle .toggle-eye');
+    var eyeOff = document.querySelector('#presetModalKeyToggle .toggle-eye-off');
+    if (keyInput && eye && eyeOff) {
+        keyInput.type = 'password';
+        eye.style.display = '';
+        eyeOff.style.display = 'none';
+    }
     // 设置服务商
     const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === provider));
