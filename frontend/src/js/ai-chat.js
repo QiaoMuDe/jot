@@ -28,6 +28,10 @@ let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
 let sessionContextMenu = null; // AI 会话右键菜单
 let _contextSessionId = null;  // 右键菜单当前会话 ID
+let aiMsgContextMenu = null;   // AI 消息右键菜单
+let _contextMsgContent = '';  // 右键消息内容
+let _contextMsgRole = '';     // 右键消息角色
+let _contextMsgEl = null;     // 右键消息元素
 let _contextTitleEl = null;    // 右键菜单当前会话标题元素
 let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
 
@@ -530,6 +534,7 @@ export async function initAIChat() {
     if (!messagesEl) return;
 
     sessionContextMenu = document.getElementById('aiSessionContextMenu');
+    aiMsgContextMenu = document.getElementById('aiMsgContextMenu');
 
     bindEvents();
 
@@ -1147,6 +1152,9 @@ function bindEvents() {
         if (sessionContextMenu && !sessionContextMenu.contains(e.target)) {
             closeSessionContextMenu();
         }
+        if (aiMsgContextMenu && !aiMsgContextMenu.contains(e.target)) {
+            closeAiMsgContextMenu();
+        }
         // 关闭笔记引用浮层 (点击 overlay 外部不关闭) 
     });
 
@@ -1154,6 +1162,7 @@ function bindEvents() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeSessionContextMenu();
+            closeAiMsgContextMenu();
             if (refModal && refModal.style.display !== 'none') {
                 closeNoteRefModal();
             }
@@ -1183,6 +1192,51 @@ function bindEvents() {
                 } catch (e) {
                     window.showNotification?.('导出失败: ' + (e.message || e), 'error');
                 }
+            }
+        });
+    }
+
+    // AI 消息右键菜单项点击
+    if (aiMsgContextMenu) {
+        aiMsgContextMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            const content = _contextMsgContent;
+            const role = _contextMsgRole;
+            const msgEl = _contextMsgEl;
+
+            closeAiMsgContextMenu();
+
+            if (action === 'copy') {
+                navigator.clipboard.writeText(content).catch(() => {});
+            } else if (action === 'save') {
+                (async () => {
+                    try {
+                        const note = await window.go.main.App.SaveAIMessageAsNote(content);
+                        if (note && note.id) {
+                            window.showActionNotification?.('笔记已创建', 'success', [
+                                { text: '查看', callback: async () => { window.switchView('grid'); await window.loadNotes(); window.openEditor(note.id, true); } }
+                            ]);
+                        }
+                    } catch (e) {
+                        window.showNotification?.('保存失败: ' + (e.message || e), 'error');
+                    }
+                })();
+            } else if (action === 'regen') {
+                handleRegenerate(msgEl);
+            } else if (action === 'followUp') {
+                try {
+                    const safeContent = String(content || '');
+                    const excerpt = safeContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                    followUpRef = safeContent;
+                    const bar = document.getElementById('aiChatFollowUpBar');
+                    const text = document.getElementById('aiChatFollowUpText');
+                    if (bar && text) {
+                        text.textContent = '引用: ' + excerpt + (safeContent.length > 80 ? '…' : '');
+                        bar.style.display = 'flex';
+                    }
+                } catch (_) {}
             }
         });
     }
@@ -1396,10 +1450,14 @@ async function switchSession(id) {
             if (msg.role === 'user') {
                 addMessage(msg.content, 'user');
                 const userMsgEl = messagesEl.lastElementChild;
-                if (userMsgEl) userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
+                if (userMsgEl) {
+                    userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
+                    bindMsgContextMenu(userMsgEl, msg.content, 'user');
+                }
             } else if (msg.role === 'assistant') {
                 const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0);
                 el.appendChild(createMsgActions(msg.content, 'assistant'));
+                bindMsgContextMenu(el, msg.content, 'assistant');
             }
         });
 
@@ -1640,7 +1698,10 @@ async function onSend() {
 
     addMessage(text, 'user');
     const userMsgEl = messagesEl.lastElementChild;
-    if (userMsgEl) userMsgEl.appendChild(createMsgActions(text, 'user'));
+    if (userMsgEl) {
+        userMsgEl.appendChild(createMsgActions(text, 'user'));
+        bindMsgContextMenu(userMsgEl, text, 'user');
+    }
     chatHistory.push({ role: 'user', content: text });
     updateContextSize();
 
@@ -1835,6 +1896,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         chatHistory.push({ role: 'assistant', content: finalContent });
         updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant'));
+        bindMsgContextMenu(streamingEl, finalContent, 'assistant');
 
         // 自动保存消息到数据库
         if (isRegenerate) {
@@ -2255,6 +2317,88 @@ function showSessionContextMenu(e) {
     _contextTitleEl = item.querySelector('.ai-session-item-title');
 
     sessionContextMenu.classList.add('active');
+}
+
+/**
+ * 关闭 AI 消息右键菜单
+ */
+function closeAiMsgContextMenu() {
+    if (aiMsgContextMenu) {
+        aiMsgContextMenu.classList.remove('active');
+        aiMsgContextMenu.innerHTML = '';
+    }
+    _contextMsgContent = '';
+    _contextMsgRole = '';
+    _contextMsgEl = null;
+}
+
+/**
+ * 显示 AI 消息右键菜单 — 根据角色动态生成菜单项
+ */
+function showAiMsgContextMenu(event, content, role, msgEl) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!aiMsgContextMenu) return;
+
+    // 先关闭之前的菜单
+    closeAiMsgContextMenu();
+
+    // 保存上下文
+    _contextMsgContent = content;
+    _contextMsgRole = role;
+    _contextMsgEl = msgEl;
+
+    // 动态构建菜单项
+    const items = [];
+
+    // 复制（所有消息共有）
+    items.push({ action: 'copy', label: '复制' });
+
+    if (role === 'assistant') {
+        items.push({ type: 'divider' });
+        items.push({ action: 'save', label: '保存为笔记' });
+        items.push({ action: 'regen', label: '重新生成' });
+        items.push({ type: 'divider' });
+        items.push({ action: 'followUp', label: '追问此条回复' });
+    }
+
+    // 渲染菜单项
+    items.forEach(item => {
+        if (item.type === 'divider') {
+            const divider = document.createElement('div');
+            divider.className = 'context-menu-divider';
+            aiMsgContextMenu.appendChild(divider);
+        } else {
+            const menuItem = document.createElement('div');
+            menuItem.className = 'context-menu-item';
+            menuItem.dataset.action = item.action;
+            menuItem.textContent = item.label;
+            aiMsgContextMenu.appendChild(menuItem);
+        }
+    });
+
+    // 定位到鼠标位置，防止溢出视口
+    let x = event.clientX;
+    let y = event.clientY;
+    const menuW = 160;
+    const menuH = items.length * 36 + 16;
+    if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8;
+    if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 8;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+    aiMsgContextMenu.style.left = x + 'px';
+    aiMsgContextMenu.style.top = y + 'px';
+
+    aiMsgContextMenu.classList.add('active');
+}
+
+/**
+ * 为消息气泡绑定右键菜单事件
+ */
+function bindMsgContextMenu(msgEl, content, role) {
+    msgEl.addEventListener('contextmenu', (e) => {
+        showAiMsgContextMenu(e, content, role, msgEl);
+    });
 }
 
 function hideEmptyState() {
