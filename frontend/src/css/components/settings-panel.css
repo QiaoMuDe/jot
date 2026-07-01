@@ -80,6 +80,25 @@
   text-decoration: underline;
 }
 
+/* 隐藏输入框原生的密码显示按钮（预设弹窗 + 设置页） */
+#presetModalKey::-ms-reveal,
+#presetModalKey::-ms-clear,
+#aiAPIKey::-ms-reveal,
+#aiAPIKey::-ms-clear,
+#aiTavilyApiKey::-ms-reveal,
+#aiTavilyApiKey::-ms-clear {
+  display: none !important;
+}
+
+/* 隐藏 WebView2/Edge 自动填充按钮 */
+#presetModalKey::-webkit-credentials-auto-fill-button,
+#aiAPIKey::-webkit-credentials-auto-fill-button,
+#aiTavilyApiKey::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  display: none !important;
+}
+
 /* ==========================================================================
    Section G: Settings
    ========================================================================== */

@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 48）
+> 生成日期: 2026-07-01（更新 49）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1311,4 +1311,12 @@ await loadXxxSetting();
 | **预设弹窗 Key 默认隐藏** | `openAddProfileModal()` 和 `openEditProfileModal()` 每次打开时强制重置 API Key 输入框为 `type="password"` + 睁眼图标显示、闭眼图标隐藏，不记忆上次切换状态。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **golangci-lint errcheck 修复** | `app.go` 中 3 处未检查的错误返回值（`SwitchProfile` ×2、`SetActive` ×1）添加 `if err :=` 检查和 `fmt.Printf` 日志输出。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L80-L82) |
 | **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+
+## 七十六、新增记忆点（隐藏原生密码显示按钮）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 预设弹窗和设置页的密码输入框在隐藏状态下，输入框右侧除了自定义眼睛按钮外，WebView2 原生也显示了一个内置密码显示眼睛，导致双眼睛图标重叠 |
+| **修复** | CSS 中通过 `::-ms-reveal` / `::-ms-clear`（`display:none`）隐藏 Edge/Chromium 原生密码显示按钮；`::-webkit-credentials-auto-fill-button`（`display:none`）隐藏自动填充按钮。覆盖 3 个输入框：`#presetModalKey`、`#aiAPIKey`、`#aiTavilyApiKey`。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **涉及文件** | [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
 
