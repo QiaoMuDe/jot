@@ -2433,7 +2433,7 @@ function openAddProfileModal() {
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === currentProvider));
     document.getElementById('presetModalProviderLabel').textContent =
         currentProvider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
-    document.getElementById('presetModalOverlay').style.display = 'flex';
+    document.getElementById('presetModalOverlay').classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
@@ -2458,13 +2458,13 @@ function openEditProfileModal(id, name, provider, baseURL, apiKey) {
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === provider));
     document.getElementById('presetModalProviderLabel').textContent =
         provider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
-    document.getElementById('presetModalOverlay').style.display = 'flex';
+    document.getElementById('presetModalOverlay').classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
 // 关闭预设弹窗
 function closePresetModal() {
-    document.getElementById('presetModalOverlay').style.display = 'none';
+    document.getElementById('presetModalOverlay').classList.remove('visible');
     editingProfileId = null;
 }
 
@@ -2610,10 +2610,14 @@ function renderPresetMgrList() {
 // 关闭管理列表
 function closePresetMgrList() {
     presetMgrExpanded = false;
-    if (presetMgrContainer && presetMgrContainer.parentNode) {
-        presetMgrContainer.parentNode.removeChild(presetMgrContainer);
-        presetMgrContainer = null;
-    }
+    if (!presetMgrContainer) return;
+    presetMgrContainer.classList.add('closing');
+    presetMgrContainer.addEventListener('animationend', () => {
+        if (presetMgrContainer && presetMgrContainer.parentNode) {
+            presetMgrContainer.parentNode.removeChild(presetMgrContainer);
+            presetMgrContainer = null;
+        }
+    }, { once: true });
 }
 
 /**

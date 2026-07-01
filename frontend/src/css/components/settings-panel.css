@@ -726,6 +726,38 @@
 /* 预设管理列表 */
 .preset-mgr-list {
     margin-bottom: 16px;
+    overflow: hidden;
+    animation: mgrSlideDown 250ms ease-out both;
+}
+
+.preset-mgr-list.closing {
+    animation: mgrSlideUp 200ms ease-in both;
+}
+
+@keyframes mgrSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 500px;
+    }
+}
+
+@keyframes mgrSlideUp {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 500px;
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px);
+        max-height: 0;
+    }
 }
 
 /* 预设弹窗 */
@@ -737,6 +769,14 @@
     align-items: center;
     justify-content: center;
     z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 200ms ease-out, visibility 200ms ease-out;
+}
+
+.preset-modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 .preset-modal {
@@ -747,6 +787,12 @@
     max-width: 90vw;
     max-height: 80vh;
     overflow-y: auto;
+    transform: scale(0.92) translateY(-12px);
+    transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.preset-modal-overlay.visible .preset-modal {
+    transform: scale(1) translateY(0);
 }
 
 .preset-modal-header {

@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 52）
+> 生成日期: 2026-07-01（更新 53）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1338,4 +1338,15 @@ await loadXxxSetting();
 | **修复3：工具栏折行兜底** | `.ai-chat-toolbar` 添加 `flex-wrap: wrap` + `row-gap: 6px`，极端窄窗口时自然换行。`.ai-chat-model-select` 添加 `min-width: 0` + `flex-shrink: 1` 支持收缩。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **关键经验** | `text-overflow: ellipsis` 必须和文本在同一元素上。flex 容器（`display: flex`）的 `text-overflow` 对子元素的文本无效，因为 flex 子项是块级元素而非内联文本内容 |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+## 七十九、新增记忆点（预设管理面板和弹窗动画）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 设置页「配置预设」区域的「管理」按钮展开/收起预设列表面板、以及预设弹窗（新增/编辑）的打开/关闭，均无任何过渡动画，交互生硬 |
+| **改动1：管理列表展开/收起动画** | 展开时使用 `@keyframes mgrSlideDown`（250ms ease-out，opacity + translateY + max-height）；收起时添加 `.closing` class 触发 `@keyframes mgrSlideUp`（200ms ease-in），`animationend` 事件后移除 DOM 防止冲突。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **改动2：弹窗遮罩/内容打开动画** | 遮罩使用 `opacity` + `visibility` 过渡（200ms ease-out），弹窗内容使用 `transform: scale(0.92) translateY(-12px)` → `scale(1) translateY(0)`（250ms cubic-bezier 弹性曲线）。通过 `.visible` class 控制。详见 [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) |
+| **改动3：样式 display 切换改为 class 切换** | 弹窗打开/关闭从 `style.display = 'flex'/'none'` 改为 `classList.add/remove('visible')`；管理列表收起改为添加 `closing` class + `animationend` 后移除。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **关键经验** | 动态创建/销毁的 DOM 元素做收起动画时，不能立即 `removeChild`，需要先添加动画 class，监听 `animationend` 事件后再移除 DOM。`display: none/flex` 切换无法做过渡动画，需改用 `opacity` + `visibility` + class 控制 |
+| **涉及文件** | [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 
