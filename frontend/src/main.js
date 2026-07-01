@@ -1659,13 +1659,19 @@ async function loadAISettings() {
     let cfg;
     try {
         cfg = await window.go.main.App.GetAIConfig();
-        els.aiModelDropdown.innerHTML = '';
+        // 仅清除模型列表项，保留搜索框
+        els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
         if (cfg.model) {
             els.aiModelLabel.textContent = cfg.model;
             addModelDropdownItem(cfg.model, true);
         }
     } catch (e) {
         console.warn('loadAISettings: model loading error', e);
+    }
+    // 根据模型数量控制搜索框可见性
+    const loadWrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+    if (loadWrap) {
+        loadWrap.style.display = els.aiModelDropdown.querySelectorAll('.theme-select-item').length > 1 ? '' : 'none';
     }
 
     // 深度思考状态
@@ -1783,8 +1789,18 @@ async function initAISettings() {
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
         if (dropdown.children.length === 0) return;
+        const wasOpen = dropdown.classList.contains('open');
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
+        if (wasOpen) {
+            clearSettingModelSearch();
+        } else {
+            // 打开后聚焦搜索框
+            setTimeout(() => {
+                const search = dropdown.querySelector('.ai-model-search');
+                if (search) search.focus();
+            }, 50);
+        }
     });
 
     // 点击模型项
@@ -1799,14 +1815,68 @@ async function initAISettings() {
         els.aiModelLabel.textContent = model;
         dropdown.classList.remove('open');
         trigger.classList.remove('open');
+        clearSettingModelSearch();
         saveAIConfig();
     });
 
     // 点击外部关闭
-    document.addEventListener('click', () => {
-        dropdown.classList.remove('open');
-        trigger.classList.remove('open');
+    document.addEventListener('click', (e) => {
+        if (!trigger.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+            clearSettingModelSearch();
+        }
     });
+
+    // 设置页模型搜索过滤 + 关键字高亮
+    const settingSearch = document.getElementById('aiSettingModelSearch');
+    if (settingSearch) {
+        settingSearch.addEventListener('input', () => {
+            const query = settingSearch.value.trim();
+            dropdown.querySelectorAll('.theme-select-item').forEach(item => {
+                const model = item.dataset.modelValue;
+                if (!query) {
+                    item.textContent = model;
+                    item.style.display = '';
+                    return;
+                }
+                const lowerModel = model.toLowerCase();
+                const lowerQuery = query.toLowerCase();
+                const idx = lowerModel.indexOf(lowerQuery);
+                if (idx !== -1) {
+                    const before = model.substring(0, idx);
+                    const match = model.substring(idx, idx + query.length);
+                    const after = model.substring(idx + query.length);
+                    item.innerHTML = before + '<mark class="ai-search-highlight">' + match + '</mark>' + after;
+                    item.style.display = '';
+                } else {
+                    item.textContent = model;
+                    item.style.display = 'none';
+                }
+            });
+        });
+        settingSearch.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                dropdown.classList.remove('open');
+                trigger.classList.remove('open');
+                clearSettingModelSearch();
+            }
+            if (e.key === 'Enter') e.preventDefault();
+        });
+    }
+
+    function clearSettingModelSearch() {
+        const search = document.getElementById('aiSettingModelSearch');
+        if (search) {
+            search.value = '';
+            // 恢复所有 item 的 textContent（清除可能的 innerHTML 高亮）
+            document.querySelectorAll('.theme-select-item').forEach(item => {
+                const model = item.dataset.modelValue || item.dataset.model;
+                if (model) item.textContent = model;
+                item.style.display = '';
+            });
+        }
+    }
 
     // ── 服务商下拉菜单事件 ──
     const provTrigger = els.aiProviderTrigger;
@@ -1843,8 +1913,10 @@ async function initAISettings() {
             if (!currentURL || isOldDefault) {
                 els.aiBaseURL.value = defaultURLs[value] || currentURL;
             }
-            els.aiModelDropdown.innerHTML = '';
+            els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
             els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
+            const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+            if (wrap) wrap.style.display = 'none';
             const cfg = { base_url: els.aiBaseURL.value.trim(), api_key: els.aiAPIKey.value.trim(), model: '', provider: value };
             window.go.main.App.SaveAIConfig(cfg)
                 .then(() => nm.show('AI 配置已保存', 'success'))
@@ -1915,7 +1987,8 @@ async function initAISettings() {
         try {
             const models = await window.go.main.App.FetchAIModels(url, key);
             if (models && models.length > 0) {
-                els.aiModelDropdown.innerHTML = '';
+                // 仅清除模型列表项，保留搜索框
+                els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
                 const savedModel = (await window.go.main.App.GetAIConfig()).model;
                 for (const m of models) {
                     addModelDropdownItem(m, m === savedModel);
@@ -1923,6 +1996,9 @@ async function initAISettings() {
                 // 将第一个模型设为标签并保存，避免"显示了但没保存"
                 els.aiModelLabel.textContent = models[0];
                 saveAIConfig();
+                // 根据模型数量控制搜索框可见性
+                const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+                if (wrap) wrap.style.display = models.length > 1 ? '' : 'none';
                 nm.show(`已获取 ${models.length} 个模型`, 'success');
             } else {
                 nm.show('未获取到可用模型', 'warning');
@@ -2150,7 +2226,13 @@ function addModelDropdownItem(model, active) {
     item.className = 'theme-select-item' + (active ? ' active' : '');
     item.dataset.modelValue = model;
     item.textContent = model;
-    els.aiModelDropdown.appendChild(item);
+    // 插入到搜索框前面，确保搜索框在底部
+    const searchWrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+    if (searchWrap) {
+        els.aiModelDropdown.insertBefore(item, searchWrap);
+    } else {
+        els.aiModelDropdown.appendChild(item);
+    }
 }
 
 // 辅助函数: 设置状态提示

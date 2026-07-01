@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 45）
+> 生成日期: 2026-07-01（更新 46）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -1270,4 +1270,16 @@ await loadXxxSetting();
 | **CM6 引用** | `jotTheme` 中 `.cm-selectionBackground` 从 `var(--accent-light)` 改为 `var(--selection-bg, var(--accent-light))`，回退兼容。同时新增 `.cm-selectionMatch` 共享同一规则。详见 [cm6-syntax-highlight.js#L89](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js#L89) |
 | **透明色调色逻辑** | 亮色主题（:root/default/light/nord/catppuccin-latte/gruvbox-light）→ `rgba(var(--accent-rgb), 0.30)`；暗色主题（dark/monokai-pro/tokyo-night/catppuccin-mocha/gruvbox-dark/ayu-mirage/dracula）→ `rgba(var(--accent-rgb), 0.45)`。利用 `--accent-rgb` 自动适配各主题强调色，无需逐个调色。详见 [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css) |
 | **涉及文件** | [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css)、[cm6-syntax-highlight.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/cm6-syntax-highlight.js) |
+
+|## 七十三、新增记忆点（模型搜索框条件显示 + 关键字高亮）
+||
+| 记忆点 | 内容 |
+|--------|------|
+| **搜索框条件可见** | AI 助手和设置页的模型选择下拉菜单中，仅当模型列表 ≥2 个时才显示搜索框。≤1 个时隐藏，避免单个模型时冗余 UI。AI 聊天用 `modelList.length` 判断，设置页用 `.theme-select-item` 元素数量或 `models.length` 判断。聚焦搜索前通过 `offsetParent !== null` 检查可见性。详见 [ai-chat.js#L419](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L419)、[main.js#L1672](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1672) |
+| **搜索关键字高亮** | 输入搜索关键词后，匹配的模型名称中用 `<mark class="ai-search-highlight">` 包裹匹配文字（accent 背景 + 白色文字），复用会话搜索已有的 `.ai-search-highlight` 样式。清空搜索/关闭下拉时恢复 `textContent` 清除高亮。详见 [ai-chat.js#L847](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L847)、[main.js#L1834](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1834) |
+| **设置页搜索框在底部** | 设置页模型下拉向下展开，搜索框用 `position: sticky; bottom: 0` 固定在底部，模型项通过 `insertBefore` 插入到搜索框前面（DMO 中搜索在末尾），滚动到底部时搜索框始终可见。AI 聊天工具栏下拉向上展开，搜索框保持 `sticky; top: 0` 在顶部。详见 [ai-chat.css#L1031](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L1031)、[main.js#L2194](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L2194) |
+| **搜索框被 innerHTML 清空的修复** | 设置页 `loadAISettings()`、切换服务商、获取列表三处原用 `els.aiModelDropdown.innerHTML = ''` 清空下拉，同时删除了搜索框。改为 `querySelectorAll('.theme-select-item').forEach(el => el.remove())`，仅移除列表项保留搜索框。详见 [main.js#L1663](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1663) |
+| **clearSettingModelSearch 适配 innerHTML** | 使用高亮后 item 可能被 `innerHTML` 修改过内容，清除搜索时需要从 `dataset.modelValue` 恢复 `textContent`，不再依赖 `dispatchEvent(new Event('input'))` 触发 handler。详见 [main.js#L1868](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L1868) |
+| **涉及 CSS** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) `.ai-model-search-wrap` / `.ai-model-search` / `.ai-search-highlight`（复用） |
+| **涉及 JS** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 

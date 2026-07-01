@@ -393,14 +393,33 @@ async function openModelDropdown() {
     }
     renderModelDropdown();
     modelDropdown.classList.add('open');
+    // 聚焦搜索框（仅在可见时）
+    const search = modelDropdown.querySelector('.ai-model-search');
+    if (search && search.offsetParent !== null) setTimeout(() => search.focus(), 50);
 }
 
 function renderModelDropdown() {
     if (!modelDropdown || !modelLabel) return;
     const current = modelLabel.textContent;
-    modelDropdown.innerHTML = modelList.map(m =>
-        `<div class="theme-select-item${m === current ? ' active' : ''}" data-model="${m}">${m}</div>`
-    ).join('');
+    // 仅移除现有列表项，保留搜索框等非列表元素
+    modelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
+    // 用 DOM 方式追加列表项
+    const searchWrap = modelDropdown.querySelector('.ai-model-search-wrap');
+    modelList.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'theme-select-item' + (m === current ? ' active' : '');
+        div.dataset.model = m;
+        div.textContent = m;
+        if (searchWrap) {
+            searchWrap.after(div);
+        } else {
+            modelDropdown.appendChild(div);
+        }
+    });
+    // 仅当模型 ≥2 个时显示搜索框
+    if (searchWrap) {
+        searchWrap.style.display = modelList.length > 1 ? '' : 'none';
+    }
 }
 
 /**
@@ -806,6 +825,7 @@ function bindEvents() {
             e.stopPropagation();
             if (modelDropdown.classList.contains('open')) {
                 modelDropdown.classList.remove('open');
+                clearModelSearch();
             } else {
                 openModelDropdown();
             }
@@ -816,7 +836,57 @@ function bindEvents() {
             if (item) switchModel(item.dataset.model);
         });
 
-        document.addEventListener('click', () => modelDropdown.classList.remove('open'));
+        document.addEventListener('click', () => {
+            modelDropdown.classList.remove('open');
+            clearModelSearch();
+        });
+
+        // 模型搜索过滤 + 关键字高亮
+        const modelSearch = document.getElementById('aiChatModelSearch');
+        if (modelSearch) {
+            modelSearch.addEventListener('input', () => {
+                const query = modelSearch.value.trim();
+                modelDropdown.querySelectorAll('.theme-select-item').forEach(item => {
+                    const model = item.dataset.model;
+                    if (!query) {
+                        // 清空搜索 → 恢复 textContent，全部显示
+                        item.textContent = model;
+                        item.style.display = '';
+                        return;
+                    }
+                    const lowerModel = model.toLowerCase();
+                    const lowerQuery = query.toLowerCase();
+                    const idx = lowerModel.indexOf(lowerQuery);
+                    if (idx !== -1) {
+                        // 匹配 → 高亮 + 显示
+                        const before = model.substring(0, idx);
+                        const match = model.substring(idx, idx + query.length);
+                        const after = model.substring(idx + query.length);
+                        item.innerHTML = before + '<mark class="ai-search-highlight">' + match + '</mark>' + after;
+                        item.style.display = '';
+                    } else {
+                        // 不匹配 → 恢复 textContent + 隐藏
+                        item.textContent = model;
+                        item.style.display = 'none';
+                    }
+                });
+            });
+            modelSearch.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    modelDropdown.classList.remove('open');
+                    clearModelSearch();
+                }
+                if (e.key === 'Enter') e.preventDefault();
+            });
+        }
+    }
+
+    function clearModelSearch() {
+        const search = modelDropdown?.querySelector('.ai-model-search');
+        if (search) {
+            search.value = '';
+            search.dispatchEvent(new Event('input'));
+        }
     }
 
     // ── 深度思考切换 ──

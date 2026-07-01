@@ -439,7 +439,11 @@
                                         <span id="aiModelLabel">-- 请先获取模型列表 --</span>
                                         <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                                     </div>
-                                    <div class="theme-select-dropdown" id="aiModelDropdown"></div>
+                                    <div class="theme-select-dropdown" id="aiModelDropdown">
+                                        <div class="ai-model-search-wrap bottom">
+                                            <input class="ai-model-search" id="aiSettingModelSearch" type="text" placeholder="搜索模型..." autocomplete="off" />
+                                        </div>
+                                    </div>
                                 </div>
                                 <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
                             </div>
@@ -801,7 +805,11 @@
                                     <span id="aiChatModelLabel">--</span>
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
-                                <div class="ai-chat-model-dropdown" id="aiChatModelDropdown"></div>
+                                <div class="ai-chat-model-dropdown" id="aiChatModelDropdown">
+                                    <div class="ai-model-search-wrap">
+                                        <input class="ai-model-search" id="aiChatModelSearch" type="text" placeholder="搜索模型..." autocomplete="off" />
+                                    </div>
+                                </div>
                             </div>
                             <div class="ai-chat-search-toggle" id="aiChatSearchToggle" title="深度思考">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.65 4.65 0 0 1 8.91 14"/></svg>

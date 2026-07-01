@@ -1019,6 +1019,42 @@
     background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+/* ── 模型搜索框 ── */
+.ai-model-search-wrap {
+    padding: 4px 6px 2px;
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+    z-index: 1;
+}
+
+/* 设置页搜索框在底部（下拉向下展开，底部更顺手） */
+.ai-model-search-wrap.bottom {
+    top: auto;
+    bottom: 0;
+}
+
+.ai-model-search {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+}
+
+.ai-model-search:focus {
+    border-color: var(--accent);
+}
+
+.ai-model-search::placeholder {
+    color: var(--text-muted);
+}
+
 /* 输入框行 */
 .ai-chat-input-row {
     display: flex;
