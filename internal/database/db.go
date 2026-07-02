@@ -47,6 +47,13 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	// 移除不再使用的 is_empty_response 列
+	if db.Migrator().HasColumn(&models.AIMessage{}, "is_empty_response") {
+		if err := db.Migrator().DropColumn(&models.AIMessage{}, "is_empty_response"); err != nil {
+			return nil, fmt.Errorf("failed to drop is_empty_response column: %w", err)
+		}
+	}
+
 	// 初始化默认标签
 	if err := services.InitDefaultTags(db); err != nil {
 		return nil, fmt.Errorf("初始化默认标签失败: %w", err)

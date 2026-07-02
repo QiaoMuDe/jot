@@ -2,6 +2,7 @@ package aicli
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 )
@@ -67,7 +68,12 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 		if ctx.Err() != nil {
 			// 用户取消，不报错
 		} else if callbacks.OnError != nil {
-			callbacks.OnError("AI 调用失败: " + err.Error())
+			var aiErr *AIErrorWrapper
+			if errors.As(err, &aiErr) {
+				callbacks.OnError(aiErr.Err.ToJSON())
+			} else {
+				callbacks.OnError("AI 调用失败: " + err.Error())
+			}
 		}
 	}
 

@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 61）
+> 生成日期: 2026-07-02（更新 66）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1521,4 +1521,50 @@ await loadXxxSetting();
 | **CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：删除按钮 hover 红色警告色 |
 | **后端变更** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)：新增 `DeleteAIMessage(id uint) error` 按 ID 删除单条消息；[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：对应 Wails 绑定 |
 | **Fix: DB 不同步** | 与编辑问题相同，当前会话新建消息无 `msgId` 导致 DB 操作被跳过。改用 `ClearAISessionMessages + SaveAIMessages` 模式确保始终同步。 |
+
+---
+
+## 九十二、新增记忆点（AI 请求状态码封装层）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 后端对 AI 请求返回的各种 HTTP 状态码进行分类，映射为中文友好提示，在前端通过通知展示。避免原生错误信息直接暴露给用户。 |
+| **核心文件** | [internal/aicli/errors.go](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/errors.go)（新增） |
+| **错误分类** | 11 种类型：`auth_error`（401）、`rate_limit`（429/409/529）、`insufficient_quota`（402/403 配额）、`server_error`（500/502/503）、`timeout`（context deadline）、`model_not_found`（404）、`invalid_request`（400 参数错误）、`connection_error`（网络连接失败）、`context_length`（400 context_length_exceeded）、`provider_error`（Ollama 服务错误）、`unknown`（其他） |
+| **分类函数** | `ClassifyError()` 检测 OpenAI APIError/RequestError、context 超时、网络错误，fallback 文本匹配 |
+| **包装类型** | `AIErrorWrapper` 包装原始错误，传递 JSON 字符串给前端 `OnError` |
+| **前端集成** | ai-chat.js 中 `ai:stream-error` 处理器解析 error JSON → 提取 `friendly_message` → `showNotification()` 展示中文友好提示 |
+| **测试** | [internal/aicli/errors_test.go](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/errors_test.go) 17 个单元测试覆盖所有分类场景 |
+
+## 九十三、新增记忆点（错误时用户消息入库）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | AI 流式请求出错时，用户已发送的消息仍保存到数据库。原本错误发生时仅在前端通知，用户消息未被持久化，切换会话后用户消息丢失。 |
+| **变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`ai:stream-error` 处理器末尾新增 `saveSessionMessages` 调用，将用户消息单独入库（不存错误消息） |
+
+## 九十四、新增记忆点（用户消息重新发送）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 用户消息支持重新发送。消息操作栏和右键菜单新增「重新发送」按钮，点击后移除该用户消息及后续所有消息，重新将用户消息加入 chatHistory 并触发流式请求。 |
+| **前端变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：新增 `RESEND_ICON` 图标常量、`handleResend()` 函数（参考 `handleRegenerate` 但截断范围包含用户消息自身）；`createMsgActions()` 为用户消息新增重新发送按钮；右键菜单新增 `resend` 操作项 |
+| **CSS 变更** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：重新发送按钮 hover 色 |
+
+## 九十五、新增记忆点（操作按钮折叠 — 更多菜单）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 窄消息气泡时，操作按钮（复制/重新生成/重新发送/编辑/删除等）自动折叠到 ⋮ 更多按钮中，点击弹出水平菜单。避免小宽度气泡中按钮互相挤压。 |
+| **前端变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：新增 `MORE_ICON` 图标、`collapseActionsIfNeeded()`（测量气泡宽度判断是否需要折叠）、`toggleActionPopup()`（创建/切换弹出菜单）；`createMsgActions()` 末尾追加 `.more-btn`；5 处调用点追加 `collapseActionsIfNeeded()` |
+| **CSS 变更** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：`.more-btn` 默认 `display:none`，`.action-buttons.collapsed .more-btn` 显示/其他按钮隐藏；`.action-popup` 弹出菜单 `position:fixed` 追加到 `document.body`，`z-index:2147483647` 始终最顶层 |
+| **弹出方向** | 用户消息向左水平弹出，AI 消息向右水平弹出。使用 `getBoundingClientRect()` 视口坐标 + `position:fixed` 定位 |
+
+## 九十六、新增记忆点（移除 IsEmptyResponse 字段 + 空回复处理优化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 移除之前错误设计的 `IsEmptyResponse` 数据库字段。AI 空回复不再作为占位消息入库，仅在前端通过通知提醒用户并移除 DOM 气泡。 |
+| **后端变更** | [models/ai_message.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_message.go)：移除 `IsEmptyResponse bool` 字段；[services/ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)：DTO 和所有引用移除；[database/db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)：AutoMigrate 后增加 `DropColumn` 迁移代码 |
+| **前端变更** | [models.ts](file:///d:/峡谷/Dev/本地项目/jot/frontend/wailsjs/go/models.ts)：移除 `is_empty_response` 属性；[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`addMessage()` 移除 `isEmptyResponse` 参数、空回复时 `showNotification()` 通知 + `chatHistory.pop()` + 移除 DOM `streamingEl`；[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：移除 `.ai-msg-empty` 相关样式 |
 

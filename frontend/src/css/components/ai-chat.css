@@ -81,10 +81,6 @@
     box-shadow: 0 1px 3px var(--shadow);
 }
 
-/* 空回复占位时给气泡一个合理宽度 */
-.ai-msg-assistant:has(.ai-msg-empty) {
-    min-width: 200px;
-}
 
 .ai-msg-assistant .msg-content {
     line-height: 1.6;
@@ -1323,6 +1319,53 @@
     background: color-mix(in srgb, #e74c3c 15%, transparent);
 }
 
+/* ── 更多操作按钮（窄气泡折叠） ── */
+.action-buttons .more-btn {
+    display: none;
+}
+.action-buttons.collapsed .more-btn {
+    display: flex;
+}
+.action-buttons.collapsed > button:not(.more-btn) {
+    display: none;
+}
+
+/* 弹出菜单 — 水平弹出（方向由 JS 根据角色动态设置） */
+.action-popup {
+    position: fixed;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 4px;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    white-space: nowrap;
+}
+.action-popup button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+}
+.action-popup button:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+.action-popup button:last-child:hover {
+    color: #e74c3c;
+    background: color-mix(in srgb, #e74c3c 15%, transparent);
+}
+
 /* ── 思考过程可折叠区域（深度思考模型） ── */
 .thinking-details {
     margin: 0 0 8px 0;
@@ -2489,22 +2532,6 @@
     user-select: none;
     line-height: 26px;
     white-space: nowrap;
-}
-
-/* ── 空回复占位提示 ── */
-.ai-msg-empty {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-    line-height: 1.4;
-}
-.ai-msg-empty-icon {
-    flex-shrink: 0;
-    color: #d97706;
-    display: inline-flex;
-    align-items: center;
 }
 
 /* ── 新建会话条目入场动画 ── */

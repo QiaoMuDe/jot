@@ -750,11 +750,22 @@ function bindEvents() {
                     polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
                     polishBtn.disabled = false;
                 }
-            } catch (_) {
+            } catch (e) {
                 if (wrap) wrap.classList.remove('is-loading');
                 polishBtn.classList.remove('is-loading');
                 polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
                 polishBtn.disabled = false;
+                // 尝试解析结构化错误
+                try {
+                    const errData = JSON.parse(e.message || e);
+                    if (errData.user_msg) {
+                        window.showNotification(errData.user_msg, 'error', 5000);
+                    } else {
+                        window.showNotification('AI 调用失败: ' + (e.message || e), 'error', 5000);
+                    }
+                } catch (_) {
+                    window.showNotification('AI 调用失败: ' + (e.message || e), 'error', 5000);
+                }
             }
         });
     }
@@ -1224,6 +1235,9 @@ function bindEvents() {
             } else if (action === 'edit') {
                 if (isStreaming) return;
                 if (msgEl) enterEditMode(msgEl, content);
+            } else if (action === 'resend') {
+                if (isStreaming) return;
+                if (msgEl) handleResend(msgEl);
             } else if (action === 'delete') {
                 if (isStreaming) return;
                 if (msgEl) handleDeleteMsg(msgEl);
@@ -1455,11 +1469,13 @@ async function switchSession(id) {
                 if (userMsgEl) {
                     userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
                     bindMsgContextMenu(userMsgEl, msg.content, 'user');
+                    collapseActionsIfNeeded(userMsgEl);
                 }
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.is_empty_response || false, msg.id);
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, undefined, msg.id);
                 el.appendChild(createMsgActions(msg.content, 'assistant'));
                 bindMsgContextMenu(el, msg.content, 'assistant');
+                collapseActionsIfNeeded(el);
             }
         });
 
@@ -1710,6 +1726,7 @@ async function onSend() {
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user'));
         bindMsgContextMenu(userMsgEl, text, 'user');
+        collapseActionsIfNeeded(userMsgEl);
     }
     chatHistory.push({ role: 'user', content: text });
     updateContextSize();
@@ -1887,26 +1904,10 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         let finalContent = streamingContent || fullContent;
         renderMarkdown(contentDiv, finalContent);
 
-        // 在替换空内容之前记录是否是空回复
+        // 空回复：通知用户，不保存到数据库
         const isEmptyMsg = !finalContent || !finalContent.trim();
-
-        // 空回复占位：模型流正常结束但未返回任何内容
-        if (!finalContent || !finalContent.trim()) {
-            contentDiv.innerHTML = '';
-            const empty = document.createElement('div');
-            empty.className = 'ai-msg-empty';
-            const icon = document.createElement('span');
-            icon.className = 'ai-msg-empty-icon';
-            icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-            const text = document.createElement('span');
-            text.textContent = 'AI 未返回内容，请尝试重新生成';
-            empty.appendChild(icon);
-            empty.appendChild(text);
-            contentDiv.appendChild(empty);
-            // 用占位文字替换空内容，确保能正常保存到库并在历史中回显
-            streamingContent = 'AI 未返回内容，请尝试重新生成';
-            fullContent = streamingContent;
-            finalContent = streamingContent;
+        if (isEmptyMsg) {
+            window.showNotification('AI 未返回内容，请尝试重新生成', 'warning');
         }
 
         if (thinkingDetails && thinkingContentEl && streamingThinking) {
@@ -1921,13 +1922,20 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
+        collapseActionsIfNeeded(streamingEl);
 
         // 自动保存消息到数据库
-        if (isRegenerate) {
+        if (isEmptyMsg) {
+            // 空回复不存库，回退 chatHistory，移除 DOM 气泡
+            chatHistory.pop();
+            if (streamingEl && streamingEl.parentNode) {
+                streamingEl.parentNode.removeChild(streamingEl);
+            }
+        } else if (isRegenerate) {
             // 再生模式 :user 消息已在 handleRegenerate 中重保存, 只存 assistant
-            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal, is_empty_response: isEmptyMsg }]);
+            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         } else {
-            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal, is_empty_response: isEmptyMsg }]);
+            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
         }
 
         // 展示联网搜索来源折叠面板
@@ -2038,7 +2046,27 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (sendBtnEl) sendBtnEl.style.display = '';
         if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
-        addErrorMessage(err);
+
+        // 尝试解析结构化错误 JSON
+        try {
+            const errData = JSON.parse(err);
+            if (errData.user_msg) {
+                window.showNotification(errData.user_msg, 'error', 5000);
+            } else {
+                addErrorMessage(err);
+            }
+        } catch (_) {
+            addErrorMessage(err);
+        }
+
+        // 出错时仅保存用户消息到数据库，避免切换会话后消息丢失
+        if (!isRegenerate && chatHistory.length > 0) {
+            const lastMsg = chatHistory[chatHistory.length - 1];
+            if (lastMsg && lastMsg.role === 'user') {
+                saveSessionMessages([{ role: 'user', content: lastMsg.content }]);
+            }
+        }
+
         // 出错也清理追问引用
         followUpRef = '';
         const fb = document.getElementById('aiChatFollowUpBar');
@@ -2067,7 +2095,16 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (sendBtnEl) sendBtnEl.style.display = '';
         if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
-        addErrorMessage('流式调用失败: ' + (e.message || e));
+        try {
+            const errData = JSON.parse(e.message || e);
+            if (errData.user_msg) {
+                window.showNotification(errData.user_msg, 'error', 5000);
+            } else {
+                addErrorMessage('流式调用失败: ' + (e.message || e));
+            }
+        } catch (_) {
+            addErrorMessage('流式调用失败: ' + (e.message || e));
+        }
     }
 }
 
@@ -2180,9 +2217,8 @@ function renderMarkdown(el, content) {
  * @param {string} [reasoningContent] - 思维链内容 (可选) 
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
- * @param {boolean} [isEmptyResponse] - 是否空回复占位
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, isEmptyResponse, msgId) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, msgId) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     if (msgId) el.dataset.msgId = msgId;
@@ -2209,19 +2245,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     const contentEl = document.createElement('div');
     contentEl.className = 'msg-content';
 
-    if (role === 'assistant' && isEmptyResponse) {
-        // 空回复占位渲染
-        const empty = document.createElement('div');
-        empty.className = 'ai-msg-empty';
-        const icon = document.createElement('span');
-        icon.className = 'ai-msg-empty-icon';
-        icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-        const text = document.createElement('span');
-        text.textContent = content;
-        empty.appendChild(icon);
-        empty.appendChild(text);
-        contentEl.appendChild(empty);
-    } else if (role === 'assistant') {
+    if (role === 'assistant') {
         renderMarkdown(contentEl, content);
     } else {
         contentEl.textContent = content;
@@ -2403,6 +2427,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     if (role === 'user') {
         items.push({ type: 'divider' });
         items.push({ action: 'edit', label: '编辑' });
+        items.push({ action: 'resend', label: '重新发送' });
     }
 
     if (role === 'assistant') {
@@ -2548,6 +2573,8 @@ function stopTypewriter() {
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const REGEN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
 const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const RESEND_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+const MORE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
 
 /**
  * 创建消息气泡操作按钮
@@ -2591,6 +2618,17 @@ function createMsgActions(content, role, elapsedTotal) {
             enterEditMode(msgEl, content);
         });
         btnWrap.appendChild(editBtn);
+
+        // 重新发送按钮
+        const resendBtn = document.createElement('button');
+        resendBtn.innerHTML = RESEND_ICON;
+        resendBtn.title = '重新发送';
+        resendBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isStreaming) return;
+            handleResend(container.parentElement);
+        });
+        btnWrap.appendChild(resendBtn);
     }
 
     if (role === 'assistant') {
@@ -2655,8 +2693,105 @@ function createMsgActions(content, role, elapsedTotal) {
     });
     btnWrap.appendChild(deleteBtn);
 
+    // 更多操作按钮（窄气泡时折叠显示）
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'more-btn';
+    moreBtn.innerHTML = MORE_ICON;
+    moreBtn.title = '更多操作';
+    moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isStreaming) return;
+        const msgEl = container.parentElement;
+        toggleActionPopup(msgEl, moreBtn);
+    });
+    btnWrap.appendChild(moreBtn);
+
     container.appendChild(btnWrap);
     return container;
+}
+
+/**
+ * 检测消息气泡宽度是否不足以容纳所有操作按钮
+ * 如果溢出则折叠到更多按钮中
+ */
+function collapseActionsIfNeeded(msgEl) {
+    const actions = msgEl?.querySelector('.ai-msg-actions');
+    const btnWrap = actions?.querySelector('.action-buttons');
+    if (!actions || !btnWrap) return;
+
+    btnWrap.classList.remove('collapsed');
+
+    requestAnimationFrame(() => {
+        const availableWidth = actions.clientWidth;
+        const buttonsWidth = btnWrap.scrollWidth;
+        if (buttonsWidth > availableWidth && buttonsWidth > 60) {
+            btnWrap.classList.add('collapsed');
+        }
+    });
+}
+
+/**
+ * 切换操作按钮弹出菜单（更多按钮点击时）
+ */
+function toggleActionPopup(msgEl, moreBtn) {
+    const existing = msgEl.querySelector('.action-popup');
+    if (existing) {
+        existing.remove();
+        return;
+    }
+
+    const btnWrap = msgEl.querySelector('.action-buttons');
+    if (!btnWrap) return;
+
+    const hiddenButtons = [];
+    btnWrap.querySelectorAll('button:not(.more-btn)').forEach(btn => {
+        hiddenButtons.push({ html: btn.innerHTML, title: btn.title });
+    });
+
+    if (hiddenButtons.length === 0) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'action-popup';
+    popup.addEventListener('click', (e) => e.stopPropagation());
+
+    hiddenButtons.forEach((btnInfo, index) => {
+        const item = document.createElement('button');
+        item.innerHTML = btnInfo.html;
+        item.title = btnInfo.title;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const allBtns = btnWrap.querySelectorAll('button:not(.more-btn)');
+            if (allBtns[index]) {
+                allBtns[index].click();
+            }
+            popup.remove();
+        });
+        popup.appendChild(item);
+    });
+
+    // 追加到 body，脱离消息气泡的层级约束
+    document.body.appendChild(popup);
+
+    // 用 getBoundingClientRect 计算位置（水平弹出）
+    const rect = msgEl.getBoundingClientRect();
+    const gap = 4;
+    if (msgEl.classList.contains('ai-msg-user')) {
+        // 用户消息：弹窗在气泡左侧
+        popup.style.left = (rect.left - popup.offsetWidth - gap) + 'px';
+    } else {
+        // AI 消息：弹窗在气泡右侧
+        popup.style.left = (rect.right + gap) + 'px';
+    }
+    popup.style.top = (rect.top) + 'px';
+    popup.style.position = 'fixed';
+
+    const closeHandler = (ev) => {
+        if (!popup.contains(ev.target) && ev.target !== moreBtn) {
+            popup.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
 
 /**
@@ -2909,6 +3044,44 @@ async function handleRegenerate(msgEl) {
     } catch (_) { /* 静默 */ }
 
     startStreaming(true);
+}
+
+/**
+ * 重新发送用户消息
+ */
+async function handleResend(msgEl) {
+    if (!msgEl || !msgEl.parentNode || isStreaming) return;
+
+    const children = Array.from(messagesEl.children);
+    const idx = children.indexOf(msgEl);
+    if (idx === -1) return;
+
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (!contentDiv) return;
+    const content = contentDiv.textContent || '';
+
+    chatHistory.splice(idx);
+    updateContextSize();
+    children.slice(idx).forEach(el => el.remove());
+
+    try {
+        await window.go.main.App.ClearAISessionMessages(activeSessionId);
+        if (chatHistory.length > 0) {
+            await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+        }
+    } catch (_) { /* 静默 */ }
+
+    addMessage(content, 'user');
+    const newUserMsgEl = messagesEl.lastElementChild;
+    if (newUserMsgEl) {
+        newUserMsgEl.appendChild(createMsgActions(content, 'user'));
+        bindMsgContextMenu(newUserMsgEl, content, 'user');
+        collapseActionsIfNeeded(newUserMsgEl);
+    }
+    chatHistory.push({ role: 'user', content });
+    updateContextSize();
+
+    startStreaming(false);
 }
 
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -43,6 +44,9 @@ func (c *Client) openaiChatStream(ctx context.Context, messages []Message, think
 
 	stream, err := client.CreateChatCompletionStream(ctx, req)
 	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return &AIErrorWrapper{Err: ae}
+		}
 		return fmt.Errorf("创建流失败: %w", err)
 	}
 	defer func() { _ = stream.Close() }()
@@ -53,7 +57,14 @@ func (c *Client) openaiChatStream(ctx context.Context, messages []Message, think
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return ctx.Err()
 			}
-			// io.EOF 是流正常结束
+			if errors.Is(err, io.EOF) {
+				// 流正常结束
+				return nil
+			}
+			// 其他错误：尝试分类
+			if ae := ClassifyError(err); ae != nil {
+				return &AIErrorWrapper{Err: ae}
+			}
 			return nil
 		}
 
@@ -103,6 +114,9 @@ func (c *Client) openaiChat(ctx context.Context, messages []Message) (string, st
 
 	resp, err := client.CreateChatCompletion(ctx, req)
 	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return "", "", &AIErrorWrapper{Err: ae}
+		}
 		return "", "", fmt.Errorf("非流式调用失败: %w", err)
 	}
 

@@ -25,7 +25,7 @@ func (c *Client) ollamaChatStream(ctx context.Context, messages []Message, think
 	req.Think = &api.ThinkValue{Value: thinkingEnabled}
 
 	// 流式回调
-	return ollamaClient.Chat(ctx, req, func(resp api.ChatResponse) error {
+	err = ollamaClient.Chat(ctx, req, func(resp api.ChatResponse) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -46,6 +46,15 @@ func (c *Client) ollamaChatStream(ctx context.Context, messages []Message, think
 
 		return nil
 	})
+
+	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return &AIErrorWrapper{Err: ae}
+		}
+		return err
+	}
+
+	return nil
 }
 
 // ollamaChat 调用 Ollama 原生 API 的非流式接口
@@ -77,6 +86,9 @@ func (c *Client) ollamaChat(ctx context.Context, messages []Message, thinkingEna
 	})
 
 	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return "", "", &AIErrorWrapper{Err: ae}
+		}
 		return "", "", fmt.Errorf("ollama 调用失败: %w", err)
 	}
 
