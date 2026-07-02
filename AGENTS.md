@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 59）
+> 生成日期: 2026-07-02（更新 60）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1423,4 +1423,15 @@ await loadXxxSetting();
 | **优化表达提示词加强** | 原提示词 AI 会把用户输入当成请求去执行（如"帮我写一个 prompt"会真的写出来）。改用更强制约束：去掉了 Markdown 格式避免"助手模式"，加入具体反例（"帮我写…"只润色不写、"什么是…"只润色不回答），输出格式限定为纯文本 |
 | **通知方式** | 所有用户提示统一使用项目自带的 `window.showNotification()`（右上角浮窗），不用浏览器 `alert()` |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+---
+
+## 八十五、新增记忆点（AI 助手标题偶发错位修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题根因** | `.view-title` 用 `position: absolute; left: 50%; transform: translateX(-50%)` 居中，脱离 flex 流。基础 `.view-header` 的 `margin-left: -16px` 未被 AI chat 覆盖，配合 `#viewAiChat.view { padding: 0 }` 导致渲染时序差异时偶发标题左偏 |
+| **修复方案** | 将 view-header 从 `display: flex; justify-content: space-between` 改为 CSS Grid 三列布局 `grid-template-columns: 1fr auto 1fr`，标题回归正常文档流，由 grid 保证居中 |
+| **附带修复** | `margin-left: 0` 显式取消基础负 margin；`.view-controls` 加 `justify-self: end` 保证 Token 数右对齐；`.back-btn` 加 `justify-self: start` 防止按钮拉伸填满整列（hover 高亮区域过大） |
+| **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 

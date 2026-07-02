@@ -1436,15 +1436,16 @@
 }
 
 #viewAiChat .view-header {
-    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
     padding: 24px 16px 0;
     margin-bottom: 24px;
+    margin-left: 0;
 }
 
 #viewAiChat .view-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    text-align: center;
     margin: 0;
     white-space: nowrap;
     cursor: pointer;
@@ -1452,6 +1453,14 @@
 }
 #viewAiChat .view-title:hover {
     color: var(--accent);
+}
+
+#viewAiChat .view-controls {
+    justify-self: end;
+}
+
+#viewAiChat .back-btn {
+    justify-self: start;
 }
 
 .ai-chat-layout {
