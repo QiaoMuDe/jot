@@ -1458,3 +1458,14 @@ await loadXxxSetting();
 | **CallAIStream 传参** | `CallAIStream` 中调用 `SearchWeb` 前，先调用 `GetAISearchResultLimit()` 获取用户配置值并传入。`TestTavilyConnection` 中传 `1`（测试连接只需一条结果）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
 | **行为说明** | 该限制作用于 Tavily API 查询层面：Tavily 最多返回 `maxResults` 条结果，所有返回结果全部用于 AI system message 注入和前端来源卡片展示。设置多少就用多少，不存在查多条但只用一部分的情况。 |
 
+---
+
+## 八十七、新增记忆点（召回卡片预览升级为完整笔记查看）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **改造概要** | 点击 AI 消息中的召回卡片，原使用独立简陋浮层（`aiCardPreviewModal`），现改为调用 `window.openEditor(card.id, true, false, true)` 打开完整的 `viewEditor` 只读视图，零新增组件获得完整笔记查看体验。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **openEditor 新增 hideEditBtn 参数** | `openEditor(noteId, readOnly, startFullscreen, hideEditBtn)` 新增第 4 个参数，`hideEditBtn=true` 时隐藏编辑按钮（`els.editorEditBtn.style.display = 'none'`），防止从召回卡片进入查看模式后误入编辑。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **noteId 不在 state.notes 时的处理** | 原代码中 `state.notes.find()` 未找到笔记时走 else 分支设置不存在的 `colorPicker` 元素导致崩溃。修复：改为调用 `window.go.main.App.GetNote(noteId)` 从后端加载笔记数据（标题、内容、标签），与「在列表中找到笔记」的分支走相同流程。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `openEditor()` |
+| **移除废弃代码** | 删除 `openCardPreview` 函数（~80 行）、`_cardPreviewWorker` 变量、`aiCardPreviewModal` HTML 结构、`.ai-card-preview-*` CSS 样式（~128 行）、预览浮层事件绑定。`preview-worker.js` 保留不动（仍被 `main.js` 编辑器预览使用）。 |
+

@@ -3086,8 +3086,10 @@ async function toggleFileExt() {
  * 打开编辑器（新建/编辑/查看）
  * @param {number|null} noteId - 笔记 ID，null 表示新建
  * @param {boolean} readOnly - 是否为只读查看模式
+ * @param {boolean} [startFullscreen] - 是否以全屏尺寸打开
+ * @param {boolean} [hideEditBtn] - 是否隐藏"编辑"按钮（从召回卡片打开时用）
  */
-async function openEditor(noteId, readOnly, startFullscreen) {
+async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     state.editingNoteId = noteId || null;
     state.selectedTags = [];
 
@@ -3115,7 +3117,29 @@ async function openEditor(noteId, readOnly, startFullscreen) {
             }
             state.selectedTags = (note.tags || []).map((t) => t.id);
         } else {
-            document.getElementById('colorPicker').value = '#6366f1';
+            // noteId 存在但不在 state.notes 中（如从召回卡片打开），从后端加载
+            try {
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNote) {
+                    const fetchedNote = await window.go.main.App.GetNote(noteId);
+                    if (fetchedNote) {
+                        noteData = fetchedNote;
+                        els.editorNoteTitle.value = fetchedNote.title || '';
+                        try {
+                            if (window.go.main.App.GetNoteContent) {
+                                editorContent = await window.go.main.App.GetNoteContent(noteId) || '';
+                            } else {
+                                editorContent = fetchedNote.content || '';
+                            }
+                        } catch (err) {
+                            console.error('获取完整笔记内容失败:', err);
+                            editorContent = fetchedNote.content || '';
+                        }
+                        state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
+                    }
+                }
+            } catch (err) {
+                console.error('获取笔记失败:', err);
+            }
         }
     } else {
         // 新建模式：默认标题为当前日期时间 + 表情
@@ -3138,7 +3162,8 @@ async function openEditor(noteId, readOnly, startFullscreen) {
         els.editorTypeToggle.style.display = isReadOnly ? 'none' : '';
     }
     // 只读模式显示编辑按钮，编辑/新建模式隐藏
-    els.editorEditBtn.style.display = isReadOnly ? '' : 'none';
+    // hideEditBtn 为 true 时强制隐藏编辑按钮（如从召回卡片打开）
+    els.editorEditBtn.style.display = (isReadOnly && !hideEditBtn) ? '' : 'none';
     // 从查看模式进入编辑时显示"返回查看模式"按钮
     els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
     // 只读模式禁用后缀点击（查看模式不可点击，编辑/新建模式可点击）
