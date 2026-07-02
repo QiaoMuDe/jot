@@ -1788,6 +1788,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        if (!enableThinking) return; // 深度思考关闭时跳过展示思维链
         if (!thinkingDetails) {
             _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');

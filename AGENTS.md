@@ -1,8 +1,8 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 55）
+> 生成日期: 2026-07-02（更新 58）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
-> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
+> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
 ---
 
@@ -32,7 +32,7 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 对话（LangChainGo 统一接口，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考模式 + 会话持久化 CRUD + 消息管理）
+│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理）
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -197,7 +197,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | LangChainGo 统一接口，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -481,6 +481,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `frontend/src/css/components/ai-chat.css` | 1576 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge） |
 | `frontend/src/js/ai-chat.js` | 1648 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选） |
 | `app.go` | 1064 | Wails 绑定层（71+ API，含引用笔记新接口） |
+| `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
+| `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
+| `internal/aicli/openai.go` | ~130 | OpenAI 兼容 API 客户端 |
+| `internal/aicli/ollama.go` | ~110 | Ollama 原生 API 客户端 |
+| `internal/aicli/extract.go` | ~80 | gjson 流式字段提取工具 |
+| `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/note_service.go` | 568 | 笔记 CRUD 服务 + 引用上下文构建 |
 | `services/types.go` | ~30 | 通用类型（含 NoteRefInfo/NoteRefContext） |
 | `frontend/src/css/variables.css` | 210 | 12 主题 CSS 变量 |
@@ -1373,5 +1379,36 @@ await loadXxxSetting();
 | **AI 助手标题居中** | `.view-header[data-view="ai-chat"] h2` 使用 `position: absolute; left: 50%; transform: translateX(-50%)` 固定在 `.view-header` 正中央，右侧内容（清空按钮）不影响标题位置 |
 | **空回复兼容处理** | 新增 `AIMessage.IsEmptyResponse bool` 数据库字段（GORM `default:false`），标识该消息是否为空回复。流式完成检测到空内容时（`!finalContent.trim()`）输出占位文字「AI 未返回内容，请尝试重新生成」，同时 `isEmptyMsg` 在替换前捕获。前端 `addMessage` 新增第 6 参数 `isEmptyResponse`，为 `true` 时渲染 `.ai-msg-empty`（琥珀色警示图标 `△` + 灰色文字 `.ai-msg-empty-text`），不走 Markdown 渲染。历史消息加载时通过 `msg.is_empty_response` 保持一致样式 |
 | **加载气泡宽度优化** | `.ai-msg-assistant` 移除全局 `min-width: 200px`，改为仅当包含 `.ai-msg-empty` 时通过 `:has(.ai-msg-empty)` 条件生效，加载中的三点动画气泡自然收缩到内容宽度 |
+| **Ollama 深度思考兼容** | Ollama 不支持 LangChainGo 的 `WithThinking`/`WithStreamingReasoningFunc`（OpenAI 专属），改为在 `WithStreamingFunc` 中实现 `<think>`/`</think>` 标签实时解析状态机。状态机使用累计缓冲区 `thinkAcc` + 游标 `thinkCursor` + 状态 `thinkInTag`，在 to 循环中检测标签边界并分流至 `onThinking`/`onChunk`。安全策略使用 `tagPrefixLen()` 仅保留匹配标签前缀的 ASCII 字节、不截断多字节字符，流结束时刷出剩余内容。`thinkingEnabled=false` 时静默丢弃标签内容（不调用 `onThinking`、不写入 `fullThinking`、不记录 `hasThinking`），使回复内容干净。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) `CallAIStream`
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai_message.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_message.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+
+---
+
+## 八十二、新增记忆点（自研 aicli 适配层，底层改用 go-openai + ollama/ollama/api）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **移除 LangChainGo** | 删除全部 `github.com/tmc/langchaingo` 依赖（`llms` / `ollama` / `openai`），改为 `internal/aicli/` 适配层 |
+| **新增依赖** | `github.com/sashabaranov/go-openai`（OpenAI 兼容）+ `github.com/ollama/ollama/api`（Ollama 原生）|
+| **移除依赖** | `github.com/tidwall/gjson`（不再需要自研 JSON 解析）|
+| **aicli 适配层文件** | 精简为 4 个文件：`types.go`（仅 `Message` / `StreamCallbacks` / `Config` 对外类型）、`client.go`（统一分派 `Stream()` / `Chat()`）、`openai.go`（调 go-openai 的 `CreateChatCompletionStream`）、`ollama.go`（调 ollama/api 的 `Client.Chat` + `Message.Thinking`）|
+| **OpenAI 兼容后端** | 使用 go-openai 库的 `CreateChatCompletionStream`（流式）和 `CreateChatCompletion`（非流式），从 `Delta.ReasoningContent` 提取思维链 |
+| **Ollama 原生后端** | 使用 ollama/api 库的 `Client.Chat(ctx, req, fn)` 流式回调，从 `Message.Thinking` 提取思维链，通过 `req.Think = &ThinkValue{Value: true}` 控制深度思考开关 |
+| **思维链字段** | go-openai 取 `Delta.ReasoningContent` / `Message.ReasoningContent`，ollama/api 取 `Message.Thinking`，均为编译期类型安全 |
+| **删除文件** | 删除 `extract.go`（gjson 字段提取不再需要）、删除 `types.go` 中自研的 HTTP 请求结构体 |
+| **ai_service.go** | 零改动，适配层接口 `aicli.NewClient().Stream()/.Chat()` 签名不变 |
+| **涉及文件** | `internal/aicli/`（4 个文件重写）、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[go.mod](file:///d:/资源池/下水道/Dev/本地项目/jot/go.mod) |
+
+---
+
+## 八十三、新增记忆点（深度思考 Toggle 根源控制 + 400 错误修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **400 错误修复** | go-openai v1.41.2 的 `ChatCompletionMessage.Content` 标签为 `json:"content,omitempty"`，空内容消息会导致 JSON 缺少 `content` 字段，DeepSeek 等 API 返回 `400: The content field is a required field`。修复：`openaiChatStream` 发送请求前过滤掉 Content 为空的 messages |
+| **Ollama Think 显式控制** | `req.Think = &api.ThinkValue{Value: thinkingEnabled}` — toggle 关闭时也显式设为 `false`（原为 nil），从根源控制是否输出 thinking |
+| **OpenAI enable_thinking 显式控制** | `req.ChatTemplateKwargs = map[string]any{"enable_thinking": thinkingEnabled}` — toggle 关闭时设为 `false`，支持 Qwen3/Ollama OpenAI 兼容接口 |
+| **前端兜底防护** | `ai:stream-thinking` 事件处理加 `if (!enableThinking) return;`，即使后端意外返回思维链也不展示 |
+| **历史消息不动** | `addMessage()` 不做任何修改，已保存的思维链内容在历史加载时正常展示，不受 toggle 状态影响 |
+| **涉及文件** | [openai.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/openai.go)、[ollama.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/ollama.go)、[client.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/client.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 

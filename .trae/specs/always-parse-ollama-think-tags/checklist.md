@@ -1,0 +1,6 @@
+- [x] 编译通过：`go build ./internal/services/` 无错误
+- [ ] Ollama + `thinkingEnabled=false`：`<think>` 标签不显示在前端，回复内容干净
+- [ ] Ollama + `thinkingEnabled=true`：思维链正常折叠展示
+- [ ] Ollama + `thinkingEnabled=false`：`hasThinking` 为 false，`elapsedThinking` 为 0
+- [ ] Ollama + `thinkingEnabled=false` 流结束时，剩余缓冲区内内容不调用 `onThinking`
+- [ ] OpenAI provider 行为不受影响

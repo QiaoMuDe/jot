@@ -9,11 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"jot/internal/aicli"
 	"jot/internal/models"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/ollama"
-	"github.com/tmc/langchaingo/llms/openai"
 	"gorm.io/gorm"
 )
 
@@ -83,53 +81,6 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	return svc.Set("tavily_api_key", cfg.TavilyAPIKey)
 }
 
-// createLLM 根据配置创建 LangChainGo LLM 实例
-func createLLM(ctx context.Context, cfg AIConfig) (llms.Model, error) {
-	switch cfg.Provider {
-	case "openai":
-		opts := []openai.Option{}
-		if cfg.BaseURL != "" {
-			opts = append(opts, openai.WithBaseURL(cfg.BaseURL))
-		}
-		if cfg.APIKey != "" {
-			opts = append(opts, openai.WithToken(cfg.APIKey))
-		}
-		if cfg.Model != "" {
-			opts = append(opts, openai.WithModel(cfg.Model))
-		}
-		return openai.New(opts...)
-	case "ollama":
-		opts := []ollama.Option{}
-		if cfg.BaseURL != "" {
-			opts = append(opts, ollama.WithServerURL(cfg.BaseURL))
-		}
-		if cfg.Model != "" {
-			opts = append(opts, ollama.WithModel(cfg.Model))
-		}
-		return ollama.New(opts...)
-	default:
-		return nil, fmt.Errorf("不支持的 AI 服务商: %s", cfg.Provider)
-	}
-}
-
-// convertMessages 将 services.Message 转换为 LangChainGo 的 MessageContent 列表
-func convertMessages(messages []Message) []llms.MessageContent {
-	result := make([]llms.MessageContent, 0, len(messages))
-	for _, msg := range messages {
-		switch msg.Role {
-		case "user":
-			result = append(result, llms.TextParts(llms.ChatMessageTypeHuman, msg.Content))
-		case "assistant":
-			result = append(result, llms.TextParts(llms.ChatMessageTypeAI, msg.Content))
-		case "system":
-			result = append(result, llms.TextParts(llms.ChatMessageTypeSystem, msg.Content))
-		default:
-			result = append(result, llms.TextParts(llms.ChatMessageTypeHuman, msg.Content))
-		}
-	}
-	return result
-}
-
 // CallAI 调用 AI 接口（非流式）
 func (a *AIService) CallAI(messages []Message) (string, error) {
 	cfg := a.GetConfig()
@@ -137,23 +88,25 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	llm, err := createLLM(ctx, cfg)
+	client := aicli.NewClient(aicli.Config{
+		Provider: cfg.Provider,
+		BaseURL:  cfg.BaseURL,
+		APIKey:   cfg.APIKey,
+		Model:    cfg.Model,
+	})
+
+	// Convert services.Message to aicli.Message
+	aicliMsgs := make([]aicli.Message, len(messages))
+	for i, m := range messages {
+		aicliMsgs[i] = aicli.Message{Role: m.Role, Content: m.Content}
+	}
+
+	content, _, err := client.Chat(ctx, aicliMsgs, false)
 	if err != nil {
 		return "", fmt.Errorf("AI 调用失败: %w", err)
 	}
 
-	msgContents := convertMessages(messages)
-
-	resp, err := llm.GenerateContent(ctx, msgContents)
-	if err != nil {
-		return "", fmt.Errorf("AI 调用失败: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("AI 调用失败: 响应中没有 choices")
-	}
-
-	return resp.Choices[0].Content, nil
+	return content, nil
 }
 
 // CallAIStream 流式调用 AI 接口
@@ -162,83 +115,27 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, float64, float64), onError func(string)) {
 	cfg := a.GetConfig()
 
-	llm, err := createLLM(ctx, cfg)
-	if err != nil {
-		onError("创建 LLM 失败: " + err.Error())
-		return
+	client := aicli.NewClient(aicli.Config{
+		Provider: cfg.Provider,
+		BaseURL:  cfg.BaseURL,
+		APIKey:   cfg.APIKey,
+		Model:    cfg.Model,
+	})
+
+	// Convert services.Message to aicli.Message
+	aicliMsgs := make([]aicli.Message, len(messages))
+	for i, m := range messages {
+		aicliMsgs[i] = aicli.Message{Role: m.Role, Content: m.Content}
 	}
 
-	streamStart := time.Now()
-	var thinkingStart time.Time
-	var hasThinking bool
-
-	var fullContent strings.Builder
-	var fullThinking strings.Builder
-
-	msgContents := convertMessages(messages)
-
-	var opts []llms.CallOption
-
-	if thinkingEnabled {
-		opts = append(opts,
-			llms.WithStreamingReasoningFunc(func(_ context.Context, reasoningChunk, chunk []byte) error {
-				if !hasThinking {
-					thinkingStart = time.Now()
-					hasThinking = true
-				}
-				rText := string(reasoningChunk)
-				if rText != "" {
-					fullThinking.WriteString(rText)
-					if onThinking != nil {
-						onThinking(rText)
-					}
-				}
-				// content may come alongside reasoning
-				if len(chunk) > 0 {
-					text := string(chunk)
-					if text != "" {
-						fullContent.WriteString(text)
-						onChunk(text)
-					}
-				}
-				return nil
-			}),
-			llms.WithThinking(&llms.ThinkingConfig{
-				Mode:           llms.ThinkingModeAuto,
-				StreamThinking: true,
-				ReturnThinking: true,
-			}),
-		)
-	} else {
-		opts = append(opts,
-			llms.WithStreamingFunc(func(_ context.Context, chunk []byte) error {
-				text := string(chunk)
-				if text != "" {
-					fullContent.WriteString(text)
-					onChunk(text)
-				}
-				return nil
-			}),
-		)
+	callbacks := aicli.StreamCallbacks{
+		OnChunk:    onChunk,
+		OnThinking: onThinking,
+		OnDone:     onDone,
+		OnError:    onError,
 	}
 
-	_, err = llm.GenerateContent(ctx, msgContents, opts...)
-	if err != nil {
-		// 检查是否是 context.Canceled（用户取消）
-		if strings.Contains(err.Error(), "context canceled") {
-			onDone(fullContent.String(), 0, 0)
-			return
-		}
-		onError("AI 调用失败: " + err.Error())
-		return
-	}
-
-	var elapsedThinking float64
-	if hasThinking {
-		elapsedThinking = time.Since(thinkingStart).Seconds()
-	}
-	elapsedTotal := time.Since(streamStart).Seconds()
-	onDone(fullContent.String(), elapsedThinking, elapsedTotal)
+	client.Stream(ctx, aicliMsgs, thinkingEnabled, callbacks)
 }
 
 // TestConnection 测试 AI 服务连通性
@@ -297,19 +194,20 @@ func testOllamaConnection(cfg AIConfig) (bool, error) {
 	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
 }
 
-// testGenericConnection 通过创建 LLM 并执行简单调用来测试连通性
+// testGenericConnection 通过创建 AI 客户端并执行简单调用来测试连通性
 func testGenericConnection(cfg AIConfig) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	llm, err := createLLM(ctx, cfg)
-	if err != nil {
-		return false, fmt.Errorf("连接测试失败: %w", err)
-	}
+	client := aicli.NewClient(aicli.Config{
+		Provider: cfg.Provider,
+		BaseURL:  cfg.BaseURL,
+		APIKey:   cfg.APIKey,
+		Model:    cfg.Model,
+	})
 
-	_, err = llm.GenerateContent(ctx, []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeHuman, "test"),
-	}, llms.WithMaxTokens(1))
+	msgs := []aicli.Message{{Role: "user", Content: "test"}}
+	_, _, err := client.Chat(ctx, msgs, false)
 	if err != nil {
 		return false, fmt.Errorf("连接测试失败: %w", err)
 	}

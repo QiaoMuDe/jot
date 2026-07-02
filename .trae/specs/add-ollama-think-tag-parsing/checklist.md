@@ -1,0 +1,10 @@
+- [x] 编译通过：`go build ./internal/services/` 无错误
+- [ ] Ollama 推理模型回复包含 `<think>` 标签时：思维链被推送至 `onThinking`，内容被推送至 `onChunk`
+- [ ] Ollama 非推理模型回复不包含 `<think>` 标签时：所有内容走 `onChunk`，`fullThinking` 为空
+- [ ] 跨 chunk 标签边界正确处理（`<th`+`ink>`、`</th`+`ink>`），内容不丢失
+- [ ] 思维链在前、中间、结尾三种位置均正确分流
+- [ ] 仅有 `<think>` 开始无 `</think>` 结束时（截断），所有内容走 `onChunk` 容错
+- [ ] `fullContent` 仅含非思维链文本，`fullThinking` 含思维链文本
+- [ ] `hasThinking` / `elapsedThinking` 正确
+- [ ] OpenAI 兼容 Provider 的深度思考不受影响
+- [ ] AGENTS.md 已更新
