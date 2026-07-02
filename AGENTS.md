@@ -1469,3 +1469,14 @@ await loadXxxSetting();
 | **noteId 不在 state.notes 时的处理** | 原代码中 `state.notes.find()` 未找到笔记时走 else 分支设置不存在的 `colorPicker` 元素导致崩溃。修复：改为调用 `window.go.main.App.GetNote(noteId)` 从后端加载笔记数据（标题、内容、标签），与「在列表中找到笔记」的分支走相同流程。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `openEditor()` |
 | **移除废弃代码** | 删除 `openCardPreview` 函数（~80 行）、`_cardPreviewWorker` 变量、`aiCardPreviewModal` HTML 结构、`.ai-card-preview-*` CSS 样式（~128 行）、预览浮层事件绑定。`preview-worker.js` 保留不动（仍被 `main.js` 编辑器预览使用）。 |
 
+---
+
+## 八十八、新增记忆点（README.md 全面更新）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **更新动机** | 原 README.md 内容陈旧（仅含安装/开发/贡献），缺少项目全部功能描述和技术栈信息。新 README 覆盖 30+ 功能点，与项目实际状态同步。详见 [README.md](file:///d:/资源池/下水道/Dev/本地项目/jot/README.md) |
+| **新增章节** | 核心特性（笔记管理 / AI 助手 / 数据管理 / 设计系统 / 其他 5 分类）、快捷键表格（Ctrl+1~9 等 12 组）、技术栈（含版本号 + 前后端文件结构表）、FAQ 问答 |
+| **保留内容** | 安装指南、开发说明、贡献指南、许可证、相关链接 |
+| **移除内容** | 过时的 `Platform-Windows` 单行徽章和简单的单行描述 |
+
