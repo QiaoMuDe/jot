@@ -26,7 +26,7 @@ type SearchWebResult struct {
 // SearchWeb 使用 Tavily 搜索互联网，返回结构化的搜索结果
 // 如果 apiKey 为空或搜索失败，返回 nil（不阻塞调用方）
 // ctx 用于支持超时和取消（与 CallAIStream 共用 cancel，停止按钮可中断搜索）
-func SearchWeb(ctx context.Context, query string, apiKey string) *SearchWebResult {
+func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int) *SearchWebResult {
 	if apiKey == "" {
 		return nil
 	}
@@ -39,7 +39,7 @@ func SearchWeb(ctx context.Context, query string, apiKey string) *SearchWebResul
 	searchQuery := tavily.SearchQuery{
 		Query:       query,
 		SearchDepth: tavily.SearchQueryDepthAdvanced,
-		MaxResults:  5,
+		MaxResults:  maxResults,
 	}
 	answer, err := client.Search(searchCtx, searchQuery)
 	if err != nil {

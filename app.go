@@ -603,6 +603,33 @@ func (a *App) SetAIRefMaxChars(chars int) error {
 	return a.settingService.Set("ai_ref_max_chars", strconv.Itoa(chars))
 }
 
+// GetAISearchResultLimit 获取 AI 联网搜索结果数，空值时返回默认 5
+func (a *App) GetAISearchResultLimit() int {
+	val := a.settingService.Get("ai_search_result_limit")
+	if val == "" {
+		return 5
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 1 {
+		return 5
+	}
+	if n > 20 {
+		return 20
+	}
+	return n
+}
+
+// SetAISearchResultLimit 设置 AI 联网搜索结果数，含范围校验（1-20）
+func (a *App) SetAISearchResultLimit(limit int) error {
+	if limit < 1 {
+		return fmt.Errorf("搜索结果数必须大于 0")
+	}
+	if limit > 20 {
+		return fmt.Errorf("搜索结果数不能超过 20")
+	}
+	return a.settingService.Set("ai_search_result_limit", strconv.Itoa(limit))
+}
+
 // ==================== AI 相关绑定方法 ====================
 
 // GetAIConfig 获取 AI 服务配置
@@ -668,7 +695,7 @@ func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result := services.SearchWeb(ctx, "test", apiKey)
+	result := services.SearchWeb(ctx, "test", apiKey, 1)
 	if result == nil {
 		return false, fmt.Errorf("连接失败，请检查 API Key 是否正确")
 	}
@@ -720,7 +747,8 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				}
 
 				if query != "" {
-					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey)
+					searchResultLimit := a.GetAISearchResultLimit()
+					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
 					if searchResult != nil {
 						// 注入格式化文本到 system role
 						found := false

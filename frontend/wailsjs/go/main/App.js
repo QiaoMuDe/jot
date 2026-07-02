@@ -126,6 +126,10 @@ export function GetAIRefMaxChars() {
   return window['go']['main']['App']['GetAIRefMaxChars']();
 }
 
+export function GetAISearchResultLimit() {
+  return window['go']['main']['App']['GetAISearchResultLimit']();
+}
+
 export function GetAISessions() {
   return window['go']['main']['App']['GetAISessions']();
 }
@@ -296,6 +300,10 @@ export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
 
 export function SetAIRefMaxChars(arg1) {
   return window['go']['main']['App']['SetAIRefMaxChars'](arg1);
+}
+
+export function SetAISearchResultLimit(arg1) {
+  return window['go']['main']['App']['SetAISearchResultLimit'](arg1);
 }
 
 export function SetPageSize(arg1) {

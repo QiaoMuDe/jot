@@ -1445,3 +1445,16 @@ await loadXxxSetting();
 | **附带修复** | `margin-left: 0` 显式取消基础负 margin；`.view-controls` 加 `justify-self: end` 保证 Token 数右对齐；`.back-btn` 加 `justify-self: start` 防止按钮拉伸填满整列（hover 高亮区域过大） |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 
+---
+
+## 八十六、新增记忆点（联网搜索结果数可配置）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **设置项：搜索结果数** | 设置页「对话与搜索」卡片中新增"搜索结果数"数字输入框（`id=aiSearchResultLimit`，默认 5，范围 1-20），位置在 Tavily API Key 输入框下方、"默认开启"开关上方。修改后自动保存到数据库 `ai_search_result_limit` 键。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **后端绑定 GetAISearchResultLimit** | `app.go` 新增 `GetAISearchResultLimit() int` 绑定方法，读取 `ai_search_result_limit` 设置，空值/无效时返回默认 5，超过 20 截断为 20。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **后端绑定 SetAISearchResultLimit** | `app.go` 新增 `SetAISearchResultLimit(limit int) error` 绑定方法，含范围校验（< 1 返回"搜索结果数必须大于 0"，> 20 返回"搜索结果数不能超过 20"）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **SearchWeb 签名变更** | `search_service.go` 中 `SearchWeb` 函数签名从 `(ctx, query, apiKey)` 改为 `(ctx, query, apiKey, maxResults int)`，用 `maxResults` 参数替代硬编码的 `MaxResults: 5`。Tavily 查询和所有结果（格式化文本 + 来源列表）均使用该值。详见 [search_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/search_service.go) |
+| **CallAIStream 传参** | `CallAIStream` 中调用 `SearchWeb` 前，先调用 `GetAISearchResultLimit()` 获取用户配置值并传入。`TestTavilyConnection` 中传 `1`（测试连接只需一条结果）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **行为说明** | 该限制作用于 Tavily API 查询层面：Tavily 最多返回 `maxResults` 条结果，所有返回结果全部用于 AI system message 注入和前端来源卡片展示。设置多少就用多少，不存在查多条但只用一部分的情况。 |
+

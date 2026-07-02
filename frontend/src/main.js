@@ -1744,6 +1744,15 @@ async function loadAISettings() {
         } catch (_) { /* 使用 HTML 默认值 1000 */ }
     }
 
+    // 联网搜索结果数
+    const searchResultLimit = document.getElementById('aiSearchResultLimit');
+    if (searchResultLimit) {
+        try {
+            const val = await window.go.main.App.GetAISearchResultLimit();
+            searchResultLimit.value = val;
+        } catch (_) { /* 使用 HTML 默认值 5 */ }
+    }
+
     // 加载预设列表
     await loadProfiles();
 }
@@ -2246,6 +2255,30 @@ async function initAISettings() {
             try {
                 await window.go.main.App.SetAIRefMaxChars(val);
                 nm.show('引用截断字数已保存', 'success');
+            } catch (e) {
+                nm.show('保存失败: ' + e, 'error');
+            }
+        });
+    }
+
+    // ── 联网搜索结果数自动保存 ──
+    const searchResultLimit = document.getElementById('aiSearchResultLimit');
+    if (searchResultLimit) {
+        searchResultLimit.addEventListener('change', async () => {
+            const val = parseInt(searchResultLimit.value);
+            if (isNaN(val) || val < 1) {
+                searchResultLimit.value = 5;
+                nm.show('搜索结果数必须大于 0，已重置为 5', 'warning');
+                return;
+            }
+            if (val > 20) {
+                searchResultLimit.value = 20;
+                nm.show('搜索结果数不能超过 20，已重置为 20', 'warning');
+                return;
+            }
+            try {
+                await window.go.main.App.SetAISearchResultLimit(val);
+                nm.show('搜索结果数已保存', 'success');
             } catch (e) {
                 nm.show('保存失败: ' + e, 'error');
             }
