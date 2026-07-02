@@ -1480,3 +1480,16 @@ await loadXxxSetting();
 | **保留内容** | 安装指南、开发说明、贡献指南、许可证、相关链接 |
 | **移除内容** | 过时的 `Platform-Windows` 单行徽章和简单的单行描述 |
 
+---
+
+## 八十九、新增记忆点（更多技能菜单动画优化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **技能下拉菜单弹出动画** | 从 `0.15s ease-out`（仅 `translateY(4px)` 淡入）改为 `0.25s cubic-bezier(0.34, 1.56, 0.64, 1)` spring 弹性缓动 + `scale(0.96→1)` 缩放，展开时有轻微过冲回弹感。关闭时使用 `0.2s cubic-bezier(0.22, 1, 0.36, 1)` 平滑淡出。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **菜单项交错滑入** | 每个 `.ai-chat-skills-item` 初始 `opacity: 0; transform: translateX(-8px)`（从右滑入距离翻倍），`.open` 后逐个变为可见。使用 `transition-delay` 从 0.06s 到 0.46s（每个 +0.04s），所有 10 个技能项按视觉顺序从顶部到底部依次入场。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **翻译选项子菜单动画** | 将 `display: none` 瞬间切换改为 `max-height: 0→100px` + `opacity` + `padding` 三属性组合过渡（0.28s cubic-bezier），实现滑动展开/折叠效果。每个方向选项从 `translateY(-4px)` 淡入，交错延迟 0.05s/项。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **JS 控制方式变更** | 将 4 处 `style.display = 'none'` / `style.display = ''` 切换统一改为 `classList.remove('open')` / `classList.toggle('open')`，配合 CSS class 控制动画。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **Bug 修复 1：内联样式覆盖** | HTML 中翻译选项 `style="display:none"` 优先级高于 CSS class，`.open` 类无法覆盖。删除内联样式，由 CSS 默认状态（`max-height: 0; opacity: 0`）负责隐藏。 |
+| **Bug 修复 2：nth-child 偏移** | `.ai-chat-skills-options` div 是 dropdown 的子节点（child 2），导致 `nth-child` 计数偏移。原只有 9 条规则，第 10（工作总结）和第 11（提示词生成）无 `transition-delay`（默认 0s），与带延迟的顶部项抢跑。补上 nth-child(10) 和 (11) 规则后，所有 10 个技能项按正确时序入场。 |
+

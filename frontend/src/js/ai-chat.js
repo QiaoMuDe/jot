@@ -1048,7 +1048,7 @@ function bindEvents() {
             skillsDropdown.classList.toggle('open');
             // 每次打开菜单时重置方向选择区的展开状态
             if (!skillsDropdown.classList.contains('open')) {
-                if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+                if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
             }
         });
 
@@ -1060,8 +1060,7 @@ function bindEvents() {
                 if (skill === 'translate') {
                     // 切换方向选择区展开/收起
                     if (skillsTranslateOptions) {
-                        const isVisible = skillsTranslateOptions.style.display !== 'none';
-                        skillsTranslateOptions.style.display = isVisible ? 'none' : '';
+                        skillsTranslateOptions.classList.toggle('open');
                     }
                 } else if (skill === 'coding') {
                     // 直接激活编程技能 (无方向选择) , 先清空其他技能
@@ -1129,7 +1128,7 @@ function bindEvents() {
                     renderSkillChips();
                     // 关闭整个菜单
                     skillsDropdown.classList.remove('open');
-                    if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+                    if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
                 }
                 return;
             }
@@ -1140,7 +1139,7 @@ function bindEvents() {
     document.addEventListener('click', (e) => {
         if (skillsDropdown && skillsBtn && !skillsBtn.contains(e.target) && !skillsDropdown.contains(e.target)) {
             skillsDropdown.classList.remove('open');
-            if (skillsTranslateOptions) skillsTranslateOptions.style.display = 'none';
+            if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
         }
     });
 
