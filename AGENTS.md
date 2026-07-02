@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 66）
+> 生成日期: 2026-07-03（更新 67）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1567,4 +1567,16 @@ await loadXxxSetting();
 | **功能概述** | 移除之前错误设计的 `IsEmptyResponse` 数据库字段。AI 空回复不再作为占位消息入库，仅在前端通过通知提醒用户并移除 DOM 气泡。 |
 | **后端变更** | [models/ai_message.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_message.go)：移除 `IsEmptyResponse bool` 字段；[services/ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)：DTO 和所有引用移除；[database/db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)：AutoMigrate 后增加 `DropColumn` 迁移代码 |
 | **前端变更** | [models.ts](file:///d:/峡谷/Dev/本地项目/jot/frontend/wailsjs/go/models.ts)：移除 `is_empty_response` 属性；[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`addMessage()` 移除 `isEmptyResponse` 参数、空回复时 `showNotification()` 通知 + `chatHistory.pop()` + 移除 DOM `streamingEl`；[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：移除 `.ai-msg-empty` 相关样式 |
+
+## 九十七、新增记忆点（启动时顶栏主题色闪烁修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题根因** | WebView2 控件在加载 HTML 前使用原生默认背景（白色），而主题色（CSS `--bg`/`--topbar-bg`）存储在 `variables.css` 中异步加载，导致窗口出现约 50-200ms 的白色闪烁后才切换为用户保存的主题色 |
+| **修复方案** | 三层防护：① **Go 原生层** — `main.go` 新增 `themeBG()` 函数映射 12 主题 `--bg` 色值，`NewApp()` 后读取 SQLite 的 `theme` 设置，通过 `BackgroundColour: &options.RGBA` 设置 WebView2 控件初始背景色；② **HTML 内联脚本层** — `index.html` `<head>` 中同步从 `localStorage` 读取主题，设置 `data-theme` 并注入 `<style>:root{--bg:...;--topbar-bg:...}` 提前定义关键色值；③ **localStorage 持久化层** — `loadThemeSetting()` 后端获取后同步写入 localStorage，`saveThemeSetting()` 始终先写 localStorage 再写后端 |
+| **themeBG 函数** | 12 主题映射（default→#F7F5F0、dark→#0D0D0D、tokyo-night→#1A1B26 等），空值/未知主题回退 default。详见 [main.go](file:///d:/峡谷/Dev/本地项目/jot/main.go#L18-L41) |
+| **BackgroundColour** | `wails.Run()` 配置中新增 `BackgroundColour: &options.RGBA{R: r, G: g, B: b, A: 255}`，在窗口创建前设置 WebView2 原生背景色。详见 [main.go](file:///d:/峡谷/Dev/本地项目/jot/main.go#L60) |
+| **内联脚本色值映射** | 与 Go 端 `themeBG` 函数保持一致的 12 主题 `--bg`/`--topbar-bg` 硬编码映射，通过注入 `<style>` 在 CSS 加载前生效，完整 CSS 加载后自动覆盖。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html#L7-L36) |
+| **localStorage 同步** | `loadThemeSetting()` 从后端读取后 `localStorage.setItem('jot_theme', theme)` 确保下次启动同步恢复；`saveThemeSetting()` 先从 localStorage 再写后端，保证切换主题后立即持久化。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L1361-L1387) |
+| **关键经验** | Wails 的 `BackgroundColour` 是解决原生层白色闪烁的唯一手段，前端 CSS/JS 优化无法覆盖 WebView2 初始化阶段。三层防护（原生背景 → 内联样式 → 完整 CSS）分别覆盖启动的三个阶段，确保从窗口出现第一帧到内容渲染完成全程无色差。 |
 

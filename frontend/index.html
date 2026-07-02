@@ -4,7 +4,34 @@
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>jot - 笔记</title>
-
+    <script>
+        // 在首次渲染前从 localStorage 同步恢复主题，避免 CSS 加载延迟导致的闪烁
+        (function() {
+            var theme = localStorage.getItem('jot_theme');
+            if (theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+            // 在完整 CSS 加载前注入关键背景色（与 Go 端 BackgroundColour、CSS --bg 一致）
+            var criticalColors = {
+                'default':           ['#F7F5F0','#FFFFFF'],
+                'light':             ['#FAFAFA','#FFFFFF'],
+                'dark':              ['#0D0D0D','#141414'],
+                'nord':              ['#ECEFF4','#FFFFFF'],
+                'monokai-pro':       ['#2D2A2E','#221F22'],
+                'tokyo-night':       ['#1A1B26','#1F2335'],
+                'catppuccin-latte':  ['#EFF1F5','#FFFFFF'],
+                'catppuccin-mocha':  ['#1E1E2E','#181825'],
+                'gruvbox-light':     ['#FBF1C7','#F9F5D7'],
+                'gruvbox-dark':      ['#282828','#1D2021'],
+                'ayu-mirage':        ['#1F2430','#272D38'],
+                'dracula':           ['#282A36','#21222C'],
+            };
+            var c = criticalColors[theme] || criticalColors['default'];
+            var style = document.createElement('style');
+            style.textContent = ':root{--bg:' + c[0] + ';--topbar-bg:' + c[1] + '}';
+            document.head.appendChild(style);
+        })();
+    </script>
 </head>
 <body>
 <div id="app">

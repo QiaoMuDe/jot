@@ -1366,6 +1366,7 @@ async function loadThemeSetting() {
     } else {
         theme = localStorage.getItem('jot_theme') || 'default';
     }
+    localStorage.setItem('jot_theme', theme);
     applyTheme(theme);
 }
 
@@ -1373,15 +1374,13 @@ async function loadThemeSetting() {
  * 保存主题设置到后端
  */
 async function saveThemeSetting(themeName) {
+    localStorage.setItem('jot_theme', themeName);
     if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
         try {
             await window.go.main.App.SetSetting('theme', themeName);
         } catch (err) {
             console.error('保存主题设置失败:', err);
-            localStorage.setItem('jot_theme', themeName);
         }
-    } else {
-        localStorage.setItem('jot_theme', themeName);
     }
     nm.show('主题设置已保存', 'success');
 }
