@@ -16,10 +16,10 @@
 .ai-chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: 16px 20px 72px;
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 40px;
     scroll-behavior: smooth;
     min-height: 0;
     max-width: 900px;
@@ -79,6 +79,11 @@
     border-radius: 16px 16px 16px 4px;
     max-width: 82%;
     box-shadow: 0 1px 3px var(--shadow);
+}
+
+/* 空回复占位时给气泡一个合理宽度 */
+.ai-msg-assistant:has(.ai-msg-empty) {
+    min-width: 200px;
 }
 
 .ai-msg-assistant .msg-content {
@@ -1333,19 +1338,28 @@
     animation: ai-msg-enter 0.2s ease-out both;
 }
 
-/* ── 消息气泡悬浮操作按钮 ── */
+/* ── 消息气泡操作栏（耗时 + 操作按钮） ── */
 .ai-msg-actions {
     position: absolute;
-    bottom: -28px;
+    top: 100%;
+    left: 0;
     right: 0;
+    margin-top: 2px;
     display: flex;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity 0.15s;
+    align-items: center;
+    justify-content: space-between;
     z-index: 2;
 }
 
-.ai-msg:hover .ai-msg-actions {
+.ai-msg-actions .action-buttons {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.ai-msg:hover .ai-msg-actions .action-buttons {
     opacity: 1;
 }
 
@@ -1422,9 +1436,22 @@
 }
 
 #viewAiChat .view-header {
-    padding: 24px 0 0;
+    position: relative;
+    padding: 24px 16px 0;
     margin-bottom: 24px;
-    margin-left: 16px;
+}
+
+#viewAiChat .view-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+#viewAiChat .view-title:hover {
+    color: var(--accent);
 }
 
 .ai-chat-layout {
@@ -2514,19 +2541,25 @@
 .ai-msg-time {
     font-size: 0.75rem;
     color: var(--text-muted);
-    margin-top: 6px;
-    text-align: right;
     user-select: none;
-    line-height: 1.3;
+    line-height: 26px;
+    white-space: nowrap;
 }
 
-/* ── AI 助手标题 hover 交互（双击提示） ── */
-#viewAiChat .view-title {
-    cursor: pointer;
-    transition: color 0.15s ease;
+/* ── 空回复占位提示 ── */
+.ai-msg-empty {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.4;
 }
-#viewAiChat .view-title:hover {
-    color: var(--accent);
+.ai-msg-empty-icon {
+    flex-shrink: 0;
+    color: #d97706;
+    display: inline-flex;
+    align-items: center;
 }
 
 /* ── 新建会话条目入场动画 ── */

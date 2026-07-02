@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-01（更新 54）
+> 生成日期: 2026-07-02（更新 55）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ LangChainGo（AI 对话）
 
@@ -478,8 +478,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
 | `frontend/src/main.js` | 5460 | 前端核心逻辑 |
-| `frontend/src/css/components/ai-chat.css` | 1565 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge） |
-| `frontend/src/js/ai-chat.js` | 1639 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选） |
+| `frontend/src/css/components/ai-chat.css` | 1576 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge） |
+| `frontend/src/js/ai-chat.js` | 1648 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选） |
 | `app.go` | 1064 | Wails 绑定层（71+ API，含引用笔记新接口） |
 | `services/note_service.go` | 568 | 笔记 CRUD 服务 + 引用上下文构建 |
 | `services/types.go` | ~30 | 通用类型（含 NoteRefInfo/NoteRefContext） |
@@ -1361,4 +1361,17 @@ await loadXxxSetting();
 | **改动3：样式 display 切换改为 class 切换** | 弹窗打开/关闭从 `style.display = 'flex'/'none'` 改为 `classList.add/remove('visible')`；管理列表收起改为添加 `closing` class + `animationend` 后移除。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **关键经验** | 动态创建/销毁的 DOM 元素做收起动画时，不能立即 `removeChild`，需要先添加动画 class，监听 `animationend` 事件后再移除 DOM。`display: none/flex` 切换无法做过渡动画，需改用 `opacity` + `visibility` + class 控制 |
 | **涉及文件** | [settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+---
+
+## 八十一、新增记忆点（AI 回复 UI 改善）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **耗时标签移入操作栏** | AI 回复的耗时显示（`⏱ 3.2 秒`）从独立行移入 `.ai-msg-actions` 操作栏左侧，永久可见；操作按钮（复制/保存/再生/追问）设在操作栏右侧，仅鼠标悬停 `.ai-msg` 时显示。`.ai-msg-actions` 使用 `display: flex; justify-content: space-between` 布局，`.action-buttons` 用 `margin-left: auto` 推到右侧，`opacity: 0` 默认隐藏、`.ai-msg:hover` 时 `opacity: 1` |
+| **消息间距加大** | `.ai-msg` 的 `margin-bottom` 从 32px 改为 40px，`.ai-chat-messages` 底部 `padding-bottom` 从 16px 改为 72px，增大最后一条消息与输入区之间的视觉距离 |
+| **AI 助手标题居中** | `.view-header[data-view="ai-chat"] h2` 使用 `position: absolute; left: 50%; transform: translateX(-50%)` 固定在 `.view-header` 正中央，右侧内容（清空按钮）不影响标题位置 |
+| **空回复兼容处理** | 新增 `AIMessage.IsEmptyResponse bool` 数据库字段（GORM `default:false`），标识该消息是否为空回复。流式完成检测到空内容时（`!finalContent.trim()`）输出占位文字「AI 未返回内容，请尝试重新生成」，同时 `isEmptyMsg` 在替换前捕获。前端 `addMessage` 新增第 6 参数 `isEmptyResponse`，为 `true` 时渲染 `.ai-msg-empty`（琥珀色警示图标 `△` + 灰色文字 `.ai-msg-empty-text`），不走 Markdown 渲染。历史消息加载时通过 `msg.is_empty_response` 保持一致样式 |
+| **加载气泡宽度优化** | `.ai-msg-assistant` 移除全局 `min-width: 200px`，改为仅当包含 `.ai-msg-empty` 时通过 `:has(.ai-msg-empty)` 条件生效，加载中的三点动画气泡自然收缩到内容宽度 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai_message.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_message.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
 

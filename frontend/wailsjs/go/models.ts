@@ -340,6 +340,7 @@ export namespace services {
 	    reasoning_content: string;
 	    thinking_elapsed: number;
 	    total_elapsed: number;
+	    is_empty_response: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -352,6 +353,7 @@ export namespace services {
 	        this.reasoning_content = source["reasoning_content"];
 	        this.thinking_elapsed = source["thinking_elapsed"];
 	        this.total_elapsed = source["total_elapsed"];
+	        this.is_empty_response = source["is_empty_response"];
 	    }
 	}
 	export class NoteRefInfo {

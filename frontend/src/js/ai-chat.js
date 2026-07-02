@@ -1455,7 +1455,7 @@ async function switchSession(id) {
                     bindMsgContextMenu(userMsgEl, msg.content, 'user');
                 }
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0);
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.is_empty_response || false);
                 el.appendChild(createMsgActions(msg.content, 'assistant'));
                 bindMsgContextMenu(el, msg.content, 'assistant');
             }
@@ -1874,15 +1874,29 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (!hasReceivedChunk) contentDiv.innerHTML = '';
         if (streamingContent === '' && fullContent) streamingContent = fullContent;
 
-        const finalContent = streamingContent || fullContent;
+        let finalContent = streamingContent || fullContent;
         renderMarkdown(contentDiv, finalContent);
 
-        // 添加总耗时标签
-        if (elapsedTotal > 0) {
-            const timeEl = document.createElement('div');
-            timeEl.className = 'ai-msg-time';
-            timeEl.textContent = '⏱ 总耗时 ' + elapsedTotal.toFixed(1) + ' 秒';
-            streamingEl.insertBefore(timeEl, streamingEl.querySelector('.ai-msg-actions'));
+        // 在替换空内容之前记录是否是空回复
+        const isEmptyMsg = !finalContent || !finalContent.trim();
+
+        // 空回复占位：模型流正常结束但未返回任何内容
+        if (!finalContent || !finalContent.trim()) {
+            contentDiv.innerHTML = '';
+            const empty = document.createElement('div');
+            empty.className = 'ai-msg-empty';
+            const icon = document.createElement('span');
+            icon.className = 'ai-msg-empty-icon';
+            icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+            const text = document.createElement('span');
+            text.textContent = 'AI 未返回内容，请尝试重新生成';
+            empty.appendChild(icon);
+            empty.appendChild(text);
+            contentDiv.appendChild(empty);
+            // 用占位文字替换空内容，确保能正常保存到库并在历史中回显
+            streamingContent = 'AI 未返回内容，请尝试重新生成';
+            fullContent = streamingContent;
+            finalContent = streamingContent;
         }
 
         if (thinkingDetails && thinkingContentEl && streamingThinking) {
@@ -1895,15 +1909,15 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
         chatHistory.push({ role: 'assistant', content: finalContent });
         updateContextSize();
-        streamingEl.appendChild(createMsgActions(finalContent, 'assistant'));
+        streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
 
         // 自动保存消息到数据库
         if (isRegenerate) {
             // 再生模式 :user 消息已在 handleRegenerate 中重保存, 只存 assistant
-            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
+            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal, is_empty_response: isEmptyMsg }]);
         } else {
-            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
+            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal, is_empty_response: isEmptyMsg }]);
         }
 
         // 展示联网搜索来源折叠面板
@@ -2154,8 +2168,11 @@ function renderMarkdown(el, content) {
  * @param {string} content - 消息内容
  * @param {'user'|'assistant'} role - 角色
  * @param {string} [reasoningContent] - 思维链内容 (可选) 
+ * @param {number} [thinkingElapsed] - 思考耗时
+ * @param {number} [totalElapsed] - 总耗时
+ * @param {boolean} [isEmptyResponse] - 是否空回复占位
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, isEmptyResponse) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
 
@@ -2180,19 +2197,35 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
 
     const contentEl = document.createElement('div');
     contentEl.className = 'msg-content';
-    if (role === 'assistant') {
+
+    if (role === 'assistant' && isEmptyResponse) {
+        // 空回复占位渲染
+        const empty = document.createElement('div');
+        empty.className = 'ai-msg-empty';
+        const icon = document.createElement('span');
+        icon.className = 'ai-msg-empty-icon';
+        icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        const text = document.createElement('span');
+        text.textContent = content;
+        empty.appendChild(icon);
+        empty.appendChild(text);
+        contentEl.appendChild(empty);
+    } else if (role === 'assistant') {
         renderMarkdown(contentEl, content);
     } else {
         contentEl.textContent = content;
     }
     el.appendChild(contentEl);
 
-    // 显示总耗时 (仅历史消息有时耗数据) 
+    // 显示总耗时 (仅历史消息有时耗数据) — 放入操作栏容器保持视觉一致
     if (totalElapsed > 0) {
-        const timeEl = document.createElement('div');
+        const actionsEl = document.createElement('div');
+        actionsEl.className = 'ai-msg-actions';
+        const timeEl = document.createElement('span');
         timeEl.className = 'ai-msg-time';
-        timeEl.textContent = '⏱ 总耗时 ' + totalElapsed.toFixed(1) + ' 秒';
-        el.appendChild(timeEl);
+        timeEl.textContent = '⏱ ' + totalElapsed.toFixed(1) + ' 秒';
+        actionsEl.appendChild(timeEl);
+        el.appendChild(actionsEl);
     }
 
     messagesEl.appendChild(el);
@@ -2497,9 +2530,21 @@ const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 /**
  * 创建消息气泡操作按钮
  */
-function createMsgActions(content, role) {
+function createMsgActions(content, role, elapsedTotal) {
     const container = document.createElement('div');
     container.className = 'ai-msg-actions';
+
+    // 耗时标签 - 左侧
+    if (elapsedTotal > 0) {
+        const timeEl = document.createElement('span');
+        timeEl.className = 'ai-msg-time';
+        timeEl.textContent = '⏱ ' + elapsedTotal.toFixed(1) + ' 秒';
+        container.appendChild(timeEl);
+    }
+
+    // 操作按钮 - 右侧（悬浮显示）
+    const btnWrap = document.createElement('div');
+    btnWrap.className = 'action-buttons';
 
     const copyBtn = document.createElement('button');
     copyBtn.innerHTML = COPY_ICON;
@@ -2508,7 +2553,7 @@ function createMsgActions(content, role) {
         e.stopPropagation();
         handleCopy(content, copyBtn);
     });
-    container.appendChild(copyBtn);
+    btnWrap.appendChild(copyBtn);
 
     if (role === 'assistant') {
         // 保存为笔记 (仅 AI 回复) 
@@ -2528,7 +2573,7 @@ function createMsgActions(content, role) {
                 window.showNotification?.('保存失败: ' + (e.message || e), 'error');
             }
         });
-        container.appendChild(saveBtn);
+        btnWrap.appendChild(saveBtn);
 
         const regenBtn = document.createElement('button');
         regenBtn.innerHTML = REGEN_ICON;
@@ -2537,7 +2582,7 @@ function createMsgActions(content, role) {
             e.stopPropagation();
             handleRegenerate(container.parentElement);
         });
-        container.appendChild(regenBtn);
+        btnWrap.appendChild(regenBtn);
 
         // 追问：在输入区域顶部显示引用栏
         const followUpBtn = document.createElement('button');
@@ -2557,9 +2602,10 @@ function createMsgActions(content, role) {
                 }
             } catch (_) {}
         });
-        container.appendChild(followUpBtn);
+        btnWrap.appendChild(followUpBtn);
     }
 
+    container.appendChild(btnWrap);
     return container;
 }
 
