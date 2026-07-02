@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 58）
+> 生成日期: 2026-07-02（更新 59）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1411,4 +1411,16 @@ await loadXxxSetting();
 | **前端兜底防护** | `ai:stream-thinking` 事件处理加 `if (!enableThinking) return;`，即使后端意外返回思维链也不展示 |
 | **历史消息不动** | `addMessage()` 不做任何修改，已保存的思维链内容在历史加载时正常展示，不受 toggle 状态影响 |
 | **涉及文件** | [openai.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/openai.go)、[ollama.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/ollama.go)、[client.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/client.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+---
+
+## 八十四、新增记忆点（前端模型选择校验 + 优化表达提示词加强）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **发送前校验模型** | `onSend()` 开头检查 `modelLabel.textContent` 是否为 `'--'`，未选模型时用 `showNotification` 提示用户先选模型，不发起后端请求 |
+| **优化表达按钮同样校验** | `polishBtn` 点击事件也加同样检查，未选模型时提示"请先选模型，再优化表达" |
+| **优化表达提示词加强** | 原提示词 AI 会把用户输入当成请求去执行（如"帮我写一个 prompt"会真的写出来）。改用更强制约束：去掉了 Markdown 格式避免"助手模式"，加入具体反例（"帮我写…"只润色不写、"什么是…"只润色不回答），输出格式限定为纯文本 |
+| **通知方式** | 所有用户提示统一使用项目自带的 `window.showNotification()`（右上角浮窗），不用浏览器 `alert()` |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
