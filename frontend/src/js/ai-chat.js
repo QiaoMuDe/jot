@@ -2324,6 +2324,8 @@ export async function onAIChatViewActivated() {
             } else {
                 await createSession();
             }
+        } else if (chatHistory.length === 0) {
+            showWelcome();
         }
 
         // 视图入场动画完成后聚焦输入框

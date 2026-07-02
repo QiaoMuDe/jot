@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-02（更新 60）
+> 生成日期: 2026-07-02（更新 61）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1356,6 +1356,16 @@ await loadXxxSetting();
 | **修复3：工具栏折行兜底** | `.ai-chat-toolbar` 添加 `flex-wrap: wrap` + `row-gap: 6px`，极端窄窗口时自然换行。`.ai-chat-model-select` 添加 `min-width: 0` + `flex-shrink: 1` 支持收缩。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **关键经验** | `text-overflow: ellipsis` 必须和文本在同一元素上。flex 容器（`display: flex`）的 `text-overflow` 对子元素的文本无效，因为 flex 子项是块级元素而非内联文本内容 |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+---
+
+## 八十六、新增记忆点（AI 助手欢迎语打字动画未触发修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题根因** | `onAIChatViewActivated()` 只在 `activeSessionId === null` 时调用 `switchSession`/`createSession`（其中含 `showWelcome()`）。当用户从笔记页再次回到 AI 助手时，`activeSessionId` 不为 null 且 `chatHistory` 为空，但没有分支调用 `showWelcome()`，导致空会话看不到欢迎语打字动画 |
+| **修复方案** | 在 `onAIChatViewActivated()` 的 `if (activeSessionId === null)` 块后加 `else if (chatHistory.length === 0) { showWelcome(); }`，确保回到 AI 助手时空会话能触发欢迎语 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 ## 七十九、新增记忆点（预设管理面板和弹窗动画）
 
