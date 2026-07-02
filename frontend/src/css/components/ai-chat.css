@@ -1317,6 +1317,12 @@
     color: #10B981;
 }
 
+/* 删除按钮 hover 显示红色警告色 */
+.ai-msg-actions button:last-child:hover {
+    color: #e74c3c;
+    background: color-mix(in srgb, #e74c3c 15%, transparent);
+}
+
 /* ── 思考过程可折叠区域（深度思考模型） ── */
 .thinking-details {
     margin: 0 0 8px 0;
@@ -2517,4 +2523,115 @@
     color: var(--text-muted);
     white-space: nowrap;
     user-select: none;
+}
+
+/* ── 消息编辑模式 ── */
+.ai-msg-edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    max-height: 200px;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    resize: vertical;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ai-msg-edit-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.ai-msg-edit-textarea.ai-msg-edit-error {
+    border-color: #e74c3c;
+    animation: ai-msg-edit-shake 0.4s ease;
+}
+
+@keyframes ai-msg-edit-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+.ai-msg-edit-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.ai-msg-edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ai-msg-edit-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.ai-msg-edit-confirm {
+    color: #27ae60;
+    background: color-mix(in srgb, #27ae60 12%, transparent);
+}
+
+.ai-msg-edit-confirm:hover {
+    background: color-mix(in srgb, #27ae60 25%, transparent);
+    transform: scale(1.1);
+}
+
+.ai-msg-edit-cancel {
+    color: #e74c3c;
+    background: color-mix(in srgb, #e74c3c 12%, transparent);
+}
+
+.ai-msg-edit-cancel:hover {
+    background: color-mix(in srgb, #e74c3c 25%, transparent);
+    transform: scale(1.1);
+}
+
+/* 用户消息中编辑按钮样式 (暗色背景) */
+.ai-msg-user .ai-msg-edit-textarea {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.25);
+    color: #fff;
+}
+
+.ai-msg-user .ai-msg-edit-textarea:focus {
+    border-color: rgba(255,255,255,0.6);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+}
+
+.ai-msg-user .ai-msg-edit-btn {
+    color: rgba(255,255,255,0.85);
+}
+
+.ai-msg-user .ai-msg-edit-confirm {
+    background: rgba(39,174,96,0.2);
+}
+
+.ai-msg-user .ai-msg-edit-confirm:hover {
+    background: rgba(39,174,96,0.35);
+}
+
+.ai-msg-user .ai-msg-edit-cancel {
+    background: rgba(231,76,60,0.2);
+}
+
+.ai-msg-user .ai-msg-edit-cancel:hover {
+    background: rgba(231,76,60,0.35);
 }

@@ -70,6 +70,14 @@ export function CreateTag(arg1, arg2) {
   return window['go']['main']['App']['CreateTag'](arg1, arg2);
 }
 
+export function DeleteAIMessage(arg1) {
+  return window['go']['main']['App']['DeleteAIMessage'](arg1);
+}
+
+export function DeleteAIMessagesAfter(arg1, arg2) {
+  return window['go']['main']['App']['DeleteAIMessagesAfter'](arg1, arg2);
+}
+
 export function DeleteAISession(arg1) {
   return window['go']['main']['App']['DeleteAISession'](arg1);
 }
@@ -332,6 +340,10 @@ export function TestTavilyConnection(arg1) {
 
 export function TogglePinNote(arg1) {
   return window['go']['main']['App']['TogglePinNote'](arg1);
+}
+
+export function UpdateAIMessageContent(arg1, arg2) {
+  return window['go']['main']['App']['UpdateAIMessageContent'](arg1, arg2);
 }
 
 export function UpdateNote(arg1, arg2, arg3, arg4) {

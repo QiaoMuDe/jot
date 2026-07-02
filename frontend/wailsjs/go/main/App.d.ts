@@ -38,6 +38,10 @@ export function CreateProfile(arg1:string,arg2:string,arg3:string,arg4:string):P
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
+export function DeleteAIMessage(arg1:number):Promise<void>;
+
+export function DeleteAIMessagesAfter(arg1:number,arg2:number):Promise<number>;
+
 export function DeleteAISession(arg1:number):Promise<void>;
 
 export function DeleteNote(arg1:number):Promise<void>;
@@ -169,6 +173,8 @@ export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
+
+export function UpdateAIMessageContent(arg1:number,arg2:string):Promise<void>;
 
 export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Promise<models.Note>;
 

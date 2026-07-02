@@ -891,6 +891,21 @@ func (a *App) ClearAISessionMessages(sessionID uint) error {
 	return a.aiService.ClearAISessionMessages(sessionID)
 }
 
+// UpdateAIMessageContent 更新指定 AI 消息的内容
+func (a *App) UpdateAIMessageContent(id uint, content string) error {
+	return a.aiService.UpdateAIMessageContent(id, content)
+}
+
+// DeleteAIMessage 按 ID 删除单条 AI 消息
+func (a *App) DeleteAIMessage(id uint) error {
+	return a.aiService.DeleteAIMessage(id)
+}
+
+// DeleteAIMessagesAfter 删除指定会话中在指定消息之后的所有消息
+func (a *App) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64, error) {
+	return a.aiService.DeleteAIMessagesAfter(sessionID, messageID)
+}
+
 // UpdateSessionContextTokens 更新会话的上下文 Token 数
 func (a *App) UpdateSessionContextTokens(sessionID uint, tokens int) error {
 	return a.aiService.UpdateSessionContextTokens(sessionID, tokens)

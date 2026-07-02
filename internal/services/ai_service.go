@@ -459,6 +459,28 @@ func (a *AIService) ClearAISessionMessages(sessionID uint) error {
 	return a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
 }
 
+// UpdateAIMessageContent 更新指定 AI 消息的 content 字段
+func (a *AIService) UpdateAIMessageContent(id uint, content string) error {
+	return a.db.Model(&models.AIMessage{}).Where("id = ?", id).Update("content", content).Error
+}
+
+// DeleteAIMessage 按 ID 删除单条 AI 消息
+func (a *AIService) DeleteAIMessage(id uint) error {
+	return a.db.Delete(&models.AIMessage{}, id).Error
+}
+
+// DeleteAIMessagesAfter 删除指定会话中在指定消息之后的所有消息（按 created_at 比较）
+func (a *AIService) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64, error) {
+	// 先查目标消息的 created_at
+	var msg models.AIMessage
+	if err := a.db.Select("created_at").First(&msg, messageID).Error; err != nil {
+		return 0, err
+	}
+	// 删除该 session 中 created_at 大于目标消息的所有记录
+	result := a.db.Where("session_id = ? AND created_at > ?", sessionID, msg.CreatedAt).Delete(&models.AIMessage{})
+	return result.RowsAffected, result.Error
+}
+
 // CountSessions 获取 AI 会话总数（不含软删除）
 func (a *AIService) CountSessions() (int64, error) {
 	var count int64

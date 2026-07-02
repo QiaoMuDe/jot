@@ -1221,6 +1221,12 @@ function bindEvents() {
                 })();
             } else if (action === 'regen') {
                 handleRegenerate(msgEl);
+            } else if (action === 'edit') {
+                if (isStreaming) return;
+                if (msgEl) enterEditMode(msgEl, content);
+            } else if (action === 'delete') {
+                if (isStreaming) return;
+                if (msgEl) handleDeleteMsg(msgEl);
             } else if (action === 'followUp') {
                 try {
                     const safeContent = String(content || '');
@@ -1444,14 +1450,14 @@ async function switchSession(id) {
         hideWelcome();
         msgs.forEach(msg => {
             if (msg.role === 'user') {
-                addMessage(msg.content, 'user');
+                addMessage(msg.content, 'user', undefined, undefined, undefined, undefined, msg.id);
                 const userMsgEl = messagesEl.lastElementChild;
                 if (userMsgEl) {
                     userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
                     bindMsgContextMenu(userMsgEl, msg.content, 'user');
                 }
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.is_empty_response || false);
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.is_empty_response || false, msg.id);
                 el.appendChild(createMsgActions(msg.content, 'assistant'));
                 bindMsgContextMenu(el, msg.content, 'assistant');
             }
@@ -2176,9 +2182,10 @@ function renderMarkdown(el, content) {
  * @param {number} [totalElapsed] - 总耗时
  * @param {boolean} [isEmptyResponse] - 是否空回复占位
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, isEmptyResponse) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, isEmptyResponse, msgId) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
+    if (msgId) el.dataset.msgId = msgId;
 
     // 如果有思维链内容, 先渲染可折叠思考区域
     if (role === 'assistant' && reasoningContent) {
@@ -2393,6 +2400,11 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     // 复制（所有消息共有）
     items.push({ action: 'copy', label: '复制' });
 
+    if (role === 'user') {
+        items.push({ type: 'divider' });
+        items.push({ action: 'edit', label: '编辑' });
+    }
+
     if (role === 'assistant') {
         items.push({ type: 'divider' });
         items.push({ action: 'save', label: '保存为笔记' });
@@ -2400,6 +2412,10 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
         items.push({ type: 'divider' });
         items.push({ action: 'followUp', label: '追问此条回复' });
     }
+
+    // 删除（所有消息共有）
+    items.push({ type: 'divider' });
+    items.push({ action: 'delete', label: '删除' });
 
     // 渲染菜单项
     items.forEach(item => {
@@ -2561,6 +2577,22 @@ function createMsgActions(content, role, elapsedTotal) {
     });
     btnWrap.appendChild(copyBtn);
 
+    if (role === 'user') {
+        // 编辑按钮
+        const editIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = editIcon;
+        editBtn.title = '编辑';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isStreaming) return;
+            const msgEl = container.parentElement;
+            enterEditMode(msgEl, content);
+        });
+        btnWrap.appendChild(editBtn);
+    }
+
     if (role === 'assistant') {
         // 保存为笔记 (仅 AI 回复) 
         const saveBtn = document.createElement('button');
@@ -2611,8 +2643,239 @@ function createMsgActions(content, role, elapsedTotal) {
         btnWrap.appendChild(followUpBtn);
     }
 
+    // 删除按钮（所有消息共有）
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    deleteBtn.title = '删除';
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isStreaming) return;
+        const msgEl = container.parentElement;
+        handleDeleteMsg(msgEl);
+    });
+    btnWrap.appendChild(deleteBtn);
+
     container.appendChild(btnWrap);
     return container;
+}
+
+/**
+ * 进入编辑模式 — 将消息文本替换为 textarea
+ */
+function enterEditMode(msgEl, originalContent) {
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (!contentDiv) return;
+
+    msgEl.dataset.originalContent = originalContent;
+
+    // 用户消息的内容直接挂载在 textContent 上, 清除以便插入 textarea
+    contentDiv.textContent = '';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'ai-msg-edit-textarea';
+    textarea.value = originalContent;
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            confirmEdit(msgEl);
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelEdit(msgEl);
+        }
+    });
+    contentDiv.appendChild(textarea);
+
+    setTimeout(() => {
+        textarea.focus();
+        textarea.select();
+    }, 50);
+
+    const actions = msgEl.querySelector('.ai-msg-actions');
+    const btnWrap = actions?.querySelector('.action-buttons');
+    if (btnWrap) btnWrap.style.display = 'none';
+
+    const editActions = document.createElement('div');
+    editActions.className = 'ai-msg-edit-actions';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'ai-msg-edit-btn ai-msg-edit-confirm';
+    confirmBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    confirmBtn.title = '确认 (Ctrl+Enter)';
+    confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        confirmEdit(msgEl);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ai-msg-edit-btn ai-msg-edit-cancel';
+    cancelBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    cancelBtn.title = '取消 (Esc)';
+    cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelEdit(msgEl);
+    });
+
+    editActions.appendChild(confirmBtn);
+    editActions.appendChild(cancelBtn);
+
+    if (actions) {
+        actions.appendChild(editActions);
+    }
+}
+
+/**
+ * 取消编辑 — 恢复原文
+ */
+function cancelEdit(msgEl) {
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (!contentDiv) return;
+
+    const textarea = contentDiv.querySelector('.ai-msg-edit-textarea');
+    if (textarea) textarea.remove();
+
+    // 恢复原始内容 (用户消息使用 textContent)
+    contentDiv.textContent = msgEl.dataset.originalContent || '';
+
+    const editActions = msgEl.querySelector('.ai-msg-edit-actions');
+    if (editActions) editActions.remove();
+
+    const btnWrap = msgEl.querySelector('.action-buttons');
+    if (btnWrap) btnWrap.style.display = '';
+}
+
+/**
+ * 确认编辑
+ */
+function confirmEdit(msgEl) {
+    const textarea = msgEl.querySelector('.ai-msg-edit-textarea');
+    if (!textarea) return;
+
+    const newContent = textarea.value;
+    const originalContent = msgEl.dataset.originalContent || '';
+
+    if (!newContent.trim()) {
+        textarea.classList.add('ai-msg-edit-error');
+        setTimeout(() => textarea.classList.remove('ai-msg-edit-error'), 500);
+        return;
+    }
+
+    if (newContent === originalContent) {
+        cancelEdit(msgEl);
+        return;
+    }
+
+    applyEdit(msgEl, newContent);
+}
+
+/**
+ * 应用编辑 — 更新内容、清除后续消息、调用后端、重新流式
+ */
+async function applyEdit(msgEl, newContent) {
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (contentDiv) {
+        contentDiv.textContent = newContent;
+    }
+
+    _contextMsgContent = newContent;
+
+    // 通过遍历 nextElementSibling 删除后续所有消息 DOM
+    let sibling = msgEl.nextElementSibling;
+    const removed = [];
+    while (sibling) {
+        const next = sibling.nextElementSibling;
+        // 只移除消息元素，跳过搜索结果折叠面板等非消息元素
+        if (sibling.classList.contains('ai-msg')) {
+            removed.push(sibling);
+        }
+        sibling.remove();
+        sibling = next;
+    }
+
+    // 从 chatHistory 尾部逐个弹出，直到遇到编辑消息的前一条
+    // 方法：从尾部开始删，保留的消息数量 = 编辑消息前还有几条
+    const allChildren = Array.from(messagesEl.children);
+    const idx = allChildren.indexOf(msgEl);
+    if (idx !== -1) {
+        const keepCount = idx; // 编辑消息之前还有几条消息
+        chatHistory.splice(keepCount); // 保留前 keepCount 条，删除其余
+    }
+
+    // 将编辑后的用户消息加回
+    chatHistory.push({ role: 'user', content: newContent });
+    updateContextSize();
+
+    // 更新 dataset 后再 cancelEdit, 避免 cancelEdit 从 dataset 恢复旧内容
+    msgEl.dataset.originalContent = newContent;
+    cancelEdit(msgEl);
+
+    // 清理 DB: 清空该会话所有消息后重新保存截断后的 chatHistory
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.ClearAISessionMessages(activeSessionId);
+            if (chatHistory.length > 0) {
+                await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+            }
+        } catch (_) { /* 静默失败 */ }
+    }
+
+    updateContextSize();
+
+    if (!isStreaming) {
+        const curModel = modelLabel?.textContent;
+        if (!curModel || curModel === '--') {
+            window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
+            return;
+        }
+        startStreaming(true);
+    }
+}
+
+/**
+ * 处理删除消息 — 确认后移除 DOM、清理 chatHistory、同步后端
+ */
+async function handleDeleteMsg(msgEl) {
+    if (!msgEl || !msgEl.parentNode || isStreaming) return;
+
+    const confirmed = await window.showConfirmDialog('确定要删除这条消息吗？');
+    if (!confirmed) return;
+
+    // 移除该消息之后的所有后续消息（DOM）
+    let sibling = msgEl.nextElementSibling;
+    while (sibling) {
+        const next = sibling.nextElementSibling;
+        sibling.remove();
+        sibling = next;
+    }
+
+    // 从 chatHistory 中截断
+    const allChildren = Array.from(messagesEl.children);
+    const idx = allChildren.indexOf(msgEl);
+    if (idx !== -1) {
+        chatHistory.splice(idx);
+    }
+
+    msgEl.remove();
+    updateContextSize();
+
+    // 同步 DB：清空该会话所有消息后重新保存截断后的 chatHistory
+    // 避免当前会话消息没有 msgId 导致 DB 操作被跳过
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.ClearAISessionMessages(activeSessionId);
+            if (chatHistory.length > 0) {
+                await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+            }
+        } catch (_) { /* 静默失败 */ }
+    }
+
+    // 删除后如果 chatHistory 为空, 显示空对话欢迎语
+    if (chatHistory.length === 0) {
+        showWelcome();
+    }
+
+    scrollToBottom();
 }
 
 function handleCopy(text, btn) {

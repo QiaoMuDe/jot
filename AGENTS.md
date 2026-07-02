@@ -1493,3 +1493,32 @@ await loadXxxSetting();
 | **Bug 修复 1：内联样式覆盖** | HTML 中翻译选项 `style="display:none"` 优先级高于 CSS class，`.open` 类无法覆盖。删除内联样式，由 CSS 默认状态（`max-height: 0; opacity: 0`）负责隐藏。 |
 | **Bug 修复 2：nth-child 偏移** | `.ai-chat-skills-options` div 是 dropdown 的子节点（child 2），导致 `nth-child` 计数偏移。原只有 9 条规则，第 10（工作总结）和第 11（提示词生成）无 `transition-delay`（默认 0s），与带延迟的顶部项抢跑。补上 nth-child(10) 和 (11) 规则后，所有 10 个技能项按正确时序入场。 |
 
+---
+
+## 九十、新增记忆点（用户消息编辑功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 已发送的用户消息支持编辑修改。用户消息气泡悬停或右键菜单中可点击编辑按钮，进入内联编辑模式。编辑确认后：前端更新消息显示 → 清除后续所有消息（DOM + chatHistory） → 同步 DB（ClearAISessionMessages + SaveAIMessages） → 自动重新流式回复。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/edit-ai-user-message/spec.md) |
+| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`addMessage` 新增第 7 参数 `msgId` 绑定到 DOM 属性；`switchSession` 加载历史消息时传入 `msg.id`；`createMsgActions` 中为 user 消息新增编辑按钮（铅笔图标）；4 个新函数 `enterEditMode` / `cancelEdit` / `confirmEdit` / `applyEdit`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：编辑模式全套样式 textarea 样式、确认/取消按钮（绿底/红底半透明背景，hover scale 1.1 放大）、错误抖动动画、暗色主题适配 |
+| **后端变更** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)：新增 `UpdateAIMessageContent(id, content)` 和 `DeleteAIMessagesAfter(sessionID, messageID)`；[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：对应 Wails 绑定 |
+| **交互行为** | 点击编辑 → textarea 自动聚焦全选 → 编辑后 Ctrl+Enter 或点击 ✓ 确认 → 内容不变退出、内容不同则更新+重发。Escape 或点击 ✕ 恢复原文。空内容红色抖动提示不退出编辑模式。 |
+| **Fix: ESC 退出编辑器** | textarea Escape 事件冒泡触发父级编辑器关闭逻辑。`e.preventDefault()` 后加 `e.stopPropagation()` 阻止冒泡。 |
+| **Fix: DB 不同步（msgId 不存在）** | 当前会话新建消息没有 `msgId`，`DeleteAIMessagesAfter` 被跳过。改用 `ClearAISessionMessages + SaveAIMessages` 模式，与 regenerate 一致。 |
+| **Fix: 编辑后内容回退** | `contentDiv.textContent = newContent` 后未更新 `dataset.originalContent`，`cancelEdit` 读旧数据覆盖回退。在 applyEdit 中同步更新 dataset。 |
+| **Fix: 模型未选** | applyEdit 调用 `startStreaming` 前添加与 `onSend` 一致的模型选择校验。 |
+| **Fix: DOM 删除索引偏移** | `children.indexOf(msgEl)` 因 `<details>` 等非消息元素导致删错位。改用 `nextElementSibling` 循环移除后续元素。splice 保留编辑消息之前的 chatHistory，再 push 编辑后的内容。 |
+
+---
+
+## 九十一、新增记忆点（AI 消息删除功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | AI 消息和用户消息均支持单条删除。在消息操作栏新增删除按钮（🗑 图标）以及右键菜单的「删除」选项。删除该条消息时，其所有后续消息一并删除（DOM + chatHistory + DB），空对话时自动显示欢迎语。 |
+| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`createMsgActions` 在所有消息操作栏尾部添加删除按钮，流式生成中禁用；`handleDeleteMsg` 新函数处理确认对话框 → DOM 清除 → chatHistory 截断 → DB 同步 → 空对话欢迎语；右键菜单 user/assistant 均添加「删除」选项。|
+| **CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：删除按钮 hover 红色警告色 |
+| **后端变更** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)：新增 `DeleteAIMessage(id uint) error` 按 ID 删除单条消息；[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：对应 Wails 绑定 |
+| **Fix: DB 不同步** | 与编辑问题相同，当前会话新建消息无 `msgId` 导致 DB 操作被跳过。改用 `ClearAISessionMessages + SaveAIMessages` 模式确保始终同步。 |
+
