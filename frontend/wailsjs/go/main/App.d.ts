@@ -172,6 +172,8 @@ export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
+export function TogglePinAISession(arg1:number):Promise<void>;
+
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 
 export function UpdateAIMessageContent(arg1:number,arg2:string):Promise<void>;

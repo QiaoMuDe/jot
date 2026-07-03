@@ -268,6 +268,7 @@ export namespace services {
 	    id: number;
 	    title: string;
 	    context_tokens: number;
+	    is_pinned: boolean;
 	    last_message: string;
 	    message_count: number;
 	    created_at: string;
@@ -282,6 +283,7 @@ export namespace services {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.context_tokens = source["context_tokens"];
+	        this.is_pinned = source["is_pinned"];
 	        this.last_message = source["last_message"];
 	        this.message_count = source["message_count"];
 	        this.created_at = source["created_at"];

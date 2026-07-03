@@ -338,6 +338,10 @@ export function TestTavilyConnection(arg1) {
   return window['go']['main']['App']['TestTavilyConnection'](arg1);
 }
 
+export function TogglePinAISession(arg1) {
+  return window['go']['main']['App']['TogglePinAISession'](arg1);
+}
+
 export function TogglePinNote(arg1) {
   return window['go']['main']['App']['TogglePinNote'](arg1);
 }

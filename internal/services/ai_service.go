@@ -327,16 +327,17 @@ type AISessionSummary struct {
 	ID            uint   `json:"id"`
 	Title         string `json:"title"`
 	ContextTokens int    `json:"context_tokens"`
+	IsPinned      bool   `json:"is_pinned"`
 	LastMessage   string `json:"last_message"`
 	MessageCount  int    `json:"message_count"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
 }
 
-// GetAISessions 获取所有会话，按 updated_at DESC 排序，附带最后一条消息摘要
+// GetAISessions 获取所有会话，置顶优先，然后按标题、更新时间排序，附带最后一条消息摘要
 func (a *AIService) GetAISessions() []AISessionSummary {
 	var sessions []models.AISession
-	a.db.Order("updated_at DESC").Find(&sessions)
+	a.db.Order("CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END, title ASC, updated_at DESC").Find(&sessions)
 
 	result := make([]AISessionSummary, 0, len(sessions))
 	for _, s := range sessions {
@@ -344,6 +345,7 @@ func (a *AIService) GetAISessions() []AISessionSummary {
 			ID:            s.ID,
 			Title:         s.Title,
 			ContextTokens: s.ContextTokens,
+			IsPinned:      s.IsPinned,
 			CreatedAt:     s.CreatedAt.Format("2006-01-02 15:04"),
 			UpdatedAt:     s.UpdatedAt.Format("2006-01-02 15:04"),
 		}
@@ -387,6 +389,15 @@ func (a *AIService) DeleteAISession(id uint) error {
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
 	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
+}
+
+// TogglePinAISession 切换会话置顶状态
+func (a *AIService) TogglePinAISession(id uint) error {
+	var session models.AISession
+	if err := a.db.First(&session, id).Error; err != nil {
+		return err
+	}
+	return a.db.Model(&session).Update("is_pinned", gorm.Expr("NOT is_pinned")).Error
 }
 
 // UpdateSessionContextTokens 更新会话的上下文 Token 数

@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 68）
+> 生成日期: 2026-07-03（更新 69）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 71 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 72 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -26,7 +26,7 @@ jot/                                    # 项目根目录
 │   │   ├── note.go                     # Note 实体（笔记）
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
-│   │   ├── ai_session.go              # AI 会话实体（标题/时间戳）
+│   │   ├── ai_session.go              # AI 会话实体（标题/置顶/时间戳）
 │   │   └── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
 │   └── services/
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
@@ -44,7 +44,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换 + 会话置顶 + 更多按钮下拉菜单）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -132,6 +132,7 @@ jot/                                    # 项目根目录
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
     ├── replace-quikchat-with-custom-ai-chat/ # 自实现 AI 对话组件 + 流式输出（已完成）
     ├── fix-ai-sessions-and-collapsible-sidebar/ # AI 会话持久化 + 多会话 + 侧栏折叠（已完成）
+    ├── add-ai-session-pin/           # AI 会话侧栏置顶功能
     ├── fix-data-page-scrollbar/          # 数据管理页面全屏滚动条修复（已完成）
     ├── restructure-internal-packages/ # 内部包重构
     ├── simplicity-date-filter/         # 时间筛选简化（日历→下拉菜单）
@@ -197,7 +198,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -478,9 +479,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
 | `frontend/src/main.js` | 5460 | 前端核心逻辑 |
-| `frontend/src/css/components/ai-chat.css` | 1576 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge） |
-| `frontend/src/js/ai-chat.js` | 1648 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选） |
-| `app.go` | 1064 | Wails 绑定层（71+ API，含引用笔记新接口） |
+| `frontend/src/css/components/ai-chat.css` | 2458 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
+| `frontend/src/js/ai-chat.js` | 3313 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶） |
+| `app.go` | 1064 | Wails 绑定层（72+ API，含引用笔记新接口 + 会话置顶） |
 | `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
 | `internal/aicli/openai.go` | ~130 | OpenAI 兼容 API 客户端 |
@@ -1616,3 +1617,17 @@ await loadXxxSetting();
 | **localStorage 持久化** | TOC 展开/折叠状态通过 localStorage key `tocSidebarOpen` 持久化，跨会话保持。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `_initTocToggle()` |
 | **无头部设计** | 侧栏内部无标题/图标头部，列表直接顶到侧栏顶部，视觉简洁。去掉了移除的 `.toc-header` HTML 结构及其 CSS（~35 行）。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
 | **涉及文件** | [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)（侧栏布局/动画/模式隔离/按钮高亮）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（TOC 渲染/切换/状态恢复/按钮逻辑）、[preview-worker.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/preview-worker.js)（标题提取）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（TOC 侧栏/按钮 DOM 结构） |
+
+## 一百零一、新增记忆点（AI 会话侧栏置顶功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **会话表新增 IsPinned 字段** | `internal/models/ai_session.go` 的 `AISession` 结构体新增 `IsPinned bool gorm:"default:false" json:"is_pinned"` 字段。`internal/services/ai_service.go` 的 `AISessionSummary` 同步新增 `IsPinned bool` 字段并在 `GetAISessions()` 中填充。详见 [ai_session.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_session.go) 和 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **排序逻辑变更** | `GetAISessions()` 排序从 `Order("updated_at DESC")` 改为 `Order("CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END, title ASC, updated_at DESC")`：置顶会话优先显示并按标题升序排列，其余按更新时间降序。详见 [ai_service.go#L340](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **TogglePinAISession API** | `ai_service.go` 新增 `TogglePinAISession(id uint) error` 方法，使用 `gorm.Expr("NOT is_pinned")` 切换置顶状态。`app.go` 新增同名 binding 方法。详见 [ai_service.go#L394-L401](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) 和 [app.go#L864-L867](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **删除按钮→更多按钮+下拉菜单** | `renderSessionList()` 中将原来的 ✕ 删除按钮替换为 ⋯ 更多按钮（`.ai-session-item-more`）。点击弹出下拉菜单（`.ai-session-more-menu`），包含"置顶/取消置顶"和"删除会话"两个菜单项，菜单项间有分隔线。菜单动态构建，使用 `getBoundingClientRect()` + `position: fixed` 定位，自动检测窗口边界防止溢出。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` |
+| **菜单交互** | 点击更多按钮切换菜单显隐，点击菜单项执行对应操作后关闭，点击菜单外部区域关闭。流式输出（`isStreaming`）时禁用更多按钮。删除操作逻辑保持不变（确认对话框、删除后自动切换/新建）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **高度一致性修复** | 更多按钮从 `display: none` → `display: flex`（hover 时）改为 `visibility: hidden` → `visibility: visible` + 常驻 `display: flex`，避免 hover 时按钮出现/消失改变条目高度。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) `.ai-session-item-more` |
+| **置顶状态视觉区分** | 置顶会话（`s.is_pinned === true`）添加 `pinned` CSS 类名（浅 accent 背景）、标题前插入 pin SVG 图标（`.ai-session-item-pin-icon`）。置顶与普通会话之间自动插入分隔线（`.ai-session-pin-divider`）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` 和 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **CSS 样式** | 新增 `.ai-session-item-more`（hover 显示的更多按钮）、`.ai-session-more-menu`（下拉菜单容器，带 `menuFadeIn` 缩放入场动画）、`.ai-session-more-menu-item`（普通/危险菜单项）、`.ai-session-more-menu-divider`（菜单分隔线）、`.ai-session-item.pinned`（置顶背景色）、`.ai-session-item-pin-icon`（pin 图标）、`.ai-session-pin-divider`（列表分隔线）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **涉及文件** | [ai_session.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_session.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |

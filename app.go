@@ -861,6 +861,11 @@ func (a *App) GetAISessions() []services.AISessionSummary {
 	return a.aiService.GetAISessions()
 }
 
+// TogglePinAISession 切换会话置顶状态
+func (a *App) TogglePinAISession(id uint) error {
+	return a.aiService.TogglePinAISession(id)
+}
+
 // CreateAISession 创建新 AI 会话，返回会话 ID
 func (a *App) CreateAISession() uint {
 	return a.aiService.CreateAISession()

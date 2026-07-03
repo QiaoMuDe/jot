@@ -35,6 +35,10 @@ let _contextMsgEl = null;     // 右键消息元素
 let _contextTitleEl = null;    // 右键菜单当前会话标题元素
 let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
 
+// 更多操作下拉菜单
+let sessionMoreMenu = null;    // 更多操作下拉菜单元素
+let sessionMoreMenuTarget = null; // 当前打开的会话项
+
 // 模型选择器状态
 let modelTrigger = null;
 let modelDropdown = null;
@@ -540,6 +544,11 @@ export async function initAIChat() {
 
     sessionContextMenu = document.getElementById('aiSessionContextMenu');
     aiMsgContextMenu = document.getElementById('aiMsgContextMenu');
+
+    // 更多操作下拉菜单 - 动态创建
+    sessionMoreMenu = document.createElement('div');
+    sessionMoreMenu.className = 'ai-session-more-menu';
+    document.body.appendChild(sessionMoreMenu);
 
     bindEvents();
 
@@ -1273,6 +1282,14 @@ function bindEvents() {
             refTagFilter.classList.remove('open');
         }
     });
+
+    // 点击下拉菜单外部关闭
+    document.addEventListener('click', (e) => {
+        if (sessionMoreMenu && !sessionMoreMenu.contains(e.target)) {
+            sessionMoreMenu.classList.remove('active');
+            sessionMoreMenuTarget = null;
+        }
+    });
 }
 
 /* ── 会话侧栏管理 ── */
@@ -1359,10 +1376,29 @@ function renderSessionList() {
     }
 
     sessionListEl.innerHTML = '';
-    filteredSessions.forEach(s => {
+
+    // 找出置顶到非置顶的过渡索引（后端已排序: 置顶优先）
+    let pinDividerIndex = -1;
+    for (let i = 0; i < filteredSessions.length - 1; i++) {
+        if (filteredSessions[i].is_pinned && !filteredSessions[i + 1].is_pinned) {
+            pinDividerIndex = i;
+            break;
+        }
+    }
+
+    filteredSessions.forEach((s, index) => {
         const item = document.createElement('div');
         item.className = 'ai-session-item' + (s.id === activeSessionId ? ' active' : '');
+        if (s.is_pinned) item.classList.add('pinned');
         item.dataset.id = s.id;
+
+        // 置顶图标
+        if (s.is_pinned) {
+            const pinIcon = document.createElement('span');
+            pinIcon.className = 'ai-session-item-pin-icon';
+            pinIcon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
+            item.appendChild(pinIcon);
+        }
 
         const title = document.createElement('span');
         title.className = 'ai-session-item-title';
@@ -1379,53 +1415,127 @@ function renderSessionList() {
         title.title = s.title;
         item.appendChild(title);
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'ai-session-item-delete';
-        delBtn.textContent = '✕';
-        delBtn.title = '删除会话';
-        item.appendChild(delBtn);
+        // 更多按钮 (替换原来的删除按钮)
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'ai-session-item-more';
+        moreBtn.textContent = '⋯';
+        moreBtn.title = '更多操作';
+        item.appendChild(moreBtn);
 
         // 点击切换会话
         item.addEventListener('click', (e) => {
-            if (e.target === delBtn) return;
+            if (e.target === moreBtn || moreBtn.contains(e.target)) return;
             switchSession(s.id);
         });
 
         // 双击内联编辑
         title.addEventListener('dblclick', () => startInlineEdit(title, s.id));
 
-        // 删除会话
-        delBtn.addEventListener('click', async (e) => {
+        // 更多按钮点击 - 显示下拉菜单
+        moreBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (isStreaming) return;
-            const confirmed = await window.showConfirmDialog('确定删除此会话吗？');
-            if (!confirmed) return;
 
-            try {
-                await window.go.main.App.DeleteAISession(s.id);
-            } catch (_) { /* 忽略 */ }
-
-            // 如果删除的是当前会话, 切换到最近会话或新建
-            if (s.id === activeSessionId) {
-                activeSessionId = null;
-                chatHistory = [];
-                messagesEl.innerHTML = '';
+            // 关闭其他菜单
+            if (sessionMoreMenuTarget && sessionMoreMenuTarget !== item) {
+                sessionMoreMenu.classList.remove('active');
             }
 
-            await loadSessionList();
-            // 如果删除后没有会话了, 自动新建一个
-            if (sessions.length === 0) {
-                await createSession();
-            } else if (activeSessionId === null) {
-                // 切换到最近一个会话
-                switchSession(sessions[0].id);
+            // 动态构建菜单内容
+            sessionMoreMenu.innerHTML = '';
+
+            // 置顶/取消置顶
+            const pinItem = document.createElement('div');
+            pinItem.className = 'ai-session-more-menu-item';
+            pinItem.dataset.action = 'pin';
+            pinItem.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>'
+                + (s.is_pinned ? ' 取消置顶' : ' 置顶');
+            sessionMoreMenu.appendChild(pinItem);
+
+            // 分隔线
+            const divider = document.createElement('div');
+            divider.className = 'ai-session-more-menu-divider';
+            sessionMoreMenu.appendChild(divider);
+
+            // 删除会话
+            const delItem = document.createElement('div');
+            delItem.className = 'ai-session-more-menu-item danger';
+            delItem.dataset.action = 'delete';
+            delItem.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除会话';
+            sessionMoreMenu.appendChild(delItem);
+
+            // 菜单项点击事件
+            pinItem.addEventListener('click', async (pe) => {
+                pe.stopPropagation();
+                sessionMoreMenu.classList.remove('active');
+                sessionMoreMenuTarget = null;
+                try {
+                    await window.go.main.App.TogglePinAISession(s.id);
+                } catch (_) { /* 忽略 */ }
+                await loadSessionList();
+            });
+
+            delItem.addEventListener('click', async (de) => {
+                de.stopPropagation();
+                sessionMoreMenu.classList.remove('active');
+                sessionMoreMenuTarget = null;
+                if (isStreaming) return;
+                const confirmed = await window.showConfirmDialog('确定删除此会话吗？');
+                if (!confirmed) return;
+
+                try {
+                    await window.go.main.App.DeleteAISession(s.id);
+                } catch (_) { /* 忽略 */ }
+
+                // 如果删除的是当前会话, 切换到最近会话或新建
+                if (s.id === activeSessionId) {
+                    activeSessionId = null;
+                    chatHistory = [];
+                    messagesEl.innerHTML = '';
+                }
+
+                await loadSessionList();
+                // 如果删除后没有会话了, 自动新建一个
+                if (sessions.length === 0) {
+                    await createSession();
+                } else if (activeSessionId === null) {
+                    // 切换到最近一个会话
+                    switchSession(sessions[0].id);
+                }
+            });
+
+            // 定位菜单
+            const rect = moreBtn.getBoundingClientRect();
+            let left = rect.right + 4;
+            let top = rect.top;
+            const menuWidth = 160;
+            const menuHeight = 80; // 估算
+            if (left + menuWidth > window.innerWidth) {
+                left = rect.left - menuWidth - 4;
             }
+            if (top + menuHeight > window.innerHeight) {
+                top = window.innerHeight - menuHeight - 8;
+            }
+            if (left < 4) left = 4;
+            if (top < 4) top = 4;
+            sessionMoreMenu.style.left = left + 'px';
+            sessionMoreMenu.style.top = top + 'px';
+
+            sessionMoreMenu.classList.add('active');
+            sessionMoreMenuTarget = item;
         });
 
         // 右键菜单
         item.addEventListener('contextmenu', showSessionContextMenu);
 
         sessionListEl.appendChild(item);
+
+        // 在置顶会话和普通会话之间插入分隔线
+        if (index === pinDividerIndex) {
+            const divider = document.createElement('div');
+            divider.className = 'ai-session-pin-divider';
+            sessionListEl.appendChild(divider);
+        }
     });
 }
 
