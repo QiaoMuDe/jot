@@ -1733,4 +1733,44 @@ await loadXxxSetting();
 | **批量移除标签样式** | `.ai-chat-ref-chip-remove-all`：红色虚线边框、hover 变红色实底白字、gap/圆角/字号与普通 chip 一致、复用 `chip-enter` 入场动画。详见 [ai-chat.css#L2112-L2133](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **交互规则** | ≥3 篇显示、≤2 篇隐藏；点击一键清空全部引用；手动移除部分后剩余 < 3 篇时自动消失。 |
 
-| **update 计数** | `AGENTS.md` 从更新 77 → 更新 78 |
+---
+
+## 一百一十二、新增记忆点（技能提示词迁移至后端数据库）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 原先 10 项技能的 system prompt 全部硬编码在前端 `ai-chat.js` 的 `SKILL_PROMPTS` 常量中，调整需要改 JS 源码 + 重新编译 |
+| **AIPrompt 模型** | 新增 `internal/models/ai_prompt.go`，定义 `AIPrompt` 结构体（ID/Key/Name/Category/Content/IsBuiltin/UpdatedAt），`TableName()` 返回 `"ai_prompts"`（避免 GORM 默认命名为 `a_i_prompts`）。详见 [ai_prompt.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_prompt.go) |
+| **initBuiltinPrompts** | `db.go` 中 AutoMigrate 后调用 `initBuiltinPrompts()`，通过 `Pluck("key")` 查询已存在的 key，仅插入缺失的提示词（增量插入，非首次运行全量跳过）。详见 [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go) |
+| **GetSkillPrompts 方法** | `AIService` 新增 `GetSkillPrompts(skillIds []string) (string, error)`，按 `WHERE key IN (?)` 查表，`strings.Join` 拼接返回。详见 [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **CallAIStream 注入** | `app.go` 中 `CallAIStream` 签名追加 `skillIds []string` 参数，在搜索和卡片召回之后、调用 LLM 之前，调用 `GetSkillPrompts` 将技能提示词注入到 system message（追加到已有 system 或新建）。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **前端删除 SKILL_PROMPTS** | 删除 `SKILL_PROMPTS` 常量（原 114-370 行）和 `getSkillSystemPrompts()` 函数。`startStreaming()` 中改为 `Object.entries(activeSkills).map()` 将技能 ID 映射为 DB key（如 `translate`+`to_chinese` → `skill_translate_cn`）传给后端。`OPTIMIZE_EXPRESSION_PROMPT` 保留前端不动。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **数据流变化** | 旧：前端拼 skillPrompts → 后端透传 → AI；新：前端传 skillIds → 后端查 ai_prompts 表 → 后端注入 system message → AI |
+
+## 一百一十三、新增记忆点（新增"人物档案"技能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **技能 ID** | `character`，DB key `skill_character`，无方向/无子选项模式（与编程/写作一致） |
+| **提示词设计** | 角色为"角色档案设计师"，输出结构化 Markdown 档案：基础信息 → 背景故事 → 性格分析 → 人际关系 → 能力与技能 → 经典语录。详见 [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go) `initBuiltinPrompts()` |
+| **修改文件** | `db.go` 新增提示词记录；`index.html` 新增菜单项（用户图标 + `data-skill="character"`）；`ai-chat.js` 新增 click 分支和 chip 渲染分支；`ai-chat.css` 新增 `nth-child(12)` 动画延迟 0.50s。详见 [tasks.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/documents/add-character-profile-skill-plan.md) |
+| **无需修改** | `startStreaming()` 的 skill ID 映射自动将 `character` → `skill_character`，后端 `GetSkillPrompts` 通用查表 |
+
+## 一百一十四、新增记忆点（initBuiltinPrompts 增量插入逻辑）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 原逻辑 `count > 0` 时直接 `return nil`，已有任何内置提示词就跳过全部插入，新增技能时已有用户不会获得新提示词 |
+| **修复** | 改为 `Pluck("key", &existingKeys)` 查询已有 key 集合 → 遍历 `allPrompts` 仅插入 `!existing[p.Key]` 的条目。详见 [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go) `initBuiltinPrompts()` |
+| **效果** | 后续新增技能时，已有用户数据库会自动补上缺失的提示词，无需重建数据库或手动迁移 |
+
+## 一百一十五、新增记忆点（后端基础身份提示词注入）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **场景** | 无引用笔记、无开启技能时，system message 为空，AI 没有身份认知，回复较生硬 |
+| **实现** | `CallAIStream` 的 goroutine 中，在搜索注入之前检查：`len(skillIds) == 0` 且 `messages` 无 system 消息时，注入身份提示词 `"你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI..."`。详见 [app.go#L747-L761](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **注入顺序** | 身份提示词 → 搜索结果 → 卡片召回 → 技能提示词，后续内容追加到身份提示词后面 |
+| **不注入场景** | 有笔记引用（已有 system 消息）、有技能开启（skillIds 非空）、或两者都有 |
+
+| **update 计数** | `AGENTS.md` 从更新 78 → 更新 82 |

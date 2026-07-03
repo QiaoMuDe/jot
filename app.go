@@ -726,7 +726,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool, sessionID uint, isRegenerate bool) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool, sessionID uint, isRegenerate bool, skillIds []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -744,6 +744,22 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 
 	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
 	go func() {
+		// 注入基础身份提示词（仅在无笔记引用且无技能时）
+		if len(skillIds) == 0 {
+			hasSystem := false
+			for i := range messages {
+				if messages[i].Role == "system" {
+					hasSystem = true
+					break
+				}
+			}
+			if !hasSystem {
+				messages = append([]services.Message{
+					{Role: "system", Content: "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI。你可以帮助用户写作、编程、翻译、总结、答疑以及完成其他文本处理任务。请根据用户的提问提供准确、有用的回答。"},
+				}, messages...)
+			}
+		}
+
 		// 联网搜索（静默执行，搜索结果注入 system message，前端不展示）
 		if searchEnabled {
 			cfg := a.aiService.GetConfig()
@@ -828,6 +844,26 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 						runtime.EventsEmit(a.ctx, "ai:recall-cards", string(cardsJSON))
 					}
 				}
+			}
+		}
+
+		// 技能提示词注入（在搜索和卡片召回之后执行）
+		if len(skillIds) > 0 {
+			skillPrompt, err := a.aiService.GetSkillPrompts(skillIds)
+			if err == nil && skillPrompt != "" {
+				found := false
+				for i := range messages {
+					if messages[i].Role == "system" {
+						messages[i].Content = messages[i].Content + "\n\n" + skillPrompt
+						found = true
+						break
+					}
+				}
+				if !found {
+					messages = append([]services.Message{{Role: "system", Content: skillPrompt}}, messages...)
+				}
+			} else if err != nil {
+				fmt.Printf("[SkillPrompt] 获取技能提示词失败: %v\n", err)
 			}
 		}
 

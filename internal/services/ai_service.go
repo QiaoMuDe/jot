@@ -44,6 +44,25 @@ func NewAIService(db *gorm.DB) *AIService {
 	return &AIService{db: db}
 }
 
+// GetSkillPrompts 根据 skill key 列表从数据库查询并拼接技能提示词
+func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
+	if len(skillIds) == 0 {
+		return "", nil
+	}
+	var prompts []models.AIPrompt
+	if err := s.db.Where("key IN ?", skillIds).Find(&prompts).Error; err != nil {
+		return "", fmt.Errorf("查询技能提示词失败: %w", err)
+	}
+	if len(prompts) == 0 {
+		return "", nil
+	}
+	var parts []string
+	for _, p := range prompts {
+		parts = append(parts, p.Content)
+	}
+	return strings.Join(parts, "\n\n"), nil
+}
+
 // GetConfig 从 SettingService 读取 AI 配置
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)

@@ -703,6 +703,7 @@
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(9) { transition-delay: 0.38s; }
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(10) { transition-delay: 0.42s; }
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(11) { transition-delay: 0.46s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(12) { transition-delay: 0.50s; }
 
 .ai-chat-skills-item {
     display: flex;
