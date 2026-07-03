@@ -8,6 +8,7 @@ import (
 	"jot/internal/fontutil"
 	"jot/internal/models"
 	"jot/internal/services"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gitee.com/MM-Q/go-kit/fs"
 	"gitee.com/MM-Q/verman"
@@ -716,7 +718,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool, sessionID uint, isRegenerate bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -823,7 +825,7 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 
 		// 如果已被用户取消（停止按钮），不再继续调用 LLM，避免白调用
 		if ctx.Err() != nil {
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0)
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0)
 			return
 		}
 
@@ -836,8 +838,67 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
 			},
 			func(content string, elapsedThinking, elapsedTotal float64) {
-				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal)
-				if fullThinking.Len() > 0 {
+				// 在后端统一计算 tokens
+				userTokens := 0
+				assistantTokens := estimateTokens(content)
+				// 仅统计本轮 system 上下文（skill prompts、笔记引用、搜索注入、卡片召回）
+				for _, msg := range messages {
+					if msg.Role == "system" {
+						userTokens += estimateTokens(msg.Content)
+					}
+				}
+				// 仅统计最后一条用户消息（当前轮次的输入），不累加历史
+				for i := len(messages) - 1; i >= 0; i-- {
+					if messages[i].Role == "user" {
+						userTokens += estimateTokens(messages[i].Content)
+						break
+					}
+				}
+				totalTokens := userTokens + assistantTokens
+
+				// 由后端直接保存消息到数据库（含 tokens）
+				assistantMsg := services.Message{
+					Role:    "assistant",
+					Content: content,
+					ReasoningContent: func() string {
+						if !thinkingEnabled {
+							return ""
+						}
+						return fullThinking.String()
+					}(),
+					ThinkingElapsed: func() float64 {
+						if !thinkingEnabled {
+							return 0
+						}
+						return elapsedThinking
+					}(),
+					TotalElapsed: elapsedTotal,
+					Tokens:       assistantTokens,
+				}
+				if isRegenerate {
+					// 再生模式只存 assistant
+					_ = a.aiService.SaveAIMessages(sessionID, []services.Message{assistantMsg})
+				} else {
+					// 正常模式：提取最后一条 user 消息一同保存
+					var userContent string
+					for i := len(messages) - 1; i >= 0; i-- {
+						if messages[i].Role == "user" {
+							userContent = messages[i].Content
+							break
+						}
+					}
+					_ = a.aiService.SaveAIMessages(sessionID, []services.Message{
+						{Role: "user", Content: userContent, Tokens: userTokens},
+						assistantMsg,
+					})
+				}
+
+				// 持久化会话的 context_tokens
+				_ = a.aiService.UpdateSessionContextTokens(sessionID, totalTokens)
+
+				// 通过 stream-done 一并返回 token 数据
+				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens)
+				if thinkingEnabled && fullThinking.Len() > 0 {
 					runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
 				}
 			},
@@ -846,6 +907,19 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			},
 		)
 	}()
+}
+
+// estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致）
+func estimateTokens(text string) int {
+	chineseCount := 0
+	for _, r := range text {
+		if unicode.Is(unicode.Han, r) {
+			chineseCount++
+		}
+	}
+	runes := []rune(text)
+	otherCount := len(runes) - chineseCount
+	return int(math.Ceil(float64(chineseCount)/1.5 + float64(otherCount)/4))
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用
@@ -914,6 +988,11 @@ func (a *App) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64, erro
 // UpdateSessionContextTokens 更新会话的上下文 Token 数
 func (a *App) UpdateSessionContextTokens(sessionID uint, tokens int) error {
 	return a.aiService.UpdateSessionContextTokens(sessionID, tokens)
+}
+
+// UpdateLastUserMessageTokens 更新指定会话中最后一条用户消息的 tokens
+func (a *App) UpdateLastUserMessageTokens(sessionID uint, tokens int) error {
+	return a.aiService.UpdateLastUserMessageTokens(sessionID, tokens)
 }
 
 // SaveAIMessageAsNote 将 AI 消息内容保存为笔记（归入默认笔记本）

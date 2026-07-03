@@ -13,5 +13,6 @@ type AIMessage struct {
 	ReasoningContent string    `gorm:"type:text" json:"reasoning_content"`
 	ThinkingElapsed  float64   `gorm:"default:0" json:"thinking_elapsed"`
 	TotalElapsed     float64   `gorm:"default:0" json:"total_elapsed"`
+	Tokens           int       `gorm:"default:0" json:"tokens"`
 	CreatedAt        time.Time `json:"created_at"`
 }

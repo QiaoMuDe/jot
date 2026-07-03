@@ -1,0 +1,10 @@
+- [x] AIMessage 模型新增 `Tokens int` 字段
+- [x] services.Message 结构体新增 `Tokens int` 字段
+- [x] SaveAIMessages 将 Tokens 写入数据库
+- [x] 前端 chatHistory 加载时保留 tokens 字段
+- [x] 前端 saveSessionMessages 发送时携带 tokens
+- [x] 用户消息 tokens 包含 systemContent（引用笔记 + 联网搜索 + 卡片召回 + 技能提示词 + 追问引用）
+- [x] AI 消息 tokens = estimateTokens(aiContent)
+- [x] updateContextSize 改为累加 chatHistory 中各消息的 tokens 而非实时估算
+- [x] 切换会话时总 token 与数据库持久化值一致
+- [x] AI 消息左下角展示 `"⏱ X.Xs · N tokens"` 格式

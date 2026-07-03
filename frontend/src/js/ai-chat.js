@@ -34,6 +34,7 @@ let _contextMsgRole = '';     // 右键消息角色
 let _contextMsgEl = null;     // 右键消息元素
 let _contextTitleEl = null;    // 右键菜单当前会话标题元素
 let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
+let _pendingTokenSync = false; // 编辑消息后需在 stream-done 中同步 tokens 到 DB
 
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
@@ -578,7 +579,7 @@ function formatTokens(count) {
 /** 更新上下文大小指示器（消息变更时调用，自动持久化到数据库） */
 async function updateContextSize() {
     if (!contextSizeEl) return;
-    const total = chatHistory.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
+    const total = chatHistory.reduce((sum, msg) => sum + (msg.tokens || 0), 0);
     if (total === 0) {
         contextSizeEl.textContent = '';
         contextSizeEl.style.display = 'none';
@@ -1554,6 +1555,12 @@ function renderSessionList() {
             sessionListEl.appendChild(divider);
         }
     });
+
+    // 滚动到激活的会话条目
+    const activeItem = sessionListEl.querySelector('.ai-session-item.active');
+    if (activeItem) {
+        activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
 }
 
 /**
@@ -1574,7 +1581,7 @@ async function switchSession(id) {
         const msgs = await window.go.main.App.LoadAISessionMessages(id);
 
         // 重建 chatHistory (只保留 role/content 供 API 使用) 
-        chatHistory = msgs ? msgs.map(msg => ({ role: msg.role, content: msg.content })) : [];
+        chatHistory = msgs ? msgs.map(msg => ({ role: msg.role, content: msg.content, tokens: msg.tokens || 0 })) : [];
 
         // 清空消息列表
         messagesEl.innerHTML = '';
@@ -1591,16 +1598,16 @@ async function switchSession(id) {
         hideWelcome();
         msgs.forEach(msg => {
             if (msg.role === 'user') {
-                addMessage(msg.content, 'user', undefined, undefined, undefined, undefined, msg.id);
+                addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id);
                 const userMsgEl = messagesEl.lastElementChild;
                 if (userMsgEl) {
-                    userMsgEl.appendChild(createMsgActions(msg.content, 'user'));
+                    userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                     bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     collapseActionsIfNeeded(userMsgEl);
                 }
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, undefined, msg.id);
-                el.appendChild(createMsgActions(msg.content, 'assistant'));
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id);
+                el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                 bindMsgContextMenu(el, msg.content, 'assistant');
                 collapseActionsIfNeeded(el);
             }
@@ -1608,17 +1615,8 @@ async function switchSession(id) {
 
         renderSessionList();
 
-        // 从数据库加载已保存的 Token 数直接显示（不再重算）
-        const savedTokens = window._sessionTokens?.[id] || 0;
-        if (contextSizeEl) {
-            if (savedTokens > 0) {
-                contextSizeEl.style.display = '';
-                contextSizeEl.textContent = formatTokens(savedTokens) + ' tokens';
-            } else {
-                contextSizeEl.style.display = 'none';
-                contextSizeEl.textContent = '';
-            }
-        }
+        // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
+        updateContextSize();
 
         scrollToBottom();
         inputEl?.focus();
@@ -1666,10 +1664,10 @@ async function createSession() {
 
     await loadSessionList();
 
-    // 为新条目添加入场动画 (列表第一项是最新的) 
-    const items = sessionListEl.querySelectorAll('.ai-session-item');
-    if (items.length > 0) {
-        items[0].classList.add('anim-slide-in');
+    // 为新条目添加入场动画（通过 data-id 精确查找新建的会话）
+    const newItem = sessionListEl.querySelector(`.ai-session-item[data-id="${id}"]`);
+    if (newItem) {
+        newItem.classList.add('anim-slide-in');
     }
 
     scrollToBottom();
@@ -1851,11 +1849,11 @@ async function onSend() {
     addMessage(text, 'user');
     const userMsgEl = messagesEl.lastElementChild;
     if (userMsgEl) {
-        userMsgEl.appendChild(createMsgActions(text, 'user'));
+        userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
         bindMsgContextMenu(userMsgEl, text, 'user');
         collapseActionsIfNeeded(userMsgEl);
     }
-    chatHistory.push({ role: 'user', content: text });
+    chatHistory.push({ role: 'user', content: text, tokens: 0 });
     updateContextSize();
 
     // 构建笔记引用上下文 (后端已处理截断) 
@@ -2014,7 +2012,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubChunk);
 
-    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent, elapsedThinking, elapsedTotal) => {
+    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
@@ -2045,24 +2043,41 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             renderMarkdown(thinkingContentEl, streamingThinking);
         }
 
-        chatHistory.push({ role: 'assistant', content: finalContent });
+        // 使用后端计算的 tokens 更新 chatHistory
+        if (chatHistory.length > 0) {
+            const lastMsg = chatHistory[chatHistory.length - 1];
+            if (lastMsg.role === 'user') {
+                lastMsg.tokens = userTokens;
+                // 同步更新 DOM 中的用户消息 token 显示
+                const userMsgs = messagesEl.querySelectorAll('.ai-msg-user');
+                const tokensEl = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].querySelector('.user-tokens') : null;
+                if (tokensEl) {
+                    tokensEl.textContent = userTokens > 0 ? formatTokens(userTokens) + ' tokens' : '';
+                }
+            }
+        }
+        chatHistory.push({ role: 'assistant', content: finalContent, tokens: assistantTokens });
         updateContextSize();
-        streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal));
+        streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
         collapseActionsIfNeeded(streamingEl);
 
-        // 自动保存消息到数据库
+        // 自动保存消息到数据库（由后端 done 回调统一处理）
         if (isEmptyMsg) {
             // 空回复不存库，回退 chatHistory，移除 DOM 气泡
             chatHistory.pop();
             if (streamingEl && streamingEl.parentNode) {
                 streamingEl.parentNode.removeChild(streamingEl);
             }
-        } else if (isRegenerate) {
-            // 再生模式 :user 消息已在 handleRegenerate 中重保存, 只存 assistant
-            saveSessionMessages([{ role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
-        } else {
-            saveSessionMessages([{ role: 'user', content: chatHistory[chatHistory.length - 2].content }, { role: 'assistant', content: finalContent, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking, total_elapsed: elapsedTotal }]);
+        }
+
+        // 编辑消息流完成后：将更新后的用户消息 token 同步到 DB（仅更新 tokens 字段，不影响其他字段）
+        if (_pendingTokenSync && activeSessionId !== null) {
+            _pendingTokenSync = false;
+            if (userTokens > 0) {
+                window.go.main.App.UpdateLastUserMessageTokens(activeSessionId, userTokens)
+                    .catch(() => {});
+            }
         }
 
         // 展示联网搜索来源折叠面板
@@ -2190,7 +2205,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         if (!isRegenerate && chatHistory.length > 0) {
             const lastMsg = chatHistory[chatHistory.length - 1];
             if (lastMsg && lastMsg.role === 'user') {
-                saveSessionMessages([{ role: 'user', content: lastMsg.content }]);
+                saveSessionMessages([{ role: 'user', content: lastMsg.content, tokens: lastMsg.tokens || 0 }]);
             }
         }
 
@@ -2213,7 +2228,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     }
 
     try {
-        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch, enableCardRecall);
+        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch, enableCardRecall, activeSessionId, isRegenerate);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -2345,7 +2360,7 @@ function renderMarkdown(el, content) {
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, msgId) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     if (msgId) el.dataset.msgId = msgId;
@@ -2379,13 +2394,15 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     }
     el.appendChild(contentEl);
 
-    // 显示总耗时 (仅历史消息有时耗数据) — 放入操作栏容器保持视觉一致
+    // 显示总耗时 + token 数（仅历史 AI 消息）
     if (totalElapsed > 0) {
         const actionsEl = document.createElement('div');
         actionsEl.className = 'ai-msg-actions';
         const timeEl = document.createElement('span');
         timeEl.className = 'ai-msg-time';
-        timeEl.textContent = '⏱ ' + totalElapsed.toFixed(1) + ' 秒';
+        let timeText = '⏱ ' + totalElapsed.toFixed(1) + ' 秒';
+        if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
+        timeEl.textContent = timeText;
         actionsEl.appendChild(timeEl);
         el.appendChild(actionsEl);
     }
@@ -2459,13 +2476,9 @@ export async function onAIChatViewActivated() {
         loadModelSelector(cfg);
         await loadSessionList();
 
-        // 仅在未激活会话时才自动加载第一个
+        // 没有激活会话时，始终创建新对话
         if (activeSessionId === null) {
-            if (sessions.length > 0) {
-                await switchSession(sessions[0].id);
-            } else {
-                await createSession();
-            }
+            await createSession();
         } else if (chatHistory.length === 0) {
             showWelcome();
         }
@@ -2706,16 +2719,26 @@ const MORE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 /**
  * 创建消息气泡操作按钮
  */
-function createMsgActions(content, role, elapsedTotal) {
+function createMsgActions(content, role, elapsedTotal, tokens) {
     const container = document.createElement('div');
     container.className = 'ai-msg-actions';
 
-    // 耗时标签 - 左侧
+    // 耗时标签 - 左侧（仅 AI 消息）
     if (elapsedTotal > 0) {
         const timeEl = document.createElement('span');
         timeEl.className = 'ai-msg-time';
-        timeEl.textContent = '⏱ ' + elapsedTotal.toFixed(1) + ' 秒';
+        let timeText = '⏱ ' + elapsedTotal.toFixed(1) + ' 秒';
+        if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
+        timeEl.textContent = timeText;
         container.appendChild(timeEl);
+    }
+
+    // 用户消息 token 计数（右对齐，悬停时隐藏让给操作按钮）
+    if (role === 'user') {
+        const tokensEl = document.createElement('span');
+        tokensEl.className = 'user-tokens';
+        if (tokens > 0) tokensEl.textContent = formatTokens(tokens) + ' tokens';
+        container.appendChild(tokensEl);
     }
 
     // 操作按钮 - 右侧（悬浮显示）
@@ -3065,7 +3088,7 @@ async function applyEdit(msgEl, newContent) {
     }
 
     // 将编辑后的用户消息加回
-    chatHistory.push({ role: 'user', content: newContent });
+    chatHistory.push({ role: 'user', content: newContent, tokens: 0 });
     updateContextSize();
 
     // 更新 dataset 后再 cancelEdit, 避免 cancelEdit 从 dataset 恢复旧内容
@@ -3090,6 +3113,7 @@ async function applyEdit(msgEl, newContent) {
             window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
             return;
         }
+        _pendingTokenSync = true;
         startStreaming(true);
     }
 }
@@ -3201,11 +3225,11 @@ async function handleResend(msgEl) {
     addMessage(content, 'user');
     const newUserMsgEl = messagesEl.lastElementChild;
     if (newUserMsgEl) {
-        newUserMsgEl.appendChild(createMsgActions(content, 'user'));
+        newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
         collapseActionsIfNeeded(newUserMsgEl);
     }
-    chatHistory.push({ role: 'user', content });
+    chatHistory.push({ role: 'user', content, tokens: 0 });
     updateContextSize();
 
     startStreaming(false);

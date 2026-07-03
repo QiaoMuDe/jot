@@ -38,8 +38,8 @@ export function CallAI(arg1) {
   return window['go']['main']['App']['CallAI'](arg1);
 }
 
-export function CallAIStream(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5);
+export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function CancelAIStream() {
@@ -348,6 +348,10 @@ export function TogglePinNote(arg1) {
 
 export function UpdateAIMessageContent(arg1, arg2) {
   return window['go']['main']['App']['UpdateAIMessageContent'](arg1, arg2);
+}
+
+export function UpdateLastUserMessageTokens(arg1, arg2) {
+  return window['go']['main']['App']['UpdateLastUserMessageTokens'](arg1, arg2);
 }
 
 export function UpdateNote(arg1, arg2, arg3, arg4) {

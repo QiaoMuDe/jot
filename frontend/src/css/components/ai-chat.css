@@ -1265,6 +1265,21 @@
     animation: ai-msg-enter 0.2s ease-out both;
 }
 
+/* ── 用户消息 token 脚标（默认显示，悬停隐藏给操作按钮让位） ── */
+.ai-msg-user .user-tokens {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: auto;
+    opacity: 0.75;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+}
+
+.ai-msg-user:hover .user-tokens {
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* ── 消息气泡操作栏（耗时 + 操作按钮） ── */
 .ai-msg-actions {
     position: absolute;

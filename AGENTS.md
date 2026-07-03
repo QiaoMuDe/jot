@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 70）
+> 生成日期: 2026-07-03（更新 74）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 72 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 73 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -32,7 +32,7 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理）
+│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理 + Token 后端计算 + 会话 Token 持久化）
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -44,7 +44,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换 + 会话置顶 + 更多按钮下拉菜单）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换 + 会话置顶 + 更多按钮下拉菜单 + 消息 Token 显示 + 思维链安全保存）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -1631,3 +1631,34 @@ await loadXxxSetting();
 | **置顶状态视觉区分** | 置顶会话（`s.is_pinned === true`）添加 `pinned` CSS 类名（浅 accent 背景）、标题前插入 pin SVG 图标（`.ai-session-item-pin-icon`）。置顶与普通会话之间自动插入分隔线（`.ai-session-pin-divider`）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` 和 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **CSS 样式** | 新增 `.ai-session-item-more`（hover 显示的更多按钮）、`.ai-session-more-menu`（下拉菜单容器，带 `menuFadeIn` 缩放入场动画）、`.ai-session-more-menu-item`（普通/危险菜单项）、`.ai-session-more-menu-divider`（菜单分隔线，注意使用 `var(--border)` 而非未定义的 `var(--border-color)`）、`.ai-session-item.pinned`（置顶背景色）、`.ai-session-item-pin-icon`（pin 图标）、`.ai-session-pin-divider`（列表分隔线）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **涉及文件** | [ai_session.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_session.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+## 一百零二、新增记忆点（AI 消息 Token 后端统一计算与用户消息 Token 显示）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | Token 计算从前端迁移到后端统一处理。后端在流完成回调中统一计算 userTokens、assistantTokens 和 totalTokens，通过 `stream-done` 事件返回给前端。每个消息新增 `tokens` 字段，前端显示每条消息的 Token 消耗。用户消息也显示 Token 数（默认显示，悬停时隐藏让给操作按钮）。 |
+| **后端计算** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L840-L856)：`estimateTokens()` 函数根据中文字符/1.5 + 非中文字符/4 估算 Token 数。`userTokens` 仅统计本轮 system 上下文 + 最后一条用户消息（不累加历史），`assistantTokens` 统计 AI 回复内容，`totalTokens = userTokens + assistantTokens`。详见 [app.go#L903-L913](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **数据库持久化** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L859-L893)：后端直接通过 `SaveAIMessages()` 将带 tokens 的消息写入数据库。用户消息的 `tokens` 在编辑/重新发送场景下通过 `UpdateLastUserMessageTokens()` 单独更新。详见 [ai_service.go#L478-L487](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **用户消息 Token 显示** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2741-L2745)：`createMsgActions()` 中 `role === 'user'` 时创建 `span.user-tokens`，默认 `opacity: 0.75`，悬停时 `opacity: 0` 让位给操作按钮。详见 [ai-chat.css#L1269-L1281](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **Selector 修复** | [ai-chat.js#L2052-L2053](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`stream-done` 中更新用户 Token 时，改用 `querySelectorAll('.ai-msg-user')` 取最后一个元素，修复原 `:last-of-type` 伪类选择器因用户/AI 消息同为 div 标签而匹配到 AI 消息的问题。 |
+| **编辑/重新发送兼容** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：编辑(`applyEdit`)和重新发送(`handleResend`)场景下，用户消息入 `chatHistory` 时 `tokens: 0`，流完成后通过 `_pendingTokenSync` 标志触发后端 `UpdateLastUserMessageTokens` 更新 DB。 |
+| **前端加载历史消息** | [ai-chat.js#L1609](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`loadHistoryMessages()` 中加载消息时传入 `msg.tokens`，`addMessage()` 根据 `totalElapsed > 0` 显示 AI 消息 Token、根据 `tokens > 0` 显示用户消息 Token。 |
+
+## 一百零三、新增记忆点（AI 助手启动时始终创建新对话）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 重启程序后打开 AI 助手，`onAIChatViewActivated()` 自动加载 `sessions[0]`（排序后的第一个会话）。由于置顶会话优先，`sessions[0]` 是第一个置顶会话，用户每次打开都会自动跳转到旧的置顶会话，不符合预期。 |
+| **修复** | [ai-chat.js#L2479-L2481](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`onAIChatViewActivated()` 中 `activeSessionId === null` 时不再判断 `sessions.length` 和加载第一个会话，而是无条件调用 `createSession()` 创建新的"新对话"。用户如需继续历史会话，自行从侧栏点击。 |
+| **影响** | 仅修改前端 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 一处，无后端变更。 |
+
+## 一百零四、新增记忆点（修复深度思考关闭时思维链被错误保存到数据库）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 关闭"深度思考"后进行对话，AI 回复正常（没有显示思维链）。但重启程序后，那些本应没有思维链的消息却显示了思维链内容，`reasoning_content` 字段非空。 |
+| **根因** | 部分推理模型（如 DeepSeek-R1、QwQ-32B）可能忽略 `enable_thinking: false` 参数，仍然返回 `reasoning_content`。`client.go` 无条件累积 `fullThinking.WriteString(text)`，`app.go` 的 done 回调无条件执行 `ReasoningContent: fullThinking.String()`，未检查 `thinkingEnabled` 标志。数据写入 DB 后重启加载，前端 `addMessage()` 检测到非空 `reasoningContent` 即渲染思维链。 |
+| **修复 1 — ReasoningContent** | [app.go#L863-L868](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：构建 `assistantMsg` 时，`ReasoningContent` 使用闭包判断 `thinkingEnabled`，关闭时返回空字符串。 |
+| **修复 2 — ThinkingElapsed** | [app.go#L869-L874](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：`ThinkingElapsed` 同步根据 `thinkingEnabled` 判断，关闭时返回 0。 |
+| **修复 3 — stream-thinking-done 事件** | [app.go#L901](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：`stream-thinking-done` 事件发射追加 `thinkingEnabled &&` 判断，保持一致性。 |
+| **影响范围** | 仅修改 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) 一个文件 3 处，仅影响新发消息的保存逻辑，不影响已有消息。前端无需修改。 |

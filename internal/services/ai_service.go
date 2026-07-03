@@ -22,6 +22,7 @@ type Message struct {
 	ReasoningContent string  `json:"reasoning_content"`
 	ThinkingElapsed  float64 `json:"thinking_elapsed"`
 	TotalElapsed     float64 `json:"total_elapsed"`
+	Tokens           int     `json:"tokens"`
 }
 
 // AIConfig 表示 AI 服务配置
@@ -337,7 +338,7 @@ type AISessionSummary struct {
 // GetAISessions 获取所有会话，置顶优先，然后按标题、更新时间排序，附带最后一条消息摘要
 func (a *AIService) GetAISessions() []AISessionSummary {
 	var sessions []models.AISession
-	a.db.Order("CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END, title ASC, updated_at DESC").Find(&sessions)
+	a.db.Order("CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END, updated_at DESC").Find(&sessions)
 
 	result := make([]AISessionSummary, 0, len(sessions))
 	for _, s := range sessions {
@@ -412,7 +413,7 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed}
+		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens}
 	}
 	return result
 }
@@ -430,6 +431,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			ReasoningContent: msg.ReasoningContent,
 			ThinkingElapsed:  msg.ThinkingElapsed,
 			TotalElapsed:     msg.TotalElapsed,
+			Tokens:           msg.Tokens,
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {
@@ -471,6 +473,16 @@ func (a *AIService) ClearAISessionMessages(sessionID uint) error {
 // UpdateAIMessageContent 更新指定 AI 消息的 content 字段
 func (a *AIService) UpdateAIMessageContent(id uint, content string) error {
 	return a.db.Model(&models.AIMessage{}).Where("id = ?", id).Update("content", content).Error
+}
+
+// UpdateLastUserMessageTokens 更新指定会话中最后一条用户消息的 tokens（用于编辑后同步）
+func (a *AIService) UpdateLastUserMessageTokens(sessionID uint, tokens int) error {
+	var msg models.AIMessage
+	result := a.db.Where("session_id = ? AND role = 'user'", sessionID).Order("id DESC").Limit(1).Find(&msg)
+	if result.RowsAffected == 0 {
+		return nil
+	}
+	return a.db.Model(&msg).Update("tokens", tokens).Error
 }
 
 // DeleteAIMessage 按 ID 删除单条 AI 消息
