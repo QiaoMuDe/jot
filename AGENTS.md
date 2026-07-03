@@ -1697,3 +1697,13 @@ await loadXxxSetting();
 | **数据管理页清空 AI 会话** | 后端：`AIService.ClearAllAISessions()` 先删消息再删会话，`App` 绑定。前端：`index.html` 新"AI 数据"组，`data-management.js` `clearAISessions()` 带确认弹窗。详见 [ai_service.go#L505-L512](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go#L993-L997](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html#L740-L752](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-management.js#L124-L146](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
 | **确认弹窗"不保存"按钮修复** | `showConfirmDialog()` 和 `showDeleteNotebookDialog()` 的 cleanup 中 `confirmThirdBtn` 从 `style.display = ''`（恢复可见）改为 `style.display = 'none'`（保持隐藏），修复关闭对话框中"不保存"按钮露出。详见 [main.js#L983](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **update 计数** | `AGENTS.md` 从更新 76 → 更新 77 |
+
+## 一百零八、新增记忆点（AI 引用笔记选择器全选功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **全选按钮** | 引用笔记选择浮层底部 footer（`已选 N 篇` 左侧）新增全选按钮 `#aiNoteRefSelectAll`，inline-flex 布局，带复选框 SVG 图标（方框↔对勾），`.checked` 类控制选中态 accent 色。详见 [index.html#L1038-L1044](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css#L2832-L2878](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **后端 SearchNoteIDs API** | `note_service.go` 新增 `SearchNoteIDs(keyword, tagIDs)`（跨笔记本）和 `SearchNoteIDsByNotebook(keyword, notebookID, tagIDs)`（限定笔记本），均返回 `[]uint` 类型全部匹配 ID（不分页、无 Limit）。`app.go` 新增 `SearchNoteIDs` Wails 绑定，notebookID > 0 走限定分支否则走跨笔记本分支。详见 [note_service.go#L337-L386](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go)、[app.go#L207-L212](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **toggleRefSelectAll()** | 无筛选→`GetAllNoteIDs()`，有筛选（关键词/笔记本/标签任意组合）→`SearchNoteIDs()`。全选后 `_refSelectAll=true`，所有 ID 写入 `_refTempSelected`。取消全选→清空 `_refTempSelected`。详见 [ai-chat.js#L3710-L3762](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **全选态与列表联动** | `renderNoteList()`/`appendToList()` 中 `_refSelectAll=true` 时自动将当前/追加笔记 ID 写入 `_refTempSelected` 并更新选中态。`loadNoteList()` 非追加刷新时重置 `_refSelectAll=false` 但不清除 `_refTempSelected`（增量筛选友好）。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **updateRefCount 自动勾选/取消** | `updateRefCount()` 中判断 `count >= _refTotalItems` → 自动设 `_refSelectAll=true`（手动逐条选完自动勾选）；`count < _refTotalItems` → 自动设 `_refSelectAll=false`（取消勾选）。`toggleNoteSelection()` 中手动取消某条时同步退出全选模式。详见 [ai-chat.js#L3704-L3709](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.js#L3675-L3678](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |

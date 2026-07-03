@@ -87,6 +87,7 @@ let refTagDropdown = null;      // #aiNoteRefTagDropdown
 let refTagFilter = null;        // #aiNoteRefTagFilter
 let _refSearchTimer = null;     // 搜索 debounce 定时器
 let _refTempSelected = {};      // 浮层中临时选中状态 { [id]: true }
+let _refSelectAll = false;      // 全选模式标志
 let _refListLoaded = false;     // 是否已加载过列表 (首次用骨架屏, 后续用 overlay) 
 let _refCurrentPage = 1;        // 当前页码
 let _refTotalItems = 0;         // 匹配总数
@@ -997,6 +998,12 @@ function bindEvents() {
     }
     if (refConfirm) {
         refConfirm.addEventListener('click', confirmNoteSelection);
+    }
+
+    // 全选按钮
+    const refSelectAll = document.getElementById('aiNoteRefSelectAll');
+    if (refSelectAll) {
+        refSelectAll.addEventListener('click', toggleRefSelectAll);
     }
 
     // ── 追问引用栏关闭按钮 ──
@@ -3290,6 +3297,7 @@ const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" s
 async function openNoteRefModal() {
     if (!refModal) return;
     _refTempSelected = {};
+    _refSelectAll = false;
     // 以已有引用笔记预填选中状态
     referencedNotes.forEach(n => { _refTempSelected[n.id] = true; });
 
@@ -3323,6 +3331,9 @@ async function openNoteRefModal() {
         loadAllRefTags(),
         loadNoteList()
     ]);
+
+    // 打开后确保全选按钮显示未选中状态
+    updateSelectAllBtn();
 
     // 焦点到搜索框
     setTimeout(() => refSearch?.focus(), 150);
@@ -3472,6 +3483,11 @@ async function loadNoteList(append = false) {
         if (!append) _refPendingRefresh = true;
         return;
     }
+    // 非追加（筛选变更）且全选激活时，重置全选标志但不清除已选 ID
+    if (!append && _refSelectAll) {
+        _refSelectAll = false;
+        // 不需要清除 _refTempSelected
+    }
     _refLoading = true;
 
     const query = refSearch?.value.trim() || '';
@@ -3553,6 +3569,11 @@ function renderNoteList(notes) {
         return;
     }
 
+    // 全选模式下，确保所有笔记 ID 在 _refTempSelected 中
+    if (_refSelectAll && notes.length > 0) {
+        notes.forEach(n => { _refTempSelected[n.id] = true; });
+    }
+
     // 高亮搜索关键词
     const query = (refSearch?.value.trim() || '').toLowerCase();
 
@@ -3593,6 +3614,11 @@ function renderNoteList(notes) {
 function appendToList(notes) {
     if (!refList || !notes || notes.length === 0) {
         return;
+    }
+
+    // 全选模式下，自动选中新追加的条目
+    if (_refSelectAll && notes.length > 0) {
+        notes.forEach(n => { _refTempSelected[n.id] = true; });
     }
 
     const query = (refSearch?.value.trim() || '').toLowerCase();
@@ -3645,6 +3671,11 @@ function toggleNoteSelection(id) {
     if (!id) return;
     if (_refTempSelected[id]) {
         delete _refTempSelected[id];
+        // 手动取消选中时，退出全选模式
+        if (_refSelectAll) {
+            _refSelectAll = false;
+            updateSelectAllBtn();
+        }
     } else {
         _refTempSelected[id] = true;
     }
@@ -3668,6 +3699,90 @@ function updateRefCount() {
     if (refConfirm) {
         refConfirm.disabled = count === 0;
         refConfirm.style.opacity = count === 0 ? '0.5' : '1';
+    }
+    // 手动逐条选中所有条目时自动切换全选为勾选状态
+    if (!_refSelectAll && count > 0 && _refTotalItems > 0 && count >= _refTotalItems) {
+        _refSelectAll = true;
+    } else if (_refSelectAll && count < _refTotalItems) {
+        _refSelectAll = false;
+    }
+    // 同步全选按钮状态
+    updateSelectAllBtn();
+}
+
+/**
+ * 切换全选/取消全选
+ */
+async function toggleRefSelectAll() {
+    if (_refSelectAll) {
+        // 已全选 → 取消全选
+        _refSelectAll = false;
+        _refTempSelected = {};
+        updateRefCount();
+        // 更新所有列表条目的选中态
+        if (refList) {
+            refList.querySelectorAll('.ai-note-ref-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+        }
+        // 更新全选按钮样式
+        updateSelectAllBtn();
+        return;
+    }
+
+    // 未全选 → 全选：根据当前筛选条件获取所有匹配 ID
+    const query = refSearch?.value.trim() || '';
+    const notebookId = parseInt(refNotebook?.value || '0');
+    const tagIds = _refTagIds.size > 0 ? Array.from(_refTagIds) : [];
+
+    try {
+        let ids = [];
+        if (query || notebookId > 0 || tagIds.length > 0) {
+            // 有筛选条件 → 调用 SearchNoteIDs
+            ids = await window.go.main.App.SearchNoteIDs(query, notebookId, tagIds);
+        } else {
+            // 无筛选 → 获取所有笔记 ID
+            ids = await window.go.main.App.GetAllNoteIDs();
+        }
+
+        if (!ids || ids.length === 0) return;
+
+        _refSelectAll = true;
+        ids.forEach(id => { _refTempSelected[id] = true; });
+
+        // 更新所有列表条目的选中态
+        if (refList) {
+            refList.querySelectorAll('.ai-note-ref-item').forEach(item => {
+                if (_refTempSelected[item.dataset.id]) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        updateRefCount();
+        updateSelectAllBtn();
+    } catch (e) {
+        console.error('toggleRefSelectAll 失败:', e);
+    }
+}
+
+/**
+ * 更新全选按钮的选中状态样式
+ */
+function updateSelectAllBtn() {
+    const btn = document.getElementById('aiNoteRefSelectAll');
+    if (!btn) return;
+    btn.classList.toggle('checked', _refSelectAll);
+    // 全选时更换为对勾图标，取消时更换为方框图标
+    const checkEl = btn.querySelector('.ai-note-ref-select-all-check');
+    if (checkEl) {
+        if (_refSelectAll) {
+            checkEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        } else {
+            checkEl.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>';
+        }
     }
 }
 

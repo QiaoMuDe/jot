@@ -203,6 +203,14 @@ func (a *App) SearchNotes(keyword string, page, pageSize int, notebookID uint, s
 	}, nil
 }
 
+// SearchNoteIDs 按筛选条件返回所有匹配笔记 ID（不分页），用于全选功能
+func (a *App) SearchNoteIDs(keyword string, notebookID uint, tagIDs []uint) ([]uint, error) {
+	if notebookID > 0 {
+		return a.noteService.SearchNoteIDsByNotebook(keyword, notebookID, tagIDs)
+	}
+	return a.noteService.SearchNoteIDs(keyword, tagIDs)
+}
+
 // TogglePinNote 切换指定笔记的置顶状态
 func (a *App) TogglePinNote(id uint) (*models.Note, error) {
 	return a.noteService.TogglePin(id)

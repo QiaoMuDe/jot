@@ -156,6 +156,8 @@ export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 
 export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
 
+export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
+
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;
 
 export function SetAIRefMaxChars(arg1:number):Promise<void>;

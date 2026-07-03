@@ -333,6 +333,58 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	return notes, total, nil
 }
 
+// SearchNoteIDs 按关键词/标签搜索并返回所有匹配笔记 ID（不分页）
+func (s *NoteService) SearchNoteIDs(keyword string, tagIDs []uint) ([]uint, error) {
+	var ids []uint
+
+	likePattern := "%" + keyword + "%"
+
+	query := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL").
+		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+
+	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
+	if len(tagIDs) > 0 {
+		subQuery := s.db.Table("note_tags").
+			Select("note_id").
+			Where("tag_id IN ?", tagIDs).
+			Group("note_id").
+			Having("COUNT(DISTINCT tag_id) = ?", len(tagIDs))
+		query = query.Where("id IN (?)", subQuery)
+	}
+
+	if err := query.Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// SearchNoteIDsByNotebook 在指定笔记本中按关键词/标签搜索并返回所有匹配笔记 ID（不分页）
+func (s *NoteService) SearchNoteIDsByNotebook(keyword string, notebookID uint, tagIDs []uint) ([]uint, error) {
+	var ids []uint
+
+	likePattern := "%" + keyword + "%"
+
+	query := s.db.Model(&models.Note{}).
+		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
+		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+
+	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
+	if len(tagIDs) > 0 {
+		subQuery := s.db.Table("note_tags").
+			Select("note_id").
+			Where("tag_id IN ?", tagIDs).
+			Group("note_id").
+			Having("COUNT(DISTINCT tag_id) = ?", len(tagIDs))
+		query = query.Where("id IN (?)", subQuery)
+	}
+
+	if err := query.Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // TogglePin 切换指定笔记的置顶状态，返回更新后的笔记对象
 func (s *NoteService) TogglePin(id uint) (*models.Note, error) {
 	note, err := s.GetByID(id)
