@@ -1452,6 +1452,13 @@ function renderSessionList() {
                 + (s.is_pinned ? ' 取消置顶' : ' 置顶');
             sessionMoreMenu.appendChild(pinItem);
 
+            // 重命名
+            const renameItem = document.createElement('div');
+            renameItem.className = 'ai-session-more-menu-item';
+            renameItem.dataset.action = 'rename';
+            renameItem.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> 重命名';
+            sessionMoreMenu.appendChild(renameItem);
+
             // 分隔线
             const divider = document.createElement('div');
             divider.className = 'ai-session-more-menu-divider';
@@ -1473,6 +1480,16 @@ function renderSessionList() {
                     await window.go.main.App.TogglePinAISession(s.id);
                 } catch (_) { /* 忽略 */ }
                 await loadSessionList();
+            });
+
+            renameItem.addEventListener('click', (re) => {
+                re.stopPropagation();
+                sessionMoreMenu.classList.remove('active');
+                sessionMoreMenuTarget = null;
+                closeSessionContextMenu();
+                // 关闭菜单后触发该会话标题的内联编辑
+                const titleEl = item.querySelector('.ai-session-item-title');
+                if (titleEl) startInlineEdit(titleEl, s.id);
             });
 
             delItem.addEventListener('click', async (de) => {

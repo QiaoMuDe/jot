@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 69）
+> 生成日期: 2026-07-03（更新 70）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -479,8 +479,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
 | `frontend/src/main.js` | 5460 | 前端核心逻辑 |
-| `frontend/src/css/components/ai-chat.css` | 2458 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `frontend/src/js/ai-chat.js` | 3313 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶） |
+| `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
+| `frontend/src/js/ai-chat.js` | 3328 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶） |
 | `app.go` | 1064 | Wails 绑定层（72+ API，含引用笔记新接口 + 会话置顶） |
 | `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
@@ -1625,9 +1625,9 @@ await loadXxxSetting();
 | **会话表新增 IsPinned 字段** | `internal/models/ai_session.go` 的 `AISession` 结构体新增 `IsPinned bool gorm:"default:false" json:"is_pinned"` 字段。`internal/services/ai_service.go` 的 `AISessionSummary` 同步新增 `IsPinned bool` 字段并在 `GetAISessions()` 中填充。详见 [ai_session.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_session.go) 和 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
 | **排序逻辑变更** | `GetAISessions()` 排序从 `Order("updated_at DESC")` 改为 `Order("CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END, title ASC, updated_at DESC")`：置顶会话优先显示并按标题升序排列，其余按更新时间降序。详见 [ai_service.go#L340](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
 | **TogglePinAISession API** | `ai_service.go` 新增 `TogglePinAISession(id uint) error` 方法，使用 `gorm.Expr("NOT is_pinned")` 切换置顶状态。`app.go` 新增同名 binding 方法。详见 [ai_service.go#L394-L401](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) 和 [app.go#L864-L867](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
-| **删除按钮→更多按钮+下拉菜单** | `renderSessionList()` 中将原来的 ✕ 删除按钮替换为 ⋯ 更多按钮（`.ai-session-item-more`）。点击弹出下拉菜单（`.ai-session-more-menu`），包含"置顶/取消置顶"和"删除会话"两个菜单项，菜单项间有分隔线。菜单动态构建，使用 `getBoundingClientRect()` + `position: fixed` 定位，自动检测窗口边界防止溢出。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` |
+| **删除按钮→更多按钮+下拉菜单** | `renderSessionList()` 中将原来的 ✕ 删除按钮替换为 ⋯ 更多按钮（`.ai-session-item-more`）。点击弹出下拉菜单（`.ai-session-more-menu`），包含"置顶/取消置顶"、"重命名"和"删除会话"三个菜单项，菜单项间有分隔线。菜单动态构建，使用 `getBoundingClientRect()` + `position: fixed` 定位，自动检测窗口边界防止溢出。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` |
 | **菜单交互** | 点击更多按钮切换菜单显隐，点击菜单项执行对应操作后关闭，点击菜单外部区域关闭。流式输出（`isStreaming`）时禁用更多按钮。删除操作逻辑保持不变（确认对话框、删除后自动切换/新建）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **高度一致性修复** | 更多按钮从 `display: none` → `display: flex`（hover 时）改为 `visibility: hidden` → `visibility: visible` + 常驻 `display: flex`，避免 hover 时按钮出现/消失改变条目高度。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) `.ai-session-item-more` |
 | **置顶状态视觉区分** | 置顶会话（`s.is_pinned === true`）添加 `pinned` CSS 类名（浅 accent 背景）、标题前插入 pin SVG 图标（`.ai-session-item-pin-icon`）。置顶与普通会话之间自动插入分隔线（`.ai-session-pin-divider`）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `renderSessionList()` 和 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **CSS 样式** | 新增 `.ai-session-item-more`（hover 显示的更多按钮）、`.ai-session-more-menu`（下拉菜单容器，带 `menuFadeIn` 缩放入场动画）、`.ai-session-more-menu-item`（普通/危险菜单项）、`.ai-session-more-menu-divider`（菜单分隔线）、`.ai-session-item.pinned`（置顶背景色）、`.ai-session-item-pin-icon`（pin 图标）、`.ai-session-pin-divider`（列表分隔线）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **CSS 样式** | 新增 `.ai-session-item-more`（hover 显示的更多按钮）、`.ai-session-more-menu`（下拉菜单容器，带 `menuFadeIn` 缩放入场动画）、`.ai-session-more-menu-item`（普通/危险菜单项）、`.ai-session-more-menu-divider`（菜单分隔线，注意使用 `var(--border)` 而非未定义的 `var(--border-color)`）、`.ai-session-item.pinned`（置顶背景色）、`.ai-session-item-pin-icon`（pin 图标）、`.ai-session-pin-divider`（列表分隔线）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **涉及文件** | [ai_session.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/ai_session.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
