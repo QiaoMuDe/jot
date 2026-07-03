@@ -408,6 +408,7 @@ const els = {
     // 浮动操作按钮
     fabGroup: $('fabGroup'),
     fabNewNote: $('fabNewNote'),
+    fabAI: $('fabAI'),
     backToTopBtn: $('backToTopBtn'),
 
     // 关于页面
@@ -4408,6 +4409,11 @@ function initEventListeners() {
         openEditor(null, false, getNoteOpenFullscreen());
     });
 
+    // 浮动 AI 按钮
+    els.fabAI.addEventListener('click', () => {
+        switchView('ai-chat');
+    });
+
     // 回到顶部
     els.backToTopBtn.addEventListener('click', () => {
         els.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5045,11 +5051,13 @@ function initScrollbarAutoHide() {
             }, 1000);
         });
     });
-    // 主内容区滚动时控制 "↑" 按钮显隐（阈值 300px）
+    // 主内容区滚动时控制 FAB 组位置和 "↑" 按钮显隐（阈值 300px）
     if (els.mainContent) {
         els.mainContent.addEventListener('scroll', () => {
             const scrollY = els.mainContent.scrollTop;
-            els.backToTopBtn.classList.toggle('visible', scrollY > 300);
+            const isScrolled = scrollY > 300;
+            els.fabGroup.classList.toggle('scrolled', isScrolled);
+            els.backToTopBtn.classList.toggle('visible', isScrolled);
         });
     }
 }

@@ -1590,3 +1590,12 @@ await loadXxxSetting();
 | **气泡宽度不受影响** | 消息气泡的 `max-width: 75%`（用户）/ `82%`（AI）相对容器的百分比约束保持不变，容器变宽后气泡不会无限制拉伸，保持可读性 |
 | **效果对比** | 1200px 窗口+侧栏开 → 消息区 ~970px（撑满）；1440px 窗口+侧栏开 → ~1210px（撑满）；1920px 窗口 → 1600px（上限）。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/ai-chat-responsive-width/spec.md) |
 
+
+## 九十九、新增记忆点（首页 FAB 区新增 AI 按钮与滚动交互）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 笔记首页右下角 FAB 组中，在新建(+)按钮下方新增 AI 助手按钮，点击一键跳转 AI 对话页。滚动时（>300px）FAB 组整体上移，回到顶部按钮在下方淡入；回到顶部后主按钮归位、回到顶部按钮隐藏。详见 `.trae/specs/add-fab-ai-button/` |
+| **HTML 变更** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L1446-L1451)：FAB 组 DOM 顺序从 `backToTopBtn → fabNewNote`（column-reverse 逆序）改为 `fabNewNote → fabAI → backToTopBtn`（column 正序）。新增 `#fabAI` 按钮，使用项目 AI 菜单同款微笑表情 SVG 图标 |
+| **CSS 变更** | [main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css#L806-L894)：`.fab-group` 从 `column-reverse` → `column`，新增 `transition: bottom 0.25s ease`；新增 `.fab-group.scrolled` 将 `bottom` 从 `12px` 提升至 `64px`；新增 `.fab-ai` 紫色按钮（`#8b5cf6`/`#7c3aed`）区别于 accent 蓝；`.fab-top` 移除冗余 `transform: translateY(10px)` |
+| **前端 JS 变更** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)：`els` 新增 `fabAI: $('fabAI')`；`initEventListeners` 中 `fabAI` 点击 → `switchView('ai-chat')`；`initScrollbarAutoHide` 滚动监听同时控制 `fabGroup.classList.toggle('scrolled')` + `backToTopBtn.classList.toggle('visible')`，阈值统一 300px |
