@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 74）
+> 生成日期: 2026-07-03（更新 76）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1662,3 +1662,22 @@ await loadXxxSetting();
 | **修复 2 — ThinkingElapsed** | [app.go#L869-L874](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：`ThinkingElapsed` 同步根据 `thinkingEnabled` 判断，关闭时返回 0。 |
 | **修复 3 — stream-thinking-done 事件** | [app.go#L901](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：`stream-thinking-done` 事件发射追加 `thinkingEnabled &&` 判断，保持一致性。 |
 | **影响范围** | 仅修改 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) 一个文件 3 处，仅影响新发消息的保存逻辑，不影响已有消息。前端无需修改。 |
+
+## 一百零五、新增记忆点（用户消息操作按钮闪烁修复 + 宽度自适应 absolute 定位）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 用户消息悬停时操作按钮（重新发送/编辑/删除/更多）出现闪烁，鼠标靠近按钮右侧区域时触发疯狂的测量循环。根因是悬停时触发布局变化（`.user-tokens` 宽度/overflow 变化 + `.action-buttons` margin-left 变化），导致浏览器反复 reflow。 |
+| **修复方案** | 将 `.user-tokens` 和 `.action-buttons` 改为 `position: absolute` 叠加布局（不占文档流空间），悬停时仅切换 `opacity`，完全不触发布局 reflow。详见 [ai-chat.css#L1268-L1292](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **narrow-mode / wide-mode** | 根据 `collapseActionsIfNeeded()` 测量的可用宽度动态决定：窄模式（宽度不足）→ `left: 32px`，宽模式（宽度足够）→ `right: 0`。通过 `msgEl.classList.add('wide-mode'/'narrow-mode')` 切换两种定位方式。详见 [ai-chat.js#L2867-L2899](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `collapseActionsIfNeeded()` |
+| **测量条件** | `tokensWidth + buttonsWidth + 32 <= availableWidth` → 宽模式（tokens 可见 + 按钮在右侧）。否则 → 窄模式（tokens 悬停时 `opacity: 0` + 按钮 `left: 32px`）。详见 [ai-chat.js#L2882-L2892](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **user-tokens 宽模式保留** | 宽模式下悬停时 `.user-tokens` 保持 `opacity: 0.75` 半透明可见，而非完全隐藏。详见 [ai-chat.css#L1282-L1285](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **过渡动画** | 所有 opacity 变化使用 `transition: opacity 0.12s` 平滑显隐，无延迟。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+## 一百零六、新增记忆点（编辑模式用户消息 token 阻挡修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 点击用户消息的编辑按钮后，编辑态下的确定/取消按钮显示在用户消息左边缘。而 `.user-tokens` 使用 `position: absolute; left: 0; top: 0` 叠加在消息左上角，导致确定/取消按钮被 `.user-tokens` 覆盖挡住无法点击。 |
+| **修复** | `enterEditMode()` 中新增 `tokensEl.style.display = 'none'` 隐藏用户消息 token；`cancelEdit()` 中对应恢复 `tokensEl.style.display = ''`。详见 [ai-chat.js#L3015-L3017](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `enterEditMode()` 和 [ai-chat.js#L3051-L3053](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `cancelEdit()` |
+| **影响** | 仅修改前端 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 两处，无 CSS/后端变更。 |

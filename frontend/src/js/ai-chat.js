@@ -2874,7 +2874,33 @@ function collapseActionsIfNeeded(msgEl) {
     requestAnimationFrame(() => {
         const availableWidth = actions.clientWidth;
         const buttonsWidth = btnWrap.scrollWidth;
-        if (buttonsWidth > availableWidth && buttonsWidth > 60) {
+        let isCollapsed = buttonsWidth > availableWidth && buttonsWidth > 60;
+
+        // 用户消息：检测宽度模式并决定折叠
+        if (msgEl.classList.contains('ai-msg-user')) {
+            const tokensEl = actions.querySelector('.user-tokens');
+            const tokensWidth = tokensEl ? tokensEl.scrollWidth : 0;
+            // 窄模式：按钮在 left: 32px，剩余宽度 = clientWidth - 32
+            // 宽模式：按钮在 right: 0，剩余宽度 = clientWidth
+            const narrowRemaining = availableWidth - 32;
+            const wideRemaining = availableWidth;
+            const needsCollapsedNarrow = buttonsWidth > narrowRemaining && buttonsWidth > 60;
+            const needsCollapsedWide = buttonsWidth > wideRemaining && buttonsWidth > 60;
+
+            if (tokensWidth + buttonsWidth + 32 <= availableWidth) {
+                // 足够宽 → 宽模式（按钮右侧，tokens 可见）
+                msgEl.classList.add('wide-mode');
+                msgEl.classList.remove('narrow-mode');
+                isCollapsed = needsCollapsedWide;
+            } else {
+                // 宽度不足 → 窄模式（按钮左侧 32px，tokens 隐藏）
+                msgEl.classList.add('narrow-mode');
+                msgEl.classList.remove('wide-mode');
+                isCollapsed = needsCollapsedNarrow;
+            }
+        }
+
+        if (isCollapsed) {
             btnWrap.classList.add('collapsed');
         }
     });
@@ -2980,6 +3006,9 @@ function enterEditMode(msgEl, originalContent) {
     const actions = msgEl.querySelector('.ai-msg-actions');
     const btnWrap = actions?.querySelector('.action-buttons');
     if (btnWrap) btnWrap.style.display = 'none';
+    // 编辑模式下隐藏用户消息的 token 脚标（绝对定位会挡住编辑按钮）
+    const tokensEl = actions?.querySelector('.user-tokens');
+    if (tokensEl) tokensEl.style.display = 'none';
 
     const editActions = document.createElement('div');
     editActions.className = 'ai-msg-edit-actions';
@@ -3028,6 +3057,9 @@ function cancelEdit(msgEl) {
 
     const btnWrap = msgEl.querySelector('.action-buttons');
     if (btnWrap) btnWrap.style.display = '';
+
+    const tokensEl = msgEl.querySelector('.user-tokens');
+    if (tokensEl) tokensEl.style.display = '';
 }
 
 /**
