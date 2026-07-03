@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 67）
+> 生成日期: 2026-07-03（更新 68）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1599,3 +1599,20 @@ await loadXxxSetting();
 | **HTML 变更** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L1446-L1451)：FAB 组 DOM 顺序从 `backToTopBtn → fabNewNote`（column-reverse 逆序）改为 `fabNewNote → fabAI → backToTopBtn`（column 正序）。新增 `#fabAI` 按钮，使用项目 AI 菜单同款微笑表情 SVG 图标 |
 | **CSS 变更** | [main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css#L806-L894)：`.fab-group` 从 `column-reverse` → `column`，新增 `transition: bottom 0.25s ease`；新增 `.fab-group.scrolled` 将 `bottom` 从 `12px` 提升至 `64px`；新增 `.fab-ai` 紫色按钮（`#8b5cf6`/`#7c3aed`）区别于 accent 蓝；`.fab-top` 移除冗余 `transform: translateY(10px)` |
 | **前端 JS 变更** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)：`els` 新增 `fabAI: $('fabAI')`；`initEventListeners` 中 `fabAI` 点击 → `switchView('ai-chat')`；`initScrollbarAutoHide` 滚动监听同时控制 `fabGroup.classList.toggle('scrolled')` + `backToTopBtn.classList.toggle('visible')`，阈值统一 300px |
+
+## 一百、新增记忆点（编辑器 Markdown 预览目录（TOC）侧栏）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 在编辑器查看/编辑模式的 Markdown 预览区域添加大纲（Table of Contents）侧栏，从 Markdown 源文档中提取标题层级，展示可点击导航的目录树。当前选中的标题高亮，跟随滚动自动切换。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) `.toc-sidebar` / `.toc-body` |
+| **标题提取** | `preview-worker.js` 中 `extractHeadings()` 使用 `marked.Lexer.lex()` 解析 Markdown 源文件，提取标题文本 + 锚点 ID + 层级。不依赖 `marked.parse()` 渲染结果，适用于所有预览场景（查看/编辑/新建）。详见 [preview-worker.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/preview-worker.js) |
+| **统一离线渲染路径** | 所有 Markdown 渲染（查看模式、编辑模式预览、新建模式预览）统一走 Web Worker 离线程 `preview-worker.js`，不阻塞主线程。渲染期间显示 spinner 加载动画，完成后 crossfade 淡入内容。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **跨模式 TOC 恢复** | `openEditor()` 中 TOC 不可见时跳过 `_renderToc`。每次预览渲染后在 worker 回调中调用 `_ensureTocReady()`（非 `_showToc()`），只在 TOC 已展开时才重新填充内容。`updatePreview()` 中 content hash 匹配时恢复 TOC 布局 + `_ensureTocReady()`，解决 view→edit→view 切换后 TOC 不显示的问题。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `updatePreview()` |
+| **展开/折叠动画** | 侧栏从 `display: none` 改为 `width` + `opacity` 弹簧动画（`cubic-bezier(0.16, 1, 0.3, 1)`）：折叠态 `width: 0; opacity: 0; pointer-events: none`，展开态 `width: 220px; opacity: 1`。`overflow: hidden` 防止文字溢出。`transition-delay: 70ms` 让内容稍晚于侧栏滑入。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) `.toc-sidebar` |
+| **编辑/预览模式隔离** | 侧栏仅在 `data-mode="preview"` 时参与 flex 布局并播放动画；`data-mode="edit"` 时 `display: none` 完全脱离布局流，避免压缩 CM6 编辑器高度。浮动展开按钮在编辑模式下也隐藏。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **顶部按钮集成** | 大纲按钮 `#tocToggleBtn` 位于编辑器顶部操作栏（进入编辑模式/全屏按钮的同一行）最左侧。仅 `.md` 后缀笔记 + 预览模式时显示（`show-in-preview` 类 + CSS `[data-mode="preview"]` 双重控制）。打开时按钮高亮（`.active` 类 accent 色）。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `_initTocToggle()` |
+| **空内容/无标题保护** | 点击大纲按钮时检查 `els.mdRendered.textContent` 是否为空（→「正文暂无内容，无法生成目录」）、是否有 `h1-h6` 标题元素（→「当前文档未提取到标题」）。不符合时通过 `nm.show(msg, 'info')` 通知提示，不展开侧栏。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `_initTocToggle` |
+| **类型切换同步** | `saveFileExt()`（底部自定义后缀）和 `toggleFileExt()`（顶部 M/T 切换）均同步 `tocToggleBtn` 的 `show-in-preview` 类。切换为 `.md` 时显示按钮，非 `.md` 时隐藏。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `saveFileExt()` |
+| **localStorage 持久化** | TOC 展开/折叠状态通过 localStorage key `tocSidebarOpen` 持久化，跨会话保持。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `_initTocToggle()` |
+| **无头部设计** | 侧栏内部无标题/图标头部，列表直接顶到侧栏顶部，视觉简洁。去掉了移除的 `.toc-header` HTML 结构及其 CSS（~35 行）。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **涉及文件** | [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)（侧栏布局/动画/模式隔离/按钮高亮）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（TOC 渲染/切换/状态恢复/按钮逻辑）、[preview-worker.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/preview-worker.js)（标题提取）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（TOC 侧栏/按钮 DOM 结构） |

@@ -152,21 +152,21 @@ function switchEditorReadOnly(readOnly) {
     // Markdown 笔记：自动切换预览/编辑模式
     const isMd = els.editorFileExt.textContent === '.md';
     if (isMd && readOnly) {
-        // 查看模式 → Markdown 预览
+        // 查看模式 → Markdown 预览（走 Worker 离线程渲染）
         els.editorOverlay.dataset.mode = 'preview';
         els.editorModeBtns.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === 'preview');
         });
-        // 从 CM6 获取最新内容渲染预览
-        if (getEditorContent().trim()) {
-            els.mdRendered.innerHTML = marked.parse(getEditorContent());
-            _applyPreviewDOMHelpers();
-        } else {
-            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
-        }
+        // 从 CM6 获取最新内容走 Worker 渲染
+        updatePreview();
     } else if (isMd) {
         // 编辑模式 → 切回纯文本编辑
         switchEditorMode('edit');
+        _setPreviewLayout(false);
+    } else {
+        // 非 Markdown 笔记：隐藏 TOC
+        _setPreviewLayout(false);
+        _closeToc();
     }
     // 编辑模式记录快照，查看模式清除快照
     if (!readOnly) {
@@ -372,6 +372,10 @@ const els = {
     editorWordCount: $('editorWordCount'),
     editorFileExt: $('editorFileExt'),
     editorEditTime: $('editorEditTime'),
+    editorPanes: document.querySelector('.editor-panes'),
+    tocSidebar: $('tocSidebar'),
+    tocBody: $('tocBody'),
+    tocToggleBtn: $('tocToggleBtn'),
 
     // 通知容器
     notificationContainer: $('notificationContainer'),
@@ -3034,6 +3038,10 @@ async function saveFileExt() {
         els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
         els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
     }
+    // 同步大纲按钮可见性
+    if (els.tocToggleBtn) {
+        els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
+    }
     // 刷新字数统计显示
     updateWordCount();
 
@@ -3059,6 +3067,11 @@ async function toggleFileExt() {
     if (els.editorTypeToggle) {
         els.editorTypeToggle.textContent = newExt === '.md' ? 'M' : 'T';
         els.editorTypeToggle.title = newExt === '.md' ? '切换为纯文本格式' : '切换为 Markdown 格式';
+    }
+
+    // 同步大纲按钮可见性
+    if (els.tocToggleBtn) {
+        els.tocToggleBtn.classList.toggle('show-in-preview', newExt === '.md');
     }
 
     // 同步编辑器 UI（编辑/预览模式按钮可见性）
@@ -3177,6 +3190,11 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     // 设置文件后缀显示
     updateFileExtDisplay(ext);
 
+    // 大纲按钮仅 .md 后缀笔记显示（预览模式才可见，由 CSS data-mode 控制）
+    if (els.tocToggleBtn) {
+        els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
+    }
+
     // 初始化类型切换按钮显示
     if (els.editorTypeToggle) {
         els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
@@ -3193,31 +3211,21 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         if (els.editorFileExt.textContent !== '.md') {
             // 纯文本：CM6 自动以只读模式展示（data-mode 已由默认值 'edit' 覆盖）
             els.mdRendered.style.display = 'none';
+            _setPreviewLayout(false);
+            _closeToc();
         } else {
-            // Markdown：直接从暂存内容渲染预览，无需等 CM6 初始化
+            // Markdown：走 Worker 离线程渲染预览
             els.editorOverlay.dataset.mode = 'preview';
             els.editorModeBtns.forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === 'preview');
             });
             if (editorContent.trim()) {
-                els.mdRendered.innerHTML = marked.parse(editorContent);
-                // 同步 DOM 后处理：hljs 高亮 + 代码块/表格复制按钮 + 语言标签
-                // 内部已包含 hljs.highlightElement,无需重复调用
-                _applyPreviewDOMHelpers();
+                updatePreview(editorContent);
             } else {
                 els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+                _setPreviewLayout(false);
+                _closeToc();
             }
-            // 动画延迟一个 tick，确保 DOM 已更新
-            requestAnimationFrame(() => {
-                els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
-                requestAnimationFrame(() => {
-                    const codeBlocks = els.mdRendered.querySelectorAll('pre');
-                    codeBlocks.forEach((block, index) => {
-                        block.style.animation = `animFadeIn 0.2s ease-out forwards`;
-                        block.style.animationDelay = `${index * 50}ms`;
-                    });
-                });
-            });
         }
     } else {
         els.editorEditTime.textContent = '';
@@ -3329,13 +3337,15 @@ function initPreviewWorker() {
             { type: 'module' }
         );
         _previewWorker.onmessage = function (e) {
-            const { html, error } = e.data;
+            const { html, error, headings } = e.data;
             if (error) {
                 console.error('Preview Worker:', error);
                 els.mdRendered.innerHTML = '<p class="md-error">渲染失败</p>';
                 _previewWorkerLoading = false;
                 return;
             }
+            // 在 innerHTML 替换前捕获 loading 元素引用，用于后续交叉淡出
+            const oldLoading = els.mdRendered.querySelector('.md-rendered-loading');
             // 设置渲染结果
             els.mdRendered.innerHTML = html;
             // hljs 高亮（必须在主线程，需要 DOM 环境）
@@ -3346,9 +3356,30 @@ function initPreviewWorker() {
             });
             // 复制按钮、语言标签、表格按钮等 DOM 后处理
             _applyPreviewDOMHelpers();
-            // 隐藏加载状态
-            const loadingEl = els.mdRendered.querySelector('.md-rendered-loading');
-            if (loadingEl) loadingEl.remove();
+            // 生成标题锚点 ID 并渲染 TOC
+            _ensureHeadingIds();
+            _renderToc(headings || []);
+            _bindTocScrollListener();
+            _setPreviewLayout(true);
+            _ensureTocReady();  // 确保 TOC 状态正确
+            // 内容淡入动画
+            _applyPreviewFadeIn();
+            // 交叉淡入：把之前捕获的 loading 元素转为 absolute 覆盖层置于内容上方，平滑淡出
+            if (oldLoading) {
+                oldLoading.style.position = 'absolute';
+                oldLoading.style.inset = '0';
+                oldLoading.style.zIndex = '5';
+                oldLoading.style.minHeight = '0';
+                oldLoading.style.background = 'var(--card-bg)';
+                oldLoading.style.animation = 'none';  // 停止脉动
+                oldLoading.style.pointerEvents = 'none';
+                els.mdRendered.appendChild(oldLoading);
+                requestAnimationFrame(() => {
+                    oldLoading.style.opacity = '0';
+                    oldLoading.style.transition = 'opacity 0.25s ease-out';
+                });
+                oldLoading.addEventListener('transitionend', () => oldLoading.remove(), { once: true });
+            }
             _previewWorkerLoading = false;
         };
     } catch (err) {
@@ -3463,18 +3494,263 @@ function _applyPreviewDOMHelpers() {
 }
 
 /**
+ * 为预览中的 h1~h6 元素生成唯一锚点 ID
+ */
+function _ensureHeadingIds() {
+    if (!els.mdRendered) return;
+    const usedIds = new Set();
+    els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((h) => {
+        let id = h.textContent.trim()
+            .toLowerCase()
+            .replace(/[^\w\u4e00-\u9fff]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        if (!id) id = 'heading';
+        // 处理重复 ID：追加 -1, -2 后缀
+        let candidate = id;
+        if (usedIds.has(id)) {
+            let n = 1;
+            while (usedIds.has(id + '-' + n)) n++;
+            candidate = id + '-' + n;
+        }
+        usedIds.add(candidate);
+        h.id = candidate;
+    });
+}
+
+/**
+ * 从当前 mdRendered DOM 中提取标题数组
+ * @returns {Array<{depth:number, text:string}>}
+ */
+function _extractHeadingsFromDOM() {
+    if (!els.mdRendered) return [];
+    const headings = [];
+    els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((h) => {
+        headings.push({ depth: parseInt(h.tagName.charAt(1), 10), text: h.textContent.trim() });
+    });
+    return headings;
+}
+
+/**
+ * 渲染 TOC 侧栏
+ * @param {Array<{depth:number, text:string}>} headings
+ */
+function _renderToc(headings) {
+    if (!els.tocBody) return;
+    els.tocBody.innerHTML = '';
+    if (!headings || headings.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'toc-empty';
+        empty.textContent = '无标题';
+        els.tocBody.appendChild(empty);
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'toc-list';
+    headings.forEach((h, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'toc-item depth-' + Math.min(h.depth, 6);
+        btn.textContent = h.text || '(空)';
+        btn.dataset.tocIndex = index;
+        btn.addEventListener('click', () => {
+            const allHeadings = els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6');
+            const matched = allHeadings[index];
+            if (matched && matched.id) {
+                matched.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+        list.appendChild(btn);
+    });
+    els.tocBody.appendChild(list);
+}
+
+/** TOC 滚动高亮防抖定时器 */
+let _tocScrollTimer = null;
+
+/**
+ * 更新 TOC 滚动高亮
+ */
+function _updateTocScrollHighlight() {
+    if (_tocScrollTimer) return;
+    _tocScrollTimer = setTimeout(() => {
+        _tocScrollTimer = null;
+        if (!els.mdRendered || !els.tocBody) return;
+        const headings = els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6');
+        const tocItems = els.tocBody.querySelectorAll('.toc-item');
+        if (!headings.length || !tocItems.length) return;
+
+        const containerTop = els.mdRendered.getBoundingClientRect().top;
+
+        // 找到当前最接近顶部的标题
+        let activeIndex = -1;
+        headings.forEach((h, i) => {
+            const rect = h.getBoundingClientRect();
+            if (rect.top >= containerTop - 20) {
+                if (activeIndex === -1) activeIndex = i;
+                return;
+            }
+            // 如果标题在视口上方，记录最后一个在上方的
+            activeIndex = i;
+        });
+        // 若所有标题都在上方，选中最后一个
+        if (activeIndex === -1 && headings.length > 0) activeIndex = headings.length - 1;
+        // 若第一个标题还在下方，选中第一个
+        if (activeIndex === -1) activeIndex = 0;
+
+        // 高亮对应的 TOC 项
+        tocItems.forEach((item, i) => {
+            item.classList.toggle('active', i === activeIndex);
+        });
+
+        // 将高亮项滚动到 TOC 可视区域
+        const activeItem = tocItems[activeIndex];
+        if (activeItem) {
+            const itemRect = activeItem.getBoundingClientRect();
+            const tocRect = els.tocBody.getBoundingClientRect();
+            if (itemRect.top < tocRect.top || itemRect.bottom > tocRect.bottom) {
+                activeItem.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, 100);
+}
+
+/** 已绑定的 TOC 滚动监听标志 */
+let _tocScrollBound = false;
+
+/**
+ * 绑定 TOC 滚动监听（防重复绑定）
+ */
+function _bindTocScrollListener() {
+    if (_tocScrollBound || !els.mdRendered) return;
+    els.mdRendered.addEventListener('scroll', _updateTocScrollHighlight, { passive: true });
+    _tocScrollBound = true;
+}
+
+/**
+ * 初始化 TOC 侧栏展开/折叠按钮
+ * TOC 默认隐藏，用户点击展开按钮打开，点击关闭按钮收起
+ */
+function _initTocToggle() {
+    if (!els.tocSidebar || !els.tocToggleBtn) return;
+    // 恢复上次展开状态
+    const saved = localStorage.getItem('tocSidebarOpen');
+    if (saved === 'true') {
+        els.tocSidebar.classList.add('toc-visible');
+        els.tocToggleBtn.classList.add('active');
+    }
+    // 点击顶部按钮切换展开/折叠
+    els.tocToggleBtn.addEventListener('click', () => {
+        // 无渲染内容时提示不展开
+        const mdContent = els.mdRendered.textContent.trim();
+        if (!mdContent) {
+            nm.show('正文暂无内容，无法生成目录', 'info');
+            return;
+        }
+        // 无标题时提示不展开
+        const hasHeadings = els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6').length > 0;
+        if (!hasHeadings) {
+            nm.show('当前文档未提取到标题', 'info');
+            return;
+        }
+        const isOpen = els.tocSidebar.classList.toggle('toc-visible');
+        els.tocToggleBtn.classList.toggle('active', isOpen);
+        localStorage.setItem('tocSidebarOpen', isOpen ? 'true' : 'false');
+    });
+}
+
+/**
+ * 关闭 TOC 侧栏，同步清除按钮活跃态
+ */
+function _closeToc() {
+    if (els.tocSidebar) els.tocSidebar.classList.remove('toc-visible');
+    if (els.tocToggleBtn) els.tocToggleBtn.classList.remove('active');
+}
+
+/**
+ * 检查当前笔记是否为 Markdown 格式
+ * @returns {boolean}
+ */
+function _isMarkdownNote() {
+    return els.editorFileExt && els.editorFileExt.textContent === '.md';
+}
+
+/**
+ * 更新 editor-panes 的 data-preview-layout 属性
+ * @param {boolean} enable
+ */
+function _setPreviewLayout(enable) {
+    if (!els.editorPanes) return;
+    if (enable && _isMarkdownNote()) {
+        els.editorPanes.setAttribute('data-preview-layout', '');
+    } else {
+        els.editorPanes.removeAttribute('data-preview-layout');
+    }
+}
+
+/**
+ * 集成 TOC：为渲染好的 mdRendered 生成标题 ID、更新 TOC 侧栏
+ */
+function _integrateToc() {
+    // 仅 Markdown 笔记启用 TOC
+    if (!_isMarkdownNote()) {
+        _closeToc();
+        return;
+    }
+    _ensureHeadingIds();
+    const headings = _extractHeadingsFromDOM();
+    _renderToc(headings);
+    _bindTocScrollListener();
+    _setPreviewLayout(true);
+}
+
+/**
+ * 确保 TOC 侧栏内容已准备（不控制显隐，显隐由用户按钮 + localStorage 控制）
+ */
+function _ensureTocReady() {
+    // 仅确保 TOC 相关状态，不修改 toc-visible
+    if (!_isMarkdownNote()) {
+        _closeToc();
+    }
+}
+
+/**
+ * 预览淡入动画
+ */
+function _applyPreviewFadeIn() {
+    requestAnimationFrame(() => {
+        els.mdRendered.style.animation = 'animFadeIn 0.2s ease-out forwards';
+        requestAnimationFrame(() => {
+            const codeBlocks = els.mdRendered.querySelectorAll('pre');
+            codeBlocks.forEach((block, index) => {
+                block.style.animation = `animFadeIn 0.2s ease-out forwards`;
+                block.style.animationDelay = `${index * 50}ms`;
+            });
+        });
+    });
+}
+
+/**
  * 更新 Markdown 预览区
  * 通过 Web Worker 离线程解析，不阻塞主线程 UI
+ * @param {string} [content] - 可选，指定渲染内容；不传则从 CM6 编辑器获取
  */
-function updatePreview() {
-    const content = getEditorContent();
+function updatePreview(content) {
+    if (content === undefined) content = getEditorContent();
     if (!content.trim()) {
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
         _lastPreviewContent = '';
+        _setPreviewLayout(false);
+        _closeToc();
+        if (els.tocBody) els.tocBody.innerHTML = '';
         return;
     }
     // 内容未变化则跳过重复渲染（哈希缓存）
-    if (content === _lastPreviewContent) return;
+    if (content === _lastPreviewContent) {
+        // 但仍需恢复 TOC 和预览布局状态
+        // （场景：编辑模式内切"预览"、查看→编辑→查看等，内容未变但 TOC 被之前操作移除了）
+        _setPreviewLayout(true);
+        _ensureTocReady();
+        return;
+    }
     _lastPreviewContent = content;
 
     // 有 Worker 且不在处理中则走 Worker 渲染
@@ -3489,6 +3765,10 @@ function updatePreview() {
     // 无 Worker 或 Worker 正忙时回退到主线程同步渲染
     els.mdRendered.innerHTML = marked.parse(content);
     _applyPreviewDOMHelpers();
+    // 主线程回退路径，自己提取标题
+    _integrateToc();
+    // 回退路径的淡入动画
+    _applyPreviewFadeIn();
 }
 
 /**
@@ -3527,6 +3807,9 @@ function switchEditorMode(mode) {
     // 预览模式下立即渲染（CM6 未就绪时跳过，等 initCodeMirror 完成后自动刷新）
     if (mode === 'preview' && cmEditor) {
         updatePreview();
+    } else if (mode === 'edit') {
+        _setPreviewLayout(false);
+        _closeToc();
     }
     // 切换模式时关闭查找/替换条（CM6 search 自管理）
     if (cmEditor) {
@@ -3694,7 +3977,13 @@ function closeEditor() {
         // 重置 Markdown 渲染/编辑显示状态
         els.mdRendered.style.display = 'none';
         els.mdRendered.innerHTML = '';
+        _lastPreviewContent = '';
         delete els.editorOverlay.dataset.mode;
+        // 重置 TOC 状态
+        _tocScrollBound = false;
+        _setPreviewLayout(false);
+        _closeToc();
+        if (els.tocBody) els.tocBody.innerHTML = '';
     }, 200);
 }
 
@@ -6531,6 +6820,8 @@ async function init() {
     await loadTags();
     // 初始化预览渲染 Worker
     initPreviewWorker();
+    // 初始化 TOC 侧栏展开/折叠按钮
+    _initTocToggle();
     // 初始化无边框窗口控制
     initWindowControls();
     // 注册文件拖拽导入

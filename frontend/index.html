@@ -171,6 +171,9 @@
                 <div class="editor-panel" id="editorPanel">
                     <div class="editor-header">
                         <div class="editor-header-actions">
+                            <button class="editor-header-btn" id="tocToggleBtn" title="目录">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            </button>
                             <button class="editor-header-btn editor-type-toggle" id="editorTypeToggle" title="切换为纯文本格式">M</button>
                             <button class="editor-header-btn" id="editorEditBtn" title="编辑笔记" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
                             <button class="editor-header-btn" id="editorViewBtn" title="返回查看模式" style="display:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -188,6 +191,10 @@
                         <div class="editor-panes" style="position:relative;">
 
                             <div id="editorNoteContent" class="editor-textarea"></div>
+                            <!-- TOC 侧栏（通过 .toc-visible class 控制显隐，默认隐藏） -->
+                            <div class="toc-sidebar" id="tocSidebar">
+                                <div class="toc-body" id="tocBody"></div>
+                            </div>
                             <div id="mdRendered" class="md-rendered" style="display:none"></div>
                         </div>
                     </div>
