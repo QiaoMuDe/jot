@@ -65,7 +65,7 @@ jot/                                    # 项目根目录
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理统计卡片/操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
-│   │           └── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中 900px 最大宽度/32px 间距）
+│   │           └── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -797,7 +797,7 @@ await loadXxxSetting();
 | **思维链入库修复** | `SaveAIMessages()` 中创建 `AIMessage` 时未赋值 `ReasoningContent`字段（`ai_service.go`）。同时前端 JS 用 `reasoningContent`（camelCase）但 Go JSON tag 是 `reasoning_content`（snake_case），前后端序列化不匹配。修复：后端 `AIMessage` 赋值补上 `ReasoningContent`；前端发送/读取全改为 `reasoning_content`（snake_case）。详见 [ai_service.go#L383-L387](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) 和 [ai-chat.js#L424](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **AI 对话滚动条自动隐藏** | 移除 `ai-chat.css` 中独立的 `.ai-chat-messages` 滚动条样式（一直显示灰色块），将 `.ai-chat-messages` 接入 `scrollbar.css` 的自动隐藏系统（静止 1 秒淡出）。轨道底色改为 `transparent` 融进背景。`main.js` 的 `initScrollbarAutoHide()` 容器列表新增 `.ai-chat-messages`。详见 [scrollbar.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 和 [main.js#L4016](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **笔记本侧栏折叠按钮** | 在 `<aside#notebookSidebar>` 和 `.main-content-area` 之间插入兄弟按钮（`.notebook-sidebar-toggle`），14×44px 纤细条状同款。`:not(.collapsed) ~ .notebook-sidebar-toggle { left: 176px }`，展开时左边框延续分割线，折叠时 `left: 0`。只在 `grid` 视图显示。JS 新增 `updateNotebookSidebarToggleBtn()` 切换 SVG 箭头方向，`toggleSidebar()` 和 `restoreSidebarState()` 联动更新。详见 [sidebar.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/sidebar.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
-| **AI 对话侧栏贴左** | 去掉 `#viewAiChat.view` 的全局 padding（`padding: 0`），侧栏直接顶到视图左边缘。标题栏和对话区各自加回 padding（标题 `24px 32px 0`，对话区 `0 16px 16px`）。`.ai-chat-content` 增加 `align-items: center` 使消息列表居中，`.ai-chat-messages` 和 `.ai-chat-input-area` 加 `max-width: 900px; margin: 0 auto`。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **AI 对话侧栏贴左** | 去掉 `#viewAiChat.view` 的全局 padding（`padding: 0`），侧栏直接顶到视图左边缘。标题栏和对话区各自加回 padding（标题 `24px 32px 0`，对话区 `0 16px 16px`）。`.ai-chat-content` 增加 `align-items: center` 使消息列表居中，`.ai-chat-messages` 和 `.ai-chat-input-area` 加 `max-width: clamp(800px, min(92vw, 100%), 1600px); margin: 0 auto`（后改为响应式宽度，见九十八节）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **消息间距 32px + 用户消息复制按钮** | `.ai-chat-messages` 的 `gap` 从 12px → 24px → 32px 防止 hover 操作按钮被下一条消息遮挡。`createMsgActions()` 在 user 消息上也调用（加载历史消息和实时发送两处），用户消息只显示复制按钮（assistant 消息显示复制+重新生成）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 ## 二十九、新增记忆点（会话排序 + 标题编辑）
@@ -1342,7 +1342,7 @@ await loadXxxSetting();
 
 | 记忆点 | 内容 |
 |--------|------|
-| **AI 聊天输入区域全屏宽度适配** | 输入工具栏和输入框在全屏时未跟随父容器铺满，因 `.ai-input-area` 设置了 `max-width: 900px; margin: 0 auto` 限制了宽度。修复：移除 `max-width` 和 `margin`，左右 `padding` 从 `20px` 增大到 `32px`（配合 `.ai-chat-content` 的 `16px padding`，全屏时边缘留白舒适）。消息列表 `.ai-chat-messages` 保留 `max-width: 900px` 居中，气泡宽度不受影响。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **AI 聊天输入区域全屏宽度适配** | 输入工具栏和输入框在全屏时未跟随父容器铺满，因 `.ai-input-area` 设置了 `max-width: 900px; margin: 0 auto` 限制了宽度。修复：移除 `max-width` 和 `margin`，左右 `padding` 从 `20px` 增大到 `32px`（配合 `.ai-chat-content` 的 `16px padding`，全屏时边缘留白舒适）。**后续九十八节中重新引入了响应式宽度约束**，消息列表和输入区统一使用 `clamp(800px, min(92vw, 100%), 1600px)`。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **MD 参考页 TOC 跨列居中 + 宽屏双列** | `.md-ref-toc`（目录区域）新增 `grid-column: 1 / -1` 始终跨所有列，水平居中不受宽窄屏影响。分割线以下的卡片保持 `auto-fill` grid，宽屏时自动溢出到多列。详见 [md-reference.css#L423](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/md-reference.css#L423) |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[md-reference.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/md-reference.css) |
 
@@ -1579,4 +1579,14 @@ await loadXxxSetting();
 | **内联脚本色值映射** | 与 Go 端 `themeBG` 函数保持一致的 12 主题 `--bg`/`--topbar-bg` 硬编码映射，通过注入 `<style>` 在 CSS 加载前生效，完整 CSS 加载后自动覆盖。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html#L7-L36) |
 | **localStorage 同步** | `loadThemeSetting()` 从后端读取后 `localStorage.setItem('jot_theme', theme)` 确保下次启动同步恢复；`saveThemeSetting()` 先从 localStorage 再写后端，保证切换主题后立即持久化。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L1361-L1387) |
 | **关键经验** | Wails 的 `BackgroundColour` 是解决原生层白色闪烁的唯一手段，前端 CSS/JS 优化无法覆盖 WebView2 初始化阶段。三层防护（原生背景 → 内联样式 → 完整 CSS）分别覆盖启动的三个阶段，确保从窗口出现第一帧到内容渲染完成全程无色差。 |
+
+## 九十八、新增记忆点（AI 对话区响应式宽度适配）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **动机** | AI 助手消息列表固定在 `max-width: 900px`，宽屏桌面窗口下利用率不足 50%，且输入区已撑满全宽造成视觉不一致。详见 `.trae/specs/ai-chat-responsive-width/` |
+| **消息列表宽度** | `.ai-chat-messages` 的 `max-width` 从 `900px` 改为 `clamp(800px, min(92vw, 100%), 1600px)`。窄屏（<900px）下跟随窗口缩小保留边距，宽屏（1920px+）时达 1600px 上限不无限拉伸。详见 [ai-chat.css#L25](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **输入区宽度对齐** | `.ai-chat-input-area` 增加与消息列表一致的 `max-width: clamp(800px, min(92vw, 100%), 1600px)`，父容器 `.ai-chat-content` 的 `align-items: center` 自动居中，消息列表与输入区左右边距完全对齐。详见 [ai-chat.css#L576](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **气泡宽度不受影响** | 消息气泡的 `max-width: 75%`（用户）/ `82%`（AI）相对容器的百分比约束保持不变，容器变宽后气泡不会无限制拉伸，保持可读性 |
+| **效果对比** | 1200px 窗口+侧栏开 → 消息区 ~970px（撑满）；1440px 窗口+侧栏开 → ~1210px（撑满）；1920px 窗口 → 1600px（上限）。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/ai-chat-responsive-width/spec.md) |
 
