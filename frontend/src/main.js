@@ -5135,6 +5135,11 @@ async function handleKeyboardNavigation(e) {
     // Escape: 关闭查找条或退出当前子视图
     if (e.key === 'Escape') {
         e.preventDefault();
+        // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）
+        const refModal = document.getElementById('aiNoteRefModal');
+        if (refModal && refModal.style.display !== 'none') {
+            return;
+        }
         // 关于页面打开时关闭它
         if (els.viewAbout.style.display === 'flex') {
             closeAbout();
@@ -5192,6 +5197,13 @@ async function handleKeyboardNavigation(e) {
 
     // Ctrl+数字键快捷导航（仅在非输入框内生效）
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.target.closest('input, textarea, [contenteditable]')) {
+        // 笔记编辑器/查看器/新建页面打开时屏蔽 Ctrl+数字快捷键
+        const viewEditor = document.getElementById('viewEditor');
+        const viewPreview = document.getElementById('viewPreview');
+        if ((viewEditor && viewEditor.classList.contains('active')) || 
+            (viewPreview && viewPreview.classList.contains('active'))) {
+            return;
+        }
         switch (e.key) {
             case '1':
                 e.preventDefault();

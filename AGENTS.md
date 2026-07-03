@@ -1707,3 +1707,30 @@ await loadXxxSetting();
 | **toggleRefSelectAll()** | 无筛选→`GetAllNoteIDs()`，有筛选（关键词/笔记本/标签任意组合）→`SearchNoteIDs()`。全选后 `_refSelectAll=true`，所有 ID 写入 `_refTempSelected`。取消全选→清空 `_refTempSelected`。详见 [ai-chat.js#L3710-L3762](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **全选态与列表联动** | `renderNoteList()`/`appendToList()` 中 `_refSelectAll=true` 时自动将当前/追加笔记 ID 写入 `_refTempSelected` 并更新选中态。`loadNoteList()` 非追加刷新时重置 `_refSelectAll=false` 但不清除 `_refTempSelected`（增量筛选友好）。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **updateRefCount 自动勾选/取消** | `updateRefCount()` 中判断 `count >= _refTotalItems` → 自动设 `_refSelectAll=true`（手动逐条选完自动勾选）；`count < _refTotalItems` → 自动设 `_refSelectAll=false`（取消勾选）。`toggleNoteSelection()` 中手动取消某条时同步退出全选模式。详见 [ai-chat.js#L3704-L3709](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.js#L3675-L3678](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 一百零九、新增记忆点（引用笔记选择器下拉样式统一 + 滚动条修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **笔记本下拉改为自定义 dropdown** | 引用笔记选择器搜索行中原生 `<select id="aiNoteRefNotebook">` 替换为自定义 `div#aiNoteRefNotebookFilter.ai-note-ref-filter` + `button#aiNoteRefNotebookBtn.ai-note-ref-filter-btn` + `div#aiNoteRefNotebookDropdown.ai-note-ref-filter-dropdown`，与标签下拉共用 CSS 类名，视觉完全一致。详见 [index.html#L1006-L1012](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **笔记本下拉 JS 重构** | `_currentNotebookId` 状态变量替代 `refNotebook.value`；`rebuildRefNotebookOptions()` 替代 `rebuildNotebookOptions()` 渲染自定义选项 + 点击事件绑定；`openNoteRefModal()` 中重置 `_currentNotebookId=0` 并更新按钮文字/active 态。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **标签/笔记本下拉滚动条修复** | `.ai-note-ref-filter-dropdown` 添加 `scrollbar-width: thin` + `scrollbar-color` + `::-webkit-scrollbar` 系列样式（宽 6px、透明 track、var(--scrollbar-thumb) thumb、hover 加深），与侧边栏 `.ai-session-list` 风格一致。详见 [ai-chat.css#L2334-L2367](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **互斥展开** | 点击标签下拉时关闭笔记本下拉（反之亦然），`e.stopPropagation()` 防止冒泡。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 一百一十、新增记忆点（引用笔记选择器 ESC/Enter 键盘支持 + 笔记页面屏蔽 Ctrl+数字快捷键）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Enter 确认引用** | `refModal` 添加 `keydown` 监听，Enter 键触发 `refConfirm.click()`，排除焦点在搜索输入框 `#aiNoteRefSearch` 中的场景（保留输入搜索功能）。详见 [ai-chat.js#L1055-L1065](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **ESC 返回 AI 聊天** | `main.js` `handleKeyboardNavigation` ESC 分支头部检测 `#aiNoteRefModal` 的 `display !== 'none'` 时直接 `return`，跳过全局 ESC 导航（不切换到 grid 视图），由 `ai-chat.js` 的 ESC 监听器关闭浮层。详见 [main.js#L5138-L5142](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **笔记页面屏蔽 Ctrl+数字** | `main.js` `handleKeyboardNavigation` Ctrl+数字分支入口添加检测：`#viewEditor.active` 或 `#viewPreview.active` 时 `return`，屏蔽 Ctrl+1~9 全局导航快捷键。CodeMirror 6 内容区域不匹配 `closest('input, textarea, [contenteditable]')` 选择器，现通过 editor active 类额外防御。详见 [main.js#L5200-L5206](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+## 一百一十一、新增记忆点（引用笔记批量移除标签）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **批量移除标签** | `updateRefChips()` 中当 `referencedNotes.length >= 3` 时，在 chips 末尾追加 `.ai-chat-ref-chip-remove-all` 标签（废纸篓图标 + `移除全部 N 篇`），点击清空 `referencedNotes` 和 `cachedRefContext` 并重渲染。详见 [ai-chat.js#L3908-L3918](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **批量移除标签样式** | `.ai-chat-ref-chip-remove-all`：红色虚线边框、hover 变红色实底白字、gap/圆角/字号与普通 chip 一致、复用 `chip-enter` 入场动画。详见 [ai-chat.css#L2112-L2133](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **交互规则** | ≥3 篇显示、≤2 篇隐藏；点击一键清空全部引用；手动移除部分后剩余 < 3 篇时自动消失。 |
+
+| **update 计数** | `AGENTS.md` 从更新 77 → 更新 78 |

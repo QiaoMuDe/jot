@@ -1002,9 +1002,13 @@
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
-                    <select id="aiNoteRefNotebook" class="ai-note-ref-notebook-select">
-                        <option value="0">全部笔记本</option>
-                    </select>
+                    <div class="ai-note-ref-filter" id="aiNoteRefNotebookFilter">
+                        <button class="ai-note-ref-filter-btn" id="aiNoteRefNotebookBtn">
+                            <span id="aiNoteRefNotebookLabel">全部笔记本</span>
+                            <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="ai-note-ref-filter-dropdown" id="aiNoteRefNotebookDropdown"></div>
+                    </div>
                     <!-- 标签筛选 -->
                     <div class="ai-note-ref-filter" id="aiNoteRefTagFilter">
                         <button class="ai-note-ref-filter-btn" id="aiNoteRefTagBtn">

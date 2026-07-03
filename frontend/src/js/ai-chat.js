@@ -71,7 +71,10 @@ let refChips = null;            // #aiChatRefChips
 let refModal = null;            // #aiNoteRefModal
 let refOverlay = null;          // #aiNoteRefOverlay
 let refSearch = null;           // #aiNoteRefSearch
-let refNotebook = null;         // #aiNoteRefNotebook
+let refNotebookFilter = null;   // #aiNoteRefNotebookFilter
+let refNotebookBtn = null;      // #aiNoteRefNotebookBtn
+let refNotebookLabel = null;    // #aiNoteRefNotebookLabel
+let refNotebookDropdown = null; // #aiNoteRefNotebookDropdown
 let refList = null;             // #aiNoteRefList
 let refCount = null;            // #aiNoteRefCount
 let refConfirm = null;          // #aiNoteRefConfirm
@@ -88,6 +91,7 @@ let refTagFilter = null;        // #aiNoteRefTagFilter
 let _refSearchTimer = null;     // 搜索 debounce 定时器
 let _refTempSelected = {};      // 浮层中临时选中状态 { [id]: true }
 let _refSelectAll = false;      // 全选模式标志
+let _currentNotebookId = 0;    // 当前选中的笔记本 ID (0=全部)
 let _refListLoaded = false;     // 是否已加载过列表 (首次用骨架屏, 后续用 overlay) 
 let _refCurrentPage = 1;        // 当前页码
 let _refTotalItems = 0;         // 匹配总数
@@ -519,7 +523,10 @@ export async function initAIChat() {
     refModal = document.getElementById('aiNoteRefModal');
     refOverlay = document.getElementById('aiNoteRefOverlay');
     refSearch = document.getElementById('aiNoteRefSearch');
-    refNotebook = document.getElementById('aiNoteRefNotebook');
+    refNotebookFilter = document.getElementById('aiNoteRefNotebookFilter');
+    refNotebookBtn = document.getElementById('aiNoteRefNotebookBtn');
+    refNotebookLabel = document.getElementById('aiNoteRefNotebookLabel');
+    refNotebookDropdown = document.getElementById('aiNoteRefNotebookDropdown');
     refList = document.getElementById('aiNoteRefList');
     refListWrap = document.querySelector('.ai-note-ref-list-wrap');
     refCount = document.getElementById('aiNoteRefCount');
@@ -1028,12 +1035,6 @@ function bindEvents() {
             }
         });
     }
-    if (refNotebook) {
-        refNotebook.addEventListener('change', () => {
-            console.log('[RefNotebook] change event fired, value:', refNotebook.value);
-            loadNoteList(false);
-        });
-    }
     if (refSearchClear) {
         refSearchClear.addEventListener('click', () => {
             if (refSearch) {
@@ -1048,6 +1049,18 @@ function bindEvents() {
     if (refSearch) {
         refSearch.addEventListener('input', () => {
             refSearchClear?.classList.toggle('visible', refSearch.value.length > 0);
+        });
+    }
+
+    // 引用笔记选择器 Enter 键确认
+    if (refModal) {
+        refModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (e.target === refSearch) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (refConfirm) refConfirm.click();
+            }
         });
     }
 
@@ -1278,16 +1291,33 @@ function bindEvents() {
     if (refTagBtn) {
         refTagBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            // 关闭笔记本下拉（互斥）
+            if (refNotebookFilter) refNotebookFilter.classList.remove('open');
             refTagFilter.classList.toggle('open');
             if (refTagFilter.classList.contains('open')) {
                 renderRefTagDropdown();
             }
         });
     }
-    // 点击外部关闭标签下拉
+    // ── 笔记引用浮层笔记本下拉 ──
+    if (refNotebookBtn) {
+        refNotebookBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 关闭标签下拉（互斥）
+            if (refTagFilter) refTagFilter.classList.remove('open');
+            refNotebookFilter.classList.toggle('open');
+            if (refNotebookFilter.classList.contains('open')) {
+                rebuildRefNotebookOptions();
+            }
+        });
+    }
+    // 点击外部关闭标签下拉和笔记本下拉
     document.addEventListener('click', (e) => {
         if (refTagFilter && !refTagFilter.contains(e.target)) {
             refTagFilter.classList.remove('open');
+        }
+        if (refNotebookFilter && !refNotebookFilter.contains(e.target)) {
+            refNotebookFilter.classList.remove('open');
         }
     });
 
@@ -3306,7 +3336,10 @@ async function openNoteRefModal() {
     // 重置搜索/筛选
     if (refSearch) refSearch.value = '';
     if (refSearchClear) refSearchClear.classList.remove('visible');
-    if (refNotebook) refNotebook.value = '0';
+    _currentNotebookId = 0;
+    if (refNotebookLabel) refNotebookLabel.textContent = '全部笔记本';
+    if (refNotebookBtn) refNotebookBtn.classList.remove('active');
+    if (refNotebookFilter) refNotebookFilter.classList.remove('open');
 
     // 读取分页设置
     await loadRefPageSize();
@@ -3369,29 +3402,55 @@ function closeNoteRefModal() {
  * 加载所有笔记本到筛选下拉框 (带缓存, 仅首次调用时向后端请求) 
  */
 async function loadAllNotebooks() {
-    if (!refNotebook) return;
+    if (!refNotebookDropdown) return;
     try {
         if (_notebooksCache) {
-            rebuildNotebookOptions();
+            rebuildRefNotebookOptions();
             return;
         }
         const notebooks = await window.go.main.App.GetAllNotebooks() || [];
         _notebooksCache = notebooks;
-        rebuildNotebookOptions();
+        rebuildRefNotebookOptions();
     } catch (_) {
         /* 静默 */
     }
 }
 
 /**
- * 使用缓存的笔记本列表重建下拉选项
+ * 使用缓存的笔记本列表重建自定义下拉选项
  */
-function rebuildNotebookOptions() {
-    if (!refNotebook || !_notebooksCache) return;
-    const currentVal = refNotebook.value;
-    refNotebook.innerHTML = '<option value="0">全部笔记本</option>' +
-        _notebooksCache.map(n => `<option value="${n.id}">${n.name}</option>`).join('');
-    refNotebook.value = currentVal;
+function rebuildRefNotebookOptions() {
+    if (!refNotebookDropdown || !_notebooksCache) return;
+    const currentId = _currentNotebookId || 0;
+    let html = '';
+    html += `<div class="ai-note-ref-filter-option${currentId === 0 ? ' selected' : ''}" data-notebook-id="0">全部笔记本</div>`;
+    _notebooksCache.forEach(n => {
+        const selected = currentId === n.id;
+        html += `<div class="ai-note-ref-filter-option${selected ? ' selected' : ''}" data-notebook-id="${n.id}">${n.name}</div>`;
+    });
+    refNotebookDropdown.innerHTML = html;
+
+    refNotebookDropdown.querySelectorAll('.ai-note-ref-filter-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const notebookId = parseInt(opt.dataset.notebookId);
+            _currentNotebookId = notebookId;
+            // 更新按钮文字
+            if (refNotebookLabel) {
+                if (notebookId === 0) refNotebookLabel.textContent = '全部笔记本';
+                else {
+                    const nb = (_notebooksCache || []).find(n => n.id === notebookId);
+                    refNotebookLabel.textContent = nb ? nb.name : '全部笔记本';
+                }
+            }
+            // 关闭下拉
+            if (refNotebookFilter) refNotebookFilter.classList.remove('open');
+            // 更新选中样式
+            refNotebookFilter.classList.toggle('active', notebookId > 0);
+            // 触发列表刷新
+            loadNoteList(false);
+        });
+    });
 }
 
 /**
@@ -3491,7 +3550,7 @@ async function loadNoteList(append = false) {
     _refLoading = true;
 
     const query = refSearch?.value.trim() || '';
-    const notebookId = parseInt(refNotebook?.value || '0');
+    const notebookId = _currentNotebookId || 0;
     const page = append ? _refCurrentPage + 1 : 1;
     console.log('[loadNoteList] proceeding: append=', append, 'query=', query, 'notebookId=', notebookId, 'page=', page, '_refListLoaded=', _refListLoaded);
 
@@ -3732,7 +3791,7 @@ async function toggleRefSelectAll() {
 
     // 未全选 → 全选：根据当前筛选条件获取所有匹配 ID
     const query = refSearch?.value.trim() || '';
-    const notebookId = parseInt(refNotebook?.value || '0');
+    const notebookId = _currentNotebookId || 0;
     const tagIds = _refTagIds.size > 0 ? Array.from(_refTagIds) : [];
 
     try {
@@ -3831,7 +3890,9 @@ function updateRefChips() {
 
     refBar.style.display = '';
     refBtn.classList.add('has-ref');
-    refChips.innerHTML = referencedNotes.map(n => {
+
+    // 渲染单个笔记 chips
+    let html = referencedNotes.map(n => {
         const title = n.title || '无标题';
         const truncTip = n.truncated ? '<span class="ai-chat-ref-chip-trunc">(内容已截断)</span>' : '';
         return `<div class="ai-chat-ref-chip" data-id="${n.id}">
@@ -3844,7 +3905,17 @@ function updateRefChips() {
         </div>`;
     }).join('');
 
-    // 绑定移除事件
+    // 3 篇以上时追加批量移除标签
+    if (referencedNotes.length >= 3) {
+        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all" title="一键移除全部引用">
+            <svg class="ai-chat-ref-chip-remove-all-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>移除全部 ${referencedNotes.length} 篇</span>
+        </div>`;
+    }
+
+    refChips.innerHTML = html;
+
+    // 绑定单个移除事件
     refChips.querySelectorAll('.ai-chat-ref-chip-remove').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -3852,7 +3923,15 @@ function updateRefChips() {
         });
     });
 
-    // chips 区域已包含后端返回的截断状态, 无需异步刷新
+    // 绑定批量移除事件
+    const removeAllBtn = refChips.querySelector('.ai-chat-ref-chip-remove-all');
+    if (removeAllBtn) {
+        removeAllBtn.addEventListener('click', () => {
+            referencedNotes = [];
+            cachedRefContext = '';
+            updateRefChips();
+        });
+    }
 }
 
 /**

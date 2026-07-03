@@ -2109,6 +2109,32 @@
     background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
+/* ── 批量移除标签 ── */
+.ai-chat-ref-chip-remove-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px dashed var(--error, #e74c3c);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--error, #e74c3c);
+    font-size: 0.72rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+    animation: chip-enter 0.2s ease-out both;
+}
+
+.ai-chat-ref-chip-remove-all:hover {
+    background: var(--error, #e74c3c);
+    color: #fff;
+}
+
+.ai-chat-ref-chip-remove-all-icon {
+    flex-shrink: 0;
+}
+
 /* ── 笔记引用选择浮层 ── */
 .ai-note-ref-modal {
     position: fixed;
@@ -2270,25 +2296,6 @@
     display: flex;
 }
 
-.ai-note-ref-notebook-select {
-    padding: 7px 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 0.78rem;
-    color: var(--text-primary);
-    background: var(--input-bg);
-    outline: none;
-    font-family: inherit;
-    cursor: pointer;
-    min-width: 110px;
-    flex-shrink: 0;
-    transition: border-color 0.15s;
-}
-
-.ai-note-ref-notebook-select:focus {
-    border-color: var(--accent);
-}
-
 /* ── 标签筛选按钮 ── */
 .ai-note-ref-filter {
     position: relative;
@@ -2348,6 +2355,26 @@
     pointer-events: none;
     transition: opacity 0.15s ease-out, transform 0.15s ease-out;
     padding: 4px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.ai-note-ref-filter-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-note-ref-filter-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-note-ref-filter-dropdown::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+
+.ai-note-ref-filter-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
 }
 .ai-note-ref-filter.open .ai-note-ref-filter-dropdown {
     opacity: 1;
