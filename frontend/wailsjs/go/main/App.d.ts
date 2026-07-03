@@ -28,6 +28,8 @@ export function CancelAIStream():Promise<void>;
 
 export function ClearAISessionMessages(arg1:number):Promise<void>;
 
+export function ClearAllAISessions():Promise<void>;
+
 export function CreateAISession():Promise<number>;
 
 export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Promise<models.Note>;

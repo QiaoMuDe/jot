@@ -863,12 +863,12 @@
 
 /* "AI" 按钮 */
 .fab-ai {
-  background: #8b5cf6;
+  background: var(--accent);
   color: #fff;
 }
 
 .fab-ai:hover {
-  background: #7c3aed;
+  background: var(--accent-dark);
 }
 
 /* "↑" 回到顶部：默认隐藏，滚动后显示 */

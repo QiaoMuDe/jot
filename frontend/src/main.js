@@ -19,7 +19,7 @@ import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/cons
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir } from './js/data-management.js';
+import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -353,6 +353,7 @@ const els = {
     resetAllBtn: $('resetAllBtn'),
     vacuumDbBtn: $('vacuumDbBtn'),
     openDataDirBtn: $('openDataDirBtn'),
+    clearAISessionsBtn: $('clearAISessionsBtn'),
     dataContent: $('dataContent'),
     statTotalNotes: $('statTotalNotes'),
     statTotalTags: $('statTotalTags'),
@@ -978,8 +979,8 @@ function showConfirmDialog(msg) {
 
         const cleanup = (result) => {
             els.confirmDialog.classList.remove('visible');
-            // 恢复第三方按钮显示
-            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = '';
+            // 保持第三方按钮隐藏（普通确认框用不到）
+            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
             resolve(result);
         };
 
@@ -1684,29 +1685,23 @@ async function loadAISettings() {
         let enabled = false;
         try {
             const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
-            if (val !== '') enabled = val === 'true';
-            else enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
-        } catch (_) {
-            enabled = localStorage.getItem('ai_thinking_enabled') === 'true';
-        }
+            enabled = val === 'true';
+        } catch (_) { /* 保持默认 false */ }
         if (enabled) searchToggle.classList.add('active');
     }
 
     // 联网搜索配置
     const tavilyKey = document.getElementById('aiTavilyApiKey');
-    if (tavilyKey && cfg.tavily_api_key) {
-        tavilyKey.value = cfg.tavily_api_key;
+    if (tavilyKey) {
+        tavilyKey.value = cfg.tavily_api_key || '';
     }
     const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
     if (webSearchToggle) {
         let webSearchEnabled = false;
         try {
             const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
-            if (val !== '') webSearchEnabled = val === 'true';
-            else webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
-        } catch (_) {
-            webSearchEnabled = localStorage.getItem('ai_web_search_enabled') === 'true';
-        }
+            webSearchEnabled = val === 'true';
+        } catch (_) { /* 保持默认 false */ }
         if (webSearchEnabled) webSearchToggle.classList.add('active');
     }
 
@@ -1716,27 +1711,16 @@ async function loadAISettings() {
         let cardRecallEnabled = false;
         try {
             const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
-            if (val !== '') cardRecallEnabled = val === 'true';
-            else cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
-        } catch (_) {
-            cardRecallEnabled = localStorage.getItem('ai_card_recall_enabled') === 'true';
-        }
+            cardRecallEnabled = val === 'true';
+        } catch (_) { /* 保持默认 false */ }
         if (cardRecallEnabled) cardRecallToggle.classList.add('active');
     }
     const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
     if (cardRecallLimit) {
         try {
             const val = await window.go.main.App.GetSetting('ai_card_recall_limit');
-            if (val) {
-                cardRecallLimit.value = val;
-            } else {
-                const saved = localStorage.getItem('ai_card_recall_limit');
-                if (saved) cardRecallLimit.value = saved;
-            }
-        } catch (_) {
-            const saved = localStorage.getItem('ai_card_recall_limit');
-            if (saved) cardRecallLimit.value = saved;
-        }
+            if (val) cardRecallLimit.value = val;
+        } catch (_) { /* 保持 HTML 默认值 */ }
     }
 
     // 引用截断字数
@@ -2086,6 +2070,7 @@ async function initAISettings() {
             cfg.provider = getActiveProvider();
             await window.go.main.App.SaveAIConfig(cfg);
             nm.show('AI 配置已保存', 'success');
+            await loadProfiles();
         } catch (e) {
             nm.show('保存配置失败: ' + e, 'error');
         }
@@ -2099,6 +2084,7 @@ async function initAISettings() {
             cfg.provider = getActiveProvider();
             await window.go.main.App.SaveAIConfig(cfg);
             nm.show('AI 配置已保存', 'success');
+            await loadProfiles();
         } catch (e) {
             nm.show('保存配置失败: ' + e, 'error');
         }
@@ -2252,8 +2238,8 @@ async function initAISettings() {
         refMaxChars.addEventListener('change', async () => {
             const val = parseInt(refMaxChars.value);
             if (isNaN(val) || val < 1) {
-                refMaxChars.value = 1000;
-                nm.show('截断字数必须大于 0，已重置为 1000', 'warning');
+                refMaxChars.value = 5000;
+                nm.show('截断字数必须大于 0，已重置为 5000', 'warning');
                 return;
             }
             try {
@@ -2293,8 +2279,10 @@ async function initAISettings() {
     const presetTrigger = document.getElementById('presetTrigger');
     const presetDropdown = document.getElementById('presetDropdown');
     if (presetTrigger && presetDropdown) {
-        presetTrigger.addEventListener('click', (e) => {
+        presetTrigger.addEventListener('click', async (e) => {
             e.stopPropagation();
+            const profiles = await window.go.main.App.GetProfiles();
+            if (profiles.length === 0) return;
             presetTrigger.classList.toggle('open');
             presetDropdown.classList.toggle('open');
         });
@@ -4873,6 +4861,7 @@ function initEventListeners() {
     els.resetAllBtn.addEventListener('click', resetDatabase);
     els.vacuumDbBtn.addEventListener('click', vacuumDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
+    els.clearAISessionsBtn.addEventListener('click', clearAISessions);
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');
@@ -6003,13 +5992,13 @@ function showDeleteNotebookDialog(notebookId, notebookName) {
     els.confirmDialog.classList.add('visible');
 
     const cleanup = (confirmed) => {
-        els.confirmDialog.classList.remove('visible');
-        if (optionArea) optionArea.style.display = 'none';
-        // 恢复"不保存"按钮为 CSS 默认隐藏状态
-        if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = '';
-        if (!confirmed) return;
-        doDeleteNotebook(notebookId, checkbox ? checkbox.checked : false);
-    };
+            els.confirmDialog.classList.remove('visible');
+            if (optionArea) optionArea.style.display = 'none';
+            // 保持"不保存"按钮隐藏（仅三选一对话框使用）
+            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
+            if (!confirmed) return;
+            doDeleteNotebook(notebookId, checkbox ? checkbox.checked : false);
+        };
 
     els.confirmOkBtn.onclick = () => cleanup(true);
     els.confirmCancelBtn.onclick = () => cleanup(false);

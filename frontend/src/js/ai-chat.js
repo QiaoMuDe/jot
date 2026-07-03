@@ -1679,9 +1679,19 @@ async function createSession() {
  * 输入框键盘事件
  */
 function onInputKeydown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault();
         onSend();
+    }
+    if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        // 在光标位置插入换行
+        const start = inputEl.selectionStart;
+        const end = inputEl.selectionEnd;
+        inputEl.value = inputEl.value.substring(0, start) + '\n' + inputEl.value.substring(end);
+        inputEl.selectionStart = inputEl.selectionEnd = start + 1;
+        // 触发 input 事件使发送按钮状态更新
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 

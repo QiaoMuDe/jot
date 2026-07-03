@@ -36,6 +36,7 @@ async function reloadSettings() {
     window.loadQuickNoteSetting?.();
     window.loadSyntaxHighlightSetting?.();
     window.loadCodeHighlightThemeSetting?.();
+    window.loadNoteOpenFullscreenSetting?.();
     window.loadAISettings?.();
 }
 
@@ -117,6 +118,29 @@ export async function loadDataStats() {
             });
         }
     }
+}
+
+/**
+ * 清空所有 AI 会话和消息
+ */
+export async function clearAISessions() {
+    const { nm, showConfirmDialog } = window;
+
+    const confirmed = await showConfirmDialog('确定要清空所有 AI 会话吗？所有对话记录和消息将被永久删除，此操作不可撤销。');
+    if (!confirmed) return;
+
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearAllAISessions) {
+            await window.go.main.App.ClearAllAISessions();
+            nm.show('AI 会话已清空', 'success');
+        } else {
+            nm.show('功能不可用：后端未绑定', 'error');
+        }
+    } catch (err) {
+        console.error('清空 AI 会话失败:', err);
+        nm.show('清空失败：' + err.message, 'error');
+    }
+    await loadDataStats();
 }
 
 /**

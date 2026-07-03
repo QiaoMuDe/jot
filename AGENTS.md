@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 76）
+> 生成日期: 2026-07-03（更新 77）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1680,4 +1680,20 @@ await loadXxxSetting();
 |--------|------|
 | **问题** | 点击用户消息的编辑按钮后，编辑态下的确定/取消按钮显示在用户消息左边缘。而 `.user-tokens` 使用 `position: absolute; left: 0; top: 0` 叠加在消息左上角，导致确定/取消按钮被 `.user-tokens` 覆盖挡住无法点击。 |
 | **修复** | `enterEditMode()` 中新增 `tokensEl.style.display = 'none'` 隐藏用户消息 token；`cancelEdit()` 中对应恢复 `tokensEl.style.display = ''`。详见 [ai-chat.js#L3015-L3017](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `enterEditMode()` 和 [ai-chat.js#L3051-L3053](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `cancelEdit()` |
-| **影响** | 仅修改前端 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 两处，无 CSS/后端变更。 |
+| **影响** | 仅修改前端 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 两处，无 CSS/后端变更。 |
+
+## 一百零七、新增记忆点（多批次修复集 — 引用截断/Ctrl+Enter/AI 图标/重置删表重建/设置页修复/清空 AI 会话/确认弹窗修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **引用笔记截断默认值 1000→5000** | `index.html` 输入框默认值、`app.go` 空值兜底/非法值重置、`main.js` 前端校验重置兜底、`note_service.go` 后端截断逻辑，4 处同步从 1000 改为 5000。详见 [index.html#L525](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[app.go#L581-L595](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[main.js#L2255](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[note_service.go#L134](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go) |
+| **AI 输入框 Ctrl+Enter 换行** | `ai-chat.js` `onInputKeydown()` 新增 `Ctrl+Enter` 分支：Enter→发送，Shift+Enter→换行，Ctrl+Enter→换行。详见 [ai-chat.js#L1681-L1698](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **首页 AI 图标迭代** | 经过 4 轮迭代（笑脸→星星火花→机器人→护目镜→Neo Minimal 机器人→Sci-Fi Visor 护目镜），最终使用 Sci-Fi Visor 护目镜 SVG。按钮背景色从硬编码 `#8b5cf6` 改为 `var(--accent)/var(--accent-dark)` 跟随主题。详见 [index.html#L1456](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **恢复出厂设置删表重建** | `app.go` `ResetDatabase()` 从增量清理 7 张表的 DeleteAll 改为 DropTable + AutoMigrate。以后新增表只需在 `InitDB` 的 AutoMigrate 注册即可自动处理，无需修改重置逻辑。详见 [app.go#L1437-L1472](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **Tavily Key 重置残留修复** | `loadAISettings()` 中 `if (tavilyKey && cfg.tavily_api_key)` 条件赋值不执行时旧值残留。改为 `tavilyKey.value = cfg.tavily_api_key \|\| ''` 始终赋值，重置后输入框被显式清空。详见 [main.js#L1696-L1699](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **设置页移除 4 处 localStorage 回退** | `loadAISettings()` 中深度思考、联网搜索、卡片召回启用、卡片召回数量 4 处移除 `localStorage` 回退读取，改为纯后端 `GetSetting()` 读取。详见 [main.js#L1686-L1738](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **URL/Key 保存后刷新预设下拉** | URL 和 Key 的 `change` 事件末尾追加 `await loadProfiles()`，确保从 URL 自动创建的"默认配置"立即出现在预设下拉中。详见 [main.js#L2085-L2105](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **无预设时禁用下拉** | `presetTrigger` 点击时先 `GetProfiles()` 检查，无预设直接 `return` 不展开。详见 [main.js#L2296](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **数据管理页清空 AI 会话** | 后端：`AIService.ClearAllAISessions()` 先删消息再删会话，`App` 绑定。前端：`index.html` 新"AI 数据"组，`data-management.js` `clearAISessions()` 带确认弹窗。详见 [ai_service.go#L505-L512](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go#L993-L997](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[index.html#L740-L752](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-management.js#L124-L146](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **确认弹窗"不保存"按钮修复** | `showConfirmDialog()` 和 `showDeleteNotebookDialog()` 的 cleanup 中 `confirmThirdBtn` 从 `style.display = ''`（恢复可见）改为 `style.display = 'none'`（保持隐藏），修复关闭对话框中"不保存"按钮露出。详见 [main.js#L983](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **update 计数** | `AGENTS.md` 从更新 76 → 更新 77 |

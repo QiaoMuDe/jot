@@ -502,6 +502,14 @@ func (a *AIService) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64
 	return result.RowsAffected, result.Error
 }
 
+// ClearAllAISessions 清空所有 AI 会话及消息
+func (a *AIService) ClearAllAISessions() error {
+	if err := a.db.Where("1 = 1").Delete(&models.AIMessage{}).Error; err != nil {
+		return err
+	}
+	return a.db.Where("1 = 1").Delete(&models.AISession{}).Error
+}
+
 // CountSessions 获取 AI 会话总数（不含软删除）
 func (a *AIService) CountSessions() (int64, error) {
 	var count int64

@@ -578,15 +578,15 @@ func (a *App) SetSetting(key, value string) error {
 	return a.settingService.Set(key, value)
 }
 
-// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 1000
+// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 5000
 func (a *App) GetAIRefMaxChars() int {
 	val := a.settingService.Get("ai_ref_max_chars")
 	if val == "" {
-		return 1000
+		return 5000
 	}
 	n, err := strconv.Atoi(val)
 	if err != nil || n <= 0 {
-		return 1000
+		return 5000
 	}
 	if n > 50000 {
 		return 50000
@@ -988,6 +988,11 @@ func (a *App) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64, erro
 // UpdateSessionContextTokens 更新会话的上下文 Token 数
 func (a *App) UpdateSessionContextTokens(sessionID uint, tokens int) error {
 	return a.aiService.UpdateSessionContextTokens(sessionID, tokens)
+}
+
+// ClearAllAISessions 清空所有 AI 会话及消息
+func (a *App) ClearAllAISessions() error {
+	return a.aiService.ClearAllAISessions()
 }
 
 // UpdateLastUserMessageTokens 更新指定会话中最后一条用户消息的 tokens
@@ -1434,24 +1439,40 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	return results
 }
 
-// ResetDatabase 清空所有数据（笔记/标签/设置），重新初始化默认标签，恢复出厂状态
+// ResetDatabase 清空所有数据，恢复出厂状态（删表重建）
 func (a *App) ResetDatabase() error {
-	// 1. 清空所有笔记和标签
-	if err := a.noteService.ResetAll(); err != nil {
+	// 1. 删除所有表（自动处理外键依赖顺序）
+	tables := []interface{}{
+		&models.AIMessage{},
+		&models.AISession{},
+		&models.APIProfile{},
+		&models.Setting{},
+		&models.Note{},
+		&models.Tag{},
+		&models.Notebook{},
+	}
+	for _, table := range tables {
+		if err := a.db.Migrator().DropTable(table); err != nil {
+			return err
+		}
+	}
+
+	// 2. 重新 AutoMigrate（与 InitDB 保持同步）
+	if err := a.db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{},
+		&models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}); err != nil {
 		return err
 	}
-	// 2. 清空所有设置
-	if err := a.settingService.DeleteAll(); err != nil {
-		return err
-	}
-	// 3. 清空所有笔记本，重建默认笔记本
-	if err := a.notebookService.ResetAll(); err != nil {
-		return err
-	}
-	// 4. 重新初始化默认标签
+
+	// 3. 重新初始化默认标签
 	if err := services.InitDefaultTags(a.db); err != nil {
 		return err
 	}
+
+	// 4. 确保默认笔记本存在
+	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

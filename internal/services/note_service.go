@@ -130,8 +130,8 @@ func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
 		return nil, fmt.Errorf("query note ref rows: %w", err)
 	}
 
-	// 从设置动态读取单条笔记截断字数，默认 1000
-	maxPerNote := 1000
+	// 从设置动态读取单条笔记截断字数，默认 5000
+	maxPerNote := 5000
 	if s.settingService != nil {
 		val := s.settingService.Get("ai_ref_max_chars")
 		if n, err := strconv.Atoi(val); err == nil && n > 0 {

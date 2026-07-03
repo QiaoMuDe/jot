@@ -50,6 +50,10 @@ export function ClearAISessionMessages(arg1) {
   return window['go']['main']['App']['ClearAISessionMessages'](arg1);
 }
 
+export function ClearAllAISessions() {
+  return window['go']['main']['App']['ClearAllAISessions']();
+}
+
 export function CreateAISession() {
   return window['go']['main']['App']['CreateAISession']();
 }
