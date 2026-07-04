@@ -1859,3 +1859,20 @@ await loadXxxSetting();
 | **修复** | 全局配色改为暖米白底（`--bg: #F5F0E8`）+ 柔紫强调色（`--accent: #8B7EC8`）。所有冷灰、蓝色系变量全部替换为暖紫灰/淡紫/蓝紫色系。详见 [variables.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/variables.css) `[data-theme="quiet-light"]` |
 | **后续再调** | 用户反馈紫色太深，将 `--accent` 从 `#7C3AED` 降至 `#8B7EC8`，`--accent-dark` 从 `#5B21B6` 降至 `#6D5EA0`，所有紫调统一降低饱和度 |
 | **update 计数** | `AGENTS.md` 从更新 89 → 更新 90 |
+
+## 一百二十三、新增记忆点（联网搜索 Query 精炼 + 搜索指示器三态展示 + 卡片召回内容截断 + 设置默认值调整）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **联网搜索 Query 精炼** | 新增 `internal/services/query_refiner.go`，导出 `RefineSearchQuery(query, aiService)` 函数。通过 LLM 非流式调用将用户原始输入精炼为搜索引擎友好的关键词：去口语化、保留核心实体词、多意图用 `,` 分隔、不加解释。精炼 prompt 写死在代码中（不存库）。详见 [query_refiner.go#L33](file:///d:/峡谷/Dev/本地项目/jot/internal/services/query_refiner.go) |
+| **精炼失败处理** | `app.go` 中 `CallAIStream` 的搜索流程中，精炼失败时发射 `ai:stream-error` 事件携带错误信息并 `return` 终止整个流程，不继续搜索。详见 [app.go#L819-L823](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **搜索状态三态事件** | `app.go` 中搜索状态通过 `ai:search-status` 事件分三阶段发射：`refining`（精炼开始）→ `refined-keywords` 携带关键词 + `searching`（搜索阶段）→ `done`（LLM 回复开始）。详见 [app.go#L778](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[app.go#L824-L825](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[app.go#L855](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **前端搜索指示器** | `ai-chat.js` 新增 `createAdvancedSearchIndicator()` 替换旧 `createSearchIndicator()`：精炼阶段显示「🌐 正在优化搜索词...」+ 旋转图标（无下拉）；搜索阶段显示「🌐 正在联网搜索...（N 个关键词）」+ 可点击 bar + 箭头旋转 + 下拉菜单展示关键词标签列表；LLM 回复时自动移除。详见 [ai-chat.js#L2229](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **卡片召回内容截断** | `recall_service.go` 中 `RecallCard` 结构体新增 `Truncated bool` 字段，`CardRecallSearch` 签名新增 `maxChars int` 参数。长笔记首次触发截断：`len(content) > maxChars` 时调用 `extractContext()` 定位 2-gram 关键词位置，截取前后各 200 字上下文，末尾追加 `...(内容已截断)` 标记。截断失败时回退从头取 `maxChars` 字。详见 [recall_service.go#L112](file:///d:/峡谷/Dev/本地项目/jot/internal/services/recall_service.go) |
+| **截断阈值读取** | `app.go` 调用 `CardRecallSearch` 前从 `settingService` 动态读取 `ai_ref_max_chars`（默认 5000，范围 1-50000），取不到或非法值时回退 5000。 |
+| **设置默认值调整** | 联网搜索结果数上限 20→30（默认 5 不变）；卡片召回条数默认 3→5、上限 10→30；引用截断数 5000/50000 不变。涉及 `index.html`、`main.js`、`app.go` 中 3 个设置项的前后端校验和默认值同步修改。 |
+| **GetAICardRecallLimit 方法化** | `app.go` 新增 `GetAICardRecallLimit()`（DB 空返回 5，超 30 封顶）和 `SetAICardRecallLimit(limit)`（校验 1-30 范围）专用方法，与 `GetAISearchResultLimit`/`GetAIRefMaxChars` 一致。前端从 `GetSetting('ai_card_recall_limit')` 改为 `GetAICardRecallLimit()`，保存从 `SetSetting` 改为 `SetAICardRecallLimit`，移除 `localStorage` 写入。详见 [app.go#L653-L680](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **data-management.js reloadSettings 修复** | `reloadSettings()` 原逐个调用 9 个已清空的 `loadXxxSetting` 空函数，DB 重置后设置不生效。改为单行 `window.loadSettingsPageConfig?.()`。详见 [data-management.js#L29-L39](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **loadSettingsPageConfig 补充 loadProfiles** | `loadSettingsPageConfig()` 末尾追加 `loadProfiles()` 调用，修复预设配置下拉菜单始终显示「无预设配置」的问题。详见 [main.js#L1736-L1738](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 90 → 更新 91 |
