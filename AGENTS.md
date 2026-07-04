@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-04（更新 84）
+> 生成日期: 2026-07-04（更新 85）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -480,7 +480,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 |------|-----------|------|
 | `frontend/src/main.js` | 6744 | 前端核心逻辑（含批量管理 + TOC + 回到顶部） |
 | `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `frontend/src/js/ai-chat.js` | 3328 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶） |
+| `frontend/src/js/ai-chat.js` | 3346 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用） |
 | `app.go` | 1356 | Wails 绑定层（73+ API） |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
 | `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
@@ -1800,3 +1800,14 @@ await loadXxxSetting();
 | **间距优化** | chip 间 `gap` 从 8px 增至 12px，chip 内 `padding` 从 `6px 14px` 增至 `8px 18px`，为选中态 box-shadow 外扩环留出呼吸空间。详见 [modals.css#L63](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css)、[modals.css#L80](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css) |
 
 | **update 计数** | `AGENTS.md` 从更新 83 → 更新 84 |
+
+## 一百一十八、新增记忆点（引用笔记选择器 Enter 键确认修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 引用笔记选择浮层中，选中笔记后按回车键（Enter）无反应，无法确认引用 |
+| **根因** | 原监听绑定在浮层容器 `#aiNoteRefModal` 的 `keydown` 事件上，但 `keydown` 事件需由可聚焦元素触发。笔记条目为无 `tabindex` 的 `<div>`，点击后焦点始终停留在搜索输入框。浮层 handler 检测到 `e.target === refSearch` 时跳过处理，导致回车从未触发确认。详见 [ai-chat.js#L799-L808](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/js/ai-chat.js) |
+| **修复** | 改为 `document.addEventListener('keydown', ..., { capture: true })` 在 capture 阶段拦截。检测条件：`e.key === 'Enter'` + 浮层可见 + 有选中笔记。满足时 `preventDefault` + `stopPropagation` + 模拟点击确认按钮。capture 阶段在事件到达目标元素前触发，不受焦点元素限制，且避免搜索框自身的 Enter 搜索逻辑干扰。详见 [ai-chat.js#L799-L810](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/js/ai-chat.js) |
+| **效果** | 浮层内任意位置（搜索框、笔记条目、按钮）按回车，只要已有选中的笔记，均触发确认引用 |
+
+| **update 计数** | `AGENTS.md` 从更新 84 → 更新 85 |

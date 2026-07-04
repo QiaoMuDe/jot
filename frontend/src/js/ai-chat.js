@@ -796,17 +796,17 @@ function bindEvents() {
         });
     }
 
-    // 引用笔记选择器 Enter 键确认
-    if (refModal) {
-        refModal.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                if (e.target === refSearch) return;
+    // 引用笔记选择器 Enter 键确认（capture 阶段拦截，不受焦点元素限制，且阻止搜索框 Enter 搜索干扰）
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && refModal && refModal.style.display !== 'none') {
+            const count = Object.keys(_refTempSelected).length;
+            if (count > 0) {
                 e.preventDefault();
                 e.stopPropagation();
                 if (refConfirm) refConfirm.click();
             }
-        });
-    }
+        }
+    }, { capture: true });
 
     // 浮层列表点击切换选中 + 滚动到底部自动加载更多
     if (refList) {
