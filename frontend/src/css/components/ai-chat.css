@@ -385,7 +385,7 @@
     30% { transform: translateY(-4px); opacity: 1; }
 }
 
-/* ── 联网搜索动画 ── */
+/* ── 搜索指示器 ── */
 .ai-search-indicator {
     display: inline-flex;
     align-items: center;
@@ -393,7 +393,13 @@
     padding: 4px 0;
     color: var(--accent);
     font-size: 0.85rem;
-    white-space: nowrap;
+}
+
+.ai-search-indicator[data-status="searching"] {
+    position: relative;
+    flex-direction: column;
+    cursor: pointer;
+    user-select: none;
 }
 
 .ai-search-indicator svg {
@@ -401,9 +407,86 @@
     flex-shrink: 0;
 }
 
+.ai-search-indicator-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.ai-search-indicator-bar:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.ai-search-indicator-arrow {
+    transition: transform 0.2s;
+    color: var(--text-muted);
+}
+
+.ai-search-indicator[data-open="true"] .ai-search-indicator-arrow {
+    transform: rotate(180deg);
+}
+
 @keyframes ai-search-spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* ── 搜索关键词下拉菜单 ── */
+.ai-search-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 200px;
+    max-width: 320px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    padding: 10px 12px;
+    z-index: 100;
+    animation: ai-dropdown-in 0.15s ease-out;
+}
+
+@keyframes ai-dropdown-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-search-dropdown-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.ai-search-dropdown-loading svg {
+    animation: ai-search-spin 0.8s linear infinite;
+    width: 14px;
+    height: 14px;
+}
+
+/* ── 搜索关键词标签 ── */
+.ai-search-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ai-search-keyword-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 500;
+    line-height: 1.5;
 }
 
 /* ── 联网搜索来源折叠面板 ── */

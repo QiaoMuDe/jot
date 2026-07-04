@@ -1715,9 +1715,9 @@ async function loadAISettings() {
     const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
     if (cardRecallLimit) {
         try {
-            const val = await window.go.main.App.GetSetting('ai_card_recall_limit');
-            if (val) cardRecallLimit.value = val;
-        } catch (_) { /* 保持 HTML 默认值 */ }
+            const val = await window.go.main.App.GetAICardRecallLimit();
+            cardRecallLimit.value = val;
+        } catch (_) { /* 使用 HTML 默认值 5 */ }
     }
 
     // 引用截断字数
@@ -2212,16 +2212,15 @@ async function initAISettings() {
         cardRecallLimit.addEventListener('change', async (e) => {
             let val = parseInt(e.target.value);
             if (isNaN(val) || val < 1) {
-                val = 3;
-                e.target.value = 3;
+                val = 5;
+                e.target.value = 5;
             }
-            if (val > 10) {
-                val = 10;
-                e.target.value = 10;
+            if (val > 30) {
+                val = 30;
+                e.target.value = 30;
             }
-            localStorage.setItem('ai_card_recall_limit', String(val));
             try {
-                await window.go.main.App.SetSetting('ai_card_recall_limit', String(val));
+                await window.go.main.App.SetAICardRecallLimit(val);
                 nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
             } catch (err) {
                 nm.show('保存失败: ' + err, 'error');
@@ -2258,9 +2257,9 @@ async function initAISettings() {
                 nm.show('搜索结果数必须大于 0，已重置为 5', 'warning');
                 return;
             }
-            if (val > 20) {
-                searchResultLimit.value = 20;
-                nm.show('搜索结果数不能超过 20，已重置为 20', 'warning');
+            if (val > 30) {
+                searchResultLimit.value = 30;
+                nm.show('搜索结果数不能超过 30，已重置为 30', 'warning');
                 return;
             }
             try {

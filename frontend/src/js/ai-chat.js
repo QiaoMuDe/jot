@@ -1684,6 +1684,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     let hasReceivedChunk = false;
     let searchSources = null;
     let recallCards = null;
+    let refinedKeywords = '';
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -1749,9 +1750,12 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     // 联网搜索状态：显示/关闭搜索动画
     const unsubSearch = window.runtime.EventsOn('ai:search-status', (status) => {
-        if (status === 'searching') {
+        if (status === 'refining') {
             contentDiv.innerHTML = '';
-            contentDiv.appendChild(createSearchIndicator());
+            contentDiv.appendChild(createAdvancedSearchIndicator('refining'));
+        } else if (status === 'searching') {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(createAdvancedSearchIndicator('searching', refinedKeywords));
         } else if (status === 'done') {
             // 仅在尚未收到 stream chunk 时替换为打字点（搜索完成 → 等待 LLM 流式输出）
             if (!hasReceivedChunk) {
@@ -1761,6 +1765,12 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         }
     });
     unsubs.push(unsubSearch);
+
+    // 精炼后的搜索关键词
+    const unsubKeywords = window.runtime.EventsOn('ai:refined-keywords', (keywords) => {
+        refinedKeywords = keywords || '';
+    });
+    unsubs.push(unsubKeywords);
 
     // 联网搜索来源数据（结构化来源列表，AI 回复结束后展示）
     const unsubSources = window.runtime.EventsOn('ai:search-sources', (sourcesJSON) => {
@@ -2211,12 +2221,89 @@ function createTypingDots() {
 }
 
 /**
- * 创建联网搜索动画指示器（旋转地球图标 + "正在联网搜索..."）
+ * 创建高级联网搜索状态指示器（可点击展开下拉菜单）
+ * @param {'refining'|'searching'} status - 搜索阶段
+ * @param {string} [keywords=''] - 精炼后的关键词
+ * @returns {HTMLSpanElement}
  */
-function createSearchIndicator() {
+function createAdvancedSearchIndicator(status, keywords) {
     const el = document.createElement('span');
     el.className = 'ai-search-indicator';
-    el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>正在联网搜索...';
+    el.dataset.status = status;
+
+    // 地球 SVG（与原来一致）
+    const earthSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+
+    if (status === 'refining') {
+        // 精炼阶段：简洁展示，无下拉
+        el.innerHTML = earthSvg + '<span class="ai-search-indicator-text">正在优化搜索词...</span>';
+        return el;
+    }
+
+    // 搜索阶段：可点击 bar + 下拉菜单
+    el.dataset.open = 'false';
+
+    const bar = document.createElement('span');
+    bar.className = 'ai-search-indicator-bar';
+
+    let text = '正在联网搜索...';
+    if (keywords) {
+        const count = keywords.split(/\s+/).filter(Boolean).length;
+        text += '（' + count + ' 个关键词）';
+    }
+
+    bar.innerHTML = earthSvg + '<span class="ai-search-indicator-text">' + text + '</span>';
+
+    // 下拉箭头
+    const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    arrowSvg.setAttribute('width', '12');
+    arrowSvg.setAttribute('height', '12');
+    arrowSvg.setAttribute('viewBox', '0 0 24 24');
+    arrowSvg.setAttribute('class', 'ai-search-indicator-arrow');
+    const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    arrowPath.setAttribute('d', 'M6 9l6 6 6-6');
+    arrowSvg.appendChild(arrowPath);
+    bar.appendChild(arrowSvg);
+
+    el.appendChild(bar);
+
+    // 下拉菜单
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ai-search-dropdown';
+    dropdown.style.display = 'none';
+
+    if (keywords) {
+        const keywordsContainer = document.createElement('div');
+        keywordsContainer.className = 'ai-search-keywords';
+        const keywordList = keywords.split(/\s+/).filter(Boolean);
+        keywordList.forEach(function (kw) {
+            const tag = document.createElement('span');
+            tag.className = 'ai-search-keyword-tag';
+            tag.textContent = kw;
+            keywordsContainer.appendChild(tag);
+        });
+        dropdown.appendChild(keywordsContainer);
+    }
+
+    el.appendChild(dropdown);
+
+    // 点击展开/收起
+    bar.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isOpen = el.dataset.open === 'true';
+        el.dataset.open = isOpen ? 'false' : 'true';
+        dropdown.style.display = isOpen ? 'none' : 'flex';
+    });
+
+    // 点击外部收起
+    function closeHandler(e) {
+        if (!el.contains(e.target)) {
+            el.dataset.open = 'false';
+            dropdown.style.display = 'none';
+        }
+    }
+    document.addEventListener('click', closeHandler);
+
     return el;
 }
 

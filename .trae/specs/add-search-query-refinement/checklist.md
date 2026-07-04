@@ -1,0 +1,7 @@
+- [x] `query_refiner.go` 存在且导出了 `RefineSearchQuery` 函数
+- [x] `RefineSearchQuery` 返回 `(string, error)`，失败时返回 error
+- [x] 精炼 prompt 要求模型只输出关键词，不加解释
+- [x] `app.go` 中搜索流程变更为：原始 query → 精炼 → 精炼 query 搜索
+- [x] 精炼失败时发射 `ai:stream-error` 事件终止流程（不静默回退）
+- [x] 精炼调用有独立的超时控制（复用 `AIService.CallAI` 内置的 60s timeout）
+- [x] 项目可正常编译通过

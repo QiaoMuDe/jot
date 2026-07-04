@@ -633,8 +633,8 @@ func (a *App) GetAISearchResultLimit() int {
 	if err != nil || n < 1 {
 		return 5
 	}
-	if n > 20 {
-		return 20
+	if n > 30 {
+		return 30
 	}
 	return n
 }
@@ -644,10 +644,37 @@ func (a *App) SetAISearchResultLimit(limit int) error {
 	if limit < 1 {
 		return fmt.Errorf("搜索结果数必须大于 0")
 	}
-	if limit > 20 {
-		return fmt.Errorf("搜索结果数不能超过 20")
+	if limit > 30 {
+		return fmt.Errorf("搜索结果数不能超过 30")
 	}
 	return a.settingService.Set("ai_search_result_limit", strconv.Itoa(limit))
+}
+
+// GetAICardRecallLimit 获取 AI 卡片召回条数，空值时返回默认 5
+func (a *App) GetAICardRecallLimit() int {
+	val := a.settingService.Get("ai_card_recall_limit")
+	if val == "" {
+		return 5
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 1 {
+		return 5
+	}
+	if n > 30 {
+		return 30
+	}
+	return n
+}
+
+// SetAICardRecallLimit 设置 AI 卡片召回条数，含范围校验（1-30）
+func (a *App) SetAICardRecallLimit(limit int) error {
+	if limit < 1 {
+		return fmt.Errorf("卡片召回条数必须大于 0")
+	}
+	if limit > 30 {
+		return fmt.Errorf("卡片召回条数不能超过 30")
+	}
+	return a.settingService.Set("ai_card_recall_limit", strconv.Itoa(limit))
 }
 
 // ==================== AI 相关绑定方法 ====================
@@ -748,7 +775,7 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 		cfg := a.aiService.GetConfig()
 		if cfg.TavilyAPIKey != "" {
 			searching = true
-			runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+			runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
 		}
 	}
 
@@ -783,6 +810,20 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				}
 
 				if query != "" {
+					// 先精炼 query：调用 AI 模型将用户输入提炼为搜索引擎友好的关键词
+					refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
+					if err != nil {
+						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, "搜索关键词精炼失败: "+err.Error())
+						return
+					}
+					if refinedQuery != "" {
+						query = refinedQuery
+					}
+
+					// 通知前端精炼完成，传递精炼后的关键词，并切换到搜索阶段
+					runtime.EventsEmit(a.ctx, "ai:refined-keywords", query)
+					runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+
 					searchResultLimit := a.GetAISearchResultLimit()
 					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
 					if searchResult != nil {
@@ -825,15 +866,24 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			}
 			if query != "" {
 				// 从 localStorage 读取召回条数（默认 3）
-				recallLimit := 3
+				recallLimit := 5
 				if a.settingService != nil {
 					if val := a.settingService.Get("ai_card_recall_limit"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 10 {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 30 {
 							recallLimit = n
 						}
 					}
 				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
+				// 读取引用截断阈值（默认 5000）
+				maxChars := 5000
+				if a.settingService != nil {
+					if val := a.settingService.Get("ai_ref_max_chars"); val != "" {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 50000 {
+							maxChars = n
+						}
+					}
+				}
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, maxChars, a.noteService)
 				if recallResult != nil {
 					// 注入格式化文本到 system role
 					found := false

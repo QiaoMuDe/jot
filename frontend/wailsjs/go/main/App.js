@@ -130,6 +130,10 @@ export function FetchAIModels(arg1, arg2) {
   return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
 }
 
+export function GetAICardRecallLimit() {
+  return window['go']['main']['App']['GetAICardRecallLimit']();
+}
+
 export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
@@ -204,6 +208,10 @@ export function GetProfiles() {
 
 export function GetSetting(arg1) {
   return window['go']['main']['App']['GetSetting'](arg1);
+}
+
+export function GetSettingsPageConfig() {
+  return window['go']['main']['App']['GetSettingsPageConfig']();
 }
 
 export function GetSortOrder() {
@@ -312,6 +320,10 @@ export function SearchNoteIDs(arg1, arg2, arg3) {
 
 export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+}
+
+export function SetAICardRecallLimit(arg1) {
+  return window['go']['main']['App']['SetAICardRecallLimit'](arg1);
 }
 
 export function SetAIRefMaxChars(arg1) {

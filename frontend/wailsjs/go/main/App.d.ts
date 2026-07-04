@@ -68,6 +68,8 @@ export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
 export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function GetAICardRecallLimit():Promise<number>;
+
 export function GetAIConfig():Promise<services.AIConfig>;
 
 export function GetAIRefMaxChars():Promise<number>;
@@ -105,6 +107,8 @@ export function GetPageSize():Promise<number>;
 export function GetProfiles():Promise<Array<models.APIProfile>>;
 
 export function GetSetting(arg1:string):Promise<string>;
+
+export function GetSettingsPageConfig():Promise<main.SettingsPageConfig>;
 
 export function GetSortOrder():Promise<string>;
 
@@ -159,6 +163,8 @@ export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;
+
+export function SetAICardRecallLimit(arg1:number):Promise<void>;
 
 export function SetAIRefMaxChars(arg1:number):Promise<void>;
 

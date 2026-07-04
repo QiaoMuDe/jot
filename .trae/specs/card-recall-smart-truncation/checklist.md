@@ -1,0 +1,9 @@
+- [x] `extractContext` 函数实现正确：定位关键词、截取 ±200 字、边界处理
+- [x] 笔记长度 ≤ maxChars 时全文注入（行为不变）
+- [x] 笔记长度 > maxChars 时截取上下文，带 `...(内容已截断)` 标记
+- [x] 截取位置在边界时正确处理（不从负值开始、不超出末尾）
+- [x] 无法定位关键词时回退到从头截取 maxChars 字
+- [x] `RecallCard` 结构体新增 `Truncated bool` 字段
+- [x] `CardRecallSearch` 签名变更，调用方同步更新
+- [x] `app.go` 从 settingService 动态读取 `ai_ref_max_chars`，取不到时用 5000
+- [x] 项目可正常编译通过
