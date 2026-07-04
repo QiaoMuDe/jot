@@ -16,18 +16,12 @@ func themeBG(theme string) (uint8, uint8, uint8) {
 	switch theme {
 	case "dark":
 		return 13, 13, 13
-	case "monokai-pro":
-		return 45, 42, 46
 	case "tokyo-night":
 		return 26, 27, 38
-	case "catppuccin-mocha":
-		return 30, 30, 46
-	case "gruvbox-dark":
-		return 40, 40, 40
-	case "ayu-mirage":
-		return 31, 36, 48
 	case "dracula":
 		return 40, 42, 54
+	case "one-dark-pro":
+		return 40, 44, 52
 	case "catppuccin-latte":
 		return 239, 241, 245
 	case "gruvbox-light":
@@ -36,6 +30,12 @@ func themeBG(theme string) (uint8, uint8, uint8) {
 		return 236, 239, 244
 	case "light":
 		return 250, 250, 250
+	case "eye-protection":
+		return 199, 237, 204
+	case "quiet-light":
+		return 245, 245, 245
+	case "ysgrifennwr":
+		return 245, 237, 218
 	default: // "default" 主题
 		return 247, 245, 240
 	}

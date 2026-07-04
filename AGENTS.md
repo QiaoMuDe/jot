@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-04（更新 86）
+> 生成日期: 2026-07-04（更新 90）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -39,7 +39,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6744 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~7354 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
@@ -479,7 +479,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/main.js` | 6754 | 前端核心逻辑（含批量管理 + TOC + 回到顶部） |
+| `frontend/src/main.js` | 7348 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统） |
 | `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
 | `frontend/src/js/ai-chat.js` | 3346 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用） |
 | `app.go` | 1356 | Wails 绑定层（73+ API） |
@@ -1829,4 +1829,33 @@ await loadXxxSetting();
 | **修复 3** | 点击后锁定 `_tocScrollTimer` 定时器 500ms（匹配 smooth 动画时长），期间 scroll 事件因定时器未到期而提前返回，不覆盖点击高亮。动画结束后定时器释放，后续 scroll 事件恢复正常高亮计算。详见 [main.js#L3548-L3552](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) |
 | **涉及文件** | [editor.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/editor.css)（`scroll-padding-top`）、[main.js](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js)（点击高亮/高亮算法/闪烁锁定） |
 
-| **update 计数** | `AGENTS.md` 从更新 85 → 更新 86 |
+| **update 计数** | `AGENTS.md` 从更新 86 → 更新 87 |
+
+## 一百二十、新增记忆点（6 个新主题：暗夜/深林/日光/静谧/碧空/暖笺）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **新增主题** | 一口气新增 6 个主题：`one-dark-pro`（暗夜，暖灰暗）、`evergreen-forest`（深林，冷绿暗）、`solarized-light`（日光，暖黄亮）、`quiet-light`（静谧，低对比亮）、`bluloco-light`（碧空，蓝调亮）、`ysgrifennwr`（暖笺，暖米亮）。主题从 9 → 15 个。详见 [variables.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/variables.css) 末尾 6 个新 `[data-theme]` 块 |
+| **前端注册** | `main.js` 的 `themeLabels` 和 `codeHighlightThemePairing` 各新增 6 条。详见 [main.js#L1291-L1320](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) |
+| **UI 入口** | `index.html` 的 `criticalColors` 新增 6 条防闪色，下拉菜单新增 6 个选项（浅色主题在前、护眼在后）。详见 [index.html](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/index.html) |
+| **Go 后端清理** | `main.go` 的 `themeBG()` 移除 4 个已删除主题的死代码（`monokai-pro`、`catppuccin-mocha`、`gruvbox-dark`、`ayu-mirage`），新增 7 个主题映射（含之前缺失的 `eye-protection`）。详见 [main.go#L15-L42](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/main.go) |
+| **配色方案** | 每个主题 49 个 CSS 变量（核心 20 + 语义 17 + 滚动条 3 + 标签 4 + 阴影 4），参考 VS Code 同名主题官方配色。详见 [new-themes-plan.md](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/.trae/documents/new-themes-plan.md) |
+| **涉及文件** | [variables.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/variables.css)（+310 行 CSS）、[main.js](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js)（themeLabels + pairing）、[index.html](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/index.html)（criticalColors + 下拉）、[main.go](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/main.go)（清理+映射） |
+| **update 计数** | `AGENTS.md` 从更新 87 → 更新 88 |
+
+## 一百二十一、新增记忆点（删除 3 个主题：深林/日光/碧空）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **删除主题** | 移除 `evergreen-forest`（深林）、`solarized-light`（日光）、`bluloco-light`（碧空），原因是与现有配色对比不够鲜明，主题从 15 → 12 个。 |
+| **涉及文件** | [variables.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/variables.css)（删 2 个块）、[main.js](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js)（themeLabels + pairing 各删 3 条）、[index.html](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/index.html)（criticalColors + 下拉各删 3 项）、[main.go](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/main.go)（themeBG 删 3 case） |
+| **update 计数** | `AGENTS.md` 从更新 88 → 更新 89 |
+
+## 一百二十二、新增记忆点（quiet-light 主题配色修正：灰蓝→紫调）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | `quiet-light` 原设计为灰白冷调 + 蓝色强调色（`--accent: #4477AA`），与 VS Code Quiet Light 的暖米白+紫调完全不符 |
+| **修复** | 全局配色改为暖米白底（`--bg: #F5F0E8`）+ 柔紫强调色（`--accent: #8B7EC8`）。所有冷灰、蓝色系变量全部替换为暖紫灰/淡紫/蓝紫色系。详见 [variables.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/variables.css) `[data-theme="quiet-light"]` |
+| **后续再调** | 用户反馈紫色太深，将 `--accent` 从 `#7C3AED` 降至 `#8B7EC8`，`--accent-dark` 从 `#5B21B6` 降至 `#6D5EA0`，所有紫调统一降低饱和度 |
+| **update 计数** | `AGENTS.md` 从更新 89 → 更新 90 |

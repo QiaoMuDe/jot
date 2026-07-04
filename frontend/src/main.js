@@ -1288,17 +1288,17 @@ async function saveFontSetting(key, value) {
 /** 代码高亮主题配对映射：系统主题 → 推荐代码高亮主题 */
 const codeHighlightThemePairing = {
     'catppuccin-latte': 'catppuccin-mocha',
-    'catppuccin-mocha': 'catppuccin-mocha',
-    'gruvbox-dark': 'gruvbox-dark',
-    'gruvbox-light': 'gruvbox-dark',
-    'ayu-mirage': 'ayu-mirage',
+    'gruvbox-light': 'github-dark',
+    'one-dark-pro': 'one-dark-pro',
+    'quiet-light': 'vscode-light-plus',
+    'ysgrifennwr': 'github-light',
     'dracula': 'dracula',
     'default': 'monokai-dimmed',
     'nord': 'monokai-dimmed',
-    'monokai-pro': 'monokai-dimmed',
     'light': 'github-light',
     'tokyo-night': 'github-dark',
     'dark': 'github-dark',
+    'eye-protection': 'github-light',
 };
 
 const themeLabels = {
@@ -1307,11 +1307,11 @@ const themeLabels = {
     'nord': '北极',
     'gruvbox-light': '旧纸',
     'light': '浅色',
-    'gruvbox-dark': '陈酿',
-    'monokai-pro': '粉墨',
-    'ayu-mirage': '暮光',
+    'one-dark-pro': '暗夜',
+    'quiet-light': '静谧',
+    'ysgrifennwr': '暖笺',
     'tokyo-night': '夜幕',
-    'catppuccin-mocha': '暖夜',
+    'eye-protection': '护眼',
     'dark': '深色',
     'dracula': '德古拉',
 };
