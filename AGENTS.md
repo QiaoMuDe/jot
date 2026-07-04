@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-04（更新 85）
+> 生成日期: 2026-07-04（更新 86）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -118,6 +118,7 @@ jot/                                    # 项目根目录
     ├── fix-drag-drop-notebook-scope/ # 拖拽导入笔记本作用域修正（已完成）
     ├── fix-fullscreen-cover-custom-titlebar/ # 全屏模式遮挡标题栏修复（已完成）
     ├── fix-preview-scrollbar/        # 预览模式滚动条修复（已完成）
+    ├── fix-toc-heading-scroll-position/ # TOC 标题点击跳转定位不精准修复（已完成）
     ├── fix-viewmode-fullscreen-halfheight/ # 查看模式全屏半高修复（已完成）
     ├── integrate-codemirror-6/       # CodeMirror 6 编辑器集成（已完成）
     └── lazy-content-loading/         # 懒加载 Content 优化（已完成）
@@ -478,7 +479,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/main.js` | 6744 | 前端核心逻辑（含批量管理 + TOC + 回到顶部） |
+| `frontend/src/main.js` | 6754 | 前端核心逻辑（含批量管理 + TOC + 回到顶部） |
 | `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
 | `frontend/src/js/ai-chat.js` | 3346 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用） |
 | `app.go` | 1356 | Wails 绑定层（73+ API） |
@@ -1811,3 +1812,21 @@ await loadXxxSetting();
 | **效果** | 浮层内任意位置（搜索框、笔记条目、按钮）按回车，只要已有选中的笔记，均触发确认引用 |
 
 | **update 计数** | `AGENTS.md` 从更新 84 → 更新 85 |
+
+## 一百一十九、新增记忆点（TOC 标题点击跳转定位与高亮同步修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题 1：滚动定位不精准** | 点击 TOC 目录项后，标题紧贴预览区顶部边缘、上方无留白，有时偏上有时偏下。详见 [main.js#L3539-L3555](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) `_renderToc` |
+| **根因** | `scrollIntoView({ block: 'start' })` 将标题 border-box 上边缘对齐到滚动容器内容区上边缘（padding 内侧），标题自身的 `margin-top: 1.5em` 被推到可视区外。详见 [spec.md](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/.trae/specs/fix-toc-heading-scroll-position/spec.md) |
+| **修复 1** | 在 `.md-rendered` CSS 中新增 `scroll-padding-top: 0.75rem`，确保 `scrollIntoView` 等滚动操作时标题上方有合理留白。详见 [editor.css#L911](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/editor.css) |
+| **问题 2：点击高亮不更新** | 修复 1 后点击 TOC 标题定位正确，但 active 高亮样式停留在上一个标题上，不跟随点击切换 |
+| **根因** | 点击事件只调用了 `scrollIntoView`，未同步更新 active class，完全依赖 scroll 事件驱动的高亮更新。且 `_updateTocScrollHighlight` 中用同一变量 `activeIndex` 同时记录"上方标题"和"首个可见标题"，导致先被上方标题设值后无法被可见标题覆盖。详见 [main.js#L3562-L3595](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) `_updateTocScrollHighlight` |
+| **修复 2a** | 点击 TOC 项时立即设置 active class，不再依赖 scroll 事件。详见 [main.js#L3544-L3547](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) |
+| **修复 2b** | 引入独立变量 `lastAboveIndex` 分别跟踪"上方标题"和"可见标题"，修复高亮计算逻辑。详见 [main.js#L3575-L3590](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) |
+| **问题 3：高亮闪烁** | 修复 2 后点击 TOC 标题，高亮在滚动中间过程上下闪烁，最后才稳定到正确标题 |
+| **根因** | `scrollIntoView({ behavior: 'smooth' })` 触发连续 scroll 事件，每个事件调用 `_updateTocScrollHighlight` 重新计算，滚动经过其他标题时高亮被中间位置覆盖 |
+| **修复 3** | 点击后锁定 `_tocScrollTimer` 定时器 500ms（匹配 smooth 动画时长），期间 scroll 事件因定时器未到期而提前返回，不覆盖点击高亮。动画结束后定时器释放，后续 scroll 事件恢复正常高亮计算。详见 [main.js#L3548-L3552](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js) |
+| **涉及文件** | [editor.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/editor.css)（`scroll-padding-top`）、[main.js](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/main.js)（点击高亮/高亮算法/闪烁锁定） |
+
+| **update 计数** | `AGENTS.md` 从更新 85 → 更新 86 |

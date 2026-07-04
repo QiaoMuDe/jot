@@ -3538,8 +3538,18 @@ function _renderToc(headings) {
         btn.dataset.tocIndex = index;
         btn.addEventListener('click', () => {
             const allHeadings = els.mdRendered.querySelectorAll('h1,h2,h3,h4,h5,h6');
+            const tocItems = els.tocBody.querySelectorAll('.toc-item');
             const matched = allHeadings[index];
             if (matched && matched.id) {
+                // 立即更新 TOC 高亮，不依赖 scroll 事件
+                tocItems.forEach((item, i) => {
+                    item.classList.toggle('active', i === index);
+                });
+                // 锁定滚动高亮 ~500ms，防止 smooth 滚动过程中中间位置覆盖点击高亮
+                clearTimeout(_tocScrollTimer);
+                _tocScrollTimer = setTimeout(() => {
+                    _tocScrollTimer = null;
+                }, 500);
                 matched.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
@@ -3567,6 +3577,7 @@ function _updateTocScrollHighlight() {
 
         // 找到当前最接近顶部的标题
         let activeIndex = -1;
+        let lastAboveIndex = -1;
         headings.forEach((h, i) => {
             const rect = h.getBoundingClientRect();
             if (rect.top >= containerTop - 20) {
@@ -3574,8 +3585,10 @@ function _updateTocScrollHighlight() {
                 return;
             }
             // 如果标题在视口上方，记录最后一个在上方的
-            activeIndex = i;
+            lastAboveIndex = i;
         });
+        // 若未有标题在视口内，则使用最后一个在上方的标题
+        if (activeIndex === -1 && lastAboveIndex >= 0) activeIndex = lastAboveIndex;
         // 若所有标题都在上方，选中最后一个
         if (activeIndex === -1 && headings.length > 0) activeIndex = headings.length - 1;
         // 若第一个标题还在下方，选中第一个
