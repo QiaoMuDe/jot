@@ -542,3 +542,31 @@ func (a *AIService) CountMessages() (int64, error) {
 	err := a.db.Model(&models.AIMessage{}).Count(&count).Error
 	return count, err
 }
+
+// SumTokens 获取 AI 消息的总 token 数
+func (a *AIService) SumTokens() (int64, error) {
+	var total int64
+	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(SUM(tokens), 0)").Scan(&total).Error
+	return total, err
+}
+
+// AvgResponseTime 获取 AI 消息的平均响应时间（毫秒）
+func (a *AIService) AvgResponseTime() (float64, error) {
+	var avg float64
+	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(AVG(total_elapsed), 0)").Where("total_elapsed > 0").Scan(&avg).Error
+	return avg, err
+}
+
+// AvgThinkingTime 获取 AI 消息的平均思考时间（毫秒）
+func (a *AIService) AvgThinkingTime() (float64, error) {
+	var avg float64
+	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(AVG(thinking_elapsed), 0)").Where("thinking_elapsed > 0").Scan(&avg).Error
+	return avg, err
+}
+
+// MaxResponseTime 获取 AI 消息的最大响应时间（毫秒）
+func (a *AIService) MaxResponseTime() (float64, error) {
+	var max float64
+	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(MAX(total_elapsed), 0)").Scan(&max).Error
+	return max, err
+}

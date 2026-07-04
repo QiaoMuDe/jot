@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-03（更新 77）
+> 生成日期: 2026-07-04（更新 83）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -63,7 +63,7 @@ jot/                                    # 项目根目录
 │   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层/快捷键页面样式（shortcut-row flex 水平布局）
 │   │           ├── settings-panel.css  # 设置页分段控件/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
-│   │           ├── data-view.css       # 数据管理统计卡片/操作卡片
+│   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │           └── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
@@ -1774,3 +1774,17 @@ await loadXxxSetting();
 | **不注入场景** | 有笔记引用（已有 system 消息）、有技能开启（skillIds 非空）、或两者都有 |
 
 | **update 计数** | `AGENTS.md` 从更新 78 → 更新 82 |
+
+## 一百一十六、新增记忆点（数据管理页重构为信笺风格 + AI 统计扩展 + 入场动画重设计）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 原数据统计页使用 7 张小卡片（stat-card）展示笔记/AI 统计数据，卡片数量多、视觉零散，后续新增 Token/响应时间等指标后更显拥挤。重构为书信体（信笺风格）叙事式布局 |
+| **实现** | 移除 7 张 `.stat-card`，替换为 `.data-letter` 组件：`.letter-header`（日期 + 问候语）→ `.letter-body`（自然语言段落 + `<strong>` 强调数字 + `<hr>` 分隔线 + `.letter-stars` 星级评价）→ `.letter-footer`（落款签名）。宽度 580px 居中。详见 [index.html#L647-L660](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[data-view.css#L42-L77](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css)、[data-management.js#L44-L144](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **新 AI 统计字段** | `DataStats` 结构体新增 `TotalTokens`、`AvgResponseTime`、`AvgThinkingTime`、`MaxResponseTime`。后端聚合方法：`SumTokens()`、`AvgResponseTime()`、`AvgThinkingTime()`、`MaxResponseTime()`（均为 `AIService` 方法），全部在 `GetDataStats()` 中接入。详见 [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **星级评价** | 响应时间使用星级评分：平均等待(avgResponseTime)阈值 [3,6,10,20]s→5~1星；思考耗时(avgThinkingTime)阈值 [1,3,6,10]s；最长等待(maxResponseTime)阈值 [10,20,30,60]s。星级用 `<span class="star-icon">` 渲染 ★/☆。详见 [data-management.js#L102-L110](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **入场动画重设计** | 从弹性缩放（scaleY 0.3→1.025 橡胶弹跳）改为 clip-path 幕帘式展开：`clip-path: inset(0 0 100% 0)` → `inset(0 0 0 0)`（从上往下遮罩展开），配合 translateY(24px) + scale(0.97) → overshoot(-4px, 1.005) → settle。时长 0.9s，缓动 `cubic-bezier(0.22, 1, 0.36, 1)`（优雅 ease-out，无橡胶感）。通过 JS 类 `reveal` 的 remove/offsetWidth/add 触发。详见 [data-view.css#L56-L81](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css) |
+| **操作区适配** | `.data-action-list` 和 `.data-danger-zone` 宽度从 760px 收窄至 580px（与信纸对齐）。"数据操作"标题移除（`data-action-heading` 类及 HTML 一并删除）。危险操作区重构为 `.data-action-list-danger`（红色边框卡片）+ 按钮保留 `.data-action-row-danger` 红色文字，hover 背景 `#fee2e2`。无分隔线标题。详见 [data-view.css#L179-L320](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/data-view.css)、[index.html#L747-L760](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **删除的旧样式** | `.stat-card`、`.stat-card-icon`、`.stat-card-value`、`.stat-card-label`、`.data-divider`、`.data-danger-divider`、`.data-action-heading` 及所有 7 张 stat-card 的 inline `--i` 延迟动画、.data-section-card 卡片网格布局 |
+
+| **update 计数** | `AGENTS.md` 从更新 82 → 更新 83 |

@@ -1,7 +1,5 @@
 /* ===== 数据管理函数 ===== */
 
-let _statShakeInited = false; // 统计卡片点击抖动仅绑定一次
-
 /**
  * 数字递增动画（从 0 渐变到目标值）
  * @param {HTMLElement} element - 显示数字的元素
@@ -41,12 +39,14 @@ async function reloadSettings() {
 }
 
 /**
- * 加载数据统计概览
+ * 加载数据统计概览 — 信笺风格
  */
 export async function loadDataStats() {
     const { els, state } = window;
     let totalNotes = 0, totalTags = 0, trashedNotes = 0, totalNotebooks = 0, dbSizeStr = '';
-    let aiSessions = 0, aiMessages = 0;
+    let aiSessions = 0, aiMessages = 0, totalTokens = 0;
+    let avgResponseTime = 0, avgThinkingTime = 0, maxResponseTime = 0;
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
             const stats = await window.go.main.App.GetDataStats();
@@ -58,6 +58,10 @@ export async function loadDataStats() {
                 dbSizeStr = stats.db_size_str || '';
                 aiSessions = stats.ai_sessions || 0;
                 aiMessages = stats.ai_messages || 0;
+                totalTokens = stats.total_tokens || 0;
+                avgResponseTime = stats.avg_response_time || 0;
+                avgThinkingTime = stats.avg_thinking_time || 0;
+                maxResponseTime = stats.max_response_time || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -68,56 +72,75 @@ export async function loadDataStats() {
         console.error('加载统计数据失败:', err);
     }
 
-    // 统计卡片交错入场动画
-    const statCards = els.dataContent.querySelectorAll('.stat-card');
-    const totalCards = statCards.length;
-    if (totalCards > 0) {
-        statCards.forEach((card, index) => {
-            card.style.animation = `cardEnter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards`;
-            card.style.animationDelay = `${index * 80}ms`;
-        });
+    // 获取信件元素
+    const letterEl = els.dataLetter;
+    const dateEl = els.letterDate;
+    const bodyEl = els.letterBody;
+
+    if (!letterEl || !bodyEl) return;
+
+    // 设置日期
+    if (dateEl) {
+        const now = new Date();
+        dateEl.textContent = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
     }
 
-    // 先全部设为 0/占位，然后数字递增动画
-    els.statTotalNotes.textContent = '0';
-    els.statTotalTags.textContent = '0';
-    els.statTrashedNotes.textContent = '0';
-    els.statTotalNotebooks.textContent = '0';
-    els.statDBSize.textContent = dbSizeStr || '0';
+    const hasData = totalNotes > 0 || aiMessages > 0;
 
-    // 入场动画完成后启动 count-up（取最后一张卡片的动画结束时间）
-    const lastDelay = (totalCards > 0 ? (totalCards - 1) * 80 : 0) + 400;
-    setTimeout(() => {
-        animateCountUp(els.statTotalNotes, totalNotes);
-        animateCountUp(els.statTotalTags, totalTags);
-        animateCountUp(els.statTrashedNotes, trashedNotes);
-        animateCountUp(els.statTotalNotebooks, totalNotebooks);
-        animateCountUp(els.statAISessions, aiSessions);
-        animateCountUp(els.statAIMessages, aiMessages);
-    }, lastDelay + 50);
+    if (!hasData) {
+        // 空数据占位
+        bodyEl.innerHTML = '<p class="data-letter-empty">你还没有开始记录呢，快去写第一篇笔记吧！</p>';
+        // 隐藏落款
+        const footerEl = els.letterFooter;
+        if (footerEl) footerEl.style.display = 'none';
+    } else {
+        // 显示落款
+        const footerEl = els.letterFooter;
+        if (footerEl) footerEl.style.display = '';
+
+        // 星级辅助函数：根据阈值数组 [5星上限, 4星上限, 3星上限, 2星上限] 计算星级
+        const getStars = (value, thresholds) => {
+            const count = value <= thresholds[0] ? 5 : value <= thresholds[1] ? 4 : value <= thresholds[2] ? 3 : value <= thresholds[3] ? 2 : 1;
+            return `<span class="star-icon">${'★'.repeat(count)}${'☆'.repeat(5 - count)}</span>`;
+        };
+
+        // 每行用各自的值和阈值计算星星
+        const responseStars = getStars(avgResponseTime, [3, 6, 10, 20]);
+        const thinkingStars = getStars(avgThinkingTime, [1, 3, 6, 10]);
+        const maxStars = getStars(maxResponseTime, [10, 20, 30, 60]);
+
+        // 拼接信纸正文 HTML
+        bodyEl.innerHTML = `
+            <p class="letter-section-title">📝 笔记与存储</p>
+            <p>
+                截至目前，你的笔记本里共收录了 <strong>${totalNotes}</strong> 篇笔记，
+                分散在 <strong>${totalNotebooks}</strong> 个笔记本中，标记了 <strong>${totalTags}</strong> 个标签。
+                回收站中暂有 <strong>${trashedNotes}</strong> 篇待处理的笔记。
+                数据库当前占用 <strong>${dbSizeStr || '0 B'}</strong>。
+            </p>
+            <hr class="letter-divider">
+            <p class="letter-section-title">🤖 AI 统计数据</p>
+            <p>
+                在 AI 方面，你进行了 <strong>${aiSessions}</strong> 次对话，
+                累计发送 <strong>${aiMessages.toLocaleString()}</strong> 条消息，
+                消耗 <strong>${totalTokens.toLocaleString()}</strong> Token。
+            </p>
+            <div class="letter-stars">
+                <div class="star-row">平均等待 ${avgResponseTime.toFixed(1)}s &nbsp; ${responseStars}</div>
+                <div class="star-row">思考耗时 ${avgThinkingTime.toFixed(1)}s &nbsp; ${thinkingStars}</div>
+                <div class="star-row">最长等待 ${maxResponseTime.toFixed(1)}s &nbsp; ${maxStars}</div>
+            </div>
+        `;
+    }
+
+    // 播放入场动画
+    letterEl.classList.remove('reveal');
+    // 强制 reflow 确保动画重新触发
+    void letterEl.offsetWidth;
+    letterEl.classList.add('reveal');
 
     // 加载备份信息
     loadBackupInfo();
-
-    // 统计卡片点击抖动反馈（仅绑定一次）
-    if (!_statShakeInited) {
-        _statShakeInited = true;
-        const grid = document.querySelector('.data-stats');
-        if (grid) {
-            grid.addEventListener('click', (e) => {
-                const card = e.target.closest('.stat-card');
-                if (card) {
-                    // 直接用内联 style 覆盖入口动画，避免 class 拼不过 inline animation
-                    card.style.animation = 'none';
-                    void card.offsetWidth;
-                    card.style.animation = 'statCardShake 0.45s ease';
-                    card.addEventListener('animationend', () => {
-                        card.style.animation = '';
-                    }, { once: true });
-                }
-            });
-        }
-    }
 }
 
 /**

@@ -10,15 +10,19 @@ type PaginatedResult struct {
 
 // DataStats 数据统计概览
 type DataStats struct {
-	TotalNotes     int64  `json:"total_notes"`
-	TrashedNotes   int64  `json:"trashed_notes"`
-	PinnedNotes    int64  `json:"pinned_notes"`
-	TotalTags      int64  `json:"total_tags"`
-	TotalNotebooks int64  `json:"total_notebooks"`
-	AISessions     int64  `json:"ai_sessions"`
-	AIMessages     int64  `json:"ai_messages"`
-	DBSize         int64  `json:"db_size"`
-	DBSizeStr      string `json:"db_size_str"`
+	TotalNotes      int64   `json:"total_notes"`
+	TrashedNotes    int64   `json:"trashed_notes"`
+	PinnedNotes     int64   `json:"pinned_notes"`
+	TotalTags       int64   `json:"total_tags"`
+	TotalNotebooks  int64   `json:"total_notebooks"`
+	AISessions      int64   `json:"ai_sessions"`
+	AIMessages      int64   `json:"ai_messages"`
+	TotalTokens     int64   `json:"total_tokens"`
+	AvgResponseTime float64 `json:"avg_response_time"`
+	AvgThinkingTime float64 `json:"avg_thinking_time"`
+	MaxResponseTime float64 `json:"max_response_time"`
+	DBSize          int64   `json:"db_size"`
+	DBSizeStr       string  `json:"db_size_str"`
 }
 
 // ImportResult 导入操作的结果

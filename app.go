@@ -317,6 +317,16 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 	stats.AISessions = aiSessions
 	stats.AIMessages = aiMessages
 
+	// AI 性能统计
+	totalTokens, _ := a.aiService.SumTokens()
+	avgResponseTime, _ := a.aiService.AvgResponseTime()
+	avgThinkingTime, _ := a.aiService.AvgThinkingTime()
+	maxResponseTime, _ := a.aiService.MaxResponseTime()
+	stats.TotalTokens = totalTokens
+	stats.AvgResponseTime = avgResponseTime
+	stats.AvgThinkingTime = avgThinkingTime
+	stats.MaxResponseTime = maxResponseTime
+
 	return stats, nil
 }
 

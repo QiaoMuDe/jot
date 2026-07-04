@@ -298,6 +298,10 @@ export namespace services {
 	    total_notebooks: number;
 	    ai_sessions: number;
 	    ai_messages: number;
+	    total_tokens: number;
+	    avg_response_time: number;
+	    avg_thinking_time: number;
+	    max_response_time: number;
 	    db_size: number;
 	    db_size_str: string;
 	
@@ -314,6 +318,10 @@ export namespace services {
 	        this.total_notebooks = source["total_notebooks"];
 	        this.ai_sessions = source["ai_sessions"];
 	        this.ai_messages = source["ai_messages"];
+	        this.total_tokens = source["total_tokens"];
+	        this.avg_response_time = source["avg_response_time"];
+	        this.avg_thinking_time = source["avg_thinking_time"];
+	        this.max_response_time = source["max_response_time"];
 	        this.db_size = source["db_size"];
 	        this.db_size_str = source["db_size_str"];
 	    }

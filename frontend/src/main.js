@@ -355,13 +355,10 @@ const els = {
     openDataDirBtn: $('openDataDirBtn'),
     clearAISessionsBtn: $('clearAISessionsBtn'),
     dataContent: $('dataContent'),
-    statTotalNotes: $('statTotalNotes'),
-    statTotalTags: $('statTotalTags'),
-    statTrashedNotes: $('statTrashedNotes'),
-    statTotalNotebooks: $('statTotalNotebooks'),
-    statDBSize: $('statDBSize'),
-    statAISessions: $('statAISessions'),
-    statAIMessages: $('statAIMessages'),
+    dataLetter: $('dataLetter'),
+    letterDate: $('letterDate'),
+    letterBody: $('letterBody'),
+    letterFooter: $('letterFooter'),
 
     // 备份还原
     backupBtn: $('backupBtn'),
