@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-04（更新 83）
+> 生成日期: 2026-07-04（更新 84）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -39,7 +39,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~5490 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6744 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
@@ -478,10 +478,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/main.js` | 5460 | 前端核心逻辑 |
+| `frontend/src/main.js` | 6744 | 前端核心逻辑（含批量管理 + TOC + 回到顶部） |
 | `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
 | `frontend/src/js/ai-chat.js` | 3328 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶） |
-| `app.go` | 1064 | Wails 绑定层（72+ API，含引用笔记新接口 + 会话置顶） |
+| `app.go` | 1356 | Wails 绑定层（73+ API） |
+| `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
 | `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
 | `internal/aicli/openai.go` | ~130 | OpenAI 兼容 API 客户端 |
@@ -1788,3 +1789,14 @@ await loadXxxSetting();
 | **删除的旧样式** | `.stat-card`、`.stat-card-icon`、`.stat-card-value`、`.stat-card-label`、`.data-divider`、`.data-danger-divider`、`.data-action-heading` 及所有 7 张 stat-card 的 inline `--i` 延迟动画、.data-section-card 卡片网格布局 |
 
 | **update 计数** | `AGENTS.md` 从更新 82 → 更新 83 |
+
+## 一百一十七、新增记忆点（批量标签弹窗样式修复 + 间距优化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 批量管理弹窗（"增加标签"/"减少标签"）中标签以纯文本显示，缺少样式（背景色、圆角、悬停效果、选中态等） |
+| **根因** | [modals.css](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css#L77) 第 77 行孤立 `.batch-tag-empty` 导致 `.batch-tag-chip` 被解析为后代选择器 `.batch-tag-empty .batch-tag-chip`，选择器不匹配任何元素，所有样式失效。详见 [modals.css#L77-L112](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css) |
+| **修复** | 删除第 77 行孤立的 `.batch-tag-empty`，使 `.batch-tag-chip` 恢复为独立顶级选择器。详见 [modals.css#L77](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css) |
+| **间距优化** | chip 间 `gap` 从 8px 增至 12px，chip 内 `padding` 从 `6px 14px` 增至 `8px 18px`，为选中态 box-shadow 外扩环留出呼吸空间。详见 [modals.css#L63](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css)、[modals.css#L80](file:///d:/%E5%B3%A1%E8%B0%B7/Dev/%E6%9C%AC%E5%9C%B0%E9%A1%B9%E7%9B%AE/jot/frontend/src/css/components/modals.css) |
+
+| **update 计数** | `AGENTS.md` 从更新 83 → 更新 84 |
