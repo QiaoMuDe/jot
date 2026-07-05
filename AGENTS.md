@@ -1924,3 +1924,28 @@ await loadXxxSetting();
 | **loadProfiles 移入 loadSettings** | `loadProfiles()` 调用从 `init()` 中移除，改为在 `loadSettings()` 末尾统一调用。其他调用方（设置页保存触发刷新）保留直接调用 `loadProfiles()`。详见 [main.js#L7063](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **其他调用方统一** | `data-management.js` 的 `reloadSettings()` 从逐个调用 8 个已清空的 `loadXxxSetting` 改为单行 `window.loadSettings?.()`。详见 [data-management.js#L29-L39](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
 | **效果** | 新增设置项时只需在 `SettingsConfig` 加字段 + `GetAllSettings`/`SaveAllSettings` 加对应行 + `loadSettings`/`saveSettings` 加 DOM 读写，前后端各改 2 处即可。移除所有 `localStorage` 回退，默认值统一由 DB 初始化。 |
+
+## 一百二十八、新增记忆点（持久化 AI 搜索来源与召回卡片结构化数据）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 联网搜索的搜索来源和卡片召回的召回卡片数据仅通过 Wails Events 运行时传递到前端内存变量中，切换会话或重启后结构化数据丢失，只保留 system message 纯文本 |
+| **AIMessage 模型扩展** | `internal/models/ai_message.go` 新增 `SearchSources TEXT` 和 `RecallCards TEXT` 字段，存储 JSON 序列化的搜索来源列表和召回卡片列表。详见 [ai_message.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_message.go) |
+| **Message 结构体扩展** | `internal/services/ai_service.go` 的 `Message` 结构体新增 `SearchSources string` 和 `RecallCards string` 字段。`SaveAIMessages()`/`LoadAISessionMessages()` 同步读写这两个字段。详见 [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **CallAIStream 数据传递** | `app.go` 中 goroutine 内声明 `searchSourcesJSON`/`recallCardsJSON` 变量，搜索/召回完成后缓存 JSON 字符串，`stream-done` 回调中通过 `assistantMsg.SearchSources`/`RecallCards` 传入 `SaveAIMessages` 持久化。详见 [app.go#L768](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **前端 addMessage 渲染** | `frontend/src/js/ai-chat.js` 的 `addMessage()` 新增第 8/9 参数 `searchSources`/`recallCards`，内部 JSON.parse 后渲染 `<details>` 折叠面板（可点击链接/可打开笔记），逻辑复用现有 stream-done 回调中的 DOM 构建代码。详见 [ai-chat.js#L2133](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **前端 switchSession 恢复** | `switchSession()` 加载历史消息时，assistant 消息的 `msg.search_sources`/`msg.recall_cards` 传入 `addMessage()`，恢复搜索来源和召回卡片 UI。详见 [ai-chat.js#L1371](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [ai_message.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_message.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **update 计数** | `AGENTS.md` 从更新 92 → 更新 93 |
+
+## 一百二十九、新增记忆点（AI Base URL 尾斜杠前端校验 + 预设弹窗错误状态残留修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 后端已通过 `strings.TrimRight(cfg.BaseURL, "/")` 自动处理尾斜杠，但用户输入时缺少前端反馈。需在三个入口添加前端校验，以红色抖动提示用户不能以斜杠结尾 |
+| **CSS 动画** | `frontend/src/css/animations.css` 新增 `@keyframes shake` 抖动动画和 `.input-error`（红色边框）样式类。详见 [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css) |
+| **设置页 Base URL 校验** | `frontend/src/main.js` 中 `#aiBaseURL` 的 `change` 事件新增 `url.endsWith('/')` 校验，失败时添加 `.input-error` + toast 提示 + 阻止保存。`input` 事件自动移除错误样式。详见 [main.js#L1877](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **预设弹窗 URL 校验** | `savePresetModal()` 中新增 `baseURL.endsWith('/')` 校验，失败时 `#presetModalURL` 添加 `.input-error` + toast 提示 + `return` 阻止保存。`input` 事件自动移除错误样式。详见 [main.js#L2135](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **预设弹窗错误状态残留修复** | `openAddProfileModal()` 和 `openEditPresetModal()` 中新增 `document.getElementById('presetModalURL').classList.remove('input-error')`，确保关闭后重新打开弹窗时输入框恢复正常样式。详见 [main.js#L2231](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **update 计数** | `AGENTS.md` 从更新 93 → 更新 94 |

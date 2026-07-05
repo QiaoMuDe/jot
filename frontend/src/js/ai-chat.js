@@ -1360,7 +1360,7 @@ async function switchSession(id) {
         hideWelcome();
         msgs.forEach(msg => {
             if (msg.role === 'user') {
-                addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id);
+                addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined);
                 const userMsgEl = messagesEl.lastElementChild;
                 if (userMsgEl) {
                     userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
@@ -1368,7 +1368,7 @@ async function switchSession(id) {
                     collapseActionsIfNeeded(userMsgEl);
                 }
             } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id);
+                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards);
                 el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                 bindMsgContextMenu(el, msg.content, 'assistant');
                 collapseActionsIfNeeded(el);
@@ -2130,7 +2130,7 @@ function renderMarkdown(el, content) {
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     if (msgId) el.dataset.msgId = msgId;
@@ -2175,6 +2175,92 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         timeEl.textContent = timeText;
         actionsEl.appendChild(timeEl);
         el.appendChild(actionsEl);
+    }
+
+    // 解析 JSON 字符串参数
+    if (typeof searchSources === 'string') {
+        try { searchSources = JSON.parse(searchSources); } catch (_) { searchSources = null; }
+    }
+    if (typeof recallCards === 'string') {
+        try { recallCards = JSON.parse(recallCards); } catch (_) { recallCards = null; }
+    }
+
+    // 渲染搜索来源折叠面板
+    if (role === 'assistant' && searchSources && searchSources.length > 0) {
+        const details = document.createElement('details');
+        details.className = 'search-sources';
+        details.open = false;
+        const summary = document.createElement('summary');
+        summary.className = 'search-sources-summary';
+        summary.textContent = '🌐 搜索来源 (' + searchSources.length + ' 个)';
+        details.appendChild(summary);
+        const list = document.createElement('div');
+        list.className = 'search-sources-content';
+        searchSources.forEach(function(src, i) {
+            const item = document.createElement('div');
+            item.className = 'search-sources-item';
+            var link = document.createElement('a');
+            link.href = src.url;
+            link.textContent = (i + 1) + '. ' + src.title;
+            link.addEventListener('click', (function(url) {
+                return function(e) {
+                    e.preventDefault();
+                    window.runtime.BrowserOpenURL(url);
+                };
+            })(src.url));
+            item.appendChild(link);
+            if (src.content) {
+                var snippet = document.createElement('p');
+                snippet.className = 'search-sources-snippet';
+                snippet.textContent = src.content;
+                item.appendChild(snippet);
+            }
+            list.appendChild(item);
+        });
+        details.appendChild(list);
+        el.appendChild(details);
+    }
+
+    // 渲染召回卡片折叠面板
+    if (role === 'assistant' && recallCards && recallCards.length > 0) {
+        const details = document.createElement('details');
+        details.className = 'recall-cards';
+        details.open = false;
+        const summary = document.createElement('summary');
+        summary.className = 'recall-cards-summary';
+        summary.textContent = '📄 召回笔记 (' + recallCards.length + ' 篇)';
+        details.appendChild(summary);
+        const list = document.createElement('div');
+        list.className = 'recall-cards-content';
+        recallCards.forEach(function(card) {
+            const item = document.createElement('div');
+            item.className = 'recall-cards-item';
+            item.addEventListener('click', (function(c) {
+                return function(e) {
+                    e.preventDefault();
+                    window.openEditor(c.id, true, false, true);
+                };
+            })(card));
+            const titleRow = document.createElement('div');
+            titleRow.className = 'recall-cards-item-title';
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'recall-cards-item-title-icon';
+            iconSpan.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
+            titleRow.appendChild(iconSpan);
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = card.title;
+            titleRow.appendChild(titleSpan);
+            item.appendChild(titleRow);
+            if (card.content) {
+                const snippet = document.createElement('p');
+                snippet.className = 'recall-cards-snippet';
+                snippet.textContent = card.content.length > 100 ? card.content.slice(0, 100) + '...' : card.content;
+                item.appendChild(snippet);
+            }
+            list.appendChild(item);
+        });
+        details.appendChild(list);
+        el.appendChild(details);
     }
 
     messagesEl.appendChild(el);

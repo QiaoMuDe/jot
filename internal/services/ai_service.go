@@ -23,6 +23,8 @@ type Message struct {
 	ThinkingElapsed  float64 `json:"thinking_elapsed"`
 	TotalElapsed     float64 `json:"total_elapsed"`
 	Tokens           int     `json:"tokens"`
+	SearchSources    string  `json:"search_sources"`
+	RecallCards      string  `json:"recall_cards"`
 }
 
 // AIConfig 表示 AI 服务配置
@@ -425,7 +427,7 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens}
+		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
 	}
 	return result
 }
@@ -444,6 +446,8 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			ThinkingElapsed:  msg.ThinkingElapsed,
 			TotalElapsed:     msg.TotalElapsed,
 			Tokens:           msg.Tokens,
+			SearchSources:    msg.SearchSources,
+			RecallCards:      msg.RecallCards,
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {

@@ -765,6 +765,7 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 	a.aiStreamCancel = cancel
 
 	var fullThinking strings.Builder
+	var searchSourcesJSON, recallCardsJSON string
 
 	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
 	var searching bool
@@ -837,9 +838,10 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 							messages = append([]services.Message{{Role: "system", Content: searchResult.FormattedText}}, messages...)
 						}
 
-						// 发射结构化来源数据给前端
+						// 发射结构化来源数据给前端，并缓存用于持久化
 						if len(searchResult.Sources) > 0 {
 							sourcesJSON, _ := json.Marshal(searchResult.Sources)
+							searchSourcesJSON = string(sourcesJSON)
 							runtime.EventsEmit(a.ctx, "ai:search-sources", string(sourcesJSON))
 						}
 					}
@@ -895,9 +897,10 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 						messages = append([]services.Message{{Role: "system", Content: recallResult.FormattedText}}, messages...)
 					}
 
-					// 发射结构化卡片数据给前端
+					// 发射结构化卡片数据给前端，并缓存用于持久化
 					if len(recallResult.Cards) > 0 {
 						cardsJSON, _ := json.Marshal(recallResult.Cards)
+						recallCardsJSON = string(cardsJSON)
 						runtime.EventsEmit(a.ctx, "ai:recall-cards", string(cardsJSON))
 					}
 				}
@@ -973,8 +976,10 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 						}
 						return elapsedThinking
 					}(),
-					TotalElapsed: elapsedTotal,
-					Tokens:       assistantTokens,
+					TotalElapsed:  elapsedTotal,
+					Tokens:        assistantTokens,
+					SearchSources: searchSourcesJSON,
+					RecallCards:   recallCardsJSON,
 				}
 				if isRegenerate {
 					// 再生模式只存 assistant

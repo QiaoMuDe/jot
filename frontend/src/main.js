@@ -1875,9 +1875,21 @@ async function initAISettings() {
 
     // ── 自动保存 ▸ URL 输入完成 ──
     els.aiBaseURL.addEventListener('change', async () => {
+        const url = els.aiBaseURL.value.trim();
+        if (url.endsWith('/')) {
+            els.aiBaseURL.classList.add('input-error');
+            nm.show('API 地址不能以斜杠结尾', 'error');
+            return;
+        }
         await saveSettings();
         nm.show('AI 配置已保存', 'success');
         await loadProfiles();
+    });
+    // 用户修正后自动移除错误样式
+    els.aiBaseURL.addEventListener('input', () => {
+        if (!els.aiBaseURL.value.trim().endsWith('/')) {
+            els.aiBaseURL.classList.remove('input-error');
+        }
     });
     // ── 自动保存 ▸ Key 输入完成 ──
     els.aiAPIKey.addEventListener('change', async () => {
@@ -2120,6 +2132,12 @@ async function initAISettings() {
             }
         }
     });
+    // 用户修正预设 URL 后自动移除错误样式
+    document.getElementById('presetModalURL')?.addEventListener('input', function () {
+        if (!this.value.trim().endsWith('/')) {
+            this.classList.remove('input-error');
+        }
+    });
 }
 
 // ── API 配置预设管理 ──
@@ -2215,6 +2233,7 @@ function openAddProfileModal() {
     document.getElementById('presetModalTitle').textContent = '新增配置';
     document.getElementById('presetModalName').value = '';
     document.getElementById('presetModalURL').value = els.aiBaseURL.value || '';
+    document.getElementById('presetModalURL').classList.remove('input-error');
     document.getElementById('presetModalKey').value = els.aiAPIKey.value || '';
     // 重置 Key 为隐藏状态
     var keyInput = document.getElementById('presetModalKey');
@@ -2241,6 +2260,7 @@ function openEditProfileModal(id, name, provider, baseURL, apiKey) {
     document.getElementById('presetModalTitle').textContent = '编辑配置';
     document.getElementById('presetModalName').value = name || '';
     document.getElementById('presetModalURL').value = baseURL || '';
+    document.getElementById('presetModalURL').classList.remove('input-error');
     document.getElementById('presetModalKey').value = apiKey || '';
     // 重置 Key 为隐藏状态
     var keyInput = document.getElementById('presetModalKey');
@@ -2275,6 +2295,12 @@ async function savePresetModal() {
     const apiKey = document.getElementById('presetModalKey').value.trim();
     if (!name) { nm.show('请输入名称', 'error'); return; }
     if (!baseURL) { nm.show('请输入 API 地址', 'error'); return; }
+    if (baseURL.endsWith('/')) {
+        const urlInput = document.getElementById('presetModalURL');
+        urlInput.classList.add('input-error');
+        nm.show('API 地址不能以斜杠结尾', 'error');
+        return;
+    }
     try {
         if (editingProfileId) {
             await window.go.main.App.UpdateProfile(editingProfileId, name, provider, baseURL, apiKey);

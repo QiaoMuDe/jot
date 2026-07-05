@@ -351,6 +351,8 @@ export namespace services {
 	    thinking_elapsed: number;
 	    total_elapsed: number;
 	    tokens: number;
+	    search_sources: string;
+	    recall_cards: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -364,6 +366,8 @@ export namespace services {
 	        this.thinking_elapsed = source["thinking_elapsed"];
 	        this.total_elapsed = source["total_elapsed"];
 	        this.tokens = source["tokens"];
+	        this.search_sources = source["search_sources"];
+	        this.recall_cards = source["recall_cards"];
 	    }
 	}
 	export class NoteRefInfo {
