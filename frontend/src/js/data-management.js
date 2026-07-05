@@ -27,15 +27,7 @@ export function animateCountUp(element, targetValue, duration = 300) {
  * 重新加载所有设置（恢复出厂/导入/还原后调用）
  */
 async function reloadSettings() {
-    window.loadThemeSetting?.();
-    window.loadFontSettings?.();
-    window.loadSortSettings?.();
-    window.loadPageSizeSetting?.();
-    window.loadQuickNoteSetting?.();
-    window.loadSyntaxHighlightSetting?.();
-    window.loadCodeHighlightThemeSetting?.();
-    window.loadNoteOpenFullscreenSetting?.();
-    window.loadAISettings?.();
+    window.loadSettings?.();
 }
 
 /**

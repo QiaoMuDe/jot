@@ -435,6 +435,56 @@ export namespace services {
 	        this.page_size = source["page_size"];
 	    }
 	}
+	export class SettingsConfig {
+	    theme: string;
+	    font_family: string;
+	    font_size: number;
+	    code_highlight_theme: string;
+	    note_open_fullscreen: boolean;
+	    sort_order: string;
+	    page_size: number;
+	    quick_note_enabled: boolean;
+	    cm_syntax_highlight: boolean;
+	    ai_provider: string;
+	    ai_base_url: string;
+	    ai_api_key: string;
+	    ai_model: string;
+	    tavily_api_key: string;
+	    ai_thinking_enabled: boolean;
+	    ai_web_search_enabled: boolean;
+	    ai_card_recall_enabled: boolean;
+	    ai_card_recall_limit: number;
+	    ai_ref_max_chars: number;
+	    ai_search_result_limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingsConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	        this.font_family = source["font_family"];
+	        this.font_size = source["font_size"];
+	        this.code_highlight_theme = source["code_highlight_theme"];
+	        this.note_open_fullscreen = source["note_open_fullscreen"];
+	        this.sort_order = source["sort_order"];
+	        this.page_size = source["page_size"];
+	        this.quick_note_enabled = source["quick_note_enabled"];
+	        this.cm_syntax_highlight = source["cm_syntax_highlight"];
+	        this.ai_provider = source["ai_provider"];
+	        this.ai_base_url = source["ai_base_url"];
+	        this.ai_api_key = source["ai_api_key"];
+	        this.ai_model = source["ai_model"];
+	        this.tavily_api_key = source["tavily_api_key"];
+	        this.ai_thinking_enabled = source["ai_thinking_enabled"];
+	        this.ai_web_search_enabled = source["ai_web_search_enabled"];
+	        this.ai_card_recall_enabled = source["ai_card_recall_enabled"];
+	        this.ai_card_recall_limit = source["ai_card_recall_limit"];
+	        this.ai_ref_max_chars = source["ai_ref_max_chars"];
+	        this.ai_search_result_limit = source["ai_search_result_limit"];
+	    }
+	}
 
 }
 

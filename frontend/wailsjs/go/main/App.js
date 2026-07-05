@@ -158,6 +158,10 @@ export function GetAllNotebooks() {
   return window['go']['main']['App']['GetAllNotebooks']();
 }
 
+export function GetAllSettings() {
+  return window['go']['main']['App']['GetAllSettings']();
+}
+
 export function GetAllTags() {
   return window['go']['main']['App']['GetAllTags']();
 }
@@ -308,6 +312,10 @@ export function SaveAIMessageAsNote(arg1) {
 
 export function SaveAIMessages(arg1, arg2) {
   return window['go']['main']['App']['SaveAIMessages'](arg1, arg2);
+}
+
+export function SaveAllSettings(arg1) {
+  return window['go']['main']['App']['SaveAllSettings'](arg1);
 }
 
 export function SearchNoteIDs(arg1, arg2, arg3) {

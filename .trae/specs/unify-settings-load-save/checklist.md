@@ -1,0 +1,25 @@
+# Checklist
+
+- [x] SettingsConfig 结构体在 `types.go` 中定义，包含全部 20 个设置字段，类型正确（string/bool/int）
+- [x] `GetAllSettings()` 方法读取全部 20 个 DB key 并返回 `SettingsConfig`
+- [x] `SaveAllSettings()` 方法写入全部 20 个字段，含范围校验（page_size, font_size, ai_card_recall_limit 等）
+- [x] `app.go` 中 `GetAllSettings`/`SaveAllSettings` 作为 Wails 绑定可用
+- [x] 前端 `loadSettings()` 调用 `GetAllSettings()` 一次性填充所有 DOM 元素并应用视觉效果
+- [x] 前端 `saveSettings()` 收集所有 DOM 值构建 `SettingsConfig`，调用 `SaveAllSettings(cfg)` 一次保存
+- [x] 9 个独立的 `loadXxxSetting()` 函数已从 `main.js` 删除
+- [x] 9 个 `window.loadXxxSetting` 导出已被 `window.loadSettings = loadSettings` 替换
+- [x] 9 个 `loadXxxSetting` window 引用已被从 `data-management.js` 的 `reloadSettings()` 中删除
+- [x] `reloadSettings()` 只调用 `window.loadSettings()`
+- [x] 设置页入口 `showTargetView('settings')` 只调用 `loadSettings()`
+- [x] init 流程只调用 `loadSettings()`
+- [x] 所有设置页保存触发器（主题、排序、开关、AI 输入框等）统一调用 `saveSettings()`
+- [x] `ai-chat.js` 中 3 处 AI toggle 的 `localStorage.getItem` fallback 已移除
+- [x] `ai-chat.js` 中 3 处 AI toggle 的 `localStorage.setItem` 已移除
+- [x] `ai-chat.js` 中 3 处 AI toggle 的独立 `GetSetting('key')` 调用已移除
+- [x] `ai-chat.js` 中 3 处 AI toolbar toggle 保存调用 `saveSettings()` 而非独立 `SetSetting()`
+- [x] `go vet ./...` 通过
+- [ ] 应用启动后设置页所有项正确加载（需要运行时验证）
+- [ ] 修改任一设置项后重新进入设置页，修改值保持（需要运行时验证）
+- [ ] 恢复出厂设置 → 设置页所有项回退到默认值（需要运行时验证）
+- [ ] 还原备份 → 设置页所有项恢复为备份值（需要运行时验证）
+- [ ] AI 对话页工具栏 toggle 状态与设置页同步（需要运行时验证）

@@ -229,36 +229,15 @@ export async function initAIChat() {
 
     // 深度思考
     searchToggle = document.getElementById('aiChatSearchToggle');
-    enableThinking = false;
-    try {
-        const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
-        if (val !== '') enableThinking = val === 'true';
-        else enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
-    } catch (_) {
-        enableThinking = localStorage.getItem('ai_thinking_enabled') === 'true';
-    }
+    enableThinking = searchToggle?.classList.contains('active') || false;
 
     // 联网搜索
     webSearchToggle = document.getElementById('aiChatWebSearchToggle');
-    enableWebSearch = false;
-    try {
-        const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
-        if (val !== '') enableWebSearch = val === 'true';
-        else enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
-    } catch (_) {
-        enableWebSearch = localStorage.getItem('ai_web_search_enabled') === 'true';
-    }
+    enableWebSearch = webSearchToggle?.classList.contains('active') || false;
 
     // 卡片召回
     cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
-    enableCardRecall = false;
-    try {
-        const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
-        if (val !== '') enableCardRecall = val === 'true';
-        else enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
-    } catch (_) {
-        enableCardRecall = localStorage.getItem('ai_card_recall_enabled') === 'true';
-    }
+    enableCardRecall = cardRecallToggle?.classList.contains('active') || false;
 
     // 笔记引用
     refBtn = document.getElementById('aiChatRefBtn');
@@ -692,13 +671,12 @@ function bindEvents() {
         if (enableThinking) searchToggle.classList.add('active');
         searchToggle.addEventListener('click', async () => {
             enableThinking = searchToggle.classList.toggle('active');
-            localStorage.setItem('ai_thinking_enabled', String(enableThinking));
-            try { await window.go.main.App.SetSetting('ai_thinking_enabled', String(enableThinking)); } catch (_) {}
-            // 同步设置页 toggle
+            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
             const settingToggle = document.getElementById('aiSettingSearchToggle');
             if (settingToggle) {
                 settingToggle.classList.toggle('active', enableThinking);
             }
+            try { await window.saveSettings(); } catch (_) {}
         });
     }
 
@@ -707,13 +685,12 @@ function bindEvents() {
         if (enableWebSearch) webSearchToggle.classList.add('active');
         webSearchToggle.addEventListener('click', async () => {
             enableWebSearch = webSearchToggle.classList.toggle('active');
-            localStorage.setItem('ai_web_search_enabled', String(enableWebSearch));
-            try { await window.go.main.App.SetSetting('ai_web_search_enabled', String(enableWebSearch)); } catch (_) {}
-            // 同步设置页 toggle
+            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
             const settingToggle = document.getElementById('aiSettingWebSearchToggle');
             if (settingToggle) {
                 settingToggle.classList.toggle('active', enableWebSearch);
             }
+            try { await window.saveSettings(); } catch (_) {}
         });
     }
 
@@ -722,13 +699,12 @@ function bindEvents() {
         if (enableCardRecall) cardRecallToggle.classList.add('active');
         cardRecallToggle.addEventListener('click', async () => {
             enableCardRecall = cardRecallToggle.classList.toggle('active');
-            localStorage.setItem('ai_card_recall_enabled', String(enableCardRecall));
-            try { await window.go.main.App.SetSetting('ai_card_recall_enabled', String(enableCardRecall)); } catch (_) {}
-            // 同步设置页 toggle
+            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
             const settingToggle = document.getElementById('aiSettingCardRecallToggle');
             if (settingToggle) {
                 settingToggle.classList.toggle('active', enableCardRecall);
             }
+            try { await window.saveSettings(); } catch (_) {}
         });
     }
 
@@ -2333,6 +2309,9 @@ function scrollToBottom() {
 export async function onAIChatViewActivated() {
     if (!messagesEl) return;
 
+    // 从 DOM 重新同步工具栏状态变量（用户可能在设置页更改了这些开关）
+    syncToolbarState();
+
     try {
         const cfg = await window.go.main.App.GetAIConfig();
         const provider = cfg.provider || 'openai';
@@ -2359,6 +2338,15 @@ export async function onAIChatViewActivated() {
     } catch (_) {
         showEmptyState();
     }
+}
+
+/**
+ * 从 DOM 读取工具栏 toggle 状态，更新模块级变量
+ */
+function syncToolbarState() {
+    enableThinking = document.getElementById('aiChatSearchToggle')?.classList.contains('active') || false;
+    enableWebSearch = document.getElementById('aiChatWebSearchToggle')?.classList.contains('active') || false;
+    enableCardRecall = document.getElementById('aiChatCardRecallToggle')?.classList.contains('active') || false;
 }
 
 function showEmptyState() {

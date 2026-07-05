@@ -1901,3 +1901,26 @@ await loadXxxSetting();
 | **效果** | 以后新增/删除 service 类只需改 `rebuildServices` 一处，无需调节 4 处。彻底消除 notebookService 遗漏风险。 |
 
 | **update 计数** | `AGENTS.md` 从更新 91 → 更新 92 |
+
+## 一百二十六、新增记忆点（AI 工具栏状态变量在设置页切换后不同步修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 在设置页切换"深度思考/联网搜索/卡片召回"开关后，回到 AI 助手模块发送消息，三个功能均无动画也不生效（联网搜索不执行、深度思考不显示思维链、卡片召回不展示召回卡片）。 |
+| **根因** | `ai-chat.js` 中 `enableThinking`、`enableWebSearch`、`enableCardRecall` 三个模块级变量只在 `initAIChat()` 时从 DOM 读取一次。设置页切换开关时，虽然同步了工具栏 toggle 的 CSS class（`active`），但 JS 变量未被更新。切换到 AI 聊天视图时 `onAIChatViewActivated()` 也没重新读取状态，发送消息时使用 `false` 旧值，导致功能全失效。详见 [ai-chat.js#L232-L240](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.js#L2001](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **修复** | 新增 `syncToolbarState()` 函数（[ai-chat.js#L2346-L2350](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)）从 DOM 读取工具栏 toggle 状态更新模块级变量。在 `onAIChatViewActivated()` 开头调用（[ai-chat.js#L2313](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)），每次用户切换到 AI 聊天视图时自动同步。 |
+| **影响** | 仅修改前端 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) 一个文件，无后端/前端 HTML/CSS 变更。 |
+
+## 一百二十七、新增记忆点（设置页统一重构：SettingsConfig 结构体 + 统一 loadSettings/saveSettings）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **动机** | 原设置页的加载和保存分散在多个 `loadXxxSetting()` / `saveXxxSetting()` 函数中，逐个调用、逐个处理，新增设置项时需要改前后端多处，容易遗漏且不一致。 |
+| **后端 SettingsConfig 结构体** | `internal/services/types.go` 新增 `SettingsConfig` 结构体，20 个字段覆盖全部设置项（theme/font_family/font_size/code_highlight_theme/note_open_fullscreen/sort_order/page_size/quick_note_enabled/cm_syntax_highlight/ai_provider/ai_base_url/ai_api_key/ai_model/tavily_api_key/ai_thinking_enabled/ai_web_search_enabled/ai_card_recall_enabled/ai_card_recall_limit/ai_ref_max_chars/ai_search_result_limit）。详见 [types.go#L53-L74](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go) |
+| **后端 GetAllSettings** | `SettingService.GetAllSettings()` 从 DB 读取全部设置项映射到 `SettingsConfig`。`app.go` 绑定 `GetAllSettings()` 供前端调用。详见 [types.go#L77-L99](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go) |
+| **后端 SaveAllSettings** | `SettingService.SaveAllSettings(cfg)` 接收 `SettingsConfig`，含类型校验（PageSize/FontSize/AICardRecallLimit/AIRefMaxChars/AISearchResultLimit 范围限制），统一遍历写入 DB。`app.go` 绑定 `SaveAllSettings(cfg)` 供前端调用。详见 [types.go#L103-L159](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go) |
+| **前端 loadSettings** | `main.js` 中 `loadSettings()` 调用 `GetAllSettings()` 一次性加载全部设置并应用到 DOM（主题/字体/排序/分页/语法高亮/全屏打开/快速笔记/代码主题/AI 服务商/BaseURL/APIKey/模型/Tavily Key/三个 AI toggle/限制输入等），末尾调用 `loadProfiles()`。详见 [main.js#L6933-L7067](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **前端 saveSettings** | `main.js` 中 `saveSettings()` 从 DOM 收集所有设置项（含 `ai_thinking_enabled` 等从 `aiSettingSearchToggle` class 读取），组成 `SettingsConfig` 对象调用 `SaveAllSettings(cfg)` 一次性保存。详见 [main.js#L7072-L7109](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **loadProfiles 移入 loadSettings** | `loadProfiles()` 调用从 `init()` 中移除，改为在 `loadSettings()` 末尾统一调用。其他调用方（设置页保存触发刷新）保留直接调用 `loadProfiles()`。详见 [main.js#L7063](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **其他调用方统一** | `data-management.js` 的 `reloadSettings()` 从逐个调用 8 个已清空的 `loadXxxSetting` 改为单行 `window.loadSettings?.()`。详见 [data-management.js#L29-L39](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **效果** | 新增设置项时只需在 `SettingsConfig` 加字段 + `GetAllSettings`/`SaveAllSettings` 加对应行 + `loadSettings`/`saveSettings` 加 DOM 读写，前后端各改 2 处即可。移除所有 `localStorage` 回退，默认值统一由 DB 初始化。 |

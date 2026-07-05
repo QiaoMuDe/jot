@@ -517,15 +517,10 @@ function switchView(view) {
         // 加载对应视图的数据（异步，在动画期间并行加载）
         switch (view) {
             case 'settings':
-                loadFontSettings();
-                loadThemeSetting();
-                loadSortSettings();
-                loadPageSizeSetting();
-                loadSyntaxHighlightSetting();
+                loadSettings();
                 initCodeHighlightThemeSettings();
                 initCodePreview();
                 loadTags();
-                loadAISettings();
                 // 每次进入设置页 Key 输入框默认隐藏
                 els.aiAPIKey.type = 'password';
                 const initEye = els.aiAPIKeyToggle.querySelector('.toggle-eye');
@@ -1154,21 +1149,7 @@ async function createTag() {
 /**
  * 加载已保存的字体设置并应用到页面
  */
-async function loadFontSettings() {
-    let fontFamily = '';
-    let fontSize = 16;
 
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-        const savedFamily = await window.go.main.App.GetSetting('font_family');
-        if (savedFamily) fontFamily = savedFamily;
-        const savedSize = await window.go.main.App.GetSetting('font_size');
-        if (savedSize) fontSize = parseInt(savedSize, 10);
-    }
-
-    applyFontFamily(fontFamily);
-    applyFontSize(fontSize);
-    updateFontSettingsUI(fontFamily, fontSize);
-}
 
 /**
  * 更新字体设置的 UI 状态
@@ -1258,22 +1239,7 @@ function applyFontSize(size) {
     document.documentElement.style.setProperty('--font-size-base', `${size}px`);
 }
 
-/**
- * 保存字体设置到后端
- */
-async function saveFontSetting(key, value) {
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-        try {
-            await window.go.main.App.SetSetting(key, value);
-        } catch (err) {
-            console.error('保存字体设置失败:', err);
-            localStorage.setItem('jot_' + key, value);
-        }
-    } else {
-        localStorage.setItem('jot_' + key, value);
-    }
-    nm.show('字体设置已保存', 'success');
-}
+
 
 /* ===== 主题设置函数 ===== */
 
@@ -1354,33 +1320,7 @@ function getCurrentTheme() {
     return document.documentElement.getAttribute('data-theme') || 'default';
 }
 
-/**
- * 从后端加载已保存的主题设置并应用
- */
-async function loadThemeSetting() {
-    let theme = 'default';
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-        const saved = await window.go.main.App.GetSetting('theme');
-        if (saved) theme = saved;
-    }
-    localStorage.setItem('jot_theme', theme);
-    applyTheme(theme);
-}
 
-/**
- * 保存主题设置到后端
- */
-async function saveThemeSetting(themeName) {
-    localStorage.setItem('jot_theme', themeName);
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-        try {
-            await window.go.main.App.SetSetting('theme', themeName);
-        } catch (err) {
-            console.error('保存主题设置失败:', err);
-        }
-    }
-    nm.show('主题设置已保存', 'success');
-}
 
 let _themeInited = false;
 
@@ -1412,7 +1352,9 @@ function initThemeSettings() {
             dropdown.classList.remove('open');
             trigger.classList.remove('open');
             applyTheme(theme);
-            await saveThemeSetting(theme);
+            localStorage.setItem('jot_theme', theme);
+            await saveSettings();
+            nm.show('主题设置已保存', 'success');
         });
     });
 
@@ -1500,7 +1442,8 @@ function initFontSettings() {
         const font = option.dataset.font;
         applyFontFamily(font);
         updateFontSettingsUI(font, getCurrentFontSize());
-        saveFontSetting('font_family', font);
+        saveSettings();
+        nm.show('字体设置已保存', 'success');
         closeFontFamilyDropdown();
     });
 
@@ -1518,7 +1461,8 @@ function initFontSettings() {
         const size = parseInt(btn.dataset.size, 10);
         applyFontSize(size);
         updateFontSettingsUI(getCurrentFontFamily(), size);
-        saveFontSetting('font_size', String(size));
+        saveSettings();
+        nm.show('字体设置已保存', 'success');
     });
 
     // 自定义字体大小输入
@@ -1530,7 +1474,8 @@ function initFontSettings() {
         }
         applyFontSize(size);
         updateFontSettingsUI(getCurrentFontFamily(), size);
-        saveFontSetting('font_size', String(size));
+        saveSettings();
+        nm.show('字体设置已保存', 'success');
     });
 }
 
@@ -1563,9 +1508,6 @@ function getCurrentFontSize() {
  * 初始化排序和分页设置
  */
 async function initSortSettings() {
-    // 加载排序和分页设置
-    await loadSortSettings();
-    await loadPageSizeSetting();
     // 绑定排序分段控件事件
     if (els.sortControl) {
         const moveIndicator = (btn) => {
@@ -1585,10 +1527,8 @@ async function initSortSettings() {
                 els.sortControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 moveIndicator(btn);
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSortOrder) {
-                    await window.go.main.App.SetSortOrder(order);
-                    nm.show('排序方式已保存', 'success');
-                }
+                await saveSettings();
+                nm.show('排序方式已保存', 'success');
                 resetPagination();
                 await loadNotes();
             });
@@ -1613,10 +1553,8 @@ async function initSortSettings() {
                 btn.classList.add('active');
                 moveIndicator(btn);
                 els.pageSizeLabel.textContent = `${size} 条 / 页`;
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetPageSize) {
-                    await window.go.main.App.SetPageSize(size);
-                    nm.show('分页大小已保存', 'success');
-                }
+                await saveSettings();
+                nm.show('分页大小已保存', 'success');
                 resetPagination();
                 await loadNotes();
             });
@@ -1624,121 +1562,7 @@ async function initSortSettings() {
     }
 }
 
-// ── AI 配置初始化 ──
-async function loadAISettings() {
-    try {
-        const cfg = await window.go.main.App.GetAIConfig();
-        els.aiBaseURL.value = cfg.base_url || '';
-        els.aiAPIKey.value = cfg.api_key || '';
-        const provider = cfg.provider || 'openai';
-        // 设置服务商下拉选中态
-        if (els.aiProviderDropdown) {
-            const items = els.aiProviderDropdown.querySelectorAll('.theme-select-item');
-            items.forEach(item => item.classList.toggle('active', item.dataset.providerValue === provider));
-        }
-        if (els.aiProviderLabel) {
-            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
-            els.aiProviderLabel.textContent = labels[provider] || 'OpenAI 兼容';
-        }
-        // 仅更新"获取列表"按钮状态，不覆盖已保存的 URL
-        const canFetch = provider === 'openai' || provider === 'ollama';
-        if (els.aiFetchModelsBtn) {
-            els.aiFetchModelsBtn.disabled = !canFetch;
-            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
-            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
-        }
-    } catch (e) {
-        console.warn('loadAISettings: provider/URL loading error', e);
-    }
 
-    // 独立加载模型：避免前面 UI 异常导致模型设置丢失
-    let cfg;
-    try {
-        cfg = await window.go.main.App.GetAIConfig();
-        // 仅清除模型列表项，保留搜索框
-        els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
-        if (cfg.model) {
-            els.aiModelLabel.textContent = cfg.model;
-            addModelDropdownItem(cfg.model, true);
-        } else {
-            els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
-            const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
-            if (wrap) wrap.style.display = 'none';
-        }
-    } catch (e) {
-        console.warn('loadAISettings: model loading error', e);
-    }
-    // 根据模型数量控制搜索框可见性
-    const loadWrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
-    if (loadWrap) {
-        loadWrap.style.display = els.aiModelDropdown.querySelectorAll('.theme-select-item').length > 1 ? '' : 'none';
-    }
-
-    // 深度思考状态
-    const searchToggle = document.getElementById('aiSettingSearchToggle');
-    if (searchToggle) {
-        let enabled;
-        try {
-            const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
-            enabled = val === 'true';
-        } catch (_) { /* 保持默认 false */ }
-        if (enabled) searchToggle.classList.add('active');
-    }
-
-    // 联网搜索配置
-    const tavilyKey = document.getElementById('aiTavilyApiKey');
-    if (tavilyKey) {
-        tavilyKey.value = cfg.tavily_api_key || '';
-    }
-    const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
-    if (webSearchToggle) {
-        let webSearchEnabled;
-        try {
-            const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
-            webSearchEnabled = val === 'true';
-        } catch (_) { /* 保持默认 false */ }
-        if (webSearchEnabled) webSearchToggle.classList.add('active');
-    }
-
-    // 卡片召回配置
-    const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
-    if (cardRecallToggle) {
-        let cardRecallEnabled;
-        try {
-            const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
-            cardRecallEnabled = val === 'true';
-        } catch (_) { /* 保持默认 false */ }
-        if (cardRecallEnabled) cardRecallToggle.classList.add('active');
-    }
-    const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
-    if (cardRecallLimit) {
-        try {
-            const val = await window.go.main.App.GetAICardRecallLimit();
-            cardRecallLimit.value = val;
-        } catch (_) { /* 使用 HTML 默认值 5 */ }
-    }
-
-    // 引用截断字数
-    const refMaxChars = document.getElementById('aiRefMaxChars');
-    if (refMaxChars) {
-        try {
-            const val = await window.go.main.App.GetAIRefMaxChars();
-            refMaxChars.value = val;
-        } catch (_) { /* 使用 HTML 默认值 1000 */ }
-    }
-
-    // 联网搜索结果数
-    const searchResultLimit = document.getElementById('aiSearchResultLimit');
-    if (searchResultLimit) {
-        try {
-            const val = await window.go.main.App.GetAISearchResultLimit();
-            searchResultLimit.value = val;
-        } catch (_) { /* 使用 HTML 默认值 5 */ }
-    }
-
-    // 加载预设列表
-    await loadProfiles();
-}
 
 // ── 全局 AI 辅助函数 ──
 function getActiveProvider() {
@@ -1775,7 +1599,6 @@ function updateProviderUI() {
 }
 
 async function initAISettings() {
-    await loadAISettings();
 
     // ---- 模型下拉菜单事件 ----
     const trigger = els.aiModelTrigger;
@@ -1914,10 +1737,7 @@ async function initAISettings() {
             els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
             const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
             if (wrap) wrap.style.display = 'none';
-            const cfg = { base_url: els.aiBaseURL.value.trim(), api_key: els.aiAPIKey.value.trim(), model: '', provider: value };
-            window.go.main.App.SaveAIConfig(cfg)
-                .then(() => nm.show('AI 配置已保存', 'success'))
-                .catch(() => {});
+            saveSettings().then(() => nm.show('AI 配置已保存', 'success'));
         });
 
         // 点击外部关闭
@@ -2047,43 +1867,23 @@ async function initAISettings() {
         if (!url || !key) return; // 未填完不保存
         if (!hasItems || model === '-- 请先获取模型列表 --' || !model) return;
 
-        try {
-            await window.go.main.App.SaveAIConfig({ base_url: url, api_key: key, model, provider, tavily_api_key: document.getElementById('aiTavilyApiKey')?.value?.trim() || '' });
-            nm.show('AI 配置已保存', 'success');
-            // 刷新预设下拉（可能自动创建了默认配置）
-            loadProfiles();
-        } catch (e) {
-            nm.show('保存配置失败: ' + e, 'error');
-        }
+        await saveSettings();
+        nm.show('AI 配置已保存', 'success');
+        // 刷新预设下拉（可能自动创建了默认配置）
+        loadProfiles();
     }
 
-    // ── 自动保存 ▸ URL 输入完成（独立保存，不依赖其他字段） ──
+    // ── 自动保存 ▸ URL 输入完成 ──
     els.aiBaseURL.addEventListener('change', async () => {
-        const url = els.aiBaseURL.value.trim();
-        try {
-            const cfg = await window.go.main.App.GetAIConfig();
-            cfg.base_url = url;
-            cfg.provider = getActiveProvider();
-            await window.go.main.App.SaveAIConfig(cfg);
-            nm.show('AI 配置已保存', 'success');
-            await loadProfiles();
-        } catch (e) {
-            nm.show('保存配置失败: ' + e, 'error');
-        }
+        await saveSettings();
+        nm.show('AI 配置已保存', 'success');
+        await loadProfiles();
     });
-    // ── 自动保存 ▸ Key 输入完成（独立保存，不依赖其他字段） ──
+    // ── 自动保存 ▸ Key 输入完成 ──
     els.aiAPIKey.addEventListener('change', async () => {
-        const key = els.aiAPIKey.value.trim();
-        try {
-            const cfg = await window.go.main.App.GetAIConfig();
-            cfg.api_key = key;
-            cfg.provider = getActiveProvider();
-            await window.go.main.App.SaveAIConfig(cfg);
-            nm.show('AI 配置已保存', 'success');
-            await loadProfiles();
-        } catch (e) {
-            nm.show('保存配置失败: ' + e, 'error');
-        }
+        await saveSettings();
+        nm.show('AI 配置已保存', 'success');
+        await loadProfiles();
     });
 
     // 深度思考切换
@@ -2093,8 +1893,7 @@ async function initAISettings() {
             const toggleSwitch = document.getElementById('aiSettingSearchToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
-            localStorage.setItem('ai_thinking_enabled', String(isActive));
-            try { await window.go.main.App.SetSetting('ai_thinking_enabled', String(isActive)); } catch (_) {}
+            await saveSettings();
             nm.show(isActive ? '深度思考已开启' : '深度思考已关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatSearchToggle');
@@ -2136,15 +1935,8 @@ async function initAISettings() {
     const tavilyKey = document.getElementById('aiTavilyApiKey');
     if (tavilyKey) {
         tavilyKey.addEventListener('change', async () => {
-            const key = tavilyKey.value.trim();
-            try {
-                const cfg = await window.go.main.App.GetAIConfig();
-                cfg.tavily_api_key = key;
-                await window.go.main.App.SaveAIConfig(cfg);
-                nm.show(key ? 'Tavily API Key 已保存' : 'Tavily API Key 已清除', 'success');
-            } catch (e) {
-                nm.show('保存失败: ' + e, 'error');
-            }
+            await saveSettings();
+            nm.show(tavilyKey.value.trim() ? 'Tavily API Key 已保存' : 'Tavily API Key 已清除', 'success');
         });
     }
 
@@ -2176,8 +1968,7 @@ async function initAISettings() {
             const toggleSwitch = document.getElementById('aiSettingWebSearchToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
-            localStorage.setItem('ai_web_search_enabled', String(isActive));
-            try { await window.go.main.App.SetSetting('ai_web_search_enabled', String(isActive)); } catch (_) {}
+            await saveSettings();
             nm.show(isActive ? '联网搜索已默认开启' : '联网搜索已默认关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatWebSearchToggle');
@@ -2194,8 +1985,7 @@ async function initAISettings() {
             const toggleSwitch = document.getElementById('aiSettingCardRecallToggle');
             if (!toggleSwitch) return;
             const isActive = toggleSwitch.classList.toggle('active');
-            localStorage.setItem('ai_card_recall_enabled', String(isActive));
-            try { await window.go.main.App.SetSetting('ai_card_recall_enabled', String(isActive)); } catch (_) {}
+            await saveSettings();
             nm.show(isActive ? '卡片召回已开启' : '卡片召回已关闭', isActive ? 'success' : 'info');
             // 同步工具栏 toggle
             const toolbarToggle = document.getElementById('aiChatCardRecallToggle');
@@ -2218,12 +2008,8 @@ async function initAISettings() {
                 val = 30;
                 e.target.value = 30;
             }
-            try {
-                await window.go.main.App.SetAICardRecallLimit(val);
-                nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
-            } catch (err) {
-                nm.show('保存失败: ' + err, 'error');
-            }
+            await saveSettings();
+            nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
         });
     }
 
@@ -2237,12 +2023,8 @@ async function initAISettings() {
                 nm.show('截断字数必须大于 0，已重置为 5000', 'warning');
                 return;
             }
-            try {
-                await window.go.main.App.SetAIRefMaxChars(val);
-                nm.show('引用截断字数已保存', 'success');
-            } catch (e) {
-                nm.show('保存失败: ' + e, 'error');
-            }
+            await saveSettings();
+            nm.show('引用截断字数已保存', 'success');
         });
     }
 
@@ -2261,12 +2043,8 @@ async function initAISettings() {
                 nm.show('搜索结果数不能超过 30，已重置为 30', 'warning');
                 return;
             }
-            try {
-                await window.go.main.App.SetAISearchResultLimit(val);
-                nm.show('搜索结果数已保存', 'success');
-            } catch (e) {
-                nm.show('保存失败: ' + e, 'error');
-            }
+            await saveSettings();
+            nm.show('搜索结果数已保存', 'success');
         });
     }
 
@@ -2666,52 +2444,7 @@ function setAIStatus(elId, msg, type) {
     el.style.display = '';
 }
 
-/**
- * 加载已保存的排序方式
- */
-async function loadSortSettings() {
-    let sortOrder = 'updated_at';
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSortOrder) {
-        sortOrder = await window.go.main.App.GetSortOrder();
-    }
-    // 高亮对应按钮并移动指示器
-    if (els.sortControl) {
-        const btns = els.sortControl.querySelectorAll('.segmented-btn');
-        const cw = els.sortControl.offsetWidth;
-        const segW = (cw - 4) / btns.length;
-        btns.forEach((b, i) => {
-            const isActive = b.dataset.sortValue === sortOrder;
-            b.classList.toggle('active', isActive);
-            if (isActive) {
-                els.sortIndicator.style.transform = `translateX(${2 + i * segW}px)`;
-            }
-        });
-    }
-}
 
-/**
- * 加载已保存的分页大小
- */
-async function loadPageSizeSetting() {
-    let size = 20;
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetPageSize) {
-        size = await window.go.main.App.GetPageSize();
-    }
-    // 高亮对应按钮并移动指示器
-    if (els.pageSizeControl) {
-        const btns = els.pageSizeControl.querySelectorAll('.segmented-btn');
-        const cw = els.pageSizeControl.offsetWidth;
-        const segW = (cw - 4) / btns.length;
-        btns.forEach((b, i) => {
-            const isActive = parseInt(b.dataset.value, 10) === size;
-            b.classList.toggle('active', isActive);
-            if (isActive) {
-                els.pageSizeIndicator.style.transform = `translateX(${2 + i * segW}px)`;
-            }
-        });
-    }
-    els.pageSizeLabel.textContent = `${size} 条 / 页`;
-}
 
 /**
  * 删除标签
@@ -4878,48 +4611,21 @@ function initEventListeners() {
     });
 
     // 快速笔记开关
-    els.quickNoteToggle.addEventListener('change', async (e) => {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-                await window.go.main.App.SetSetting('quick_note_enabled', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            } else {
-                localStorage.setItem('quick_note_enabled', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            }
-        } catch (err) {
-            console.error('保存快速笔记设置失败:', err);
-        }
+    els.quickNoteToggle.addEventListener('change', async () => {
+        await saveSettings();
+        nm.show('设置已保存', 'success');
     });
 
     // 语法高亮开关
-    els.mdHighlightToggle.addEventListener('change', async (e) => {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-                await window.go.main.App.SetSetting('cm_syntax_highlight', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            } else {
-                localStorage.setItem('cm_syntax_highlight', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            }
-        } catch (err) {
-            console.error('保存语法高亮设置失败:', err);
-        }
+    els.mdHighlightToggle.addEventListener('change', async () => {
+        await saveSettings();
+        nm.show('设置已保存', 'success');
     });
 
     // 全屏打开笔记开关
-    els.noteOpenFullscreenToggle.addEventListener('change', async (e) => {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-                await window.go.main.App.SetSetting('note_open_fullscreen', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            } else {
-                localStorage.setItem('note_open_fullscreen', String(e.target.checked));
-                nm.show('设置已保存', 'success');
-            }
-        } catch (err) {
-            console.error('保存全屏打开设置失败:', err);
-        }
+    els.noteOpenFullscreenToggle.addEventListener('change', async () => {
+        await saveSettings();
+        nm.show('设置已保存', 'success');
     });
 
     // 右键菜单：点击其他区域关闭
@@ -6806,15 +6512,9 @@ async function init() {
     });
 
     state.selectedTags = [];
-    await loadThemeSetting();
-    await loadFontSettings();
+    await loadSettings();
     await initSortSettings();
     initAISettings();
-    // 快速笔记设置需在 loadNotes 之前加载，启用时先显示全屏编辑器再后台加载笔记
-    await loadQuickNoteSetting();
-    await loadSyntaxHighlightSetting();
-    await loadNoteOpenFullscreenSetting();
-    await loadCodeHighlightThemeSetting();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 加载笔记本列表（会设置默认选中）
@@ -7059,79 +6759,13 @@ function updateMaximizeButtonIcon(btn, isMaximized) {
     }
 }
 
-/**
- * 加载快速笔记设置，启用时自动打开全屏编辑器
- */
-async function loadQuickNoteSetting() {
-    try {
-        let enabled = false;
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-            const val = await window.go.main.App.GetSetting('quick_note_enabled');
-            enabled = val === 'true';
-        }
-        els.quickNoteToggle.checked = enabled;
-        if (enabled) {
-            openEditor(null, false, true);
-        }
-    } catch (err) {
-        console.error('加载快速笔记设置失败:', err);
-    }
-}
 
-/**
- * 加载 CM6 语法高亮设置
- */
-async function loadSyntaxHighlightSetting() {
-    try {
-        let enabled = true;
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-            const val = await window.go.main.App.GetSetting('cm_syntax_highlight');
-            enabled = val === 'true';
-        }
-        els.mdHighlightToggle.checked = enabled;
-    } catch (err) {
-        console.error('加载语法高亮设置失败:', err);
-    }
-}
-
-/**
- * 加载笔记全屏打开设置
- */
-window.loadNoteOpenFullscreenSetting = async function () {
-    try {
-        let enabled = false;
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-            const val = await window.go.main.App.GetSetting('note_open_fullscreen');
-            enabled = val === 'true';
-        }
-        els.noteOpenFullscreenToggle.checked = enabled;
-    } catch (_) {}
-};
 
 /**
  * 检查是否应以全屏模式打开笔记
  */
 function getNoteOpenFullscreen() {
     return els.noteOpenFullscreenToggle?.checked || false;
-}
-
-/**
- * 加载代码高亮主题设置
- */
-async function loadCodeHighlightThemeSetting() {
-    try {
-        let theme = 'monokai-dimmed';
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
-            const val = await window.go.main.App.GetSetting('code_highlight_theme');
-            if (val) theme = val;
-        }
-        codeHighlightTheme = theme;
-        // 同步 UI 分段控件状态
-        applyCodeHighlightThemeUI(theme);
-    } catch (err) {
-        console.error('加载代码高亮主题设置失败:', err);
-        codeHighlightTheme = 'monokai-dimmed';
-    }
 }
 
 /**
@@ -7178,24 +6812,6 @@ function applyCodeHighlightTheme(themeName) {
     }
 }
 
-/**
- * 保存代码高亮主题设置
- * @param {string} themeName
- */
-async function saveCodeHighlightThemeSetting(themeName) {
-    if (window.go && window.go.main && window.go.main.App && window.go.main.App.SetSetting) {
-        try {
-            await window.go.main.App.SetSetting('code_highlight_theme', themeName);
-        } catch (err) {
-            console.error('保存代码高亮主题设置失败:', err);
-            localStorage.setItem('code_highlight_theme', themeName);
-        }
-    } else {
-        localStorage.setItem('code_highlight_theme', themeName);
-    }
-    nm.show('代码高亮主题已保存', 'success');
-}
-
 let _codeHighlightThemeInited = false;
 
 /**
@@ -7227,7 +6843,9 @@ function initCodeHighlightThemeSettings() {
             trigger.classList.remove('open');
             applyCodeHighlightThemeUI(theme);
             applyCodeHighlightTheme(theme);
-            await saveCodeHighlightThemeSetting(theme);
+            codeHighlightTheme = theme;
+            await saveSettings();
+            nm.show('代码高亮主题已保存', 'success');
         });
     });
 
@@ -7307,6 +6925,189 @@ function buildCodePreview(container, themeName) {
     });
 }
 
+/* ===== 统一设置加载/保存 ===== */
+
+/**
+ * 一次性从后端加载所有设置并应用到前端
+ */
+async function loadSettings() {
+    try {
+        const cfg = await window.go.main.App.GetAllSettings();
+
+        // --- 主题 ---
+        localStorage.setItem('jot_theme', cfg.theme);
+        applyTheme(cfg.theme);
+
+        // --- 字体 ---
+        applyFontFamily(cfg.font_family);
+        applyFontSize(cfg.font_size);
+        updateFontSettingsUI(cfg.font_family, cfg.font_size);
+
+        // --- 排序 ---
+        if (els.sortControl) {
+            const btns = els.sortControl.querySelectorAll('.segmented-btn');
+            const cw = els.sortControl.offsetWidth;
+            const segW = (cw - 4) / btns.length;
+            btns.forEach((b, i) => {
+                const isActive = b.dataset.sortValue === cfg.sort_order;
+                b.classList.toggle('active', isActive);
+                if (isActive) {
+                    els.sortIndicator.style.transform = `translateX(${2 + i * segW}px)`;
+                }
+            });
+        }
+
+        // --- 分页大小 ---
+        if (els.pageSizeControl) {
+            const btns = els.pageSizeControl.querySelectorAll('.segmented-btn');
+            const cw = els.pageSizeControl.offsetWidth;
+            const segW = (cw - 4) / btns.length;
+            btns.forEach((b, i) => {
+                const isActive = parseInt(b.dataset.value, 10) === cfg.page_size;
+                b.classList.toggle('active', isActive);
+                if (isActive) {
+                    els.pageSizeIndicator.style.transform = `translateX(${2 + i * segW}px)`;
+                }
+            });
+        }
+        els.pageSizeLabel.textContent = `${cfg.page_size} 条 / 页`;
+
+        // --- 语法高亮 checkbox ---
+        if (els.mdHighlightToggle) els.mdHighlightToggle.checked = cfg.cm_syntax_highlight;
+
+        // --- 全屏打开 checkbox ---
+        if (els.noteOpenFullscreenToggle) els.noteOpenFullscreenToggle.checked = cfg.note_open_fullscreen;
+
+        // --- 快速笔记 checkbox ---
+        if (els.quickNoteToggle) els.quickNoteToggle.checked = cfg.quick_note_enabled;
+
+        // --- 代码高亮主题 ---
+        codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
+        applyCodeHighlightThemeUI(codeHighlightTheme);
+
+        // --- AI: 服务商下拉 ---
+        if (els.aiProviderDropdown) {
+            els.aiProviderDropdown.querySelectorAll('.theme-select-item').forEach(item =>
+                item.classList.toggle('active', item.dataset.providerValue === cfg.ai_provider)
+            );
+        }
+        if (els.aiProviderLabel) {
+            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
+            els.aiProviderLabel.textContent = labels[cfg.ai_provider] || 'OpenAI 兼容';
+        }
+
+        // --- AI: base_url & api_key ---
+        if (els.aiBaseURL) els.aiBaseURL.value = cfg.ai_base_url || '';
+        if (els.aiAPIKey) els.aiAPIKey.value = cfg.ai_api_key || '';
+
+        // --- AI: 模型下拉 ---
+        if (els.aiModelDropdown) {
+            els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
+            if (cfg.ai_model) {
+                els.aiModelLabel.textContent = cfg.ai_model;
+                addModelDropdownItem(cfg.ai_model, true);
+            } else {
+                els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
+                const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+                if (wrap) wrap.style.display = 'none';
+            }
+            const loadWrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+            if (loadWrap) {
+                loadWrap.style.display = els.aiModelDropdown.querySelectorAll('.theme-select-item').length > 1 ? '' : 'none';
+            }
+        }
+
+        // --- AI: Tavily API Key ---
+        const tavilyKey = document.getElementById('aiTavilyApiKey');
+        if (tavilyKey) tavilyKey.value = cfg.tavily_api_key || '';
+
+        // --- AI: Toggles ---
+        const searchToggle = document.getElementById('aiSettingSearchToggle');
+        if (searchToggle) searchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
+
+        const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
+        if (webSearchToggle) webSearchToggle.classList.toggle('active', cfg.ai_web_search_enabled);
+
+        const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
+        if (cardRecallToggle) cardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
+
+        // 同步 AI 聊天工具栏 toggle
+        const chatSearchToggle = document.getElementById('aiChatSearchToggle');
+        if (chatSearchToggle) chatSearchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
+
+        const chatWebSearchToggle = document.getElementById('aiChatWebSearchToggle');
+        if (chatWebSearchToggle) chatWebSearchToggle.classList.toggle('active', cfg.ai_web_search_enabled);
+
+        const chatCardRecallToggle = document.getElementById('aiChatCardRecallToggle');
+        if (chatCardRecallToggle) chatCardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
+
+        // --- AI: 限制输入 ---
+        const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
+        if (cardRecallLimit) cardRecallLimit.value = cfg.ai_card_recall_limit;
+
+        const refMaxChars = document.getElementById('aiRefMaxChars');
+        if (refMaxChars) refMaxChars.value = cfg.ai_ref_max_chars;
+
+        const searchResultLimit = document.getElementById('aiSearchResultLimit');
+        if (searchResultLimit) searchResultLimit.value = cfg.ai_search_result_limit;
+
+        // --- AI: 获取模型按钮状态 ---
+        const canFetch = cfg.ai_provider === 'openai' || cfg.ai_provider === 'ollama';
+        if (els.aiFetchModelsBtn) {
+            els.aiFetchModelsBtn.disabled = !canFetch;
+            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
+            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
+        }
+
+        // --- AI: 预设配置 ---
+        await loadProfiles();
+    } catch (e) {
+        console.warn('loadSettings: 加载设置失败', e);
+    }
+}
+
+/**
+ * 从前端 DOM 收集所有设置，一次性保存到后端
+ */
+async function saveSettings() {
+    try {
+        const cfg = {
+            theme: localStorage.getItem('jot_theme') || 'default',
+            font_family: els.fontFamilyDisplay?.textContent || '',
+            font_size: parseInt(els.fontSizeInput?.value) || 16,
+            code_highlight_theme: codeHighlightTheme || 'monokai-dimmed',
+            note_open_fullscreen: els.noteOpenFullscreenToggle?.checked || false,
+            sort_order: (() => {
+                const active = els.sortControl?.querySelector('.segmented-btn.active');
+                return active?.dataset.sortValue || 'updated_at';
+            })(),
+            page_size: (() => {
+                const active = els.pageSizeControl?.querySelector('.segmented-btn.active');
+                return parseInt(active?.dataset.value) || 20;
+            })(),
+            quick_note_enabled: els.quickNoteToggle?.checked || false,
+            cm_syntax_highlight: els.mdHighlightToggle?.checked || false,
+            ai_provider: (() => {
+                const active = els.aiProviderDropdown?.querySelector('.theme-select-item.active');
+                return active?.dataset.providerValue || 'openai';
+            })(),
+            ai_base_url: els.aiBaseURL?.value || '',
+            ai_api_key: els.aiAPIKey?.value || '',
+            ai_model: els.aiModelLabel?.textContent || '',
+            tavily_api_key: document.getElementById('aiTavilyApiKey')?.value || '',
+            ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
+            ai_web_search_enabled: document.getElementById('aiSettingWebSearchToggle')?.classList.contains('active') || false,
+            ai_card_recall_enabled: document.getElementById('aiSettingCardRecallToggle')?.classList.contains('active') || false,
+            ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
+            ai_ref_max_chars: parseInt(document.getElementById('aiRefMaxChars')?.value) || 1000,
+            ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
+        };
+        await window.go.main.App.SaveAllSettings(cfg);
+    } catch (e) {
+        console.error('保存设置失败:', e);
+    }
+}
+
 // 将内部引用暴露到 window，供 data-management.js / trash-page.js 模块使用
 window.els = els;
 window.nm = nm;
@@ -7320,15 +7121,8 @@ window.switchView = switchView;
 window.openEditor = openEditor;
 window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
-window.loadThemeSetting = loadThemeSetting;
-window.loadFontSettings = loadFontSettings;
-window.loadSortSettings = loadSortSettings;
-window.loadPageSizeSetting = loadPageSizeSetting;
-window.loadQuickNoteSetting = loadQuickNoteSetting;
-window.loadSyntaxHighlightSetting = loadSyntaxHighlightSetting;
-window.loadNoteOpenFullscreenSetting = loadNoteOpenFullscreenSetting;
-window.loadCodeHighlightThemeSetting = loadCodeHighlightThemeSetting;
-window.loadAISettings = loadAISettings;
+window.loadSettings = loadSettings;
+window.saveSettings = saveSettings;
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

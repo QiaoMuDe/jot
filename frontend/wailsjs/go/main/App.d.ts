@@ -82,6 +82,8 @@ export function GetAllNoteIDs():Promise<Array<number>>;
 
 export function GetAllNotebooks():Promise<Array<models.Notebook>>;
 
+export function GetAllSettings():Promise<services.SettingsConfig>;
+
 export function GetAllTags():Promise<Array<models.Tag>>;
 
 export function GetBackupInfo():Promise<Record<string, string>>;
@@ -157,6 +159,8 @@ export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
 export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 
 export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
+
+export function SaveAllSettings(arg1:services.SettingsConfig):Promise<void>;
 
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 

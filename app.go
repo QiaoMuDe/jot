@@ -592,6 +592,16 @@ func (a *App) SetSetting(key, value string) error {
 	return a.settingService.Set(key, value)
 }
 
+// GetAllSettings 获取全部设置项
+func (a *App) GetAllSettings() services.SettingsConfig {
+	return a.settingService.GetAllSettings()
+}
+
+// SaveAllSettings 保存全部设置项
+func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
+	return a.settingService.SaveAllSettings(cfg)
+}
+
 // GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 5000
 func (a *App) GetAIRefMaxChars() int {
 	val := a.settingService.Get("ai_ref_max_chars")
