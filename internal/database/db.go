@@ -58,6 +58,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("初始化默认标签失败: %w", err)
 	}
 
+	// 初始化默认设置（仅插入表中不存在的 key）
+	if err := InitDefaultSettings(db); err != nil {
+		return nil, fmt.Errorf("初始化默认设置失败: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -469,4 +474,48 @@ func initBuiltinPrompts(db *gorm.DB) error {
 		return nil
 	}
 	return db.Create(&prompts).Error
+}
+
+// InitDefaultSettings 增量插入默认设置（仅插入缺失的 key）
+func InitDefaultSettings(db *gorm.DB) error {
+	var existingKeys []string
+	db.Model(&models.Setting{}).Pluck("key", &existingKeys)
+	existing := make(map[string]bool, len(existingKeys))
+	for _, k := range existingKeys {
+		existing[k] = true
+	}
+
+	defaults := []models.Setting{
+		{Key: "theme", Value: "default"},
+		{Key: "font_family", Value: ""},
+		{Key: "font_size", Value: "16"},
+		{Key: "code_highlight_theme", Value: "monokai-dimmed"},
+		{Key: "note_open_fullscreen", Value: "false"},
+		{Key: "sort_order", Value: "updated_at"},
+		{Key: "page_size", Value: "20"},
+		{Key: "quick_note_enabled", Value: "false"},
+		{Key: "cm_syntax_highlight", Value: "true"},
+		{Key: "ai_provider", Value: "openai"},
+		{Key: "ai_base_url", Value: ""},
+		{Key: "ai_api_key", Value: ""},
+		{Key: "ai_model", Value: ""},
+		{Key: "ai_thinking_enabled", Value: "false"},
+		{Key: "tavily_api_key", Value: ""},
+		{Key: "ai_web_search_enabled", Value: "false"},
+		{Key: "ai_card_recall_enabled", Value: "false"},
+		{Key: "ai_card_recall_limit", Value: "5"},
+		{Key: "ai_ref_max_chars", Value: "5000"},
+		{Key: "ai_search_result_limit", Value: "5"},
+	}
+
+	var toInsert []models.Setting
+	for _, s := range defaults {
+		if !existing[s.Key] {
+			toInsert = append(toInsert, s)
+		}
+	}
+	if len(toInsert) == 0 {
+		return nil
+	}
+	return db.Create(&toInsert).Error
 }

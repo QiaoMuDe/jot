@@ -108,8 +108,6 @@ export function GetProfiles():Promise<Array<models.APIProfile>>;
 
 export function GetSetting(arg1:string):Promise<string>;
 
-export function GetSettingsPageConfig():Promise<main.SettingsPageConfig>;
-
 export function GetSortOrder():Promise<string>;
 
 export function GetSystemFonts():Promise<Array<string>>;

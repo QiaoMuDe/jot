@@ -210,10 +210,6 @@ export function GetSetting(arg1) {
   return window['go']['main']['App']['GetSetting'](arg1);
 }
 
-export function GetSettingsPageConfig() {
-  return window['go']['main']['App']['GetSettingsPageConfig']();
-}
-
 export function GetSortOrder() {
   return window['go']['main']['App']['GetSortOrder']();
 }

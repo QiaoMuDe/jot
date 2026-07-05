@@ -1,0 +1,21 @@
+# 校验检查清单
+
+- [x] `InitDefaultSettings(db)` 在 `InitDB()` 中正确调用，首次建库时默认值写入 settings 表
+- [x] `ResetDatabase()` 中也调用 `InitDefaultSettings(db)`，恢复出厂后默认值存在
+- [x] 已有用户数据不受影响：`InitDefaultSettings` 只 INSERT 不存在的 key，不覆盖已有值
+- [x] 后端 `GetSortOrder()` 不再有硬编码 fallback
+- [x] 后端 `GetPageSize()` 不再有硬编码 fallback
+- [x] 后端 `GetAIRefMaxChars()` 不再有硬编码 fallback
+- [x] 后端 `GetAISearchResultLimit()` 不再有硬编码 fallback
+- [x] 后端 `GetAICardRecallLimit()` 不再有硬编码 fallback
+- [x] 后端 `ai_service.go` 中 `GetConfig()` 移除 provider fallback（`"openai"`）
+- [x] 前端 `loadThemeSetting()` 不再有 `|| 'default'` fallback
+- [x] 前端 `loadFontSettings()` 不再有 `|| 16` fallback
+- [x] 前端 `loadSortSettings()` 不再有 `|| 'updated_at'` fallback
+- [x] 前端 `loadPageSizeSetting()` 不再有 `|| 20` fallback
+- [x] 前端 `loadQuickNoteSetting()` 不再有 `|| false` fallback
+- [x] 前端 `loadSyntaxHighlightSetting()` 不再有 `val !== 'false'` 推断逻辑
+- [x] 前端 `loadNoteOpenFullscreenSetting()` 不再有 `|| false` fallback
+- [x] 前端 `loadCodeHighlightThemeSetting()` 不再有 `|| 'monokai-dimmed'` fallback
+- [x] 前端 `loadAISettings()` 中的各开关和输入框移除硬编码 fallback 默认值
+- [x] 构建通过，无编译错误

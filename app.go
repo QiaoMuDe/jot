@@ -459,11 +459,7 @@ func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 
 	// Step 5: 重建服务
 	a.db = newDB
-	a.noteService = services.NewNoteService(newDB, a.settingService)
-	a.tagService = services.NewTagService(newDB)
-	a.settingService = services.NewSettingService(newDB)
-	a.aiService = services.NewAIService(newDB)
-	a.profileService = services.NewProfileService(newDB)
+	a.rebuildServices(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -599,9 +595,6 @@ func (a *App) SetSetting(key, value string) error {
 // GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 5000
 func (a *App) GetAIRefMaxChars() int {
 	val := a.settingService.Get("ai_ref_max_chars")
-	if val == "" {
-		return 5000
-	}
 	n, err := strconv.Atoi(val)
 	if err != nil || n <= 0 {
 		return 5000
@@ -626,9 +619,6 @@ func (a *App) SetAIRefMaxChars(chars int) error {
 // GetAISearchResultLimit 获取 AI 联网搜索结果数，空值时返回默认 5
 func (a *App) GetAISearchResultLimit() int {
 	val := a.settingService.Get("ai_search_result_limit")
-	if val == "" {
-		return 5
-	}
 	n, err := strconv.Atoi(val)
 	if err != nil || n < 1 {
 		return 5
@@ -653,9 +643,6 @@ func (a *App) SetAISearchResultLimit(limit int) error {
 // GetAICardRecallLimit 获取 AI 卡片召回条数，空值时返回默认 5
 func (a *App) GetAICardRecallLimit() int {
 	val := a.settingService.Get("ai_card_recall_limit")
-	if val == "" {
-		return 5
-	}
 	n, err := strconv.Atoi(val)
 	if err != nil || n < 1 {
 		return 5
@@ -1141,11 +1128,7 @@ func (a *App) GetSystemFonts() []string {
 
 // GetSortOrder 获取排序方式设置
 func (a *App) GetSortOrder() string {
-	order := a.settingService.Get("sort_order")
-	if order == "" {
-		return "updated_at"
-	}
-	return order
+	return a.settingService.Get("sort_order")
 }
 
 // SetSortOrder 保存排序方式设置
@@ -1156,9 +1139,6 @@ func (a *App) SetSortOrder(order string) error {
 // GetPageSize 获取分页大小设置
 func (a *App) GetPageSize() int {
 	size := a.settingService.Get("page_size")
-	if size == "" {
-		return 20
-	}
 	n, err := strconv.Atoi(size)
 	if err != nil || n < 20 || n > 100 {
 		return 20
@@ -1407,11 +1387,7 @@ func (a *App) RestoreFromDir() (*services.ImportResult, error) {
 
 	// Step 5: 重建服务
 	a.db = newDB
-	a.noteService = services.NewNoteService(newDB, a.settingService)
-	a.tagService = services.NewTagService(newDB)
-	a.settingService = services.NewSettingService(newDB)
-	a.aiService = services.NewAIService(newDB)
-	a.profileService = services.NewProfileService(newDB)
+	a.rebuildServices(newDB)
 
 	// Step 6: 清理备份
 	_ = os.Remove(backupPath)
@@ -1572,12 +1548,36 @@ func (a *App) ResetDatabase() error {
 		return err
 	}
 
-	// 4. 确保默认笔记本存在
+	// 4. 重新初始化默认设置
+	if err := database.InitDefaultSettings(a.db); err != nil {
+		return err
+	}
+
+	// 5. 确保默认笔记本存在
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		return err
 	}
 
+	// 6. 重建数据库连接（DropTable 后 glebarez/sqlite 驱动连接可能失效）
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		return fmt.Errorf("获取数据库路径失败: %w", err)
+	}
+	if err := a.reconnectDB(dbPath); err != nil {
+		return fmt.Errorf("重置后重连失败: %w", err)
+	}
+
 	return nil
+}
+
+// rebuildServices 使用新的数据库连接重建所有服务实例
+func (a *App) rebuildServices(db *gorm.DB) {
+	a.settingService = services.NewSettingService(db)
+	a.noteService = services.NewNoteService(db, a.settingService)
+	a.tagService = services.NewTagService(db)
+	a.notebookService = services.NewNotebookService(db)
+	a.aiService = services.NewAIService(db)
+	a.profileService = services.NewProfileService(db)
 }
 
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）
@@ -1592,10 +1592,6 @@ func (a *App) reconnectDB(dbPath string) error {
 		return fmt.Errorf("数据库重连失败: %w", err)
 	}
 	a.db = db
-	a.noteService = services.NewNoteService(db, a.settingService)
-	a.tagService = services.NewTagService(db)
-	a.settingService = services.NewSettingService(db)
-	a.aiService = services.NewAIService(db)
-	a.profileService = services.NewProfileService(db)
+	a.rebuildServices(db)
 	return nil
 }

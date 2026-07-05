@@ -1163,10 +1163,6 @@ async function loadFontSettings() {
         if (savedFamily) fontFamily = savedFamily;
         const savedSize = await window.go.main.App.GetSetting('font_size');
         if (savedSize) fontSize = parseInt(savedSize, 10);
-    } else {
-        // 从 localStorage 回退
-        fontFamily = localStorage.getItem('jot_font_family') || '';
-        fontSize = parseInt(localStorage.getItem('jot_font_size') || '16', 10);
     }
 
     applyFontFamily(fontFamily);
@@ -1366,8 +1362,6 @@ async function loadThemeSetting() {
     if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
         const saved = await window.go.main.App.GetSetting('theme');
         if (saved) theme = saved;
-    } else {
-        theme = localStorage.getItem('jot_theme') || 'default';
     }
     localStorage.setItem('jot_theme', theme);
     applyTheme(theme);
@@ -1666,6 +1660,10 @@ async function loadAISettings() {
         if (cfg.model) {
             els.aiModelLabel.textContent = cfg.model;
             addModelDropdownItem(cfg.model, true);
+        } else {
+            els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
+            const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+            if (wrap) wrap.style.display = 'none';
         }
     } catch (e) {
         console.warn('loadAISettings: model loading error', e);
@@ -1679,7 +1677,7 @@ async function loadAISettings() {
     // 深度思考状态
     const searchToggle = document.getElementById('aiSettingSearchToggle');
     if (searchToggle) {
-        let enabled = false;
+        let enabled;
         try {
             const val = await window.go.main.App.GetSetting('ai_thinking_enabled');
             enabled = val === 'true';
@@ -1694,7 +1692,7 @@ async function loadAISettings() {
     }
     const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
     if (webSearchToggle) {
-        let webSearchEnabled = false;
+        let webSearchEnabled;
         try {
             const val = await window.go.main.App.GetSetting('ai_web_search_enabled');
             webSearchEnabled = val === 'true';
@@ -1705,7 +1703,7 @@ async function loadAISettings() {
     // 卡片召回配置
     const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
     if (cardRecallToggle) {
-        let cardRecallEnabled = false;
+        let cardRecallEnabled;
         try {
             const val = await window.go.main.App.GetSetting('ai_card_recall_enabled');
             cardRecallEnabled = val === 'true';
@@ -1759,6 +1757,7 @@ function setActiveProvider(value) {
 }
 
 function updateProviderUI() {
+    // 以下默认 URL 仅用于 UI 初始提示，实际默认值由后端 DB 管理
     const provider = getActiveProvider();
     const defaultURLs = {
         openai: 'https://api.openai.com/v1',
@@ -2673,8 +2672,7 @@ function setAIStatus(elId, msg, type) {
 async function loadSortSettings() {
     let sortOrder = 'updated_at';
     if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSortOrder) {
-        const saved = await window.go.main.App.GetSortOrder();
-        if (saved) sortOrder = saved;
+        sortOrder = await window.go.main.App.GetSortOrder();
     }
     // 高亮对应按钮并移动指示器
     if (els.sortControl) {
@@ -2697,8 +2695,7 @@ async function loadSortSettings() {
 async function loadPageSizeSetting() {
     let size = 20;
     if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetPageSize) {
-        const saved = await window.go.main.App.GetPageSize();
-        if (saved && saved >= 20 && saved <= 100) size = saved;
+        size = await window.go.main.App.GetPageSize();
     }
     // 高亮对应按钮并移动指示器
     if (els.pageSizeControl) {
@@ -7071,8 +7068,6 @@ async function loadQuickNoteSetting() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
             const val = await window.go.main.App.GetSetting('quick_note_enabled');
             enabled = val === 'true';
-        } else {
-            enabled = localStorage.getItem('quick_note_enabled') === 'true';
         }
         els.quickNoteToggle.checked = enabled;
         if (enabled) {
@@ -7091,10 +7086,7 @@ async function loadSyntaxHighlightSetting() {
         let enabled = true;
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
             const val = await window.go.main.App.GetSetting('cm_syntax_highlight');
-            enabled = val !== 'false'; // 默认启用
-        } else {
-            const local = localStorage.getItem('cm_syntax_highlight');
-            enabled = local !== 'false';
+            enabled = val === 'true';
         }
         els.mdHighlightToggle.checked = enabled;
     } catch (err) {
@@ -7111,8 +7103,6 @@ window.loadNoteOpenFullscreenSetting = async function () {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
             const val = await window.go.main.App.GetSetting('note_open_fullscreen');
             enabled = val === 'true';
-        } else {
-            enabled = localStorage.getItem('note_open_fullscreen') === 'true';
         }
         els.noteOpenFullscreenToggle.checked = enabled;
     } catch (_) {}
@@ -7134,8 +7124,6 @@ async function loadCodeHighlightThemeSetting() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSetting) {
             const val = await window.go.main.App.GetSetting('code_highlight_theme');
             if (val) theme = val;
-        } else {
-            theme = localStorage.getItem('code_highlight_theme') || 'monokai-dimmed';
         }
         codeHighlightTheme = theme;
         // 同步 UI 分段控件状态

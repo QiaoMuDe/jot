@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-04（更新 90）
+> 生成日期: 2026-07-05（更新 92）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -1876,3 +1876,28 @@ await loadXxxSetting();
 | **loadSettingsPageConfig 补充 loadProfiles** | `loadSettingsPageConfig()` 末尾追加 `loadProfiles()` 调用，修复预设配置下拉菜单始终显示「无预设配置」的问题。详见 [main.js#L1736-L1738](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 90 → 更新 91 |
+
+## 一百二十四、新增记忆点（默认值统一到数据库增量初始化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **动机** | 默认值在前端（`localStorage` fallback）和后端（空值兜底）双向维护，改默认值需要同步改前后端 2 处，容易遗漏且不一致 |
+| **InitDefaultSettings 函数** | `internal/database/db.go` 新增 `InitDefaultSettings(db)`，在 `InitDB` 的 AutoMigrate 后调用。定义 20 项默认值 KV（`theme=default`、`sort_order=updated_at`、`page_size=20`、`ai_ref_max_chars=5000` 等）。使用 `Pluck("key")` 查询已有 key 集合，仅 INSERT 不存在的 key（增量插入，不覆盖已有值）。与 `initBuiltinPrompts` 复用同一增量模式。详见 [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go) |
+| **后端简化** | `app.go` 中 `GetSortOrder()`、`GetPageSize()`、`GetAIRefMaxChars()`、`GetAISearchResultLimit()`、`GetAICardRecallLimit()` 移除空值 `if val == "" { return default }` fallback，改为直接返回 `GetSetting()` 结果。`ResetDatabase()` 末尾调用 `database.InitDefaultSettings()`。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **AI 配置简化** | `ai_service.go` 的 `GetConfig()` 移除 provider 空值 fallback（`"openai"`），`SaveConfig()` 移除 `cfg.Provider == ""` 的判断。详见 [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **前端简化** | `main.js` 中 11 处 `loadXxxSetting()` 函数移除所有 `localStorage` fallback 分支和 `|| 'default'` / `|| 16` 等硬编码默认值。`loadSyntaxHighlightSetting()` 逻辑从 `val !== 'false'` 改为 `val === 'true'`（与 DB 默认值一致）。AI 设置中 toggles 移除 `= false` 初始化。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **效果** | 默认值的**唯一定义位置**只有 `InitDefaultSettings()` 一处，改默认值只需改这里，前端和后端自动同步。详见 [spec.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/unify-default-values-init/spec.md) |
+
+## 一百二十五、新增记忆点（重置数据库连接失效修复 + rebuildServices 统一方法）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题分析** | `ResetDatabase()` 使用 `DropTable` + `AutoMigrate` 重建全部表。`glebarez/sqlite` 驱动（基于 `modernc.org/sqlite`）在全表 DropTable 后底层连接状态失效，`sql.DB` 对象仍存活但后续操作报 `sql: database is closed`。详见 [fix-resetdatabase-sql-db-closed.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/documents/fix-resetdatabase-sql-db-closed.md) |
+| **修复 1：ResetDatabase 末尾重建连接** | `app.go` 的 `ResetDatabase()` 末尾调用 `a.reconnectDB(dbPath)`，关闭旧连接，用 `database.InitDB()` 重建新连接并重新注入所有 service。详见 [app.go#L1569-L1576](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **问题 2：一键还原后 notebookService 未重建** | `RestoreFromDir()` 和 `ImportDatabaseWithDialog()` 成功重建连接后只重建了 5 个 service，漏了 `notebookService`。`a.notebookService` 仍指向已 close 的旧连接。下次调用 `ResetDatabase()` 时 `a.notebookService.EnsureDefaultNotebook()` 使用旧连接 → `sql: database is closed`。详见 [fix-restore-missing-notebookservice.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/documents/fix-restore-missing-notebookservice.md) |
+| **修复 2：补上 notebookService** | `RestoreFromDir()` 和 `ImportDatabaseWithDialog()` 的 Step 5 中追加 `a.notebookService = services.NewNotebookService(newDB)`。同时 `reconnectDB()` 已由上次修复包含 notebookService。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **重构：提取 rebuildServices 统一方法** | 共 4 处 service 重建代码（`NewApp` 初始化 + `ImportDatabaseWithDialog` + `RestoreFromDir` + `reconnectDB`），2 处漏了 `notebookService`。`App` 新增 `rebuildServices(db *gorm.DB)` 方法，统一管理 6 个 service 的重新创建（按依赖顺序：settingService → noteService → tagService → notebookService → aiService → profileService）。3 处重建点全部替换为 `a.rebuildServices(newDB)` 一行。详见 [refactor-unified-rebuild-services.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/documents/refactor-unified-rebuild-services.md) |
+| **新增方法** | `rebuildServices(db)` 按依赖顺序重建 6 个 service：`a.settingService = services.NewSettingService(db)` → `a.noteService = services.NewNoteService(db, a.settingService)` → `a.tagService / a.notebookService / a.aiService / a.profileService`。调用方只需一行 `a.rebuildServices(newDB)`。详见 [app.go#L1573-L1580](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **效果** | 以后新增/删除 service 类只需改 `rebuildServices` 一处，无需调节 4 处。彻底消除 notebookService 遗漏风险。 |
+
+| **update 计数** | `AGENTS.md` 从更新 91 → 更新 92 |

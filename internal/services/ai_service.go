@@ -66,12 +66,8 @@ func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
 // GetConfig 从 SettingService 读取 AI 配置
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
-	provider := svc.Get("ai_provider")
-	if provider == "" {
-		provider = "openai"
-	}
 	return AIConfig{
-		Provider:     provider,
+		Provider:     svc.Get("ai_provider"),
 		BaseURL:      svc.Get("ai_base_url"),
 		APIKey:       svc.Get("ai_api_key"),
 		Model:        svc.Get("ai_model"),
@@ -82,9 +78,6 @@ func (a *AIService) GetConfig() AIConfig {
 // SaveConfig 保存 AI 配置到 SettingService
 func (a *AIService) SaveConfig(cfg AIConfig) error {
 	svc := NewSettingService(a.db)
-	if cfg.Provider == "" {
-		cfg.Provider = "openai"
-	}
 	if err := svc.Set("ai_provider", cfg.Provider); err != nil {
 		return err
 	}
