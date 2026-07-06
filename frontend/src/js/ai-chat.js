@@ -807,8 +807,30 @@ function bindEvents() {
         skillsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             skillsDropdown.classList.toggle('open');
-            // 每次打开菜单时重置方向选择区的展开状态
-            if (!skillsDropdown.classList.contains('open')) {
+            if (skillsDropdown.classList.contains('open')) {
+                // 打开菜单时，同步翻译方向的视觉状态
+                if (skillsTranslateOptions) {
+                    if (activeSkills.translate) {
+                        const dir = activeSkills.translate.direction;
+                        skillsTranslateOptions.querySelectorAll('.ai-chat-skills-option').forEach(el => {
+                            const radio = el.querySelector('input[type="radio"]');
+                            if (radio && radio.value === dir) {
+                                el.classList.add('selected');
+                                radio.checked = true;
+                            } else {
+                                el.classList.remove('selected');
+                            }
+                        });
+                    } else {
+                        // 未激活翻译技能，清除所有选中态
+                        skillsTranslateOptions.querySelectorAll('.ai-chat-skills-option').forEach(el => {
+                            el.classList.remove('selected');
+                            const radio = el.querySelector('input[type="radio"]');
+                            if (radio) radio.checked = false;
+                        });
+                    }
+                }
+            } else {
                 if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
             }
         });
@@ -887,6 +909,14 @@ function bindEvents() {
                 const radio = option.querySelector('input[type="radio"]');
                 if (radio) {
                     radio.checked = true;
+                    // 更新视觉选中状态
+                    const parent = option.closest('.ai-chat-skills-options');
+                    if (parent) {
+                        parent.querySelectorAll('.ai-chat-skills-option').forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                    }
+                    option.classList.add('selected');
                     // 激活翻译技能, 先清空其他技能
                     activeSkills = {};
                     const dir = radio.value; // 'to_chinese' or 'to_english'
