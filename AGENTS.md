@@ -2000,3 +2000,13 @@ await loadXxxSetting();
 | **菜单项重命名：统一为 4 字** | 将 2 字菜单项改为 4 字以统一视觉："编程"→"编程开发"、"写作"→"创意写作"（"翻译"保持不变）。涉及 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L890-L894) 菜单显示文本和 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1533-L1539) 芯片标签文本共 4 处。详见 [rename-skill-menu-items.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/rename-skill-menu-items.md) |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（hover delay fix）、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（翻译选中态/菜单同步/重命名）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（移除默认选中/重命名） |
 | **update 计数** | `AGENTS.md` 从更新 98 → 更新 99 |
+
+## 一百三十五、新增记忆点（切换会话时 scroll-behavior 平滑滚动动画消除）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | `switchSession()` 加载完历史消息后无条件调用 `scrollToBottom()` 设置 `scrollTop = scrollHeight`，而 `.ai-chat-messages` 上 CSS 有 `scroll-behavior: smooth`，导致每次切换会话都播放一段平滑滚动动画到底部。消息越多滚动距离越长，动画越明显 |
+| **修复** | `scrollToBottom()` 函数内在设置 `scrollTop` 前先保存并临时设为 `scrollBehavior = 'auto'`，滚动完成后立即恢复原值。程序化跳转瞬间完成无动画，用户手动滚动时 CSS 类上的 `scroll-behavior: smooth` 仍然生效 |
+| **特征** | 仅 `scrollToBottom()` 一个函数修改，约 +4 行，不涉及 CSS 文件改动 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`scrollToBottom()`） |
+| **update 计数** | `AGENTS.md` 从更新 99 → 更新 100 |

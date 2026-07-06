@@ -2415,11 +2415,14 @@ function addErrorMessage(msg) {
 }
 
 /**
- * 滚动到底部
+ * 滚动到底部（临时禁用 smooth scroll 避免动画）
  */
 function scrollToBottom() {
     requestAnimationFrame(() => {
+        const orig = messagesEl.style.scrollBehavior;
+        messagesEl.style.scrollBehavior = 'auto';
         messagesEl.scrollTop = messagesEl.scrollHeight;
+        messagesEl.style.scrollBehavior = orig;
     });
 }
 
