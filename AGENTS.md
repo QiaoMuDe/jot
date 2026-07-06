@@ -1989,3 +1989,14 @@ await loadXxxSetting();
 | **特征** | 仅后端 `errors.go` 一个文件修改，约 8 行新增，支持性检测：`"enable_thinking"` 直出 + `"reasoning"` 叠加 `"not supported"` 双重匹配 |
 | **涉及文件** | [errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go)（唯一修改） |
 | **update 计数** | `AGENTS.md` 从更新 97 → 更新 98 |
+
+## 一百三十四、新增记忆点（更多技能菜单体验修复 — hover 延迟/翻译选中态/菜单项重命名）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Bug：hover 背景延迟 0.5~0.8s** | "更多技能"菜单项悬停时背景色（`background: var(--hover-bg)`）延迟 0.5~0.8 秒才出现。根因：stagger 入场的 `transition-delay` 只有一个值（如 `0.06s`），浏览器扩展到所有属性，`background` 也被延迟。修复：[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L778-L789) 中 nth-child 规则改为 `transition-delay: 0.06s, 0.06s, 0s`，第三个值 `0s` 单独控制 `background` 无延迟。详见 [fix-skills-menu-hover-delay.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/fix-skills-menu-hover-delay.md) |
+| **Bug：翻译方向选中后视觉状态不更新** | 点击"翻译为英文"后关闭菜单，再次打开仍显示"翻译为中文"为选中态。根因：Radio `display: none`，选中态全靠 `<label>` 的 `.selected` 类呈现，但点击处理中从未更新此类。修复：[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L890-L897) 增加 `parent.querySelectorAll('.ai-chat-skills-option').forEach(el => el.classList.remove('selected'))` + `option.classList.add('selected')`。详见 [fix-translation-option-visual-selection.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/fix-translation-option-visual-selection.md) |
+| **Bug：默认无选中 + 移除技能后选中态残留** | HTML 硬编码"翻译为中文"的 `.selected` 类和 `checked` 属性，首次打开菜单即显示选中；通过 chip X 移除翻译技能后，`activeSkills.translate` 被删除但菜单 `<label>` 的 `.selected` 类残留。修复：[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L879-L880) 移除默认 `selected`/`checked`；[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L824-L831) 菜单打开同步逻辑增加 else 分支，无翻译技能时清除所有选中态。详见 [remove-translation-default-selection.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/remove-translation-default-selection.md) 和 [fix-skill-chip-remove-visual-selection.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/fix-skill-chip-remove-visual-selection.md) |
+| **菜单项重命名：统一为 4 字** | 将 2 字菜单项改为 4 字以统一视觉："编程"→"编程开发"、"写作"→"创意写作"（"翻译"保持不变）。涉及 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L890-L894) 菜单显示文本和 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1533-L1539) 芯片标签文本共 4 处。详见 [rename-skill-menu-items.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/rename-skill-menu-items.md) |
+| **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（hover delay fix）、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（翻译选中态/菜单同步/重命名）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（移除默认选中/重命名） |
+| **update 计数** | `AGENTS.md` 从更新 98 → 更新 99 |
