@@ -1949,3 +1949,14 @@ await loadXxxSetting();
 | **预设弹窗错误状态残留修复** | `openAddProfileModal()` 和 `openEditPresetModal()` 中新增 `document.getElementById('presetModalURL').classList.remove('input-error')`，确保关闭后重新打开弹窗时输入框恢复正常样式。详见 [main.js#L2231](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **涉及文件** | [animations.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/animations.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **update 计数** | `AGENTS.md` 从更新 93 → 更新 94 |
+
+## 一百三十、新增记忆点（AI 助手启动时恢复上次使用的会话）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 每次打开 AI 助手模块（重启程序后或从其他视图切换），`onAIChatViewActivated()` 中 `activeSessionId === null` 时无条件调用 `createSession()` 创建一个新的空白"新对话"。用户上次进行到一半的对话不在视图中，需要手动从侧栏点击恢复。详见 [ai-chat.js#L2395-L2427](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **修复** | `onAIChatViewActivated()` 中将 `if (activeSessionId === null) { await createSession(); }` 改为 `if (sessions.length > 0) { await switchSession(sessions[0].id); } else { await createSession(); }`。`sessions` 在前一步 `loadSessionList()` 中已按 `updated_at DESC` 排序，`sessions[0]` 即为最近使用的会话（置顶优先）。详见 [ai-chat.js#L2415-L2424](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **行为变化** | 有历史会话 → 自动恢复最近使用的会话并显示其历史消息；无历史会话 → 创建新空白对话（与以前一致）；已有 `activeSessionId`（切页后返回）→ 保持当前会话不变 |
+| **不修改的地方** | 后端 API（`GetAISessions`/`CreateAISession`/`switchSession`）无需任何改动；`createSession()` 由用户主动点击"新建"按钮触发，不受影响 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（唯一修改） |
+| **update 计数** | `AGENTS.md` 从更新 94 → 更新 95 |

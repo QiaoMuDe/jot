@@ -2412,9 +2412,13 @@ export async function onAIChatViewActivated() {
         loadModelSelector(cfg);
         await loadSessionList();
 
-        // 没有激活会话时，始终创建新对话
+        // 没有激活会话时，恢复上次使用的会话；无历史会话时才新建
         if (activeSessionId === null) {
-            await createSession();
+            if (sessions.length > 0) {
+                await switchSession(sessions[0].id);
+            } else {
+                await createSession();
+            }
         } else if (chatHistory.length === 0) {
             showWelcome();
         }
