@@ -1979,3 +1979,13 @@ await loadXxxSetting();
 | **修复** | `showContextMenu()` 中在 `menu.classList.add('active')` 后通过 `requestAnimationFrame` 获取 `menu.offsetHeight`，检测视口边界：若菜单底部超出 `window.innerHeight - 8` 则上移（`top = window.innerHeight - menuHeight - 8`），若顶部超出 8px 则下移（`top = 8`）。`transform-origin` 逻辑保持不变。详见 [main.js#L3883-L3894](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L3883-L3894) |
 | **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **update 计数** | `AGENTS.md` 从更新 96 → 更新 97 |
+
+## 一百三十三、新增记忆点（不支持深度思考的模型报错转为人类可读提示）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 用户开启"深度思考"开关后，若当前模型不支持 `enable_thinking` 参数，OpenAI 兼容 API 返回 HTTP 400 错误。`classifyBadRequest()` 未识别此模式，回退到 `CategoryInvalidRequest`，用户看到"请求参数有误，请检查输入内容"这一不明确的提示 |
+| **修复** | 在 [errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go) 新增 `CategoryModelNotSupportThinking` 错误分类（[#L26](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go#L26)），映射中文提示"当前模型不支持「深度思考」功能，请在输入框上方关闭深度思考开关后重试"（[#L48](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go#L48)）；在 `classifyBadRequest()` 中追加匹配 `"enable_thinking"` 或 `"reasoning" + "not supported"` 关键词的检测分支（[#L178-L180](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go#L178-L180)）。前端零改动，现有 `ai:stream-error` → `showNotification()` 链路自动展示 |
+| **特征** | 仅后端 `errors.go` 一个文件修改，约 8 行新增，支持性检测：`"enable_thinking"` 直出 + `"reasoning"` 叠加 `"not supported"` 双重匹配 |
+| **涉及文件** | [errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go)（唯一修改） |
+| **update 计数** | `AGENTS.md` 从更新 97 → 更新 98 |

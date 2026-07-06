@@ -12,17 +12,18 @@ import (
 
 // 错误分类常量
 const (
-	CategoryAuthError      = "auth_error"
-	CategoryRateLimit      = "rate_limit"
-	CategoryServerError    = "server_error"
-	CategoryQuotaExceeded  = "quota_exceeded"
-	CategoryModelNotFound  = "model_not_found"
-	CategoryContextLength  = "context_length"
-	CategoryTimeout        = "timeout"
-	CategoryInvalidRequest = "invalid_request"
-	CategoryContentFilter  = "content_filter"
-	CategoryNetworkError   = "network_error"
-	CategoryUnknown        = "unknown"
+	CategoryAuthError               = "auth_error"
+	CategoryRateLimit               = "rate_limit"
+	CategoryServerError             = "server_error"
+	CategoryQuotaExceeded           = "quota_exceeded"
+	CategoryModelNotFound           = "model_not_found"
+	CategoryContextLength           = "context_length"
+	CategoryTimeout                 = "timeout"
+	CategoryInvalidRequest          = "invalid_request"
+	CategoryContentFilter           = "content_filter"
+	CategoryNetworkError            = "network_error"
+	CategoryUnknown                 = "unknown"
+	CategoryModelNotSupportThinking = "model_not_support_thinking"
 )
 
 // AIError 结构化错误信息
@@ -34,17 +35,18 @@ type AIError struct {
 
 // userMessages 中文提示映射
 var userMessages = map[string]string{
-	CategoryAuthError:      "API 密钥无效或权限不足，请检查 API 配置",
-	CategoryRateLimit:      "请求过于频繁，已达速率限制，请稍后重试",
-	CategoryServerError:    "AI 服务暂时不可用，请稍后重试",
-	CategoryQuotaExceeded:  "API 额度已用尽，请检查账户余额",
-	CategoryModelNotFound:  "模型不存在或已弃用，请更换模型名称",
-	CategoryContextLength:  "上下文长度超限，请缩短对话历史或笔记内容",
-	CategoryTimeout:        "请求超时，请检查网络连接或稍后重试",
-	CategoryInvalidRequest: "请求参数有误，请检查输入内容",
-	CategoryContentFilter:  "内容被安全策略拦截，请调整输入后重试",
-	CategoryNetworkError:   "网络连接失败，请检查网络设置或 API 地址",
-	CategoryUnknown:        "AI 调用出错，请稍后重试",
+	CategoryAuthError:               "API 密钥无效或权限不足，请检查 API 配置",
+	CategoryRateLimit:               "请求过于频繁，已达速率限制，请稍后重试",
+	CategoryServerError:             "AI 服务暂时不可用，请稍后重试",
+	CategoryQuotaExceeded:           "API 额度已用尽，请检查账户余额",
+	CategoryModelNotFound:           "模型不存在或已弃用，请更换模型名称",
+	CategoryContextLength:           "上下文长度超限，请缩短对话历史或笔记内容",
+	CategoryTimeout:                 "请求超时，请检查网络连接或稍后重试",
+	CategoryInvalidRequest:          "请求参数有误，请检查输入内容",
+	CategoryContentFilter:           "内容被安全策略拦截，请调整输入后重试",
+	CategoryNetworkError:            "网络连接失败，请检查网络设置或 API 地址",
+	CategoryModelNotSupportThinking: "当前模型不支持「深度思考」功能，请在输入框上方关闭深度思考开关后重试",
+	CategoryUnknown:                 "AI 调用出错，请稍后重试",
 }
 
 // NewAIError 创建 AIError
@@ -173,6 +175,9 @@ func classifyBadRequest(msg string) *AIError {
 		strings.Contains(lower, "token") ||
 		strings.Contains(lower, "maximum context"):
 		return NewAIError(CategoryContextLength, rawMsg(msg))
+	case strings.Contains(lower, "enable_thinking") ||
+		(strings.Contains(lower, "reasoning") && strings.Contains(lower, "not supported")):
+		return NewAIError(CategoryModelNotSupportThinking, rawMsg(msg))
 	default:
 		return NewAIError(CategoryInvalidRequest, rawMsg(msg))
 	}
