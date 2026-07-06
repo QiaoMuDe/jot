@@ -1100,6 +1100,7 @@ function startInlineEdit(titleEl, sessionId) {
                 const s = sessions.find(s => s.id === sessionId);
                 if (s) s.title = newTitle;
                 titleEl.title = newTitle;
+                updateChatTitle();
             } catch (_) {
                 titleEl.textContent = orig;
             }
@@ -1350,6 +1351,7 @@ async function switchSession(id) {
 
         if (!msgs || msgs.length === 0) {
             renderSessionList();
+            updateChatTitle();
             showWelcome();
             updateContextSize();
             scrollToBottom();
@@ -1376,6 +1378,7 @@ async function switchSession(id) {
         });
 
         renderSessionList();
+        updateChatTitle();
 
         // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
         updateContextSize();
@@ -2029,6 +2032,7 @@ async function saveSessionMessages(roundMessages) {
         await window.go.main.App.SaveAIMessages(activeSessionId, roundMessages);
         // 更新侧栏标题和顺序
         await loadSessionList();
+        updateChatTitle();
     } catch (_) { /* 静默 */ }
 }
 
@@ -2584,12 +2588,27 @@ let typewriterTimer = null;
 /**
  * 显示空对话欢迎语
  */
+/**
+ * 更新 AI 对话页顶部标题
+ */
+function updateChatTitle() {
+    const titleEl = document.getElementById('aiChatTitle');
+    if (!titleEl) return;
+    if (activeSessionId !== null && chatHistory.length > 0) {
+        const s = sessions.find(s => s.id === activeSessionId);
+        titleEl.textContent = s ? s.title : 'AI 助手';
+    } else {
+        titleEl.textContent = 'AI 助手';
+    }
+}
+
 function showWelcome() {
     if (!welcomeEl) return;
     if (emptyEl) emptyEl.style.display = 'none';
     welcomeEl.style.display = '';
     if (messagesEl) messagesEl.style.display = 'none';
     if (inputAreaEl) inputAreaEl.style.display = '';
+    updateChatTitle();
     startTypewriter();
 }
 

@@ -1960,3 +1960,22 @@ await loadXxxSetting();
 | **不修改的地方** | 后端 API（`GetAISessions`/`CreateAISession`/`switchSession`）无需任何改动；`createSession()` 由用户主动点击"新建"按钮触发，不受影响 |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（唯一修改） |
 | **update 计数** | `AGENTS.md` 从更新 94 → 更新 95 |
+
+## 一百三十一、新增记忆点（AI 会话标题动态显示 — 无对话时显示"AI 助手"，有对话时显示会话标题）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | AI 助手视图顶部始终固定显示"AI 助手"标题。当用户进入有历史消息的会话时，标题未跟随会话变化，缺少上下文提示。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **修复** | 新增 `updateChatTitle()` 函数（[ai-chat.js#L2594-L2603](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2594-L2603)）：有活跃会话且有消息时显示会话标题（`sessions.find(id).title`），否则显示"AI 助手"。在 5 个关键时机调用：`switchSession()` 空/非空分支、`showWelcome()`、`startInlineEdit()` 重命名回调、`saveSessionMessages()` 后。详见 [ai-chat.js#L1103](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1103)、[ai-chat.js#L1354](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1354)、[ai-chat.js#L1381](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1381)、[ai-chat.js#L2035](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2035)、[ai-chat.js#L2611](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2611) |
+| **行为** | 无会话/欢迎语 → "AI 助手"；有消息的会话 → 会话标题（与侧栏一致）；新建空会话 → "AI 助手"；重命名后 → 同步更新 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **update 计数** | `AGENTS.md` 从更新 95 → 更新 96 |
+
+## 一百三十二、新增记忆点（笔记首页右键菜单视口溢出修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 笔记首页底部卡片右键点击时，上下文菜单（`#contextMenu`）可能超出视口底部边界，部分菜单项被裁剪不可见。详见 [main.js#L3862-L3897](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L3862-L3897) |
+| **修复** | `showContextMenu()` 中在 `menu.classList.add('active')` 后通过 `requestAnimationFrame` 获取 `menu.offsetHeight`，检测视口边界：若菜单底部超出 `window.innerHeight - 8` 则上移（`top = window.innerHeight - menuHeight - 8`），若顶部超出 8px 则下移（`top = 8`）。`transform-origin` 逻辑保持不变。详见 [main.js#L3883-L3894](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L3883-L3894) |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **update 计数** | `AGENTS.md` 从更新 96 → 更新 97 |

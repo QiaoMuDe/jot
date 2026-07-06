@@ -3880,6 +3880,18 @@ window.showContextMenu = function (event, noteId) {
     menu.style.top = event.clientY + 'px';
     menu.style.animation = 'menuEnter 0.15s ease-out forwards';
     menu.classList.add('active');
+    // 检查菜单是否超出视口边界，若超出则修正位置
+    requestAnimationFrame(function () {
+        const menuHeight = menu.offsetHeight;
+        let top = parseFloat(menu.style.top);
+        if (top + menuHeight > window.innerHeight - 8) {
+            top = window.innerHeight - menuHeight - 8;
+        }
+        if (top < 8) {
+            top = 8;
+        }
+        menu.style.top = top + 'px';
+    });
     // 锁定主内容区滚动，防止菜单打开时误滚动
     els.mainContent.style.overflow = 'hidden';
 };
