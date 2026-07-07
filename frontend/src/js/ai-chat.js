@@ -1432,11 +1432,10 @@ async function switchSession(id) {
 
         // 有消息时隐藏欢迎语
         hideWelcome();
-        // 分块渲染消息，每块后 yield 避免阻塞主线程导致界面卡顿
-        const CHUNK_SIZE = 5;
-        for (let i = 0; i < msgs.length; i += CHUNK_SIZE) {
-            const chunk = msgs.slice(i, i + CHUNK_SIZE);
-            chunk.forEach(msg => {
+        // 一次性渲染所有消息（不 yield，避免浏览器的中间状态绘制导致视觉跳跃）
+        for (let i = 0; i < msgs.length; i += 5) {
+            const chunk = msgs.slice(i, i + 5);
+            for (const msg of chunk) {
                 if (msg.role === 'user') {
                     addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
                     const userMsgEl = messagesEl.lastElementChild;
@@ -1451,12 +1450,13 @@ async function switchSession(id) {
                     bindMsgContextMenu(el, msg.content, 'assistant');
                     collapseActionsIfNeeded(el, true);
                 }
-            });
-            // 每块完成后 yield，让浏览器有机会渲染已插入的消息
-            if (i + CHUNK_SIZE < msgs.length) {
-                await new Promise(r => setTimeout(r, 0));
             }
         }
+
+        // 所有消息渲染完成后，同步滚动到底部（不用 rAF，确保在浏览器绘制前完成）
+        messagesEl.style.scrollBehavior = 'auto';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        messagesEl.style.scrollBehavior = '';
 
         // 仅更新侧栏会话的高亮状态（比全量 renderSessionList + loadSessionList 轻量得多）
         document.querySelectorAll('.ai-session-item.active').forEach(el => el.classList.remove('active'));
@@ -1467,7 +1467,6 @@ async function switchSession(id) {
         // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
         updateContextSize();
 
-        scrollToBottom();
         inputEl?.focus();
     } catch (_) { /* 静默失败 */ }
 }

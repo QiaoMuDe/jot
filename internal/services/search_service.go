@@ -29,7 +29,7 @@ type SearchWebResult struct {
 // ctx 用于支持超时和取消（与 CallAIStream 共用 cancel，停止按钮可中断搜索）
 func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int) (*SearchWebResult, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("Tavily API Key 未配置")
+		return nil, fmt.Errorf("tavily API Key 未配置")
 	}
 
 	// 用传入的 ctx 派生超时子上下文（5s 超时，但 ctx 取消时立即传播）
@@ -44,7 +44,7 @@ func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int)
 	}
 	answer, err := client.Search(searchCtx, searchQuery)
 	if err != nil {
-		return nil, fmt.Errorf("Tavily 搜索失败: %w", err)
+		return nil, fmt.Errorf("tavily 搜索失败: %w", err)
 	}
 
 	if len(answer.Results) == 0 {

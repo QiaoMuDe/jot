@@ -1,49 +1,37 @@
-# 修复会话切换滚动跳跃问题
+# 修复 AI 会话切换消息列表滚动跳跃
+
+## 问题描述
+
+切换有大量消息的 AI 会话时，消息列表先加载到底部（贴近输入框和操作栏），然后突然"跳跃"到操作栏上方露出间距。视觉上存在明显的滚动跳跃。
 
 ## 根因分析
 
-`switchSession()` 中消息渲染完成后立即调用 `scrollToBottom()`，但此时每调用一次 `collapseActionsIfNeeded(el)` 都通过 `requestAnimationFrame` **推迟**了实际的按钮折叠/展开布局计算。
+`switchSession()` 中采用**分块渲染**（每批 5 条消息 + `yield` 让浏览器绘制），渲染完成后调用 `scrollToBottom()`（通过 `requestAnimationFrame` 推迟到下一帧执行）：
 
-执行时序：
-
-| 时机  | 事件                            | 说明                                                                                           |
-| --- | ----------------------------- | -------------------------------------------------------------------------------------------- |
-| T0  | 分块渲染循环                        | `addMessage` + `collapseActionsIfNeeded(el)` 每消息调用一次                                         |
-| T0a | `collapseActionsIfNeeded(el)` | **仅排队** rAF 回调，不立即执行                                                                         |
-| T1  | 循环结束                          | <br />                                                                                       |
-| T2  | `scrollToBottom()`            | 读取当前 `scrollHeight` → 设置 `scrollTop = scrollHeight`                                          |
-| T3  | **rAF 回调执行**                  | `collapseActionsIfNeeded` 测量宽度 → 添加/移除 `.collapsed` → **消息高度变化 →** **`scrollHeight`** **变小** |
-| T4  | 浏览器绘制                         | `scrollTop` 相对于新 `scrollHeight` 过大 → 视口显示底部空白                                                |
+- **分块渲染期间**：`scrollTop = 0`，消息从列表顶部开始填充，最后一批消息恰好出现在靠近输入框的位置
+- **渲染完成后**：`scrollToBottom()` 的 rAF 回调设置 `scrollTop = scrollHeight`，`padding-bottom: 72px` 露出，消息整体上移
+- 浏览器在中间状态和最终状态之间切换，产生视觉跳跃
 
 ## 修复方案
 
-在 `switchSession()` 末尾，用连续两帧 `requestAnimationFrame` 等待所有 `collapseActionsIfNeeded` 回调执行完毕并更新布局后，再调用 `scrollToBottom()`。
+**原则**：切换会话时消息直接以最终状态显示，不让浏览器绘制中间状态。
 
-## 变更文件
+**修改文件**：`frontend/src/js/ai-chat.js` - `switchSession()` 函数
 
-| 文件                           | 变更                                                                         |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `frontend/src/js/ai-chat.js` | `switchSession()` 中将最后两行 `scrollToBottom(); inputEl?.focus();` 替换为等待两帧后再滚动 |
+**具体改动**：
+1. 去掉分块渲染的 `yield`（`await new Promise(r => setTimeout(r, 0))`），所有消息一次性同步渲染
+2. 去掉循环内的渐进式滚动
+3. 所有消息渲染完成后，**同步**设置 `scrollTop = scrollHeight`（临时禁用 `scroll-behavior: smooth`）
+4. 不再调用 `scrollToBottom()`（避免其内部的 rAF 延迟）
+5. 浏览器只绘制一次最终状态
 
-## 修改前代码（switchSession 末尾）
+**不受影响的功能**：
+- 流式输出（正常对话）：`addMessage` 的 `skipScroll=false` 场景继续使用原有的 `scrollToBottom()`（带 rAF）
+- 新建空会话、清空对话等操作
 
-```javascript
-    scrollToBottom();
-    inputEl?.focus();
-```
+## 影响文件
 
-## 修改后代码
-
-```javascript
-    // 等待两帧：确保所有 collapseActionsIfNeeded 的 rAF 回调执行完毕并更新布局
-    await new Promise(r => requestAnimationFrame(r));
-    await new Promise(r => requestAnimationFrame(r));
-    scrollToBottom();
-    inputEl?.focus();
-```
-
-## 验证
-
-1. 切换有大量消息（10+ 条，部分包含代码块）的会话，观察是否不再跳动
-2. 验证正常流式发送/接收消息时滚动行为不受影响
-
+| 文件 | 改动 |
+|------|------|
+| `frontend/src/js/ai-chat.js` | `switchSession()` 中消息渲染由"分块+yield+渐进滚动"改为"一次性渲染+同步滚动" |
+| `AGENTS.md` | 更新 AI 对话模块描述、多会话切换架构说明、spec 列表 |

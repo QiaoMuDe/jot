@@ -752,7 +752,7 @@ func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 // TestZhihuConnection 测试知乎 Access Secret 是否有效
 func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
 	if accessSecret == "" {
-		return false, fmt.Errorf("Access Secret 不能为空")
+		return false, fmt.Errorf("access Secret 不能为空")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -877,11 +877,9 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				}
 
 				// 收集结果
-				var allErrors []string
 				for i := 0; i < len(searchSources); i++ {
 					r := <-resultCh
 					if r.err != nil {
-						allErrors = append(allErrors, fmt.Sprintf("%s: %v", r.source, r.err))
 						// 发射错误事件给前端
 						errEvent := map[string]interface{}{
 							"source": r.source,
@@ -919,7 +917,7 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 								searchSourcesJSON = string(sJSON)
 							} else {
 								var existing []services.SearchSource
-								json.Unmarshal([]byte(searchSourcesJSON), &existing)
+								json.Unmarshal([]byte(searchSourcesJSON), &existing) //nolint:errcheck
 								existing = append(existing, r.result.Sources...)
 								sJSON, _ := json.Marshal(existing)
 								searchSourcesJSON = string(sJSON)

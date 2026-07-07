@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-07（更新 101）
+> 生成日期: 2026-07-07（更新 102）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -44,7 +44,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -133,6 +133,7 @@ jot/                                    # 项目根目录
     ├── remove-edit-mode-auto-save/   # 移除编辑模式自动保存
     ├── replace-quikchat-with-custom-ai-chat/ # 自实现 AI 对话组件 + 流式输出（已完成）
     ├── fix-ai-sessions-and-collapsible-sidebar/ # AI 会话持久化 + 多会话 + 侧栏折叠（已完成）
+    ├── fix-session-switch-scroll-jump/    # AI 会话切换消息列表滚动跳跃修复（已完成）
     ├── add-ai-session-pin/           # AI 会话侧栏置顶功能
     ├── fix-data-page-scrollbar/          # 数据管理页面全屏滚动条修复（已完成）
     ├── restructure-internal-packages/ # 内部包重构
@@ -423,7 +424,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端渲染** | 卡片网格渲染 | ✅ 性能良好 |
 | **AI 流式输出** | 基于 Wails Events 逐块推送，不阻塞 UI | ✅ 体验优秀 |
 | **CM6 编辑器** | 仅初始化当前编辑的笔记 | ✅ 性能良好 |
-| **多会话切换** | 切换时从后端加载对应会话的消息，采用分块渲染（CHUNK_SIZE=5，每块 yield） + 延迟 hljs 高亮（`requestIdleCallback` 渐进式） + `scroll-behavior: auto` 临时禁用 | ✅ 分块渲染后切换流畅无卡顿 |
+| **多会话切换** | 切换时从后端加载对应会话的消息，采用一次性同步渲染（无 yield）+ 同步滚动（`scroll-behavior: auto` 临时禁用），浏览器只绘制一次最终状态，彻底消除视觉跳跃 | ✅ 切换瞬间完成，无任何中间状态闪烁 |
 | **操作按钮折叠测量** | `collapseActionsIfNeeded()` 支持 `sync` 同步模式，在 `switchSession()` 中使用同步测量避免布局抖动 | ✅ 消除消息"跳跃"问题 |
 
 ### 6.3 异常处理分析
