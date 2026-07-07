@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-07（更新 102）
+> 生成日期: 2026-07-07（更新 103）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2078,3 +2078,16 @@ await loadXxxSetting();
 | **修复：sync 同步模式** | `collapseActionsIfNeeded()` 新增 `sync` 布尔参数。默认 `false` 时行为不变（异步 rAF 测量）；`sync=true` 时立即同步调用 `getBoundingClientRect()` 和客户端宽度测量，不延迟执行。`switchSession()` 分块渲染中每块追加消息后以 `sync=true` 调用 `collapseActionsIfNeeded(el, true)`，确保 `scrollToBottom()` 读取的 `scrollHeight` 包含折叠后的最终高度。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **移除 2 帧等待** | 原 `switchSession()` 中每块末尾的 `await new Promise(r => requestAnimationFrame(r))` 两帧等待被移除，不再需要等待 `collapseActionsIfNeeded` 的异步测量。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`collapseActionsIfNeeded()`/`switchSession()`） |
+
+## 一百四十、新增记忆点（联网搜索菜单样式统一 + 空会话切换修复 + 数据库瘦身清理空 AI 会话 + 侧栏展开时刷新列表）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **联网搜索下拉菜单样式统一** | 将 `.ai-chat-search-sources-dropdown` 样式改为与 ".ai-chat-skills-dropdown" 一致：使用 `.open` class 切换显隐（移除 `style.display`）、相同色值（`var(--card-bg)`/`var(--border)`/`var(--radius-md)`/`var(--shadow-lg)`）、弹性动画（`cubic-bezier(0.34, 1.56, 0.64, 1)` spring + `scale(0.96→1)`）、菜单项逐个滑入（`translateX(-8px)`、`nth-child` 延迟 0.06s/0.10s/0.14s/0.18s）。HTML 中 `<label>` 改为 `<div>`。详见 [ai-chat.css#L889-L962](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js#L689-L708](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[index.html#L904-L918](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **菜单项整行可点击** | 点击菜单项任意区域（文字/空白处）都能切换复选框选中状态。`ai-chat.js` 中为每个 `.ai-chat-search-source-item` 添加 `click` 事件，点击非 INPUT 区域时 `checkbox.checked = !checkbox.checked` + `dispatchEvent(new Event('change'))` 触发原有逻辑。详见 [ai-chat.js#L710-L725](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **空会话侧栏高亮修复** | `switchSession()` 中当 `!msgs \|\| msgs.length === 0` 时，`return` 前侧栏高亮更新代码未执行，导致空会话无法正确高亮。修复：在空会话分支的 `showWelcome()` 之前先执行侧栏高亮更新（移除所有 `.active` + 高亮当前会话）。详见 [ai-chat.js#L1429-L1438](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **数据库瘦身清理空 AI 会话** | `ai_service.go` 新增 `DeleteEmptyAISessions() int64`，使用 `NOT EXISTS` 子查询删除没有关联 `ai_messages` 记录的 `ai_sessions`。`app.go` 的 `VacuumDatabase()` 在 VACUUM 前调用此方法，结果提示语追加清理数量，如「...清理了 N 个空 AI 会话」。详见 [ai_service.go#L409-L418](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go#L334-L336](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **侧栏展开时刷新会话列表** | 侧栏折叠/展开按钮的 `click` 事件中，当 `wasCollapsed && !isCollapsed`（从折叠变为展开）时调用 `loadSessionList()` 从数据库获取最新会话列表。详见 [ai-chat.js#L576-L586](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+
+| **update 计数** | `AGENTS.md` 从更新 101 → 更新 102 |
