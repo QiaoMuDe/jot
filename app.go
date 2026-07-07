@@ -330,10 +330,29 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 	return stats, nil
 }
 
-// VacuumDatabase 对当前数据库执行 VACUUM 瘦身操作，返回释放的空间大小
+// VacuumDatabase 执行存储优化操作：清理无效数据后执行 VACUUM，返回释放的空间大小
 func (a *App) VacuumDatabase() (string, error) {
-	// 先清理空 AI 会话
-	deletedCount := a.aiService.DeleteEmptyAISessions()
+	// 读取回收站自动清理天数设置
+	daysStr := a.settingService.Get("trash_cleanup_retention_days")
+	days, _ := strconv.Atoi(daysStr)
+	if days <= 0 {
+		days = 30
+	}
+
+	// 1. 清理空 AI 会话
+	deletedSessions := a.aiService.DeleteEmptyAISessions()
+
+	// 2. 清理孤儿 AI 消息
+	deletedOrphanMsgs := a.aiService.DeleteOrphanMessages()
+
+	// 3. 清理过期回收站笔记（超过 N 天）
+	deletedNotes := a.noteService.CleanExpiredTrash(days)
+
+	// 4. 清理过期回收站笔记本（超过 N 天）
+	deletedNotebooks := a.notebookService.CleanExpiredTrash(days)
+
+	// 5. 迁移指向不存在笔记本的笔记到默认笔记本
+	migratedNotes := a.noteService.MigrateOrphanNotes()
 
 	// 获取瘦身前数据库文件大小
 	dbPath, _ := database.DefaultDBPath()
@@ -343,7 +362,7 @@ func (a *App) VacuumDatabase() (string, error) {
 	}
 
 	if err := a.noteService.Vacuum(); err != nil {
-		return "", fmt.Errorf("数据库瘦身失败: %w", err)
+		return "", fmt.Errorf("存储优化失败: %w", err)
 	}
 
 	// 获取瘦身后数据库文件大小
@@ -366,11 +385,25 @@ func (a *App) VacuumDatabase() (string, error) {
 		savedStr = fmt.Sprintf("%.1f MB", float64(saved)/(1024*1024))
 	}
 
-	msg := fmt.Sprintf("数据库瘦身完成，释放了 %s 空间", savedStr)
-	if deletedCount > 0 {
-		msg += fmt.Sprintf("，清理了 %d 个空 AI 会话", deletedCount)
+	// 组装结果消息
+	var parts []string
+	parts = append(parts, fmt.Sprintf("释放了 %s 空间", savedStr))
+	if deletedSessions > 0 {
+		parts = append(parts, fmt.Sprintf("清理了 %d 个空 AI 会话", deletedSessions))
 	}
-	return msg, nil
+	if deletedOrphanMsgs > 0 {
+		parts = append(parts, fmt.Sprintf("清理了 %d 条孤儿 AI 消息", deletedOrphanMsgs))
+	}
+	if deletedNotes > 0 {
+		parts = append(parts, fmt.Sprintf("清理了 %d 条过期回收站笔记", deletedNotes))
+	}
+	if deletedNotebooks > 0 {
+		parts = append(parts, fmt.Sprintf("清理了 %d 个过期回收站笔记本", deletedNotebooks))
+	}
+	if migratedNotes > 0 {
+		parts = append(parts, fmt.Sprintf("迁移了 %d 条孤儿笔记到默认笔记本", migratedNotes))
+	}
+	return strings.Join(parts, "，"), nil
 }
 
 // ExportDataWithDialog 弹出保存对话框，使用 VACUUM INTO 创建数据库压缩副本到用户选择的位置

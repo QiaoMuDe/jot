@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-07（更新 103）
+> 生成日期: 2026-07-07（更新 104）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2091,3 +2091,26 @@ await loadXxxSetting();
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
 
 | **update 计数** | `AGENTS.md` 从更新 101 → 更新 102 |
+
+## 一百四十一、新增记忆点（存储优化：数据库瘦身增强 + 设置项）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **按钮重命名** | 数据管理页面的"数据库瘦身"按钮改名为"存储优化"，描述改为"回收存储空间，清理无效数据"。详见 [index.html#L728-L736](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **新增设置项** | `trash_cleanup_retention_days`（回收站自动清理天数，默认 30），完整融入现有 SettingsConfig 模式：`db.go` 默认值、`types.go` 结构体字段 + GetAllSettings/SaveAllSettings、`main.js` loadSettings/saveSettings。详见 [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **新增清理逻辑** | `note_service.go` 新增 `CleanExpiredTrash(days)` 和 `MigrateOrphanNotes()`；`notebook_service.go` 新增 `CleanExpiredTrash(days)`；`ai_service.go` 新增 `DeleteOrphanMessages()`。详见 [note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go)、[notebook_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/notebook_service.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **VacuumDatabase 整合** | `app.go` 的存储优化流程：读取天数设置 → 清理空 AI 会话 → 清理孤儿 AI 消息 → 清理过期回收站笔记 → 清理过期回收站笔记本 → 迁移孤儿笔记 → VACUUM → 组装结果消息（含各项清理统计）。详见 [app.go#L333-L410](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go)、[notebook_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/notebook_service.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+|-
+
+| **update 计数** | `AGENTS.md` 从更新 103 → 更新 104 |
+
+## 一百四十二、新增记忆点（目录大纲默认关闭 + 回收站卡片 UI + 设置项保存通知）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **目录大纲默认关闭（移除 localStorage 记忆）** | `_initTocToggle()` 中去掉两处 localStorage 操作：启动时不读取 `localStorage.getItem('tocSidebarOpen')`（不再自动恢复展开状态），点击切换时不再写入 `localStorage.setItem('tocSidebarOpen',…)`。TOC 行为：打开笔记默认关闭 → 用户点击展开（仅当前会话）→ 切换编辑模式/关闭编辑器自动关闭。详见 [note-list.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/note-list.js) `_initTocToggle()` |
+| **回收站卡片 UI 统一** | 设置页中"回收站清理"分区加入 `.ai-group-header`（垃圾桶 SVG 图标 + "回收站清理"标题），与"AI 设置""外观"等其他卡片一致。详见 [index.html#L680-L692](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **输入框宽度与右对齐** | 输入框 `width:260px;flex:none`（覆盖 `.settings-input` 的 `flex:1` 防止撑满），`.ai-setting-control` 使用 `justify-content:flex-end` 靠右排列，"自动清理天数"标签 `width:100px` 防换行。详见 [index.html#L683-L689](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **设置项保存通知** | `#trashCleanupRetentionDays` 的 `change` 事件（移走光标触发）中校验范围 1-365，调用 `await saveSettings()` 后弹出 `nm.show('回收站自动清理天数已保存', 'success')`，与 `aiRefMaxChars`/`aiSettingCardRecallLimit` 等现有设置项行为一致。详见 [main.js#L2237-L2253](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[note-list.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/note-list.js) |

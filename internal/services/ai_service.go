@@ -417,6 +417,12 @@ func (a *AIService) DeleteEmptyAISessions() int64 {
 	return count
 }
 
+// DeleteOrphanMessages 删除指向不存在会话的孤儿 AI 消息
+func (a *AIService) DeleteOrphanMessages() int64 {
+	result := a.db.Where("session_id NOT IN (SELECT id FROM ai_sessions)").Delete(&models.AIMessage{})
+	return result.RowsAffected
+}
+
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
 	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error

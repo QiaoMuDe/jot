@@ -518,6 +518,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_card_recall_limit", Value: "5"},
 		{Key: "ai_ref_max_chars", Value: "5000"},
 		{Key: "ai_search_result_limit", Value: "5"},
+		{Key: "trash_cleanup_retention_days", Value: "30"},
 	}
 
 	var toInsert []models.Setting

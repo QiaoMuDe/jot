@@ -2223,6 +2223,28 @@ async function initAISettings() {
         });
     }
 
+    // ── 回收站自动清理天数保存 ──
+    const retentionDaysInput = document.getElementById('trashCleanupRetentionDays');
+    if (retentionDaysInput) {
+        retentionDaysInput.addEventListener('change', async () => {
+            let val = parseInt(retentionDaysInput.value);
+            if (isNaN(val) || val < 1) {
+                val = 30;
+                retentionDaysInput.value = 30;
+                nm.show('自动清理天数必须大于 0，已重置为 30', 'warning');
+                return;
+            }
+            if (val > 365) {
+                val = 365;
+                retentionDaysInput.value = 365;
+                nm.show('自动清理天数不能超过 365，已重置为 365', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('回收站自动清理天数已保存', 'success');
+        });
+    }
+
     // ── 预设下拉菜单事件 ──
     const presetTrigger = document.getElementById('presetTrigger');
     const presetDropdown = document.getElementById('presetDropdown');
@@ -3544,15 +3566,10 @@ function _bindTocScrollListener() {
 /**
  * 初始化 TOC 侧栏展开/折叠按钮
  * TOC 默认隐藏，用户点击展开按钮打开，点击关闭按钮收起
+ * 展开/折叠状态仅在当前会话生效，不持久化到 localStorage
  */
 function _initTocToggle() {
     if (!els.tocSidebar || !els.tocToggleBtn) return;
-    // 恢复上次展开状态
-    const saved = localStorage.getItem('tocSidebarOpen');
-    if (saved === 'true') {
-        els.tocSidebar.classList.add('toc-visible');
-        els.tocToggleBtn.classList.add('active');
-    }
     // 点击顶部按钮切换展开/折叠
     els.tocToggleBtn.addEventListener('click', () => {
         // 无渲染内容时提示不展开
@@ -3569,7 +3586,6 @@ function _initTocToggle() {
         }
         const isOpen = els.tocSidebar.classList.toggle('toc-visible');
         els.tocToggleBtn.classList.toggle('active', isOpen);
-        localStorage.setItem('tocSidebarOpen', isOpen ? 'true' : 'false');
     });
 }
 
@@ -7326,6 +7342,9 @@ async function loadSettings() {
         const searchResultLimit = document.getElementById('aiSearchResultLimit');
         if (searchResultLimit) searchResultLimit.value = cfg.ai_search_result_limit;
 
+        const retentionDays = document.getElementById('trashCleanupRetentionDays');
+        if (retentionDays) retentionDays.value = cfg.trash_cleanup_retention_days || 30;
+
         // --- AI: 获取模型按钮状态 ---
         const canFetch = cfg.ai_provider === 'openai' || cfg.ai_provider === 'ollama';
         if (els.aiFetchModelsBtn) {
@@ -7379,6 +7398,7 @@ async function saveSettings() {
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
             ai_ref_max_chars: parseInt(document.getElementById('aiRefMaxChars')?.value) || 1000,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
+            trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
         };
         await window.go.main.App.SaveAllSettings(cfg);
     } catch (e) {

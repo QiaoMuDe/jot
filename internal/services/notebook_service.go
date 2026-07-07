@@ -307,3 +307,9 @@ func (s *NotebookService) EmptyTrash() error {
 	result := s.db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.Notebook{})
 	return result.Error
 }
+
+// CleanExpiredTrash 永久删除回收站中超过指定天数的笔记本
+func (s *NotebookService) CleanExpiredTrash(days int) int64 {
+	result := s.db.Unscoped().Where(fmt.Sprintf("deleted_at IS NOT NULL AND deleted_at < datetime('now', '-%d days')", days)).Delete(&models.Notebook{})
+	return result.RowsAffected
+}

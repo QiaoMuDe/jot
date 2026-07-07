@@ -448,6 +448,20 @@ func (s *NoteService) EmptyTrash() error {
 	return nil
 }
 
+// CleanExpiredTrash 永久删除回收站中超过指定天数的笔记
+func (s *NoteService) CleanExpiredTrash(days int) int64 {
+	result := s.db.Unscoped().Where(fmt.Sprintf("deleted_at IS NOT NULL AND deleted_at < datetime('now', '-%d days')", days)).Delete(&models.Note{})
+	return result.RowsAffected
+}
+
+// MigrateOrphanNotes 将所有指向不存在笔记本的笔记迁移到默认笔记本
+func (s *NoteService) MigrateOrphanNotes() int64 {
+	result := s.db.Model(&models.Note{}).
+		Where("notebook_id NOT IN (SELECT id FROM notebooks) AND notebook_id != 0").
+		Update("notebook_id", 1)
+	return result.RowsAffected
+}
+
 // BatchPinNotes 批量置顶或取消置顶指定 ID 数组的笔记
 func (s *NoteService) BatchPinNotes(ids []uint, pin bool) error {
 	result := s.db.Model(&models.Note{}).Where("id IN ?", ids).UpdateColumn("pinned", pin)

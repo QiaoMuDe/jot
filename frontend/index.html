@@ -673,6 +673,22 @@
                         <span class="page-size-label" id="pageSizeLabel">20 条 / 页</span>
                     </div>
                 </div>
+                <!-- 回收站清理 -->
+                <div class="settings-section">
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        <span class="ai-group-title">回收站清理</span>
+                    </div>
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label" style="width:100px;">自动清理天数</span>
+                        <div class="ai-setting-control" style="justify-content:flex-end;">
+                            <input type="number" id="trashCleanupRetentionDays" class="settings-input" value="30" min="1" max="365" style="width:260px;flex:none;" />
+                            <span class="ai-setting-hint" style="white-space:nowrap;">天前的笔记自动清理</span>
+                        </div>
+                    </div>
+                </div>
         </div>
     </div>
 
@@ -729,8 +745,8 @@
                     <button class="data-action-row" id="vacuumDbBtn">
                         <span class="dar-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
                         <span class="dar-body">
-                            <span class="dar-label">数据库瘦身</span>
-                            <span class="dar-desc">回收已删除数据占用的空间</span>
+                            <span class="dar-label">存储优化</span>
+                            <span class="dar-desc">回收存储空间，清理无效数据</span>
                         </span>
                         <span class="dar-chevron">&rsaquo;</span>
                     </button>

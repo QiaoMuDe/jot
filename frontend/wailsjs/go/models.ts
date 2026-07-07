@@ -465,6 +465,7 @@ export namespace services {
 	    ai_card_recall_limit: number;
 	    ai_ref_max_chars: number;
 	    ai_search_result_limit: number;
+	    trash_cleanup_retention_days: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SettingsConfig(source);
@@ -495,6 +496,7 @@ export namespace services {
 	        this.ai_card_recall_limit = source["ai_card_recall_limit"];
 	        this.ai_ref_max_chars = source["ai_ref_max_chars"];
 	        this.ai_search_result_limit = source["ai_search_result_limit"];
+	        this.trash_cleanup_retention_days = source["trash_cleanup_retention_days"];
 	    }
 	}
 
