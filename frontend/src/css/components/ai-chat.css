@@ -36,6 +36,10 @@
     font-size: 0.875rem;
     line-height: 1.5;
     word-break: break-word;
+}
+
+/* 仅流式接收新消息时播放入场动画，切换历史会话时跳过 */
+.ai-msg-enter-anim {
     animation: ai-msg-enter 0.2s ease-out both;
 }
 

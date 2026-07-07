@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-05（更新 92）
+> 生成日期: 2026-07-07（更新 101）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -39,12 +39,12 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~7354 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6784 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 用户/助手消息操作按钮 + 消息右键上下文菜单 + 清空按钮常显 + 模型/深度思考切换 + 会话置顶 + 更多按钮下拉菜单 + 消息 Token 显示 + 思维链安全保存）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -160,7 +160,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应文件 | 核心依赖 |
 |----------|----------|----------|----------|
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
-| **数据模型层** | Note/Tag/Setting/ AISession/AIMessage 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go` | GORM |
+| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
@@ -199,7 +199,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -423,14 +423,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端渲染** | 卡片网格渲染 | ✅ 性能良好 |
 | **AI 流式输出** | 基于 Wails Events 逐块推送，不阻塞 UI | ✅ 体验优秀 |
 | **CM6 编辑器** | 仅初始化当前编辑的笔记 | ✅ 性能良好 |
-| **多会话切换** | 切换时从后端加载对应会话的消息，每次只渲染当前会话 | ✅ 符合预期 |
+| **多会话切换** | 切换时从后端加载对应会话的消息，采用分块渲染（CHUNK_SIZE=5，每块 yield） + 延迟 hljs 高亮（`requestIdleCallback` 渐进式） + `scroll-behavior: auto` 临时禁用 | ✅ 分块渲染后切换流畅无卡顿 |
+| **操作按钮折叠测量** | `collapseActionsIfNeeded()` 支持 `sync` 同步模式，在 `switchSession()` 中使用同步测量避免布局抖动 | ✅ 消除消息"跳跃"问题 |
 
 ### 6.3 异常处理分析
 
 | 异常场景 | 处理方式 |
 |----------|----------|
 | **后端 API 不可用** | 前端 Mock 数据降级 |
-| **AI API 调用失败** | 错误消息以 AI 消息气泡展示在对话中 |
+| **AI API 调用失败** | 错误消息以 AI 消息气泡展示在对话中；HTTP 状态码封装为人类可读提示（401→认证失败、429→请求频繁等 11 种分类）|
+| **联网搜索失败** | 每个搜索来源独立发射错误事件 `ai:search-error`，不影响其他来源继续搜索；前端通过 `showNotification()` 提示用户 |
 | **数据库损坏** | 备份还原机制 |
 | **流式连接中断** | 前端监听 `ai:stream-error` 事件，显示错误提示 |
 | **会话/消息查询失败** | 返回空列表 + 控制台错误日志，不阻断 UI |
@@ -457,7 +459,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
-5. **自实现 AI 对话引擎（LangChainGo 驱动）**：基于 LangChainGo 统一 LLM 接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠。Provider 通过前端设置页下拉切换，配置自动持久化。
+5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计。Provider 通过前端设置页下拉切换，配置自动持久化。
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
@@ -479,12 +481,13 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/main.js` | 7348 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统） |
-| `frontend/src/css/components/ai-chat.css` | 2459 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `frontend/src/js/ai-chat.js` | 3346 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用） |
-| `app.go` | 1356 | Wails 绑定层（73+ API） |
+| `frontend/src/js/ai-chat.js` | 3669 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
+| `frontend/src/main.js` | 6784 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构） |
+| `frontend/src/css/components/ai-chat.css` | 2814 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
+| `app.go` | 1497 | Wails 绑定层（80+ API） |
+| `services/ai_service.go` | 494 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移） |
+| `services/note_service.go` | 617 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
-| `services/ai_service.go` | ~360 | AI 对话服务层（自研 aicli 客户端接入） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
 | `internal/aicli/openai.go` | ~130 | OpenAI 兼容 API 客户端 |
 | `internal/aicli/ollama.go` | ~110 | Ollama 原生 API 客户端 |
@@ -524,6 +527,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **数字键导航**（Ctrl+数字键 1-9）
 - [x] **快捷键说明页**（Ctrl+7 打开，可滚动列表）
 - [x] **拖拽导入闪烁动画**（3 次红色慢闪）
+- [x] **多来源联网搜索**（Tavily/知乎/全网搜索三来源独立开关 + 独立 Key 配置）
+- [x] **搜索开关联动**（Key 为空自动禁用、点击启用时校验配置）
+- [x] **切换会话分块渲染 + 延迟高亮**（CHUNK_SIZE=5 yield + requestIdleCallback hljs）
+- [x] **操作按钮折叠 sync 模式**（消除会话切换滚动跳跃）
+- [x] **设置页 Token 默认隐藏 + 知乎 URL 修正**
 
 ---
 
@@ -544,6 +552,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 7. **LangChainGo 统一 AI 接口**：`CallAIStream` 使用 `llms.GenerateContent` + `WithStreamingFunc`/`WithStreamingReasoningFunc` 统一流式输出。`createLLM()` 工厂函数根据 `provider` 字段创建对应 LLM 实例：`openai.New()`（OpenAI 兼容，含 BaseURL/Token/Model 配置）或 `ollama.New()`（Ollama 本地，含 ServerURL/Model 配置）。前端设置页新增「服务商」下拉选择器，切换时自动填充默认 URL、清空模型、保存配置。
 
 8. **消息渲染与气泡**：`addMessage()` 创建消息气泡 DOM，AI 侧使用 `marked.parse()` 渲染 Markdown（含 `hljs.highlightElement()` 代码高亮），用户侧以 `<pre class="ai-user-msg">` 转义纯文本。打字指示器内嵌到 `msg-content` 内部（不独立建气泡）
+
+9. **多来源联网搜索（三来源后端集成）**：`CallAIStream` 支持三个独立搜索来源：Tavily（通用搜索）、知乎搜索（`SearchZhihuContent`）、全网搜索（`SearchGlobalContent`）。后端通过 `SearchWeb`（Tavily）、`SearchZhihuContent`（知乎内容）、`SearchGlobalContent`（全网搜索）三个函数分别执行，每个来源独立发射 `ai:search-error` 事件处理失败不影响其他来源。搜索结果统一聚合注入 system message。详见 [search_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/search_service.go)、[zhihu_search_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/zhihu_search_service.go)
+
+10. **前端多来源搜索动画**：搜索动画使用简易旋转地球 SVG + 文本变化展示状态，不展示具体来源状态详情。搜索错误通过 `showNotification()` 右上角浮动通知提示，不阻塞对话。`ai:search-source-status` 事件展示各来源进度（searching/done/failed），`ai:search-error` 事件携带来源标签和错误信息。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `startStreaming()` 中的搜索事件监听
+
+11. **搜索开关 Key 校验 + 禁用态**：前端三组搜索开关（Tavily/知乎/全网）分别受对应 Key/Tokon 配置控制。Key 为空时开关自动 disabled 防止误启用；点击启用时若 Key 未配置则 `showNotification` 提示用户先配置；修改 Key 为空时自动禁用对应开关。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 中 settings 页搜索开关的校验逻辑
+
+12. **切换会话性能优化（分块渲染）**：`switchSession()` 中对大量历史消息采用分块渲染策略（CHUNK_SIZE=5），每块渲染后 `setTimeout` 0ms yield 给浏览器，避免一次性渲染大量 DOM 导致卡顿。配合 `collapseActionsIfNeeded(el, true)` 同步模式消除布局抖动。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()`
+
+13. **延迟语法高亮（deferHighlight）**：`renderMarkdown()` 新增 `deferHighlight` 参数，历史消息加载时使用 `deferHighlightBlocks()` 通过 `requestIdleCallback` 渐进式执行 `hljs.highlightElement()`，优先级低于首次渲染，优先保证页面交互。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
+
+14. **操作按钮折叠（collapseActionsIfNeeded）**：窄消息气泡时操作按钮自动折叠到 ⋮ 更多按钮。`collapseActionsIfNeeded()` 新增 `sync` 参数支持同步模式（`getBoundingClientRect` 立即测量布局），用于 `switchSession` 中确保 `scrollToBottom()` 读取正确的 `scrollHeight`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
+
+15. **设置页修复集**：①知乎 Token 输入框默认 `type="password"` 隐藏；②三个搜索开关检查对应 Key/Tokon 是否配置，未配置时 disabled；③知乎开发者地址改为 `https://developer.zhihu.com/`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)
+
+16. **重置出厂设置修复集**：①`resetDatabase()` 清空 `#aiChatMessages.innerHTML` 和 `#aiSessionList.innerHTML` 避免旧数据残留；②`onAIChatViewActivated()` 中清除标题/contextSize/chatHistory/sessions/activeSessionId 等模块级变量；③重置后自动调用 `onAIChatViewActivated?.()` 让 AI 助手模块立即进入就绪状态，消除闪烁。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
 ---
 
@@ -1139,27 +1163,28 @@ await loadXxxSetting();
 | **prompt 设计** | 角色为"提示词工程专家"，生成含 Role/Core Task/Guidelines/Output Format 标准结构的 prompt，提供两个示例（翻译助手、周报助手），要求只输出 prompt 本身 |
 | **状态管理** | 技能互斥（激活时清空 `activeSkills = {}`），切换会话自动重置，纯前端注入 system message |
 
-## 六十、新增记忆点（联网搜索静默化 + 搜索动画重构）
+## 六十、新增记忆点（多来源联网搜索重构 — Tavily/知乎/全网搜索）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **搜索静默化** | 移除所有 `runtime.EventsEmit("ai:search-status")` 搜索状态事件（searching/done/empty），搜索结果不再在前端展示。搜索仅在后端静默执行，结果注入 system message 后直接走 LLM 流式调用。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` |
-| **搜索动画重构** | 重新引入 `ai:search-status` 事件，但只用于播放搜索动画，不展示具体状态文本。`"searching"` 在主 goroutine（`go func()` 之前）发射，确保不被阻塞；`"done"` 在 goroutine 内搜索完成后发射。前端监听事件切换：`"searching"` → 旋转地球 SVG + 「正在联网搜索...」文字；`"done"` → 切回打字点（等待 LLM 流式）。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **三来源搜索架构** | `CallAIStream` 从单一搜索来源改为三个独立来源：Tavily（通用网页搜索）、知乎搜索（`SearchZhihuContent`，搜索知乎平台内容）、全网搜索（`SearchGlobalContent`，通用全网搜索）。每个来源有独立 API Key/Tokon 配置，独立启停开关。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
+| **zhihu_search_service.go** | 新增文件，导出 `SearchZhihuContent(ctx, query, accessToken)` 和 `SearchGlobalContent(ctx, query)` 两个函数。`SearchZhihuContent` 使用知乎开放平台 API 搜索知乎内容，需要 access_token；`SearchGlobalContent` 使用知乎开放平台的全网搜索能力，不需要 token。详见 [zhihu_search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/zhihu_search_service.go) |
+| **独立搜索事件** | 每个搜索来源独立发射状态事件：`ai:search-source-status` 携带 `{source, status}`（status=searching/done/failed）；搜索错误发射 `ai:search-error` 携带 `{source, error}`。失败不阻塞其他来源继续搜索。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` |
+| **搜索动画简化** | 搜索动画从多来源详细状态展示改为简易旋转地球 SVG + 文本「正在联网搜索...」展示。搜索错误通过 `showNotification()` 右上角浮动通知提示，不展示具体来源状态详情。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `startStreaming()` |
 | **取消时清理** | 用户点击停止按钮时，如果正处于搜索阶段，`ctx.Err() != nil` 提前 return 前发射 `ai:stream-done` 事件，确保前端恢复发送按钮/隐藏停止按钮，不留残影。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` |
-| **搜索取消链** | 停止按钮 → `CancelAIStream()` → 取消根 context → `SearchWeb` 中派生 `searchCtx` 立即取消 → Tavily HTTP 请求中止。`ctx.Err()` 检查在搜索完成后进行，避免白调 LLM。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
-| **CSS 新增** | `.ai-search-indicator` flex 行，accent 色文字，内联 SVG 带 `ai-search-spin` 0.8s 线性旋转动画。移除旧的 `.ai-search-status`（脉冲动画）和 `.ai-search-sources`（来源折叠面板）。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **搜索取消链** | 停止按钮 → `CancelAIStream()` → 取消根 context → 搜索 context 立即取消 → HTTP 请求中止。`ctx.Err()` 检查在搜索完成后进行，避免白调 LLM。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[zhihu_search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/zhihu_search_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 
-## 六十一、新增记忆点（联网搜索来源展示 + 切换键统一）
+## 六十一、新增记忆点（搜索来源展示 + 设置页搜索开关重构）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **SearchWeb 返回结构化数据** | `SearchWeb()` 返回类型从 `string` 改为 `*SearchWebResult`，包含 `FormattedText`（注入 system message）和 `Sources []SearchSource`（Title/URL/Content，用于前端展示）。失败返回 `nil`。新增 `SearchSource` 和 `SearchWebResult` 结构体。详见 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
+| **SearchWeb 返回结构化数据** | `SearchWeb()` 返回类型从 `string` 改为 `*SearchWebResult`，包含 `FormattedText`（注入 system message）和 `Sources []SearchSource`（Title/URL/Content，用于前端展示）。失败返回 `nil`。`SearchZhihuContent` 和 `SearchGlobalContent` 同理返回结构化数据。详见 [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go) |
 | **搜索来源事件** | 后端搜索成功后发射新事件 `ai:search-sources`，携带 `json.Marshal` 序列化的 `[]SearchSource`。前端 `startStreaming()` 中监听该事件，`JSON.parse` 存入 `searchSources` 变量。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) `CallAIStream()` 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **来源折叠面板** | `unsubDone` 回调中，如果 `searchSources` 有数据，在消息气泡底部（操作按钮前）插入 `<details class="search-sources">` 折叠面板。列表展示序号、标题链接（`<a>`）、内容摘要（3 行截断）。默认收起。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
-| **浏览器打开链接** | 搜索来源链接点击时，通过 `window.runtime.BrowserOpenURL(url)` 在系统默认浏览器打开，而非 WebView2 内。拦截 `<a>` 默认事件实现。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `unsubDone` 回调 |
-| **CSS 来源面板** | `.search-sources` 带边框圆角、二级背景色。`summary` accent 色，hover 高亮。`.search-sources-snippet` 3 行 `-webkit-line-clamp` 截断。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **Tavily Key 显示/隐藏** | 设置页联网搜索 Key 输入框新增眼睛切换按钮（`#aiTavilyToggleBtn`），与上方 AI API Key 的切换按钮样式统一：`btn btn-sm btn-save`，`👁`/`🙈` emoji 切换。固定 `width:32px; text-align:center` 防止 emoji 宽度不同导致布局抖动。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **设置页三组搜索开关** | 设置页「对话与搜索」卡片中从单一「联网搜索」开关拆分为三个独立开关：「Tavily 搜索」「知乎搜索」「全网搜索」。每个开关对应一个独立配置 Key，分别受 Tavily API Key、知乎 Access Secret 控制。开关 disabled 状态与 Key 配置联动。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **知乎 Access Secret 配置** | 设置页新增「知乎 Access Secret」输入框（type=password，带眼睛切换按钮），存储到数据库 `zhihu_access_secret` 键。下方提示「前往 [developer.zhihu.com](https://developer.zhihu.com/) 注册获取」。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 和 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **工具栏三组搜索开关** | AI 聊天工具栏中「联网搜索」开关拆分为三组：「Tavily」「知乎」「全网搜索」，分别对应三个 toggle 按钮。点击时校验对应 Key 是否已配置，未配置时弹出通知提示。开关状态与设置页双向同步。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [search_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/search_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 
 ## 六十二、新增记忆点（追问引用栏重构）
@@ -2010,3 +2035,45 @@ await loadXxxSetting();
 | **特征** | 仅 `scrollToBottom()` 一个函数修改，约 +4 行，不涉及 CSS 文件改动 |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`scrollToBottom()`） |
 | **update 计数** | `AGENTS.md` 从更新 99 → 更新 100 |
+
+## 一百三十六、新增记忆点（多来源搜索前端重构 — 三组独立开关 + Key 校验联动）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **前端三组搜索开关** | AI 聊天工具栏将单一「联网搜索」开关拆分为三个独立 toggle：「Tavily」「知乎」「全网搜索」。每个开关有独立 SVG 图标、独立 localStorage key（`ai_tavily_enabled`/`ai_zhihu_enabled`/`ai_global_search_enabled`）。设置页同步拆分三个开关，各自受对应 Key/Tokon 配置控制。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **搜索开关禁用态联动** | 设置页和工具栏的搜索开关自动检测对应 Key 是否为 null/empty。Key 为空时开关自动 `disabled` 并置灰；用户点击启用时若 Key 未配置则 `showNotification` 提示「请先在设置中配置 xxx」；修改 Key 为空字符串时自动禁用对应开关。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) settings 页校验逻辑 |
+| **Key 清空自动禁用** | `#aiTavilyApiKey` 和 `#aiZhihuAccessSecret` 的 `input` 事件监听，检测到值为空时自动关闭并禁用对应开关。开关禁用在保存前执行，确保用户不会在 Key 为空时误启用。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **工具栏同步设置页** | 设置页开关变动时同步更新工具栏 toggle 的 UI 状态（`.active` class 切换）；工具栏开关变动时同步写入后端数据库 + localStorage。`syncToolbarState()` 在 `onAIChatViewActivated()` 中调用确保每次切换到 AI 聊天视图时变量与 DOM 一致。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `syncToolbarState()` |
+| **涉及文件** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **update 计数** | `AGENTS.md` 从更新 100 → 更新 101 |
+
+## 一百三十七、新增记忆点（设置页 Token 隐藏默认 + 知乎 URL 修正 + 重置闪烁修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **知乎 Token 默认隐藏** | 设置页 AI 配置区「知乎 Access Secret」输入框在 `loadSettings()` 中每次加载时强制重置为 `type="password"`，解决切换视图/重置数据库后 token 明文暴露的问题。Tavily API Key 同理。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `loadSettings()` |
+| **知乎开发者 URL 修正** | 设置页知乎 Access Secret 下方提示链接从错误的 `https://open.zhihu.com` 改为 `https://developer.zhihu.com/`。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
+| **重置数据库清除 AI 助手 DOM** | `resetDatabase()` 末尾新增 `#aiChatMessages.innerHTML = ''` 清空消息列表 + `#aiSessionList.innerHTML = ''` 清空会话列表 + `window.onAIChatViewActivated?.()` 刷新 AI 助手视图。避免重置后切换到 AI 助手模块时显示旧数据残影。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **重置后标题/Token 残留修复** | `resetDatabase()` 后调用 `onAIChatViewActivated()` 时清空模块级变量：`chatHistory = []`、`sessions = []`、`activeSessionId = null` 等，确保标题回退为"AI 助手"、contextSize 隐藏。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `showEmptyState()` |
+| **重置后闪烁消除** | `resetDatabase()` 中先清空 AI 聊天 DOM 再调用 `loadSettings()`，`onAIChatViewActivated()` 中先 `hideEmptyState()`/`showEmptyState()` 切换，消除旧的对话页面一闪而过再加载空状态页面的问题。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
+
+## 一百三十八、新增记忆点（切换会话性能优化 — 分块渲染 + 延迟高亮 + 动画消除）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **分块渲染（Chunked Rendering）** | `switchSession()` 中消息渲染采用分块策略：`CHUNK_SIZE = 5`（每块 5 条消息），每块渲染后 `await new Promise(r => setTimeout(r, 0))` yield 给浏览器进行布局/绘制。避免大量消息（50+ 条）一次性渲染导致主线程阻塞数百毫秒。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()` |
+| **延迟语法高亮（Deferred Highlight）** | `renderMarkdown()` 新增 `deferHighlight` 参数。history 模式时使用 `deferHighlightBlocks()` 函数，通过 `requestIdleCallback` 在浏览器空闲时渐进式执行 `hljs.highlightElement()`，每帧处理 3 个代码块。首次渲染时标记为 `deferHighlight` 的代码块不执行高亮，优先保证页面交互流畅。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `deferHighlightBlocks()` |
+| **入口动画分离** | `addMessage()` 新增 `deferHighlight`（第 11 参数）和 `skipScroll` 参数。history 模式新增消息不加 `.ai-msg-enter-anim` 动画类，直接 `opacity: 1` 可见。`switchSession()` 中分块渲染时仅首块添加 `.ai-msg-enter-anim` 动画，后续块静默插入。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `addMessage()` |
+| **scroll-behavior 临时禁用** | `scrollToBottom()` 中临时设置 `scrollBehavior = 'auto'` 覆盖 CSS 的 `scroll-behavior: smooth`，滚动完成后恢复。避免程序化滚动触发平滑动画导致视觉卡顿。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `scrollToBottom()` |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`switchSession()`/`addMessage()`/`renderMarkdown()`/`deferHighlightBlocks()`/`scrollToBottom()`）、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（`.ai-msg-enter-anim` 分离类） |
+
+## 一百三十九、新增记忆点（切换会话滚动跳跃修复 — collapseActionsIfNeeded sync 参数）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题现象** | 切换有大量消息的会话时，消息先加载到底部贴近输入框和操作栏，然后又将消息向上移动一段间距，出现"跳跃"感 |
+| **根因** | `switchSession()` 中每块消息渲染完后先调 `scrollToBottom()`（此时 `collapseActionsIfNeeded` 因 `requestAnimationFrame` 延迟测量，`scrollHeight` 尚未计入操作按钮展开高度 → 滚动到位），然后 `collapseActionsIfNeeded` 完成测量并折叠按钮（操作按钮隐藏 → 消息高度减少 → 页面向上移动 → 消息与输入框之间出现空白间距）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()`、`collapseActionsIfNeeded()` |
+| **修复：sync 同步模式** | `collapseActionsIfNeeded()` 新增 `sync` 布尔参数。默认 `false` 时行为不变（异步 rAF 测量）；`sync=true` 时立即同步调用 `getBoundingClientRect()` 和客户端宽度测量，不延迟执行。`switchSession()` 分块渲染中每块追加消息后以 `sync=true` 调用 `collapseActionsIfNeeded(el, true)`，确保 `scrollToBottom()` 读取的 `scrollHeight` 包含折叠后的最终高度。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **移除 2 帧等待** | 原 `switchSession()` 中每块末尾的 `await new Promise(r => requestAnimationFrame(r))` 两帧等待被移除，不再需要等待 `collapseActionsIfNeeded` 的异步测量。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`collapseActionsIfNeeded()`/`switchSession()`） |

@@ -1423,7 +1423,6 @@ async function switchSession(id) {
         messagesEl.innerHTML = '';
 
         if (!msgs || msgs.length === 0) {
-            renderSessionList();
             updateChatTitle();
             showWelcome();
             updateContextSize();
@@ -1433,24 +1432,36 @@ async function switchSession(id) {
 
         // 有消息时隐藏欢迎语
         hideWelcome();
-        msgs.forEach(msg => {
-            if (msg.role === 'user') {
-                addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined);
-                const userMsgEl = messagesEl.lastElementChild;
-                if (userMsgEl) {
-                    userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
-                    bindMsgContextMenu(userMsgEl, msg.content, 'user');
-                    collapseActionsIfNeeded(userMsgEl);
+        // 分块渲染消息，每块后 yield 避免阻塞主线程导致界面卡顿
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < msgs.length; i += CHUNK_SIZE) {
+            const chunk = msgs.slice(i, i + CHUNK_SIZE);
+            chunk.forEach(msg => {
+                if (msg.role === 'user') {
+                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
+                    const userMsgEl = messagesEl.lastElementChild;
+                    if (userMsgEl) {
+                        userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
+                        bindMsgContextMenu(userMsgEl, msg.content, 'user');
+                        collapseActionsIfNeeded(userMsgEl, true);
+                    }
+                } else if (msg.role === 'assistant') {
+                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, true, true);
+                    el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
+                    bindMsgContextMenu(el, msg.content, 'assistant');
+                    collapseActionsIfNeeded(el, true);
                 }
-            } else if (msg.role === 'assistant') {
-                const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards);
-                el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
-                bindMsgContextMenu(el, msg.content, 'assistant');
-                collapseActionsIfNeeded(el);
+            });
+            // 每块完成后 yield，让浏览器有机会渲染已插入的消息
+            if (i + CHUNK_SIZE < msgs.length) {
+                await new Promise(r => setTimeout(r, 0));
             }
-        });
+        }
 
-        renderSessionList();
+        // 仅更新侧栏会话的高亮状态（比全量 renderSessionList + loadSessionList 轻量得多）
+        document.querySelectorAll('.ai-session-item.active').forEach(el => el.classList.remove('active'));
+        const currentItem = document.querySelector(`.ai-session-item[data-id="${id}"]`);
+        if (currentItem) currentItem.classList.add('active');
         updateChatTitle();
 
         // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
@@ -2164,15 +2175,40 @@ async function saveSessionMessages(roundMessages) {
 /* ── 渲染与 UI ── */
 
 /**
+ * 渐进式延迟处理代码块语法高亮，每批最多 8ms 后 yield
+ */
+function deferHighlightBlocks(el) {
+    const blocks = [...el.querySelectorAll('pre code[class*="language-"]')];
+    if (!blocks.length) return;
+    let index = 0;
+    const schedule = () => {
+        const deadline = Date.now() + 8;
+        while (index < blocks.length && Date.now() < deadline) {
+            try { hljs.highlightElement(blocks[index]); } catch (_) {}
+            index++;
+        }
+        if (index < blocks.length) {
+            requestIdleCallback(schedule, { timeout: 100 });
+        }
+    };
+    requestIdleCallback(schedule, { timeout: 100 });
+}
+
+/**
  * 渲染 Markdown + 代码高亮
  */
-function renderMarkdown(el, content) {
+function renderMarkdown(el, content, deferHighlight) {
     el.innerHTML = marked.parse(content);
 
-    // 后处理高亮 :对每个标注了语言的代码块执行 hljs.highlightElement
-    el.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
-        try { hljs.highlightElement(block); } catch (_) {}
-    });
+    if (deferHighlight) {
+        // 延迟高亮：渲染后渐进式处理代码高亮，不阻塞首次渲染
+        deferHighlightBlocks(el);
+    } else {
+        // 立即高亮（流式回复等需要即时展示的场景）
+        el.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
+            try { hljs.highlightElement(block); } catch (_) {}
+        });
+    }
 
     el.querySelectorAll('pre').forEach((pre) => {
         // 避免重复包装
@@ -2259,9 +2295,11 @@ function renderMarkdown(el, content) {
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, skipScroll = false, deferHighlight = false) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
+    // 仅流式消息播放入场动画，切换历史会话时跳过
+    if (!skipScroll) el.classList.add('ai-msg-enter-anim');
     if (msgId) el.dataset.msgId = msgId;
 
     // 如果有思维链内容, 先渲染可折叠思考区域
@@ -2278,7 +2316,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         details.appendChild(summary);
         const thinkingEl = document.createElement('div');
         thinkingEl.className = 'thinking-content';
-        renderMarkdown(thinkingEl, reasoningContent);
+        renderMarkdown(thinkingEl, reasoningContent, deferHighlight);
         details.appendChild(thinkingEl);
         el.appendChild(details);
     }
@@ -2287,7 +2325,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     contentEl.className = 'msg-content';
 
     if (role === 'assistant') {
-        renderMarkdown(contentEl, content);
+        renderMarkdown(contentEl, content, deferHighlight);
     } else {
         contentEl.textContent = content;
     }
@@ -2393,7 +2431,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     }
 
     messagesEl.appendChild(el);
-    scrollToBottom();
+    if (!skipScroll) scrollToBottom();
     return el;
 }
 
@@ -2944,14 +2982,14 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
  * 检测消息气泡宽度是否不足以容纳所有操作按钮
  * 如果溢出则折叠到更多按钮中
  */
-function collapseActionsIfNeeded(msgEl) {
+function collapseActionsIfNeeded(msgEl, sync) {
     const actions = msgEl?.querySelector('.ai-msg-actions');
     const btnWrap = actions?.querySelector('.action-buttons');
     if (!actions || !btnWrap) return;
 
     btnWrap.classList.remove('collapsed');
 
-    requestAnimationFrame(() => {
+    const run = () => {
         const availableWidth = actions.clientWidth;
         const buttonsWidth = btnWrap.scrollWidth;
         let isCollapsed = buttonsWidth > availableWidth && buttonsWidth > 60;
@@ -2983,7 +3021,13 @@ function collapseActionsIfNeeded(msgEl) {
         if (isCollapsed) {
             btnWrap.classList.add('collapsed');
         }
-    });
+    };
+
+    if (sync) {
+        run();
+    } else {
+        requestAnimationFrame(run);
+    }
 }
 
 /**
