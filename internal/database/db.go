@@ -485,6 +485,15 @@ func InitDefaultSettings(db *gorm.DB) error {
 		existing[k] = true
 	}
 
+	// 迁移旧设置: ai_web_search_enabled → tavily_search_enabled
+	if existing["ai_web_search_enabled"] && !existing["tavily_search_enabled"] {
+		var oldVal models.Setting
+		if err := db.Where("key = ?", "ai_web_search_enabled").First(&oldVal).Error; err == nil {
+			db.Model(&models.Setting{}).Where("key = ?", "tavily_search_enabled").Update("value", oldVal.Value)
+			// 可选：删除旧 key，但保留以兼容旧版本
+		}
+	}
+
 	defaults := []models.Setting{
 		{Key: "theme", Value: "default"},
 		{Key: "font_family", Value: ""},
@@ -501,7 +510,10 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_model", Value: ""},
 		{Key: "ai_thinking_enabled", Value: "false"},
 		{Key: "tavily_api_key", Value: ""},
-		{Key: "ai_web_search_enabled", Value: "false"},
+		{Key: "zhihu_access_secret", Value: ""},
+		{Key: "zhihu_search_enabled", Value: "false"},
+		{Key: "zhihu_global_search_enabled", Value: "false"},
+		{Key: "tavily_search_enabled", Value: "false"},
 		{Key: "ai_card_recall_enabled", Value: "false"},
 		{Key: "ai_card_recall_limit", Value: "5"},
 		{Key: "ai_ref_max_chars", Value: "5000"},

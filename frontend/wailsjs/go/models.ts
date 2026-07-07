@@ -250,6 +250,7 @@ export namespace services {
 	    api_key: string;
 	    model: string;
 	    tavily_api_key: string;
+	    zhihu_access_secret: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AIConfig(source);
@@ -262,6 +263,7 @@ export namespace services {
 	        this.api_key = source["api_key"];
 	        this.model = source["model"];
 	        this.tavily_api_key = source["tavily_api_key"];
+	        this.zhihu_access_secret = source["zhihu_access_secret"];
 	    }
 	}
 	export class AISessionSummary {
@@ -455,7 +457,10 @@ export namespace services {
 	    ai_model: string;
 	    tavily_api_key: string;
 	    ai_thinking_enabled: boolean;
-	    ai_web_search_enabled: boolean;
+	    zhihu_access_secret: string;
+	    zhihu_search_enabled: boolean;
+	    zhihu_global_search_enabled: boolean;
+	    tavily_search_enabled: boolean;
 	    ai_card_recall_enabled: boolean;
 	    ai_card_recall_limit: number;
 	    ai_ref_max_chars: number;
@@ -482,7 +487,10 @@ export namespace services {
 	        this.ai_model = source["ai_model"];
 	        this.tavily_api_key = source["tavily_api_key"];
 	        this.ai_thinking_enabled = source["ai_thinking_enabled"];
-	        this.ai_web_search_enabled = source["ai_web_search_enabled"];
+	        this.zhihu_access_secret = source["zhihu_access_secret"];
+	        this.zhihu_search_enabled = source["zhihu_search_enabled"];
+	        this.zhihu_global_search_enabled = source["zhihu_global_search_enabled"];
+	        this.tavily_search_enabled = source["tavily_search_enabled"];
 	        this.ai_card_recall_enabled = source["ai_card_recall_enabled"];
 	        this.ai_card_recall_limit = source["ai_card_recall_limit"];
 	        this.ai_ref_max_chars = source["ai_ref_max_chars"];

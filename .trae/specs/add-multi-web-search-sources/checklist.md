@@ -1,0 +1,29 @@
+# Checklist
+
+- [x] zhihu-go 依赖已成功引入 `go.mod`
+- [x] `zhihu_search_service.go` 实现了 `SearchZhihuContent` 和 `SearchGlobalContent` 两个函数
+- [x] `SettingsConfig` 新增了 `ZhihuAccessSecret`、`ZhihuSearchEnabled`、`ZhihuGlobalSearchEnabled`、`TavilySearchEnabled` 四个字段
+- [x] `AIConfig` 新增了 `ZhihuAccessSecret` 字段
+- [x] `GetAllSettings()` 和 `SaveAllSettings()` 正确处理新字段
+- [x] `InitDefaultSettings()` 包含了知乎和 Tavily 的新默认配置项
+- [x] `CallAIStream` 签名从 `searchEnabled bool` 改为 `searchSources []string`
+- [x] 多个搜索源可并行执行，结果统一注入 system message
+- [x] 每个搜索源独立执行，失败时不阻塞其他源
+- [x] 搜索结果数限制 `ai_search_result_limit` 应用到所有搜索源
+- [x] 设置页包含知乎 Access Secret 输入框（密码模式 + 显示/隐藏 + 测试连接）
+- [x] 设置页包含三个独立开关（知乎搜索/全网搜索/Tavily搜索）
+- [x] AI 聊天栏「联网搜索」改为按钮 + 下拉复选框菜单
+- [x] 复选框状态与设置页开关双向同步
+- [x] `saveSettings()` / `loadSettings()` 正确处理新设置项
+- [x] 搜索动画改为多源分阶段展示：精炼 → 各源独立状态行（进行中/成功/失败）→ 汇总完成
+- [x] 每个搜索源在动画中有独立状态行：旋转图标(搜索中) / 绿色✓(成功) / 红色✗(失败)
+- [x] 搜索失败时前端显示哪个源失败及错误原因（红色错误状态）
+- [x] 知乎 Access Secret 为空时对应搜索在动画中显示错误提示
+- [x] 知乎 API 失败时对应搜索在动画中显示错误提示
+- [x] Tavily API 失败时对应搜索在动画中显示错误提示
+- [x] 所有搜索源均失败时，前端显示「所有搜索源均失败」提示，AI 继续回复
+- [x] 搜索结果在 Sources 中标注来源标签（`zhihu_search` / `zhihu_global` / `tavily`）
+- [x] 搜索来源折叠面板按来源分组展示
+- [x] 后端通过 `ai:search-error` 事件推送错误信息
+- [x] 后端通过 `ai:search-source-status` 事件推送每源状态
+- [x] 旧数据 `ai_web_search_enabled` 迁移兼容

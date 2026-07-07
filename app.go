@@ -739,9 +739,29 @@ func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result := services.SearchWeb(ctx, "test", apiKey, 1)
+	result, err := services.SearchWeb(ctx, "test", apiKey, 1)
+	if err != nil {
+		return false, fmt.Errorf("连接失败: %v", err)
+	}
 	if result == nil {
 		return false, fmt.Errorf("连接失败，请检查 API Key 是否正确")
+	}
+	return true, nil
+}
+
+// TestZhihuConnection 测试知乎 Access Secret 是否有效
+func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
+	if accessSecret == "" {
+		return false, fmt.Errorf("Access Secret 不能为空")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := services.SearchZhihuContent(ctx, "test", accessSecret, 1)
+	if err != nil {
+		return false, fmt.Errorf("连接失败: %v", err)
+	}
+	if result == nil {
+		return false, fmt.Errorf("连接失败，请检查 Access Secret 是否正确")
 	}
 	return true, nil
 }
@@ -760,7 +780,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchEnabled bool, cardRecallEnabled bool, sessionID uint, isRegenerate bool, skillIds []string) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, sessionID uint, isRegenerate bool, skillIds []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -769,12 +789,9 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 
 	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
 	var searching bool
-	if searchEnabled {
-		cfg := a.aiService.GetConfig()
-		if cfg.TavilyAPIKey != "" {
-			searching = true
-			runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
-		}
+	if len(searchSources) > 0 {
+		searching = true
+		runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
 	}
 
 	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
@@ -795,58 +812,137 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			}
 		}
 
-		// 联网搜索（静默执行，搜索结果注入 system message，前端不展示）
-		if searchEnabled {
+		// 搜索源并行执行
+		if len(searchSources) > 0 {
 			cfg := a.aiService.GetConfig()
-			if cfg.TavilyAPIKey != "" {
-				var query string
-				for i := len(messages) - 1; i >= 0; i-- {
-					if messages[i].Role == "user" {
-						query = messages[i].Content
-						break
+
+			var query string
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "user" {
+					query = messages[i].Content
+					break
+				}
+			}
+
+			if query != "" {
+				// 精炼 query
+				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
+				if err != nil {
+					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, "搜索关键词精炼失败: "+err.Error())
+					return
+				}
+				if refinedQuery != "" {
+					query = refinedQuery
+				}
+				runtime.EventsEmit(a.ctx, "ai:refined-keywords", query)
+
+				// 发射 searching 状态，前端切换显示为"正在联网搜索..."
+				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+
+				// 为每个搜索源发射 searching 状态
+				for _, source := range searchSources {
+					sourceStatus := map[string]interface{}{
+						"source": source,
+						"status": "searching",
 					}
+					statusJSON, _ := json.Marshal(sourceStatus)
+					runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
 				}
 
-				if query != "" {
-					// 先精炼 query：调用 AI 模型将用户输入提炼为搜索引擎友好的关键词
-					refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
-					if err != nil {
-						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, "搜索关键词精炼失败: "+err.Error())
-						return
-					}
-					if refinedQuery != "" {
-						query = refinedQuery
-					}
+				searchResultLimit := a.GetAISearchResultLimit()
+				type searchResult struct {
+					source string
+					result *services.SearchWebResult
+					err    error
+				}
+				resultCh := make(chan searchResult, len(searchSources))
 
-					// 通知前端精炼完成，传递精炼后的关键词，并切换到搜索阶段
-					runtime.EventsEmit(a.ctx, "ai:refined-keywords", query)
-					runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+				// 并行执行所有搜索源
+				for _, source := range searchSources {
+					go func(src string) {
+						var r searchResult
+						r.source = src
+						switch src {
+						case "tavily":
+							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
+						case "zhihu_search":
+							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+						case "zhihu_global":
+							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+						default:
+							r.err = fmt.Errorf("未知搜索源: %s", src)
+						}
+						resultCh <- r
+					}(source)
+				}
 
-					searchResultLimit := a.GetAISearchResultLimit()
-					searchResult := services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
-					if searchResult != nil {
-						// 注入格式化文本到 system role
+				// 收集结果
+				var allErrors []string
+				for i := 0; i < len(searchSources); i++ {
+					r := <-resultCh
+					if r.err != nil {
+						allErrors = append(allErrors, fmt.Sprintf("%s: %v", r.source, r.err))
+						// 发射错误事件给前端
+						errEvent := map[string]interface{}{
+							"source": r.source,
+							"error":  r.err.Error(),
+						}
+						errJSON, _ := json.Marshal(errEvent)
+						runtime.EventsEmit(a.ctx, "ai:search-error", string(errJSON))
+					} else if r.result != nil {
+						// 注入搜索结果到 system message
 						found := false
 						for i := range messages {
 							if messages[i].Role == "system" {
-								messages[i].Content = messages[i].Content + "\n\n" + searchResult.FormattedText
+								messages[i].Content = messages[i].Content + "\n\n" + r.result.FormattedText
 								found = true
 								break
 							}
 						}
 						if !found {
-							messages = append([]services.Message{{Role: "system", Content: searchResult.FormattedText}}, messages...)
+							messages = append([]services.Message{{Role: "system", Content: r.result.FormattedText}}, messages...)
 						}
 
-						// 发射结构化来源数据给前端，并缓存用于持久化
-						if len(searchResult.Sources) > 0 {
-							sourcesJSON, _ := json.Marshal(searchResult.Sources)
-							searchSourcesJSON = string(sourcesJSON)
-							runtime.EventsEmit(a.ctx, "ai:search-sources", string(sourcesJSON))
+						// 发射来源状态 success
+						sourceStatus := map[string]interface{}{
+							"source": r.source,
+							"status": "success",
+							"count":  len(r.result.Sources),
 						}
+						statusJSON, _ := json.Marshal(sourceStatus)
+						runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
+
+						// 累积所有来源数据
+						if len(r.result.Sources) > 0 {
+							if searchSourcesJSON == "" {
+								sJSON, _ := json.Marshal(r.result.Sources)
+								searchSourcesJSON = string(sJSON)
+							} else {
+								var existing []services.SearchSource
+								json.Unmarshal([]byte(searchSourcesJSON), &existing)
+								existing = append(existing, r.result.Sources...)
+								sJSON, _ := json.Marshal(existing)
+								searchSourcesJSON = string(sJSON)
+							}
+						}
+					} else {
+						// 无结果但也没错误
+						sourceStatus := map[string]interface{}{
+							"source": r.source,
+							"status": "success",
+							"count":  0,
+						}
+						statusJSON, _ := json.Marshal(sourceStatus)
+						runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
 					}
 				}
+				close(resultCh)
 			}
+		}
+
+		// 发射最终的 search-sources 事件
+		if searchSourcesJSON != "" {
+			runtime.EventsEmit(a.ctx, "ai:search-sources", searchSourcesJSON)
 		}
 
 		// 通知前端搜索完成，关闭搜索动画

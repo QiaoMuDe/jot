@@ -50,9 +50,10 @@ let modelList = [];
 let searchToggle = null;
 let enableThinking = false;
 
-// 联网搜索状态
-let webSearchToggle = null;
-let enableWebSearch = false;
+// 多源搜索状态
+let searchSourcesBtn = null;
+let searchSourcesDropdown = null;
+let searchSources = new Set();
 
 // 卡片召回状态
 let cardRecallToggle = null;
@@ -231,9 +232,9 @@ export async function initAIChat() {
     searchToggle = document.getElementById('aiChatSearchToggle');
     enableThinking = searchToggle?.classList.contains('active') || false;
 
-    // 联网搜索
-    webSearchToggle = document.getElementById('aiChatWebSearchToggle');
-    enableWebSearch = webSearchToggle?.classList.contains('active') || false;
+    // 多源搜索
+    searchSourcesBtn = document.getElementById('aiChatSearchSourcesBtn');
+    searchSourcesDropdown = document.getElementById('aiChatSearchSourcesDropdown');
 
     // 卡片召回
     cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
@@ -680,19 +681,61 @@ function bindEvents() {
         });
     }
 
-    // ── 联网搜索切换 ──
-    if (webSearchToggle) {
-        if (enableWebSearch) webSearchToggle.classList.add('active');
-        webSearchToggle.addEventListener('click', async () => {
-            enableWebSearch = webSearchToggle.classList.toggle('active');
-            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
-            const settingToggle = document.getElementById('aiSettingWebSearchToggle');
-            if (settingToggle) {
-                settingToggle.classList.toggle('active', enableWebSearch);
-            }
-            try { await window.saveSettings(); } catch (_) {}
+    // ── 多源搜索按钮点击切换下拉菜单 ──
+    if (searchSourcesBtn && searchSourcesDropdown) {
+        searchSourcesBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = searchSourcesDropdown.style.display !== 'none';
+            searchSourcesDropdown.style.display = isVisible ? 'none' : 'block';
         });
+        
+        // 点击外部关闭下拉菜单
+        document.addEventListener('click', () => {
+            if (searchSourcesDropdown) {
+                searchSourcesDropdown.style.display = 'none';
+            }
+        });
+        
+        if (searchSourcesDropdown) {
+            searchSourcesDropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
     }
+    
+    // ── 复选框切换 ──
+    ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.addEventListener('change', async () => {
+                if (checkbox.disabled) return;
+                const source = checkbox.dataset.source;
+                if (checkbox.checked) {
+                    searchSources.add(source);
+                } else {
+                    searchSources.delete(source);
+                }
+                // 更新按钮激活状态
+                if (searchSourcesBtn) {
+                    searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
+                }
+                // 同步设置页对应开关
+                const settingMap = {
+                    'zhihu_search': 'aiSettingZhihuSearchToggle',
+                    'zhihu_global': 'aiSettingZhihuGlobalSearchToggle',
+                    'tavily': 'aiSettingTavilySearchToggle',
+                };
+                const settingId = settingMap[source];
+                if (settingId) {
+                    const settingToggle = document.getElementById(settingId);
+                    if (settingToggle) {
+                        settingToggle.classList.toggle('active', checkbox.checked);
+                    }
+                }
+                try { await window.saveSettings(); } catch (_) {}
+            });
+        }
+    });
 
     // ── 卡片召回切换 ──
     if (cardRecallToggle) {
@@ -1679,7 +1722,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:recall-cards'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -1691,7 +1734,9 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     let streamingContent = '';
     let streamingThinking = '';
     let hasReceivedChunk = false;
-    let searchSources = null;
+    let streamSearchSources = null;
+    let searchSourceStates = {};
+    let totalSearchSources = [];
     let recallCards = null;
     let refinedKeywords = '';
 
@@ -1757,16 +1802,20 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubThinking);
 
-    // 联网搜索状态：显示/关闭搜索动画
+    // 多源搜索状态管理
+    searchSourceStates = {};
+    totalSearchSources = [];
+
+    // 多源搜索状态：精炼阶段 → 搜索阶段 → 完成
     const unsubSearch = window.runtime.EventsOn('ai:search-status', (status) => {
         if (status === 'refining') {
             contentDiv.innerHTML = '';
-            contentDiv.appendChild(createAdvancedSearchIndicator('refining'));
+            contentDiv.appendChild(createSimpleSearchIndicator('正在优化搜索词...'));
         } else if (status === 'searching') {
             contentDiv.innerHTML = '';
-            contentDiv.appendChild(createAdvancedSearchIndicator('searching', refinedKeywords));
+            contentDiv.appendChild(createSimpleSearchIndicator('正在联网搜索...'));
         } else if (status === 'done') {
-            // 仅在尚未收到 stream chunk 时替换为打字点（搜索完成 → 等待 LLM 流式输出）
+            // 仅在尚未收到 stream chunk 时替换为打字点
             if (!hasReceivedChunk) {
                 contentDiv.innerHTML = '';
                 contentDiv.appendChild(createTypingDots());
@@ -1774,6 +1823,25 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         }
     });
     unsubs.push(unsubSearch);
+
+    // 搜索源状态更新（仅记录状态，不更新 UI 动画）
+    const unsubSourceStatus = window.runtime.EventsOn('ai:search-source-status', (statusJSON) => {
+        try {
+            const data = typeof statusJSON === 'string' ? JSON.parse(statusJSON) : statusJSON;
+            searchSourceStates[data.source] = data;
+        } catch (_) {}
+    });
+    unsubs.push(unsubSourceStatus);
+
+    // 搜索源错误事件 → 弹通知
+    const unsubSearchError = window.runtime.EventsOn('ai:search-error', (errJSON) => {
+        try {
+            const data = typeof errJSON === 'string' ? JSON.parse(errJSON) : errJSON;
+            searchSourceStates[data.source] = { source: data.source, status: 'error', error: data.error };
+            window.showNotification?.('联网搜索失败 (' + (sourceLabels[data.source] || data.source) + '): ' + data.error, 'error', 5000);
+        } catch (_) {}
+    });
+    unsubs.push(unsubSearchError);
 
     // 精炼后的搜索关键词
     const unsubKeywords = window.runtime.EventsOn('ai:refined-keywords', (keywords) => {
@@ -1784,7 +1852,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     // 联网搜索来源数据（结构化来源列表，AI 回复结束后展示）
     const unsubSources = window.runtime.EventsOn('ai:search-sources', (sourcesJSON) => {
         try {
-            searchSources = JSON.parse(sourcesJSON);
+            streamSearchSources = JSON.parse(sourcesJSON);
         } catch (_) {}
     });
     unsubs.push(unsubSources);
@@ -1881,38 +1949,64 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             }
         }
 
-        // 展示联网搜索来源折叠面板
-        if (searchSources && searchSources.length > 0) {
+        // 展示联网搜索来源折叠面板（按来源分组）
+        if (streamSearchSources && streamSearchSources.length > 0) {
             const details = document.createElement('details');
             details.className = 'search-sources';
             details.open = false;
             const summary = document.createElement('summary');
             summary.className = 'search-sources-summary';
-            summary.textContent = '🌐 搜索来源 (' + searchSources.length + ' 个)';
+            summary.textContent = '🌐 搜索来源 (' + streamSearchSources.length + ' 个)';
             details.appendChild(summary);
             const list = document.createElement('div');
             list.className = 'search-sources-content';
-            searchSources.forEach(function(src, i) {
-                const item = document.createElement('div');
-                item.className = 'search-sources-item';
-                var link = document.createElement('a');
-                link.href = src.url;
-                link.textContent = (i + 1) + '. ' + src.title;
-                link.addEventListener('click', (function(url) {
-                    return function(e) {
-                        e.preventDefault();
-                        window.runtime.BrowserOpenURL(url);
-                    };
-                })(src.url));
-                item.appendChild(link);
-                if (src.content) {
-                    var snippet = document.createElement('p');
-                    snippet.className = 'search-sources-snippet';
-                    snippet.textContent = src.content;
-                    item.appendChild(snippet);
-                }
-                list.appendChild(item);
+
+            // 按 source_label 分组
+            var groups = {};
+            streamSearchSources.forEach(function(src) {
+                var label = src.source_label || 'unknown';
+                if (!groups[label]) groups[label] = [];
+                groups[label].push(src);
             });
+
+            // 来源标签显示名称映射
+            var groupLabels = {
+                'tavily': '📡 Tavily搜索',
+                'zhihu_search': '📖 知乎搜索',
+                'zhihu_global': '🌍 全网搜索',
+            };
+
+            var groupOrder = ['tavily', 'zhihu_search', 'zhihu_global'];
+            groupOrder.forEach(function(labelKey) {
+                var items = groups[labelKey];
+                if (!items || items.length === 0) return;
+                var groupHeader = document.createElement('div');
+                groupHeader.className = 'search-sources-group-header';
+                groupHeader.textContent = groupLabels[labelKey] || labelKey + ' (' + items.length + ')';
+                list.appendChild(groupHeader);
+                items.forEach(function(src, idx) {
+                    var item = document.createElement('div');
+                    item.className = 'search-sources-item';
+                    var link = document.createElement('a');
+                    link.href = src.url;
+                    link.textContent = (idx + 1) + '. ' + src.title;
+                    link.addEventListener('click', (function(url) {
+                        return function(e) {
+                            e.preventDefault();
+                            window.runtime.BrowserOpenURL(url);
+                        };
+                    })(src.url));
+                    item.appendChild(link);
+                    if (src.content) {
+                        var snippet = document.createElement('p');
+                        snippet.className = 'search-sources-snippet';
+                        snippet.textContent = src.content;
+                        item.appendChild(snippet);
+                    }
+                    list.appendChild(item);
+                });
+            });
+
             details.appendChild(list);
             // 插入到操作按钮之前
             var actionsEl = streamingEl.querySelector('.ai-msg-actions');
@@ -2031,7 +2125,8 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             }
             return 'skill_' + id;
         });
-        window.go.main.App.CallAIStream(myGen, messages, enableThinking, enableWebSearch, enableCardRecall, activeSessionId, isRegenerate, skillIds);
+        const searchSourcesArray = Array.from(searchSources);
+        window.go.main.App.CallAIStream(myGen, messages, enableThinking, searchSourcesArray, enableCardRecall, activeSessionId, isRegenerate, skillIds);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -2317,89 +2412,29 @@ function createTypingDots() {
 }
 
 /**
- * 创建高级联网搜索状态指示器（可点击展开下拉菜单）
+ * 来源名称映射
+ */
+const sourceLabels = {
+    'tavily': 'Tavily搜索',
+    'zhihu_search': '知乎搜索',
+    'zhihu_global': '全网搜索',
+};
+
+/**
+ * 创建多源搜索状态指示器
  * @param {'refining'|'searching'} status - 搜索阶段
  * @param {string} [keywords=''] - 精炼后的关键词
+ * @param {Object} [sourceStates={}] - 各搜索源状态
  * @returns {HTMLSpanElement}
  */
-function createAdvancedSearchIndicator(status, keywords) {
+/**
+ * 简易搜索指示器：地球图标 + 文字（无下拉多源详情）
+ * @param {string} text - 显示文字，如 "正在优化搜索词..."、"正在联网搜索..."
+ */
+function createSimpleSearchIndicator(text) {
     const el = document.createElement('span');
-    el.className = 'ai-search-indicator';
-    el.dataset.status = status;
-
-    // 地球 SVG（与原来一致）
-    const earthSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-
-    if (status === 'refining') {
-        // 精炼阶段：简洁展示，无下拉
-        el.innerHTML = earthSvg + '<span class="ai-search-indicator-text">正在优化搜索词...</span>';
-        return el;
-    }
-
-    // 搜索阶段：可点击 bar + 下拉菜单
-    el.dataset.open = 'false';
-
-    const bar = document.createElement('span');
-    bar.className = 'ai-search-indicator-bar';
-
-    let text = '正在联网搜索...';
-    if (keywords) {
-        const count = keywords.split(/\s+/).filter(Boolean).length;
-        text += '（' + count + ' 个关键词）';
-    }
-
-    bar.innerHTML = earthSvg + '<span class="ai-search-indicator-text">' + text + '</span>';
-
-    // 下拉箭头
-    const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    arrowSvg.setAttribute('width', '12');
-    arrowSvg.setAttribute('height', '12');
-    arrowSvg.setAttribute('viewBox', '0 0 24 24');
-    arrowSvg.setAttribute('class', 'ai-search-indicator-arrow');
-    const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    arrowPath.setAttribute('d', 'M6 9l6 6 6-6');
-    arrowSvg.appendChild(arrowPath);
-    bar.appendChild(arrowSvg);
-
-    el.appendChild(bar);
-
-    // 下拉菜单
-    const dropdown = document.createElement('div');
-    dropdown.className = 'ai-search-dropdown';
-    dropdown.style.display = 'none';
-
-    if (keywords) {
-        const keywordsContainer = document.createElement('div');
-        keywordsContainer.className = 'ai-search-keywords';
-        const keywordList = keywords.split(/\s+/).filter(Boolean);
-        keywordList.forEach(function (kw) {
-            const tag = document.createElement('span');
-            tag.className = 'ai-search-keyword-tag';
-            tag.textContent = kw;
-            keywordsContainer.appendChild(tag);
-        });
-        dropdown.appendChild(keywordsContainer);
-    }
-
-    el.appendChild(dropdown);
-
-    // 点击展开/收起
-    bar.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isOpen = el.dataset.open === 'true';
-        el.dataset.open = isOpen ? 'false' : 'true';
-        dropdown.style.display = isOpen ? 'none' : 'flex';
-    });
-
-    // 点击外部收起
-    function closeHandler(e) {
-        if (!el.contains(e.target)) {
-            el.dataset.open = 'false';
-            dropdown.style.display = 'none';
-        }
-    }
-    document.addEventListener('click', closeHandler);
-
+    el.className = 'ai-simple-search-indicator';
+    el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="ai-search-indicator-text">' + text + '</span>';
     return el;
 }
 
@@ -2472,7 +2507,40 @@ export async function onAIChatViewActivated() {
  */
 function syncToolbarState() {
     enableThinking = document.getElementById('aiChatSearchToggle')?.classList.contains('active') || false;
-    enableWebSearch = document.getElementById('aiChatWebSearchToggle')?.classList.contains('active') || false;
+    // 获取密钥配置状态（从设置页的 input 读取）
+    const zhihuSecret = document.getElementById('aiZhihuAccessSecret')?.value || '';
+    const tavilyKey = document.getElementById('aiTavilyApiKey')?.value || '';
+    const hasZhihuSecret = !!(zhihuSecret && zhihuSecret.trim());
+    const hasTavilyKey = !!(tavilyKey && tavilyKey.trim());
+    
+    // 从复选框读取搜索源状态
+    searchSources = new Set();
+    ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(id => {
+        const cb = document.getElementById(id);
+        if (!cb) return;
+        const label = cb.closest('.ai-chat-search-source-item');
+        // 判断是否需要禁用
+        let needsDisabled = false;
+        if (cb.dataset.source === 'zhihu_search' || cb.dataset.source === 'zhihu_global') {
+            needsDisabled = !hasZhihuSecret;
+        } else if (cb.dataset.source === 'tavily') {
+            needsDisabled = !hasTavilyKey;
+        }
+        if (needsDisabled) {
+            cb.disabled = true;
+            if (label) label.classList.add('disabled');
+            cb.checked = false;
+        } else {
+            cb.disabled = false;
+            if (label) label.classList.remove('disabled');
+            if (cb.checked) {
+                searchSources.add(cb.dataset.source);
+            }
+        }
+    });
+    if (searchSourcesBtn) {
+        searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
+    }
     enableCardRecall = document.getElementById('aiChatCardRecallToggle')?.classList.contains('active') || false;
 }
 
@@ -2484,6 +2552,17 @@ function showEmptyState() {
     if (clearBtnEl) clearBtnEl.style.display = 'none';
     // 侧栏仍可见但禁用操作
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = 'none';
+    // 重置标题和 Token 显示
+    const titleEl = document.getElementById('aiChatTitle');
+    if (titleEl) titleEl.textContent = 'AI 助手';
+    if (contextSizeEl) {
+        contextSizeEl.textContent = '';
+        contextSizeEl.style.display = 'none';
+    }
+    // 清空内存中的旧会话数据（数据库已重置，这些数据已失效）
+    chatHistory = [];
+    sessions = [];
+    activeSessionId = null;
 }
 
 /**

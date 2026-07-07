@@ -362,6 +362,10 @@ export function TestTavilyConnection(arg1) {
   return window['go']['main']['App']['TestTavilyConnection'](arg1);
 }
 
+export function TestZhihuConnection(arg1) {
+  return window['go']['main']['App']['TestZhihuConnection'](arg1);
+}
+
 export function TogglePinAISession(arg1) {
   return window['go']['main']['App']['TogglePinAISession'](arg1);
 }

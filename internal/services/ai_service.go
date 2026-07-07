@@ -29,11 +29,12 @@ type Message struct {
 
 // AIConfig 表示 AI 服务配置
 type AIConfig struct {
-	Provider     string `json:"provider"`
-	BaseURL      string `json:"base_url"`
-	APIKey       string `json:"api_key"`
-	Model        string `json:"model"`
-	TavilyAPIKey string `json:"tavily_api_key"`
+	Provider          string `json:"provider"`
+	BaseURL           string `json:"base_url"`
+	APIKey            string `json:"api_key"`
+	Model             string `json:"model"`
+	TavilyAPIKey      string `json:"tavily_api_key"`
+	ZhihuAccessSecret string `json:"zhihu_access_secret"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -69,11 +70,12 @@ func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
 	return AIConfig{
-		Provider:     svc.Get("ai_provider"),
-		BaseURL:      svc.Get("ai_base_url"),
-		APIKey:       svc.Get("ai_api_key"),
-		Model:        svc.Get("ai_model"),
-		TavilyAPIKey: svc.Get("tavily_api_key"),
+		Provider:          svc.Get("ai_provider"),
+		BaseURL:           svc.Get("ai_base_url"),
+		APIKey:            svc.Get("ai_api_key"),
+		Model:             svc.Get("ai_model"),
+		TavilyAPIKey:      svc.Get("tavily_api_key"),
+		ZhihuAccessSecret: svc.Get("zhihu_access_secret"),
 	}
 }
 
@@ -92,7 +94,10 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	if err := svc.Set("ai_model", cfg.Model); err != nil {
 		return err
 	}
-	return svc.Set("tavily_api_key", cfg.TavilyAPIKey)
+	if err := svc.Set("tavily_api_key", cfg.TavilyAPIKey); err != nil {
+		return err
+	}
+	return svc.Set("zhihu_access_secret", cfg.ZhihuAccessSecret)
 }
 
 // CallAI 调用 AI 接口（非流式）

@@ -688,6 +688,12 @@
   left: 14px;
 }
 
+/* 设置页开关禁用状态 */
+.ai-setting-toggle-row.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* ——— End AI Settings ——— */
 
 /* ── 通用 button 变体（用于设置页预设管理） ── */

@@ -22,7 +22,7 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
-export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boolean,arg4:boolean,arg5:boolean,arg6:number,arg7:boolean,arg8:Array<string>):Promise<void>;
+export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:number,arg7:boolean,arg8:Array<string>):Promise<void>;
 
 export function CancelAIStream():Promise<void>;
 
@@ -183,6 +183,8 @@ export function SwitchProfile(arg1:number):Promise<void>;
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
+
+export function TestZhihuConnection(arg1:string):Promise<boolean>;
 
 export function TogglePinAISession(arg1:number):Promise<void>;
 

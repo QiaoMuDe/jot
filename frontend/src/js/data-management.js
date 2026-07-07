@@ -192,6 +192,14 @@ export async function resetDatabase() {
     window.loadNotebooks();
     // 重置后重新应用默认设置
     reloadSettings();
+    // 清除 AI 聊天页面的旧消息 HTML，防止后续切换视图时闪烁旧内容
+    const aiMessagesEl = document.getElementById('aiChatMessages');
+    if (aiMessagesEl) aiMessagesEl.innerHTML = '';
+    // 清除 AI 会话侧边栏中的旧会话列表
+    const aiSessionListEl = document.getElementById('aiSessionList');
+    if (aiSessionListEl) aiSessionListEl.innerHTML = '';
+    // 提前预加载 AI 聊天页面状态，使 AI 助手选项卡切换时不再闪烁
+    window.onAIChatViewActivated?.();
     // 重置后折叠侧栏，用户展开时自动触发刷新笔记本数据
     if (els.notebookSidebar) {
         els.notebookSidebar.classList.add('collapsed');
@@ -277,6 +285,8 @@ export async function importData() {
                     loadDataStats();
                     window.loadTags();
                     reloadSettings();
+                    // 提前预加载 AI 聊天页面状态
+                    window.onAIChatViewActivated?.();
                 }
             }
         } else {

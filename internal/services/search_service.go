@@ -12,9 +12,10 @@ import (
 
 // SearchSource 单条搜索来源，用于前端展示
 type SearchSource struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Content string `json:"content"`
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Content     string `json:"content"`
+	SourceLabel string `json:"source_label"`
 }
 
 // SearchWebResult 搜索返回结果，包含格式化文本和结构化来源列表
@@ -24,11 +25,11 @@ type SearchWebResult struct {
 }
 
 // SearchWeb 使用 Tavily 搜索互联网，返回结构化的搜索结果
-// 如果 apiKey 为空或搜索失败，返回 nil（不阻塞调用方）
+// 如果 apiKey 为空，返回 error
 // ctx 用于支持超时和取消（与 CallAIStream 共用 cancel，停止按钮可中断搜索）
-func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int) *SearchWebResult {
+func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int) (*SearchWebResult, error) {
 	if apiKey == "" {
-		return nil
+		return nil, fmt.Errorf("Tavily API Key 未配置")
 	}
 
 	// 用传入的 ctx 派生超时子上下文（5s 超时，但 ctx 取消时立即传播）
@@ -43,11 +44,11 @@ func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int)
 	}
 	answer, err := client.Search(searchCtx, searchQuery)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("Tavily 搜索失败: %w", err)
 	}
 
 	if len(answer.Results) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var b strings.Builder
@@ -65,14 +66,15 @@ func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int)
 		b.WriteString("\n")
 
 		sources = append(sources, SearchSource{
-			Title:   r.Title,
-			URL:     r.URL.String(),
-			Content: content,
+			Title:       r.Title,
+			URL:         r.URL.String(),
+			Content:     content,
+			SourceLabel: "tavily",
 		})
 	}
 
 	return &SearchWebResult{
 		FormattedText: b.String(),
 		Sources:       sources,
-	}
+	}, nil
 }

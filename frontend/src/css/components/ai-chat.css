@@ -386,13 +386,19 @@
 }
 
 /* ── 搜索指示器 ── */
-.ai-search-indicator {
+.ai-search-indicator,
+.ai-simple-search-indicator {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 4px 0;
     color: var(--accent);
     font-size: 0.85rem;
+}
+
+.ai-simple-search-indicator svg {
+    animation: ai-search-spin 0.8s linear infinite;
+    flex-shrink: 0;
 }
 
 .ai-search-indicator[data-status="searching"] {
@@ -489,7 +495,152 @@
     line-height: 1.5;
 }
 
+/* ── 多源搜索指示器 ── */
+.ai-multi-search-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    color: var(--accent);
+    font-size: 0.85rem;
+}
+
+.ai-multi-search-indicator[data-status="searching"] {
+    position: relative;
+    flex-direction: column;
+    cursor: pointer;
+    user-select: none;
+}
+
+.ai-multi-search-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--accent);
+    flex-wrap: wrap;
+    transition: background 0.15s;
+}
+
+.ai-multi-search-bar:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
+}
+
+.ai-multi-search-bar svg:first-child {
+    animation: ai-search-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.ai-multi-search-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ai-multi-source-list {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-left: 2px;
+}
+
+.ai-multi-source-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--hover-bg, rgba(128, 128, 128, 0.05));
+}
+
+.ai-multi-source-row.searching {
+    color: var(--accent);
+}
+
+.ai-multi-source-row.success {
+    color: #22c55e;
+}
+
+.ai-multi-source-row.error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.ai-multi-source-spin {
+    animation: ai-search-spin 0.8s linear infinite;
+}
+
+.ai-multi-source-text {
+    white-space: nowrap;
+}
+
+.ai-multi-source-error-text {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* ── 多源搜索下拉详情 ── */
+.ai-multi-source-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.ai-multi-source-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ai-multi-source-detail-row:last-child {
+    border-bottom: none;
+}
+
+.ai-multi-source-detail-row.success {
+    color: #22c55e;
+}
+
+.ai-multi-source-detail-row.error {
+    color: #ef4444;
+}
+
+.ai-multi-source-detail-row.searching {
+    color: var(--text-muted);
+}
+
+.ai-multi-source-detail-label {
+    font-weight: 500;
+}
+
+.ai-multi-source-detail-status {
+    font-size: 0.78rem;
+}
+
 /* ── 联网搜索来源折叠面板 ── */
+.search-sources-group-header {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    padding: 6px 0 4px 0;
+    margin-top: 4px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.3px;
+}
+.search-sources-group-header:first-child {
+    margin-top: 0;
+}
+
 .search-sources {
     margin: 12px 0 4px 0;
     border: 1px solid var(--border);
@@ -729,6 +880,52 @@
 
 .ai-chat-search-toggle.active .ai-chat-toggle-knob {
     left: 14px;
+}
+
+/* ── 多源搜索下拉菜单 ── */
+.ai-chat-sources-wrap {
+    position: relative;
+}
+
+.ai-chat-search-sources-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    min-width: 160px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
+    padding: 6px 0;
+    z-index: 100;
+    animation: ai-dropdown-in 0.15s ease-out;
+    margin-bottom: 4px;
+}
+
+.ai-chat-search-source-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    transition: background 0.12s;
+    user-select: none;
+}
+
+.ai-chat-search-source-item:hover {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.06));
+}
+
+.ai-chat-search-source-item.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ai-chat-search-source-item input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--accent);
 }
 
 /* ── 更多技能 ── */

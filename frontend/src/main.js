@@ -28,6 +28,9 @@ import { loadTrashNotes } from './js/trash-page.js';
 // AI 对话页面模块
 import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
 
+// 暴露到 window，供 data-management.js 等模块在重置/还原后预加载 AI 聊天页面
+window.onAIChatViewActivated = onAIChatViewActivated;
+
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({
     breaks: true,
@@ -1947,6 +1950,32 @@ async function initAISettings() {
     const tavilyKey = document.getElementById('aiTavilyApiKey');
     if (tavilyKey) {
         tavilyKey.addEventListener('change', async () => {
+            if (!tavilyKey.value.trim()) {
+                // 清空 Key → 禁用 Tavily 搜索开关
+                const line = document.getElementById('aiSettingTavilySearchLine');
+                if (line) {
+                    line.classList.add('disabled');
+                    const toggle = line.querySelector('.ai-chat-toggle-switch');
+                    if (toggle) toggle.classList.remove('active');
+                }
+                const cb = document.getElementById('aiChatTavilySearch');
+                if (cb) {
+                    cb.disabled = true;
+                    cb.checked = false;
+                    const label = cb.closest('.ai-chat-search-source-item');
+                    if (label) label.classList.add('disabled');
+                }
+            } else {
+                // 填入 Key → 恢复 Tavily 搜索开关
+                const line = document.getElementById('aiSettingTavilySearchLine');
+                if (line) line.classList.remove('disabled');
+                const cb = document.getElementById('aiChatTavilySearch');
+                if (cb) {
+                    cb.disabled = false;
+                    const label = cb.closest('.ai-chat-search-source-item');
+                    if (label) label.classList.remove('disabled');
+                }
+            }
             await saveSettings();
             nm.show(tavilyKey.value.trim() ? 'Tavily API Key 已保存' : 'Tavily API Key 已清除', 'success');
         });
@@ -1973,20 +2002,154 @@ async function initAISettings() {
         });
     }
 
-    // ── 联网搜索默认开启切换 ──
-    const settingWebSearchLine = document.getElementById('aiSettingWebSearchLine');
-    if (settingWebSearchLine) {
-        settingWebSearchLine.addEventListener('click', async () => {
-            const toggleSwitch = document.getElementById('aiSettingWebSearchToggle');
-            if (!toggleSwitch) return;
-            const isActive = toggleSwitch.classList.toggle('active');
-            await saveSettings();
-            nm.show(isActive ? '联网搜索已默认开启' : '联网搜索已默认关闭', isActive ? 'success' : 'info');
-            // 同步工具栏 toggle
-            const toolbarToggle = document.getElementById('aiChatWebSearchToggle');
-            if (toolbarToggle) {
-                toolbarToggle.classList.toggle('active', isActive);
+    // ── 知乎注册链接（通过系统浏览器打开） ──
+    const zhihuLink = document.querySelector('.zhihu-link');
+    if (zhihuLink) {
+        zhihuLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.runtime.BrowserOpenURL('https://developer.zhihu.com/');
+        });
+    }
+
+    // ── 知乎 Access Secret 显示/隐藏切换 ──
+    const zhihuToggleBtn = document.getElementById('aiZhihuToggleBtn');
+    const zhihuSecretInput = document.getElementById('aiZhihuAccessSecret');
+    if (zhihuToggleBtn && zhihuSecretInput) {
+        zhihuToggleBtn.addEventListener('click', () => {
+            const isPassword = zhihuSecretInput.type === 'password';
+            zhihuSecretInput.type = isPassword ? 'text' : 'password';
+            zhihuToggleBtn.querySelector('.toggle-eye').style.display = isPassword ? 'none' : '';
+            zhihuToggleBtn.querySelector('.toggle-eye-off').style.display = isPassword ? '' : 'none';
+        });
+    }
+
+    // ── 知乎 Access Secret 自动保存 ──
+    if (zhihuSecretInput) {
+        zhihuSecretInput.addEventListener('change', async () => {
+            if (!zhihuSecretInput.value.trim()) {
+                // 清空 Secret → 禁用知乎搜索和知乎全网搜索开关
+                ['aiSettingZhihuSearchLine', 'aiSettingZhihuGlobalSearchLine'].forEach(lineId => {
+                    const line = document.getElementById(lineId);
+                    if (line) {
+                        line.classList.add('disabled');
+                        const toggle = line.querySelector('.ai-chat-toggle-switch');
+                        if (toggle) toggle.classList.remove('active');
+                    }
+                });
+                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch'].forEach(cbId => {
+                    const cb = document.getElementById(cbId);
+                    if (cb) {
+                        cb.disabled = true;
+                        cb.checked = false;
+                        const label = cb.closest('.ai-chat-search-source-item');
+                        if (label) label.classList.add('disabled');
+                    }
+                });
+            } else {
+                // 填入 Secret → 恢复知乎搜索和知乎全网搜索开关
+                ['aiSettingZhihuSearchLine', 'aiSettingZhihuGlobalSearchLine'].forEach(lineId => {
+                    const line = document.getElementById(lineId);
+                    if (line) line.classList.remove('disabled');
+                });
+                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch'].forEach(cbId => {
+                    const cb = document.getElementById(cbId);
+                    if (cb) {
+                        cb.disabled = false;
+                        const label = cb.closest('.ai-chat-search-source-item');
+                        if (label) label.classList.remove('disabled');
+                    }
+                });
             }
+            await saveSettings();
+            nm.show(zhihuSecretInput.value.trim() ? 'Access Secret 已保存' : 'Access Secret 已清除', 'success');
+        });
+    }
+
+    // ── 知乎测试连接 ──
+    const testZhihuBtn = document.getElementById('aiTestZhihuBtn');
+    if (testZhihuBtn && zhihuSecretInput) {
+        testZhihuBtn.addEventListener('click', async () => {
+            const secret = zhihuSecretInput.value.trim();
+            if (!secret) {
+                nm.show('请输入 Access Secret', 'warning');
+                return;
+            }
+            setBtnLoading(testZhihuBtn, true, '测试中…');
+            try {
+                const ok = await window.go.main.App.TestZhihuConnection(secret);
+                if (ok) {
+                    nm.show('知乎连接测试成功', 'success');
+                } else {
+                    nm.show('知乎连接测试失败', 'error');
+                }
+            } catch (e) {
+                nm.show('连接失败: ' + (e.message || e), 'error');
+            } finally {
+                setBtnLoading(testZhihuBtn, false);
+            }
+        });
+    }
+
+    // ── 知乎搜索切换 ──
+    const settingZhihuSearchLine = document.getElementById('aiSettingZhihuSearchLine');
+    if (settingZhihuSearchLine) {
+        settingZhihuSearchLine.addEventListener('click', async () => {
+            const toggleSwitch = document.getElementById('aiSettingZhihuSearchToggle');
+            if (!toggleSwitch) return;
+            const willBeActive = !toggleSwitch.classList.contains('active');
+            // 尝试开启 → 检查是否有知乎 Access Secret
+            if (willBeActive) {
+                const secret = document.getElementById('aiZhihuAccessSecret')?.value || '';
+                if (!secret.trim()) {
+                    nm.show('请先在设置中配置知乎 Access Secret', 'warning');
+                    return;
+                }
+            }
+            toggleSwitch.classList.toggle('active');
+            await saveSettings();
+            nm.show(willBeActive ? '知乎搜索已开启' : '知乎搜索已关闭', willBeActive ? 'success' : 'info');
+        });
+    }
+
+    // ── 知乎全网搜索切换 ──
+    const settingZhihuGlobalSearchLine = document.getElementById('aiSettingZhihuGlobalSearchLine');
+    if (settingZhihuGlobalSearchLine) {
+        settingZhihuGlobalSearchLine.addEventListener('click', async () => {
+            const toggleSwitch = document.getElementById('aiSettingZhihuGlobalSearchToggle');
+            if (!toggleSwitch) return;
+            const willBeActive = !toggleSwitch.classList.contains('active');
+            // 尝试开启 → 检查是否有知乎 Access Secret
+            if (willBeActive) {
+                const secret = document.getElementById('aiZhihuAccessSecret')?.value || '';
+                if (!secret.trim()) {
+                    nm.show('请先在设置中配置知乎 Access Secret', 'warning');
+                    return;
+                }
+            }
+            toggleSwitch.classList.toggle('active');
+            await saveSettings();
+            nm.show(willBeActive ? '知乎全网搜索已开启' : '知乎全网搜索已关闭', willBeActive ? 'success' : 'info');
+        });
+    }
+
+    // ── Tavily 搜索切换 ──
+    const settingTavilySearchLine = document.getElementById('aiSettingTavilySearchLine');
+    if (settingTavilySearchLine) {
+        settingTavilySearchLine.addEventListener('click', async () => {
+            const toggleSwitch = document.getElementById('aiSettingTavilySearchToggle');
+            if (!toggleSwitch) return;
+            const willBeActive = !toggleSwitch.classList.contains('active');
+            // 尝试开启 → 检查是否有 Tavily API Key
+            if (willBeActive) {
+                const key = document.getElementById('aiTavilyApiKey')?.value || '';
+                if (!key.trim()) {
+                    nm.show('请先在设置中配置 Tavily API Key', 'warning');
+                    return;
+                }
+            }
+            toggleSwitch.classList.toggle('active');
+            await saveSettings();
+            nm.show(willBeActive ? 'Tavily 搜索已开启' : 'Tavily 搜索已关闭', willBeActive ? 'success' : 'info');
         });
     }
 
@@ -7057,24 +7220,98 @@ async function loadSettings() {
 
         // --- AI: Tavily API Key ---
         const tavilyKey = document.getElementById('aiTavilyApiKey');
-        if (tavilyKey) tavilyKey.value = cfg.tavily_api_key || '';
+        if (tavilyKey) {
+            tavilyKey.value = cfg.tavily_api_key || '';
+            // 每次加载设置时重置为隐藏状态（密码模式）
+            tavilyKey.type = 'password';
+        }
+        const tavilyToggleBtn = document.getElementById('aiTavilyToggleBtn');
+        if (tavilyToggleBtn) {
+            tavilyToggleBtn.querySelector('.toggle-eye').style.display = '';
+            tavilyToggleBtn.querySelector('.toggle-eye-off').style.display = 'none';
+        }
 
-        // --- AI: Toggles ---
+        // --- AI: 知乎 Access Secret ---
+        const zhihuSecret = document.getElementById('aiZhihuAccessSecret');
+        if (zhihuSecret) {
+            zhihuSecret.value = cfg.zhihu_access_secret || '';
+            // 每次加载设置时重置为隐藏状态（密码模式）
+            zhihuSecret.type = 'password';
+        }
+        const zhihuToggleBtn = document.getElementById('aiZhihuToggleBtn');
+        if (zhihuToggleBtn) {
+            zhihuToggleBtn.querySelector('.toggle-eye').style.display = '';
+            zhihuToggleBtn.querySelector('.toggle-eye-off').style.display = 'none';
+        }
+
+        // --- AI: 搜索源开关 ---
         const searchToggle = document.getElementById('aiSettingSearchToggle');
         if (searchToggle) searchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
 
-        const webSearchToggle = document.getElementById('aiSettingWebSearchToggle');
-        if (webSearchToggle) webSearchToggle.classList.toggle('active', cfg.ai_web_search_enabled);
+        const zhihuSearchToggle = document.getElementById('aiSettingZhihuSearchToggle');
+        if (zhihuSearchToggle) zhihuSearchToggle.classList.toggle('active', cfg.zhihu_search_enabled);
+
+        const zhihuGlobalSearchToggle = document.getElementById('aiSettingZhihuGlobalSearchToggle');
+        if (zhihuGlobalSearchToggle) zhihuGlobalSearchToggle.classList.toggle('active', cfg.zhihu_global_search_enabled);
+
+        const tavilySearchToggle = document.getElementById('aiSettingTavilySearchToggle');
+        if (tavilySearchToggle) tavilySearchToggle.classList.toggle('active', cfg.tavily_search_enabled);
 
         const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
         if (cardRecallToggle) cardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
+
+        // --- 根据密钥配置禁用/强制关闭搜索开关 ---
+        const hasZhihuSecret = !!(cfg.zhihu_access_secret && cfg.zhihu_access_secret.trim());
+        const hasTavilyKey = !!(cfg.tavily_api_key && cfg.tavily_api_key.trim());
+        
+        const toggleZhihuSearchLine = document.getElementById('aiSettingZhihuSearchLine');
+        const toggleZhihuGlobalLine = document.getElementById('aiSettingZhihuGlobalSearchLine');
+        const toggleTavilyLine = document.getElementById('aiSettingTavilySearchLine');
+
+        [toggleZhihuSearchLine, toggleZhihuGlobalLine].forEach(el => {
+            if (el) {
+                if (!hasZhihuSecret) {
+                    el.classList.add('disabled');
+                    const toggleSwitch = el.querySelector('.ai-chat-toggle-switch');
+                    if (toggleSwitch) toggleSwitch.classList.remove('active');
+                } else {
+                    el.classList.remove('disabled');
+                }
+            }
+        });
+        if (toggleTavilyLine) {
+            if (!hasTavilyKey) {
+                toggleTavilyLine.classList.add('disabled');
+                const toggleSwitch = toggleTavilyLine.querySelector('.ai-chat-toggle-switch');
+                if (toggleSwitch) toggleSwitch.classList.remove('active');
+            } else {
+                toggleTavilyLine.classList.remove('disabled');
+            }
+        }
+
+        // 强制关闭未配置密钥的搜索源（同步 cfg 值，使下面聊天栏同步也能生效）
+        if (!hasZhihuSecret) {
+            cfg.zhihu_search_enabled = false;
+            cfg.zhihu_global_search_enabled = false;
+        }
+        if (!hasTavilyKey) {
+            cfg.tavily_search_enabled = false;
+        }
 
         // 同步 AI 聊天工具栏 toggle
         const chatSearchToggle = document.getElementById('aiChatSearchToggle');
         if (chatSearchToggle) chatSearchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
 
-        const chatWebSearchToggle = document.getElementById('aiChatWebSearchToggle');
-        if (chatWebSearchToggle) chatWebSearchToggle.classList.toggle('active', cfg.ai_web_search_enabled);
+        // 注意：AI 聊天栏的多源搜索 UI 现在通过复选框列表展示
+        // 在 Toolbar 部分的同步也同步三个开关
+        const chatZhihuSearch = document.getElementById('aiChatZhihuSearch');
+        if (chatZhihuSearch) chatZhihuSearch.checked = cfg.zhihu_search_enabled;
+
+        const chatZhihuGlobalSearch = document.getElementById('aiChatZhihuGlobalSearch');
+        if (chatZhihuGlobalSearch) chatZhihuGlobalSearch.checked = cfg.zhihu_global_search_enabled;
+
+        const chatTavilySearch = document.getElementById('aiChatTavilySearch');
+        if (chatTavilySearch) chatTavilySearch.checked = cfg.tavily_search_enabled;
 
         const chatCardRecallToggle = document.getElementById('aiChatCardRecallToggle');
         if (chatCardRecallToggle) chatCardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
@@ -7133,8 +7370,11 @@ async function saveSettings() {
             ai_api_key: els.aiAPIKey?.value || '',
             ai_model: els.aiModelLabel?.textContent || '',
             tavily_api_key: document.getElementById('aiTavilyApiKey')?.value || '',
+            zhihu_access_secret: document.getElementById('aiZhihuAccessSecret')?.value || '',
+            zhihu_search_enabled: document.getElementById('aiSettingZhihuSearchToggle')?.classList.contains('active') || false,
+            zhihu_global_search_enabled: document.getElementById('aiSettingZhihuGlobalSearchToggle')?.classList.contains('active') || false,
+            tavily_search_enabled: document.getElementById('aiSettingTavilySearchToggle')?.classList.contains('active') || false,
             ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
-            ai_web_search_enabled: document.getElementById('aiSettingWebSearchToggle')?.classList.contains('active') || false,
             ai_card_recall_enabled: document.getElementById('aiSettingCardRecallToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
             ai_ref_max_chars: parseInt(document.getElementById('aiRefMaxChars')?.value) || 1000,

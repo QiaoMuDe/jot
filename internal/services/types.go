@@ -64,10 +64,13 @@ type SettingsConfig struct {
 	AIBaseURL           string `json:"ai_base_url"`
 	AIAPIKey            string `json:"ai_api_key"`
 	AIModel             string `json:"ai_model"`
-	TavilyAPIKey        string `json:"tavily_api_key"`
-	AIThinkingEnabled   bool   `json:"ai_thinking_enabled"`
-	AIWebSearchEnabled  bool   `json:"ai_web_search_enabled"`
-	AICardRecallEnabled bool   `json:"ai_card_recall_enabled"`
+	TavilyAPIKey            string `json:"tavily_api_key"`
+	AIThinkingEnabled       bool   `json:"ai_thinking_enabled"`
+	ZhihuAccessSecret       string `json:"zhihu_access_secret"`
+	ZhihuSearchEnabled      bool   `json:"zhihu_search_enabled"`
+	ZhihuGlobalSearchEnabled bool  `json:"zhihu_global_search_enabled"`
+	TavilySearchEnabled     bool   `json:"tavily_search_enabled"`
+	AICardRecallEnabled     bool   `json:"ai_card_recall_enabled"`
 	AICardRecallLimit   int    `json:"ai_card_recall_limit"`
 	AIRefMaxChars       int    `json:"ai_ref_max_chars"`
 	AISearchResultLimit int    `json:"ai_search_result_limit"`
@@ -89,10 +92,13 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AIBaseURL:           s.Get("ai_base_url"),
 		AIAPIKey:            s.Get("ai_api_key"),
 		AIModel:             s.Get("ai_model"),
-		TavilyAPIKey:        s.Get("tavily_api_key"),
-		AIThinkingEnabled:   parseBoolSetting(s.Get("ai_thinking_enabled")),
-		AIWebSearchEnabled:  parseBoolSetting(s.Get("ai_web_search_enabled")),
-		AICardRecallEnabled: parseBoolSetting(s.Get("ai_card_recall_enabled")),
+		TavilyAPIKey:            s.Get("tavily_api_key"),
+		AIThinkingEnabled:       parseBoolSetting(s.Get("ai_thinking_enabled")),
+		ZhihuAccessSecret:       s.Get("zhihu_access_secret"),
+		ZhihuSearchEnabled:      parseBoolSetting(s.Get("zhihu_search_enabled")),
+		ZhihuGlobalSearchEnabled: parseBoolSetting(s.Get("zhihu_global_search_enabled")),
+		TavilySearchEnabled:     parseBoolSetting(s.Get("tavily_search_enabled")),
+		AICardRecallEnabled:     parseBoolSetting(s.Get("ai_card_recall_enabled")),
 		AICardRecallLimit:   parseIntSetting(s.Get("ai_card_recall_limit"), 5),
 		AIRefMaxChars:       parseIntSetting(s.Get("ai_ref_max_chars"), 5000),
 		AISearchResultLimit: parseIntSetting(s.Get("ai_search_result_limit"), 5),
@@ -142,9 +148,12 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_api_key":             cfg.AIAPIKey,
 		"ai_model":               cfg.AIModel,
 		"tavily_api_key":         cfg.TavilyAPIKey,
-		"ai_thinking_enabled":    strconv.FormatBool(cfg.AIThinkingEnabled),
-		"ai_web_search_enabled":  strconv.FormatBool(cfg.AIWebSearchEnabled),
-		"ai_card_recall_enabled": strconv.FormatBool(cfg.AICardRecallEnabled),
+		"ai_thinking_enabled":      strconv.FormatBool(cfg.AIThinkingEnabled),
+		"zhihu_access_secret":         cfg.ZhihuAccessSecret,
+		"zhihu_search_enabled":        strconv.FormatBool(cfg.ZhihuSearchEnabled),
+		"zhihu_global_search_enabled": strconv.FormatBool(cfg.ZhihuGlobalSearchEnabled),
+		"tavily_search_enabled":       strconv.FormatBool(cfg.TavilySearchEnabled),
+		"ai_card_recall_enabled":      strconv.FormatBool(cfg.AICardRecallEnabled),
 		"ai_card_recall_limit":   strconv.Itoa(cfg.AICardRecallLimit),
 		"ai_ref_max_chars":       strconv.Itoa(cfg.AIRefMaxChars),
 		"ai_search_result_limit": strconv.Itoa(cfg.AISearchResultLimit),

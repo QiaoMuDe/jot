@@ -544,6 +544,27 @@
                             <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
                         </div>
                     </div>
+                        <!-- 知乎 Access Secret -->
+                        <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
+                            <span class="ai-setting-label">Access Secret</span>
+                            <div class="ai-setting-control" style="max-width:380px;">
+                                <input type="password" id="aiZhihuAccessSecret" class="settings-input" placeholder="输入知乎 Access Secret 后按回车保存" />
+                                <button id="aiZhihuToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                    <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                    <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                        <line x1="1" y1="1" x2="23" y2="23"/>
+                                    </svg>
+                                </button>
+                                <button id="aiTestZhihuBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                            </div>
+                            <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link zhihu-link">developer.zhihu.com</span> 注册获取 Access Secret，用于知乎搜索能力</span>
+                        </div>
+                        <!-- Tavily API Key -->
                         <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
                             <span class="ai-setting-label">API Key</span>
                             <div class="ai-setting-control" style="max-width:380px;">
@@ -571,11 +592,32 @@
                                 <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
                             </div>
                         </div>
+                        <!-- 知乎搜索开关 -->
                         <div class="ai-setting-item">
-                            <span class="ai-setting-label">默认开启</span>
-                            <div class="ai-setting-toggle-row" id="aiSettingWebSearchLine">
-                                <span class="ai-setting-toggle-desc">发送消息时默认启用联网搜索</span>
-                                <div class="ai-chat-toggle-switch" id="aiSettingWebSearchToggle">
+                            <span class="ai-setting-label">知乎搜索</span>
+                            <div class="ai-setting-toggle-row" id="aiSettingZhihuSearchLine">
+                                <span class="ai-setting-toggle-desc">发送消息时启用知乎站内搜索</span>
+                                <div class="ai-chat-toggle-switch" id="aiSettingZhihuSearchToggle">
+                                    <div class="ai-chat-toggle-knob"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 知乎全网搜索开关 -->
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">全网搜索</span>
+                            <div class="ai-setting-toggle-row" id="aiSettingZhihuGlobalSearchLine">
+                                <span class="ai-setting-toggle-desc">发送消息时启用知乎全网搜索</span>
+                                <div class="ai-chat-toggle-switch" id="aiSettingZhihuGlobalSearchToggle">
+                                    <div class="ai-chat-toggle-knob"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Tavily搜索开关 -->
+                        <div class="ai-setting-item">
+                            <span class="ai-setting-label">Tavily搜索</span>
+                            <div class="ai-setting-toggle-row" id="aiSettingTavilySearchLine">
+                                <span class="ai-setting-toggle-desc">发送消息时启用 Tavily 联网搜索</span>
+                                <div class="ai-chat-toggle-switch" id="aiSettingTavilySearchToggle">
                                     <div class="ai-chat-toggle-knob"></div>
                                 </div>
                             </div>
@@ -852,10 +894,28 @@
                                 <span>深度思考</span>
                                 <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
                             </div>
-                            <div class="ai-chat-search-toggle" id="aiChatWebSearchToggle" title="联网搜索">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                                <span>联网搜索</span>
-                                <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
+                            <!-- 联网搜索多源选择按钮 -->
+                            <div class="ai-chat-sources-wrap">
+                                <div class="ai-chat-search-toggle" id="aiChatSearchSourcesBtn" title="联网搜索">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                    <span>联网搜索</span>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                </div>
+                                <!-- 多源搜索下拉菜单 -->
+                                <div class="ai-chat-search-sources-dropdown" id="aiChatSearchSourcesDropdown" style="display:none;">
+                                    <label class="ai-chat-search-source-item">
+                                        <input type="checkbox" id="aiChatZhihuSearch" data-source="zhihu_search" />
+                                        <span>知乎搜索</span>
+                                    </label>
+                                    <label class="ai-chat-search-source-item">
+                                        <input type="checkbox" id="aiChatZhihuGlobalSearch" data-source="zhihu_global" />
+                                        <span>全网搜索</span>
+                                    </label>
+                                    <label class="ai-chat-search-source-item">
+                                        <input type="checkbox" id="aiChatTavilySearch" data-source="tavily" />
+                                        <span>Tavily搜索</span>
+                                    </label>
+                                </div>
                             </div>
                             <div class="ai-chat-search-toggle" id="aiChatCardRecallToggle" title="卡片召回">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>

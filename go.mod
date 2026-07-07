@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	gitee.com/MM-Q/go-kit v0.0.24
 	gitee.com/MM-Q/verman v0.0.19
+	gitee.com/MM-Q/zhihu-go v1.0.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/hekmon/tavily v1.3.0
 	github.com/ollama/ollama v0.31.1
@@ -63,3 +64,5 @@ require (
 )
 
 // replace github.com/wailsapp/wails/v2 v2.12.0 => D:\AppData\gopath\pkg\mod
+
+replace gitee.com/MM-Q/zhihu-go v1.0.0 => D:\资源池\下水道\Dev\本地项目\zhihu-go
