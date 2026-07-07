@@ -893,43 +893,72 @@
 
 .ai-chat-search-sources-dropdown {
     position: absolute;
-    bottom: 100%;
+    bottom: calc(100% + 4px);
     left: 0;
     min-width: 160px;
-    background: var(--bg-secondary);
+    background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.12);
-    padding: 6px 0;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
     z-index: 100;
-    animation: ai-dropdown-in 0.15s ease-out;
-    margin-bottom: 4px;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+    transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 4px 0;
+    overflow: visible;
 }
+
+.ai-chat-search-sources-dropdown.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* 菜单项动画：展开时逐个滑入 */
+.ai-chat-search-sources-dropdown .ai-chat-search-source-item {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, background 0.1s;
+}
+
+.ai-chat-search-sources-dropdown.open .ai-chat-search-source-item {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.ai-chat-search-sources-dropdown.open .ai-chat-search-source-item:nth-child(1) { transition-delay: 0.06s, 0.06s, 0s; }
+.ai-chat-search-sources-dropdown.open .ai-chat-search-source-item:nth-child(2) { transition-delay: 0.10s, 0.10s, 0s; }
+.ai-chat-search-sources-dropdown.open .ai-chat-search-source-item:nth-child(3) { transition-delay: 0.14s, 0.14s, 0s; }
+.ai-chat-search-sources-dropdown.open .ai-chat-search-source-item:nth-child(4) { transition-delay: 0.18s, 0.18s, 0s; }
 
 .ai-chat-search-source-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    cursor: pointer;
+    gap: 6px;
+    padding: 7px 12px;
     font-size: 0.82rem;
     color: var(--text-primary);
-    transition: background 0.12s;
+    cursor: pointer;
     user-select: none;
+    white-space: nowrap;
 }
 
 .ai-chat-search-source-item:hover {
-    background: var(--hover-bg, rgba(128, 128, 128, 0.06));
-}
-
-.ai-chat-search-source-item.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    background: var(--hover-bg);
+    color: var(--accent);
 }
 
 .ai-chat-search-source-item input[type="checkbox"] {
     margin: 0;
     accent-color: var(--accent);
+}
+
+.ai-chat-search-source-item.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 /* ── 更多技能 ── */

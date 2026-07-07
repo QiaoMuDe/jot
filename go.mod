@@ -64,5 +64,3 @@ require (
 )
 
 // replace github.com/wailsapp/wails/v2 v2.12.0 => D:\AppData\gopath\pkg\mod
-
-replace gitee.com/MM-Q/zhihu-go v1.0.0 => D:\资源池\下水道\Dev\本地项目\zhihu-go

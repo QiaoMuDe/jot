@@ -406,6 +406,17 @@ func (a *AIService) DeleteAISession(id uint) error {
 	return a.db.Delete(&models.AISession{}, id).Error
 }
 
+// DeleteEmptyAISessions 删除没有关联消息的 AI 会话
+func (a *AIService) DeleteEmptyAISessions() int64 {
+	// 使用子查询找出没有消息的会话并删除
+	var count int64
+	a.db.Raw("SELECT COUNT(*) FROM ai_sessions s WHERE NOT EXISTS (SELECT 1 FROM ai_messages m WHERE m.session_id = s.id)").Scan(&count)
+
+	a.db.Exec("DELETE FROM ai_sessions WHERE id IN (SELECT s.id FROM ai_sessions s WHERE NOT EXISTS (SELECT 1 FROM ai_messages m WHERE m.session_id = s.id))")
+
+	return count
+}
+
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
 	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error

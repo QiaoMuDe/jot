@@ -332,6 +332,9 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 
 // VacuumDatabase 对当前数据库执行 VACUUM 瘦身操作，返回释放的空间大小
 func (a *App) VacuumDatabase() (string, error) {
+	// 先清理空 AI 会话
+	deletedCount := a.aiService.DeleteEmptyAISessions()
+
 	// 获取瘦身前数据库文件大小
 	dbPath, _ := database.DefaultDBPath()
 	var beforeSize int64
@@ -363,7 +366,11 @@ func (a *App) VacuumDatabase() (string, error) {
 		savedStr = fmt.Sprintf("%.1f MB", float64(saved)/(1024*1024))
 	}
 
-	return fmt.Sprintf("数据库瘦身完成，释放了 %s 空间", savedStr), nil
+	msg := fmt.Sprintf("数据库瘦身完成，释放了 %s 空间", savedStr)
+	if deletedCount > 0 {
+		msg += fmt.Sprintf("，清理了 %d 个空 AI 会话", deletedCount)
+	}
+	return msg, nil
 }
 
 // ExportDataWithDialog 弹出保存对话框，使用 VACUUM INTO 创建数据库压缩副本到用户选择的位置

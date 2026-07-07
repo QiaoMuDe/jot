@@ -574,10 +574,15 @@ function bindEvents() {
         }
 
         toggleBtn.addEventListener('click', () => {
+            const wasCollapsed = sidebar.classList.contains('collapsed');
             const isCollapsed = sidebar.classList.toggle('collapsed');
             toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
             toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
             localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
+            // 从折叠变为展开时，刷新会话列表
+            if (wasCollapsed && !isCollapsed) {
+                loadSessionList();
+            }
         });
     }
 
@@ -685,14 +690,13 @@ function bindEvents() {
     if (searchSourcesBtn && searchSourcesDropdown) {
         searchSourcesBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const isVisible = searchSourcesDropdown.style.display !== 'none';
-            searchSourcesDropdown.style.display = isVisible ? 'none' : 'block';
+            searchSourcesDropdown.classList.toggle('open');
         });
         
         // 点击外部关闭下拉菜单
         document.addEventListener('click', () => {
             if (searchSourcesDropdown) {
-                searchSourcesDropdown.style.display = 'none';
+                searchSourcesDropdown.classList.remove('open');
             }
         });
         
@@ -703,8 +707,23 @@ function bindEvents() {
         }
     }
     
-    // ── 复选框切换 ──
-    ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(id => {
+    // ── 搜索源菜单项点击切换 ──
+    // 点击整个菜单项区域（不限于复选框）都能切换选中状态
+    const sourceItemIds = ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'];
+    const sourceItems = searchSourcesDropdown?.querySelectorAll('.ai-chat-search-source-item');
+    if (sourceItems) {
+        sourceItems.forEach(item => {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (!checkbox) return;
+            item.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return; // 让 checkbox 自身的 change 事件处理
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            });
+        });
+    }
+    // 复选框 change 事件（处理复选框自身点击和程序化触发）
+    sourceItemIds.forEach(id => {
         const checkbox = document.getElementById(id);
         if (checkbox) {
             checkbox.addEventListener('change', async () => {
@@ -1423,6 +1442,10 @@ async function switchSession(id) {
         messagesEl.innerHTML = '';
 
         if (!msgs || msgs.length === 0) {
+            // 更新侧栏高亮
+            document.querySelectorAll('.ai-session-item.active').forEach(el => el.classList.remove('active'));
+            const currentItem = document.querySelector(`.ai-session-item[data-id="${id}"]`);
+            if (currentItem) currentItem.classList.add('active');
             updateChatTitle();
             showWelcome();
             updateContextSize();
