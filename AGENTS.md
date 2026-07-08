@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-08（更新 108）
+> 生成日期: 2026-07-08（更新 109）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2185,3 +2185,12 @@ await loadXxxSetting();
 | **涉及文件** | [todo.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/todo.go)、[todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[database/db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go) |
 
 | **update 计数** | `AGENTS.md` 从更新 107 → 更新 108 |
+
+## 一百四十六、新增记忆点（联网搜索 & 更多技能下拉菜单宽度调整）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **菜单宽度缩减** | AI 助手工具栏「联网搜索」和「更多技能」两个下拉菜单的 `min-width` 从 160px 调至 150px（最终值），经多轮迭代后从 160px → 136px → 129px → 124px → 120px → 130px → 140px → 150px 逐步确认。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L896-L912) `.ai-chat-search-sources-dropdown` 和 [ai-chat.css#L970-L988](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L970-L988) `.ai-chat-skills-dropdown` |
+| **涉及文件** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+| **update 计数** | `AGENTS.md` 从更新 108 → 更新 109 |
