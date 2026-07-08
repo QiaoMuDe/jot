@@ -87,6 +87,12 @@
                     </div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="ai-chat" title="Ctrl+7 AI 助手"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>AI 助手</div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" data-action="todo" title="待办清单">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>待办清单
+                    </div>
                 </div>
             </div>
             <div class="topbar-brand">
@@ -1525,6 +1531,46 @@ console.log(greet("Jot"));
             <button id="mdRefTopBtn" class="md-ref-top-btn" title="回到顶部">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
             </button>
+        </div>
+
+        <!-- 待办清单 -->
+        <div id="viewTodo" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="todoBackBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                    </svg> 返回
+                </button>
+                <h2 class="view-title">待办清单</h2>
+            </div>
+            <div class="todo-container">
+                <!-- 输入区 + 筛选 -->
+                <div class="todo-input-wrap">
+                    <input type="text" id="todoInput" class="todo-input" placeholder="添加新的待办事项..." autocomplete="off">
+                    <div class="todo-input-divider"></div>
+                    <div class="todo-filter-bar">
+                        <button class="todo-filter-btn active" data-filter="active">待办</button>
+                        <button class="todo-filter-btn" data-filter="done">已完成</button>
+                    </div>
+                </div>
+                <!-- 列表区 -->
+                <div id="todoList" class="todo-list">
+                    <!-- 动态渲染 -->
+                </div>
+                <!-- 空状态 -->
+                <div id="todoEmpty" class="todo-empty" style="display:none;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.25;margin-bottom:12px;">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    <p>还没有待办事项</p>
+                    <span>在上方输入框中添加吧</span>
+                </div>
+            </div>
+            <!-- 统计栏（固定在底部） -->
+            <div class="todo-stats" id="todoStats">
+                <span id="todoTotalCount">共 0 项</span>
+                <span id="todoPendingCount">待办 0 项</span>
+            </div>
         </div>
     </main>
 

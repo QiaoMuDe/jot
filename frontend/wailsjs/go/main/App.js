@@ -74,6 +74,10 @@ export function CreateTag(arg1, arg2) {
   return window['go']['main']['App']['CreateTag'](arg1, arg2);
 }
 
+export function CreateTodo(arg1) {
+  return window['go']['main']['App']['CreateTodo'](arg1);
+}
+
 export function DeleteAIMessage(arg1) {
   return window['go']['main']['App']['DeleteAIMessage'](arg1);
 }
@@ -104,6 +108,10 @@ export function DeleteProfile(arg1) {
 
 export function DeleteTag(arg1) {
   return window['go']['main']['App']['DeleteTag'](arg1);
+}
+
+export function DeleteTodo(arg1) {
+  return window['go']['main']['App']['DeleteTodo'](arg1);
 }
 
 export function EmptyTrash() {
@@ -242,6 +250,10 @@ export function ImportFiles(arg1, arg2) {
   return window['go']['main']['App']['ImportFiles'](arg1, arg2);
 }
 
+export function ListTodos() {
+  return window['go']['main']['App']['ListTodos']();
+}
+
 export function LoadAISessionMessages(arg1) {
   return window['go']['main']['App']['LoadAISessionMessages'](arg1);
 }
@@ -374,6 +386,10 @@ export function TogglePinNote(arg1) {
   return window['go']['main']['App']['TogglePinNote'](arg1);
 }
 
+export function ToggleTodo(arg1) {
+  return window['go']['main']['App']['ToggleTodo'](arg1);
+}
+
 export function UpdateAIMessageContent(arg1, arg2) {
   return window['go']['main']['App']['UpdateAIMessageContent'](arg1, arg2);
 }
@@ -400,6 +416,10 @@ export function UpdateSessionContextTokens(arg1, arg2) {
 
 export function UpdateTag(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateTag'](arg1, arg2, arg3);
+}
+
+export function UpdateTodo(arg1, arg2) {
+  return window['go']['main']['App']['UpdateTodo'](arg1, arg2);
 }
 
 export function VacuumDatabase() {

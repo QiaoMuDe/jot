@@ -34,6 +34,7 @@ type App struct {
 	notebookService *services.NotebookService
 	aiService       *services.AIService
 	profileService  *services.ProfileService
+	todoService     *services.TodoService
 	aiStreamCancel  context.CancelFunc
 }
 
@@ -56,6 +57,7 @@ func NewApp() *App {
 		notebookService: services.NewNotebookService(db),
 		aiService:       services.NewAIService(db),
 		profileService:  services.NewProfileService(db),
+		todoService:     services.NewTodoService(db),
 	}
 }
 
@@ -1727,6 +1729,29 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.notebookService = services.NewNotebookService(db)
 	a.aiService = services.NewAIService(db)
 	a.profileService = services.NewProfileService(db)
+	a.todoService = services.NewTodoService(db)
+}
+
+// ==================== Todo 相关绑定方法 ====================
+
+func (a *App) CreateTodo(text string) (*models.Todo, error) {
+	return a.todoService.Create(text)
+}
+
+func (a *App) ListTodos() ([]models.Todo, error) {
+	return a.todoService.List()
+}
+
+func (a *App) ToggleTodo(id uint) (*models.Todo, error) {
+	return a.todoService.Toggle(id)
+}
+
+func (a *App) DeleteTodo(id uint) error {
+	return a.todoService.Delete(id)
+}
+
+func (a *App) UpdateTodo(id uint, text string) (*models.Todo, error) {
+	return a.todoService.Update(id, text)
 }
 
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）

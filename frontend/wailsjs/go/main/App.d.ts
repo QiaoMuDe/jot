@@ -40,6 +40,8 @@ export function CreateProfile(arg1:string,arg2:string,arg3:string,arg4:string):P
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
+export function CreateTodo(arg1:string):Promise<models.Todo>;
+
 export function DeleteAIMessage(arg1:number):Promise<void>;
 
 export function DeleteAIMessagesAfter(arg1:number,arg2:number):Promise<number>;
@@ -55,6 +57,8 @@ export function DeleteNotebookWithNotes(arg1:number):Promise<void>;
 export function DeleteProfile(arg1:number):Promise<void>;
 
 export function DeleteTag(arg1:number):Promise<void>;
+
+export function DeleteTodo(arg1:number):Promise<void>;
 
 export function EmptyTrash():Promise<void>;
 
@@ -124,6 +128,8 @@ export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
 export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
 
+export function ListTodos():Promise<Array<models.Todo>>;
+
 export function LoadAISessionMessages(arg1:number):Promise<Array<services.Message>>;
 
 export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
@@ -190,6 +196,8 @@ export function TogglePinAISession(arg1:number):Promise<void>;
 
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 
+export function ToggleTodo(arg1:number):Promise<models.Todo>;
+
 export function UpdateAIMessageContent(arg1:number,arg2:string):Promise<void>;
 
 export function UpdateLastUserMessageTokens(arg1:number,arg2:number):Promise<void>;
@@ -203,5 +211,7 @@ export function UpdateProfile(arg1:number,arg2:string,arg3:string,arg4:string,ar
 export function UpdateSessionContextTokens(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Tag>;
+
+export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
 
 export function VacuumDatabase():Promise<string>;

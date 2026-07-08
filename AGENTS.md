@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-07（更新 104）
+> 生成日期: 2026-07-08（更新 107）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -39,7 +39,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~6784 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~7126 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
@@ -200,7 +200,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -217,8 +217,8 @@ jot/                                    # 项目根目录
                          │ Wails Binding (JSON 序列化)
 ┌────────────────────────▼────────────────────────────┐
 │              App 层 (app.go)                         │
-│  38+ 个绑定方法（CRUD/搜索/置顶/回收站/统计/导入导出/路径/│
-│   AI 配置/会话管理/消息管理)                          │
+│  100+ 个绑定方法（CRUD/搜索/置顶/回收站/统计/导入导出/路径/│
+│    AI 配置/会话管理/消息管理/笔记本回收站/配置文件预设)    │
 │  (含 runtime.SaveFileDialog 原生对话框调用)            │
 └────────────────────────┬────────────────────────────┘
                          │
@@ -482,21 +482,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 3669 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
-| `frontend/src/main.js` | 6784 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构） |
-| `frontend/src/css/components/ai-chat.css` | 2814 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
-| `app.go` | 1497 | Wails 绑定层（80+ API） |
-| `services/ai_service.go` | 494 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移） |
-| `services/note_service.go` | 617 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 |
+| `frontend/src/js/ai-chat.js` | 3690 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
+| `frontend/src/main.js` | 7126 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
+| `frontend/src/css/components/ai-chat.css` | 2839 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
+| `app.go` | 1548 | Wails 绑定层（100+ API） |
+| `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
+| `services/note_service.go` | 629 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 |
+| `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
 | `internal/aicli/openai.go` | ~130 | OpenAI 兼容 API 客户端 |
 | `internal/aicli/ollama.go` | ~110 | Ollama 原生 API 客户端 |
 | `internal/aicli/extract.go` | ~80 | gjson 流式字段提取工具 |
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
-| `services/note_service.go` | 568 | 笔记 CRUD 服务 + 引用上下文构建 |
-| `services/types.go` | ~30 | 通用类型（含 NoteRefInfo/NoteRefContext） |
-| `frontend/src/css/variables.css` | 210 | 12 主题 CSS 变量 |
+| `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
+| `services/types.go` | ~146 | 通用类型（含 DataStats/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
+| `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
 
 ---
 
@@ -533,6 +534,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **切换会话分块渲染 + 延迟高亮**（CHUNK_SIZE=5 yield + requestIdleCallback hljs）
 - [x] **操作按钮折叠 sync 模式**（消除会话切换滚动跳跃）
 - [x] **设置页 Token 默认隐藏 + 知乎 URL 修正**
+- [x] **存储优化增强**（回收站自动清理 + 孤儿笔记迁移 + 空 AI 会话清理 + VACUUM 整合流程）
+- [x] **批量管理重构**（FAB 入口 + CSS transition 动效 + 复选框移除 + 置顶按钮可操作）
+- [x] **更多菜单子菜单**（"帮助参考"合并快捷键/MD 语法，Ctrl+7→AI 助手）
 
 ---
 

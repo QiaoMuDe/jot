@@ -44,7 +44,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(1)
 
 	// 自动迁移数据模型
-	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}); err != nil {
+	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
