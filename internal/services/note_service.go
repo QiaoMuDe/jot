@@ -575,7 +575,7 @@ func (s *NoteService) GetStats() (*DataStats, error) {
 	}, nil
 }
 
-// ResetAll 清空所有笔记和标签数据，用于恢复出厂设置
+// ResetAll 清空所有笔记、标签和待办数据，用于恢复出厂设置
 func (s *NoteService) ResetAll() error {
 	// 清空所有笔记（包括软删除，自动清理 note_tags 关联）
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Note{}).Error; err != nil {
@@ -583,6 +583,10 @@ func (s *NoteService) ResetAll() error {
 	}
 	// 清空所有标签（自动清理 note_tags 中残留关联）
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Tag{}).Error; err != nil {
+		return err
+	}
+	// 清空所有待办
+	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Todo{}).Error; err != nil {
 		return err
 	}
 	return nil

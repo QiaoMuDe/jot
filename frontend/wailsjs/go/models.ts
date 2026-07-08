@@ -347,6 +347,8 @@ export namespace services {
 	    max_response_time: number;
 	    db_size: number;
 	    db_size_str: string;
+	    total_todos: number;
+	    completed_todos: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DataStats(source);
@@ -367,6 +369,8 @@ export namespace services {
 	        this.max_response_time = source["max_response_time"];
 	        this.db_size = source["db_size"];
 	        this.db_size_str = source["db_size_str"];
+	        this.total_todos = source["total_todos"];
+	        this.completed_todos = source["completed_todos"];
 	    }
 	}
 	export class ImportResult {

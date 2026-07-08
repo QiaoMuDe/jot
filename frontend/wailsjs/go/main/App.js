@@ -54,6 +54,10 @@ export function ClearAllAISessions() {
   return window['go']['main']['App']['ClearAllAISessions']();
 }
 
+export function ClearCompletedTodos() {
+  return window['go']['main']['App']['ClearCompletedTodos']();
+}
+
 export function CreateAISession() {
   return window['go']['main']['App']['CreateAISession']();
 }

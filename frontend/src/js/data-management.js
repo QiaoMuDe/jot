@@ -38,6 +38,7 @@ export async function loadDataStats() {
     let totalNotes = 0, totalTags = 0, trashedNotes = 0, totalNotebooks = 0, dbSizeStr = '';
     let aiSessions = 0, aiMessages = 0, totalTokens = 0;
     let avgResponseTime = 0, avgThinkingTime = 0, maxResponseTime = 0;
+    let totalTodos = 0, completedTodos = 0;
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetDataStats) {
@@ -54,6 +55,8 @@ export async function loadDataStats() {
                 avgResponseTime = stats.avg_response_time || 0;
                 avgThinkingTime = stats.avg_thinking_time || 0;
                 maxResponseTime = stats.max_response_time || 0;
+                totalTodos = stats.total_todos || 0;
+                completedTodos = stats.completed_todos || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -77,7 +80,7 @@ export async function loadDataStats() {
         dateEl.textContent = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
     }
 
-    const hasData = totalNotes > 0 || aiMessages > 0;
+    const hasData = totalNotes > 0 || aiMessages > 0 || totalTodos > 0;
 
     if (!hasData) {
         // 空数据占位
@@ -109,6 +112,13 @@ export async function loadDataStats() {
                 分散在 <strong>${totalNotebooks}</strong> 个笔记本中，标记了 <strong>${totalTags}</strong> 个标签。
                 回收站中暂有 <strong>${trashedNotes}</strong> 篇待处理的笔记。
                 数据库当前占用 <strong>${dbSizeStr || '0 B'}</strong>。
+            </p>
+            <hr class="letter-divider">
+            <p class="letter-section-title">✓ 待办事项</p>
+            <p>
+                你共创建了 <strong>${totalTodos}</strong> 个待办事项，
+                已完成 <strong>${completedTodos}</strong> 项，
+                完成率 <strong>${totalTodos > 0 ? Math.round(completedTodos / totalTodos * 100) : 0}%</strong>。
             </p>
             <hr class="letter-divider">
             <p class="letter-section-title">🤖 AI 统计数据</p>
@@ -156,6 +166,33 @@ export async function clearAISessions() {
         nm.show('清空失败：' + err.message, 'error');
     }
     await loadDataStats();
+}
+
+/**
+ * 清空所有已完成的待办事项
+ */
+export async function clearCompletedTodos() {
+    const { nm, showConfirmDialog } = window;
+
+    const confirmed = await showConfirmDialog('确定要清空所有已完成的待办事项吗？此操作不可撤销。');
+    if (!confirmed) return;
+
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ClearCompletedTodos) {
+            const msg = await window.go.main.App.ClearCompletedTodos();
+            nm.show(msg, 'success');
+        } else {
+            nm.show('功能不可用：后端未绑定', 'error');
+        }
+    } catch (err) {
+        console.error('清空已完成待办失败:', err);
+        nm.show('清空失败：' + err.message, 'error');
+    }
+    await loadDataStats();
+    // 如果当前在待办清单页面，刷新待办列表
+    if (window._todoFilter !== undefined) {
+        window.loadTodos?.();
+    }
 }
 
 /**

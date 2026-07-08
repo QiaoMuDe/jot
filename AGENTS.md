@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-08（更新 109）
+> 生成日期: 2026-07-08（更新 114）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -498,10 +498,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 |------|-----------|------|
 | `frontend/src/js/ai-chat.js` | 3690 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
+| `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2839 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
-| `app.go` | 1548 | Wails 绑定层（100+ API） |
+| `app.go` | 1791 | Wails 绑定层（100+ API） |
 | `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
-| `services/note_service.go` | 629 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 |
+| `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
 | `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
 | `internal/aicli/client.go` | ~130 | AI 客户端统一入口 |
@@ -510,9 +511,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `internal/aicli/extract.go` | ~80 | gjson 流式字段提取工具 |
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
-| `services/types.go` | ~146 | 通用类型（含 DataStats/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
+| `services/types.go` | 192 | 通用类型（含 DataStats 含待办统计/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
 | `frontend/src/css/components/todo.css` | 336 | 待办清单全部样式（输入+筛选一体化工具栏/7 个 @keyframes 动画 + 两段式新增动画） |
-| `internal/services/todo_service.go` | 58 | 待办 CRUD 服务（创建/列表/切换完成/删除/编辑） |
+| `internal/services/todo_service.go` | 82 | 待办 CRUD + 统计服务（创建/列表/切换完成/删除/编辑/Count/CountCompleted/DeleteCompleted） |
 | `internal/models/todo.go` | 11 | Todo 数据模型（ID/Text/Done/时间戳） |
 | `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
 
@@ -2253,3 +2254,16 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **快捷键说明弹窗** | Ctrl+6 → 待办清单、Ctrl+7 → 设置、Ctrl+8 → AI 助手 |
 
 | **update 计数** | `AGENTS.md` 从更新 112 → 更新 113 |
+
+## 一百五十一、新增记忆点（待办数据加入数据管理页面 + 清空待办纳入存储优化 + 合并数据清理分组）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概述** | 将待办数据纳入数据管理页面：信笺统计新增「✓ 待办事项」段落（总待办/已完成/完成率），操作列表合并「数据清理」分组（「清空 AI 会话」+「清空已完成待办」），「清空已完成待办」同步纳入存储优化流程的第 6 步，`ResetAll` 恢复出厂设置新增清空待办表 |
+| **后端新增** | `DataStats` 新增 `TotalTodos`/`CompletedTodos` 字段；`TodoService` 新增 `Count()`/`CountCompleted()`/`DeleteCompleted()` 三个方法 |
+| **存储优化** | `VacuumDatabase()` 新增第 6 步：清空已完成待办，结果消息追加「清空了 X 个已完成待办」 |
+| **重置行为** | `ResetAll()` 新增清空 `models.Todo{}`（恢复出厂设置一并清空待办）|
+
+| **涉及文件** | [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)（DataStats 字段）、[todo_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/todo_service.go)（3 个新增方法）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L332-L336)（GetDataStats 统计查询）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L365-L366)（VacuumDatabase 第 6 步）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L1763-L1772)（ClearCompletedTodos binding）、[note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go#L589-L592)（ResetAll 清空待办）、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html#L775-L796)（数据清理分组 + 分隔线）、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js)（loadDataStats + clearCompletedTodos）、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（导入 + DOM 引用 + 事件绑定） |
+
+| **update 计数** | `AGENTS.md` 从更新 113 → 更新 114 |

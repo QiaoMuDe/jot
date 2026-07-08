@@ -25,6 +25,8 @@ type DataStats struct {
 	MaxResponseTime float64 `json:"max_response_time"`
 	DBSize          int64   `json:"db_size"`
 	DBSizeStr       string  `json:"db_size_str"`
+	TotalTodos      int64   `json:"total_todos"`
+	CompletedTodos  int64   `json:"completed_todos"`
 }
 
 // ImportResult 导入操作的结果

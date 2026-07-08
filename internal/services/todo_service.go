@@ -56,3 +56,27 @@ func (s *TodoService) Update(id uint, text string) (*models.Todo, error) {
 	}
 	return &todo, nil
 }
+
+func (s *TodoService) Count() (int64, error) {
+	var count int64
+	if err := s.db.Model(&models.Todo{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *TodoService) CountCompleted() (int64, error) {
+	var count int64
+	if err := s.db.Model(&models.Todo{}).Where("done = ?", true).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *TodoService) DeleteCompleted() (int64, error) {
+	result := s.db.Where("done = ?", true).Delete(&models.Todo{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}

@@ -19,7 +19,7 @@ import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/cons
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions } from './js/data-management.js';
+import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -362,6 +362,7 @@ const els = {
     vacuumDbBtn: $('vacuumDbBtn'),
     openDataDirBtn: $('openDataDirBtn'),
     clearAISessionsBtn: $('clearAISessionsBtn'),
+    clearCompletedTodosBtn: $('clearCompletedTodosBtn'),
     dataContent: $('dataContent'),
     dataLetter: $('dataLetter'),
     letterDate: $('letterDate'),
@@ -4863,6 +4864,7 @@ function initEventListeners() {
     els.vacuumDbBtn.addEventListener('click', vacuumDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
     els.clearAISessionsBtn.addEventListener('click', clearAISessions);
+    els.clearCompletedTodosBtn.addEventListener('click', clearCompletedTodos);
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');

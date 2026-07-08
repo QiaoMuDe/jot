@@ -329,6 +329,12 @@ func (a *App) GetDataStats() (*services.DataStats, error) {
 	stats.AvgThinkingTime = avgThinkingTime
 	stats.MaxResponseTime = maxResponseTime
 
+	// 待办统计
+	totalTodos, _ := a.todoService.Count()
+	completedTodos, _ := a.todoService.CountCompleted()
+	stats.TotalTodos = totalTodos
+	stats.CompletedTodos = completedTodos
+
 	return stats, nil
 }
 
@@ -355,6 +361,9 @@ func (a *App) VacuumDatabase() (string, error) {
 
 	// 5. 迁移指向不存在笔记本的笔记到默认笔记本
 	migratedNotes := a.noteService.MigrateOrphanNotes()
+
+	// 6. 清空已完成待办
+	deletedTodos, _ := a.todoService.DeleteCompleted()
 
 	// 获取瘦身前数据库文件大小
 	dbPath, _ := database.DefaultDBPath()
@@ -404,6 +413,9 @@ func (a *App) VacuumDatabase() (string, error) {
 	}
 	if migratedNotes > 0 {
 		parts = append(parts, fmt.Sprintf("迁移了 %d 条孤儿笔记到默认笔记本", migratedNotes))
+	}
+	if deletedTodos > 0 {
+		parts = append(parts, fmt.Sprintf("清空了 %d 个已完成待办", deletedTodos))
 	}
 	return strings.Join(parts, "，"), nil
 }
@@ -1752,6 +1764,14 @@ func (a *App) DeleteTodo(id uint) error {
 
 func (a *App) UpdateTodo(id uint, text string) (*models.Todo, error) {
 	return a.todoService.Update(id, text)
+}
+
+func (a *App) ClearCompletedTodos() (string, error) {
+	count, err := a.todoService.DeleteCompleted()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("已清空 %d 个已完成待办事项", count), nil
 }
 
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）
