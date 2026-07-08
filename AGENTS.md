@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-08（更新 107）
+> 生成日期: 2026-07-08（更新 108）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 73 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 105+ 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -27,12 +27,16 @@ jot/                                    # 项目根目录
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
 │   │   ├── ai_session.go              # AI 会话实体（标题/置顶/时间戳）
-│   │   └── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
+│   │   ├── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
+│   │   ├── api_profile.go             # API 配置预设实体（名称/服务商/URL/Key）
+│   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
+│   │   └── todo.go                    # Todo 实体（待办/文本/完成状态/时间戳）
 │   └── services/
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理 + Token 后端计算 + 会话 Token 持久化）
+│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
+│       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -65,7 +69,8 @@ jot/                                    # 项目根目录
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
-│   │           └── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
+│   │           ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
+│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/6 个入场退出动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -106,6 +111,7 @@ jot/                                    # 项目根目录
     ├── add-sort-pagination/          # 排序分页设置
     ├── add-table-copy-button/        # 表格复制按钮
     ├── add-theme-system/             # 主题系统
+    ├── add-todo-list/               # 待办清单功能
     ├── add-toolbar-toggle-setting/   # MD 工具栏开关设置（已完成）
     ├── add-view-mode-toggle-from-edit/ # 查看/编辑模式返回按钮
     ├── add-web-worker-rendering/     # Web Worker 离线程渲染
@@ -224,25 +230,29 @@ jot/                                    # 项目根目录
                          │
               ┌──────────┼──────────┐
               ▼          ▼          ▼
-    ┌─────────────┐ ┌──────────┐ ┌──────────────┐
-    │ NoteService │ │TagService│ │  AI Service  │
-    │ (CRUD/搜索/ │ │(CRUD/关联)│ │ (AI 流式对话 │
-    │  置顶/回收站 │ │          │ │  会话管理    │
-    │  统计/导入   │ │          │ │  消息持久化) │
-    │  导出)      │ │          │ │              │
-    └──────┬──────┘ └─────┬────┘ └──────┬───────┘
-           │              │             │
-           └──────┬───────┴──────┬──────┘
-                  ▼              ▼
-        ┌─────────────────┐ ┌─────────────────┐
-        │    GORM ORM     │ │   GORM ORM     │
-        │ (数据访问层)      │ │ (AI 模型层)     │
-        └────────┬────────┘ └────────┬───────┘
-                 ▼                   ▼
-        ┌──────────────────────────────┐
-        │          SQLite              │
-        │   (glebarez/sqlite 纯 Go 驱动)│
-        └──────────────────────────────┘
+    ┌─────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────────┐
+    │ NoteService │ │TagService│ │TodoService │ │  AI Service  │
+    │ (CRUD/搜索/ │ │(CRUD/关联)│ │ (CRUD/切换 │ │ (AI 流式对话 │
+    │  置顶/回收站 │ │          │ │  完成/删除 │ │  会话管理    │
+    │  统计/导入   │ │          │ │  编辑)     │ │  消息持久化) │
+    │  导出)      │ │          │ │            │ │              │
+    └──────┬──────┘ └─────┬────┘ └──────┬─────┘ └──────┬───────┘
+           │              │             │              │
+           └──────┬───────┴──────┬──────┴──────┬───────┘
+                  │              │              │
+                  ▼              ▼              ▼
+        ┌─────────────────┐ ┌──────────┐ ┌─────────────────┐
+        │    GORM ORM     │ │GORM ORM │ │   GORM ORM     │
+        │ (数据访问层)      │ │(待办层)  │ │ (AI 模型层)     │
+        └────────┬────────┘ └────┬─────┘ └────────┬────────┘
+                 │               │                 │
+                 └───────────────┴─────────────────┘
+                                    ▼
+                          ┌─────────────────┐
+                          │     SQLite      │
+                          │ (glebarez/sqlite│
+                          │  纯 Go 驱动)     │
+                          └─────────────────┘
 ```
 
 ---
@@ -254,13 +264,13 @@ jot/                                    # 项目根目录
 | 依赖方 | 被依赖方 | 依赖类型 | 依赖详情 |
 |--------|----------|----------|----------|
 | `app.go` | `database` | 编译依赖 | 调用 `database.InitDB()` 获取 `*gorm.DB` 实例 |
-| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` / `SettingService` 实例 |
-| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` / `*models.Setting` 类型 |
+| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` / `TodoService` / `SettingService` 实例 |
+| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` / `*models.Todo` / `*models.Setting` 类型 |
 | `app.go` | `runtime` | 编译依赖 | `runtime.SaveFileDialog` 原生保存对话框 |
 | `app.go` | `fontutil` | 编译依赖 | `fontutil.GetFonts()` 枚举系统字体 |
-| `services` | `models` | 编译依赖 | 操作 Note/Tag/Setting/AISession/AIMessage 结构体 |
+| `services` | `models` | 编译依赖 | 操作 Note/Tag/Todo/Setting/AISession/AIMessage 结构体 |
 | `services` | GORM | 编译依赖 | `*gorm.DB` 数据库操作 |
-| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.AISession{}, &models.AIMessage{})` |
+| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{}, &models.Todo{}, &models.Setting{}, &models.AISession{}, &models.AIMessage{})` |
 | `database` | glebarez/sqlite | 编译依赖 | 纯 Go SQLite 驱动 |
 | `fontutil` | gdi32/user32 | 运行时依赖 | syscall 调用 Windows GDI API |
 | `frontend/main.js` | `wailsjs/go/main/App.js` | 运行时调用 | `window.go.main.App.*` 调用后端 API |
@@ -275,21 +285,25 @@ graph TD
         B --> C[database/db.go]
         B --> D[services/note_service.go]
         B --> E[services/tag_service.go]
+        B --> TD[services/todo_service.go]
         B --> F[services/types.go]
         B --> AI[services/ai_service.go]
         C --> G[models/note.go]
         C --> H[models/tag.go]
+        C --> TD2[models/todo.go]
         C --> I[models/ai_session.go]
         C --> J[models/ai_message.go]
         D --> G
         D --> H
         E --> G
         E --> H
+        TD --> TD2
         AI --> I
         AI --> J
         C --> K[glebarez/sqlite]
         D --> L[GORM]
         E --> L
+        TD --> L
         AI --> L
         B -.-> M[runtime.SaveFileDialog]
     end
@@ -497,6 +511,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
 | `services/types.go` | ~146 | 通用类型（含 DataStats/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
+| `frontend/src/css/components/todo.css` | 279 | 待办清单全部样式（输入+筛选一体化工具栏/6 个 @keyframes 动画） |
+| `internal/services/todo_service.go` | 58 | 待办 CRUD 服务（创建/列表/切换完成/删除/编辑） |
+| `internal/models/todo.go` | 11 | Todo 数据模型（ID/Text/Done/时间戳） |
 | `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
 
 ---
@@ -537,6 +554,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **存储优化增强**（回收站自动清理 + 孤儿笔记迁移 + 空 AI 会话清理 + VACUUM 整合流程）
 - [x] **批量管理重构**（FAB 入口 + CSS transition 动效 + 复选框移除 + 置顶按钮可操作）
 - [x] **更多菜单子菜单**（"帮助参考"合并快捷键/MD 语法，Ctrl+7→AI 助手）
+- [x] **待办清单功能**（Todo CRUD + 输入筛选一体化工具栏 + 6 个 keyframes 动画 + 筛选按钮数量显示）
 
 ---
 
@@ -2146,3 +2164,24 @@ await loadXxxSetting();
 | **效果** | 更多菜单项从 9 → 8 项（"帮助参考"替代"快捷键说明"+"MD 语法"）；Ctrl+7 变为 AI 助手快捷键；Ctrl+8/Ctrl+9 不再绑定功能 |
 
 | **update 计数** | `AGENTS.md` 从更新 105 → 更新 106 |
+
+| **update 计数** | `AGENTS.md` 从更新 106 → 更新 107 |
+
+## 一百四十五、新增记忆点（待办清单功能 — 完整前后端实现）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 待办清单功能：顶部导航菜单新增「待办清单」入口（对勾 SVG 图标），点击后切换到 `#viewTodo` 视图。视图分为输入筛选一体化工具栏、列表区、空状态三部分。数据完全走后端 SQLite 数据库，不依赖 localStorage。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L1532-L1576)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **后端模型** | `internal/models/todo.go` 定义 `Todo` 结构体（ID/Text/Done/CreatedAt/UpdatedAt），GORM AutoMigrate 自动建表 `todos`。详见 [todo.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/todo.go) |
+| **后端 Service** | `internal/services/todo_service.go` 定义 `TodoService`，提供 5 个 CRUD 方法：`Create()` 创建待办（非空校验）、`List()` 按 `done ASC, created_at DESC` 排序查询全部、`Toggle()` 切换完成状态（取反）、`Delete()` 硬删除、`Update()` 编辑文本。详见 [todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go) |
+| **Wails 绑定** | `app.go` 新增 5 个 binding 方法：`CreateTodo`、`ListTodos`、`ToggleTodo`、`DeleteTodo`、`UpdateTodo`。同时初始化 `todoService` 字段和 `rebuildServices()` 中的重建。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **前端加载流程** | `switchView('todo')` → `_todoFilter = 'active'` → `loadTodos()` → `await App.ListTodos()` → `renderTodos(todos, filter)` → `updateTodoStats(todos)`。筛选切换通过事件委托在 `.todo-filter-btn` 上处理，不重新查询后端，仅前端过滤。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **新增待办** | 输入框 Enter 键 → `addTodo()` → `App.CreateTodo(text)` → 返回后自动插入列表顶部（`todo-new` 动画）并更新统计。若当前在"已完成"筛选下，自动切回"待办"筛选并刷新。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7551-L7609) |
+| **切换完成状态** | `toggleTodo(id)`：在"全部"筛选下原地切换样式并移动位置（完成→移到底部，取消→移到顶部）；在"待办"/"已完成"筛选下播退出动画（`todo-completing`/`todo-activating`）→ 300ms 后移除 DOM → 调 `ToggleTodo(id)` API → 刷新统计。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7612-L7663) |
+| **行内编辑** | 双击 `.todo-text` 进入编辑模式：替换 span → input 输入框，Enter 保存/Blur 保存/Escape 取消。调用 `App.UpdateTodo(id, newText)` 持久化后调用 `loadTodos()` 刷新。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7710-L7760) |
+| **删除待办** | 点击 `.todo-delete-btn` → 播 `todo-deleting` 动画（向右淡出缩小，0.3s）→ 移除 DOM → 调 `DeleteTodo(id)` API → 更新空状态。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7665-L7708) |
+| **CSS 动画** | `todo.css` 共 6 个 `@keyframes`：`todoEnter`（从上滑入）、`todoExit`（向上缩小淡出）、`todoComplete`（向左淡出缩小）、`todoActivate`（向右淡出缩小）、`todoDelete`（向右淡出缩小）、`todoNew`（优雅滑入+缩放）。DOM 动画结束后通过 `animationend` 事件移除动画类，避免后续动画冲突。详见 [todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css) |
+| **筛选按钮显示数量** | 移除底部 `.todo-stats` 统计栏（共 N 项/待办 N 项），改为在筛选按钮上直接显示数量：「待办 N」「已完成 N」。`updateTodoStats()` 函数改为直接更新按钮文本，列表区自然撑满底部空间。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7538) |
+| **涉及文件** | [todo.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/todo.go)、[todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[database/db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go) |
+
+| **update 计数** | `AGENTS.md` 从更新 107 → 更新 108 |

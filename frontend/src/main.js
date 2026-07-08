@@ -292,9 +292,6 @@ const els = {
     todoInput: $('todoInput'),
     todoList: $('todoList'),
     todoEmpty: $('todoEmpty'),
-    todoStats: $('todoStats'),
-    todoTotalCount: $('todoTotalCount'),
-    todoPendingCount: $('todoPendingCount'),
     viewEditor: $('viewEditor'),
     editorPanel: $('editorPanel'),
 
@@ -7536,14 +7533,16 @@ function renderTodos(todos, filter) {
 }
 
 /**
- * 更新统计信息
+ * 更新筛选按钮上的数量显示
  */
 function updateTodoStats(todos) {
-    if (!els.todoTotalCount || !els.todoPendingCount) return;
     const total = todos.length;
     const pending = todos.filter(t => !t.done).length;
-    els.todoTotalCount.textContent = `共 ${total} 项`;
-    els.todoPendingCount.textContent = `待办 ${pending} 项`;
+    const done = total - pending;
+    const activeBtn = document.querySelector('.todo-filter-btn[data-filter="active"]');
+    const doneBtn = document.querySelector('.todo-filter-btn[data-filter="done"]');
+    if (activeBtn) activeBtn.textContent = `待办 ${pending}`;
+    if (doneBtn) doneBtn.textContent = `已完成 ${done}`;
 }
 
 /**
