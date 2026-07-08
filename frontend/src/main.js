@@ -7569,40 +7569,112 @@ async function addTodo() {
             return;
         }
 
-        // 已在待办分类，直接插入新条目到列表顶部
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = `
-            <div class="todo-item todo-new" data-id="${newTodo.id}">
-                <button class="todo-checkbox" onclick="toggleTodo(${newTodo.id})">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                </button>
-                <span class="todo-text" ondblclick="editTodo(${newTodo.id})">${escapeHtml(newTodo.text)}</span>
-                <button class="todo-delete-btn" onclick="deleteTodo(${newTodo.id})" title="删除">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-        `;
-        const itemEl = wrapper.firstElementChild;
-        els.todoList.prepend(itemEl);
-
-        // 入场动画结束后移除类，避免后续动画冲突
-        itemEl.addEventListener('animationend', () => {
-            itemEl.classList.remove('todo-new');
-        }, { once: true });
-
         // 隐藏空状态
         if (els.todoEmpty) els.todoEmpty.style.display = 'none';
 
-        // 更新统计
-        const allTodos = await window.go.main.App.ListTodos();
-        updateTodoStats(allTodos);
+        const listEl = els.todoList;
+        const existingItems = [...listEl.querySelectorAll('.todo-item')];
+
+        // 无已有条目或动画进行中 → fallback：直接插入
+        if (existingItems.length === 0 || listEl.dataset.todoAnimating === 'true') {
+            insertNewTodoItem(newTodo);
+            updateTodoStatsAfterAdd();
+            return;
+        }
+
+        // === 两段式动画：已有条目先平滑下移 → 再插入新条目 ===
+        listEl.dataset.todoAnimating = 'true';
+
+        // 计算下移距离 = 第一个条目的高度 + 列表 gap(6px)
+        const shiftY = existingItems[0].offsetHeight + 6;
+
+        // 为防止下移时条目被容器裁剪，临时给列表底部加 padding
+        listEl.style.paddingBottom = shiftY + 'px';
+
+        // Phase 1: 直接用 inline style 触发下移（不用 CSS class，避免 .todo-item 的 transition 冲突）
+        existingItems.forEach(el => {
+            el.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            el.style.transform = `translateY(${shiftY}px)`;
+        });
+
+        // Phase 2: 下移完成后插入新条目
+        setTimeout(() => {
+            // 使用 rAF 批量处理所有变更，保证浏览器在一帧内完成渲染
+            requestAnimationFrame(() => {
+                // ① 先插入新条目（改变布局，把已有条目往下推）
+                insertNewTodoItem(newTodo);
+                listEl.style.paddingBottom = '';
+
+                // ② 强制 reflow，确保新条目的布局尺寸已生效到渲染树
+                void listEl.offsetHeight;
+
+                // ③ 清除 transform——此时已有条目已被新条目推到正确位置，不会跳动
+                existingItems.forEach(el => {
+                    el.style.transition = 'none';
+                    el.style.transform = '';
+                });
+
+                delete listEl.dataset.todoAnimating;
+                updateTodoStatsAfterAdd();
+
+                // ④ 下一帧再恢复 transition
+                requestAnimationFrame(() => {
+                    existingItems.forEach(el => {
+                        el.style.transition = '';
+                    });
+                });
+            });
+        }, 350);
     } catch (err) {
         console.error('添加待办失败:', err);
     }
+}
+
+/**
+ * 构建待办条目的 HTML 字符串
+ */
+function buildTodoItemHTML(todo) {
+    return `
+        <div class="todo-item" data-id="${todo.id}">
+            <button class="todo-checkbox" onclick="toggleTodo(${todo.id})">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                </svg>
+            </button>
+            <span class="todo-text" ondblclick="editTodo(${todo.id})">${escapeHtml(todo.text)}</span>
+            <button class="todo-delete-btn" onclick="deleteTodo(${todo.id})" title="删除">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+    `;
+}
+
+/**
+ * 直接插入新待办条目到列表顶部（无下移动画，用于 fallback 场景）
+ */
+function insertNewTodoItem(newTodo) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = buildTodoItemHTML(newTodo);
+    const itemEl = wrapper.firstElementChild;
+    itemEl.classList.add('todo-item-enter');
+    els.todoList.prepend(itemEl);
+
+    // 入场动画结束后移除类
+    itemEl.addEventListener('animationend', () => {
+        itemEl.classList.remove('todo-item-enter');
+    }, { once: true });
+}
+
+/**
+ * 新增后异步更新统计
+ */
+async function updateTodoStatsAfterAdd() {
+    try {
+        const allTodos = await window.go.main.App.ListTodos();
+        updateTodoStats(allTodos);
+    } catch (_) {}
 }
 
 /**

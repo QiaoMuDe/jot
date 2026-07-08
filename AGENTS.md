@@ -70,7 +70,7 @@ jot/                                    # 项目根目录
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │           ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
-│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/6 个入场退出动画）
+│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/7 个入场退出动画 + 两段式新增动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -511,7 +511,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
 | `services/types.go` | ~146 | 通用类型（含 DataStats/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
-| `frontend/src/css/components/todo.css` | 279 | 待办清单全部样式（输入+筛选一体化工具栏/6 个 @keyframes 动画） |
+| `frontend/src/css/components/todo.css` | 334 | 待办清单全部样式（输入+筛选一体化工具栏/7 个 @keyframes 动画 + 两段式新增动画） |
 | `internal/services/todo_service.go` | 58 | 待办 CRUD 服务（创建/列表/切换完成/删除/编辑） |
 | `internal/models/todo.go` | 11 | Todo 数据模型（ID/Text/Done/时间戳） |
 | `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
@@ -2194,3 +2194,16 @@ await loadXxxSetting();
 | **涉及文件** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 
 | **update 计数** | `AGENTS.md` 从更新 108 → 更新 109 |
+
+## 一百四十七、新增记忆点（待办新增动画增强 — 两段式空间叙事）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **动画方案** | 新增待办时采用「先下移 → 再插入」两段式空间叙事动画：Phase 1 已有条目平滑下移一个位置腾出空间，Phase 2 新条目优雅滑入。替代原先简单 `todo-new` 淡入动画。详见 [spec](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/enhance-todo-add-animation/spec.md)、[tasks](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/enhance-todo-add-animation/tasks.md) |
+| **Phase 1：已有条目下移** | 在 `addTodo()` 中：计算下移距离 `shiftY = existingItems[0].offsetHeight + 6`（条目高度 + flex gap），通过 inline style 设置 `transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)` 和 `transform: translateY(${shiftY}px)`，避免使用 CSS class 以防止 `.todo-item` 基础样式的 `transition: transform 0.2s ease` 冲突。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7585-L7610) |
+| **Phase 2：插入新条目** | 350ms 后执行：先 `requestAnimationFrame` 包裹所有变更 → ① 插入新条目到列表顶部（改变布局，把已有条目往下推）→ ② 强制 reflow `void listEl.offsetHeight` 确保布局已生效 → ③ 清除已有条目的 `transform`（此时它们已被新条目推到正确位置，不会视觉跳动）→ ④ 下一帧恢复 `transition`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7600-L7624) |
+| **新条目入场动画** | `insertNewTodoItem()` 给新元素添加 `.todo-item-enter` class，触发 `@keyframes todoItemEnter`（`translateY(-30px) scale(0.96)` → `translateY(0) scale(1)`，350ms ease-out），`animationend` 后移除类。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L327-L334) |
+| **回弹问题修复** | 原实现中 Phase 2 清除 transform 和插入新条目在同一个 JS tick 但浏览器分帧渲染（先渲染 transform 清除→条目上跳，再渲染 DOM 插入→条目被推回），导致回弹。修复方式：用 `requestAnimationFrame` 批量处理 + 先插入 DOM 再强制 reflow 最后清除 transform，保证浏览器在一帧内完成所有变更，transform 清除和 DOM 插入效果互相抵消。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7600-L7624) |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[spec.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/enhance-todo-add-animation/spec.md) |
+
+| **update 计数** | `AGENTS.md` 从更新 109 → 更新 110 |

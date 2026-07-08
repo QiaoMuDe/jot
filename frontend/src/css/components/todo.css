@@ -316,3 +316,19 @@
     100% { opacity: 1; transform: translateY(0) scale(1); border-radius: var(--radius-lg); }
 }
 .todo-item.todo-new { animation: todoNew 0.35s ease-out both; border-radius: var(--radius-lg); }
+
+/* 新增待办 — 已有条目整体下移（直接位移） */
+.todo-item.todo-shift {
+    transform: translateY(var(--shift-y, 0px));
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 新增待办 — 新条目入场：从上方优雅滑入 */
+@keyframes todoItemEnter {
+    0%   { opacity: 0; transform: translateY(-30px) scale(0.96); border-radius: var(--radius-lg); }
+    100% { opacity: 1; transform: translateY(0) scale(1); border-radius: var(--radius-lg); }
+}
+.todo-item.todo-item-enter {
+    animation: todoItemEnter 0.35s ease-out both;
+    border-radius: var(--radius-lg);
+}
