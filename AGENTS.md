@@ -497,7 +497,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
 | `frontend/src/js/ai-chat.js` | 3690 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
-| `frontend/src/main.js` | 7126 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
+| `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/css/components/ai-chat.css` | 2839 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
 | `app.go` | 1548 | Wails 绑定层（100+ API） |
 | `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
@@ -2228,3 +2228,28 @@ await loadXxxSetting();
 | **涉及文件** | [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css) |
 
 | **update 计数** | `AGENTS.md` 从更新 111 → 更新 112 |
+
+## 一百五十、新增记忆点（待办清单菜单入口重新排序 + 快捷键分配）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更** | 将「待办清单」从更多菜单末尾（AI 助手之后）移到「数据管理 → 回收站」之后，与数据管理、回收站组成「组织管理工具」分组。分配 Ctrl+6 快捷键，设置和 AI 助手快捷键顺延（Ctrl+7、Ctrl+8）。 |
+
+**菜单结构调整：**
+
+```
+Ctrl+4 数据管理
+Ctrl+5 回收站
+Ctrl+6 待办清单      ← 新位置，新增快捷键
+───────────
+Ctrl+7 设置          ← 原 Ctrl+6
+      帮助参考
+───────────
+Ctrl+8 AI 助手       ← 原 Ctrl+7
+```
+
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html#L78-L94)（菜单顺序 + title 属性）、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L5229-L5240)（快捷键 handler + 快捷键说明弹窗） |
+| **快捷键 handler** | `case '6': switchView('todo')`、`case '7': switchView('settings')`、`case '8': switchView('ai-chat')` |
+| **快捷键说明弹窗** | Ctrl+6 → 待办清单、Ctrl+7 → 设置、Ctrl+8 → AI 助手 |
+
+| **update 计数** | `AGENTS.md` 从更新 112 → 更新 113 |

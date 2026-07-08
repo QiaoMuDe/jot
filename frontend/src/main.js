@@ -5228,9 +5228,13 @@ async function handleKeyboardNavigation(e) {
                 return;
             case '6':
                 e.preventDefault();
-                switchView('settings');
+                switchView('todo');
                 return;
             case '7':
+                e.preventDefault();
+                switchView('settings');
+                return;
+            case '8':
                 e.preventDefault();
                 switchView('ai-chat');
                 return;
@@ -5459,8 +5463,9 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 3', desc: '批量管理' },
         { key: 'Ctrl + 4', desc: '数据管理' },
         { key: 'Ctrl + 5', desc: '回收站' },
-        { key: 'Ctrl + 6', desc: '设置' },
-        { key: 'Ctrl + 7', desc: 'AI 助手' },
+        { key: 'Ctrl + 6', desc: '待办清单' },
+        { key: 'Ctrl + 7', desc: '设置' },
+        { key: 'Ctrl + 8', desc: 'AI 助手' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
