@@ -76,15 +76,19 @@
     to   { opacity: 0.98; transform: scale(0.92); }
 }
 
-/* Slide up from bottom (for batch bar, toast) */
+/* Slide up from bottom (for batch bar, toast) — spring overshoot */
 @keyframes slideUp {
-    from { transform: translateY(100%); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
+    0%   { transform: translateY(100%); opacity: 0; }
+    60%  { opacity: 1; transform: translateY(-4px); }
+    80%  { transform: translateY(1px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideDown {
-    from { transform: translateY(0); opacity: 1; }
-    to   { transform: translateY(100%); opacity: 0; }
+    0%   { transform: translateY(0); opacity: 1; }
+    60%  { opacity: 1; transform: translateY(104%); }
+    80%  { transform: translateY(98%); }
+    100% { opacity: 0; transform: translateY(100%); }
 }
 
 /* Scale pulse (for tag chip, checkbox) */
@@ -92,6 +96,12 @@
     0%   { transform: scale(1); }
     50%  { transform: scale(1.15); }
     100% { transform: scale(1); }
+}
+
+/* Batch button fade in — 用于批量操作栏按钮交错入场 */
+@keyframes batchBtnFadeIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Scale bounce (for checkbox, pin button) */

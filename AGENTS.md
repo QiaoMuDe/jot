@@ -2114,3 +2114,18 @@ await loadXxxSetting();
 | **输入框宽度与右对齐** | 输入框 `width:260px;flex:none`（覆盖 `.settings-input` 的 `flex:1` 防止撑满），`.ai-setting-control` 使用 `justify-content:flex-end` 靠右排列，"自动清理天数"标签 `width:100px` 防换行。详见 [index.html#L683-L689](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
 | **设置项保存通知** | `#trashCleanupRetentionDays` 的 `change` 事件（移走光标触发）中校验范围 1-365，调用 `await saveSettings()` 后弹出 `nm.show('回收站自动清理天数已保存', 'success')`，与 `aiRefMaxChars`/`aiSettingCardRecallLimit` 等现有设置项行为一致。详见 [main.js#L2237-L2253](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[note-list.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/note-list.js) |
+
+## 一百四十三、新增记忆点（批量管理重构：FAB 入口 + 动效重设计 + 交互增强）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **FAB 新增批量入口** | FAB 组右下角新增 `#fabBatch` 按钮（四格方块 SVG 图标），位于 fabAI 与 backToTopBtn 之间，点击 → `switchView('grid')` + `toggleBatchMode()`，与更多菜单/Ctrl+3 并列入口。详见 [index.html#L1529](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js#L4651-L4655](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **操作栏动画重设计** | 弃用 JS-set animation（`slideUp`/`slideDown`），改为 CSS transition + `.visible` 类控制。展开/收起使用 `max-height` + `padding` 过渡（而非 `transform`），使布局（卡片网格）跟随操作栏平滑上下移动，消除跳变。缓动使用 spring 曲线 `cubic-bezier(0.16, 1, 0.3, 1)`。详见 [main-content.css#L381-L411](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css) |
+| **cloneNode 事件监听丢失修复** | 入口分支曾用 `cloneNode(true)` 替换 `.batch-bar` DOM 以清除 `transitionend` 监听，但导致 `batchPinBtn`/`batchDeleteBtn` 等按钮事件全丢失。改为 `bar._batchExiting` 标志位：退出时设 true、进入时置 false，`transitionend` 回调检查标志后决定是否执行 `display:none`。详见 [main.js#L4182-L4216](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **复选框移除** | 批量模式下卡片上的 `input[type="checkbox"]` 元素及全部 `.batch-checkbox` CSS 已删除。选中视觉反馈纯靠 `.note-card.selected` 的 accent 边框 + 阴影 + 背景色。详见 [main-content.css#L501-L514](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[main.js#L2742-L2746](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **批量模式下置顶按钮可操作** | 去掉 `pin-btn.disabled` 类和 CSS 的 `pointer-events: none`，批量模式下单张卡片置顶按钮始终可用。详见 [main-content.css#L368-L372](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[main.js#L2744](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **批量置顶按钮文字逻辑修正** | ①按钮文字改为"任一已置顶→取消置顶"（`some` 替代 `every`）；②取消选中后恢复为"置顶"；③动作逻辑直接读取按钮文字决定 pin/unpin，与按钮展示一致。详见 [main.js#L4279-L4291](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[main.js#L4334](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **批量移动后清空选中** | `confirmMoveNotes()` 迁移完成后添加 `clearSelection()`，解决笔记移走后操作栏仍显示"已选 N 条"的问题。详见 [main.js#L4594](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[animations.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/animations.css) |
+
+| **update 计数** | `AGENTS.md` 从更新 104 → 更新 105 |

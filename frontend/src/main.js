@@ -414,6 +414,7 @@ const els = {
     fabGroup: $('fabGroup'),
     fabNewNote: $('fabNewNote'),
     fabAI: $('fabAI'),
+    fabBatch: $('fabBatch'),
     backToTopBtn: $('backToTopBtn'),
 
     // 关于页面
@@ -2740,11 +2741,7 @@ function renderCardGrid(animateMode, prevCount) {
                 <span class="card-time">${formatTime(note.updated_at || note.created_at)}</span>
             </div>
             <div class="card-actions" onclick="event.stopPropagation()">
-                ${state.batchMode
-                    ? `<input type="checkbox" class="batch-checkbox" ${state.selectedNoteIds.has(note.id) ? 'checked' : ''} onclick="event.stopPropagation(); window.toggleNoteSelection(${note.id})">`
-                    : ''
-                }
-                <button class="card-action-btn pin-btn${state.batchMode ? ' disabled' : ''}" onclick="event.stopPropagation()${state.batchMode ? '' : `; window.handlePinClick(event, ${note.id})`}" title="${note.pinned ? '已置顶' : (state.batchMode ? '批量模式下不可操作' : '置顶')}">
+                <button class="card-action-btn pin-btn" onclick="event.stopPropagation(); window.handlePinClick(event, ${note.id})" title="${note.pinned ? '已置顶' : '置顶'}">
                     ${note.pinned ? SVGS.pinFilled : SVGS.pinOutline}
                 </button>
             </div>
@@ -4186,24 +4183,29 @@ function toggleBatchMode() {
         // 进入批量模式
         clearSelection();
         bar.style.display = 'flex';
-        bar.style.animation = 'slideUp 0.25s ease-out forwards';
+        bar.classList.remove('visible');
+        // 标记已退出退出动画阶段，阻止上一次 transitionend 误触
+        if (bar._batchExiting) {
+            bar._batchExiting = false;
+        }
+        // 强制回流后触发 transition
+        void bar.offsetHeight;
+        bar.classList.add('visible');
         renderCardGrid('none');
         updateBatchBar();
-
-        // 复选框交错淡入
-        const checkboxes = document.querySelectorAll('.batch-checkbox');
-        checkboxes.forEach((cb, i) => {
-            cb.style.animation = `scaleBounce 0.3s ease-out ${i * 20}ms forwards`;
-        });
     } else {
-        // 退出批量模式：清空选中 + bar 滑出
+        // 退出批量模式
         clearSelection();
-        bar.style.animation = 'slideDown 0.15s ease-in forwards';
-        bar.addEventListener('animationend', function onEnd() {
-            bar.style.display = 'none';
-            bar.style.animation = '';
-            bar.removeEventListener('animationend', onEnd);
-        });
+        bar.classList.remove('visible');
+        bar._batchExiting = true;
+        const onEnd = (e) => {
+            if (e.propertyName === 'max-height' && bar._batchExiting) {
+                bar.style.display = 'none';
+                bar._batchExiting = false;
+            }
+            bar.removeEventListener('transitionend', onEnd);
+        };
+        bar.addEventListener('transitionend', onEnd);
         renderCardGrid('none');
         updateBatchBar();
     }
@@ -4275,12 +4277,16 @@ function updateBatchBar() {
         }
     }
     // 更新批量置顶按钮文字
-    if (els.batchPinBtn && count > 0) {
-        const allPinned = Array.from(state.selectedNoteIds).every(id => {
-            const note = state.notes.find(n => n.id === id);
-            return note && note.pinned;
-        });
-        els.batchPinBtn.textContent = allPinned ? '取消置顶' : '置顶';
+    if (els.batchPinBtn) {
+        if (count > 0) {
+            const anyPinned = Array.from(state.selectedNoteIds).some(id => {
+                const note = state.notes.find(n => n.id === id);
+                return note && note.pinned;
+            });
+            els.batchPinBtn.textContent = anyPinned ? '取消置顶' : '置顶';
+        } else {
+            els.batchPinBtn.textContent = '置顶';
+        }
     }
 }
 
@@ -4320,15 +4326,13 @@ async function batchDeleteSelected() {
 
 /**
  * 批量置顶/取消置顶选中的笔记
- * 判断策略：如果至少有一条未置顶则全部置顶，否则全部取消置顶
+ * 与按钮文字保持一致：显示"取消置顶"时执行取消置顶，显示"置顶"时执行置顶
  */
 async function batchPinSelected() {
     const ids = Array.from(state.selectedNoteIds);
     if (ids.length === 0) return;
 
-    // 判断当前选中笔记中是否有未置顶的
-    const anyUnpinned = state.notes.some(n => ids.includes(n.id) && !n.pinned);
-    const pin = anyUnpinned; // 有未置顶 → 全部置顶；全部已置顶 → 取消置顶
+    const pin = els.batchPinBtn.textContent === '置顶';
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchPinNotes) {
@@ -4586,6 +4590,7 @@ async function confirmMoveNotes() {
         await loadNotes();
         await loadNotebooks();
         renderNotebookList();
+        clearSelection();
         nm.show(`已将 ${moveNoteIds.length} 条笔记移动到「${targetName}」`, 'success');
     } catch (err) {
         console.error('迁移笔记失败:', err);
@@ -4645,6 +4650,12 @@ function initEventListeners() {
     // 浮动 AI 按钮
     els.fabAI.addEventListener('click', () => {
         switchView('ai-chat');
+    });
+
+    // 浮动批量管理按钮
+    els.fabBatch.addEventListener('click', () => {
+        switchView('grid');
+        toggleBatchMode();
     });
 
     // 回到顶部
