@@ -9,14 +9,16 @@
     align-items: center;
 }
 
+#viewTodo .back-btn {
+    justify-self: start;
+}
+
 .todo-container {
     max-width: 560px;
     margin: 0 auto;
     width: 100%;
-    padding: 0 4px;
+    padding: 0 16px;
     flex: 1;
-    overflow-y: auto;
-    min-height: 0;
 }
 
 /* 输入区 + 筛选行 — 一体化工具栏 */

@@ -511,7 +511,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
 | `services/types.go` | ~146 | 通用类型（含 DataStats/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
-| `frontend/src/css/components/todo.css` | 334 | 待办清单全部样式（输入+筛选一体化工具栏/7 个 @keyframes 动画 + 两段式新增动画） |
+| `frontend/src/css/components/todo.css` | 336 | 待办清单全部样式（输入+筛选一体化工具栏/7 个 @keyframes 动画 + 两段式新增动画） |
 | `internal/services/todo_service.go` | 58 | 待办 CRUD 服务（创建/列表/切换完成/删除/编辑） |
 | `internal/models/todo.go` | 11 | Todo 数据模型（ID/Text/Done/时间戳） |
 | `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
@@ -2207,3 +2207,24 @@ await loadXxxSetting();
 | **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[spec.md](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/enhance-todo-add-animation/spec.md) |
 
 | **update 计数** | `AGENTS.md` 从更新 109 → 更新 110 |
+
+## 一百四十八、新增记忆点（待办清单滚动条修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 待办清单页面右侧滚动条不显示，且滚动条位置在 `.todo-container` 内部紧贴待办条目，而非页面右侧边框。 |
+| **方案变更** | 改为让 `#mainContent` 处理待办页面的滚动，移除 `.todo-container` 的 `overflow-y: auto` 和内滚动。`.todo-container` 内容自然溢出 `.view` 后由 `#mainContent` 承接滚动，其滚动条已在页面右侧边框位置且已有完整样式。 |
+| **具体改动** | `.todo-container` 移除 `overflow-y: auto; min-height: 0; scrollbar-gutter: stable`，保留 `flex: 1` 填充剩余空间。`main.js` 的 `initScrollbarAutoHide()` 中移除 `.todo-container` 监听（由 `#mainContent` 的滚动条自动显隐处理）。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L12-L15)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L5317) |
+| **涉及文件** | [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 110 → 更新 111 |
+
+## 一百四十九、新增记忆点（待办清单返回按钮悬停宽度修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 待办清单页面左上角返回按钮鼠标悬停时背景色覆盖很宽的区域，因 `#viewTodo .view-header` 使用 `display: grid; grid-template-columns: 1fr auto 1fr`，返回按钮位于第一个 `1fr` 列中被拉伸填满整列宽度。其他页面使用 `display: flex; justify-content: space-between`，按钮只占自身内容宽度，不存在此问题。 |
+| **修复** | 在 `todo.css` 新增 `#viewTodo .back-btn { justify-self: start; }`，让返回按钮在 grid 单元格中只占自身内容宽度，不再被拉伸。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L11-L13) |
+| **涉及文件** | [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css) |
+
+| **update 计数** | `AGENTS.md` 从更新 111 → 更新 112 |
