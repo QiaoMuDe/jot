@@ -7537,6 +7537,26 @@ function renderTodos(todos, filter) {
             }, { once: true });
         });
     });
+
+    // 绑定悬浮预览 tooltip
+    listEl.querySelectorAll('.todo-item').forEach(item => {
+        if (item.querySelector('.todo-text')) {
+            item.addEventListener('mouseenter', (e) => {
+                if (item.classList.contains('editing')) return;
+                const text = item.querySelector('.todo-text')?.textContent || '';
+                if (!text) return;
+                clearTimeout(todoTooltipTimer);
+                todoTooltipTimer = setTimeout(() => {
+                    if (item.classList.contains('editing')) return;
+                    showTodoTooltip(item, text, e.clientX, e.clientY);
+                }, 1000);
+            });
+            item.addEventListener('mouseleave', () => {
+                clearTimeout(todoTooltipTimer);
+                hideTodoTooltip();
+            });
+        }
+    });
 }
 
 /**
@@ -7672,6 +7692,24 @@ function insertNewTodoItem(newTodo) {
     itemEl.addEventListener('animationend', () => {
         itemEl.classList.remove('todo-item-enter');
     }, { once: true });
+
+    // 绑定悬浮预览 tooltip
+    if (itemEl.querySelector('.todo-text')) {
+        itemEl.addEventListener('mouseenter', (e) => {
+            if (itemEl.classList.contains('editing')) return;
+            const text = itemEl.querySelector('.todo-text')?.textContent || '';
+            if (!text) return;
+            clearTimeout(todoTooltipTimer);
+            todoTooltipTimer = setTimeout(() => {
+                if (itemEl.classList.contains('editing')) return;
+                showTodoTooltip(itemEl, text, e.clientX, e.clientY);
+            }, 1000);
+        });
+        itemEl.addEventListener('mouseleave', () => {
+            clearTimeout(todoTooltipTimer);
+            hideTodoTooltip();
+        });
+    }
 }
 
 /**
@@ -7792,28 +7830,40 @@ async function editTodo(id) {
     const textEl = item.querySelector('.todo-text');
     if (!textEl) return;
 
-    const oldText = textEl.textContent;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'todo-text';
-    input.value = oldText;
-    input.style.width = '100%';
-    input.style.border = '1px solid var(--accent)';
-    input.style.outline = 'none';
-    input.style.fontSize = '0.875rem';
-    input.style.fontFamily = 'inherit';
-    input.style.padding = '2px 4px';
-    input.style.borderRadius = 'var(--radius-sm)';
-    input.style.color = 'var(--text-primary)';
-    input.style.background = 'var(--card-bg)';
+    item.classList.add('editing');
 
-    textEl.replaceWith(input);
-    input.focus();
-    input.select();
+    // 编辑时关闭悬浮预览
+    clearTimeout(todoTooltipTimer);
+    hideTodoTooltip();
+
+    const oldText = textEl.textContent;
+    const textarea = document.createElement('textarea');
+    textarea.className = 'todo-text';
+    textarea.value = oldText;
+    textarea.rows = 4;
+    textarea.style.width = '100%';
+    textarea.style.border = '1px solid var(--accent)';
+    textarea.style.outline = 'none';
+    textarea.style.fontSize = '0.875rem';
+    textarea.style.fontFamily = 'inherit';
+    textarea.style.padding = '10px 12px';
+    textarea.style.lineHeight = '1.6';
+    textarea.style.borderRadius = 'var(--radius-sm)';
+    textarea.style.color = 'var(--text-primary)';
+    textarea.style.background = 'var(--card-bg)';
+    textarea.style.resize = 'none';
+    textarea.style.whiteSpace = 'pre-wrap';
+    textarea.style.overflow = 'auto';
+
+    textEl.replaceWith(textarea);
+    textarea.focus();
+    textarea.select();
 
     const finishEdit = async (save) => {
-        const newText = save ? input.value.trim() : oldText;
-        if (save && newText && newText !== oldText) {
+        const newText = save ? textarea.value.trim() : oldText;
+        const changed = save && newText && newText !== oldText;
+
+        if (changed) {
             try {
                 if (window.go?.main?.App?.UpdateTodo) {
                     await window.go.main.App.UpdateTodo(id, newText);
@@ -7822,26 +7872,120 @@ async function editTodo(id) {
                 console.error('编辑待办失败:', err);
             }
         }
+
+        item.classList.remove('editing');
         // 恢复文本显示
         const span = document.createElement('span');
         span.className = 'todo-text';
+        if (item.classList.contains('completed')) {
+            span.classList.add('done');
+        }
         span.textContent = save ? (newText || oldText) : oldText;
         span.ondblclick = () => editTodo(id);
-        input.replaceWith(span);
-        await loadTodos();
+        textarea.replaceWith(span);
+
+        // 内容有变更 → 播放保存动画，更新统计
+        if (changed) {
+            item.classList.add('todo-saved');
+            item.addEventListener('animationend', () => {
+                item.classList.remove('todo-saved');
+            }, { once: true });
+
+            await refreshTodoStats();
+            document.dispatchEvent(new CustomEvent('todos-updated'));
+        }
     };
 
-    input.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') {
+    textarea.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
             e.preventDefault();
             await finishEdit(true);
+        } else if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const val = textarea.value;
+            textarea.value = val.substring(0, start) + '\n' + val.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 1;
         } else if (e.key === 'Escape') {
             await finishEdit(false);
         }
     });
 
-    input.addEventListener('blur', () => finishEdit(true));
+    textarea.addEventListener('blur', () => finishEdit(true));
 }
+
+/* ==================== 悬浮预览 Tooltip ==================== */
+let todoTooltipEl = null;
+let todoTooltipTimer = null;
+
+function showTodoTooltip(item, text, mouseX, mouseY) {
+    hideTodoTooltip();
+
+    const el = document.createElement('div');
+    el.className = 'todo-tooltip';
+    el.textContent = text;
+    document.body.appendChild(el);
+
+    // 基于鼠标位置定位
+    positionTodoTooltip(mouseX, mouseY, el);
+
+    // 触发回流后添加 visible 类启动动画
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            el.classList.add('visible');
+        });
+    });
+
+    todoTooltipEl = el;
+}
+
+function positionTodoTooltip(mouseX, mouseY, el) {
+    const tooltipW = el.offsetWidth;
+    const tooltipH = el.offsetHeight;
+    const gap = 12;
+    const margin = 8;
+
+    // 默认：光标右下方
+    let left = mouseX + gap;
+    let top = mouseY + gap;
+
+    // 超出右边界 → 显示在光标左侧
+    if (left + tooltipW > window.innerWidth - margin) {
+        left = mouseX - tooltipW - gap;
+    }
+
+    // 超出下边界 → 显示在光标上方
+    if (top + tooltipH > window.innerHeight - margin) {
+        top = mouseY - tooltipH - gap;
+    }
+
+    // 防止左/上溢出
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+
+    // transform-origin 从光标位置展开
+    const originX = left > mouseX ? '0%' : '100%';
+    const originY = top > mouseY ? '0%' : '100%';
+    el.style.transformOrigin = `${originX} ${originY}`;
+}
+
+function hideTodoTooltip() {
+    if (todoTooltipEl) {
+        todoTooltipEl.classList.remove('visible');
+        const el = todoTooltipEl;
+        el.addEventListener('transitionend', () => el.remove(), { once: true });
+        setTimeout(() => { if (el.parentNode) el.remove(); }, 200);
+        todoTooltipEl = null;
+    }
+}
+
+// 滚动/窗口变化时隐藏 tooltip
+window.addEventListener('scroll', hideTodoTooltip, true);
+window.addEventListener('resize', hideTodoTooltip);
 
 // 将待办函数暴露到 window（供 HTML onclick 调用）
 window.addTodo = addTodo;

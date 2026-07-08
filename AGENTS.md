@@ -70,7 +70,7 @@ jot/                                    # 项目根目录
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │           ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
-│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/7 个入场退出动画 + 两段式新增动画）
+│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -512,7 +512,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `internal/aicli/types.go` | ~90 | 客户端类型定义 |
 | `services/notebook_service.go` | 273 | 笔记本 CRUD + 回收站笔记本（软删除/恢复/全部恢复/全部清空）|
 | `services/types.go` | 192 | 通用类型（含 DataStats 含待办统计/NoteRefInfo/NoteRefContext/SettingsConfig/ImportResult） |
-| `frontend/src/css/components/todo.css` | 336 | 待办清单全部样式（输入+筛选一体化工具栏/7 个 @keyframes 动画 + 两段式新增动画） |
+| `frontend/src/css/components/todo.css` | 419 | 待办清单全部样式（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip + 编辑模式平滑过渡） |
 | `internal/services/todo_service.go` | 82 | 待办 CRUD + 统计服务（创建/列表/切换完成/删除/编辑/Count/CountCompleted/DeleteCompleted） |
 | `internal/models/todo.go` | 11 | Todo 数据模型（ID/Text/Done/时间戳） |
 | `frontend/src/css/variables.css` | 672 | 12 主题 CSS 变量 + --selection-bg 选中颜色 |
@@ -2179,9 +2179,9 @@ await loadXxxSetting();
 | **前端加载流程** | `switchView('todo')` → `_todoFilter = 'active'` → `loadTodos()` → `await App.ListTodos()` → `renderTodos(todos, filter)` → `updateTodoStats(todos)`。筛选切换通过事件委托在 `.todo-filter-btn` 上处理，不重新查询后端，仅前端过滤。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **新增待办** | 输入框 Enter 键 → `addTodo()` → `App.CreateTodo(text)` → 返回后自动插入列表顶部（`todo-new` 动画）并更新统计。若当前在"已完成"筛选下，自动切回"待办"筛选并刷新。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7551-L7609) |
 | **切换完成状态** | `toggleTodo(id)`：在"全部"筛选下原地切换样式并移动位置（完成→移到底部，取消→移到顶部）；在"待办"/"已完成"筛选下播退出动画（`todo-completing`/`todo-activating`）→ 300ms 后移除 DOM → 调 `ToggleTodo(id)` API → 刷新统计。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7612-L7663) |
-| **行内编辑** | 双击 `.todo-text` 进入编辑模式：替换 span → input 输入框，Enter 保存/Blur 保存/Escape 取消。调用 `App.UpdateTodo(id, newText)` 持久化后调用 `loadTodos()` 刷新。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7710-L7760) |
+| **行内编辑** | 双击 `.todo-text` 进入编辑模式：替换 span → textarea 多行输入框，Enter 保存/Ctrl+Enter 换行/Blur 保存/Escape 取消。调用 `App.UpdateTodo(id, newText)` 持久化后原地更新文本并播放保存动画（`.todo-saved` 呼吸缩放），不再全量刷新列表。已完成的条目同样支持双击编辑，退出后恢复删除线样式。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **删除待办** | 点击 `.todo-delete-btn` → 播 `todo-deleting` 动画（向右淡出缩小，0.3s）→ 移除 DOM → 调 `DeleteTodo(id)` API → 更新空状态。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7665-L7708) |
-| **CSS 动画** | `todo.css` 共 6 个 `@keyframes`：`todoEnter`（从上滑入）、`todoExit`（向上缩小淡出）、`todoComplete`（向左淡出缩小）、`todoActivate`（向右淡出缩小）、`todoDelete`（向右淡出缩小）、`todoNew`（优雅滑入+缩放）。DOM 动画结束后通过 `animationend` 事件移除动画类，避免后续动画冲突。详见 [todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css) |
+| **CSS 动画** | `todo.css` 共 8 个 `@keyframes`：`todoEnter`（从上滑入）、`todoExit`（向上缩小淡出）、`todoComplete`（向左淡出缩小）、`todoActivate`（向右淡出缩小）、`todoDelete`（向右淡出缩小）、`todoNew`（优雅滑入+缩放）、`todoItemEnter`（新条目入场弹性滑入）、`todoSaveSuccess`（编辑保存呼吸缩放动画）。DOM 动画结束后通过 `animationend` 事件移除动画类，避免后续动画冲突。详见 [todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css) |
 | **筛选按钮显示数量** | 移除底部 `.todo-stats` 统计栏（共 N 项/待办 N 项），改为在筛选按钮上直接显示数量：「待办 N」「已完成 N」。`updateTodoStats()` 函数改为直接更新按钮文本，列表区自然撑满底部空间。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7538) |
 | **涉及文件** | [todo.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/todo.go)、[todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[todo.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[database/db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go) |
 
@@ -2266,4 +2266,19 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 
 | **涉及文件** | [types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)（DataStats 字段）、[todo_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/todo_service.go)（3 个新增方法）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L332-L336)（GetDataStats 统计查询）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L365-L366)（VacuumDatabase 第 6 步）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L1763-L1772)（ClearCompletedTodos binding）、[note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go#L589-L592)（ResetAll 清空待办）、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html#L775-L796)（数据清理分组 + 分隔线）、[data-management.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/data-management.js)（loadDataStats + clearCompletedTodos）、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（导入 + DOM 引用 + 事件绑定） |
 
-| **update 计数** | `AGENTS.md` 从更新 113 → 更新 114 |
+---
+
+## 一百五十二、新增记忆点（待办清单编辑体验全面优化 + 悬浮预览 + 保存动画）
+
+| 维度 | 内容 |
+|---|---|
+| **功能概述** | 对待办清单的编辑体验进行全面优化：双击编辑支持多行文本、编辑时平滑隐藏控件、编辑后原地保存动画替代全量刷新、鼠标悬停预览 tooltip、各条目统一左侧装饰、已完成条目支持编辑。 |
+| **多行编辑** | 双击编辑时，将 `<span>` 替换为 `<textarea rows="4">` 而非原 `<input>`，支持多行内容。回车确认保存，`Ctrl+回车` 或 `Shift+回车` 换行，`Escape` 取消。编辑时隐藏闪烁光标（后又恢复为显示光标）。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7825-L7898) |
+| **编辑模式平滑过渡** | 编辑时复选框（左侧）和删除按钮（右侧）不再使用 `display: none` 硬切换，改为 `opacity: 0; transform: scale(0.5); width: 0; overflow: hidden` 配合 `transition: all 0.2s` 平滑淡出收缩，同时 `gap: 0` 避免留白。退出编辑时平滑淡入恢复。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L156-L182) |
+| **编辑保存动画** | 编辑保存后不再调用 `loadTodos()` 全量刷新列表（解决闪烁问题），改为原地更新文本并播放 `@keyframes todoSaveSuccess` 呼吸缩放动画（`scale(1) → 1.008 → 1`，2s ease-out），`animationend` 后自动清理类名。仅内容实际变更时播放动画，统计信息通过 `refreshTodoStats()` 原地更新。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L356-L383)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7862-L7897) |
+| **悬浮预览 tooltip** | 鼠标悬停在待办条目上 1 秒后，在光标位置弹出预览卡片（`position: fixed`），显示完整文本（含换行）。超出视口时自动翻转到光标另一侧。`transform-origin` 动态调整，缩放动画从鼠标方向展开。编辑模式下不触发预览。双击进入编辑时自动关闭已弹出的 tooltip。实时读取 DOM 内容，编辑保存后预览最新文本。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7900-L7980) |
+| **左侧装饰线统一** | 所有条目（未完成 + 已完成）统一使用 `border-left: 3px solid var(--accent)` 代替 `box-shadow: inset`，避免白色边框渗出问题。已完成条目保持 `opacity: 0.8` / 灰色背景区分。详见 [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css#L109-L154) |
+| **已完成条目可编辑** | 已完成条目同样支持双击编辑，编辑时隐藏删除线和低透明度样式，退出编辑后通过检测 `.completed` 类自动恢复 `.todo-text.done` 删除线样式。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7878-L7881) |
+| **涉及文件** | [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 114 → 更新 115 |
