@@ -4625,6 +4625,7 @@ function openMoreMenu(menu) {
  */
 function closeMoreMenu(menu) {
     if (!menu.classList.contains('active')) return;
+    menu.querySelector('.dropdown-submenu-trigger')?.classList.remove('open');
     menu.style.animation = 'modalExit 0.1s ease-in forwards';
     const onEnd = () => {
         menu.classList.remove('active');
@@ -4711,6 +4712,24 @@ function initEventListeners() {
             }
         }
     });
+
+    // 更多菜单 - 子菜单 hover 交互
+    function setupSubmenu() {
+        const submenuTrigger = els.moreMenu.querySelector('.dropdown-submenu-trigger');
+        if (!submenuTrigger) return;
+
+        submenuTrigger.addEventListener('mouseenter', () => {
+            submenuTrigger.classList.add('open');
+        });
+
+        submenuTrigger.addEventListener('mouseleave', (e) => {
+            const submenu = submenuTrigger.querySelector('.dropdown-submenu');
+            if (submenu && !submenu.contains(e.relatedTarget)) {
+                submenuTrigger.classList.remove('open');
+            }
+        });
+    }
+    setupSubmenu();
 
     // 点击品牌名返回所有笔记
     document.querySelector('.topbar-brand')?.addEventListener('click', () => {
@@ -5174,18 +5193,6 @@ async function handleKeyboardNavigation(e) {
                 return;
             case '7':
                 e.preventDefault();
-                if (els.shortcutsView.style.display !== 'none') {
-                    closeShortcuts();
-                } else {
-                    openShortcuts();
-                }
-                return;
-            case '8':
-                e.preventDefault();
-                switchView('md-ref');
-                return;
-            case '9':
-                e.preventDefault();
                 switchView('ai-chat');
                 return;
         }
@@ -5414,9 +5421,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 4', desc: '数据管理' },
         { key: 'Ctrl + 5', desc: '回收站' },
         { key: 'Ctrl + 6', desc: '设置' },
-        { key: 'Ctrl + 7', desc: '快捷键说明' },
-        { key: 'Ctrl + 8', desc: 'MD 语法' },
-        { key: 'Ctrl + 9', desc: 'AI 助手' },
+        { key: 'Ctrl + 7', desc: 'AI 助手' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">

@@ -203,3 +203,46 @@ button :only-child:is(svg) {
   margin: 4px 8px;
   opacity: 0.6;
 }
+
+/* 子菜单触发器 */
+.dropdown-item.dropdown-submenu-trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dropdown-item.dropdown-submenu-trigger .submenu-arrow {
+    margin-left: auto;
+    transition: transform 0.15s ease;
+    opacity: 0.4;
+    flex-shrink: 0;
+}
+
+.dropdown-item.dropdown-submenu-trigger.open .submenu-arrow {
+    transform: rotate(90deg);
+}
+
+/* 子菜单容器 */
+.dropdown-submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: -4px;
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    min-width: 150px;
+    z-index: 2001;
+    border: 1px solid var(--border);
+}
+
+.dropdown-submenu-trigger.open .dropdown-submenu {
+    display: block;
+}
+
+.dropdown-submenu .dropdown-item {
+    white-space: nowrap;
+}

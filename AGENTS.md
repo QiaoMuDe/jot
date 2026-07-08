@@ -2129,3 +2129,16 @@ await loadXxxSetting();
 | **涉及文件** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[animations.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/animations.css) |
 
 | **update 计数** | `AGENTS.md` 从更新 104 → 更新 105 |
+
+## 一百四十四、新增记忆点（更多菜单「帮助参考」子菜单 + 快捷键重新分配）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 更多菜单中「快捷键说明」(Ctrl+7) 和「MD 语法」(Ctrl+8) 属于低频参考类功能，占据两个独立菜单项。将它们归入一个子菜单项使菜单更简洁 |
+| **HTML 变更** | [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L80-L87) 中将原两个独立 `dropdown-item`（`data-action="help"` 和 `data-action="md-ref"`）替换为 `dropdown-item dropdown-submenu-trigger`（"帮助参考"，书籍图标 + 右侧箭头），内含 `div.dropdown-submenu`，子菜单两项还原了原有的键盘图标/文件图标 SVG |
+| **CSS 新增** | [topbar.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/topbar.css#L207-L248) 新增 `.dropdown-submenu-trigger`（relative）、`.submenu-arrow`（右侧箭头，展开时 rotate(90°)）、`.dropdown-submenu`（绝对定位 left:100%、圆角阴影与主菜单一致）、`.open` 类控制子树显隐 |
+| **JS 交互** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L4716-L4732) 新增 `setupSubmenu()` 处理子菜单 hover 交互（`mouseenter` 加 `open` 类，`mouseleave` 检查 `relatedTarget` 防误关）；`closeMoreMenu()` 中新增 `.remove('open')` 确保主菜单关闭时子菜单同步关闭 |
+| **快捷键解绑与重分配** | 移除 `handleKeyboardNavigation` 中 `case '7'`（快捷键说明）和 `case '8'`（MD 语法）；将 `case '9'`（AI 助手）改为 `case '7'`。快捷键页面移除 `Ctrl+7`/`Ctrl+8` 条目，`Ctrl+9` 改为 `Ctrl+7`（AI 助手）。[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html#L89) AI 助手 `title` 同步从 `Ctrl+9` 改为 `Ctrl+7` |
+| **效果** | 更多菜单项从 9 → 8 项（"帮助参考"替代"快捷键说明"+"MD 语法"）；Ctrl+7 变为 AI 助手快捷键；Ctrl+8/Ctrl+9 不再绑定功能 |
+
+| **update 计数** | `AGENTS.md` 从更新 105 → 更新 106 |
