@@ -146,6 +146,8 @@ export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function PermanentDeleteTrashNotebook(arg1:number):Promise<void>;
 
+export function ReadTextFile(arg1:string):Promise<string>;
+
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;
 
 export function RenameAISession(arg1:number,arg2:string):Promise<void>;
@@ -173,6 +175,8 @@ export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise
 export function SaveAllSettings(arg1:services.SettingsConfig):Promise<void>;
 
 export function SaveImage(arg1:string,arg2:string):Promise<string>;
+
+export function SaveImageFromPath(arg1:string):Promise<string>;
 
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 

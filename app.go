@@ -160,6 +160,52 @@ func (a *App) SaveImage(name string, data string) (string, error) {
 	return "/images/" + filename, nil
 }
 
+// SaveImageFromPath 从本地路径复制图片到 ~/.jot/images/，返回可访问的 URL 路径
+// localPath: 本地文件绝对路径
+// 返回: /images/uuid_name.ext 格式的 URL
+func (a *App) SaveImageFromPath(localPath string) (string, error) {
+	bytes, err := os.ReadFile(localPath)
+	if err != nil {
+		return "", fmt.Errorf("读取本地图片失败: %w", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("获取用户目录失败: %w", err)
+	}
+	imageDir := filepath.Join(home, ".jot", "images")
+	if err := os.MkdirAll(imageDir, 0755); err != nil {
+		return "", fmt.Errorf("创建图片目录失败: %w", err)
+	}
+
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("生成随机数失败: %w", err)
+	}
+	uuid := fmt.Sprintf("%x", b)
+
+	filename := uuid + "_" + filepath.Base(localPath)
+	filePath := filepath.Join(imageDir, filename)
+	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
+		return "", fmt.Errorf("写入图片文件失败: %w", err)
+	}
+
+	return "/images/" + filename, nil
+}
+
+// ReadTextFile 读取文本文件内容，若为二进制文件则返回错误
+// localPath: 本地文件绝对路径
+func (a *App) ReadTextFile(localPath string) (string, error) {
+	if fs.IsBinaryPath(localPath) {
+		return "", fmt.Errorf("不支持二进制文件")
+	}
+	content, err := os.ReadFile(localPath)
+	if err != nil {
+		return "", fmt.Errorf("读取文件失败: %w", err)
+	}
+	return string(content), nil
+}
+
 // CleanupOrphanImages 清理 ~/.jot/images/ 中未被任何笔记引用的孤儿图片
 // 扫描所有笔记（含回收站）的 content，删除未引用的图片文件
 // 返回删除的文件数量

@@ -286,6 +286,10 @@ export function PermanentDeleteTrashNotebook(arg1) {
   return window['go']['main']['App']['PermanentDeleteTrashNotebook'](arg1);
 }
 
+export function ReadTextFile(arg1) {
+  return window['go']['main']['App']['ReadTextFile'](arg1);
+}
+
 export function RemoveTagFromNote(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromNote'](arg1, arg2);
 }
@@ -340,6 +344,10 @@ export function SaveAllSettings(arg1) {
 
 export function SaveImage(arg1, arg2) {
   return window['go']['main']['App']['SaveImage'](arg1, arg2);
+}
+
+export function SaveImageFromPath(arg1) {
+  return window['go']['main']['App']['SaveImageFromPath'](arg1);
 }
 
 export function SearchNoteIDs(arg1, arg2, arg3) {

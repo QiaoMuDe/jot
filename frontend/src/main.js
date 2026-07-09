@@ -118,6 +118,13 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
     // 粘贴图片上传（仅 .md 编辑模式）
     cmEditor.dom.addEventListener('paste', handlePaste);
 
+    // 阻止拖拽文件时 CM6 默认的内容插入行为（由 OnFileDrop 统一处理）
+    cmEditor.dom.addEventListener('drop', (e) => {
+        if (e.dataTransfer?.files?.length > 0) {
+            e.preventDefault();
+        }
+    });
+
     return cmEditor;
 }
 
@@ -127,7 +134,14 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
  */
 async function handlePaste(e) {
     // 仅在 .md 笔记且编辑模式下处理图片粘贴
-    if (els.editorFileExt.textContent !== '.md') return;
+    if (els.editorFileExt.textContent !== '.md') {
+        // 非 .md 笔记粘贴图片时提示用户
+        const hasImage = Array.from(e.clipboardData.files).some(f => f.type.startsWith('image/'));
+        if (hasImage) {
+            window.showNotification?.('图片粘贴仅支持 .md 格式笔记', 'info');
+        }
+        return;
+    }
     if (els.editorNoteTitle.readOnly) return;
 
     const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
@@ -6888,6 +6902,15 @@ function initFileDrop() {
         e.preventDefault();
         if (!e.dataTransfer.types.includes('Files')) return;
         _dragCounter++;
+
+        // 编辑器拖拽悬停视觉反馈
+        if (_dragCounter === 1) {
+            // 检查是否悬停到 CM6 编辑器上
+            const cmEl = document.querySelector('.cm-editor');
+            if (cmEl && cmEl.matches(':hover')) {
+                cmEl.classList.add('dragover');
+            }
+        }
         if (_dragCounter === 1 && dropOverlay) {
             dropOverlay.classList.add('active');
         }
@@ -6895,6 +6918,12 @@ function initFileDrop() {
 
     document.addEventListener('dragover', (e) => {
         e.preventDefault();
+        // 拖拽过程中动态检测是否在编辑器上方，切换 dragover 类
+        const cmEl = document.querySelector('.cm-editor');
+        if (cmEl) {
+            const overEditor = cmEl.matches(':hover');
+            cmEl.classList.toggle('dragover', overEditor);
+        }
     });
 
     document.addEventListener('dragleave', (e) => {
@@ -6903,6 +6932,9 @@ function initFileDrop() {
         if (_dragCounter <= 0) {
             _dragCounter = 0;
             if (dropOverlay) dropOverlay.classList.remove('active');
+            // 移除编辑器悬停样式
+            const cmEl = document.querySelector('.cm-editor');
+            if (cmEl) cmEl.classList.remove('dragover');
         }
     });
 
@@ -6911,6 +6943,8 @@ function initFileDrop() {
         e.preventDefault();
         _dragCounter = 0;
         if (dropOverlay) dropOverlay.classList.remove('active');
+        const cmEl = document.querySelector('.cm-editor');
+        if (cmEl) cmEl.classList.remove('dragover');
     });
 
     // Wails OnFileDrop：OS 级拦截，直接返回文件路径
@@ -6922,10 +6956,74 @@ function initFileDrop() {
             // 确保遮罩已隐藏
             _dragCounter = 0;
             if (dropOverlay) dropOverlay.classList.remove('active');
+            const cmEl = document.querySelector('.cm-editor');
+            if (cmEl) cmEl.classList.remove('dragover');
             if (!paths || paths.length === 0) return;
 
-            // 调用后端 ImportFiles 统一处理（stat 检测目录 + 二进制检测 + 创建笔记到当前笔记本）
-            handleFileDropPaths(paths, state.activeNotebookId);
+            // 编辑器打开时（任何模式）全局禁止通过拖拽创建笔记
+            if (cmEditor !== null) {
+                // 判断释放位置是否在 CM6 编辑器上
+                const target = document.elementFromPoint(x, y);
+                const cmEditorEl = target?.closest('.cm-editor');
+                if (!cmEditorEl) return; // 拖到编辑器外 → 忽略
+
+                // 查看模式（只读）→ 忽略
+                if (els.editorNoteTitle.readOnly) return;
+
+                // 检查是否为 .md 笔记（仅 .md 支持图片拖拽）
+                const isMd = els.editorFileExt.textContent === '.md';
+
+                // 编辑/新建模式 → 区分文件类型处理
+                const imgPaths = isMd
+                    ? paths.filter(p => /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(p))
+                    : [];
+                const textPaths = paths.filter(p => !/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(p));
+
+                // 非 .md 笔记拖拽图片时提示
+                if (!isMd && paths.some(p => /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(p))) {
+                    window.showNotification?.('图片拖拽仅支持 .md 格式笔记', 'info');
+                }
+
+                // 处理图片：上传 + 插入 Markdown（缓存光标位置，依次往后插）
+                let pos = cmEditor.state.selection.main.head;
+                let hasInsert = false;
+                for (const p of imgPaths) {
+                    try {
+                        const url = await window.go.main.App.SaveImageFromPath(p);
+                        const filename = p.split(/[/\\]/).pop();
+                        const markdown = `![${filename}](${url})`;
+                        cmEditor.dispatch({
+                            changes: { from: pos, insert: markdown },
+                            selection: { anchor: pos + markdown.length, head: pos + markdown.length }
+                        });
+                        pos += markdown.length;
+                        hasInsert = true;
+                    } catch (err) {
+                        console.error('拖拽上传图片失败:', p, err);
+                    }
+                }
+
+                // 处理文本文件：读取内容并插入光标处
+                for (const p of textPaths) {
+                    try {
+                        const content = await window.go.main.App.ReadTextFile(p);
+                        cmEditor.dispatch({
+                            changes: { from: pos, insert: content },
+                            selection: { anchor: pos + content.length, head: pos + content.length }
+                        });
+                        pos += content.length;
+                        hasInsert = true;
+                    } catch (err) {
+                        // 二进制文件或不支持的文件 → 忽略
+                        console.log('拖拽文件已忽略（非文本或二进制）:', p);
+                    }
+                }
+
+                if (hasInsert) cmEditor.focus();
+            } else {
+                // 编辑器未打开 → 走原有笔记导入
+                handleFileDropPaths(paths, state.activeNotebookId);
+            }
         }, false);
     }
 }

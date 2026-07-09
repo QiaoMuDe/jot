@@ -207,6 +207,13 @@
   flex-direction: column;
 }
 
+/* CM6 编辑器拖拽悬停视觉反馈 */
+.cm-editor.dragover {
+  outline: 2px dashed var(--accent-color, #6c63ff);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
 /* CM6 编辑器淡入（避免初始化前的白屏闪烁） */
 .cm-editor {
   animation: cmFadeIn 0.15s ease-out forwards;

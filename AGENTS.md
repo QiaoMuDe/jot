@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-09（更新 117）
+> 生成日期: 2026-07-09（更新 118）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2327,4 +2327,30 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **前端文案更新** | index.html 导出描述「备份为 .db 文件」→「备份为 .zip 文件」，导入描述「从备份文件还原」→「从备份文件还原（.zip）」 |
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（核心修改）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（按钮文案） |
 
-| **update 计数** | `AGENTS.md` 从更新 117 → 更新 118 |
+## 一百五十六、新增记忆点（编辑器拖拽图片上传）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 用户只能通过 Ctrl+V 粘贴图片到编辑器。拖拽图片文件从文件管理器到编辑器是同等自然的操作，但 Wails 的 `EnableFileDrop: true` 会 OS 级拦截所有文件拖入，走 `OnFileDrop` → `ImportFiles`（创建为笔记），与编辑器图片上传有冲突 |
+| **冲突解决方案** | 不改变 `EnableFileDrop` 机制，在 `OnFileDrop` 回调中通过 `document.elementFromPoint(x, y)` 判断释放坐标是否在 `.cm-editor` 上。若是且为 `.md` 编辑/新建模式，则路由到图片上传逻辑而非笔记导入。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L6920-L6985) |
+| **SaveImageFromPath（Go 后端）** | 新增方法：`os.ReadFile(localPath)` → 生成 UUID → `os.WriteFile` → `~/.jot/images/` → 返回 `/images/uuid_name.ext`。与 `SaveImage`（接收 base64）并行存在，各自独立。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L163-L195) |
+| **拖拽路由分流逻辑** | `OnFileDrop(x, y, paths)` → `elementFromPoint(x, y).closest('.cm-editor')` → 匹配 `.md` + 非只读 → 图片路径调 `SaveImageFromPath` → 光标处插入 `![](/images/uuid_name.ext)`（累加位置匹配粘贴逻辑）→ 非图片路径仍走 `handleFileDropPaths`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L6956-L6980) |
+| **拖拽悬停视觉反馈** | CSS 新增 `.cm-editor.dragover { outline: 2px dashed var(--accent-color); }`；`dragenter/dragover/dragleave/drop` 事件中动态切换 `dragover` 类。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css#L208-L214) |
+| **光标位置一致性** | 拖拽上传与粘贴上传的光标位置接逻辑一致：`pos` 在异步前缓存一次，dispatch 后 `pos += markdown.length` 累加，确保多图连续插入和单图光标定位一致 |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（后端方法）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（前端路由+视觉反馈）、[editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)（拖拽悬停样式） |
+
+---
+
+## 一百五十七、新增记忆点（优化编辑器拖拽行为：三级路由 + CM6 drop 拦截 + ReadTextFile + .md 图片限制）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概述** | 重写 `OnFileDrop` 回调三级路由（编辑器是否打开 → 是否只读 → 文件类型），编辑器打开时全局禁止通过拖拽创建笔记；CM6 编辑器原生 drop 事件 preventDefault 拦截文件内容插入；Go 后端新增 ReadTextFile 复用 fs.IsBinaryPath 检测二进制；粘贴/拖拽图片仅在 `.md` 笔记生效，非 `.md` 提示用户 |
+| **CM6 drop 拦截** | 在 `createCmEditor` 中注册 `drop` 事件：检测 `e.dataTransfer?.files?.length > 0` 时 `e.preventDefault()`，阻止 CM6 在 target 阶段读取文件内容插入编辑器。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L121-L127) |
+| **ReadTextFile（Go 后端）** | 新增 `ReadTextFile(localPath) (string, error)`：调用 `fs.IsBinaryPath` 检查 → 非二进制则 `os.ReadFile` 返回内容 → 二进制返回错误。放置在 `SaveImage/SaveImageFromPath` 下方。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L197-L209) |
+| **OnFileDrop 三级路由** | 编辑器打开时全局禁止创建笔记：`cmEditor === null` → `handleFileDropPaths`；`cmEditor !== null` + 拖到编辑器外 → 忽略；`cmEditor !== null` + 拖到编辑器上 + `readOnly`（查看模式）→ 忽略；`cmEditor !== null` + 拖到编辑器上 + 非 `readOnly`（编辑/新建）→ 图片上传/文本插入/二进制忽略。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L6943-L7016) |
+| **文本文件插入** | 非图片文件调用 `ReadTextFile`：成功（文本文件）→ 插入内容到光标处（累加位置 `pos += content.length`）；失败（二进制文件）→ 静默忽略。有多图时依次处理。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L6991-L7003) |
+| **.md 图片限制 + 通知** | 粘贴图片：`handlePaste` 中 `editorFileExt !== '.md'` 时 `showNotification('图片粘贴仅支持 .md 格式笔记')`；拖拽图片：OnFileDrop 中 `isMd` 检查，非 `.md` 时 `imgPaths = []` + 通知提示。文本文件插入不受后缀限制。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L135-L142) |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（ReadTextFile）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（CM6 drop + OnFileDrop 路由 + .md 检查 + 通知） |
+
+| **update 计数** | `AGENTS.md` 从更新 119 → 更新 120 |
