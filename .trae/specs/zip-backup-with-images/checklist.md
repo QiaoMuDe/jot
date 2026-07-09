@@ -1,0 +1,15 @@
+- [x] `exportSnapshot()` 函数实现：VACUUM INTO → ZIP 打包 → 清理
+- [x] `replaceDatabase()` 函数实现：备份 → 替换 db + images → 重连 → 回滚
+- [x] `importFromArchive()` 函数实现：解压 → replaceDatabase → 清理
+- [x] ExportDataWithDialog 输出 `.zip` 文件，对话框筛选器为 `*.zip`
+- [x] ImportDatabaseWithDialog 接受 `.zip` 文件，筛选器为 `*.zip`
+- [x] BackupToDir 输出 `backup/jot-backup.zip`
+- [x] RestoreFromDir 从 `backup/jot-backup.zip` 恢复
+- [x] GetBackupInfo 读取 `jot-backup.zip` 文件信息
+- [x] ResetDatabase 清空 `~/.jot/images/` 目录
+- [x] 前端导出/导入/备份/还原文案统一改为 `.zip`
+- [x] `go build ./...` 编译通过
+- [x] `npx vite build` 前端构建通过
+- [ ] 导出 → 导入完整链路验证：导出的 `.zip` 包含 db + images，导入后图片正常显示
+- [ ] 一键备份 → 一键还原完整链路验证
+- [ ] 恢复出厂设置后图片目录被清空

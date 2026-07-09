@@ -1,11 +1,13 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"jot/internal/database"
 	"jot/internal/fontutil"
 	"jot/internal/models"
@@ -208,6 +210,15 @@ func (a *App) CleanupOrphanImages() int {
 	}
 
 	return deleted
+}
+
+// imageDirPath 返回 ~/.jot/images 目录路径
+func (a *App) imageDirPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("获取用户目录失败: %w", err)
+	}
+	return filepath.Join(home, ".jot", "images"), nil
 }
 
 // ==================== Note 相关绑定方法 ====================
@@ -462,6 +473,9 @@ func (a *App) VacuumDatabase() (string, error) {
 	// 6. 清空已完成待办
 	deletedTodos, _ := a.todoService.DeleteCompleted()
 
+	// 7. 清理未引用的图片文件
+	deletedImages := a.CleanupOrphanImages()
+
 	// 获取瘦身前数据库文件大小
 	dbPath, _ := database.DefaultDBPath()
 	var beforeSize int64
@@ -514,28 +528,20 @@ func (a *App) VacuumDatabase() (string, error) {
 	if deletedTodos > 0 {
 		parts = append(parts, fmt.Sprintf("清空了 %d 个已完成待办", deletedTodos))
 	}
+	if deletedImages > 0 {
+		parts = append(parts, fmt.Sprintf("删除了 %d 张未引用图片", deletedImages))
+	}
 	return strings.Join(parts, "，"), nil
 }
 
-// ExportDataWithDialog 弹出保存对话框，使用 VACUUM INTO 创建数据库压缩副本到用户选择的位置
+// ExportDataWithDialog 弹出保存对话框，导出 ZIP 格式备份（含数据库和图片）
 func (a *App) ExportDataWithDialog() (string, error) {
-	// 创建临时路径用于 VACUUM INTO 输出
-	tempPath := filepath.Join(os.TempDir(), "jot-backup-"+time.Now().Format("2006-01-02")+".db")
-
-	// 使用 VACUUM INTO 创建压缩副本
-	if err := a.noteService.ExportBackup(tempPath); err != nil {
-		return "", fmt.Errorf("数据库备份失败: %w", err)
-	}
-	defer func() {
-		_ = os.Remove(tempPath)
-	}()
-
-	// 弹出保存对话框让用户选择保存位置
+	// 弹出保存对话框
 	filePath, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "导出数据库备份",
-		DefaultFilename: "jot-backup-" + time.Now().Format("2006-01-02") + ".db",
+		Title:           "导出数据备份",
+		DefaultFilename: "jot-backup-" + time.Now().Format("2006-01-02") + ".zip",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "SQLite 数据库 (*.db)", Pattern: "*.db"},
+			{DisplayName: "ZIP 文件 (*.zip)", Pattern: "*.zip"},
 		},
 	})
 	if err != nil {
@@ -545,20 +551,20 @@ func (a *App) ExportDataWithDialog() (string, error) {
 		return "已取消", nil
 	}
 
-	// 将临时文件复制到用户选择的路径
-	if err := fs.CopyEx(tempPath, filePath, true); err != nil {
-		return "", err
+	// 调用统一导出
+	if err := a.exportSnapshot(filePath); err != nil {
+		return "", fmt.Errorf("导出失败: %w", err)
 	}
 
 	return "导出成功：" + filePath, nil
 }
 
-// ImportDatabaseWithDialog 弹出文件选择对话框，从数据库备份文件恢复数据
+// ImportDatabaseWithDialog 弹出文件选择对话框，从 ZIP 备份文件恢复数据（含图片）
 func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "导入数据库备份",
+		Title: "导入数据备份",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "SQLite 数据库 (*.db)", Pattern: "*.db"},
+			{DisplayName: "ZIP 文件 (*.zip)", Pattern: "*.zip"},
 		},
 	})
 	if err != nil {
@@ -568,54 +574,14 @@ func (a *App) ImportDatabaseWithDialog() (*services.ImportResult, error) {
 		return &services.ImportResult{Message: "已取消"}, nil
 	}
 
-	dbPath, err := database.DefaultDBPath()
-	if err != nil {
-		return &services.ImportResult{Message: "获取数据库路径失败：" + err.Error()}, nil
+	if err := a.importFromArchive(filePath); err != nil {
+		return &services.ImportResult{Message: "导入失败：" + err.Error()}, nil
 	}
 
-	// Step 1: 备份当前数据库
-	backupPath := dbPath + ".bak"
-	if err := fs.CopyEx(dbPath, backupPath, true); err != nil {
-		return &services.ImportResult{Message: "备份当前数据库失败：" + err.Error()}, nil
-	}
-
-	// Step 2: 关闭旧连接
-	sqlDB, err := a.db.DB()
-	if err != nil {
-		_ = os.Remove(backupPath)
-		return &services.ImportResult{Message: "获取数据库连接失败：" + err.Error()}, nil
-	}
-	_ = sqlDB.Close()
-
-	// Step 3: 复制选定文件到数据库路径
-	if err := fs.CopyEx(filePath, dbPath, true); err != nil {
-		// 恢复备份
-		_ = fs.CopyEx(backupPath, dbPath, true)
-		if rerr := a.reconnectDB(dbPath); rerr != nil {
-			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
-		}
-		return &services.ImportResult{Message: "复制备份文件失败：" + err.Error()}, nil
-	}
-
-	// Step 4: 重新初始化数据库
-	newDB, err := database.InitDB(dbPath)
-	if err != nil {
-		// 恢复备份
-		_ = fs.CopyEx(backupPath, dbPath, true)
-		if rerr := a.reconnectDB(dbPath); rerr != nil {
-			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
-		}
-		return &services.ImportResult{Message: "数据库重连失败：" + err.Error()}, nil
-	}
-
-	// Step 5: 重建服务
-	a.db = newDB
-	a.rebuildServices(newDB)
-
-	// Step 6: 清理备份
-	_ = os.Remove(backupPath)
-
-	return &services.ImportResult{Message: "已从备份文件恢复数据库", SuccessCount: 1}, nil
+	return &services.ImportResult{
+		Message:      "已从备份文件恢复数据库与图片",
+		SuccessCount: 1,
+	}, nil
 }
 
 // ==================== Tag 相关绑定方法 ====================
@@ -1567,9 +1533,211 @@ func (a *App) OpenProjectURL(url string) string {
 	return "已打开浏览器"
 }
 
+// exportSnapshot 统一导出：VACUUM INTO → ZIP 打包 {jot-backup.db, images/} → 清理
+func (a *App) exportSnapshot(destZipPath string) error {
+	// 1. VACUUM INTO 临时 .db
+	tempDB := destZipPath + ".tmpdb"
+	defer func() { _ = os.Remove(tempDB) }()
+	if err := a.noteService.ExportBackup(tempDB); err != nil {
+		return fmt.Errorf("VACUUM INTO 失败: %w", err)
+	}
+
+	// 2. 获取图片目录
+	imgDir, err := a.imageDirPath()
+	if err != nil {
+		return err
+	}
+
+	// 3. 创建 ZIP 文件
+	zipFile, err := os.Create(destZipPath)
+	if err != nil {
+		return fmt.Errorf("创建 ZIP 失败: %w", err)
+	}
+	defer func() { _ = zipFile.Close() }()
+
+	zw := zip.NewWriter(zipFile)
+	defer func() { _ = zw.Close() }()
+
+	// 3a. 添加 db 文件（不压缩，SQLite 已是压缩状态）
+	dbFile, err := os.Open(tempDB)
+	if err != nil {
+		return fmt.Errorf("打开临时 db 失败: %w", err)
+	}
+	defer func() { _ = dbFile.Close() }()
+
+	dbInfo, _ := dbFile.Stat()
+	dbHeader, err := zip.FileInfoHeader(dbInfo)
+	if err != nil {
+		return fmt.Errorf("创建 db header 失败: %w", err)
+	}
+	dbHeader.Name = "jot-backup.db"
+	dbHeader.Method = zip.Store
+	dbWriter, err := zw.CreateHeader(dbHeader)
+	if err != nil {
+		return fmt.Errorf("创建 db ZIP entry 失败: %w", err)
+	}
+	if _, err := io.Copy(dbWriter, dbFile); err != nil {
+		return fmt.Errorf("写入 db 到 ZIP 失败: %w", err)
+	}
+
+	// 3b. 添加 images/ 目录中的文件
+	entries, err := os.ReadDir(imgDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("读取图片目录失败: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		imgFile, err := os.Open(filepath.Join(imgDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		imgInfo, _ := imgFile.Stat()
+		imgHeader, err := zip.FileInfoHeader(imgInfo)
+		if err != nil {
+			_ = imgFile.Close()
+			continue
+		}
+		imgHeader.Name = "images/" + entry.Name()
+		imgHeader.Method = zip.Deflate
+		imgWriter, err := zw.CreateHeader(imgHeader)
+		if err != nil {
+			_ = imgFile.Close()
+			continue
+		}
+		_, _ = io.Copy(imgWriter, imgFile)
+		_ = imgFile.Close()
+	}
+
+	return nil
+}
+
+// replaceDatabase 统一替换：备份当前 db → 关闭连接 → 替换 db + images → 重连 → 重建服务
+func (a *App) replaceDatabase(srcDBPath, srcImagesDir string) error {
+	dbPath, err := database.DefaultDBPath()
+	if err != nil {
+		return fmt.Errorf("获取数据库路径失败: %w", err)
+	}
+
+	// Step 1: 备份当前数据库
+	backupPath := dbPath + ".bak"
+	if err := fs.CopyEx(dbPath, backupPath, true); err != nil {
+		return fmt.Errorf("备份当前数据库失败: %w", err)
+	}
+
+	// 失败的回滚
+	rollback := func() {
+		_ = fs.CopyEx(backupPath, dbPath, true)
+		_ = a.reconnectDB(dbPath)
+	}
+
+	// Step 2: 关闭旧连接
+	sqlDB, err := a.db.DB()
+	if err != nil {
+		_ = os.Remove(backupPath)
+		return fmt.Errorf("获取数据库连接失败: %w", err)
+	}
+	_ = sqlDB.Close()
+
+	// Step 3: 复制 db 文件
+	if err := fs.CopyEx(srcDBPath, dbPath, true); err != nil {
+		rollback()
+		return fmt.Errorf("复制数据库文件失败: %w", err)
+	}
+
+	// Step 4: 替换 images/ 目录
+	if srcImagesDir != "" {
+		imgDir, err := a.imageDirPath()
+		if err == nil {
+			_ = os.RemoveAll(imgDir)
+			_ = os.MkdirAll(imgDir, 0755)
+			entries, _ := os.ReadDir(srcImagesDir)
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					src := filepath.Join(srcImagesDir, entry.Name())
+					dst := filepath.Join(imgDir, entry.Name())
+					_ = fs.CopyEx(src, dst, true)
+				}
+			}
+		}
+	}
+
+	// Step 5: 重新初始化数据库
+	newDB, err := database.InitDB(dbPath)
+	if err != nil {
+		rollback()
+		return fmt.Errorf("数据库重连失败: %w", err)
+	}
+
+	// Step 6: 重建服务
+	a.db = newDB
+	a.rebuildServices(newDB)
+
+	// Step 7: 清理备份
+	_ = os.Remove(backupPath)
+
+	return nil
+}
+
+// importFromArchive 统一导入：解压 ZIP → 提取 db + images → replaceDatabase
+func (a *App) importFromArchive(srcZipPath string) error {
+	// 解压到临时目录
+	tmpDir := filepath.Join(os.TempDir(), "jot-restore-"+fmt.Sprintf("%x", time.Now().UnixNano()))
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return fmt.Errorf("创建临时目录失败: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	reader, err := zip.OpenReader(srcZipPath)
+	if err != nil {
+		return fmt.Errorf("打开 ZIP 文件失败: %w", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	var dbSrc string
+	var imagesDir string
+
+	for _, f := range reader.File {
+		destPath := filepath.Join(tmpDir, f.Name)
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(destPath, 0755)
+			continue
+		}
+		_ = os.MkdirAll(filepath.Dir(destPath), 0755)
+
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+
+		out, err := os.Create(destPath)
+		if err != nil {
+			_ = rc.Close()
+			continue
+		}
+
+		_, _ = io.Copy(out, rc)
+		_ = out.Close()
+		_ = rc.Close()
+
+		if f.Name == "jot-backup.db" {
+			dbSrc = destPath
+		} else if strings.HasPrefix(f.Name, "images/") {
+			imagesDir = filepath.Dir(destPath)
+		}
+	}
+
+	if dbSrc == "" {
+		return fmt.Errorf("ZIP 文件中未找到 jot-backup.db")
+	}
+
+	return a.replaceDatabase(dbSrc, imagesDir)
+}
+
 // ==================== 一键备份与还原绑定方法 ====================
 
-// BackupToDir 一键备份到 ~/.jot/backup/ 目录，固定文件名 jot-backup.db（覆盖旧备份）
+// BackupToDir 一键备份到 ~/.jot/backup/ 目录，固定文件名 jot-backup.zip（覆盖旧备份）
 func (a *App) BackupToDir() (string, error) {
 	backupDir, err := database.BackupDir()
 	if err != nil {
@@ -1579,80 +1747,41 @@ func (a *App) BackupToDir() (string, error) {
 		return "", fmt.Errorf("创建备份目录失败: %w", err)
 	}
 
-	filePath := filepath.Join(backupDir, "jot-backup.db")
+	zipPath := filepath.Join(backupDir, "jot-backup.zip")
 
-	// VACUUM INTO 要求目标文件不存在，先删除旧备份（文件不存在也忽略）
-	_ = os.Remove(filePath)
+	// 先删除旧备份
+	_ = os.Remove(zipPath)
 
-	if err := a.noteService.ExportBackup(filePath); err != nil {
+	if err := a.exportSnapshot(zipPath); err != nil {
 		return "", fmt.Errorf("备份失败: %w", err)
 	}
 
-	return "备份成功：jot-backup.db", nil
+	return "备份成功：jot-backup.zip", nil
 }
 
-// RestoreFromDir 从 backup 目录的 jot-backup.db 还原备份
+// RestoreFromDir 从 backup 目录的 jot-backup.zip 还原备份（含图片）
 func (a *App) RestoreFromDir() (*services.ImportResult, error) {
 	backupDir, err := database.BackupDir()
 	if err != nil {
 		return &services.ImportResult{Message: "获取备份目录失败：" + err.Error()}, nil
 	}
 
-	filePath := filepath.Join(backupDir, "jot-backup.db")
+	zipPath := filepath.Join(backupDir, "jot-backup.zip")
 
-	// 检查备份文件是否存在
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
 		return &services.ImportResult{Message: "暂无可用备份"}, nil
 	} else if err != nil {
 		return &services.ImportResult{Message: "读取备份文件失败：" + err.Error()}, nil
 	}
 
-	dbPath, err := database.DefaultDBPath()
-	if err != nil {
-		return &services.ImportResult{Message: "获取数据库路径失败：" + err.Error()}, nil
+	if err := a.importFromArchive(zipPath); err != nil {
+		return &services.ImportResult{Message: "还原失败：" + err.Error()}, nil
 	}
 
-	// Step 1: 备份当前数据库
-	backupPath := dbPath + ".bak"
-	if err := fs.CopyEx(dbPath, backupPath, true); err != nil {
-		return &services.ImportResult{Message: "备份当前数据库失败：" + err.Error()}, nil
-	}
-
-	// Step 2: 关闭旧连接
-	sqlDB, err := a.db.DB()
-	if err != nil {
-		_ = os.Remove(backupPath)
-		return &services.ImportResult{Message: "获取数据库连接失败：" + err.Error()}, nil
-	}
-	_ = sqlDB.Close()
-
-	// Step 3: 复制备份文件到数据库路径
-	if err := fs.CopyEx(filePath, dbPath, true); err != nil {
-		_ = fs.CopyEx(backupPath, dbPath, true)
-		if rerr := a.reconnectDB(dbPath); rerr != nil {
-			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
-		}
-		return &services.ImportResult{Message: "复制备份文件失败：" + err.Error()}, nil
-	}
-
-	// Step 4: 重新初始化数据库
-	newDB, err := database.InitDB(dbPath)
-	if err != nil {
-		_ = fs.CopyEx(backupPath, dbPath, true)
-		if rerr := a.reconnectDB(dbPath); rerr != nil {
-			return &services.ImportResult{Message: "恢复失败：" + err.Error() + "；重连也失败：" + rerr.Error()}, nil
-		}
-		return &services.ImportResult{Message: "数据库重连失败：" + err.Error()}, nil
-	}
-
-	// Step 5: 重建服务
-	a.db = newDB
-	a.rebuildServices(newDB)
-
-	// Step 6: 清理备份
-	_ = os.Remove(backupPath)
-
-	return &services.ImportResult{Message: "已从备份文件恢复：jot-backup.db", SuccessCount: 1}, nil
+	return &services.ImportResult{
+		Message:      "已从备份文件恢复：jot-backup.zip",
+		SuccessCount: 1,
+	}, nil
 }
 
 // GetBackupInfo 获取备份文件信息（文件名、修改时间、文件大小），无备份时返回空值
@@ -1662,7 +1791,7 @@ func (a *App) GetBackupInfo() (map[string]string, error) {
 		return map[string]string{"file_name": "", "file_time": "", "file_size": ""}, nil
 	}
 
-	filePath := filepath.Join(backupDir, "jot-backup.db")
+	filePath := filepath.Join(backupDir, "jot-backup.zip")
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		return map[string]string{"file_name": "", "file_time": "", "file_size": ""}, nil
@@ -1680,7 +1809,7 @@ func (a *App) GetBackupInfo() (map[string]string, error) {
 	}
 
 	return map[string]string{
-		"file_name": "jot-backup.db",
+		"file_name": "jot-backup.zip",
 		"file_time": fi.ModTime().Format("2006-01-02 15:04"),
 		"file_size": sizeStr,
 	}, nil
@@ -1825,6 +1954,13 @@ func (a *App) ResetDatabase() error {
 	}
 	if err := a.reconnectDB(dbPath); err != nil {
 		return fmt.Errorf("重置后重连失败: %w", err)
+	}
+
+	// 7. 清空图片目录
+	imgDir, err := a.imageDirPath()
+	if err == nil {
+		_ = os.RemoveAll(imgDir)
+		_ = os.MkdirAll(imgDir, 0755)
 	}
 
 	return nil

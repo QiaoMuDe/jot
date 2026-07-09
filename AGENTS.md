@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-09（更新 116）
+> 生成日期: 2026-07-09（更新 117）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2308,3 +2308,23 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 116 → 更新 117 |
+
+## 一百五十五、新增记忆点（ZIP 格式备份/还原 — 含图片）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 笔记支持粘贴图片后，`~/.jot/images/` 目录的图片成为笔记数据的重要组成部分。之前的导出/备份只处理 `.db` 文件不包含图片，还原后图片全变坏链。需将导出/备份改为 ZIP 格式（数据库 + 图片目录一并打包），同时重构导入/还原侧高度重复的核心逻辑 |
+| **核心抽象函数（app.go）** | 抽取 3 个内部函数消除 `ImportDatabaseWithDialog` 和 `RestoreFromDir` 之间的重复：① `exportSnapshot(destZipPath)`：VACUUM INTO 临时 .db → `archive/zip` 打包 `{jot-backup.db, images/}` → 清理临时文件；② `replaceDatabase(srcDBPath, srcImagesDir)`：备份当前 db → 关闭连接 → 复制 db + 替换 images/ → 重新初始化 → 重建服务 → 清理备份（含 rollback 机制）；③ `importFromArchive(srcZipPath)`：解压 ZIP 到临时目录 → 提取 db + images → 调用 replaceDatabase。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **ExportDataWithDialog** | 改为弹出 `.zip` 保存对话框，调用 `exportSnapshot()` 输出 ZIP。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L531-L554) |
+| **ImportDatabaseWithDialog** | 改为接受 `.zip` 文件筛选器，调用 `importFromArchive()` 恢复。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L557-L580) |
+| **BackupToDir** | 改为输出 `backup/jot-backup.zip`，调用 `exportSnapshot()`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1735-L1754) |
+| **RestoreFromDir** | 改为从 `backup/jot-backup.zip` 读取，调用 `importFromArchive()`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1757-L1779) |
+| **GetBackupInfo** | 改为读取 `jot-backup.zip` 的文件大小/修改时间。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1782-L1810) |
+| **ResetDatabase** | 末尾新增 Step 7（清空图片目录）：`os.RemoveAll(imgDir) + os.MkdirAll(imgDir, 0755)`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1953-L1958) |
+| **VacuumDatabase 联动清理图片** | `VacuumDatabase()` 中新增第 7 步（清空已完成待办之后、VACUUM 之前）：调用 `CleanupOrphanImages()`，并将删除数量拼入结果消息「删除了 N 张未引用图片」。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L476-L477) |
+| **errcheck lint 修复** | `exportSnapshot` 和 `importFromArchive` 中所有 deferred Close/Remove 改为 `defer func() { _ = ... }()` 形式通过 golangci-lint 检查 |
+| **不兼容旧 .db 备份** | 导入/还原只接收 `.zip` 文件，旧的 `.db` 备份文件不再支持 |
+| **前端文案更新** | index.html 导出描述「备份为 .db 文件」→「备份为 .zip 文件」，导入描述「从备份文件还原」→「从备份文件还原（.zip）」 |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（核心修改）、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)（按钮文案） |
+
+| **update 计数** | `AGENTS.md` 从更新 117 → 更新 118 |
