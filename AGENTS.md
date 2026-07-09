@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-08（更新 114）
+> 生成日期: 2026-07-09（更新 116）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2282,3 +2282,29 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [todo.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/todo.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 114 → 更新 115 |
+
+## 一百五十三、新增记忆点（Markdown 图片粘贴上传 + 本地文件服务器）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | Markdown 笔记支持以 HTTP(S) 链接的图片正常显示，但本地路径图片无法渲染。且在粘贴图片时需要自动上传到后端而不是依赖外部路径。方案：Go 后端新增文件服务器 + 粘贴自动上传接口 |
+| **文件服务器（main.go）** | `main.go` 的 AssetServer 配置新增 `Handler`：拦截 `/images/*` 路径请求，从 `~/.jot/images/` 目录读取文件返回。生产环境通过 `http.FileServer` + `os.DirFS` 提供服务。详见 [main.go#L70-L76](file:///d:/资源池/下水道/Dev/本地项目/jot/main.go) |
+| **SaveImage API（app.go）** | `startup()` 中通过 `os.MkdirAll` 自动创建 `~/.jot/images/` 目录。新增 `SaveImage(name, data)` 方法：接收文件名 + base64 字符串，生成 `uuid_原始文件名.扩展名`，解码后写入磁盘。返回 `/images/uuid_name.ext` 供 Markdown 引用。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **粘贴上传逻辑（main.js）** | CM6 编辑器添加 `paste` 事件监听：仅 `.md` 后缀笔记 + 编辑模式（非只读）时处理。过滤 `clipboardData.files` 中的图片文件 → `FileReader.readAsDataURL` 转 base64 → 调用 `SaveImage` 上传 → 在光标位置插入 `![](/images/uuid_name.ext)`。光标在异步操作前缓存 `pos = cmEditor.state.selection.main.head`，插入后 `selection: { anchor: pos + markdown.length }` 将光标定位到图片语法末尾。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `handlePaste()` |
+| **光标定位修复** | 初始实现光标跳到文档开头（异步后取 `selection.main.head` 已变）；修复为异步前缓存 `pos`。后又修复光标跳到下一行的问题（末尾 `\n` 导致 `markdown.length` 含换行符 → 光标在换行后）；最终去除插入字符串的尾部 `\n`，光标停在同一行末尾。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [main.go](file:///d:/资源池/下水道/Dev/本地项目/jot/main.go)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 115 → 更新 116 |
+
+## 一百五十四、新增记忆点（孤儿图片清理 — CleanupOrphanImages）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 粘贴图片到笔记后，`~/.jot/images/` 目录积累大量 `uuid_name.ext` 文件。删除笔记或编辑移除图片引用时，对应图片文件不会被自动清理，长期占用磁盘空间。需提供清理功能：检查所有笔记（含回收站）的 content 字段，删除未被引用的图片文件 |
+| **后端 CleanupOrphanImages（app.go）** | 新增 `CleanupOrphanImages() int` 方法：① `os.ReadDir(imageDir)` 列出所有文件；② 从数据库查询全部笔记（含软删除）的 content；③ 对每个文件，`strings.Contains(content, "/images/"+name)` 检查是否被任一笔记引用；④ 未被引用的 → `os.Remove(filepath.Join(imageDir, name))` → `deleted++`；⑤ 返回删除数量。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **前端入口（index.html）** | 数据管理页「数据清理」分组中「清空已完成待办」按钮之后新增「清理未引用图片」按钮（`id=btnCleanupImages`），红色危险样式，确认弹窗「确定要清理未引用的图片文件吗？」后执行。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
+| **前端交互（data-management.js）** | 新增 `cleanupOrphanImages()` 函数：显示加载态 → `App.CleanupOrphanImages()` → 结果通知（`删除了 N 张未引用图片` 或 `没有需要清理的图片文件`）。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+| **存储优化集成（app.go VacuumDatabase）** | `VacuumDatabase()` 中新增清理孤儿图片步骤（VACUUM 之前）：记录清理数量并拼接结果消息。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 116 → 更新 117 |

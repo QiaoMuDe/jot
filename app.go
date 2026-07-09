@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"jot/internal/database"
@@ -65,6 +67,14 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 确保图片存储目录存在
+	home, _ := os.UserHomeDir()
+	imageDir := filepath.Join(home, ".jot", "images")
+	if err := os.MkdirAll(imageDir, 0755); err != nil {
+		fmt.Printf("创建图片目录失败: %v\n", err)
+	}
+
 	// 确保默认笔记本存在（首次启动自动创建）
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		fmt.Printf("初始化默认笔记本失败: %v\n", err)
@@ -111,6 +121,93 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// ==================== 图片相关方法 ====================
+
+// SaveImage 保存图片到 ~/.jot/images/，返回可访问的 URL 路径
+// name: 原始文件名, data: base64 编码的图片数据
+// 返回: /images/uuid_name.ext 格式的 URL
+func (a *App) SaveImage(name string, data string) (string, error) {
+	bytes, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return "", fmt.Errorf("解码图片数据失败: %w", err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("获取用户目录失败: %w", err)
+	}
+	imageDir := filepath.Join(home, ".jot", "images")
+	if err := os.MkdirAll(imageDir, 0755); err != nil {
+		return "", fmt.Errorf("创建图片目录失败: %w", err)
+	}
+
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("生成随机数失败: %w", err)
+	}
+	uuid := fmt.Sprintf("%x", b)
+
+	filename := uuid + "_" + name
+	filePath := filepath.Join(imageDir, filename)
+	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
+		return "", fmt.Errorf("写入图片文件失败: %w", err)
+	}
+
+	return "/images/" + filename, nil
+}
+
+// CleanupOrphanImages 清理 ~/.jot/images/ 中未被任何笔记引用的孤儿图片
+// 扫描所有笔记（含回收站）的 content，删除未引用的图片文件
+// 返回删除的文件数量
+func (a *App) CleanupOrphanImages() int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return 0
+	}
+	imageDir := filepath.Join(home, ".jot", "images")
+
+	// 读取图片目录
+	entries, err := os.ReadDir(imageDir)
+	if err != nil {
+		// 目录不存在或无法读取，视为无孤儿图片
+		return 0
+	}
+
+	// 查询所有笔记（含软删除/回收站）的 content
+	var contents []string
+	a.db.Model(&models.Note{}).Unscoped().Pluck("content", &contents)
+
+	// 构建引用集合
+	referenced := make(map[string]bool)
+	for _, content := range contents {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			filename := entry.Name()
+			if strings.Contains(content, "/images/"+filename) {
+				referenced[filename] = true
+			}
+		}
+	}
+
+	// 删除未被引用的图片
+	deleted := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		filename := entry.Name()
+		if !referenced[filename] {
+			if err := os.Remove(filepath.Join(imageDir, filename)); err == nil {
+				deleted++
+			}
+		}
+	}
+
+	return deleted
 }
 
 // ==================== Note 相关绑定方法 ====================

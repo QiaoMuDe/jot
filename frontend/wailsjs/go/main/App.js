@@ -46,6 +46,10 @@ export function CancelAIStream() {
   return window['go']['main']['App']['CancelAIStream']();
 }
 
+export function CleanupOrphanImages() {
+  return window['go']['main']['App']['CleanupOrphanImages']();
+}
+
 export function ClearAISessionMessages(arg1) {
   return window['go']['main']['App']['ClearAISessionMessages'](arg1);
 }
@@ -332,6 +336,10 @@ export function SaveAIMessages(arg1, arg2) {
 
 export function SaveAllSettings(arg1) {
   return window['go']['main']['App']['SaveAllSettings'](arg1);
+}
+
+export function SaveImage(arg1, arg2) {
+  return window['go']['main']['App']['SaveImage'](arg1, arg2);
 }
 
 export function SearchNoteIDs(arg1, arg2, arg3) {

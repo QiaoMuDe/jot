@@ -19,7 +19,7 @@ import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/cons
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos } from './js/data-management.js';
+import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos, cleanupOrphanImages } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -115,7 +115,55 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         parent: container,
     });
 
+    // 粘贴图片上传（仅 .md 编辑模式）
+    cmEditor.dom.addEventListener('paste', handlePaste);
+
     return cmEditor;
+}
+
+/**
+ * 处理粘贴事件：检测剪贴板中的图片文件，上传并插入 Markdown 图片语法
+ * @param {ClipboardEvent} e
+ */
+async function handlePaste(e) {
+    // 仅在 .md 笔记且编辑模式下处理图片粘贴
+    if (els.editorFileExt.textContent !== '.md') return;
+    if (els.editorNoteTitle.readOnly) return;
+
+    const files = Array.from(e.clipboardData.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    e.preventDefault();
+
+    // 在异步操作前缓存光标位置，避免 async 期间光标变化导致插入位置错误
+    let pos = cmEditor.state.selection.main.head;
+
+    for (const file of files) {
+        try {
+            // 将图片文件转为 base64 字符串（Wails JSON IPC 不支持直接传 []byte）
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = reader.result; // "data:image/png;base64,iVBOR..."
+                    resolve(result.split(',')[1]); // 去掉 data:...;base64, 前缀
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            const url = await window.go.main.App.SaveImage(file.name, base64);
+            const markdown = `![${file.name}](${url})`;
+            cmEditor.dispatch({
+                changes: { from: pos, insert: markdown },
+                // 光标停留在图片语法末尾，方便后续继续输入
+                selection: { anchor: pos + markdown.length, head: pos + markdown.length }
+            });
+            pos += markdown.length; // 多图连续粘贴时，依次往后插
+        } catch (err) {
+            console.error('上传图片失败:', file.name, err);
+        }
+    }
+
+    cmEditor.focus();
 }
 
 /**
@@ -363,6 +411,7 @@ const els = {
     openDataDirBtn: $('openDataDirBtn'),
     clearAISessionsBtn: $('clearAISessionsBtn'),
     clearCompletedTodosBtn: $('clearCompletedTodosBtn'),
+    cleanupOrphanImagesBtn: $('cleanupOrphanImagesBtn'),
     dataContent: $('dataContent'),
     dataLetter: $('dataLetter'),
     letterDate: $('letterDate'),
@@ -4865,6 +4914,7 @@ function initEventListeners() {
     els.openDataDirBtn.addEventListener('click', openDataDir);
     els.clearAISessionsBtn.addEventListener('click', clearAISessions);
     els.clearCompletedTodosBtn.addEventListener('click', clearCompletedTodos);
+    els.cleanupOrphanImagesBtn.addEventListener('click', cleanupOrphanImages);
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');

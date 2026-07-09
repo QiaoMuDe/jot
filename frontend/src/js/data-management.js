@@ -196,6 +196,32 @@ export async function clearCompletedTodos() {
 }
 
 /**
+ * 清理未引用的孤儿图片
+ */
+export async function cleanupOrphanImages() {
+    const { nm, showConfirmDialog } = window;
+
+    const confirmed = await showConfirmDialog('确定要清理未引用的图片吗？这将删除笔记中不再使用的图片文件。');
+    if (!confirmed) return;
+
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.CleanupOrphanImages) {
+            const count = await window.go.main.App.CleanupOrphanImages();
+            if (count > 0) {
+                nm.show(`已清理 ${count} 张未引用图片`, 'success');
+            } else {
+                nm.show('没有需要清理的未引用图片', 'success');
+            }
+        } else {
+            nm.show('功能不可用：后端未绑定', 'error');
+        }
+    } catch (err) {
+        console.error('清理未引用图片失败:', err);
+        nm.show('清理失败：' + err.message, 'error');
+    }
+}
+
+/**
  * 恢复出厂设置：清空所有数据（笔记/标签/设置），重新初始化默认标签
  */
 export async function resetDatabase() {
@@ -258,7 +284,21 @@ export async function vacuumDatabase() {
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.VacuumDatabase) {
             const msg = await window.go.main.App.VacuumDatabase();
-            nm.show(msg, 'success');
+            // VACUUM 成功后自动执行孤儿图片清理
+            let imageMsg = '';
+            try {
+                if (window.go.main.App.CleanupOrphanImages) {
+                    const count = await window.go.main.App.CleanupOrphanImages();
+                    if (count > 0) {
+                        imageMsg = `，已清理 ${count} 张未引用图片`;
+                    } else {
+                        imageMsg = '，无未引用图片';
+                    }
+                }
+            } catch (imgErr) {
+                console.error('清理未引用图片失败:', imgErr);
+            }
+            nm.show(msg + imageMsg, 'success');
             await loadDataStats();
         } else {
             nm.show('数据库瘦身功能不可用', 'error');

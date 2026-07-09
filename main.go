@@ -2,6 +2,10 @@ package main
 
 import (
 	"embed"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -48,6 +52,10 @@ func main() {
 	// 在窗口创建前读取已保存的主题，设置 WebView2 初始背景色
 	r, g, b := themeBG(app.settingService.Get("theme"))
 
+	// 计算图片存储目录路径
+	home, _ := os.UserHomeDir()
+	imageDir := filepath.Join(home, ".jot", "images")
+
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:            "jot",
@@ -59,6 +67,13 @@ func main() {
 		BackgroundColour: &options.RGBA{R: r, G: g, B: b, A: 255},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/images/") {
+					http.StripPrefix("/images/", http.FileServer(http.Dir(imageDir))).ServeHTTP(w, r)
+					return
+				}
+				http.NotFound(w, r)
+			}),
 		},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop: true,

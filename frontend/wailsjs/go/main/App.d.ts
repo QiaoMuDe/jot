@@ -26,6 +26,8 @@ export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boole
 
 export function CancelAIStream():Promise<void>;
 
+export function CleanupOrphanImages():Promise<number>;
+
 export function ClearAISessionMessages(arg1:number):Promise<void>;
 
 export function ClearAllAISessions():Promise<void>;
@@ -169,6 +171,8 @@ export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 export function SaveAIMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
 
 export function SaveAllSettings(arg1:services.SettingsConfig):Promise<void>;
+
+export function SaveImage(arg1:string,arg2:string):Promise<string>;
 
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 
