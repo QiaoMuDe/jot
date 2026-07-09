@@ -1,0 +1,19 @@
+- [x] "+" 按钮 HTML 结构正确：包含 "+" SVG 图标、"添加"文字、下拉箭头，外层有 `.ai-chat-add-wrap`
+- [x] 下拉菜单 HTML 结构正确：包含"引用笔记"和"上传文件"两个菜单项，各含对应 SVG 图标和文字
+- [x] 菜单向上弹出：`bottom: calc(100% + 4px)`
+- [x] CSS 动画正确：关闭时 opacity/transform/pointer-events 隐藏，打开时显示，transition easing 与现有 dropdown 一致
+- [x] 菜单项逐项滑入动画：translateX 过渡 + nth-child 延迟（间隔约 40ms）
+- [x] 菜单项 hover 高亮：背景和文字颜色变化，与现有菜单项一致
+- [x] 点击 "+" 按钮 toggle 打开/关闭菜单
+- [x] 点击菜单外部区域关闭菜单
+- [x] 点击菜单内部不触发外部关闭
+- [x] 点击"引用笔记"项打开笔记引用选择器并关闭菜单
+- [x] 点击"上传文件"项触发文件选择对话框并关闭菜单
+- [x] 有引用笔记时 "+" 按钮添加 `.has-ref` 类变主题色
+- [x] 无引用笔记时移除 `.has-ref` 类恢复默认色
+- [x] 有上传文件时 "+" 按钮添加 `.has-ref` 类变主题色
+- [x] 无上传文件时移除 `.has-ref` 类恢复默认色
+- [x] 旧的 `#aiChatRefBtn` 和 `#aiChatFileBtn` 已从 HTML 中移除
+- [x] 旧的 `refBtn`/`fileBtn` 事件绑定代码已从 JS 中删除
+- [x] 引用栏 (`#aiChatRefBar`) 和文件栏 (`#aiChatFileBar`) 功能不受影响
+- [x] 整体工具栏无多余空白或布局断裂

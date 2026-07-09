@@ -1068,6 +1068,87 @@
     padding: 4px 0;
 }
 
+/* ── 添加菜单（引用+上传） ── */
+.ai-chat-add-wrap {
+    position: relative;
+    padding-right: 12px;
+    border-right: 1px solid var(--border);
+}
+
+/* + 按钮纯图标，紧凑间距 */
+#aiChatAddBtn {
+    padding: 3px 4px;
+}
+
+.ai-chat-add-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    min-width: 150px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+    transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 4px 0;
+    overflow: visible;
+}
+
+.ai-chat-add-dropdown.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* 菜单项动画：展开时逐个滑入 */
+.ai-chat-add-dropdown .ai-chat-add-item {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, background 0.1s;
+}
+
+.ai-chat-add-dropdown.open .ai-chat-add-item {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.ai-chat-add-dropdown.open .ai-chat-add-item:nth-child(1) { transition-delay: 0.06s, 0.06s, 0s; }
+.ai-chat-add-dropdown.open .ai-chat-add-item:nth-child(2) { transition-delay: 0.10s, 0.10s, 0s; }
+.ai-chat-add-dropdown.open .ai-chat-add-item:nth-child(3) { transition-delay: 0.14s, 0.14s, 0s; }
+.ai-chat-add-dropdown.open .ai-chat-add-item:nth-child(4) { transition-delay: 0.18s, 0.18s, 0s; }
+
+.ai-chat-add-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.ai-chat-add-item:hover {
+    background: var(--hover-bg);
+    color: var(--accent);
+}
+
+.ai-chat-add-item svg {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.ai-chat-add-item:hover svg {
+    color: var(--accent);
+}
+
 .ai-chat-skills-option {
     display: flex;
     align-items: center;

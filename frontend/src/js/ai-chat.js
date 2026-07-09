@@ -19,7 +19,8 @@ let contextSizeEl = null;     // #aiChatContextSize
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 
-let fileBtn = null;           // #aiChatFileBtn
+let addBtn = null;            // #aiChatAddBtn
+let addDropdown = null;       // #aiChatAddDropdown
 let fileBar = null;           // #aiChatFileBar
 let fileChips = null;         // #aiChatFileChips
 
@@ -73,7 +74,6 @@ let followUpRef = '';           // 被追问的 AI 回复完整内容
 let uploadedFiles = [];  // 每项: { name, content, size, truncated }
 
 // 笔记引用选择浮层 DOM
-let refBtn = null;              // #aiChatRefBtn
 let refBar = null;              // #aiChatRefBar
 let refChips = null;            // #aiChatRefChips
 let refModal = null;            // #aiNoteRefModal
@@ -248,7 +248,6 @@ export async function initAIChat() {
     enableCardRecall = cardRecallToggle?.classList.contains('active') || false;
 
     // 笔记引用
-    refBtn = document.getElementById('aiChatRefBtn');
     refBar = document.getElementById('aiChatRefBar');
     refChips = document.getElementById('aiChatRefChips');
     refModal = document.getElementById('aiNoteRefModal');
@@ -280,8 +279,9 @@ export async function initAIChat() {
     skillBar = document.getElementById('aiChatSkillBar');
     skillChips = document.getElementById('aiChatSkillChips');
 
-    // 上传文件
-    fileBtn = document.getElementById('aiChatFileBtn');
+    // 添加菜单
+    addBtn = document.getElementById('aiChatAddBtn');
+    addDropdown = document.getElementById('aiChatAddDropdown');
     fileBar = document.getElementById('aiChatFileBar');
     fileChips = document.getElementById('aiChatFileChips');
 
@@ -793,11 +793,6 @@ function bindEvents() {
         });
     }
 
-    // ── 笔记引用按钮 ──
-    if (refBtn) {
-        refBtn.addEventListener('click', openNoteRefModal);
-    }
-
     // ── 笔记引用浮层 ──
     if (refOverlay) {
         refOverlay.addEventListener('click', closeNoteRefModal);
@@ -1016,11 +1011,14 @@ function bindEvents() {
         });
     }
 
-    // 点击外部关闭技能菜单
+    // 点击外部关闭技能菜单 / 添加菜单
     document.addEventListener('click', (e) => {
         if (skillsDropdown && skillsBtn && !skillsBtn.contains(e.target) && !skillsDropdown.contains(e.target)) {
             skillsDropdown.classList.remove('open');
             if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
+        }
+        if (addDropdown && addBtn && !addBtn.contains(e.target) && !addDropdown.contains(e.target)) {
+            addDropdown.classList.remove('open');
         }
     });
 
@@ -1169,31 +1167,48 @@ function bindEvents() {
         }
     });
 
-    // 上传文件按钮
-    if (fileBtn) {
-        fileBtn.addEventListener('click', async () => {
-            fileBtn.disabled = true;
-            try {
-                const results = await window.go.main.App.SelectAIChatFiles();
-                if (!results || results.length === 0) return;
+    // ── 添加菜单（引用笔记 + 上传文件） ──
+    if (addBtn && addDropdown) {
+        addBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addDropdown.classList.toggle('open');
+        });
 
-                for (const r of results) {
-                    if (r.error) {
-                        window.showNotification?.(r.error, 'error');
-                    } else {
-                        uploadedFiles.push({
-                            name: r.name,
-                            content: r.content,
-                            size: r.size,
-                            truncated: r.truncated,
-                        });
+        // 点击菜单项
+        addDropdown.addEventListener('click', async (e) => {
+            const item = e.target.closest('.ai-chat-add-item');
+            if (!item) return;
+
+            const action = item.dataset.action;
+            addDropdown.classList.remove('open');
+
+            if (action === 'ref') {
+                openNoteRefModal();
+            } else if (action === 'upload') {
+                // 上传文件
+                addBtn.disabled = true;
+                try {
+                    const results = await window.go.main.App.SelectAIChatFiles();
+                    if (!results || results.length === 0) return;
+
+                    for (const r of results) {
+                        if (r.error) {
+                            window.showNotification?.(r.error, 'error');
+                        } else {
+                            uploadedFiles.push({
+                                name: r.name,
+                                content: r.content,
+                                size: r.size,
+                                truncated: r.truncated,
+                            });
+                        }
                     }
+                    renderFileChips();
+                } catch (e) {
+                    window.showNotification?.('上传文件失败: ' + (e.message || e), 'error');
+                } finally {
+                    addBtn.disabled = false;
                 }
-                renderFileChips();
-            } catch (e) {
-                window.showNotification?.('上传文件失败: ' + (e.message || e), 'error');
-            } finally {
-                fileBtn.disabled = false;
             }
         });
     }
@@ -4049,16 +4064,16 @@ async function confirmNoteSelection() {
  * 更新引用笔记 chips 显示
  */
 function updateRefChips() {
-    if (!refChips || !refBar || !refBtn) return;
+    if (!refChips || !refBar) return;
 
     if (referencedNotes.length === 0) {
         refBar.style.display = 'none';
-        refBtn.classList.remove('has-ref');
+        if (addBtn) addBtn.classList.remove('has-ref');
         return;
     }
 
     refBar.style.display = '';
-    refBtn.classList.add('has-ref');
+    if (addBtn) addBtn.classList.add('has-ref');
 
     // 渲染单个笔记 chips
     let html = referencedNotes.map(n => {
@@ -4120,7 +4135,7 @@ function renderFileChips() {
     if (!fileChips || !fileBar) return;
 
     // 有上传文件时高亮按钮，与引用笔记按钮行为一致
-    if (fileBtn) fileBtn.classList.toggle('has-ref', uploadedFiles.length > 0);
+    if (addBtn) addBtn.classList.toggle('has-ref', uploadedFiles.length > 0);
 
     if (uploadedFiles.length === 0) {
         fileBar.style.display = 'none';

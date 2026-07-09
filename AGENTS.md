@@ -2367,6 +2367,18 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 
 ---
 
+## 一百六十二、新增记忆点（合并引用笔记与上传文件为"+"添加菜单）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 工具栏按钮过多（引用、上传、模型选择、深度思考、联网搜索、卡片召回、更多技能、发送等），操作栏拥挤。引用笔记和上传文件具有相同"引用/附件"语义，合并为一个"+"菜单释放空间 |
+| **HTML 结构变化** | 删除独立的 `#aiChatRefBtn`（引用）和 `#aiChatFileBtn`（上传）两个按钮，替换为 `#aiChatAddBtn`（仅显示`+` SVG 图标）+ `.ai-chat-add-dropdown` 下拉菜单。菜单包含"引用笔记"（`data-action="ref"`）和"上传文件"（`data-action="upload"`）两个 `.ai-chat-add-item`。添加按钮右侧有 `border-right` 竖线与模型选择器分隔。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **CSS 样式** | 新增 `.ai-chat-add-wrap`（`position:relative; padding-right:12px; border-right`）、`.ai-chat-add-dropdown`（向上弹出，复用现有 dropdown 动画体系：opacity + translateY + scale transition）、`.ai-chat-add-item`（flex 布局 + hover 高亮 + 逐项滑入动画）。`#aiChatAddBtn` 内边距 `3px 4px` 纯图标紧凑布局。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **JS 交互逻辑** | 新增 `addBtn`/`addDropdown` 变量和 DOM 获取。事件绑定：`addBtn.click` → `toggle('open')` + `e.stopPropagation()`；`addDropdown` 菜单项点击：`ref` 调用 `openNoteRefModal()`，`upload` 调用 `SelectAIChatFiles()`，均先关闭菜单；`document.click` 外部关闭。`has-ref` 高亮从 `refBtn`/`fileBtn` 迁移到 `addBtn`（同时检查引用笔记和上传文件两种状态）。完全删除 `refBtn` 和 `fileBtn` 的变量声明、DOM 获取和事件绑定。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)（删除两个按钮 + 新增菜单结构）、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（新增菜单样式 + 分隔线）、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（新增变量/事件 + 逻辑迁移 + 清理旧代码） |
+
+---
+
 | | **一百五十九：预览图片灯箱 + 图片尺寸调整** — `.image-lightbox` 遮罩 CSS（fixed/深色背景/flex 居中）、日常图片显示从 `max-width:100%` 改为 `85%` 居中、`_applyPreviewDOMHelpers` 中遍历 `<img>` 注册 click 事件创建灯箱 |
 | | **一百六十：灯箱动画升级** — CSS transition 三态系统（`.active`/`.closing`）：backdrop-filter 背景虚化（4px）、图片弹性缓动 `cubic-bezier(.34,1.4,.64,1)` 打开、关闭时 280ms 淡出缩小、右上角 ✕ 关闭按钮（带延迟淡入动画）、支持 ESC 键关闭 |
 | | **一百六十一：灯箱 ESC 修复** — 改用 `window.__lightboxOpen` 布尔标志替代 DOM 查询；`close()` 中主动 `document.removeEventListener` 清理监听器（修复泄漏）；全局 handler 中灯箱检查移到全屏检查之前（ESC 优先级：灯箱 > 退出全屏 > 关闭笔记） |
