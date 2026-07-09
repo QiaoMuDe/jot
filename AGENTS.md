@@ -2398,3 +2398,45 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（灯箱点击 + ESC 监听 + 全局 handler 优先级）、[editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)（灯箱三态 CSS + 图片尺寸调整） |
 
 | **update 计数** | `AGENTS.md` 从更新 120 → 更新 121 |
+
+## 一百六十四、新增记忆点（Ctrl+1 回首页刷新数据 + 品牌名点击跳转首页）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Ctrl+1 回首页刷新数据** | `handleKeyboardNavigation()` 的 `case '1'` 分支中，`switchView('grid')` 后添加 `await loadNotes()`，确保按下 Ctrl+1 时从数据库重新加载最新笔记列表，而非显示缓存中的旧数据。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L5321-L5326) |
+| **品牌名点击回首页** | 顶栏品牌名 `.brand` 点击事件从 `switchView('about')` 改为 `switchView('grid')` + `loadNotes()`，与"笔记"导航按钮行为一致。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 121 → 更新 122 |
+
+## 一百六十五、新增记忆点（AI 会话标题首条消息后即时设置）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题现象** | 发送第一条消息后会话标题未设置，切换会话时标题才被生成 |
+| **修复** | `ai-chat.js` 中 `ai:stream-done` 回调改为 `async` 函数，流式完成后调用 `await loadSessionList()` 刷新侧栏会话列表 + `updateChatTitle()` 更新顶部标题显示。后端 `SaveAIMessages` 自动生成标题后，前端立即同步更新。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2014-L2206) |
+| **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 122 → 更新 123 |
+
+## 一百六十六、新增记忆点（Ctrl+J AI 侧栏折叠/展开快捷键）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | AI 助手模块新增 Ctrl+J 快捷键切换会话侧栏展开/折叠状态 |
+| **JS 变更** | `ai-chat.js` 中将侧栏切换逻辑提取为 `window.toggleAISessionSidebar()` 全局函数（含 localStorage 持久化 + 折叠→展开时自动刷新会话列表）；按钮点击改为调用此函数。`main.js` 的 `handleKeyboardNavigation()` 新增 `case 'j'` 分支，仅当 `state.currentView === 'ai-chat'` 时调用 `toggleAISessionSidebar()`。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L592-L617)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **快捷键说明页面** | `renderShortcutsPage()` 中新增 `Ctrl + J → AI 侧栏折叠/展开` 条目。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 123 → 更新 124 |
+
+## 一百六十七、新增记忆点（AI 侧栏折叠动画优化 + 文字换行修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 侧栏折叠时子元素不同步：header、list、footer 因 `display: none` 瞬间消失，而搜索框没有 `display: none` 会滞后被 `overflow: hidden` 裁剪，造成不同步抽动。同时折叠过程中标题"会话"和按钮"清空当前对话"的文字会因容器变窄而折行，产生"从横变竖"的突兀感 |
+| **同步裁剪修复** | 移除 `.ai-session-sidebar.collapsed` 中对 `.ai-session-sidebar-header`、`.ai-session-list`、`.ai-session-sidebar-footer` 的 `display: none` 规则。所有子元素完全依赖父容器 `overflow: hidden` + `width` 过渡同步裁剪/露出，不再有任何差异。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L1918-L1927) |
+| **文字折行修复** | `.ai-session-sidebar-title` 和 `.ai-session-clear-btn` 分别添加 `white-space: nowrap`，防止折叠过程中文字因容器变窄而换行。配合父容器的 `overflow: hidden`，文字在折叠时被平滑裁剪而非折行。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css#L1938、#L2195) |
+| **涉及文件** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+| **update 计数** | `AGENTS.md` 从更新 124 → 更新 125 |

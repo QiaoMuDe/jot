@@ -592,10 +592,10 @@ function bindEvents() {
     // 侧栏折叠/展开
     const toggleBtn = document.getElementById('aiSidebarToggle');
     const sidebar = document.querySelector('.ai-session-sidebar');
-    if (toggleBtn && sidebar) {
-        const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
-        const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+    const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
+    if (toggleBtn && sidebar) {
         // 恢复保存的状态 (默认展开) 
         const saved = localStorage.getItem('ai_sidebar_collapsed');
         if (saved === 'false') {
@@ -607,18 +607,24 @@ function bindEvents() {
             toggleBtn.innerHTML = chevronRight;
             toggleBtn.title = '折叠侧栏';
         }
+    }
 
-        toggleBtn.addEventListener('click', () => {
-            const wasCollapsed = sidebar.classList.contains('collapsed');
-            const isCollapsed = sidebar.classList.toggle('collapsed');
-            toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
-            toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
-            localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
-            // 从折叠变为展开时，刷新会话列表
-            if (wasCollapsed && !isCollapsed) {
-                loadSessionList();
-            }
-        });
+    // 导出为全局函数，供 Ctrl+J 快捷键使用
+    window.toggleAISessionSidebar = function() {
+        if (!toggleBtn || !sidebar) return;
+        const wasCollapsed = sidebar.classList.contains('collapsed');
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
+        toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
+        localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
+        // 从折叠变为展开时，刷新会话列表
+        if (wasCollapsed && !isCollapsed) {
+            loadSessionList();
+        }
+    };
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', window.toggleAISessionSidebar);
     }
 
     // 对话搜索
@@ -2011,7 +2017,7 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubChunk);
 
-    const unsubDone = window.runtime.EventsOn('ai:stream-done', (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens) => {
+    const unsubDone = window.runtime.EventsOn('ai:stream-done', async (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
@@ -2200,6 +2206,10 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         followUpRef = '';
         const followUpBar = document.getElementById('aiChatFollowUpBar');
         if (followUpBar) followUpBar.style.display = 'none';
+
+        // 流式完成后刷新会话列表（更新标题等）
+        await loadSessionList();
+        updateChatTitle();
     });
     unsubs.push(unsubDone);
 

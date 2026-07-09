@@ -5212,6 +5212,15 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl+J: AI 助手侧栏折叠/展开（仅 AI 助手视图生效）
+    if (e.ctrlKey && (e.key === 'j' || e.key === 'J') && state.currentView === 'ai-chat') {
+        e.preventDefault();
+        if (typeof window.toggleAISessionSidebar === 'function') {
+            window.toggleAISessionSidebar();
+        }
+        return;
+    }
+
     // Ctrl+E: 切换编辑器全屏模式（仅编辑器打开时有效）
     if (e.ctrlKey && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault();
@@ -5322,6 +5331,7 @@ async function handleKeyboardNavigation(e) {
                 e.preventDefault();
                 state.searchKeyword = '';
                 switchView('grid');
+                await loadNotes();
                 return;
             case '2':
                 e.preventDefault();
@@ -5581,6 +5591,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 6', desc: '待办清单' },
         { key: 'Ctrl + 7', desc: '设置' },
         { key: 'Ctrl + 8', desc: 'AI 助手' },
+        { key: 'Ctrl + J', desc: 'AI 侧栏折叠/展开' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">

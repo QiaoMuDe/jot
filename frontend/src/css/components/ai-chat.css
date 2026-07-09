@@ -1920,12 +1920,6 @@
     border-right: none;
 }
 
-.ai-session-sidebar.collapsed .ai-session-sidebar-header,
-.ai-session-sidebar.collapsed .ai-session-list,
-.ai-session-sidebar.collapsed .ai-session-sidebar-footer {
-    display: none;
-}
-
 .ai-session-sidebar-header {
     display: flex;
     align-items: center;
@@ -1940,6 +1934,7 @@
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
     cursor: pointer;
     transition: color 0.15s ease;
 }
@@ -2196,6 +2191,7 @@
     background: var(--card-bg);
     color: var(--text-secondary);
     font-size: 0.78rem;
+    white-space: nowrap;
     cursor: pointer;
     transition: var(--transition);
     font-family: inherit;
