@@ -358,6 +358,10 @@ export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
+export function SelectAIChatFiles() {
+  return window['go']['main']['App']['SelectAIChatFiles']();
+}
+
 export function SetAICardRecallLimit(arg1) {
   return window['go']['main']['App']['SetAICardRecallLimit'](arg1);
 }

@@ -182,6 +182,8 @@ export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promis
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;
 
+export function SelectAIChatFiles():Promise<Array<main.AIChatFileResult>>;
+
 export function SetAICardRecallLimit(arg1:number):Promise<void>;
 
 export function SetAIRefMaxChars(arg1:number):Promise<void>;

@@ -937,6 +937,80 @@ func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
 	return a.aiService.FetchModels(cfg)
 }
 
+// SelectAIChatFiles 打开文件对话框选择文本文件，校验并读取内容返回给 AI 聊天使用
+func (a *App) SelectAIChatFiles() ([]AIChatFileResult, error) {
+	const maxSize int64 = 10 * 1024 * 1024 // 10MB
+
+	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:           "选择要上传的文本文件",
+		ShowHiddenFiles: false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("打开文件对话框失败: %w", err)
+	}
+	if len(paths) == 0 {
+		return []AIChatFileResult{}, nil // 用户取消
+	}
+
+	var results []AIChatFileResult
+
+	for _, p := range paths {
+		result := AIChatFileResult{Path: p, Name: filepath.Base(p)}
+
+		// 检查路径
+		info, err := os.Stat(p)
+		if err != nil {
+			result.Error = "无法访问文件: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		// 拒绝目录
+		if info.IsDir() {
+			result.Error = "不支持上传目录，请选择文件"
+			results = append(results, result)
+			continue
+		}
+
+		// 文件大小限制
+		if info.Size() > maxSize {
+			result.Error = "文件过大（超过 10MB），请选择小于 10MB 的文件"
+			results = append(results, result)
+			continue
+		}
+		result.Size = info.Size()
+
+		// 二进制文件检测
+		if fs.IsBinaryPath(p) {
+			result.Error = "不支持二进制文件，请选择文本文件"
+			results = append(results, result)
+			continue
+		}
+
+		// 读取文件内容
+		content, err := os.ReadFile(p)
+		if err != nil {
+			result.Error = "读取文件失败: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+		contentStr := string(content)
+
+		// 调用 GetAIRefMaxChars() 获取截断阈值（每次实时从 DB 读取）
+		maxChars := a.GetAIRefMaxChars()
+		if len(contentStr) > maxChars {
+			truncMsg := fmt.Sprintf("\n\n...(内容已截断，完整文件共 %d 字)", len(contentStr))
+			contentStr = contentStr[:maxChars] + truncMsg
+			result.Truncated = true
+		}
+
+		result.Content = contentStr
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
 // CallAI 调用 AI 对话接口
 func (a *App) CallAI(messages []services.Message) (string, error) {
 	return a.aiService.CallAI(messages)
@@ -1868,6 +1942,16 @@ type FileImportResult struct {
 	NoteID  uint   `json:"note_id"`
 	Success bool   `json:"success"`
 	Error   string `json:"error"`
+}
+
+// AIChatFileResult AI 聊天上传文件的处理结果
+type AIChatFileResult struct {
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	Content   string `json:"content"`
+	Size      int64  `json:"size"`
+	Truncated bool   `json:"truncated"`
+	Error     string `json:"error,omitempty"`
 }
 
 // ImportFiles 批量导入拖拽文件为笔记（归入指定笔记本）

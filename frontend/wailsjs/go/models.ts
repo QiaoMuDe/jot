@@ -38,6 +38,28 @@ export namespace gorm {
 
 export namespace main {
 	
+	export class AIChatFileResult {
+	    path: string;
+	    name: string;
+	    content: string;
+	    size: number;
+	    truncated: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIChatFileResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.size = source["size"];
+	        this.truncated = source["truncated"];
+	        this.error = source["error"];
+	    }
+	}
 	export class FileImportResult {
 	    path: string;
 	    title: string;

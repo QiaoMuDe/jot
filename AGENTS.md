@@ -48,7 +48,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -2353,6 +2353,20 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **.md 图片限制 + 通知** | 粘贴图片：`handlePaste` 中 `editorFileExt !== '.md'` 时 `showNotification('图片粘贴仅支持 .md 格式笔记')`；拖拽图片：OnFileDrop 中 `isMd` 检查，非 `.md` 时 `imgPaths = []` + 通知提示。文本文件插入不受后缀限制。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L135-L142) |
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（ReadTextFile）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（CM6 drop + OnFileDrop 路由 + .md 检查 + 通知） |
 |--------|--------|
+
+## 一百五十八、新增记忆点（AI 聊天上传本地文件）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 助手仅支持纯文本输入，无法将本地文件作为上下文提供给 AI。需要新增文件上传功能，让用户选择本地文本文件，将其内容注入 AI 提示词 |
+| **Go 后端 SelectAIChatFiles** | 新增 `AIChatFileResult` 结构体（Path/Name/Content/Size/Truncated/Error）和 `SelectAIChatFiles() []AIChatFileResult` 方法：使用 `runtime.OpenMultipleFilesDialog` 打开原生多选对话框 → 遍历每个文件校验（目录拒绝/大小 >10MB 拒绝/`fs.IsBinaryPath` 拒绝）→ `os.ReadFile` 读取 → 调用 `GetAIRefMaxChars()`（每次实时查 DB）截断 → 返回结果列表。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L940-L1012) |
+| **前端 HTML 结构与按钮** | 工具栏引用按钮后新增 `#aiChatFileBtn`（`.ai-chat-toolbar-btn`，自定义上传 SVG 图标，`<span>上传</span>`）。技能指示条后新增 `#aiChatFileBar`（初始隐藏）+ `#aiChatFileChips`。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **前端 CSS 文件 chips 样式** | 完全复用引用笔记 chips 的 CSS 体系：`.ai-chat-file-bar` / `.ai-chat-file-chip`（max-width:260px）/ `.ai-chat-file-chip-icon` / `.ai-chat-file-chip-name` / `.ai-chat-file-chip-remove`，均与 ref 系列样式一致。截断标记直接复用 `.ai-chat-ref-chip-trunc`。批量清除复用 `.ai-chat-ref-chip-remove-all`。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **前端 JS 上传交互** | `uploadedFiles = []` 存储文件数据。`renderFileChips()`：空列表隐藏 bar → 渲染文件 chip（文档图标 + 文件名 + 截断标记 + × 按钮）→ ≥3 文件显示"移除全部 N 个"批量清除按钮（红色虚线边框）。`onSend()` 中将文件内容按格式拼入 `systemContext`，顺序：笔记引用 → 追问引用 → 文件内容。发送后清空列表。有文件时按钮高亮（`.has-ref`）。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)（SelectAIChatFiles + AIChatFileResult）、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)（按钮 + chips 栏）、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（file chips 样式）、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（交互 + 渲染 + 消息拼接） |
+
+---
+
 | | **一百五十九：预览图片灯箱 + 图片尺寸调整** — `.image-lightbox` 遮罩 CSS（fixed/深色背景/flex 居中）、日常图片显示从 `max-width:100%` 改为 `85%` 居中、`_applyPreviewDOMHelpers` 中遍历 `<img>` 注册 click 事件创建灯箱 |
 | | **一百六十：灯箱动画升级** — CSS transition 三态系统（`.active`/`.closing`）：backdrop-filter 背景虚化（4px）、图片弹性缓动 `cubic-bezier(.34,1.4,.64,1)` 打开、关闭时 280ms 淡出缩小、右上角 ✕ 关闭按钮（带延迟淡入动画）、支持 ESC 键关闭 |
 | | **一百六十一：灯箱 ESC 修复** — 改用 `window.__lightboxOpen` 布尔标志替代 DOM 查询；`close()` 中主动 `document.removeEventListener` 清理监听器（修复泄漏）；全局 handler 中灯箱检查移到全屏检查之前（ESC 优先级：灯箱 > 退出全屏 > 关闭笔记） |

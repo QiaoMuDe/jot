@@ -19,6 +19,10 @@ let contextSizeEl = null;     // #aiChatContextSize
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 
+let fileBtn = null;           // #aiChatFileBtn
+let fileBar = null;           // #aiChatFileBar
+let fileChips = null;         // #aiChatFileChips
+
 // 状态
 let chatHistory = [];          // 当前会话的消息 (发送给模型用) 
 let activeSessionId = null;    // null = 新会话尚未保存
@@ -64,6 +68,9 @@ let referencedNotes = [];       // { id, title, notebook_name }
 
 // 追问引用
 let followUpRef = '';           // 被追问的 AI 回复完整内容
+
+// 上传文件列表
+let uploadedFiles = [];  // 每项: { name, content, size, truncated }
 
 // 笔记引用选择浮层 DOM
 let refBtn = null;              // #aiChatRefBtn
@@ -273,6 +280,11 @@ export async function initAIChat() {
     skillBar = document.getElementById('aiChatSkillBar');
     skillChips = document.getElementById('aiChatSkillChips');
 
+    // 上传文件
+    fileBtn = document.getElementById('aiChatFileBtn');
+    fileBar = document.getElementById('aiChatFileBar');
+    fileChips = document.getElementById('aiChatFileChips');
+
     if (!messagesEl) return;
 
     sessionContextMenu = document.getElementById('aiSessionContextMenu');
@@ -325,6 +337,17 @@ async function updateContextSize() {
             await window.go.main.App.UpdateSessionContextTokens(activeSessionId, total);
         } catch (_) { /* 静默失败 */ }
     }
+}
+
+/**
+ * 格式化文件大小为人类可读字符串
+ * @param {number} bytes - 文件字节数
+ * @returns {string}
+ */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 /**
@@ -1145,6 +1168,35 @@ function bindEvents() {
             sessionMoreMenuTarget = null;
         }
     });
+
+    // 上传文件按钮
+    if (fileBtn) {
+        fileBtn.addEventListener('click', async () => {
+            fileBtn.disabled = true;
+            try {
+                const results = await window.go.main.App.SelectAIChatFiles();
+                if (!results || results.length === 0) return;
+
+                for (const r of results) {
+                    if (r.error) {
+                        window.showNotification?.(r.error, 'error');
+                    } else {
+                        uploadedFiles.push({
+                            name: r.name,
+                            content: r.content,
+                            size: r.size,
+                            truncated: r.truncated,
+                        });
+                    }
+                }
+                renderFileChips();
+            } catch (e) {
+                window.showNotification?.('上传文件失败: ' + (e.message || e), 'error');
+            } finally {
+                fileBtn.disabled = false;
+            }
+        });
+    }
 }
 
 /* ── 会话侧栏管理 ── */
@@ -1737,7 +1789,25 @@ async function onSend() {
             : refText;
     }
 
+    // 上传文件内容注入 system context
+    if (uploadedFiles.length > 0) {
+        let fileContext = '用户上传了以下文件内容，请基于这些内容回答用户的提问：\n';
+        uploadedFiles.forEach((f, idx) => {
+            const sizeStr = formatFileSize(f.size);
+            fileContext += '\n--- 文件: ' + f.name + ' (' + sizeStr + ') ---\n';
+            fileContext += f.content;
+            fileContext += '\n---';
+        });
+        systemContext = systemContext
+            ? systemContext + '\n\n' + fileContext
+            : fileContext;
+    }
+
     startStreaming(false, systemContext);
+
+    // 发送后清空上传文件列表
+    uploadedFiles = [];
+    renderFileChips();
 }
 
 /**
@@ -4041,6 +4111,67 @@ function removeRefNote(id) {
     referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
     cachedRefContext = ''; // 清除缓存
     updateRefChips();
+}
+
+/**
+ * 渲染上传文件 chips
+ */
+function renderFileChips() {
+    if (!fileChips || !fileBar) return;
+
+    // 有上传文件时高亮按钮，与引用笔记按钮行为一致
+    if (fileBtn) fileBtn.classList.toggle('has-ref', uploadedFiles.length > 0);
+
+    if (uploadedFiles.length === 0) {
+        fileBar.style.display = 'none';
+        return;
+    }
+
+    fileBar.style.display = '';
+
+    // 渲染单个文件 chips
+    let html = uploadedFiles.map((f, idx) => {
+        const truncTip = f.truncated ? '<span class="ai-chat-ref-chip-trunc">(内容已截断)</span>' : '';
+        return `<div class="ai-chat-file-chip" data-index="${idx}">
+            <span class="ai-chat-file-chip-icon">${DOC_ICON}</span>
+            <span class="ai-chat-file-chip-name" title="${f.name.replace(/"/g, '&quot;')}">${f.name}</span>
+            ${truncTip}
+            <button class="ai-chat-file-chip-remove" data-index="${idx}" title="移除文件">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>`;
+    }).join('');
+
+    // 3 个文件以上时追加批量清除按钮
+    if (uploadedFiles.length >= 3) {
+        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all" title="一键移除全部文件">
+            <svg class="ai-chat-ref-chip-remove-all-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>移除全部 ${uploadedFiles.length} 个</span>
+        </div>`;
+    }
+
+    fileChips.innerHTML = html;
+
+    // 绑定单个移除事件
+    fileChips.querySelectorAll('.ai-chat-file-chip-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            if (!isNaN(idx)) {
+                uploadedFiles.splice(idx, 1);
+                renderFileChips();
+            }
+        });
+    });
+
+    // 绑定批量清除事件
+    const removeAllBtn = fileChips.querySelector('.ai-chat-ref-chip-remove-all');
+    if (removeAllBtn) {
+        removeAllBtn.addEventListener('click', () => {
+            uploadedFiles = [];
+            renderFileChips();
+        });
+    }
 }
 
 /**
