@@ -48,7 +48,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -2376,6 +2376,19 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **CSS 样式** | 新增 `.ai-chat-add-wrap`（`position:relative; padding-right:12px; border-right`）、`.ai-chat-add-dropdown`（向上弹出，复用现有 dropdown 动画体系：opacity + translateY + scale transition）、`.ai-chat-add-item`（flex 布局 + hover 高亮 + 逐项滑入动画）。`#aiChatAddBtn` 内边距 `3px 4px` 纯图标紧凑布局。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **JS 交互逻辑** | 新增 `addBtn`/`addDropdown` 变量和 DOM 获取。事件绑定：`addBtn.click` → `toggle('open')` + `e.stopPropagation()`；`addDropdown` 菜单项点击：`ref` 调用 `openNoteRefModal()`，`upload` 调用 `SelectAIChatFiles()`，均先关闭菜单；`document.click` 外部关闭。`has-ref` 高亮从 `refBtn`/`fileBtn` 迁移到 `addBtn`（同时检查引用笔记和上传文件两种状态）。完全删除 `refBtn` 和 `fileBtn` 的变量声明、DOM 获取和事件绑定。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)（删除两个按钮 + 新增菜单结构）、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（新增菜单样式 + 分隔线）、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（新增变量/事件 + 逻辑迁移 + 清理旧代码） |
+
+---
+
+## 一百六十三、新增记忆点（AI 聊天拖拽上传文件）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 聊天模块只支持点击"上传"按钮从对话框选择文件，不支持拖拽文件直接上传。通过拖拽文件到 AI 聊天区域，可直接复用已有的验证/读取/截断逻辑，提升操作效率 |
+| **后端逻辑** | 在 `app.go` 中将 `SelectAIChatFiles` 的文件校验/读取/截断逻辑提取为私有方法 `readAIChatFiles(paths []string) []AIChatFileResult`，新增公开方法 `ReadAIChatFiles(paths)` 供拖拽场景通过 Wails 直接调用。按钮上传和拖拽上传共享同一套校验：目录拒绝、10MB 大小限制、`fs.IsBinaryPath` 二进制检测、`GetAIRefMaxChars` 内容截断（每次实时从 DB 读取）。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **全局拖拽屏蔽** | 在 `main.js` 的 `initFileDrop()` 中，`dragenter/dragleave/drop` 事件均增加 `e.target.closest('.ai-chat-content')` 判断，AI 聊天区内不操作全局 `_dragCounter` 和 `#dropOverlay` 遮罩；`OnFileDrop` 回调中通过 `elementFromPoint(x, y)` 优先判断释放坐标是否在 `.ai-chat-content` 内，若是则路由到 `window.handleAiChatFileDrop(paths)`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **AI 专属遮罩** | HTML 中 `#aiChatDropOverlay` 使用全局 `drop-overlay` 类（`position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.35)`），置于 body 层级紧邻 `#dropOverlay`。文字为"释放以上传文件"，完全复用全局遮罩的样式和动画。详见 [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+| **JS 拖拽事件** | 在 `ai-chat.js` 中新增 `initAiChatFileDrop()`：`dragenter` 用 `_aiDragCounter` 计数器控制遮罩显示（`display: flex` → rAF → `active` 类），`dragover` 必须 `preventDefault()`，`dragleave` 递减计数器，为 0 时移除 `active` 类 + `setTimeout` 隐藏 `display`。`window.handleAiChatFileDrop` 调用 `ReadAIChatFiles(paths)`，错误项通过 `showNotification('error')` 提示，成功项加入 `uploadedFiles[]` 并调用 `renderFileChips()`。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)（提取 `readAIChatFiles` + 新增 `ReadAIChatFiles`）、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)（遮罩移至 body 层级）、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（全局拖拽屏蔽 + OnFileDrop 路由）、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（遮罩控制 + 文件处理 + renderChips） |
 
 ---
 

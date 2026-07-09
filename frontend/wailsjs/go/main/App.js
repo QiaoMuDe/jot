@@ -286,6 +286,10 @@ export function PermanentDeleteTrashNotebook(arg1) {
   return window['go']['main']['App']['PermanentDeleteTrashNotebook'](arg1);
 }
 
+export function ReadAIChatFiles(arg1) {
+  return window['go']['main']['App']['ReadAIChatFiles'](arg1);
+}
+
 export function ReadTextFile(arg1) {
   return window['go']['main']['App']['ReadTextFile'](arg1);
 }

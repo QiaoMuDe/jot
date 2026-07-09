@@ -146,6 +146,8 @@ export function PermanentDeleteNote(arg1:number):Promise<void>;
 
 export function PermanentDeleteTrashNotebook(arg1:number):Promise<void>;
 
+export function ReadAIChatFiles(arg1:Array<string>):Promise<Array<main.AIChatFileResult>>;
+
 export function ReadTextFile(arg1:string):Promise<string>;
 
 export function RemoveTagFromNote(arg1:number,arg2:number):Promise<void>;

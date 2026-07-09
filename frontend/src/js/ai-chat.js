@@ -73,6 +73,11 @@ let followUpRef = '';           // 被追问的 AI 回复完整内容
 // 上传文件列表
 let uploadedFiles = [];  // 每项: { name, content, size, truncated }
 
+// 拖拽上传
+let _aiDragCounter = 0;
+let aiChatContent = null;       // .ai-chat-content
+let aiChatDropOverlay = null;   // #aiChatDropOverlay
+
 // 笔记引用选择浮层 DOM
 let refBar = null;              // #aiChatRefBar
 let refChips = null;            // #aiChatRefChips
@@ -285,6 +290,10 @@ export async function initAIChat() {
     fileBar = document.getElementById('aiChatFileBar');
     fileChips = document.getElementById('aiChatFileChips');
 
+    // 拖拽遮罩
+    aiChatContent = document.querySelector('.ai-chat-content');
+    aiChatDropOverlay = document.getElementById('aiChatDropOverlay');
+
     if (!messagesEl) return;
 
     sessionContextMenu = document.getElementById('aiSessionContextMenu');
@@ -302,6 +311,9 @@ export async function initAIChat() {
         breaks: true,
         gfm: true
     });
+
+    // 初始化拖拽上传
+    initAiChatFileDrop();
 }
 
 /* ── 上下文大小 ── */
@@ -4188,6 +4200,89 @@ function renderFileChips() {
         });
     }
 }
+
+/**
+ * 初始化 AI 聊天文件拖拽上传
+ */
+function initAiChatFileDrop() {
+    if (!aiChatContent || !aiChatDropOverlay) return;
+
+    // ── 拖拽进入：显示遮罩 ──
+    aiChatContent.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        if (!e.dataTransfer.types.includes('Files')) return;
+        _aiDragCounter++;
+        if (_aiDragCounter === 1) {
+            aiChatDropOverlay.style.display = 'flex';
+            // 用 requestAnimationFrame 确保 display 生效后再触发 transition
+            requestAnimationFrame(() => {
+                aiChatDropOverlay.classList.add('active');
+            });
+        }
+    });
+
+    // ── 拖拽悬停：必须 preventDefault 否则 drop 不触发 ──
+    aiChatContent.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    // ── 拖拽离开：隐藏遮罩 ──
+    aiChatContent.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        _aiDragCounter--;
+        if (_aiDragCounter <= 0) {
+            _aiDragCounter = 0;
+            aiChatDropOverlay.classList.remove('active');
+            // transition 结束后隐藏 display
+            setTimeout(() => {
+                if (!aiChatDropOverlay.classList.contains('active')) {
+                    aiChatDropOverlay.style.display = 'none';
+                }
+            }, 200);
+        }
+    });
+
+    // ── 拖拽释放：隐藏遮罩（实际文件由 OnFileDrop 处理） ──
+    aiChatContent.addEventListener('drop', (e) => {
+        e.preventDefault();
+        _aiDragCounter = 0;
+        aiChatDropOverlay.classList.remove('active');
+        aiChatDropOverlay.style.display = 'none';
+    });
+}
+
+// ── 拖拽文件处理（由 main.js OnFileDrop 回调调用） ──
+window.handleAiChatFileDrop = async function(paths) {
+    // 确保遮罩已隐藏
+    _aiDragCounter = 0;
+    if (aiChatDropOverlay) {
+        aiChatDropOverlay.classList.remove('active');
+        aiChatDropOverlay.style.display = 'none';
+    }
+
+    if (!paths || paths.length === 0) return;
+
+    try {
+        const results = await window.go.main.App.ReadAIChatFiles(paths);
+        if (!results || results.length === 0) return;
+
+        for (const r of results) {
+            if (r.error) {
+                window.showNotification?.(r.error, 'error');
+            } else {
+                uploadedFiles.push({
+                    name: r.name,
+                    content: r.content,
+                    size: r.size,
+                    truncated: r.truncated,
+                });
+            }
+        }
+        renderFileChips();
+    } catch (e) {
+        window.showNotification?.('拖拽文件失败: ' + (e.message || e), 'error');
+    }
+};
 
 /**
  * 获取笔记引用上下文 (直接使用后端拼装好的结果) 

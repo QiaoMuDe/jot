@@ -939,8 +939,6 @@ func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
 
 // SelectAIChatFiles 打开文件对话框选择文本文件，校验并读取内容返回给 AI 聊天使用
 func (a *App) SelectAIChatFiles() ([]AIChatFileResult, error) {
-	const maxSize int64 = 10 * 1024 * 1024 // 10MB
-
 	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:           "选择要上传的文本文件",
 		ShowHiddenFiles: false,
@@ -951,6 +949,18 @@ func (a *App) SelectAIChatFiles() ([]AIChatFileResult, error) {
 	if len(paths) == 0 {
 		return []AIChatFileResult{}, nil // 用户取消
 	}
+
+	return a.readAIChatFiles(paths), nil
+}
+
+// ReadAIChatFiles 直接根据文件路径列表校验并读取内容（拖拽上传用）
+func (a *App) ReadAIChatFiles(paths []string) []AIChatFileResult {
+	return a.readAIChatFiles(paths)
+}
+
+// readAIChatFiles 内部方法：校验、读取、截断一组文件（按钮上传和拖拽上传共用）
+func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
+	const maxSize int64 = 10 * 1024 * 1024 // 10MB
 
 	var results []AIChatFileResult
 
@@ -1008,7 +1018,7 @@ func (a *App) SelectAIChatFiles() ([]AIChatFileResult, error) {
 		results = append(results, result)
 	}
 
-	return results, nil
+	return results
 }
 
 // CallAI 调用 AI 对话接口

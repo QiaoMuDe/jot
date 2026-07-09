@@ -6950,6 +6950,10 @@ function initFileDrop() {
     document.addEventListener('dragenter', (e) => {
         e.preventDefault();
         if (!e.dataTransfer.types.includes('Files')) return;
+
+        // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
+        if (e.target.closest('.ai-chat-content')) return;
+
         _dragCounter++;
 
         // 编辑器拖拽悬停视觉反馈
@@ -6977,6 +6981,10 @@ function initFileDrop() {
 
     document.addEventListener('dragleave', (e) => {
         e.preventDefault();
+
+        // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
+        if (e.target.closest('.ai-chat-content')) return;
+
         _dragCounter--;
         if (_dragCounter <= 0) {
             _dragCounter = 0;
@@ -6990,6 +6998,10 @@ function initFileDrop() {
     // HTML5 drop 仅重置遮罩，不处理文件（由 OnFileDrop 接手）
     document.addEventListener('drop', (e) => {
         e.preventDefault();
+
+        // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
+        if (e.target.closest('.ai-chat-content')) return;
+
         _dragCounter = 0;
         if (dropOverlay) dropOverlay.classList.remove('active');
         const cmEl = document.querySelector('.cm-editor');
@@ -7008,6 +7020,16 @@ function initFileDrop() {
             const cmEl = document.querySelector('.cm-editor');
             if (cmEl) cmEl.classList.remove('dragover');
             if (!paths || paths.length === 0) return;
+
+            // 判断释放位置是否在 AI 聊天内容区
+            const target = document.elementFromPoint(x, y);
+            const aiChatContent = target?.closest('.ai-chat-content');
+            if (aiChatContent) {
+                if (typeof window.handleAiChatFileDrop === 'function') {
+                    await window.handleAiChatFileDrop(paths);
+                }
+                return;
+            }
 
             // 编辑器打开时（任何模式）全局禁止通过拖拽创建笔记
             if (cmEditor !== null) {
