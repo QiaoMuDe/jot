@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-09（更新 118）
+> 生成日期: 2026-07-09（更新 121）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2352,5 +2352,10 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **文本文件插入** | 非图片文件调用 `ReadTextFile`：成功（文本文件）→ 插入内容到光标处（累加位置 `pos += content.length`）；失败（二进制文件）→ 静默忽略。有多图时依次处理。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L6991-L7003) |
 | **.md 图片限制 + 通知** | 粘贴图片：`handlePaste` 中 `editorFileExt !== '.md'` 时 `showNotification('图片粘贴仅支持 .md 格式笔记')`；拖拽图片：OnFileDrop 中 `isMd` 检查，非 `.md` 时 `imgPaths = []` + 通知提示。文本文件插入不受后缀限制。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L135-L142) |
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（ReadTextFile）、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（CM6 drop + OnFileDrop 路由 + .md 检查 + 通知） |
+|--------|--------|
+| | **一百五十九：预览图片灯箱 + 图片尺寸调整** — `.image-lightbox` 遮罩 CSS（fixed/深色背景/flex 居中）、日常图片显示从 `max-width:100%` 改为 `85%` 居中、`_applyPreviewDOMHelpers` 中遍历 `<img>` 注册 click 事件创建灯箱 |
+| | **一百六十：灯箱动画升级** — CSS transition 三态系统（`.active`/`.closing`）：backdrop-filter 背景虚化（4px）、图片弹性缓动 `cubic-bezier(.34,1.4,.64,1)` 打开、关闭时 280ms 淡出缩小、右上角 ✕ 关闭按钮（带延迟淡入动画）、支持 ESC 键关闭 |
+| | **一百六十一：灯箱 ESC 修复** — 改用 `window.__lightboxOpen` 布尔标志替代 DOM 查询；`close()` 中主动 `document.removeEventListener` 清理监听器（修复泄漏）；全局 handler 中灯箱检查移到全屏检查之前（ESC 优先级：灯箱 > 退出全屏 > 关闭笔记） |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（灯箱点击 + ESC 监听 + 全局 handler 优先级）、[editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)（灯箱三态 CSS + 图片尺寸调整） |
 
-| **update 计数** | `AGENTS.md` 从更新 119 → 更新 120 |
+| **update 计数** | `AGENTS.md` 从更新 120 → 更新 121 |

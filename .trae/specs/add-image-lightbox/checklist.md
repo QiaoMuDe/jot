@@ -1,0 +1,9 @@
+- [x] `.image-lightbox` 遮罩 CSS 已添加（fixed/inset:0/黑色半透明/flex居中）
+- [x] 灯箱中的图片约束为 `max-width: 90vw; max-height: 90vh; object-fit: contain`
+- [x] `.md-rendered img` 已从 `max-width: 100%` 改为 `max-width: 85%`
+- [x] `.md-rendered img` 已添加 `display: block; margin: 0.5em auto; cursor: zoom-in`
+- [x] `_applyPreviewDOMHelpers` 中为每张图片注册了 click 事件
+- [ ] 点击图片打开灯箱显示原图
+- [ ] 点击遮罩任意位置关闭灯箱
+- [x] `go build ./...` 编译通过
+- [x] `npx vite build` 前端构建通过

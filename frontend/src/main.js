@@ -3490,6 +3490,51 @@ function _applyPreviewDOMHelpers() {
         const ro = new ResizeObserver(updateBtnPosition);
         ro.observe(table);
     });
+
+    // 图片灯箱：点击图片展开全屏查看（丝滑开合动画）
+    els.mdRendered.querySelectorAll('img').forEach((img) => {
+        img.style.cursor = 'zoom-in';
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            const overlay = document.createElement('div');
+            overlay.className = 'image-lightbox';
+            overlay.innerHTML = `
+                <button class="lightbox-close" aria-label="关闭">✕</button>
+                <img src="${img.src}" alt="${img.alt || ''}" draggable="false">
+            `;
+
+            // 打开动画：DOM 插入后下一帧添加 .active 触发 CSS transition
+            window.__lightboxOpen = true;
+            document.body.appendChild(overlay);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    overlay.classList.add('active');
+                });
+            });
+
+            // 关闭逻辑：加 .closing → 等 transition 结束 → 移除
+            const close = () => {
+                if (overlay.classList.contains('closing')) return;
+                window.__lightboxOpen = false;
+                document.removeEventListener('keydown', onKey);
+                overlay.classList.remove('active');
+                overlay.classList.add('closing');
+                overlay.addEventListener('transitionend', () => {
+                    overlay.remove();
+                }, { once: true });
+            };
+
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) close();
+            });
+            overlay.querySelector('.lightbox-close')?.addEventListener('click', close);
+
+            // ESC 键关闭
+            const onKey = (ke) => { if (ke.key === 'Escape') close(); };
+            document.addEventListener('keydown', onKey);
+        });
+    });
 }
 
 /**
@@ -5207,6 +5252,10 @@ async function handleKeyboardNavigation(e) {
         // 关于页面打开时关闭它
         if (els.viewAbout.style.display === 'flex') {
             closeAbout();
+            return;
+        }
+        // 灯箱打开时，ESC 不关闭笔记
+        if (window.__lightboxOpen) {
             return;
         }
         // 如果编辑器处于全屏模式，先退出全屏
