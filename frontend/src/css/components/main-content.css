@@ -657,6 +657,7 @@
   transform: scale(0.9);
   pointer-events: none;
   transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
+  --ctx-inset: 14px;
 }
 
 .context-menu.active {
@@ -667,7 +668,7 @@
 
 .context-menu-item {
   display: block;
-  padding: 8px 14px;
+  padding: 8px var(--ctx-inset);
   border-radius: var(--radius-sm);
   font-size: 0.813rem;
   cursor: pointer;
@@ -696,7 +697,7 @@
 .context-menu-divider {
   height: 1px;
   background: var(--divider);
-  margin: 4px 6px;
+  margin: 4px 0;
 }
 
 /* ==========================================================================

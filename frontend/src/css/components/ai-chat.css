@@ -1660,58 +1660,16 @@
     animation: ai-msg-enter 0.2s ease-out both;
 }
 
-/* ── 用户消息 token 脚标（绝对定位，悬停只变 opacity） ── */
+/* ── 用户消息 token 脚标 ── */
 .ai-msg-user .user-tokens {
-    position: absolute;
-    left: 0;
-    top: 0;
     font-size: 0.75rem;
     color: var(--text-muted);
     user-select: none;
     line-height: 26px;
     white-space: nowrap;
-    transition: opacity 0.12s;
 }
 
-/* 窄模式：悬停时隐藏 token */
-.ai-msg-user.narrow-mode:hover .user-tokens {
-    opacity: 0;
-    pointer-events: none;
-}
-
-/* 宽模式：悬停时 token 保留可见 */
-.ai-msg-user.wide-mode:hover .user-tokens {
-    opacity: 0.75;
-}
-
-/* 用户消息操作按钮（绝对定位，悬停时渐显） */
-.ai-msg-user .action-buttons {
-    position: absolute;
-    top: 0;
-    display: flex;
-    gap: 2px;
-    margin-left: 0;
-    opacity: 0;
-    transition: opacity 0.12s;
-}
-
-/* 窄模式：按钮从左侧偏移 */
-.ai-msg-user.narrow-mode .action-buttons {
-    left: 32px;
-    right: auto;
-}
-
-/* 宽模式：按钮推到右侧 */
-.ai-msg-user.wide-mode .action-buttons {
-    left: auto;
-    right: 0;
-}
-
-.ai-msg-user:hover .action-buttons {
-    opacity: 1;
-}
-
-/* ── 消息气泡操作栏（耗时 + 操作按钮） ── */
+/* ── 消息气泡操作栏（耗时 + token） ── */
 .ai-msg-actions {
     position: absolute;
     top: 100%;
@@ -1724,99 +1682,27 @@
     z-index: 2;
 }
 
-/* 用户消息操作栏覆盖：block 布局使绝对定位 children 叠加 */
+/* 用户消息操作栏：flex 布局 */
 .ai-msg-user .ai-msg-actions {
-    display: block;
-    height: 26px;
-}
-
-.ai-msg-actions .action-buttons {
     display: flex;
-    gap: 2px;
-    margin-left: auto;
-    opacity: 0;
-    transition: opacity 0.12s;
-}
-
-.ai-msg:hover .ai-msg-actions .action-buttons {
-    opacity: 1;
-}
-
-.ai-msg-actions button {
-    width: 26px;
     height: 26px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
+    align-items: center;
+}
+
+/* ── AI 消息右键菜单图标 ── */
+#aiMsgContextMenu .context-menu-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: background 0.12s, color 0.12s;
+    gap: 10px;
 }
-
-.ai-msg-actions button:hover {
-    background: var(--hover-bg);
-    color: var(--text-primary);
-}
-
-/* 复制成功态 */
-.ai-msg-actions button.copied {
-    color: #10B981;
-}
-
-/* 删除按钮 hover 显示红色警告色 */
-.ai-msg-actions button:last-child:hover {
-    color: #e74c3c;
-    background: color-mix(in srgb, #e74c3c 15%, transparent);
-}
-
-/* ── 更多操作按钮（窄气泡折叠） ── */
-.action-buttons .more-btn {
-    display: none;
-}
-.action-buttons.collapsed .more-btn {
-    display: flex;
-}
-.action-buttons.collapsed > button:not(.more-btn) {
-    display: none;
-}
-
-/* 弹出菜单 — 水平弹出（方向由 JS 根据角色动态设置） */
-.action-popup {
-    position: fixed;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    padding: 4px;
-    z-index: 2147483647;
-    display: flex;
-    flex-direction: row;
-    gap: 2px;
-    white-space: nowrap;
-}
-.action-popup button {
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
+#aiMsgContextMenu .ctx-item-icon {
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: background 0.12s, color 0.12s;
+    color: var(--text-muted);
+    flex-shrink: 0;
 }
-.action-popup button:hover {
-    background: var(--hover-bg);
-    color: var(--text-primary);
-}
-.action-popup button:last-child:hover {
-    color: #e74c3c;
-    background: color-mix(in srgb, #e74c3c 15%, transparent);
+#aiMsgContextMenu .context-menu-item.danger .ctx-item-icon {
+    color: var(--danger);
 }
 
 /* ── 思考过程可折叠区域（深度思考模型） ── */

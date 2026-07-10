@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-10（更新 122）
+> 生成日期: 2026-07-10（更新 123）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -48,7 +48,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块 ~3896 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + 右键菜单 + 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
+│   │   │   ├── ai-chat.js              # AI 对话模块 ~3650 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -496,10 +496,10 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 3690 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/操作按钮折叠/用户消息编辑/删除/重新发送/右键菜单） |
+| `frontend/src/js/ai-chat.js` | 3650 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
-| `frontend/src/css/components/ai-chat.css` | 2839 | AI 对话全部样式（含引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态/操作按钮折叠/编辑模式） |
+| `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
 | `app.go` | 1791 | Wails 绑定层（100+ API） |
 | `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
 | `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
@@ -550,7 +550,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **多来源联网搜索**（Tavily/知乎/全网搜索三来源独立开关 + 独立 Key 配置）
 - [x] **搜索开关联动**（Key 为空自动禁用、点击启用时校验配置）
 - [x] **切换会话分块渲染 + 延迟高亮**（CHUNK_SIZE=5 yield + requestIdleCallback hljs）
-- [x] **操作按钮折叠 sync 模式**（消除会话切换滚动跳跃）
+- [x] **消息操作栏简化**（移除独立按钮，仅常驻显示 Token，操作通过右键菜单）
 - [x] **设置页 Token 默认隐藏 + 知乎 URL 修正**
 - [x] **存储优化增强**（回收站自动清理 + 孤儿笔记迁移 + 空 AI 会话清理 + VACUUM 整合流程）
 - [x] **批量管理重构**（FAB 入口 + CSS transition 动效 + 复选框移除 + 置顶按钮可操作）
@@ -583,19 +583,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 11. **搜索开关 Key 校验 + 禁用态**：前端三组搜索开关（Tavily/知乎/全网）分别受对应 Key/Tokon 配置控制。Key 为空时开关自动 disabled 防止误启用；点击启用时若 Key 未配置则 `showNotification` 提示用户先配置；修改 Key 为空时自动禁用对应开关。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) 中 settings 页搜索开关的校验逻辑
 
-12. **切换会话性能优化（分块渲染）**：`switchSession()` 中对大量历史消息采用分块渲染策略（CHUNK_SIZE=5），每块渲染后 `setTimeout` 0ms yield 给浏览器，避免一次性渲染大量 DOM 导致卡顿。配合 `collapseActionsIfNeeded(el, true)` 同步模式消除布局抖动。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()`
+12. **切换会话性能优化（分块渲染）**：`switchSession()` 中对大量历史消息采用分块渲染策略（CHUNK_SIZE=5），每块渲染后 `setTimeout` 0ms yield 给浏览器，避免一次性渲染大量 DOM 导致卡顿。移除 `collapseActionsIfNeeded` 同步调用（该函数已删除，不再需要布局抖动补偿）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()`
 
 13. **延迟语法高亮（deferHighlight）**：`renderMarkdown()` 新增 `deferHighlight` 参数，历史消息加载时使用 `deferHighlightBlocks()` 通过 `requestIdleCallback` 渐进式执行 `hljs.highlightElement()`，优先级低于首次渲染，优先保证页面交互。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
-14. **操作按钮折叠（collapseActionsIfNeeded）**：窄消息气泡时操作按钮自动折叠到 ⋮ 更多按钮。`collapseActionsIfNeeded()` 新增 `sync` 参数支持同步模式（`getBoundingClientRect` 立即测量布局），用于 `switchSession` 中确保 `scrollToBottom()` 读取正确的 `scrollHeight`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
+14. **设置页修复集**：①知乎 Token 输入框默认 `type="password"` 隐藏；②三个搜索开关检查对应 Key/Tokon 是否配置，未配置时 disabled；③知乎开发者地址改为 `https://developer.zhihu.com/`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)
 
-15. **设置页修复集**：①知乎 Token 输入框默认 `type="password"` 隐藏；②三个搜索开关检查对应 Key/Tokon 是否配置，未配置时 disabled；③知乎开发者地址改为 `https://developer.zhihu.com/`。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)
+15. **重置出厂设置修复集**：①`resetDatabase()` 清空 `#aiChatMessages.innerHTML` 和 `#aiSessionList.innerHTML` 避免旧数据残留；②`onAIChatViewActivated()` 中清除标题/contextSize/chatHistory/sessions/activeSessionId 等模块级变量；③重置后自动调用 `onAIChatViewActivated?.()` 让 AI 助手模块立即进入就绪状态，消除闪烁。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
-16. **重置出厂设置修复集**：①`resetDatabase()` 清空 `#aiChatMessages.innerHTML` 和 `#aiSessionList.innerHTML` 避免旧数据残留；②`onAIChatViewActivated()` 中清除标题/contextSize/chatHistory/sessions/activeSessionId 等模块级变量；③重置后自动调用 `onAIChatViewActivated?.()` 让 AI 助手模块立即进入就绪状态，消除闪烁。详见 [data-management.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/data-management.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
+16. **AI 错误通知修复（`ai:stream-error` JSON 格式化）**：`app.go` 中搜索关键词精炼失败时（`services.RefineSearchQuery` 出错），原始代码拼接纯文本前缀 `"搜索关键词精炼失败: " + err.Error()` 发射事件，前端 `JSON.parse()` 失败，错误落入 `addErrorMessage()` 被插入对话流。修复后通过 `errors.As()` 解出 `*aicli.AIErrorWrapper`，直接透传其 JSON（含 `category/user_msg/raw`）；若不是 AI 错误则用 `CategoryUnknown` 创建标准 JSON。前端收到合法 JSON 后走 `showNotification()` 右上角通知。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1079-L1088)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2227-L2237)、[errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go)
 
-17. **AI 错误通知修复（`ai:stream-error` JSON 格式化）**：`app.go` 中搜索关键词精炼失败时（`services.RefineSearchQuery` 出错），原始代码拼接纯文本前缀 `"搜索关键词精炼失败: " + err.Error()` 发射事件，前端 `JSON.parse()` 失败，错误落入 `addErrorMessage()` 被插入对话流。修复后通过 `errors.As()` 解出 `*aicli.AIErrorWrapper`，直接透传其 JSON（含 `category/user_msg/raw`）；若不是 AI 错误则用 `CategoryUnknown` 创建标准 JSON。前端收到合法 JSON 后走 `showNotification()` 右上角通知。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1079-L1088)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2227-L2237)、[errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go)
-
-18. **全局链接系统浏览器打开**：在 `main.js` 的 `initEventListeners()` 中添加 `document` 级 click 事件委托，拦截所有 `<a>` 标签点击，通过 `e.preventDefault()` + `window.runtime.BrowserOpenURL(href)` 在系统默认浏览器中打开。排除 `#` 锚点链接和 `javascript:` 伪协议。同时移除了 `ai-chat.js` 中 `messagesEl` 级别的区域委托和搜索来源面板中的冗余 `link.addEventListener` 代码。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L5131-L5138)
+17. **全局链接系统浏览器打开**：在 `main.js` 的 `initEventListeners()` 中添加 `document` 级 click 事件委托，拦截所有 `<a>` 标签点击，通过 `e.preventDefault()` + `window.runtime.BrowserOpenURL(href)` 在系统默认浏览器中打开。排除 `#` 锚点链接和 `javascript:` 伪协议。同时移除了 `ai-chat.js` 中 `messagesEl` 级别的区域委托和搜索来源面板中的冗余 `link.addEventListener` 代码。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L5131-L5138)
 
 ---
 
@@ -853,7 +851,7 @@ await loadXxxSetting();
 | **AI 对话滚动条自动隐藏** | 移除 `ai-chat.css` 中独立的 `.ai-chat-messages` 滚动条样式（一直显示灰色块），将 `.ai-chat-messages` 接入 `scrollbar.css` 的自动隐藏系统（静止 1 秒淡出）。轨道底色改为 `transparent` 融进背景。`main.js` 的 `initScrollbarAutoHide()` 容器列表新增 `.ai-chat-messages`。详见 [scrollbar.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 和 [main.js#L4016](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 | **笔记本侧栏折叠按钮** | 在 `<aside#notebookSidebar>` 和 `.main-content-area` 之间插入兄弟按钮（`.notebook-sidebar-toggle`），14×44px 纤细条状同款。`:not(.collapsed) ~ .notebook-sidebar-toggle { left: 176px }`，展开时左边框延续分割线，折叠时 `left: 0`。只在 `grid` 视图显示。JS 新增 `updateNotebookSidebarToggleBtn()` 切换 SVG 箭头方向，`toggleSidebar()` 和 `restoreSidebarState()` 联动更新。详见 [sidebar.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/sidebar.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
 | **AI 对话侧栏贴左** | 去掉 `#viewAiChat.view` 的全局 padding（`padding: 0`），侧栏直接顶到视图左边缘。标题栏和对话区各自加回 padding（标题 `24px 32px 0`，对话区 `0 16px 16px`）。`.ai-chat-content` 增加 `align-items: center` 使消息列表居中，`.ai-chat-messages` 和 `.ai-chat-input-area` 加 `max-width: clamp(800px, min(92vw, 100%), 1600px); margin: 0 auto`（后改为响应式宽度，见九十八节）。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **消息间距 32px + 用户消息复制按钮** | `.ai-chat-messages` 的 `gap` 从 12px → 24px → 32px 防止 hover 操作按钮被下一条消息遮挡。`createMsgActions()` 在 user 消息上也调用（加载历史消息和实时发送两处），用户消息只显示复制按钮（assistant 消息显示复制+重新生成）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **消息间距 32px + 用户消息 Token 常驻** | `.ai-chat-messages` 的 `gap` 从 12px → 24px → 32px。`createMsgActions()` 简化后仅显示 Token 消耗信息，操作统一通过右键菜单进行。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 ## 二十九、新增记忆点（会话排序 + 标题编辑）
 
@@ -950,7 +948,7 @@ await loadXxxSetting();
 | 记忆点 | 内容 |
 |--------|------|
 | **后端绑定** | `app.go:SaveAIMessageAsNote(content)` 校验非空 → `generateNoteTitle` 自动生成标题（取第一行，截断 50 字符）→ `noteService.CreateWithNotebook(title, content, ".md", 1)` 归入默认笔记本。详见 [app.go#L582](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
-| **前端按钮** | `ai-chat.js:createMsgActions` assistant 分支中插入"保存为笔记"（软盘 SVG 图标），位于复制和重新生成之间。点击调用 `SaveAIMessageAsNote`，成功显示通知。详见 [ai-chat.js#L899](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **前端操作** | `ai-chat.js:createMsgActions` 已移除所有独立按钮，"保存为笔记"通过右键菜单操作。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 ## 三十八、新增记忆点（通知系统增强 — showAction）
 
@@ -1391,7 +1389,7 @@ await loadXxxSetting();
 | **showAiMsgContextMenu()** | 根据角色动态生成菜单项：用户消息→「复制」；AI 回复→「复制」「保存为笔记」「重新生成」「追问此条回复」。菜单位置跟随鼠标坐标，自动防止溢出视口。`event.preventDefault()` 阻止浏览器默认菜单。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **closeAiMsgContextMenu()** | 移除 `active` 类、清空 innerHTML、重置上下文变量。点击菜单外部、Escape 键、点击菜单项均触发关闭。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **bindMsgContextMenu()** | 为消息气泡绑定 `contextmenu` 事件 → 调用 `showAiMsgContextMenu`。在 3 处消息创建点调用：历史会话加载、用户消息发送、流式输出完成。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
-| **事件集成** | 在 `initAIChat()` 的全局 `click` 监听器中新增 `aiMsgContextMenu` 外部点击关闭、`Escape` 键关闭。新增 `aiMsgContextMenu` 的 `click` 事件委托处理菜单项点击（`copy`/`save`/`regen`/`followUp`），各操作逻辑与 `createMsgActions()` 中悬浮按钮完全一致。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **事件集成** | 在 `initAIChat()` 的全局 `click` 监听器中新增 `aiMsgContextMenu` 外部点击关闭、`Escape` 键关闭。新增 `aiMsgContextMenu` 的 `click` 事件委托处理菜单项点击（`copy`/`save`/`regen`/`followUp`），各操作逻辑与右键菜单项一致。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
 ## 七十七、新增记忆点（全屏宽度适配）
@@ -1555,8 +1553,8 @@ await loadXxxSetting();
 
 | 记忆点 | 内容 |
 |--------|------|
-| **功能概述** | 已发送的用户消息支持编辑修改。用户消息气泡悬停或右键菜单中可点击编辑按钮，进入内联编辑模式。编辑确认后：前端更新消息显示 → 清除后续所有消息（DOM + chatHistory） → 同步 DB（ClearAISessionMessages + SaveAIMessages） → 自动重新流式回复。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/edit-ai-user-message/spec.md) |
-| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`addMessage` 新增第 7 参数 `msgId` 绑定到 DOM 属性；`switchSession` 加载历史消息时传入 `msg.id`；`createMsgActions` 中为 user 消息新增编辑按钮（铅笔图标）；4 个新函数 `enterEditMode` / `cancelEdit` / `confirmEdit` / `applyEdit`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **功能概述** | 已发送的用户消息支持编辑修改。用户消息右键菜单中可点击编辑选项，进入内联编辑模式。编辑确认后：前端更新消息显示 → 清除后续所有消息（DOM + chatHistory） → 同步 DB（ClearAISessionMessages + SaveAIMessages） → 自动重新流式回复。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/edit-ai-user-message/spec.md) |
+| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`addMessage` 新增第 7 参数 `msgId` 绑定到 DOM 属性；`switchSession` 加载历史消息时传入 `msg.id`；右键菜单新增编辑选项；4 个新函数 `enterEditMode` / `cancelEdit` / `confirmEdit` / `applyEdit`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：编辑模式全套样式 textarea 样式、确认/取消按钮（绿底/红底半透明背景，hover scale 1.1 放大）、错误抖动动画、暗色主题适配 |
 | **后端变更** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)：新增 `UpdateAIMessageContent(id, content)` 和 `DeleteAIMessagesAfter(sessionID, messageID)`；[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：对应 Wails 绑定 |
 | **交互行为** | 点击编辑 → textarea 自动聚焦全选 → 编辑后 Ctrl+Enter 或点击 ✓ 确认 → 内容不变退出、内容不同则更新+重发。Escape 或点击 ✕ 恢复原文。空内容红色抖动提示不退出编辑模式。 |
@@ -1572,8 +1570,8 @@ await loadXxxSetting();
 
 | 记忆点 | 内容 |
 |--------|------|
-| **功能概述** | AI 消息和用户消息均支持单条删除。在消息操作栏新增删除按钮（🗑 图标）以及右键菜单的「删除」选项。删除该条消息时，其所有后续消息一并删除（DOM + chatHistory + DB），空对话时自动显示欢迎语。 |
-| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`createMsgActions` 在所有消息操作栏尾部添加删除按钮，流式生成中禁用；`handleDeleteMsg` 新函数处理确认对话框 → DOM 清除 → chatHistory 截断 → DB 同步 → 空对话欢迎语；右键菜单 user/assistant 均添加「删除」选项。|
+| **功能概述** | AI 消息和用户消息均支持单条删除。在右键菜单新增「删除」选项。删除该条消息时，其所有后续消息一并删除（DOM + chatHistory + DB），空对话时自动显示欢迎语。 |
+| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`createMsgActions` 中删除按钮移除，改为右键菜单「删除」选项；`handleDeleteMsg` 新函数处理确认对话框 → DOM 清除 → chatHistory 截断 → DB 同步 → 空对话欢迎语；右键菜单 user/assistant 均添加「删除」选项。|
 | **CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：删除按钮 hover 红色警告色 |
 | **后端变更** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)：新增 `DeleteAIMessage(id uint) error` 按 ID 删除单条消息；[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：对应 Wails 绑定 |
 | **Fix: DB 不同步** | 与编辑问题相同，当前会话新建消息无 `msgId` 导致 DB 操作被跳过。改用 `ClearAISessionMessages + SaveAIMessages` 模式确保始终同步。 |
@@ -1603,18 +1601,17 @@ await loadXxxSetting();
 
 | 记忆点 | 内容 |
 |--------|------|
-| **功能概述** | 用户消息支持重新发送。消息操作栏和右键菜单新增「重新发送」按钮，点击后移除该用户消息及后续所有消息，重新将用户消息加入 chatHistory 并触发流式请求。 |
-| **前端变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：新增 `RESEND_ICON` 图标常量、`handleResend()` 函数（参考 `handleRegenerate` 但截断范围包含用户消息自身）；`createMsgActions()` 为用户消息新增重新发送按钮；右键菜单新增 `resend` 操作项 |
+| **功能概述** | 用户消息支持重新发送。右键菜单新增「重新发送」选项，点击后移除该用户消息及后续所有消息，重新将用户消息加入 chatHistory 并触发流式请求。 |
+| **前端变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：新增 `RESEND_ICON` 图标常量、`handleResend()` 函数（参考 `handleRegenerate` 但截断范围包含用户消息自身）；`createMsgActions()` 中重新发送按钮移除，改为右键菜单「重新发送」选项；右键菜单新增 `resend` 操作项 |
 | **CSS 变更** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：重新发送按钮 hover 色 |
 
-## 九十五、新增记忆点（操作按钮折叠 — 更多菜单）
+## 九十五、~~操作按钮折叠 — 更多菜单（已废弃）~~
 
 | 记忆点 | 内容 |
 |--------|------|
-| **功能概述** | 窄消息气泡时，操作按钮（复制/重新生成/重新发送/编辑/删除等）自动折叠到 ⋮ 更多按钮中，点击弹出水平菜单。避免小宽度气泡中按钮互相挤压。 |
-| **前端变更** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：新增 `MORE_ICON` 图标、`collapseActionsIfNeeded()`（测量气泡宽度判断是否需要折叠）、`toggleActionPopup()`（创建/切换弹出菜单）；`createMsgActions()` 末尾追加 `.more-btn`；5 处调用点追加 `collapseActionsIfNeeded()` |
-| **CSS 变更** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：`.more-btn` 默认 `display:none`，`.action-buttons.collapsed .more-btn` 显示/其他按钮隐藏；`.action-popup` 弹出菜单 `position:fixed` 追加到 `document.body`，`z-index:2147483647` 始终最顶层 |
-| **弹出方向** | 用户消息向左水平弹出，AI 消息向右水平弹出。使用 `getBoundingClientRect()` 视口坐标 + `position:fixed` 定位 |
+| **移除时间** | 2026-07-10，simplify-ai-msg-actions 变更中移除 |
+| **移除原因** | 操作栏简化为仅常驻显示 Token 消耗，所有操作通过右键菜单进行 |
+| **移除内容** | `MORE_ICON` 常量、`collapseActionsIfNeeded()`、`toggleActionPopup()`、`.action-popup` CSS、`.action-buttons` CSS、`.more-btn` CSS |
 
 ## 九十六、新增记忆点（移除 IsEmptyResponse 字段 + 空回复处理优化）
 
@@ -1694,7 +1691,7 @@ await loadXxxSetting();
 | **功能概述** | Token 计算从前端迁移到后端统一处理。后端在流完成回调中统一计算 userTokens、assistantTokens 和 totalTokens，通过 `stream-done` 事件返回给前端。每个消息新增 `tokens` 字段，前端显示每条消息的 Token 消耗。用户消息也显示 Token 数（默认显示，悬停时隐藏让给操作按钮）。 |
 | **后端计算** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L840-L856)：`estimateTokens()` 函数根据中文字符/1.5 + 非中文字符/4 估算 Token 数。`userTokens` 仅统计本轮 system 上下文 + 最后一条用户消息（不累加历史），`assistantTokens` 统计 AI 回复内容，`totalTokens = userTokens + assistantTokens`。详见 [app.go#L903-L913](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
 | **数据库持久化** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L859-L893)：后端直接通过 `SaveAIMessages()` 将带 tokens 的消息写入数据库。用户消息的 `tokens` 在编辑/重新发送场景下通过 `UpdateLastUserMessageTokens()` 单独更新。详见 [ai_service.go#L478-L487](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
-| **用户消息 Token 显示** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2741-L2745)：`createMsgActions()` 中 `role === 'user'` 时创建 `span.user-tokens`，默认 `opacity: 0.75`，悬停时 `opacity: 0` 让位给操作按钮。详见 [ai-chat.css#L1269-L1281](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **用户消息 Token 显示** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2741-L2745)：`createMsgActions()` 中 `role === 'user'` 时创建 `span.user-tokens`，常驻显示（不再悬停隐藏），操作按钮已移除。详见 [ai-chat.css#L1269-L1281](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 | **Selector 修复** | [ai-chat.js#L2052-L2053](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`stream-done` 中更新用户 Token 时，改用 `querySelectorAll('.ai-msg-user')` 取最后一个元素，修复原 `:last-of-type` 伪类选择器因用户/AI 消息同为 div 标签而匹配到 AI 消息的问题。 |
 | **编辑/重新发送兼容** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：编辑(`applyEdit`)和重新发送(`handleResend`)场景下，用户消息入 `chatHistory` 时 `tokens: 0`，流完成后通过 `_pendingTokenSync` 标志触发后端 `UpdateLastUserMessageTokens` 更新 DB。 |
 | **前端加载历史消息** | [ai-chat.js#L1609](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`loadHistoryMessages()` 中加载消息时传入 `msg.tokens`，`addMessage()` 根据 `totalElapsed > 0` 显示 AI 消息 Token、根据 `tokens > 0` 显示用户消息 Token。 |
@@ -1718,16 +1715,13 @@ await loadXxxSetting();
 | **修复 3 — stream-thinking-done 事件** | [app.go#L901](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：`stream-thinking-done` 事件发射追加 `thinkingEnabled &&` 判断，保持一致性。 |
 | **影响范围** | 仅修改 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) 一个文件 3 处，仅影响新发消息的保存逻辑，不影响已有消息。前端无需修改。 |
 
-## 一百零五、新增记忆点（用户消息操作按钮闪烁修复 + 宽度自适应 absolute 定位）
+## 一百零五、~~用户消息操作按钮闪烁修复 + 宽度自适应 absolute 定位（已废弃）~~
 
 | 记忆点 | 内容 |
 |--------|------|
-| **问题** | 用户消息悬停时操作按钮（重新发送/编辑/删除/更多）出现闪烁，鼠标靠近按钮右侧区域时触发疯狂的测量循环。根因是悬停时触发布局变化（`.user-tokens` 宽度/overflow 变化 + `.action-buttons` margin-left 变化），导致浏览器反复 reflow。 |
-| **修复方案** | 将 `.user-tokens` 和 `.action-buttons` 改为 `position: absolute` 叠加布局（不占文档流空间），悬停时仅切换 `opacity`，完全不触发布局 reflow。详见 [ai-chat.css#L1268-L1292](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **narrow-mode / wide-mode** | 根据 `collapseActionsIfNeeded()` 测量的可用宽度动态决定：窄模式（宽度不足）→ `left: 32px`，宽模式（宽度足够）→ `right: 0`。通过 `msgEl.classList.add('wide-mode'/'narrow-mode')` 切换两种定位方式。详见 [ai-chat.js#L2867-L2899](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `collapseActionsIfNeeded()` |
-| **测量条件** | `tokensWidth + buttonsWidth + 32 <= availableWidth` → 宽模式（tokens 可见 + 按钮在右侧）。否则 → 窄模式（tokens 悬停时 `opacity: 0` + 按钮 `left: 32px`）。详见 [ai-chat.js#L2882-L2892](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
-| **user-tokens 宽模式保留** | 宽模式下悬停时 `.user-tokens` 保持 `opacity: 0.75` 半透明可见，而非完全隐藏。详见 [ai-chat.css#L1282-L1285](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
-| **过渡动画** | 所有 opacity 变化使用 `transition: opacity 0.12s` 平滑显隐，无延迟。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **移除时间** | 2026-07-10，simplify-ai-msg-actions 变更中移除 |
+| **移除原因** | 操作栏简化为仅常驻显示 Token，不再有操作按钮，闪烁/定位问题自然消失 |
+| **移除内容** | `.user-tokens` absolute 定位、`narrow-mode`/`wide-mode` 切换、`collapseActionsIfNeeded()` 宽度测量 |
 
 ## 一百零六、新增记忆点（编辑模式用户消息 token 阻挡修复）
 
@@ -2096,15 +2090,13 @@ await loadXxxSetting();
 | **scroll-behavior 临时禁用** | `scrollToBottom()` 中临时设置 `scrollBehavior = 'auto'` 覆盖 CSS 的 `scroll-behavior: smooth`，滚动完成后恢复。避免程序化滚动触发平滑动画导致视觉卡顿。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `scrollToBottom()` |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`switchSession()`/`addMessage()`/`renderMarkdown()`/`deferHighlightBlocks()`/`scrollToBottom()`）、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（`.ai-msg-enter-anim` 分离类） |
 
-## 一百三十九、新增记忆点（切换会话滚动跳跃修复 — collapseActionsIfNeeded sync 参数）
+## 一百三十九、~~切换会话滚动跳跃修复 — collapseActionsIfNeeded sync 参数（已废弃）~~
 
 | 记忆点 | 内容 |
 |--------|------|
-| **问题现象** | 切换有大量消息的会话时，消息先加载到底部贴近输入框和操作栏，然后又将消息向上移动一段间距，出现"跳跃"感 |
-| **根因** | `switchSession()` 中每块消息渲染完后先调 `scrollToBottom()`（此时 `collapseActionsIfNeeded` 因 `requestAnimationFrame` 延迟测量，`scrollHeight` 尚未计入操作按钮展开高度 → 滚动到位），然后 `collapseActionsIfNeeded` 完成测量并折叠按钮（操作按钮隐藏 → 消息高度减少 → 页面向上移动 → 消息与输入框之间出现空白间距）。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `switchSession()`、`collapseActionsIfNeeded()` |
-| **修复：sync 同步模式** | `collapseActionsIfNeeded()` 新增 `sync` 布尔参数。默认 `false` 时行为不变（异步 rAF 测量）；`sync=true` 时立即同步调用 `getBoundingClientRect()` 和客户端宽度测量，不延迟执行。`switchSession()` 分块渲染中每块追加消息后以 `sync=true` 调用 `collapseActionsIfNeeded(el, true)`，确保 `scrollToBottom()` 读取的 `scrollHeight` 包含折叠后的最终高度。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
-| **移除 2 帧等待** | 原 `switchSession()` 中每块末尾的 `await new Promise(r => requestAnimationFrame(r))` 两帧等待被移除，不再需要等待 `collapseActionsIfNeeded` 的异步测量。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
-| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`collapseActionsIfNeeded()`/`switchSession()`） |
+| **移除时间** | 2026-07-10，simplify-ai-msg-actions 变更中移除 |
+| **移除原因** | `collapseActionsIfNeeded` 函数已删除，相关 sync 参数和滚动跳跃修复不再需要 |
+| **替代方案** | `switchSession()` 中移除对 `collapseActionsIfNeeded` 的调用，分块渲染后直接 `scrollToBottom()` |
 
 ## 一百四十、新增记忆点（联网搜索菜单样式统一 + 空会话切换修复 + 数据库瘦身清理空 AI 会话 + 侧栏展开时刷新列表）
 
@@ -2444,3 +2436,13 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
 
 | **update 计数** | `AGENTS.md` 从更新 124 → 更新 125 |
+
+## 一百六十八、新增记忆点（简化 AI 消息操作栏）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | 消息底部操作栏右侧的一排独立操作按钮（复制/编辑/重新发送/保存为笔记/重新生成/追问/删除）全部移除，仅保留 Token 消耗信息常驻显示。所有操作统一通过右键菜单进行。右键菜单每个菜单项左侧配 SVG 图标。 |
+| **前端 JS 变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`createMsgActions()` 简化 — 只创建 time/token 标签，不再创建按钮；删除 `collapseActionsIfNeeded()`、`toggleActionPopup()`、`showMsgActionsMenu()` 三个函数；删除 `MORE_ICON` 常量；`showAiMsgContextMenu()` 新增 `actionIcons` 图标映射，每个菜单项使用 `<span class="ctx-item-icon">` 配 SVG 图标 |
+| **前端 CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：移除 `.action-buttons` 悬停渐显、`.action-popup` 弹出菜单、`.more-btn`、`.action-buttons.collapsed` 等规则；移除 `.ai-msg-user.narrow-mode`/`.wide-mode` 按钮定位规则；`.user-tokens` 从 absolute 改为 inline 常驻显示；新增 `#aiMsgContextMenu .context-menu-item` flex 布局 + `#aiMsgContextMenu .ctx-item-icon` 样式；`.ai-msg-user .ai-msg-actions` 改为 flex 布局 |
+| **全局 CSS 变更** | [main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)：`.context-menu` 新增 `--ctx-inset: 14px` 自定义属性，`.context-menu-item` 的 padding 和 `.context-menu-divider` 的 margin 统一引用该变量，分隔线宽度自动跟随菜单项宽度 |
+| **菜单宽度** | 菜单宽度从 160px 增加到 180px，适配图标+文字布局 |

@@ -1550,13 +1550,11 @@ async function switchSession(id) {
                     if (userMsgEl) {
                         userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
-                        collapseActionsIfNeeded(userMsgEl, true);
                     }
                 } else if (msg.role === 'assistant') {
                     const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, true, true);
                     el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                     bindMsgContextMenu(el, msg.content, 'assistant');
-                    collapseActionsIfNeeded(el, true);
                 }
             }
         }
@@ -1803,7 +1801,6 @@ async function onSend() {
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
         bindMsgContextMenu(userMsgEl, text, 'user');
-        collapseActionsIfNeeded(userMsgEl);
     }
     chatHistory.push({ role: 'user', content: text, tokens: 0 });
     updateContextSize();
@@ -2065,7 +2062,6 @@ function startStreaming(isRegenerate = false, systemContext = '') {
         updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
-        collapseActionsIfNeeded(streamingEl);
 
         // 自动保存消息到数据库（由后端 done 回调统一处理）
         if (isEmptyMsg) {
@@ -2802,6 +2798,17 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     items.push({ type: 'divider' });
     items.push({ action: 'delete', label: '删除' });
 
+    // 图标映射
+    const actionIcons = {
+        copy: COPY_ICON,
+        edit: EDIT_ICON,
+        resend: RESEND_ICON,
+        save: SAVE_ICON,
+        regen: REGEN_ICON,
+        followUp: FOLLOWUP_ICON,
+        delete: DELETE_ICON,
+    };
+
     // 渲染菜单项
     items.forEach(item => {
         if (item.type === 'divider') {
@@ -2812,7 +2819,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
             const menuItem = document.createElement('div');
             menuItem.className = 'context-menu-item';
             menuItem.dataset.action = item.action;
-            menuItem.textContent = item.label;
+            menuItem.innerHTML = `<span class="ctx-item-icon">${actionIcons[item.action] || ''}</span><span class="ctx-item-label">${item.label}</span>`;
             aiMsgContextMenu.appendChild(menuItem);
         }
     });
@@ -2820,7 +2827,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     // 定位到鼠标位置，防止溢出视口
     let x = event.clientX;
     let y = event.clientY;
-    const menuW = 160;
+    const menuW = 180;
     const menuH = items.length * 36 + 16;
     if (x + menuW > window.innerWidth) x = window.innerWidth - menuW - 8;
     if (y + menuH > window.innerHeight) y = window.innerHeight - menuH - 8;
@@ -2949,7 +2956,10 @@ const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 const REGEN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
 const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 const RESEND_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
-const MORE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+const EDIT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+const FOLLOWUP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+const DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
 /**
  * 创建消息气泡操作按钮
@@ -2968,7 +2978,7 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
         container.appendChild(timeEl);
     }
 
-    // 用户消息 token 计数（右对齐，悬停时隐藏让给操作按钮）
+    // 用户消息 token 计数（左侧）
     if (role === 'user') {
         const tokensEl = document.createElement('span');
         tokensEl.className = 'user-tokens';
@@ -2976,239 +2986,7 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
         container.appendChild(tokensEl);
     }
 
-    // 操作按钮 - 右侧（悬浮显示）
-    const btnWrap = document.createElement('div');
-    btnWrap.className = 'action-buttons';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.innerHTML = COPY_ICON;
-    copyBtn.title = '复制';
-    copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        handleCopy(content, copyBtn);
-    });
-    btnWrap.appendChild(copyBtn);
-
-    if (role === 'user') {
-        // 编辑按钮
-        const editIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
-
-        const editBtn = document.createElement('button');
-        editBtn.innerHTML = editIcon;
-        editBtn.title = '编辑';
-        editBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (isStreaming) return;
-            const msgEl = container.parentElement;
-            enterEditMode(msgEl, content);
-        });
-        btnWrap.appendChild(editBtn);
-
-        // 重新发送按钮
-        const resendBtn = document.createElement('button');
-        resendBtn.innerHTML = RESEND_ICON;
-        resendBtn.title = '重新发送';
-        resendBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (isStreaming) return;
-            handleResend(container.parentElement);
-        });
-        btnWrap.appendChild(resendBtn);
-    }
-
-    if (role === 'assistant') {
-        // 保存为笔记 (仅 AI 回复) 
-        const saveBtn = document.createElement('button');
-        saveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
-        saveBtn.title = '保存为笔记';
-        saveBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            try {
-                const note = await window.go.main.App.SaveAIMessageAsNote(content);
-                if (note && note.id) {
-                    window.showActionNotification?.('笔记已创建', 'success', [
-                        { text: '查看', callback: async () => { window.switchView('grid'); await window.loadNotes(); window.openEditor(note.id, true); } }
-                    ]);
-                }
-            } catch (e) {
-                window.showNotification?.('保存失败: ' + (e.message || e), 'error');
-            }
-        });
-        btnWrap.appendChild(saveBtn);
-
-        const regenBtn = document.createElement('button');
-        regenBtn.innerHTML = REGEN_ICON;
-        regenBtn.title = '重新生成';
-        regenBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleRegenerate(container.parentElement);
-        });
-        btnWrap.appendChild(regenBtn);
-
-        // 追问：在输入区域顶部显示引用栏
-        const followUpBtn = document.createElement('button');
-        followUpBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
-        followUpBtn.title = '追问此条回复';
-        followUpBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            try {
-                const safeContent = String(content || '');
-                const excerpt = safeContent.replace(/\s+/g, ' ').trim().slice(0, 80);
-                followUpRef = safeContent;
-                const bar = document.getElementById('aiChatFollowUpBar');
-                const text = document.getElementById('aiChatFollowUpText');
-                if (bar && text) {
-                    text.textContent = '引用: ' + excerpt + (safeContent.length > 80 ? '…' : '');
-                    bar.style.display = 'flex';
-                }
-            } catch (_) {}
-        });
-        btnWrap.appendChild(followUpBtn);
-    }
-
-    // 删除按钮（所有消息共有）
-    const deleteBtn = document.createElement('button');
-    deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-    deleteBtn.title = '删除';
-    deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (isStreaming) return;
-        const msgEl = container.parentElement;
-        handleDeleteMsg(msgEl);
-    });
-    btnWrap.appendChild(deleteBtn);
-
-    // 更多操作按钮（窄气泡时折叠显示）
-    const moreBtn = document.createElement('button');
-    moreBtn.className = 'more-btn';
-    moreBtn.innerHTML = MORE_ICON;
-    moreBtn.title = '更多操作';
-    moreBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (isStreaming) return;
-        const msgEl = container.parentElement;
-        toggleActionPopup(msgEl, moreBtn);
-    });
-    btnWrap.appendChild(moreBtn);
-
-    container.appendChild(btnWrap);
     return container;
-}
-
-/**
- * 检测消息气泡宽度是否不足以容纳所有操作按钮
- * 如果溢出则折叠到更多按钮中
- */
-function collapseActionsIfNeeded(msgEl, sync) {
-    const actions = msgEl?.querySelector('.ai-msg-actions');
-    const btnWrap = actions?.querySelector('.action-buttons');
-    if (!actions || !btnWrap) return;
-
-    btnWrap.classList.remove('collapsed');
-
-    const run = () => {
-        const availableWidth = actions.clientWidth;
-        const buttonsWidth = btnWrap.scrollWidth;
-        let isCollapsed = buttonsWidth > availableWidth && buttonsWidth > 60;
-
-        // 用户消息：检测宽度模式并决定折叠
-        if (msgEl.classList.contains('ai-msg-user')) {
-            const tokensEl = actions.querySelector('.user-tokens');
-            const tokensWidth = tokensEl ? tokensEl.scrollWidth : 0;
-            // 窄模式：按钮在 left: 32px，剩余宽度 = clientWidth - 32
-            // 宽模式：按钮在 right: 0，剩余宽度 = clientWidth
-            const narrowRemaining = availableWidth - 32;
-            const wideRemaining = availableWidth;
-            const needsCollapsedNarrow = buttonsWidth > narrowRemaining && buttonsWidth > 60;
-            const needsCollapsedWide = buttonsWidth > wideRemaining && buttonsWidth > 60;
-
-            if (tokensWidth + buttonsWidth + 32 <= availableWidth) {
-                // 足够宽 → 宽模式（按钮右侧，tokens 可见）
-                msgEl.classList.add('wide-mode');
-                msgEl.classList.remove('narrow-mode');
-                isCollapsed = needsCollapsedWide;
-            } else {
-                // 宽度不足 → 窄模式（按钮左侧 32px，tokens 隐藏）
-                msgEl.classList.add('narrow-mode');
-                msgEl.classList.remove('wide-mode');
-                isCollapsed = needsCollapsedNarrow;
-            }
-        }
-
-        if (isCollapsed) {
-            btnWrap.classList.add('collapsed');
-        }
-    };
-
-    if (sync) {
-        run();
-    } else {
-        requestAnimationFrame(run);
-    }
-}
-
-/**
- * 切换操作按钮弹出菜单（更多按钮点击时）
- */
-function toggleActionPopup(msgEl, moreBtn) {
-    const existing = msgEl.querySelector('.action-popup');
-    if (existing) {
-        existing.remove();
-        return;
-    }
-
-    const btnWrap = msgEl.querySelector('.action-buttons');
-    if (!btnWrap) return;
-
-    const hiddenButtons = [];
-    btnWrap.querySelectorAll('button:not(.more-btn)').forEach(btn => {
-        hiddenButtons.push({ html: btn.innerHTML, title: btn.title });
-    });
-
-    if (hiddenButtons.length === 0) return;
-
-    const popup = document.createElement('div');
-    popup.className = 'action-popup';
-    popup.addEventListener('click', (e) => e.stopPropagation());
-
-    hiddenButtons.forEach((btnInfo, index) => {
-        const item = document.createElement('button');
-        item.innerHTML = btnInfo.html;
-        item.title = btnInfo.title;
-        item.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const allBtns = btnWrap.querySelectorAll('button:not(.more-btn)');
-            if (allBtns[index]) {
-                allBtns[index].click();
-            }
-            popup.remove();
-        });
-        popup.appendChild(item);
-    });
-
-    // 追加到 body，脱离消息气泡的层级约束
-    document.body.appendChild(popup);
-
-    // 用 getBoundingClientRect 计算位置（水平弹出）
-    const rect = msgEl.getBoundingClientRect();
-    const gap = 4;
-    if (msgEl.classList.contains('ai-msg-user')) {
-        // 用户消息：弹窗在气泡左侧
-        popup.style.left = (rect.left - popup.offsetWidth - gap) + 'px';
-    } else {
-        // AI 消息：弹窗在气泡右侧
-        popup.style.left = (rect.right + gap) + 'px';
-    }
-    popup.style.top = (rect.top) + 'px';
-    popup.style.position = 'fixed';
-
-    const closeHandler = (ev) => {
-        if (!popup.contains(ev.target) && ev.target !== moreBtn) {
-            popup.remove();
-            document.removeEventListener('click', closeHandler);
-        }
-    };
-    setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
 
 /**
@@ -3245,9 +3023,9 @@ function enterEditMode(msgEl, originalContent) {
     }, 50);
 
     const actions = msgEl.querySelector('.ai-msg-actions');
-    const btnWrap = actions?.querySelector('.action-buttons');
-    if (btnWrap) btnWrap.style.display = 'none';
-    // 编辑模式下隐藏用户消息的 token 脚标（绝对定位会挡住编辑按钮）
+    const moreBtn = actions?.querySelector('.more-btn');
+    if (moreBtn) moreBtn.style.display = 'none';
+    // 编辑模式下隐藏用户消息的 token 脚标
     const tokensEl = actions?.querySelector('.user-tokens');
     if (tokensEl) tokensEl.style.display = 'none';
 
@@ -3296,8 +3074,8 @@ function cancelEdit(msgEl) {
     const editActions = msgEl.querySelector('.ai-msg-edit-actions');
     if (editActions) editActions.remove();
 
-    const btnWrap = msgEl.querySelector('.action-buttons');
-    if (btnWrap) btnWrap.style.display = '';
+    const moreBtn = msgEl.querySelector('.more-btn');
+    if (moreBtn) moreBtn.style.display = '';
 
     const tokensEl = msgEl.querySelector('.user-tokens');
     if (tokensEl) tokensEl.style.display = '';
@@ -3500,7 +3278,6 @@ async function handleResend(msgEl) {
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
-        collapseActionsIfNeeded(newUserMsgEl);
     }
     chatHistory.push({ role: 'user', content, tokens: 0 });
     updateContextSize();
