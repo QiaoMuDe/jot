@@ -2474,7 +2474,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         try { recallCards = JSON.parse(recallCards); } catch (_) { recallCards = null; }
     }
 
-    // 渲染搜索来源折叠面板
+    // 渲染搜索来源折叠面板（按 source_label 分组）
     if (role === 'assistant' && searchSources && searchSources.length > 0) {
         const details = document.createElement('details');
         details.className = 'search-sources';
@@ -2485,21 +2485,47 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         details.appendChild(summary);
         const list = document.createElement('div');
         list.className = 'search-sources-content';
-        searchSources.forEach(function(src, i) {
-            const item = document.createElement('div');
-            item.className = 'search-sources-item';
-            var link = document.createElement('a');
-            link.href = src.url;
-            link.textContent = (i + 1) + '. ' + src.title;
-            item.appendChild(link);
-            if (src.content) {
-                var snippet = document.createElement('p');
-                snippet.className = 'search-sources-snippet';
-                snippet.textContent = src.content;
-                item.appendChild(snippet);
-            }
-            list.appendChild(item);
+
+        // 按 source_label 分组
+        var groups = {};
+        searchSources.forEach(function(src) {
+            var label = src.source_label || 'unknown';
+            if (!groups[label]) groups[label] = [];
+            groups[label].push(src);
         });
+
+        // 来源标签显示名称映射
+        var groupLabels = {
+            'tavily': '📡 Tavily搜索',
+            'zhihu_search': '📖 知乎搜索',
+            'zhihu_global': '🌍 全网搜索',
+        };
+
+        var groupOrder = ['tavily', 'zhihu_search', 'zhihu_global'];
+        groupOrder.forEach(function(labelKey) {
+            var items = groups[labelKey];
+            if (!items || items.length === 0) return;
+            var groupHeader = document.createElement('div');
+            groupHeader.className = 'search-sources-group-header';
+            groupHeader.textContent = groupLabels[labelKey] || labelKey + ' (' + items.length + ')';
+            list.appendChild(groupHeader);
+            items.forEach(function(src, idx) {
+                var item = document.createElement('div');
+                item.className = 'search-sources-item';
+                var link = document.createElement('a');
+                link.href = src.url;
+                link.textContent = (idx + 1) + '. ' + src.title;
+                item.appendChild(link);
+                if (src.content) {
+                    var snippet = document.createElement('p');
+                    snippet.className = 'search-sources-snippet';
+                    snippet.textContent = src.content;
+                    item.appendChild(snippet);
+                }
+                list.appendChild(item);
+            });
+        });
+
         details.appendChild(list);
         el.appendChild(details);
     }

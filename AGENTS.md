@@ -2472,3 +2472,15 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[note_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/note_service.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[models.ts](file:///d:/峡谷/Dev/本地项目/jot/frontend/wailsjs/go/models.ts) |
 
 | **update 计数** | `AGENTS.md` 从更新 126 → 更新 127 |
+
+## 一百七十一、新增记忆点（搜索来源切换会话后分组丢失修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 联网搜索的搜索来源在流式完成后正常按来源分组展示（Tavily/知乎搜索/全网搜索各自分组），但切换会话或重启程序后，搜索来源变成平铺的 15 条排序列表，不再分组。详见 [ai-chat.js#L2477-L2504](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **根因** | 搜索来源渲染存在两套代码路径：① `unsubDone` 回调（实时流式完成后）按 `source_label` 分组渲染；② `addMessage` 函数（从数据库加载历史消息时）直接平铺遍历，无分组逻辑。切换会话或重启后走的是 `addMessage` 路径。详见 [ai-chat.js#L2084-L2138](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) (分组版) vs [ai-chat.js#L2477-L2504](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) (平铺版) |
+| **修复** | 将 `addMessage` 中的搜索来源渲染改为与 `unsubDone` 一致的按 `source_label` 分组逻辑：先按 `source_label` 分组 → 按固定顺序（tavily → zhihu_search → zhihu_global）展示分组标题（📡 Tavily搜索/📖 知乎搜索/🌍 全网搜索）→ 组内从 1 开始编号。详见 [ai-chat.js#L2477-L2531](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **效果** | 无论实时流式完成、切换会话还是重启程序，搜索来源的展示始终按来源分组且顺序一致。 |
+
+| **update 计数** | `AGENTS.md` 从更新 127 → 更新 128 |
