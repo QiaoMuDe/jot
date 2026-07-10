@@ -2126,12 +2126,6 @@ function startStreaming(isRegenerate = false, systemContext = '') {
                     var link = document.createElement('a');
                     link.href = src.url;
                     link.textContent = (idx + 1) + '. ' + src.title;
-                    link.addEventListener('click', (function(url) {
-                        return function(e) {
-                            e.preventDefault();
-                            window.runtime.BrowserOpenURL(url);
-                        };
-                    })(src.url));
                     item.appendChild(link);
                     if (src.content) {
                         var snippet = document.createElement('p');
@@ -2498,12 +2492,6 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
             var link = document.createElement('a');
             link.href = src.url;
             link.textContent = (i + 1) + '. ' + src.title;
-            link.addEventListener('click', (function(url) {
-                return function(e) {
-                    e.preventDefault();
-                    window.runtime.BrowserOpenURL(url);
-                };
-            })(src.url));
             item.appendChild(link);
             if (src.content) {
                 var snippet = document.createElement('p');
@@ -4209,6 +4197,7 @@ function renderFileChips() {
             renderFileChips();
         });
     }
+
 }
 
 /**

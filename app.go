@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"jot/internal/aicli"
 	"jot/internal/database"
 	"jot/internal/fontutil"
 	"jot/internal/models"
@@ -1075,7 +1077,13 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				// 精炼 query
 				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
 				if err != nil {
-					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, "搜索关键词精炼失败: "+err.Error())
+					var aiErr *aicli.AIErrorWrapper
+					if errors.As(err, &aiErr) {
+						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
+					} else {
+						ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
+						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
+					}
 					return
 				}
 				if refinedQuery != "" {
