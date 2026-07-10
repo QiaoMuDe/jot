@@ -533,8 +533,16 @@
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">引用截断</span>
                         <div class="ai-setting-control">
-                            <input type="number" id="aiRefMaxChars" class="settings-input" value="5000" min="1" max="50000" style="width:100px;" />
+                            <input type="number" id="aiRefMaxChars" class="settings-input" value="10000" min="1" max="100000" style="width:100px;" />
                             <span class="ai-setting-hint" style="white-space:nowrap;">字符/条</span>
+                        </div>
+                    </div>
+                    <!-- 最大文件限制数 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">最大文件限制数</span>
+                        <div class="ai-setting-control">
+                            <input type="number" id="maxFileSize" class="settings-input" value="1" min="1" max="100" style="width:80px;" />
+                            <span class="ai-setting-hint" style="white-space:nowrap;">MB</span>
                         </div>
                     </div>
                     <!-- 卡片召回 -->

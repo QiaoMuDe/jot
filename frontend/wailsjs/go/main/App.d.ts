@@ -98,6 +98,8 @@ export function GetBackupInfo():Promise<Record<string, string>>;
 
 export function GetDataStats():Promise<services.DataStats>;
 
+export function GetMaxFileSize():Promise<number>;
+
 export function GetNote(arg1:number):Promise<models.Note>;
 
 export function GetNoteContent(arg1:number):Promise<string>;

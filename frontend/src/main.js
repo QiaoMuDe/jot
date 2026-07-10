@@ -2272,12 +2272,37 @@ async function initAISettings() {
         refMaxChars.addEventListener('change', async () => {
             const val = parseInt(refMaxChars.value);
             if (isNaN(val) || val < 1) {
-                refMaxChars.value = 5000;
-                nm.show('截断字数必须大于 0，已重置为 5000', 'warning');
+                refMaxChars.value = 10000;
+                nm.show('截断字数必须大于 0，已重置为 10000', 'warning');
+                return;
+            }
+            if (val > 100000) {
+                refMaxChars.value = 100000;
+                nm.show('截断字数不能超过 100000，已重置为 100000', 'warning');
                 return;
             }
             await saveSettings();
             nm.show('引用截断字数已保存', 'success');
+        });
+    }
+
+    // ── 最大文件限制数自动保存 ──
+    const maxFileSize = document.getElementById('maxFileSize');
+    if (maxFileSize) {
+        maxFileSize.addEventListener('change', async () => {
+            const val = parseInt(maxFileSize.value);
+            if (isNaN(val) || val < 1) {
+                maxFileSize.value = 1;
+                nm.show('最大文件限制数必须大于 0，已重置为 1', 'warning');
+                return;
+            }
+            if (val > 100) {
+                maxFileSize.value = 100;
+                nm.show('最大文件限制数不能超过 100，已重置为 100', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('最大文件限制数已保存（' + val + ' MB）', 'success');
         });
     }
 
@@ -7640,6 +7665,9 @@ async function loadSettings() {
         const refMaxChars = document.getElementById('aiRefMaxChars');
         if (refMaxChars) refMaxChars.value = cfg.ai_ref_max_chars;
 
+        const maxFileSize = document.getElementById('maxFileSize');
+        if (maxFileSize) maxFileSize.value = cfg.max_file_size;
+
         const searchResultLimit = document.getElementById('aiSearchResultLimit');
         if (searchResultLimit) searchResultLimit.value = cfg.ai_search_result_limit;
 
@@ -7698,6 +7726,7 @@ async function saveSettings() {
             ai_card_recall_enabled: document.getElementById('aiSettingCardRecallToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
             ai_ref_max_chars: parseInt(document.getElementById('aiRefMaxChars')?.value) || 1000,
+            max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
         };

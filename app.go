@@ -767,28 +767,41 @@ func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
 	return a.settingService.SaveAllSettings(cfg)
 }
 
-// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 5000
+// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 10000
 func (a *App) GetAIRefMaxChars() int {
 	val := a.settingService.Get("ai_ref_max_chars")
 	n, err := strconv.Atoi(val)
 	if err != nil || n <= 0 {
-		return 5000
+		return 10000
 	}
-	if n > 50000 {
-		return 50000
+	if n > 100000 {
+		return 100000
 	}
 	return n
 }
 
-// SetAIRefMaxChars 设置 AI 引用笔记截断字数，含范围校验（1-50000）
+// SetAIRefMaxChars 设置 AI 引用笔记截断字数，含范围校验（1-100000）
 func (a *App) SetAIRefMaxChars(chars int) error {
 	if chars <= 0 {
 		return fmt.Errorf("截断字数必须大于 0")
 	}
-	if chars > 50000 {
-		return fmt.Errorf("截断字数不能超过 50000")
+	if chars > 100000 {
+		return fmt.Errorf("截断字数不能超过 100000")
 	}
 	return a.settingService.Set("ai_ref_max_chars", strconv.Itoa(chars))
+}
+
+// GetMaxFileSize 获取最大文件限制大小（字节），空值时返回默认 1MB
+func (a *App) GetMaxFileSize() int64 {
+	val := a.settingService.Get("max_file_size")
+	n, err := strconv.Atoi(val)
+	if err != nil || n <= 0 {
+		return 1 * 1024 * 1024
+	}
+	if n > 100 {
+		n = 100
+	}
+	return int64(n) * 1024 * 1024
 }
 
 // GetAISearchResultLimit 获取 AI 联网搜索结果数，空值时返回默认 5
@@ -962,7 +975,7 @@ func (a *App) ReadAIChatFiles(paths []string) []AIChatFileResult {
 
 // readAIChatFiles 内部方法：校验、读取、截断一组文件（按钮上传和拖拽上传共用）
 func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
-	const maxSize int64 = 10 * 1024 * 1024 // 10MB
+	maxSize := a.GetMaxFileSize()
 
 	var results []AIChatFileResult
 
@@ -986,7 +999,8 @@ func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 
 		// 文件大小限制
 		if info.Size() > maxSize {
-			result.Error = "文件过大（超过 10MB），请选择小于 10MB 的文件"
+			maxSizeMB := maxSize / (1024 * 1024)
+			result.Error = fmt.Sprintf("文件过大（超过 %dMB），请选择小于 %dMB 的文件", maxSizeMB, maxSizeMB)
 			results = append(results, result)
 			continue
 		}
@@ -1222,11 +1236,11 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 						}
 					}
 				}
-				// 读取引用截断阈值（默认 5000）
-				maxChars := 5000
+				// 读取引用截断阈值（默认 10000）
+				maxChars := 10000
 				if a.settingService != nil {
 					if val := a.settingService.Get("ai_ref_max_chars"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 50000 {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 100000 {
 							maxChars = n
 						}
 					}
@@ -1982,7 +1996,7 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 		}}
 	}
 
-	const maxSize int64 = 10 * 1024 * 1024 // 10MB
+	maxSize := a.GetMaxFileSize()
 	var results []FileImportResult
 
 	for _, p := range paths {
@@ -2005,7 +2019,8 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 
 		// 文件大小限制
 		if info.Size() > maxSize {
-			result.Error = "文件过大（超过 10MB），无法导入"
+			maxSizeMB := maxSize / (1024 * 1024)
+			result.Error = fmt.Sprintf("文件过大（超过 %dMB），无法导入", maxSizeMB)
 			results = append(results, result)
 			continue
 		}

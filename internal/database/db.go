@@ -516,7 +516,8 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "tavily_search_enabled", Value: "false"},
 		{Key: "ai_card_recall_enabled", Value: "false"},
 		{Key: "ai_card_recall_limit", Value: "5"},
-		{Key: "ai_ref_max_chars", Value: "5000"},
+		{Key: "ai_ref_max_chars", Value: "10000"},
+		{Key: "max_file_size", Value: "1"},
 		{Key: "ai_search_result_limit", Value: "5"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},
 	}

@@ -75,6 +75,7 @@ type SettingsConfig struct {
 	AICardRecallEnabled       bool   `json:"ai_card_recall_enabled"`
 	AICardRecallLimit         int    `json:"ai_card_recall_limit"`
 	AIRefMaxChars             int    `json:"ai_ref_max_chars"`
+	MaxFileSize               int    `json:"max_file_size"`
 	AISearchResultLimit       int    `json:"ai_search_result_limit"`
 	TrashCleanupRetentionDays int    `json:"trash_cleanup_retention_days"`
 }
@@ -103,7 +104,8 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		TavilySearchEnabled:       parseBoolSetting(s.Get("tavily_search_enabled")),
 		AICardRecallEnabled:       parseBoolSetting(s.Get("ai_card_recall_enabled")),
 		AICardRecallLimit:         parseIntSetting(s.Get("ai_card_recall_limit"), 5),
-		AIRefMaxChars:             parseIntSetting(s.Get("ai_ref_max_chars"), 5000),
+		AIRefMaxChars:             parseIntSetting(s.Get("ai_ref_max_chars"), 10000),
+		MaxFileSize:               parseIntSetting(s.Get("max_file_size"), 1),
 		AISearchResultLimit:       parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		TrashCleanupRetentionDays: parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 	}
@@ -127,9 +129,14 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		cfg.AICardRecallLimit = 30
 	}
 	if cfg.AIRefMaxChars < 1 {
-		cfg.AIRefMaxChars = 5000
-	} else if cfg.AIRefMaxChars > 50000 {
-		cfg.AIRefMaxChars = 50000
+		cfg.AIRefMaxChars = 10000
+	} else if cfg.AIRefMaxChars > 100000 {
+		cfg.AIRefMaxChars = 100000
+	}
+	if cfg.MaxFileSize < 1 {
+		cfg.MaxFileSize = 1
+	} else if cfg.MaxFileSize > 100 {
+		cfg.MaxFileSize = 100
 	}
 	if cfg.AISearchResultLimit < 1 {
 		cfg.AISearchResultLimit = 5
@@ -165,6 +172,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_card_recall_enabled":       strconv.FormatBool(cfg.AICardRecallEnabled),
 		"ai_card_recall_limit":         strconv.Itoa(cfg.AICardRecallLimit),
 		"ai_ref_max_chars":             strconv.Itoa(cfg.AIRefMaxChars),
+		"max_file_size":                strconv.Itoa(cfg.MaxFileSize),
 		"ai_search_result_limit":       strconv.Itoa(cfg.AISearchResultLimit),
 		"trash_cleanup_retention_days": strconv.Itoa(cfg.TrashCleanupRetentionDays),
 	}

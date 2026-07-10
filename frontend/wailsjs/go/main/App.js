@@ -190,6 +190,10 @@ export function GetDataStats() {
   return window['go']['main']['App']['GetDataStats']();
 }
 
+export function GetMaxFileSize() {
+  return window['go']['main']['App']['GetMaxFileSize']();
+}
+
 export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }

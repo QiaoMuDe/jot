@@ -130,15 +130,23 @@ func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
 		return nil, fmt.Errorf("query note ref rows: %w", err)
 	}
 
-	// 从设置动态读取单条笔记截断字数，默认 5000
-	maxPerNote := 5000
+	// 从设置动态读取单条笔记截断字数，默认 10000
+	maxPerNote := 10000
 	if s.settingService != nil {
 		val := s.settingService.Get("ai_ref_max_chars")
 		if n, err := strconv.Atoi(val); err == nil && n > 0 {
 			maxPerNote = n
 		}
 	}
-	const maxTotalChars = 10 * 1024 * 1024 // 总上下文最大字节数（10MB）
+	// 从设置动态读取最大文件限制数（转换为字节），默认 1MB
+	maxTotalChars := 1 * 1024 * 1024
+	if s.settingService != nil {
+		if val := s.settingService.Get("max_file_size"); val != "" {
+			if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 100 {
+				maxTotalChars = n * 1024 * 1024
+			}
+		}
+	}
 
 	notes := make([]NoteRefInfo, 0, len(rows))
 	var parts []string
