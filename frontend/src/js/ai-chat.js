@@ -2339,7 +2339,17 @@ function renderMarkdown(el, content, deferHighlight) {
         const code = pre.querySelector('code');
         if (!code) return;
 
-        // 复制按钮 (先放 pre 内部, 和笔记预览模式一致) 
+        // 语言信息
+        const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
+        const lang = langClass ? langClass.replace('language-', '') : '';
+
+        // 始终用 pre-wrapper 包裹，为绝对定位的复制按钮提供非滚动定位容器
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pre-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        // 复制按钮 (放在 pre-wrapper 内、pre 外部，避免随 pre 滚动)
         const copyBtn = document.createElement('button');
         const isSingleLine = code && !code.textContent.trim().includes('\n');
         copyBtn.className = 'code-copy-btn' + (isSingleLine ? ' code-copy-btn--single' : '');
@@ -2359,17 +2369,10 @@ function renderMarkdown(el, content, deferHighlight) {
                 setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
             }
         });
-        pre.appendChild(copyBtn);
+        wrapper.appendChild(copyBtn);
 
-        // 语言标签 (需 wrapper 作定位容器) 
-        const langClass = Array.from(code.classList).find(cls => cls.startsWith('language-'));
-        const lang = langClass ? langClass.replace('language-', '') : '';
+        // 语言标签
         if (lang) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'pre-wrapper';
-            pre.parentNode.insertBefore(wrapper, pre);
-            wrapper.appendChild(pre);
-
             const badge = document.createElement('span');
             badge.className = 'code-lang-badge';
             badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);

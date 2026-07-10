@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-10（更新 123）
+> 生成日期: 2026-07-10（更新 126）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2446,3 +2446,16 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **前端 CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：移除 `.action-buttons` 悬停渐显、`.action-popup` 弹出菜单、`.more-btn`、`.action-buttons.collapsed` 等规则；移除 `.ai-msg-user.narrow-mode`/`.wide-mode` 按钮定位规则；`.user-tokens` 从 absolute 改为 inline 常驻显示；新增 `#aiMsgContextMenu .context-menu-item` flex 布局 + `#aiMsgContextMenu .ctx-item-icon` 样式；`.ai-msg-user .ai-msg-actions` 改为 flex 布局 |
 | **全局 CSS 变更** | [main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)：`.context-menu` 新增 `--ctx-inset: 14px` 自定义属性，`.context-menu-item` 的 padding 和 `.context-menu-divider` 的 margin 统一引用该变量，分隔线宽度自动跟随菜单项宽度 |
 | **菜单宽度** | 菜单宽度从 160px 增加到 180px，适配图标+文字布局 |
+
+| **update 计数** | `AGENTS.md` 从更新 125 → 更新 126 |
+
+## 一百六十九、新增记忆点（AI 代码块复制按钮固定修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题现象** | AI 消息代码块的"复制"按钮位于代码块右上角，当代码内容超出宽度出现水平滚动条时，拖动滚动条会导致复制按钮跟随代码内容水平移动 |
+| **根因** | 复制按钮 `.code-copy-btn` 通过 `pre.appendChild(copyBtn)` 追加到 `<pre>` 内部，而 `<pre>` 有 `overflow-x: auto` 且 `position: relative`。当 `<pre>` 水平滚动时，其内部的绝对定位子元素也随之偏移 |
+| **修复方案** | 将复制按钮移出 `<pre>`（滚动容器），放到 `.pre-wrapper`（不滚动）内。同时始终创建 `.pre-wrapper` 包裹器（之前仅在有语言标签时才创建），统一有无语言标签的 DOM 结构 |
+| **前端 JS 变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2342-L2381)：将 `pre.appendChild(copyBtn)` 改为 `wrapper.appendChild(copyBtn)`；包装逻辑提前，始终为 `<pre>` 创建 `.pre-wrapper`。新 DOM：`.pre-wrapper` > `.code-copy-btn` + `<pre>` + `.code-lang-badge`（可选） |
+| **前端 CSS 变更** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)：移除 `.ai-msg-assistant pre` 的 `position: relative`；悬浮显现选择器从 `.ai-msg-assistant pre:hover .code-copy-btn` 改为 `.ai-msg-assistant .pre-wrapper:hover .code-copy-btn` |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |

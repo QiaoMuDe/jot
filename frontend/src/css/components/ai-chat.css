@@ -180,7 +180,6 @@
     margin: 0.5em 0;
     overflow-x: auto;
     overflow-y: hidden;
-    position: relative;
     font-size: 0.82em;
     line-height: 1.5;
     /* 与编辑器 .md-rendered 一致的滚动条控制 */
@@ -251,7 +250,7 @@
     z-index: 1;
     color: var(--text-muted);
 }
-.ai-msg-assistant pre:hover .code-copy-btn,
+.ai-msg-assistant .pre-wrapper:hover .code-copy-btn,
 .ai-msg-assistant .code-copy-btn:hover {
     opacity: 1;
 }
