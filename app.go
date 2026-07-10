@@ -125,6 +125,39 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
+	// 迁移存量明文密钥为 Base64 编码格式（放在旧迁移之后，确保旧迁移逻辑读到的是明文）
+	a.migrateSensitiveKeys()
+}
+
+// migrateSensitiveKeys 迁移存量明文密钥为 Base64 编码格式（(zk) 前缀）
+func (a *App) migrateSensitiveKeys() {
+	// 迁移 settings 表
+	keys := []string{"ai_api_key", "tavily_api_key", "zhihu_access_secret"}
+	for _, key := range keys {
+		var setting models.Setting
+		if err := a.db.Where("key = ?", key).First(&setting).Error; err != nil {
+			continue // 无记录则跳过
+		}
+		val := setting.Value
+		if val == "" || strings.HasPrefix(val, "(zk)") {
+			continue
+		}
+		encoded := services.EncodeB64(val)
+		a.db.Model(&setting).Update("value", encoded)
+		fmt.Printf("迁移密钥：%s 已编码\n", key)
+	}
+
+	// 迁移 api_profiles 表的 api_key 字段
+	var profiles []models.APIProfile
+	a.db.Find(&profiles)
+	for _, p := range profiles {
+		if p.APIKey == "" || strings.HasPrefix(p.APIKey, "(zk)") {
+			continue
+		}
+		encoded := services.EncodeB64(p.APIKey)
+		a.db.Model(&models.APIProfile{}).Where("id = ?", p.ID).Update("api_key", encoded)
+		fmt.Printf("迁移预设密钥：%s 已编码\n", p.Name)
+	}
 }
 
 // ==================== 图片相关方法 ====================
@@ -762,9 +795,24 @@ func (a *App) GetAllSettings() services.SettingsConfig {
 	return a.settingService.GetAllSettings()
 }
 
-// SaveAllSettings 保存全部设置项
+// SaveAllSettings 保存全部设置项，无预设时自动创建默认配置
 func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
-	return a.settingService.SaveAllSettings(cfg)
+	if err := a.settingService.SaveAllSettings(cfg); err != nil {
+		return err
+	}
+	// 无预设时自动创建"默认配置"
+	profiles := a.profileService.ListProfiles()
+	if len(profiles) == 0 && cfg.AIBaseURL != "" && cfg.AIAPIKey != "" {
+		provider := cfg.AIProvider
+		if provider == "" {
+			provider = "openai"
+		}
+		profile := a.profileService.CreateProfile("默认配置", provider, cfg.AIBaseURL, cfg.AIAPIKey, true)
+		if err := a.profileService.SetActive(profile.ID); err != nil {
+			fmt.Printf("警告：激活默认配置失败: %v\n", err)
+		}
+	}
+	return nil
 }
 
 // GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 10000

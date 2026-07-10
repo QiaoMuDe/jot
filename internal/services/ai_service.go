@@ -69,7 +69,7 @@ func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
 // GetConfig 从 SettingService 读取 AI 配置
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
-	return AIConfig{
+	cfg := AIConfig{
 		Provider:          svc.Get("ai_provider"),
 		BaseURL:           svc.Get("ai_base_url"),
 		APIKey:            svc.Get("ai_api_key"),
@@ -77,6 +77,10 @@ func (a *AIService) GetConfig() AIConfig {
 		TavilyAPIKey:      svc.Get("tavily_api_key"),
 		ZhihuAccessSecret: svc.Get("zhihu_access_secret"),
 	}
+	cfg.APIKey = DecodeB64(cfg.APIKey)
+	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
+	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
+	return cfg
 }
 
 // SaveConfig 保存 AI 配置到 SettingService
@@ -88,16 +92,16 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 	if err := svc.Set("ai_base_url", cfg.BaseURL); err != nil {
 		return err
 	}
-	if err := svc.Set("ai_api_key", cfg.APIKey); err != nil {
+	if err := svc.Set("ai_api_key", EncodeB64(cfg.APIKey)); err != nil {
 		return err
 	}
 	if err := svc.Set("ai_model", cfg.Model); err != nil {
 		return err
 	}
-	if err := svc.Set("tavily_api_key", cfg.TavilyAPIKey); err != nil {
+	if err := svc.Set("tavily_api_key", EncodeB64(cfg.TavilyAPIKey)); err != nil {
 		return err
 	}
-	return svc.Set("zhihu_access_secret", cfg.ZhihuAccessSecret)
+	return svc.Set("zhihu_access_secret", EncodeB64(cfg.ZhihuAccessSecret))
 }
 
 // CallAI 调用 AI 接口（非流式）
@@ -191,7 +195,10 @@ func testOpenAIConnection(cfg AIConfig) (bool, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return true, nil
+	}
+	return false, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
 }
 
 // testOllamaConnection 测试 Ollama 连通性（调用 /api/tags）
@@ -210,7 +217,10 @@ func testOllamaConnection(cfg AIConfig) (bool, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	return resp.StatusCode >= 200 && resp.StatusCode < 300, nil
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return true, nil
+	}
+	return false, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
 }
 
 // testGenericConnection 通过创建 AI 客户端并执行简单调用来测试连通性

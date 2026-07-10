@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-10（更新 126）
+> 生成日期: 2026-07-10（更新 129）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -37,7 +37,14 @@ jot/                                    # 项目根目录
 │       ├── setting_service.go          # 配置读写
 │       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
 │       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
-│       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult 等）
+│       ├── profile_service.go          # API 配置预设 CRUD + 切换/激活
+│       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
+│       ├── search_service.go           # 通用网页搜索（Tavily API）
+│       ├── zhihu_search_service.go     # 知乎搜索 + 全网搜索
+│       ├── recall_service.go           # 卡片召回（AI 引用笔记）
+│       ├── query_refiner.go            # 搜索 Query 精炼
+│       ├── notebook_service.go         # 笔记本 CRUD
+│       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，7 个视图
@@ -457,7 +464,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | 风险点 | 评估 |
 |--------|------|
 | **本地数据库** | SQLite 文件本地存储，无远程访问风险 |
-| **API Key 存储** | 明文存储在 Setting KV 表中，未加密 |
+| **API Key 存储** | Base64 编码存储在 DB 中，带 `(zk)` 前缀标识，前端读写均为解码后明文。仅防肉眼查看，非真实加密 |
 | **XSS 风险** | AI 回复经 `marked.parse()` 渲染，`marked` 默认 Sanitize |
 
 ---
@@ -1350,7 +1357,7 @@ await loadXxxSetting();
 | **新增数据表 api_profiles** | `APIProfile` 结构体（ID/Name/Provider/BaseURL/APIKey/IsDefault/IsActive/CreatedAt），GORM AutoMigrate 自动建表。详见 [api_profile.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/models/api_profile.go) |
 | **后端 Service 层** | `ProfileService` 提供 5 个方法：`ListProfiles()`、`CreateProfile()`、`UpdateProfile()`、`DeleteProfile()`（默认配置不可删除）、`SwitchProfile(id)`（写入 settings + 标记激活）。新增 `SetActive(id)`（仅改标记不碰 model）。详见 [profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go) |
 | **后端启动迁移** | 启动时检测 `api_profiles` 表有无记录且 settings 表有 `ai_base_url` 配置，零配置时自动从旧 settings 创建"默认配置"（`IsDefault: true`）并激活。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L60-L98) |
-| **SaveAIConfig 兜底** | 保存设置时检测无任何预设配置，自动创建"默认配置"并激活，确保首次配置的用户也能开箱即用。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L609-L619) |
+| **SaveAllSettings/SaveAIConfig 兜底** | `SaveAllSettings()` 和 `SaveAIConfig()` 在保存设置时检测无任何预设配置，自动创建"默认配置"并激活，确保首次配置的用户也能开箱即用。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go#L798-L815) |
 | **Wails 绑定** | `app.go` 新增 5 个绑定：`GetProfiles`、`CreateProfile`、`UpdateProfile`、`DeleteProfile`、`SwitchProfile`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L537-L560) |
 | **前端预设下拉** | 设置页 API 连接区顶部新增预设选择行：`<select>` 风格下拉（`.preset-selector`）+「新增」「管理」按钮。切换时调用 `SwitchProfile(id)` → 自动填充 URL/Key/服务商 → 重置模型下拉。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `switchProfile()` / `loadProfiles()` |
 | **前端预设管理** | 点击「管理」展开折叠面板 `#presetMgrBody`，列表展示各预设（服务商标签 + 名称 + URL），每行有编辑/删除按钮。「默认配置」永久不可删除（`$p.is_default` 隐藏删除按钮 + 后端保护）。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) `renderPresetMgrList()` |
@@ -2483,4 +2490,27 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **效果** | 无论实时流式完成、切换会话还是重启程序，搜索来源的展示始终按来源分组且顺序一致。 |
 
-| **update 计数** | `AGENTS.md` 从更新 127 → 更新 128 |
+## 一百七十二、新增记忆点（敏感密钥 Base64 编码存储）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 项目中 4 类密钥（ai_api_key、tavily_api_key、zhihu_access_secret、api_profile.api_key）在 DB 中明文存储，打开 SQLite 文件可一眼看到密码 |
+| **编码方案** | 使用 Base64 编码 + `(zk)` 前缀标识。存储格式：`(zk)base64string`。解码时检测前缀 `(zk)` → 截掉后 Base64 解码 → 返回明文；无前缀直接返回原值（兼容旧数据）。详见 [crypto.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/crypto.go) |
+| **后端写入编码** | `AIService.SaveConfig()` 写入前对 3 个 key 调 `EncodeB64()`、`ProfileService.CreateProfile/UpdateProfile` 写入前调 `EncodeB64()`、`SettingService.SaveAllSettings()` 写入前调 `EncodeB64()`、`SwitchProfile()` 读取已编码值直接写 settings 不重复编码 |
+| **后端读取解码** | `AIService.GetConfig()` 读取后对 3 个 key 调 `DecodeB64()`、`ProfileService.ListProfiles()` 遍历时解码每个 profile 的 APIKey、`SettingService.GetAllSettings()` 读取后解码 3 个 key |
+| **启动迁移** | `migrateSensitiveKeys()` 在 startup 中执行，遍历 settings 表的 ai_api_key/tavily_api_key/zhihu_access_secret 和 api_profiles 表的 api_key，检测 `(zk)` 前缀决定是否编码。幂等安全。详见 [app.go#L132-L161](file:///d:/峡谷/Dev/本地项目/jot/app.go#L132-L161) |
+| **前端无感** | 所有编解码在后端完成，前端始终读写明文。设置面板调用 `GetAllSettings()`/`SaveAllSettings()`，AI 对话调用 `GetConfig()`/`SaveConfig()`，API 预设调用 `GetProfiles()`/`CreateProfile()` 等，均在后端编解码 |
+| **涉及文件** | [crypto.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/crypto.go)（新建）、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[profile_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/profile_service.go)、[types.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/types.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+
+## 一百七十三、新增记忆点（测试连接通知提示优化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 设置页 3 个测试连接按钮的通知提示太笼统（如"连接成功！"、"API 地址连接失败"），无法帮助用户定位具体问题 |
+| **AI 地址测试** | 成功时显示 `"${provider} 服务连接成功"`；失败时显示 `"${provider} 服务连接失败，请检查地址和 Key 是否正确"`；异常时显示后端具体错误（含 HTTP 状态码）。详见 [main.js#L1871-L1878](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L1871-L1878) |
+| **Tavily 测试** | 成功时显示 `"Tavily API Key 验证成功，搜索服务可用"`；修复了之前忽略 ok 返回值的 bug，增加 ok 检查分支。详见 [main.js#L2071-L2081](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L2071-L2081) |
+| **知乎测试** | 成功时显示 `"知乎 Access Secret 验证成功，搜索服务可用"`；catch 分支去掉冗余的"连接失败: "前缀，直接展示后端具体错误。详见 [main.js#L2157-L2164](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L2157-L2164) |
+| **后端改进** | `testOpenAIConnection()` 和 `testOllamaConnection()` 非 2xx 状态码时从返回 `(false, nil)` 改为返回 `(false, "服务器返回状态码 %d")`，让前端 catch 到具体 HTTP 错误。详见 [ai_service.go#L198-L201](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go#L198-L201) |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
+
+| **update 计数** | `AGENTS.md` 从更新 128 → 更新 129 |

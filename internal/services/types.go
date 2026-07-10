@@ -82,7 +82,7 @@ type SettingsConfig struct {
 
 // GetAllSettings 从 SettingService 读取全部设置项
 func (s *SettingService) GetAllSettings() SettingsConfig {
-	return SettingsConfig{
+	cfg := SettingsConfig{
 		Theme:                     s.Get("theme"),
 		FontFamily:                s.Get("font_family"),
 		FontSize:                  parseIntSetting(s.Get("font_size"), 16),
@@ -109,6 +109,10 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AISearchResultLimit:       parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		TrashCleanupRetentionDays: parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 	}
+	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
+	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
+	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
+	return cfg
 }
 
 // SaveAllSettings 保存全部设置项到 SettingService，含类型校验
@@ -148,6 +152,10 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.TrashCleanupRetentionDays > 365 {
 		cfg.TrashCleanupRetentionDays = 365
 	}
+
+	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
+	cfg.TavilyAPIKey = EncodeB64(cfg.TavilyAPIKey)
+	cfg.ZhihuAccessSecret = EncodeB64(cfg.ZhihuAccessSecret)
 
 	sets := map[string]string{
 		"theme":                        cfg.Theme,

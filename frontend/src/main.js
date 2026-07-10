@@ -1870,12 +1870,12 @@ async function initAISettings() {
         try {
             const ok = await window.go.main.App.TestAIBaseURL(url, key);
             if (ok) {
-                nm.show('API 地址连接成功', 'success');
+                nm.show(provider + ' 服务连接成功', 'success');
             } else {
-                nm.show('API 地址连接失败，请检查地址', 'warning');
+                nm.show(provider + ' 服务连接失败，请检查地址和 Key 是否正确', 'warning');
             }
         } catch (e) {
-            nm.show('连接失败: ' + e, 'error');
+            nm.show(provider + ' 连接失败: ' + e, 'error');
         } finally {
             setBtnLoading(els.aiTestURLBtn, false);
         }
@@ -2070,10 +2070,14 @@ async function initAISettings() {
             }
             setBtnLoading(testBtn, true, '测试中…');
             try {
-                await window.go.main.App.TestTavilyConnection(key);
-                nm.show('连接成功！', 'success');
+                const ok = await window.go.main.App.TestTavilyConnection(key);
+                if (ok) {
+                    nm.show('Tavily API Key 验证成功，搜索服务可用', 'success');
+                } else {
+                    nm.show('Tavily 连接失败，请检查 API Key 是否正确', 'warning');
+                }
             } catch (e) {
-                nm.show('连接失败: ' + (e.message || e), 'error');
+                nm.show('Tavily 连接失败: ' + (e.message || e), 'error');
             } finally {
                 setBtnLoading(testBtn, false);
             }
@@ -2156,12 +2160,12 @@ async function initAISettings() {
             try {
                 const ok = await window.go.main.App.TestZhihuConnection(secret);
                 if (ok) {
-                    nm.show('知乎连接测试成功', 'success');
+                    nm.show('知乎 Access Secret 验证成功，搜索服务可用', 'success');
                 } else {
-                    nm.show('知乎连接测试失败', 'error');
+                    nm.show('知乎搜索连接失败，请检查 Access Secret 是否正确', 'warning');
                 }
             } catch (e) {
-                nm.show('连接失败: ' + (e.message || e), 'error');
+                nm.show(e.message || e, 'error');
             } finally {
                 setBtnLoading(testZhihuBtn, false);
             }

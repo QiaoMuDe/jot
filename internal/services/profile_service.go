@@ -21,6 +21,9 @@ func NewProfileService(db *gorm.DB) *ProfileService {
 func (p *ProfileService) ListProfiles() []models.APIProfile {
 	var profiles []models.APIProfile
 	p.db.Order("created_at desc").Find(&profiles)
+	for i := range profiles {
+		profiles[i].APIKey = DecodeB64(profiles[i].APIKey)
+	}
 	return profiles
 }
 
@@ -30,7 +33,7 @@ func (p *ProfileService) CreateProfile(name, provider, baseURL, apiKey string, i
 		Name:     name,
 		Provider: provider,
 		BaseURL:  baseURL,
-		APIKey:   apiKey,
+		APIKey:   EncodeB64(apiKey),
 	}
 	if len(isDefault) > 0 && isDefault[0] {
 		profile.IsDefault = true
@@ -45,7 +48,7 @@ func (p *ProfileService) UpdateProfile(id uint, name, provider, baseURL, apiKey 
 		"name":     name,
 		"provider": provider,
 		"base_url": baseURL,
-		"api_key":  apiKey,
+		"api_key":  EncodeB64(apiKey),
 	}).Error
 }
 
