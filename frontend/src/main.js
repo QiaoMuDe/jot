@@ -2542,7 +2542,8 @@ function openAddProfileModal() {
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === currentProvider));
     document.getElementById('presetModalProviderLabel').textContent =
         currentProvider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
-    document.getElementById('presetModalOverlay').classList.add('visible');
+    const overlay = document.getElementById('presetModalOverlay');
+    overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
@@ -2568,7 +2569,8 @@ function openEditProfileModal(id, name, provider, baseURL, apiKey) {
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === provider));
     document.getElementById('presetModalProviderLabel').textContent =
         provider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
-    document.getElementById('presetModalOverlay').classList.add('visible');
+    const overlay = document.getElementById('presetModalOverlay');
+    overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
@@ -2613,9 +2615,17 @@ async function savePresetModal() {
 }
 
 // 删除预设
-async function deleteProfile(id, name) {
+async function deleteProfile(id, name, rowEl) {
     const confirmed = await showConfirmDialog(`确定删除配置「${name}」吗？`);
     if (!confirmed) return;
+    // 先播放删除动画
+    if (rowEl) {
+        rowEl.classList.remove('preset-row-enter');
+        rowEl.classList.add('preset-delete-out');
+        await new Promise(resolve => {
+            rowEl.addEventListener('animationend', resolve, { once: true });
+        });
+    }
     try {
         await window.go.main.App.DeleteProfile(id);
         nm.show('配置已删除', 'success');
@@ -2635,6 +2645,16 @@ function renderPresetMgrList() {
         presetMgrContainer = document.createElement('div');
         presetMgrContainer.className = 'preset-mgr-list';
         presetMgrContainer.style.cssText = 'margin-top:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--input-bg);';
+        // 初始化滚动条自动显隐（仅第一次）
+        let timer = null;
+        presetMgrContainer.addEventListener('scroll', (e) => {
+            if (e.target !== presetMgrContainer) return;
+            presetMgrContainer.classList.add('scrolling');
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                presetMgrContainer.classList.remove('scrolling');
+            }, 1000);
+        });
         // 插入到管理按钮所在行的下方
         const presetRow = document.querySelector('.preset-select-row');
         if (presetRow) {
@@ -2669,10 +2689,13 @@ function renderPresetMgrList() {
             presetMgrContainer.appendChild(empty);
             return;
         }
-        profiles.forEach(p => {
+        profiles.forEach((p, index) => {
             const row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--radius-sm);gap:8px;';
             row.style.borderBottom = '1px solid var(--border)';
+            // 添加入场动画（错开延迟避免同时弹出）
+            row.classList.add('preset-row-enter');
+            row.style.animationDelay = `${index * 50}ms`;
             // 信息区
             const info = document.createElement('div');
             info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
@@ -2709,7 +2732,7 @@ function renderPresetMgrList() {
             } else {
                 delBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteProfile(p.id, p.name);
+                    deleteProfile(p.id, p.name, row);
                 });
             }
             actions.appendChild(editBtn);
@@ -5191,6 +5214,19 @@ function getScrollContainer() {
 async function handleKeyboardNavigation(e) {
     const container = getScrollContainer();
 
+    // Enter: 预设弹窗保存（需在 Ctrl 快捷键之前拦截）
+    if (e.key === 'Enter') {
+        const presetOverlay = document.getElementById('presetModalOverlay');
+        if (presetOverlay && presetOverlay.classList.contains('visible')) {
+            const providerDd = document.getElementById('presetModalProviderDropdown');
+            if (!(providerDd && providerDd.classList.contains('open'))) {
+                e.preventDefault();
+                savePresetModal();
+                return;
+            }
+        }
+    }
+
     // Ctrl+S: 编辑器内保存（编辑/新建模式有效，查看模式忽略）
     if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
@@ -5294,6 +5330,12 @@ async function handleKeyboardNavigation(e) {
         // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）
         const refModal = document.getElementById('aiNoteRefModal');
         if (refModal && refModal.style.display !== 'none') {
+            return;
+        }
+        // 预设弹窗打开时关闭它（不继续执行导航逻辑）
+        const presetOverlay = document.getElementById('presetModalOverlay');
+        if (presetOverlay && presetOverlay.classList.contains('visible')) {
+            closePresetModal();
             return;
         }
         // 关于页面打开时关闭它

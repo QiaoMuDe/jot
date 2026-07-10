@@ -732,7 +732,8 @@
 /* 预设管理列表 */
 .preset-mgr-list {
     margin-bottom: 16px;
-    overflow: hidden;
+    max-height: 500px;
+    overflow-y: auto;
     animation: mgrSlideDown 250ms ease-out both;
 }
 
@@ -880,4 +881,49 @@
     font-weight: 500;
     line-height: 1.5;
     flex-shrink: 0;
+}
+
+/* 预设删除项滑出动画 */
+.preset-delete-out {
+    animation: presetDeleteOut 300ms ease-in forwards;
+    overflow: hidden;
+}
+
+@keyframes presetDeleteOut {
+    0% {
+        opacity: 1;
+        transform: translateX(0);
+        max-height: 48px;
+        margin-bottom: 0;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+    60% {
+        opacity: 0.6;
+        transform: translateX(20px);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(40px);
+        max-height: 0;
+        margin-bottom: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+}
+
+/* 预设列表行入场动画 */
+.preset-row-enter {
+    animation: presetRowEnter 300ms ease-out both;
+}
+
+@keyframes presetRowEnter {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }

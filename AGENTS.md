@@ -2514,3 +2514,22 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) |
 
 | **update 计数** | `AGENTS.md` 从更新 128 → 更新 129 |
+
+## 一百七十一、新增记忆点（预设弹窗移除 overlay 键盘监听，改用全局键盘处理器）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 预设弹窗的 ESC（关闭）和 Enter（保存）快捷键需要在 overlay 上用 capture 阶段监听，但在 Wails/WebView2 环境中不可靠，ESC 仍会触发全局导航退回首页，Enter 需按两次 |
+| **修复：ESC** | 在全局 `handleKeyboardNavigation()` 的 ESC 分支中，于 refModal 检查之后、关于页面检查之前，添加预设弹窗可见性检测：visible 时 `closePresetModal()` + `return`，不继续执行 `switchView('grid')` |
+| **修复：Enter** | 在 `handleKeyboardNavigation()` 函数开头（所有 Ctrl 快捷键之前）拦截 Enter 键，检测预设弹窗可见 + 服务商下拉未打开时，`e.preventDefault()` + `savePresetModal()` + `return` |
+| **移除** | 删除了 overlay 上的 keydown 监听、全局 ESC 中的空检查代码、open 函数中不必要的 `overlay.focus()`、HTML 中不必要的 `tabindex="-1"`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) |
+
+## 一百七十二、新增记忆点（预设管理列表加入主滚动条自动显隐系统）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | `.preset-mgr-list` 没有加入已有的 `::-webkit-scrollbar-thumb` 自动显隐系统，鼠标悬停时不显示滚动块，滚动时也不稳定（有时出现有时不出现） |
+| **修复：CSS** | 在 [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 中为 `.preset-mgr-list` 添加与 `#mainContent`、`.search-results`、`.ai-chat-messages` 完全一致的滚动条规则：默认 `background: transparent`（隐藏）、`.scrolling` 类时显示、`:hover` 时显示、Firefox `scrollbar-width: thin` 兼容 |
+| **修复：JS** | 在 [renderPresetMgrList()](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L2649-L2658) 容器首次创建时绑定 scroll 监听，滚动中加 `.scrolling` 类，停止 1 秒后移除，行为与主内容区一致 |
+| **涉及文件** | [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
