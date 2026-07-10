@@ -31,7 +31,8 @@
 .search-modal-results::-webkit-scrollbar-button,
 .search-modal-filter-dropdown::-webkit-scrollbar-button,
 .ai-chat-messages::-webkit-scrollbar-button,
-.preset-mgr-list::-webkit-scrollbar-button {
+.preset-mgr-list::-webkit-scrollbar-button,
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-button {
     width: 0 !important;
     height: 0 !important;
     display: none !important;
@@ -60,11 +61,21 @@
     background: var(--scrollbar-thumb-hover);
 }
 
+/* 代码预览：始终显示滚动条滑块 */
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+.code-preview:hover .cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-hover);
+}
+
 /* 给 track 加一层极淡底色，让滚动条区域有存在感 */
 #mainContent::-webkit-scrollbar-track,
 .search-results::-webkit-scrollbar-track,
 .ai-chat-messages::-webkit-scrollbar-track,
-.preset-mgr-list::-webkit-scrollbar-track {
+.preset-mgr-list::-webkit-scrollbar-track,
+.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-track {
     background: transparent;
 }
 

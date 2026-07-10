@@ -488,8 +488,6 @@
 }
 
 .code-preview .cm-editor {
-    height: auto;
-    max-height: 200px;
     background: var(--input-bg);
 }
 
@@ -498,6 +496,9 @@
     font-size: 12px;
     padding: 10px;
     overflow: auto;
+    max-height: 200px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .code-preview .cm-editor .cm-gutters {
@@ -516,15 +517,6 @@
 
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-track {
     background: transparent;
-}
-
-.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
-}
-
-.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
 }
 
 /* ── AI 配置状态 ── */

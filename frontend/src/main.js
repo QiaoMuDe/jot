@@ -7491,8 +7491,8 @@ function buildCodePreview(container, themeName) {
         javascript(),
         EditorView.editable.of(false),
         EditorView.theme({
-            '&': { height: 'auto', maxHeight: '200px', backgroundColor: 'transparent' },
-            '.cm-scroller': { overflow: 'auto', fontFamily: 'Consolas, Monaco, monospace', fontSize: '12px' },
+            '&': { backgroundColor: 'transparent' },
+            '.cm-scroller': { overflow: 'auto', maxHeight: '200px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '12px' },
             '.cm-gutters': { display: 'none' },
             '.cm-line': { padding: '0 2px' },
             '.cm-editor': { outline: 'none' },

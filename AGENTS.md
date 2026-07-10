@@ -2533,3 +2533,16 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **修复：CSS** | 在 [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 中为 `.preset-mgr-list` 添加与 `#mainContent`、`.search-results`、`.ai-chat-messages` 完全一致的滚动条规则：默认 `background: transparent`（隐藏）、`.scrolling` 类时显示、`:hover` 时显示、Firefox `scrollbar-width: thin` 兼容 |
 | **修复：JS** | 在 [renderPresetMgrList()](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L2649-L2658) 容器首次创建时绑定 scroll 监听，滚动中加 `.scrolling` 类，停止 1 秒后移除，行为与主内容区一致 |
 | **涉及文件** | [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+## 一百七十三、新增记忆点（设置页代码演示滚动条始终显示）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 设置页代码高亮演示容器（`.code-preview`）的 `.cm-scroller` 滚动条一直隐藏。初始进入设置页时偶尔可见，但滑动后即消失 |
+| **根因 1：父容器 `overflow: hidden` 裁剪** | 在 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css#L486) 中 `.code-preview` 设置了 `overflow: hidden` + `border-radius`，子元素 `.cm-scroller` 的 6px 宽滚动条被圆角区域 + overflow hidden 裁剪掉 |
+| **根因 2：`max-height` 作用对象错误** | `max-height: 200px` 设置在 `.cm-editor` 而非 `.cm-scroller` 上。CM6 flex 布局下 `.cm-editor` 设为 `height: auto` 时，`.cm-scroller` 可能不被约束，导致 `overflow: auto` 不触发滚动条。将 `max-height` 直接从 `.cm-editor` 移到 `.cm-scroller` 确保滚动容器直接获得高度约束 |
+| **根因 3：`scrollbar-color` 泄漏** | `#mainContent` 设置了 `scrollbar-color: transparent transparent`（Firefox 兼容组），Chromium 89+ 也存在对 `scrollbar-color` 的支持，且该属性会覆盖 `::-webkit-scrollbar-thumb`。从 `#mainContent` 泄漏到后代 .cm-scroller 导致滚动条 thumb 透明。显式在 `.cm-scroller` 上设置 `scrollbar-color: var(--scrollbar-thumb) transparent` 覆盖 |
+| **修复：CSS** | 在 [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css) 中：保留 `.code-preview { overflow: hidden }`；`max-height: 200px` 从 `.cm-editor` 移到 `.cm-scroller`；`.cm-scroller` 新增 `scrollbar-width: thin` 和 `scrollbar-color: var(--scrollbar-thumb) transparent` |
+| **修复：JS** | 在 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7494-L7495) 的 `EditorView.theme()` 中同步：`'&'` 移除 `height: auto, maxHeight: '200px'`，将 `maxHeight: '200px'` 移到 `'.cm-scroller'` 配置中 |
+| **修复：scrollbar.css** | 在 [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 中添加独立的 `.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb) }` 规则，hover 加亮规则独立为单独声明 |
+| **涉及文件** | [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
