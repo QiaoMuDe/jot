@@ -47,6 +47,7 @@ type SessionConfig struct {
 	EnableCardRecall         bool   `json:"enable_card_recall"`
 	ReferencedNotes          string `json:"referenced_notes"`
 	EnabledSkills            string `json:"enabled_skills"`
+	RoleplayNotes            string `json:"roleplay_notes"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -436,6 +437,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnableCardRecall:         parseBoolSetting(svc.Get("ai_card_recall_enabled")),
 		ReferencedNotes:          "[]",
 		EnabledSkills:            "{}",
+		RoleplayNotes:            "[]",
 	}
 	record := models.AISessionConfig{
 		SessionID:                sessionID,
@@ -447,6 +449,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnableCardRecall:         cfg.EnableCardRecall,
 		ReferencedNotes:          cfg.ReferencedNotes,
 		EnabledSkills:            cfg.EnabledSkills,
+		RoleplayNotes:            cfg.RoleplayNotes,
 	}
 	return a.db.Create(&record).Error
 }
@@ -462,6 +465,7 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"enable_card_recall":          cfg.EnableCardRecall,
 		"referenced_notes":            cfg.ReferencedNotes,
 		"enabled_skills":              cfg.EnabledSkills,
+		"roleplay_notes":              cfg.RoleplayNotes,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 }
 
@@ -478,6 +482,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 			return SessionConfig{
 				ReferencedNotes: "[]",
 				EnabledSkills:   "{}",
+				RoleplayNotes:   "[]",
 			}
 		}
 	}
@@ -490,6 +495,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		EnableCardRecall:         record.EnableCardRecall,
 		ReferencedNotes:          record.ReferencedNotes,
 		EnabledSkills:            record.EnabledSkills,
+		RoleplayNotes:            record.RoleplayNotes,
 	}
 }
 

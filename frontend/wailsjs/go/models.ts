@@ -517,6 +517,7 @@ export namespace services {
 	    enable_card_recall: boolean;
 	    referenced_notes: string;
 	    enabled_skills: string;
+	    roleplay_notes: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -532,6 +533,7 @@ export namespace services {
 	        this.enable_card_recall = source["enable_card_recall"];
 	        this.referenced_notes = source["referenced_notes"];
 	        this.enabled_skills = source["enabled_skills"];
+	        this.roleplay_notes = source["roleplay_notes"];
 	    }
 	}
 	export class SettingsConfig {

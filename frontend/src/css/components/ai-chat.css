@@ -1016,6 +1016,7 @@
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(10) { transition-delay: 0.42s, 0.42s, 0s; }
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(11) { transition-delay: 0.46s, 0.46s, 0s; }
 .ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(12) { transition-delay: 0.50s, 0.50s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(13) { transition-delay: 0.54s, 0.54s, 0s; }
 
 .ai-chat-skills-item {
     display: flex;
@@ -3267,5 +3268,7 @@
 .ai-note-ref-select-all.checked .ai-note-ref-select-all-check svg {
     stroke: var(--accent, #4a9eff);
 }
+
+
 
 

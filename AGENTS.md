@@ -2432,9 +2432,6 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **快捷键说明页面** | `renderShortcutsPage()` 中新增 `Ctrl + J → AI 侧栏折叠/展开` 条目。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 | **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
 
-| **update 计数** | `AGENTS.md` 从更新 123 → 更新 124 |
-
-## 一百六十七、新增记忆点（AI 侧栏折叠动画优化 + 文字换行修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -2579,3 +2576,37 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **修复 1：会话工具栏解耦** | 移除会话工具栏三处 toggle 同步设置页的代码：深度思考、搜索源、卡片召回。现在切换只调用 `saveCurrentSessionConfig()` 保存到会话配置，不再触碰全局设置。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **修复 2：返回按钮刷新** | 6 个返回按钮在 `switchView('grid')` 后追加 `loadNotes()` 调用：回收站 `trashBackBtn`、数据管理 `dataBackBtn`、MD 语法手册 `mdRefBackBtn`、待办 `todoBackBtn`、AI 助手 `aiChatBackBtn`、设置页 `settingsBackBtn`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+
+---
+
+## 一百七十六、新增记忆点（角色扮演技能 — 完整实现）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能概述** | "更多技能"菜单新增"角色扮演"技能。激活后，用户可通过芯片选择 1~3 篇笔记作为人物设定，AI 以该人物身份回答问题。笔记内容以"人物设定"格式注入 system message，与普通引用笔记共存且互不干扰 |
+| **后端模型** | [AISessionConfig](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session_config.go) 新增 `RoleplayNotes string` 字段（JSON 格式存储选中笔记数组） |
+| **后端 prompt** | [initBuiltinPrompts](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go) 新增 `skill_roleplay` 提示词：指示 AI 将引用笔记作为人物设定，以该人物身份回答，严格遵循设定特征 |
+| **后端会话读写** | [ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go) 中 `SessionConfig` 结构体新增 `RoleplayNotes string`；读写逻辑同步 |
+| **前端更多技能** | [index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html) 更多技能菜单新增 `data-skill="roleplay"` 条目，面具 SVG 图标 |
+| **前端 chip 渲染** | [renderSkillChips](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1786-L1810) 渲染角色扮演为单个 chip：面具图标 角色扮演: N 篇/未设置，点击 chip 主体打开笔记选择器，点击 X 取消技能 + 清空笔记 |
+| **前端角色档案选择器** | [openRoleplaySelector](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1880-L1925) 复用现有笔记引用选择器，限制 1~3 篇，已选笔记自动预勾选 |
+| **前端会话配置读写** | [saveCurrentSessionConfig](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L4412-L4436) 和 [switchSession](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1559-L1562) 读写 `roleplay_notes`；[createSession](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1680-L1682) 从默认配置加载 |
+| **前端 system message 注入** | [onSend](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2008-L2038) 检测 `activeSkills.roleplay` 时以"人物设定"格式注入笔记内容 |
+| **引用栏笔记删除同步** | [removeRefNote](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L4170) 和批量移除引用 handler 同步从 `roleplayNotes` 中移除同名 ID 笔记 |
+| **修复的 Bugs** | 单组件合并；确认按钮角色模式下 0 篇也可确认；X 关闭后 clearRoleplayNotes() 因 renderSkillChips() 中 keys.length === 0 提前 return 不执行（将 clear 检查移到函数开头） |
+| **入场动画** | [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) 使用 nth-child(13) 以 0.54s 延迟依次入场 |
+| **涉及文件** | [ai_session_config.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session_config.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[index.html](file:///d:/峡谷/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+
+| **update 计数** | AGENTS.md 从更新 129 到 更新 130 |
+
+## 一百七十七、新增记忆点（AI 助手加载最后使用会话而非置顶会话）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 打开 AI 助手时，如果有置顶会话，onAIChatViewActivated() 总是加载 sessions[0]（受后端排序 CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END 影响，第一个永远是置顶会话），而非真正最后使用过的会话 |
+| **修复** | [onAIChatViewActivated](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2878-L2883) 中将 sessions[0].id 改为 reduce 遍历所有会话找出 updated_at 最新的那个（忽略置顶优先级） |
+| **不修改部分** | 后端排序不变（UI 列表仍置顶在前）；switchSession/createSession/renderSessionList 逻辑不变；activeSessionId 持久化不变 |
+| **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+| **update 计数** | AGENTS.md 从更新 130 到 更新 131 |

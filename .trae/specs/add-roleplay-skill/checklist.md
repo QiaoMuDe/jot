@@ -1,0 +1,22 @@
+# Checklist
+
+- [x] `AISessionConfig` 模型新增 `RoleplayNotes` 字段（type:text, default:''）
+- [x] `SessionConfig` 结构体新增 `RoleplayNotes string` 字段
+- [x] `CreateDefaultSessionConfig()` 设置 `roleplay_notes` 默认值为 `[]`
+- [x] `SaveSessionConfig()` / `LoadSessionConfig()` 正确读写 `RoleplayNotes`
+- [x] `initBuiltinPrompts()` 新增 `skill_roleplay` 技能提示词
+- [x] 更多技能菜单新增"角色扮演"条目
+- [x] 点击技能互斥激活，行为与现有技能一致
+- [x] 角色扮演 chip 正确渲染
+- [x] 激活技能后在工具栏旁显示角色档案选择组件
+- [x] 取消技能后角色档案选择器隐藏
+- [x] 点击组件打开笔记选择器，最多选择 3 篇
+- [x] 组件显示已选笔记数量，悬停 tooltip 显示标题
+- [x] 选择确认后自动保存会话配置
+- [x] 移除角色档案时自动保存会话配置
+- [x] 切换会话时恢复角色档案状态
+- [x] 新建会话时角色档案为空
+- [x] 角色扮演模式下 system message 以"人物设定"格式注入
+- [x] 角色扮演 + 普通引用笔记可同时使用
+- [x] `go build ./...` 编译通过
+- [x] `npx vite build` 前端构建通过

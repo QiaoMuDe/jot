@@ -12,4 +12,5 @@ type AISessionConfig struct {
 	EnableCardRecall         bool   `gorm:"default:false" json:"enable_card_recall"`
 	ReferencedNotes          string `gorm:"type:text" json:"referenced_notes"`
 	EnabledSkills            string `gorm:"type:text" json:"enabled_skills"`
+	RoleplayNotes            string `gorm:"type:text;default:''" json:"roleplay_notes"`
 }

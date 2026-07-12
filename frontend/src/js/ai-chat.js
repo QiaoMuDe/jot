@@ -67,6 +67,10 @@ let enableCardRecall = false;
 // 笔记引用状态
 let referencedNotes = [];       // { id, title, notebook_name }
 
+// 角色扮演状态
+let roleplayNotes = [];         // { id, title, notebook_name } — 角色档案笔记
+let roleplayCacheContext = '';  // 角色档案缓存内容
+
 // 追问引用
 let followUpRef = '';           // 被追问的 AI 回复完整内容
 
@@ -284,6 +288,8 @@ export async function initAIChat() {
     skillsTranslateOptions = document.getElementById('aiChatTranslateOptions');
     skillBar = document.getElementById('aiChatSkillBar');
     skillChips = document.getElementById('aiChatSkillChips');
+
+    // 角色档案选择器
 
     // 添加菜单
     addBtn = document.getElementById('aiChatAddBtn');
@@ -988,6 +994,14 @@ function bindEvents() {
                     renderSkillChips();
                     saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
+                } else if (skill === 'roleplay') {
+                    activeSkills = {};
+                    activeSkills.roleplay = true;
+                    renderSkillChips();
+                    saveCurrentSessionConfig();
+                    skillsDropdown.classList.remove('open');
+                    // 注意：不从会话配置恢复 roleplayNotes。× 关闭已永久清空，切换会话由
+                    // switchSession/createSession 负责加载，这里只使用当前内存状态。
                 }
                 return;
             }
@@ -1222,6 +1236,8 @@ function bindEvents() {
             }
         });
     }
+
+
 }
 
 /* ── 会话侧栏管理 ── */
@@ -1540,6 +1556,9 @@ async function switchSession(id) {
                 referencedNotes = JSON.parse(config.referenced_notes || '[]');
                 cachedRefContext = '';
                 updateRefChips();
+                roleplayNotes = JSON.parse(config.roleplay_notes || '[]');
+                roleplayCacheContext = '';
+                // renderSkillChips() 会在后面被调用，不需要单独 updateRoleplaySelector
                 activeSkills = JSON.parse(config.enabled_skills || '{}');
                 renderSkillChips();
             }
@@ -1658,6 +1677,9 @@ async function createSession() {
             referencedNotes = JSON.parse(defaultCfg.referenced_notes || '[]');
             cachedRefContext = '';
             updateRefChips();
+            roleplayNotes = JSON.parse(defaultCfg.roleplay_notes || '[]');
+            roleplayCacheContext = '';
+            // renderSkillChips() 会在后面被调用，不需要单独 updateRoleplaySelector
             activeSkills = JSON.parse(defaultCfg.enabled_skills || '{}');
             renderSkillChips();
         }
@@ -1724,6 +1746,12 @@ function autoResizeInput() {
  */
 function renderSkillChips() {
     if (!skillBar || !skillChips) return;
+
+    // 如果取消了角色扮演技能，清空 roleplayNotes（必须在 keys 为空提前返回之前执行）
+    if (!activeSkills.roleplay) {
+        clearRoleplayNotes();
+    }
+
     const keys = Object.keys(activeSkills);
     if (keys.length === 0) {
         skillBar.style.display = 'none';
@@ -1799,23 +1827,141 @@ function renderSkillChips() {
                 <span class="ai-chat-skill-chip-label">人物档案</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
+        } else if (skillId === 'roleplay') {
+            const count = roleplayNotes.length;
+            const label = count > 0 ? count + ' 篇' : '未设置';
+            const countTitle = count > 0 ? roleplayNotes.map(n => n.title || '无标题').join(' · ') : '';
+            return `<div class="ai-chat-skill-chip ai-chat-skill-chip-roleplay" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14h2a4 4 0 0 1 4 4v2H2v-2a4 4 0 0 1 4-4h2"/><circle cx="12" cy="14" r="3"/></svg></span>
+                <span class="ai-chat-skill-chip-label" title="${countTitle.replace(/"/g, '&quot;')}">角色扮演: ${label}</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}">${SVGS.windowClose}</button>
+            </div>`;
         }
         return '';
     }).join('');
 
     // 绑定 chip 叉号点击事件
     skillChips.querySelectorAll('.ai-chat-skill-chip-remove').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const skill = btn.dataset.skill;
             delete activeSkills[skill];
             renderSkillChips();
-            saveCurrentSessionConfig();
+            await saveCurrentSessionConfig();
         });
     });
+    
+    // 绑定角色扮演 chip 点击事件：打开角色档案选择器
+    const roleplayChip = skillChips.querySelector('.ai-chat-skill-chip-roleplay');
+    if (roleplayChip) {
+        roleplayChip.addEventListener('click', (e) => {
+            if (e.target.closest('.ai-chat-skill-chip-remove')) return;
+            openRoleplaySelector();
+        });
+    }
 }
 
+/**
+ * 清空角色档案笔记
+ */
+function clearRoleplayNotes() {
+    roleplayNotes = [];
+    roleplayCacheContext = '';
+}
 
+/**
+ * 打开笔记选择器选择角色档案笔记
+ */
+function openRoleplaySelector() {
+    if (!refModal) return;
+    
+    // 重置临时选中状态
+    _refTempSelected = {};
+    _refSelectAll = false;
+    // 以当前角色档案笔记预填
+    roleplayNotes.forEach(n => { _refTempSelected[n.id] = true; });
+    
+    refModal.style.display = 'flex';
+    
+    // 重置搜索/筛选
+    if (refSearch) refSearch.value = '';
+    if (refSearchClear) refSearchClear.classList.remove('visible');
+    _currentNotebookId = 0;
+    if (refNotebookLabel) refNotebookLabel.textContent = '全部笔记本';
+    if (refNotebookBtn) refNotebookBtn.classList.remove('active');
+    if (refNotebookFilter) refNotebookFilter.classList.remove('open');
+    
+    // 移除常规确认处理函数，防止冲突
+    if (refConfirm) {
+        refConfirm.removeEventListener('click', confirmNoteSelection);
+        
+        // 设置角色档案专用的确认 handler，立即生效
+        refConfirm.onclick = async () => {
+            const selectedIds = Object.keys(_refTempSelected);
+            if (selectedIds.length === 0) {
+                roleplayNotes = [];
+                roleplayCacheContext = '';
+                closeNoteRefModal();
+                renderSkillChips();
+                await saveCurrentSessionConfig();
+                return;
+            }
+            
+            // 限制最大 3 篇
+            if (selectedIds.length > 3) {
+                window.showNotification?.('角色档案最多选择 3 篇笔记', 'warning');
+                return;
+            }
+            
+            try {
+                const ids = selectedIds.map(id => parseInt(id));
+                // 直接构建 roleplayNotes（不调用 confirmNoteSelection）
+                const notes = await getSelectedNotesInfo(ids);
+                if (notes && notes.length > 0) {
+                    roleplayNotes = notes;
+                    roleplayCacheContext = '';
+                }
+            } catch (_) {}
+            
+            closeNoteRefModal();
+            renderSkillChips();
+            await saveCurrentSessionConfig();
+        };
+    }
+    
+    // 读取分页设置
+    (async () => {
+        await loadRefPageSize?.();
+        _refListLoaded = false;
+        _refCurrentPage = 1;
+        _refTotalItems = 0;
+        _refLoading = false;
+        _refPendingRefresh = false;
+        _refTagIds.clear();
+        if (refTagLabel) refTagLabel.textContent = '标签';
+        if (refTagBtn) refTagBtn.classList.remove('active');
+        if (refListWrap) refListWrap.scrollTop = 0;
+        
+        // 加载笔记列表
+        await loadNoteList();
+    })();
+}
+
+/**
+ * 获取选中笔记的信息（id, title, notebook_name）
+ * @param {number[]} ids
+ * @returns {Promise<Array>}
+ */
+async function getSelectedNotesInfo(ids) {
+    if (!ids || ids.length === 0) return [];
+    try {
+        const refContext = await window.go.main.App.GetNoteRefContext(ids);
+        if (refContext && refContext.notes) {
+            return refContext.notes.map(n => ({ id: n.id, title: n.title, notebook_name: n.notebook_name }));
+        }
+    } catch (_) {}
+    return [];
+}
 
 /**
  * 发送消息
@@ -1863,6 +2009,16 @@ async function onSend() {
     let systemContext = '';
     if (referencedNotes.length > 0) {
         systemContext = await getNoteContext();
+    }
+    
+    // 角色扮演上下文注入
+    if (activeSkills.roleplay && roleplayNotes.length > 0) {
+        const roleplayCtx = await getRoleplayContext();
+        if (roleplayCtx) {
+            systemContext = systemContext
+                ? roleplayCtx + '\n\n' + systemContext
+                : roleplayCtx;
+        }
     }
 
     // 追问引用注入 system context
@@ -2721,7 +2877,11 @@ export async function onAIChatViewActivated() {
         // 没有激活会话时，恢复上次使用的会话；无历史会话时才新建
         if (activeSessionId === null) {
             if (sessions.length > 0) {
-                await switchSession(sessions[0].id);
+                // 在所有会话中选 updated_at 最新的（忽略置顶优先），确保加载最后使用的会话
+                const mostRecent = sessions.reduce((a, b) =>
+                    new Date(a.updated_at) > new Date(b.updated_at) ? a : b
+                );
+                await switchSession(mostRecent.id);
             } else {
                 await createSession();
             }
@@ -3450,6 +3610,11 @@ function closeNoteRefModal() {
     if (!refModal) return;
     refModal.style.display = 'none';
     _refTempSelected = {};
+    // 清理角色档案选择器可能劫持的确认按钮 handler，并恢复常规确认处理函数
+    if (refConfirm) {
+        refConfirm.onclick = null;
+        refConfirm.addEventListener('click', confirmNoteSelection);
+    }
 }
 
 /**
@@ -3810,8 +3975,10 @@ function updateRefCount() {
     const count = Object.keys(_refTempSelected).length;
     refCount.textContent = `已选 ${count} 篇`;
     if (refConfirm) {
-        refConfirm.disabled = count === 0;
-        refConfirm.style.opacity = count === 0 ? '0.5' : '1';
+        // 角色档案选择器模式下，允许空选中点击确认（用于清空档案）
+        const isRoleplayMode = !!refConfirm.onclick;
+        refConfirm.disabled = !isRoleplayMode && count === 0;
+        refConfirm.style.opacity = count === 0 && !isRoleplayMode ? '0.5' : '1';
     }
     // 手动逐条选中所有条目时自动切换全选为勾选状态
     if (!_refSelectAll && count > 0 && _refTotalItems > 0 && count >= _refTotalItems) {
@@ -3984,6 +4151,12 @@ function updateRefChips() {
         removeAllBtn.addEventListener('click', () => {
             referencedNotes = [];
             cachedRefContext = '';
+            // 同步清理角色档案
+            if (roleplayNotes.length > 0) {
+                roleplayNotes = [];
+                roleplayCacheContext = '';
+                renderSkillChips();
+            }
             updateRefChips();
             saveCurrentSessionConfig();
         });
@@ -3997,6 +4170,13 @@ function updateRefChips() {
 function removeRefNote(id) {
     referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
     cachedRefContext = ''; // 清除缓存
+    // 同步清理角色档案中相同 ID 的笔记
+    const oldLen = roleplayNotes.length;
+    roleplayNotes = roleplayNotes.filter(n => String(n.id) !== String(id));
+    if (roleplayNotes.length !== oldLen) {
+        roleplayCacheContext = '';
+        renderSkillChips();
+    }
     updateRefChips();
     saveCurrentSessionConfig();
 }
@@ -4169,6 +4349,27 @@ async function getNoteContext() {
 }
 
 /**
+ * 获取角色扮演上下文（从后端获取笔记内容，包装为人物设定格式）
+ * @returns {Promise<string>}
+ */
+async function getRoleplayContext() {
+    if (roleplayNotes.length === 0) return '';
+    if (roleplayCacheContext) return roleplayCacheContext;
+    
+    try {
+        const ids = roleplayNotes.map(n => n.id);
+        const refContext = await window.go.main.App.GetNoteRefContext(ids);
+        if (!refContext || !refContext.context) return '';
+        
+        // 缓存并返回
+        roleplayCacheContext = refContext.context;
+        return refContext.context;
+    } catch (_) {
+        return '';
+    }
+}
+
+/**
  * HTML table 元素转 Markdown 表格文本
  * @param {HTMLTableElement} tableEl
  * @returns {string}
@@ -4222,6 +4423,7 @@ async function saveCurrentSessionConfig() {
             tavily_search_enabled: searchSources.has('tavily'),
             enable_card_recall: enableCardRecall,
             referenced_notes: JSON.stringify(referencedNotes),
+            roleplay_notes: JSON.stringify(roleplayNotes),
             enabled_skills: JSON.stringify(activeSkills),
         });
     } catch (_) {}
