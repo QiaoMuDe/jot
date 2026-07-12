@@ -508,6 +508,32 @@ export namespace services {
 	        this.page_size = source["page_size"];
 	    }
 	}
+	export class SessionConfig {
+	    model_name: string;
+	    enable_thinking: boolean;
+	    zhihu_search_enabled: boolean;
+	    zhihu_global_search_enabled: boolean;
+	    tavily_search_enabled: boolean;
+	    enable_card_recall: boolean;
+	    referenced_notes: string;
+	    enabled_skills: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model_name = source["model_name"];
+	        this.enable_thinking = source["enable_thinking"];
+	        this.zhihu_search_enabled = source["zhihu_search_enabled"];
+	        this.zhihu_global_search_enabled = source["zhihu_global_search_enabled"];
+	        this.tavily_search_enabled = source["tavily_search_enabled"];
+	        this.enable_card_recall = source["enable_card_recall"];
+	        this.referenced_notes = source["referenced_notes"];
+	        this.enabled_skills = source["enabled_skills"];
+	    }
+	}
 	export class SettingsConfig {
 	    theme: string;
 	    font_family: string;

@@ -212,6 +212,7 @@ async function switchModel(model) {
         const settingsLabel = document.getElementById('aiModelLabel');
         if (settingsLabel) settingsLabel.textContent = model;
         modelDropdown.classList.remove('open');
+        await saveCurrentSessionConfig();
     } catch (_) {}
 }
 
@@ -724,6 +725,7 @@ function bindEvents() {
                 settingToggle.classList.toggle('active', enableThinking);
             }
             try { await window.saveSettings(); } catch (_) {}
+            await saveCurrentSessionConfig();
         });
     }
 
@@ -775,6 +777,7 @@ function bindEvents() {
                 } else {
                     searchSources.delete(source);
                 }
+                await saveCurrentSessionConfig();
                 // 更新按钮激活状态
                 if (searchSourcesBtn) {
                     searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
@@ -808,6 +811,7 @@ function bindEvents() {
                 settingToggle.classList.toggle('active', enableCardRecall);
             }
             try { await window.saveSettings(); } catch (_) {}
+            await saveCurrentSessionConfig();
         });
     }
 
@@ -948,54 +952,64 @@ function bindEvents() {
                     activeSkills = {};
                     activeSkills.coding = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'writing') {
                     // 直接激活写作技能, 先清空其他技能
                     activeSkills = {};
                     activeSkills.writing = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'tutor') {
                     // 直接激活答疑技能, 先清空其他技能
                     activeSkills = {};
                     activeSkills.tutor = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'reqspec') {
                     // 直接激活需求规格技能, 先清空其他技能
                     activeSkills = {};
                     activeSkills.reqspec = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'polish') {
                     activeSkills = {};
                     activeSkills.polish = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'summary') {
                     activeSkills = {};
                     activeSkills.summary = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'copywriting') {
                     activeSkills = {};
                     activeSkills.copywriting = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'report') {
                     activeSkills = {};
                     activeSkills.report = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'promptgen') {
                     activeSkills = {};
                     activeSkills.promptgen = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 } else if (skill === 'character') {
                     activeSkills = {};
                     activeSkills.character = true;
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     skillsDropdown.classList.remove('open');
                 }
                 return;
@@ -1020,6 +1034,7 @@ function bindEvents() {
                     const dir = radio.value; // 'to_chinese' or 'to_english'
                     activeSkills.translate = { direction: dir };
                     renderSkillChips();
+                    saveCurrentSessionConfig();
                     // 关闭整个菜单
                     skillsDropdown.classList.remove('open');
                     if (skillsTranslateOptions) skillsTranslateOptions.classList.remove('open');
@@ -1520,6 +1535,39 @@ async function switchSession(id) {
         activeSessionId = id;
         const msgs = await window.go.main.App.LoadAISessionMessages(id);
 
+        // 加载会话配置并恢复操作栏状态
+        try {
+            const config = await window.go.main.App.LoadSessionConfig(id);
+            if (config) {
+                if (config.model_name && modelLabel) modelLabel.textContent = config.model_name;
+                enableThinking = !!config.enable_thinking;
+                if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
+                // 恢复搜索源
+                searchSources = new Set();
+                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(sid => {
+                    const cb = document.getElementById(sid);
+                    if (!cb || cb.disabled) return;
+                    const source = cb.dataset.source;
+                    let enabled = false;
+                    if (source === 'zhihu_search') enabled = !!config.zhihu_search_enabled;
+                    else if (source === 'zhihu_global') enabled = !!config.zhihu_global_search_enabled;
+                    else if (source === 'tavily') enabled = !!config.tavily_search_enabled;
+                    cb.checked = enabled;
+                    if (enabled) searchSources.add(source);
+                });
+                if (searchSourcesBtn) {
+                    searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
+                }
+                enableCardRecall = !!config.enable_card_recall;
+                if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
+                referencedNotes = JSON.parse(config.referenced_notes || '[]');
+                cachedRefContext = '';
+                updateRefChips();
+                activeSkills = JSON.parse(config.enabled_skills || '{}');
+                renderSkillChips();
+            }
+        } catch (_) {}
+
         // 重建 chatHistory (只保留 role/content 供 API 使用) 
         chatHistory = msgs ? msgs.map(msg => ({ role: msg.role, content: msg.content, tokens: msg.tokens || 0 })) : [];
 
@@ -1605,16 +1653,44 @@ async function createSession() {
 
     // 清空当前状态
     activeSessionId = id;
+
+    // 加载默认会话配置
+    try {
+        const defaultCfg = await window.go.main.App.LoadSessionConfig(id);
+        if (defaultCfg) {
+            if (defaultCfg.model_name) modelLabel.textContent = defaultCfg.model_name;
+            enableThinking = !!defaultCfg.enable_thinking;
+            if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
+            searchSources = new Set();
+            ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(sid => {
+                const cb = document.getElementById(sid);
+                if (!cb || cb.disabled) return;
+                const source = cb.dataset.source;
+                let enabled = false;
+                if (source === 'zhihu_search') enabled = !!defaultCfg.zhihu_search_enabled;
+                else if (source === 'zhihu_global') enabled = !!defaultCfg.zhihu_global_search_enabled;
+                else if (source === 'tavily') enabled = !!defaultCfg.tavily_search_enabled;
+                cb.checked = enabled;
+                if (enabled) searchSources.add(source);
+            });
+            if (searchSourcesBtn) {
+                searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
+            }
+            enableCardRecall = !!defaultCfg.enable_card_recall;
+            if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
+            referencedNotes = JSON.parse(defaultCfg.referenced_notes || '[]');
+            cachedRefContext = '';
+            updateRefChips();
+            activeSkills = JSON.parse(defaultCfg.enabled_skills || '{}');
+            renderSkillChips();
+        }
+    } catch (_) {}
+
     chatHistory = [];
     updateContextSize();
     messagesEl.innerHTML = '';
     hideEmptyState();
     showWelcome();
-    referencedNotes = [];
-    cachedRefContext = '';
-    updateRefChips();
-    activeSkills = {};
-    renderSkillChips();
 
     await loadSessionList();
 
@@ -1757,6 +1833,7 @@ function renderSkillChips() {
             const skill = btn.dataset.skill;
             delete activeSkills[skill];
             renderSkillChips();
+            saveCurrentSessionConfig();
         });
     });
 }
@@ -3874,6 +3951,7 @@ async function confirmNoteSelection() {
 
     closeNoteRefModal();
     updateRefChips();
+    await saveCurrentSessionConfig();
 }
 
 /**
@@ -3930,6 +4008,7 @@ function updateRefChips() {
             referencedNotes = [];
             cachedRefContext = '';
             updateRefChips();
+            saveCurrentSessionConfig();
         });
     }
 }
@@ -3942,6 +4021,7 @@ function removeRefNote(id) {
     referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
     cachedRefContext = ''; // 清除缓存
     updateRefChips();
+    saveCurrentSessionConfig();
 }
 
 /**
@@ -4149,6 +4229,25 @@ function formatDate(dateStr) {
     } catch (_) {
         return '';
     }
+}
+
+/**
+ * 保存当前会话的操作栏配置到后端
+ */
+async function saveCurrentSessionConfig() {
+    if (!activeSessionId) return;
+    try {
+        await window.go.main.App.SaveSessionConfig(activeSessionId, {
+            model_name: modelLabel?.textContent || '',
+            enable_thinking: enableThinking,
+            zhihu_search_enabled: searchSources.has('zhihu_search'),
+            zhihu_global_search_enabled: searchSources.has('zhihu_global'),
+            tavily_search_enabled: searchSources.has('tavily'),
+            enable_card_recall: enableCardRecall,
+            referenced_notes: JSON.stringify(referencedNotes),
+            enabled_skills: JSON.stringify(activeSkills),
+        });
+    } catch (_) {}
 }
 
 

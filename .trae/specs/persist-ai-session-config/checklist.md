@@ -1,0 +1,27 @@
+# Checklist
+
+- [x] AISessionConfig 模型正确定义，字段与 spec 一致，SessionID 有唯一索引
+- [x] `database/db.go` 中 `AutoMigrate` 包含新模型
+- [x] `ai_service.go` 实现 `CreateDefaultSessionConfig(sessionID uint)` 从全局设置复制初始值
+- [x] `ai_service.go` 实现 `SaveSessionConfig(sessionID uint, config)` 持久化配置
+- [x] `ai_service.go` 实现 `LoadSessionConfig(sessionID uint)` 返回配置
+- [x] `app.go` 新增 `SaveSessionConfig` / `LoadSessionConfig` 绑定且正确注册
+- [x] `CreateAISession()` 调用 `CreateDefaultSessionConfig()`
+- [x] 切换会话时恢复模型选择器选中状态
+- [x] 切换会话时恢复深度思考 toggle 状态
+- [x] 切换会话时恢复搜索源 checkbox 的 checked 状态
+- [x] 切换会话时恢复卡片召回 toggle 状态
+- [x] 切换会话时恢复笔记引用 chips
+- [x] 切换会话时恢复技能 chips
+- [x] 旧数据（无配置记录）按默认值处理，不报错
+- [x] 模型切换时自动保存配置
+- [x] 深度思考切换时自动保存配置
+- [x] 搜索源变更时自动保存配置
+- [x] 卡片召回切换时自动保存配置
+- [x] 笔记引用确认时自动保存配置
+- [x] 技能变更时自动保存配置
+- [x] 设置页修改全局配置不再覆盖已有会话操作栏
+- [x] 新建会话时从当前全局设置获取初始值
+- [x] 搜索源 checkbox disabled 状态仍由全局密钥决定
+- [x] `go build ./...` 编译通过
+- [x] `npx vite build` 前端构建通过

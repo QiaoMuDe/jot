@@ -37,6 +37,18 @@ type AIConfig struct {
 	ZhihuAccessSecret string `json:"zhihu_access_secret"`
 }
 
+// SessionConfig 表示 AI 会话的操作栏配置，用于前端交互
+type SessionConfig struct {
+	ModelName                string `json:"model_name"`
+	EnableThinking           bool   `json:"enable_thinking"`
+	ZhihuSearchEnabled       bool   `json:"zhihu_search_enabled"`
+	ZhihuGlobalSearchEnabled bool   `json:"zhihu_global_search_enabled"`
+	TavilySearchEnabled      bool   `json:"tavily_search_enabled"`
+	EnableCardRecall         bool   `json:"enable_card_recall"`
+	ReferencedNotes          string `json:"referenced_notes"`
+	EnabledSkills            string `json:"enabled_skills"`
+}
+
 // AIService 封装 AI 相关的业务逻辑操作
 type AIService struct {
 	db *gorm.DB
@@ -400,28 +412,109 @@ func (a *AIService) GetAISessions() []AISessionSummary {
 	return result
 }
 
-// CreateAISession 创建新会话，返回会话 ID
+// CreateAISession 创建新会话，返回会话 ID，并自动创建默认配置
 func (a *AIService) CreateAISession() uint {
 	session := models.AISession{Title: "新对话"}
 	a.db.Create(&session)
+	// 自动创建默认会话配置
+	if err := a.CreateDefaultSessionConfig(session.ID); err != nil {
+		// 静默失败，不影响会话创建
+		_ = err
+	}
 	return session.ID
 }
 
-// DeleteAISession 删除会话及其所有消息
+// CreateDefaultSessionConfig 从全局设置为指定会话创建默认配置
+func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
+	svc := NewSettingService(a.db)
+	cfg := SessionConfig{
+		ModelName:                svc.Get("ai_model"),
+		EnableThinking:           parseBoolSetting(svc.Get("ai_thinking_enabled")),
+		ZhihuSearchEnabled:       parseBoolSetting(svc.Get("zhihu_search_enabled")),
+		ZhihuGlobalSearchEnabled: parseBoolSetting(svc.Get("zhihu_global_search_enabled")),
+		TavilySearchEnabled:      parseBoolSetting(svc.Get("tavily_search_enabled")),
+		EnableCardRecall:         parseBoolSetting(svc.Get("ai_card_recall_enabled")),
+		ReferencedNotes:          "[]",
+		EnabledSkills:            "{}",
+	}
+	record := models.AISessionConfig{
+		SessionID:                sessionID,
+		ModelName:                cfg.ModelName,
+		EnableThinking:           cfg.EnableThinking,
+		ZhihuSearchEnabled:       cfg.ZhihuSearchEnabled,
+		ZhihuGlobalSearchEnabled: cfg.ZhihuGlobalSearchEnabled,
+		TavilySearchEnabled:      cfg.TavilySearchEnabled,
+		EnableCardRecall:         cfg.EnableCardRecall,
+		ReferencedNotes:          cfg.ReferencedNotes,
+		EnabledSkills:            cfg.EnabledSkills,
+	}
+	return a.db.Create(&record).Error
+}
+
+// SaveSessionConfig 保存会话配置
+func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
+	return a.db.Where("session_id = ?", sessionID).Assign(map[string]interface{}{
+		"model_name":                  cfg.ModelName,
+		"enable_thinking":             cfg.EnableThinking,
+		"zhihu_search_enabled":        cfg.ZhihuSearchEnabled,
+		"zhihu_global_search_enabled": cfg.ZhihuGlobalSearchEnabled,
+		"tavily_search_enabled":       cfg.TavilySearchEnabled,
+		"enable_card_recall":          cfg.EnableCardRecall,
+		"referenced_notes":            cfg.ReferencedNotes,
+		"enabled_skills":              cfg.EnabledSkills,
+	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
+}
+
+// LoadSessionConfig 加载会话配置，如果不存在则自动创建默认配置并返回
+func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
+	var record models.AISessionConfig
+	err := a.db.Where("session_id = ?", sessionID).First(&record).Error
+	if err != nil {
+		// 配置不存在时自动创建默认配置
+		_ = a.CreateDefaultSessionConfig(sessionID)
+		// 重新读取
+		if err := a.db.Where("session_id = ?", sessionID).First(&record).Error; err != nil {
+			// 极端情况仍失败时返回空默认值
+			return SessionConfig{
+				ReferencedNotes: "[]",
+				EnabledSkills:   "{}",
+			}
+		}
+	}
+	return SessionConfig{
+		ModelName:                record.ModelName,
+		EnableThinking:           record.EnableThinking,
+		ZhihuSearchEnabled:       record.ZhihuSearchEnabled,
+		ZhihuGlobalSearchEnabled: record.ZhihuGlobalSearchEnabled,
+		TavilySearchEnabled:      record.TavilySearchEnabled,
+		EnableCardRecall:         record.EnableCardRecall,
+		ReferencedNotes:          record.ReferencedNotes,
+		EnabledSkills:            record.EnabledSkills,
+	}
+}
+
+// DeleteAISession 删除会话及其所有消息和配置
 func (a *AIService) DeleteAISession(id uint) error {
 	// 级联删除消息
 	if err := a.db.Where("session_id = ?", id).Delete(&models.AIMessage{}).Error; err != nil {
 		return err
 	}
+	// 删除会话配置
+	if err := a.db.Where("session_id = ?", id).Delete(&models.AISessionConfig{}).Error; err != nil {
+		return err
+	}
 	return a.db.Delete(&models.AISession{}, id).Error
 }
 
-// DeleteEmptyAISessions 删除没有关联消息的 AI 会话
+// DeleteEmptyAISessions 删除没有关联消息的 AI 会话（同时清理对应的会话配置）
 func (a *AIService) DeleteEmptyAISessions() int64 {
 	// 使用子查询找出没有消息的会话并删除
 	var count int64
 	a.db.Raw("SELECT COUNT(*) FROM ai_sessions s WHERE NOT EXISTS (SELECT 1 FROM ai_messages m WHERE m.session_id = s.id)").Scan(&count)
 
+	// 删除对应的会话配置
+	a.db.Exec("DELETE FROM ai_session_configs WHERE session_id IN (SELECT s.id FROM ai_sessions s WHERE NOT EXISTS (SELECT 1 FROM ai_messages m WHERE m.session_id = s.id))")
+	// 删除会话
 	a.db.Exec("DELETE FROM ai_sessions WHERE id IN (SELECT s.id FROM ai_sessions s WHERE NOT EXISTS (SELECT 1 FROM ai_messages m WHERE m.session_id = s.id))")
 
 	return count
@@ -550,9 +643,12 @@ func (a *AIService) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64
 	return result.RowsAffected, result.Error
 }
 
-// ClearAllAISessions 清空所有 AI 会话及消息
+// ClearAllAISessions 清空所有 AI 会话、消息及会话配置
 func (a *AIService) ClearAllAISessions() error {
 	if err := a.db.Where("1 = 1").Delete(&models.AIMessage{}).Error; err != nil {
+		return err
+	}
+	if err := a.db.Where("1 = 1").Delete(&models.AISessionConfig{}).Error; err != nil {
 		return err
 	}
 	return a.db.Where("1 = 1").Delete(&models.AISession{}).Error

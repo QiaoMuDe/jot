@@ -1507,6 +1507,16 @@ func (a *App) UpdateSessionContextTokens(sessionID uint, tokens int) error {
 	return a.aiService.UpdateSessionContextTokens(sessionID, tokens)
 }
 
+// SaveSessionConfig 保存会话操作栏配置
+func (a *App) SaveSessionConfig(sessionID uint, cfg services.SessionConfig) error {
+	return a.aiService.SaveSessionConfig(sessionID, cfg)
+}
+
+// LoadSessionConfig 加载会话操作栏配置
+func (a *App) LoadSessionConfig(sessionID uint) services.SessionConfig {
+	return a.aiService.LoadSessionConfig(sessionID)
+}
+
 // ClearAllAISessions 清空所有 AI 会话及消息
 func (a *App) ClearAllAISessions() error {
 	return a.aiService.ClearAllAISessions()
@@ -2124,8 +2134,11 @@ func (a *App) ResetDatabase() error {
 	// 1. 删除所有表（自动处理外键依赖顺序）
 	tables := []interface{}{
 		&models.AIMessage{},
+		&models.AISessionConfig{},
 		&models.AISession{},
+		&models.AIPrompt{},
 		&models.APIProfile{},
+		&models.Todo{},
 		&models.Setting{},
 		&models.Note{},
 		&models.Tag{},
@@ -2139,11 +2152,17 @@ func (a *App) ResetDatabase() error {
 
 	// 2. 重新 AutoMigrate（与 InitDB 保持同步）
 	if err := a.db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{},
-		&models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}); err != nil {
+		&models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.AISessionConfig{},
+		&models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}); err != nil {
 		return err
 	}
 
-	// 3. 重新初始化默认标签
+	// 3. 重新初始化内置技能提示词
+	if err := database.InitBuiltinPrompts(a.db); err != nil {
+		return fmt.Errorf("初始化内置提示词失败: %w", err)
+	}
+
+	// 4. 重新初始化默认标签
 	if err := services.InitDefaultTags(a.db); err != nil {
 		return err
 	}

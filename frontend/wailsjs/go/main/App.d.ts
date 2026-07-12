@@ -138,6 +138,8 @@ export function ListTodos():Promise<Array<models.Todo>>;
 
 export function LoadAISessionMessages(arg1:number):Promise<Array<services.Message>>;
 
+export function LoadSessionConfig(arg1:number):Promise<services.SessionConfig>;
+
 export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
 
 export function OpenDataDir():Promise<void>;
@@ -181,6 +183,8 @@ export function SaveAllSettings(arg1:services.SettingsConfig):Promise<void>;
 export function SaveImage(arg1:string,arg2:string):Promise<string>;
 
 export function SaveImageFromPath(arg1:string):Promise<string>;
+
+export function SaveSessionConfig(arg1:number,arg2:services.SessionConfig):Promise<void>;
 
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 

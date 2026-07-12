@@ -7686,23 +7686,7 @@ async function loadSettings() {
             cfg.tavily_search_enabled = false;
         }
 
-        // 同步 AI 聊天工具栏 toggle
-        const chatSearchToggle = document.getElementById('aiChatSearchToggle');
-        if (chatSearchToggle) chatSearchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
 
-        // 注意：AI 聊天栏的多源搜索 UI 现在通过复选框列表展示
-        // 在 Toolbar 部分的同步也同步三个开关
-        const chatZhihuSearch = document.getElementById('aiChatZhihuSearch');
-        if (chatZhihuSearch) chatZhihuSearch.checked = cfg.zhihu_search_enabled;
-
-        const chatZhihuGlobalSearch = document.getElementById('aiChatZhihuGlobalSearch');
-        if (chatZhihuGlobalSearch) chatZhihuGlobalSearch.checked = cfg.zhihu_global_search_enabled;
-
-        const chatTavilySearch = document.getElementById('aiChatTavilySearch');
-        if (chatTavilySearch) chatTavilySearch.checked = cfg.tavily_search_enabled;
-
-        const chatCardRecallToggle = document.getElementById('aiChatCardRecallToggle');
-        if (chatCardRecallToggle) chatCardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
 
         // --- AI: 限制输入 ---
         const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');

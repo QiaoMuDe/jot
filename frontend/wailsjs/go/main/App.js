@@ -270,6 +270,10 @@ export function LoadAISessionMessages(arg1) {
   return window['go']['main']['App']['LoadAISessionMessages'](arg1);
 }
 
+export function LoadSessionConfig(arg1) {
+  return window['go']['main']['App']['LoadSessionConfig'](arg1);
+}
+
 export function MoveNoteToNotebook(arg1, arg2) {
   return window['go']['main']['App']['MoveNoteToNotebook'](arg1, arg2);
 }
@@ -356,6 +360,10 @@ export function SaveImage(arg1, arg2) {
 
 export function SaveImageFromPath(arg1) {
   return window['go']['main']['App']['SaveImageFromPath'](arg1);
+}
+
+export function SaveSessionConfig(arg1, arg2) {
+  return window['go']['main']['App']['SaveSessionConfig'](arg1, arg2);
 }
 
 export function SearchNoteIDs(arg1, arg2, arg3) {

@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-10（更新 129）
+> 生成日期: 2026-07-10（更新 130）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -27,6 +27,7 @@ jot/                                    # 项目根目录
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
 │   │   ├── ai_session.go              # AI 会话实体（标题/置顶/时间戳）
+│   │   ├── ai_session_config.go      # AI 会话操作栏配置实体（模型/深度思考/搜索源/卡片召回/笔记引用/技能，与 AISession 一对一关联）
 │   │   ├── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
 │   │   ├── api_profile.go             # API 配置预设实体（名称/服务商/URL/Key）
 │   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
@@ -35,7 +36,7 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
+│       ├── ai_service.go               # AI 对话（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
 │       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
 │       ├── profile_service.go          # API 配置预设 CRUD + 切换/激活
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
@@ -55,7 +56,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块 ~3650 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃）
+│   │   │   ├── ai-chat.js              # AI 对话模块 ~3700 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -174,7 +175,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应文件 | 核心依赖 |
 |----------|----------|----------|----------|
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
-| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go` | GORM |
+| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
@@ -2546,3 +2547,24 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **修复：JS** | 在 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js#L7494-L7495) 的 `EditorView.theme()` 中同步：`'&'` 移除 `height: auto, maxHeight: '200px'`，将 `maxHeight: '200px'` 移到 `'.cm-scroller'` 配置中 |
 | **修复：scrollbar.css** | 在 [scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css) 中添加独立的 `.code-preview .cm-editor .cm-scroller::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb) }` 规则，hover 加亮规则独立为单独声明 |
 | **涉及文件** | [settings-panel.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[scrollbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/scrollbar.css)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+---
+
+## 一百七十四、新增记忆点（AI 会话操作栏配置持久化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 切换会话或重启程序后，AI 聊天操作栏的配置（模型/深度思考/搜索源/卡片召回/笔记引用/技能）全部丢失，因为仅存在于前端内存中 |
+| **方案** | 新建 `AISessionConfig` 表（`ai_session_configs`），与 `AISession` 一对一关联。新建会话时从全局设置复制初始值，之后操作栏的配置修改只写入会话配置表，与全局设置完全解耦。详见 [spec](file:///d:/峡谷/Dev/本地项目/jot/.trae/specs/persist-ai-session-config/spec.md) |
+| **后端模型** | [AISessionConfig](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session_config.go) — 10 个字段：`SessionID`（唯一索引）、`ModelName`、`EnableThinking`、`ZhihuSearchEnabled`、`ZhihuGlobalSearchEnabled`、`TavilySearchEnabled`、`EnableCardRecall`、`ReferencedNotes`（JSON）、`EnabledSkills`（JSON） |
+| **后端 API** | [SessionConfig](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go#L41-L50) 结构体 — 8 个 JSON 字段，`CreateDefaultSessionConfig()` 从全局读取 6 个初始值，`SaveSessionConfig()` 使用 `FirstOrCreate` + `Assign` 写入，`LoadSessionConfig()` 查不到记录时自动创建默认配置 |
+| **Wails 绑定** | [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) — `SaveSessionConfig` / `LoadSessionConfig` 两个新绑定，`ResetDatabase` 补充了 `AISessionConfig` 到 DropTable/AutoMigrate |
+| **前端切换会话** | [switchSession](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1538-L1569) — 加载会话配置后恢复：模型标签、深度思考 toggle、搜索源 checkbox、卡片召回 toggle、笔记引用 chips、技能 chips |
+| **前端新建会话** | [createSession](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1657-L1687) — 同上，加载默认配置（由 `LoadSessionConfig` 自动创建） |
+| **前端保存** | [saveCurrentSessionConfig](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L4234-L4248) — 收集操作栏全部 8 个状态，调用 `SaveSessionConfig` 写入后端 |
+| **保存触发点** | 模型切换、深度思考切换、搜索源切换、卡片召回切换、添加技能、移除技能（chip 叉号）、添加笔记引用、移除笔记引用（单条/全部） |
+| **设置页解耦** | 设置页修改模型/深度思考/搜索源/卡片召回时，不再同步到 AI 聊天操作栏。仅新建会话时从全局设置复制初始值。`main.js` 中原本的同步代码（第 7689-7705 行）已移除 |
+| **切换预设清空模型** | `SwitchProfile` 清空全局 `ai_model` 后，同时清空所有 `AISessionConfig` 记录的 `model_name`，避免过期模型被恢复 |
+| **删除级联清理** | 单个删除会话、清理空 AI 会话、清空所有 AI 会话、复位数据库，均级联删除 `AISessionConfig` 记录 |
+| **修复的 Bug** | ① `switchSession` 条件 `if (config && config.model_name)` 改为 `if (config)`（model_name 为空时跳过整个配置恢复）② 移除技能 chip 未保存 ③ 移除单条/全部引用笔记未保存 |
+| **涉及文件** | [ai_session_config.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session_config.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[profile_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/profile_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |

@@ -95,5 +95,7 @@ func (p *ProfileService) SwitchProfile(id uint) error {
 	if err := svc.Set("ai_model", ""); err != nil {
 		return err
 	}
+	// 清除所有会话配置中的模型（切换预设后旧模型不可用）
+	p.db.Model(&models.AISessionConfig{}).Where("1 = 1").Update("model_name", "")
 	return nil
 }

@@ -44,12 +44,12 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(1)
 
 	// 自动迁移数据模型
-	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}); err != nil {
+	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}, &models.AISessionConfig{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	// 初始化内置技能提示词
-	if err := initBuiltinPrompts(db); err != nil {
+	if err := InitBuiltinPrompts(db); err != nil {
 		return nil, fmt.Errorf("初始化内置提示词失败: %w", err)
 	}
 
@@ -84,8 +84,8 @@ func EnsureBackupDir() error {
 	return os.MkdirAll(dir, 0755)
 }
 
-// initBuiltinPrompts 增量插入内置技能提示词 (仅插入缺失的 key)
-func initBuiltinPrompts(db *gorm.DB) error {
+// InitBuiltinPrompts 增量插入内置技能提示词 (仅插入缺失的 key)
+func InitBuiltinPrompts(db *gorm.DB) error {
 	// 查询已存在的内置提示词 key
 	var existingKeys []string
 	db.Model(&models.AIPrompt{}).Where("is_builtin = ?", true).Pluck("key", &existingKeys)
