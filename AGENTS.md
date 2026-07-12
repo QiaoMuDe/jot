@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-10（更新 130）
+> 生成日期: 2026-07-12（更新 131）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2568,3 +2568,14 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **删除级联清理** | 单个删除会话、清理空 AI 会话、清空所有 AI 会话、复位数据库，均级联删除 `AISessionConfig` 记录 |
 | **修复的 Bug** | ① `switchSession` 条件 `if (config && config.model_name)` 改为 `if (config)`（model_name 为空时跳过整个配置恢复）② 移除技能 chip 未保存 ③ 移除单条/全部引用笔记未保存 |
 | **涉及文件** | [ai_session_config.go](file:///d:/峡谷/Dev/本地项目/jot/internal/models/ai_session_config.go)、[ai_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/ai_service.go)、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)、[db.go](file:///d:/峡谷/Dev/本地项目/jot/internal/database/db.go)、[profile_service.go](file:///d:/峡谷/Dev/本地项目/jot/internal/services/profile_service.go)、[ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+
+---
+
+## 一百七十五、新增记忆点（AI 会话操作栏彻底解耦 & 返回按钮刷新笔记列表）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 两个问题：① 会话工具栏操作（深度思考/搜索源/卡片召回）切换时会同步更新设置页 toggle 并调用 `window.saveSettings()` 保存到全局配置，导致会话级操作影响全局设置 ② 各页面返回按钮仅调用 `switchView('grid')`，未刷新笔记列表，用户看到缓存旧数据 |
+| **修复 1：会话工具栏解耦** | 移除会话工具栏三处 toggle 同步设置页的代码：深度思考、搜索源、卡片召回。现在切换只调用 `saveCurrentSessionConfig()` 保存到会话配置，不再触碰全局设置。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **修复 2：返回按钮刷新** | 6 个返回按钮在 `switchView('grid')` 后追加 `loadNotes()` 调用：回收站 `trashBackBtn`、数据管理 `dataBackBtn`、MD 语法手册 `mdRefBackBtn`、待办 `todoBackBtn`、AI 助手 `aiChatBackBtn`、设置页 `settingsBackBtn`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 和 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |

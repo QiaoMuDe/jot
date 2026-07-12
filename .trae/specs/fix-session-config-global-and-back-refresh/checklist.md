@@ -1,0 +1,22 @@
+# Checklist
+
+- [x] 深度思考 toggle 切换时不再同步设置页 toggle
+- [x] 深度思考 toggle 切换时不再调用 `window.saveSettings()`
+- [x] 深度思考 toggle 切换时仍调用 `saveCurrentSessionConfig()`
+- [x] 搜索源 toggle 切换时不再同步设置页 toggle
+- [x] 搜索源 toggle 切换时不再调用 `window.saveSettings()`
+- [x] 搜索源 toggle 切换时仍调用 `saveCurrentSessionConfig()`
+- [x] 卡片召回 toggle 切换时不再同步设置页 toggle
+- [x] 卡片召回 toggle 切换时不再调用 `window.saveSettings()`
+- [x] 卡片召回 toggle 切换时仍调用 `saveCurrentSessionConfig()`
+- [x] 新建会话时仍从全局配置复制初始值（行为不变）
+- [x] 回收站返回按钮点击后调用 `loadNotes()`
+- [x] 数据管理返回按钮点击后调用 `loadNotes()`
+- [x] MD 语法手册返回按钮点击后调用 `loadNotes()`
+- [x] 待办返回按钮点击后调用 `loadNotes()`
+- [x] AI 助手返回按钮点击后调用 `loadNotes()`
+- [x] 设置页返回按钮点击后调用 `loadNotes()`
+- [x] `moreMenu` 菜单「首页」选项已调用 `loadNotes()`（确认现有行为）
+- [x] 全局 Escape 返回首页时仍调用 `loadNotes()`（行为不变）
+- [x] `go build ./...` 编译通过（仅前端变更，无需后端编译）
+- [x] `npx vite build` 前端构建通过

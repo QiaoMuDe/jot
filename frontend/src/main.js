@@ -5007,6 +5007,7 @@ function initEventListeners() {
     // 回收站按钮
     els.trashBackBtn.addEventListener('click', () => {
         switchView('grid');
+        loadNotes();
     });
     els.restoreAllBtn.addEventListener('click', window.restoreAllNotes);
     els.emptyTrashBtn.addEventListener('click', window.emptyTrash);
@@ -5014,6 +5015,7 @@ function initEventListeners() {
     // 数据管理按钮
     els.dataBackBtn.addEventListener('click', () => {
         switchView('grid');
+        loadNotes();
     });
     els.exportDataBtn.addEventListener('click', exportData);
     els.importDataBtn.addEventListener('click', importData);
@@ -5029,14 +5031,17 @@ function initEventListeners() {
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');
+        loadNotes();
     });
 
     els.todoBackBtn.addEventListener('click', () => {
         switchView('grid');
+        loadNotes();
     });
 
     els.settingsBackBtn.addEventListener('click', () => {
         switchView('grid');
+        loadNotes();
     });
 
     // 快速笔记开关

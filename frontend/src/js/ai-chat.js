@@ -370,7 +370,10 @@ function bindEvents() {
     // 返回按钮
     const backBtn = document.getElementById('aiChatBackBtn');
     if (backBtn) {
-        backBtn.addEventListener('click', () => window.switchView('grid'));
+        backBtn.addEventListener('click', () => {
+            window.switchView('grid');
+            window.loadNotes();
+        });
     }
 
     // 清空当前对话
@@ -719,12 +722,6 @@ function bindEvents() {
         if (enableThinking) searchToggle.classList.add('active');
         searchToggle.addEventListener('click', async () => {
             enableThinking = searchToggle.classList.toggle('active');
-            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
-            const settingToggle = document.getElementById('aiSettingSearchToggle');
-            if (settingToggle) {
-                settingToggle.classList.toggle('active', enableThinking);
-            }
-            try { await window.saveSettings(); } catch (_) {}
             await saveCurrentSessionConfig();
         });
     }
@@ -777,25 +774,11 @@ function bindEvents() {
                 } else {
                     searchSources.delete(source);
                 }
-                await saveCurrentSessionConfig();
                 // 更新按钮激活状态
                 if (searchSourcesBtn) {
                     searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
                 }
-                // 同步设置页对应开关
-                const settingMap = {
-                    'zhihu_search': 'aiSettingZhihuSearchToggle',
-                    'zhihu_global': 'aiSettingZhihuGlobalSearchToggle',
-                    'tavily': 'aiSettingTavilySearchToggle',
-                };
-                const settingId = settingMap[source];
-                if (settingId) {
-                    const settingToggle = document.getElementById(settingId);
-                    if (settingToggle) {
-                        settingToggle.classList.toggle('active', checkbox.checked);
-                    }
-                }
-                try { await window.saveSettings(); } catch (_) {}
+                await saveCurrentSessionConfig();
             });
         }
     });
@@ -805,12 +788,6 @@ function bindEvents() {
         if (enableCardRecall) cardRecallToggle.classList.add('active');
         cardRecallToggle.addEventListener('click', async () => {
             enableCardRecall = cardRecallToggle.classList.toggle('active');
-            // 先同步设置页 toggle，再保存（保证 saveSettings 读到最新值）
-            const settingToggle = document.getElementById('aiSettingCardRecallToggle');
-            if (settingToggle) {
-                settingToggle.classList.toggle('active', enableCardRecall);
-            }
-            try { await window.saveSettings(); } catch (_) {}
             await saveCurrentSessionConfig();
         });
     }
