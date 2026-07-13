@@ -7001,6 +7001,10 @@ async function init() {
 
     state.selectedTags = [];
     await loadSettings();
+    // 快速笔记：启用时自动打开全屏编辑器
+    if (els.quickNoteToggle?.checked) {
+        await openEditor(null, false, true);
+    }
     await initSortSettings();
     initAISettings();
     // 先恢复侧栏折叠状态

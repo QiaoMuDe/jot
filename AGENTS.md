@@ -2610,3 +2610,14 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 | **update 计数** | AGENTS.md 从更新 130 到 更新 131 |
+
+## 一百七十八、新增记忆点（修复快速笔记启动触发丢失）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 设置页快速笔记开关可正常保存和加载（checkbox 状态正确），但重启后编辑器不再自动弹出。详见 [fix-quicknote-startup-trigger.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/documents/fix-quicknote-startup-trigger.md) |
+| **根因** | 「unify-settings-load-save」重构中，旧 `loadQuickNoteSetting()` 函数被删除，但其启动时触发编辑器的逻辑（检查 `quick_note_enabled` 并调用 `openEditor(null, false, true)`）未被迁移到 `init()` 中。详见 [AGENTS.md#L7003-L7007](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7003-L7007) |
+| **修复** | 在 `init()` 的 `loadSettings()` 之后（[main.js#L7004-L7007](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L7004-L7007)）追加快速笔记检测：`if (els.quickNoteToggle?.checked) { await openEditor(null, false, true); }`。`loadSettings()` 已先一步写入 checkbox 状态，直接读取 DOM 即可。`openEditor` 的第三个参数 `startFullscreen=true` 复用已有逻辑直接进入全屏模式并跳过入场动画。 |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（`init()`，+4 行） |
+
+| **update 计数** | `AGENTS.md` 从更新 131 到 更新 132 |
