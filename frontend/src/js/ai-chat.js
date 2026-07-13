@@ -2,6 +2,7 @@
  * AI 对话模块 — 持久化多会话支持
  */
 import hljs from 'highlight.js';
+import { applyAIHighlightTheme } from './hljs-themes.js';
 import { marked } from 'marked';
 
 let messagesEl = null;        // #aiChatMessages
@@ -2566,20 +2567,22 @@ function renderMarkdown(el, content, deferHighlight) {
         const copyBtn = document.createElement('button');
         const isSingleLine = code && !code.textContent.trim().includes('\n');
         copyBtn.className = 'code-copy-btn' + (isSingleLine ? ' code-copy-btn--single' : '');
-        copyBtn.textContent = '复制';
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制`;
         copyBtn.title = '复制代码';
         copyBtn.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(code.textContent);
                 copyBtn.classList.add('copied');
-                copyBtn.textContent = '已复制';
+                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制`;
                 setTimeout(() => {
                     copyBtn.classList.remove('copied');
-                    copyBtn.textContent = '复制';
+                    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制`;
                 }, 1500);
             } catch (_) {
-                copyBtn.textContent = '失败';
-                setTimeout(() => { copyBtn.textContent = '复制'; }, 1500);
+                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> 失败`;
+                setTimeout(() => {
+                    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制`;
+                }, 1500);
             }
         });
         wrapper.appendChild(copyBtn);

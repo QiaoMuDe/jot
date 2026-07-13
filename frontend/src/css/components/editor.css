@@ -336,13 +336,41 @@
 
 .md-rendered pre {
     position: relative;
-    margin: 1.2em 0;
-    padding: 12px 16px;
+    padding: 12px 16px 10px 16px;
     border-radius: var(--radius-sm);
     overflow-x: auto;
+    overflow-y: hidden;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     min-height: 52px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    font-size: 0.82em;
+    line-height: 1.6;
+}
+
+/* 预览区代码块滚动条：专属 4px 细滚动条，靠近边框 */
+.md-rendered pre::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+.md-rendered pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+.md-rendered pre::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 2px;
+}
+.md-rendered pre::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+.md-rendered pre::-webkit-scrollbar-corner {
+    background: transparent;
+}
+.md-rendered pre::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 /* ==========================================================================
@@ -356,7 +384,8 @@
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--card-bg);
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(4px);
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.6;
@@ -383,6 +412,7 @@
 .copy-code-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    border-color: var(--accent);
     transform: scale(1.08);
 }
 
@@ -404,6 +434,13 @@
 /* pre wrapper：保留用于管理连续代码块之间的间距 */
 .pre-wrapper {
     position: relative;
+    margin: 1.2em 0;
+}
+.pre-wrapper pre {
+    margin: 0;
+}
+.pre-wrapper + .pre-wrapper {
+    margin-top: calc(1.2em - 1px);
 }
 
 /* 代码块语言标签：代码块外部右下角，主题自适应 */
@@ -1019,7 +1056,7 @@
 }
 
 .md-rendered code {
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
   font-size: 0.85em;
   padding: 0.15em 0.4em;
   background: var(--bg-secondary);
@@ -1034,6 +1071,7 @@
   line-height: 1.5;
   background: none;
   border: none;
+  font-family: var(--font-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
   color: var(--text-primary);
 }
 
@@ -1099,7 +1137,7 @@
 }
 
 [data-theme="light"] .md-rendered pre {
-  background: #f6f8fa;
+  background: var(--bg-secondary);
 }
 
 /* ===== 图片灯箱 ===== */

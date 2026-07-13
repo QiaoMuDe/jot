@@ -173,23 +173,23 @@
 
 /* ── 代码块 ── */
 .ai-msg-assistant pre {
-    background: var(--input-bg);
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px 8px 14px;
     margin: 0.5em 0;
     overflow-x: auto;
     overflow-y: hidden;
     font-size: 0.82em;
-    line-height: 1.5;
+    line-height: 1.6;
     /* 与编辑器 .md-rendered 一致的滚动条控制 */
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 /* AI 代码块滚动条：与编辑器预览完全一致的实现 */
 .ai-msg-assistant pre::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
 }
 .ai-msg-assistant pre::-webkit-scrollbar-track {
     background: transparent;
@@ -213,14 +213,27 @@
     background: none;
     padding: 0;
     border-radius: 0;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: var(--font-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
     font-size: inherit;
     color: var(--text-primary);
 }
 
-/* pre wrapper：为语言标签提供绝对定位容器 */
+/* pre wrapper：为语言标签和复制按钮提供绝对定位容器 */
 .ai-msg-assistant .pre-wrapper {
     position: relative;
+    margin: 0.5em 0;
+}
+.ai-msg-assistant .pre-wrapper pre {
+    margin: 0;
+}
+.ai-msg-assistant .pre-wrapper + .pre-wrapper {
+    margin-top: calc(0.5em - 1px);
+}
+
+/* highlight.js 样式重置 — 与编辑器预览一致 */
+.ai-msg-assistant .hljs {
+    background: transparent;
+    padding: 0;
 }
 
 /* 行内代码 */
@@ -236,19 +249,24 @@
 /* 代码复制按钮：pre-wrapper 右上角，悬浮显现 */
 .ai-msg-assistant .code-copy-btn {
     position: absolute;
-    top: 4px;
-    right: 8px;
-    background: var(--hover-bg);
+    top: 6px;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(4px);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
     cursor: pointer;
     font-size: 0.75rem;
     line-height: 1.5;
+    color: var(--text-muted);
     opacity: 0;
     transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     z-index: 1;
-    color: var(--text-muted);
+    font-family: inherit;
 }
 .ai-msg-assistant .pre-wrapper:hover .code-copy-btn,
 .ai-msg-assistant .code-copy-btn:hover {
@@ -258,12 +276,16 @@
 .ai-msg-assistant .code-copy-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    border-color: var(--accent);
     transform: scale(1.08);
 }
 .ai-msg-assistant .code-copy-btn.copied {
-    color: #16a34a;
-    border-color: #16a34a;
+    color: var(--success);
+    border-color: var(--success);
     opacity: 1;
+}
+.ai-msg-assistant .code-copy-btn.copied svg {
+    color: var(--success);
 }
 /* 单行代码块：复制按钮右侧垂直居中 */
 .ai-msg-assistant .code-copy-btn--single {
@@ -280,16 +302,18 @@
     top: 100%;
     right: 8px;
     margin-top: 4px;
+    padding: 2px 8px;
     font-size: 0.7rem;
-    color: var(--text-muted);
-    font-family: inherit;
-    user-select: none;
-    background: var(--hover-bg);
-    padding: 1px 6px;
+    font-family: var(--font-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
+    line-height: 1.5;
     border-radius: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     opacity: 0;
     transition: opacity 0.15s ease;
     pointer-events: none;
+    user-select: none;
 }
 .ai-msg-assistant .pre-wrapper:hover .code-lang-badge {
     opacity: 1;

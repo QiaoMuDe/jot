@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-13（更新 134）
+> 生成日期: 2026-07-13（更新 137）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2645,3 +2645,42 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 133 到 更新 134 |
+
+## 一百八十一、新增记忆点（AI 消息代码块与笔记预览代码块样式统一）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 消息代码块与笔记预览代码块视觉不一致：背景色不同、滚动条不同、字体大小和行高不同、复制按钮样式有差异 |
+| **CSS 变量统一代码字体** | `variables.css` 新增 `--font-mono` 变量（默认 'Consolas', 'Monaco', 'Courier New', monospace），供 JS 动态覆写。AI 代码块和笔记预览代码块的 `pre code` 字体改为 `var(--font-mono)` 跟随设置页字体选择。详见 [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css) |
+| **背景色统一** | AI 代码块背景 `var(--input-bg)` → `var(--bg-secondary)`，与笔记预览统一。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **滚动条统一** | AI 代码块和笔记代码块均使用 4px 细滚动条、2px 圆角、透明轨道、`var(--scrollbar-thumb)` thumb 颜色、hover 加深。AI 代码块 `scrollbar-width: thin` + `::-webkit-scrollbar` 系列样式。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **复制按钮统一** | 统一使用 SVG 图标 + 文字（默认📋+复制，成功✅+已复制，失败❌+失败）+ `backdrop-filter: blur(4px)` 毛玻璃背景 + hover 边框 `var(--accent)`。笔记预览代码块从纯文字按钮改为图标+文字。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **pre-wrapper 间距统一** | 笔记预览代码块从 `pre` 自身 `margin: 1.2em 0` 改为 `pre-wrapper` 接手 `margin` 控制，相邻代码块间距去重。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **主题色背景** | 笔记预览 `[data-theme="light"] .md-rendered pre` 从硬编码 `#f6f8fa` 改为 `var(--bg-secondary)` 变量，跟随主题。详见 [editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **涉及文件** | [variables.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/variables.css)、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[editor.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/editor.css)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 134 到 更新 135 |
+
+## 一百八十二、新增记忆点（设置字体同步应用到代码块）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 设置页选择字体（`font_family`）后，笔记正文和 AI 消息正文字体变化，但代码块字体不变，仍为浏览器的等宽字体默认值 |
+| **实现** | `main.js` 中 `applyFontFamily()` 选择字体时同时设置 CSS 变量 `--font-family` 和 `--font-mono`（等宽字体跟随所选字体）；清空字体时同时移除两个变量。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+| **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 135 到 更新 136 |
+
+## 一百八十三、新增记忆点（AI 消息代码高亮跟随设置页主题）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 消息代码块使用 highlight.js 且主题固定为 `github.css`（main.js 第 5 行静态导入），不跟随设置页 `code_highlight_theme` 设置。用户切换编辑器代码高亮主题后，AI 消息的代码块高亮不变，视觉不一致 |
+| **方案** | 将 8 个需要用的 highlight.js 主题 CSS 内容嵌入 JS 数据文件，动态创建 `<style id="ai-hljs-theme">` 标签注入/替换，按 CM6 主题名→hljs 文件名的映射表选择对应主题，在设置加载和切换时同步调用 |
+| **新建文件** | [hljs-themes-data.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes-data.js) — 嵌入 8 个 highlight.js 主题 CSS 内容（JSON 字符串）；[hljs-themes.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes.js) — CM6→hljs 映射 + `applyAIHighlightTheme()` 函数 |
+| **修改文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) — 移除第 5 行静态 import `highlight.js/styles/github.css`；在 `loadSettings()` 和 `applyCodeHighlightTheme()` 中同步调用 `applyAIHighlightTheme()`。[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) — 导入 `applyAIHighlightTheme`（main.js 的启动/切换同步已保证，无需在 renderMarkdown 中额外调用） |
+| **构建注意事项** | Vite 3 的 CSS 插件会拦截 node_modules 的 CSS 导入并添加 `?used` 参数，导致 `?raw`、`?inline`、`?url` 全部失败。改用 JS 数据文件嵌入 CSS 内容 + `<style>` 标签注入，完全绕过 CSS 插件 |
+| **主题映射** | monokai-dimmed→monokai-sublime、vscode-dark-plus→atom-one-dark-reasonable、vscode-light-plus→atom-one-light、one-dark-pro→atom-one-dark、github-dark→github-dark、catppuccin-mocha/ayu-mirage→monokai-sublime、gruvbox-dark→gruvbox-dark、dracula→dracula、material-palenight→atom-one-dark、github-light→github |
+| **涉及文件** | [hljs-themes-data.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes-data.js)、[hljs-themes.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 136 到 更新 137 |

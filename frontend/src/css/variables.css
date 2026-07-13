@@ -39,6 +39,8 @@
     --font-card-title: 500 0.938rem/1.4 var(--font-family);
     --font-body: 400 0.875rem/1.6 var(--font-family);
     --font-small: 400 0.75rem/1.5 var(--font-family);
+    /* 等宽字体 — 跟随用户字体设置，通过 JS 动态注入 */
+    --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
 
     /* 间距 */
     --space-1: 4px;

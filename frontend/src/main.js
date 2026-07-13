@@ -2,7 +2,7 @@ import './css/index.css';
 import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn, WindowFullscreen, WindowUnfullscreen, WindowIsFullscreen } from '../wailsjs/runtime/runtime.js';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
+import { applyAIHighlightTheme } from './js/hljs-themes.js';
 
 // CodeMirror 6 导入
 import { EditorState, Compartment } from '@codemirror/state';
@@ -1306,9 +1306,11 @@ function highlightMatch(text, keyword) {
 function applyFontFamily(fontFamily) {
     if (fontFamily) {
         document.documentElement.style.setProperty('--font-family', `${fontFamily}, system-ui, -apple-system, sans-serif`);
+        document.documentElement.style.setProperty('--font-mono', `${fontFamily}, 'Consolas', 'Monaco', 'Courier New', monospace`);
         els.fontFamilyDisplay.textContent = fontFamily;
     } else {
         document.documentElement.style.removeProperty('--font-family');
+        document.documentElement.style.removeProperty('--font-mono');
         els.fontFamilyDisplay.textContent = '系统默认';
     }
 }
@@ -3456,7 +3458,7 @@ function _applyPreviewDOMHelpers() {
         const codeEl = pre.querySelector('code');
         const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
         btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
-        btn.textContent = '复制';
+        btn.innerHTML = SVGS.copy + ' 复制';
         btn.title = '复制代码';
         btn.addEventListener('click', async () => {
             const code = pre.querySelector('code').textContent;
@@ -3466,11 +3468,11 @@ function _applyPreviewDOMHelpers() {
                 btn.innerHTML = SVGS.checkmark + ' 已复制';
                 setTimeout(() => {
                     btn.classList.remove('copied');
-                    btn.textContent = '复制';
+                    btn.innerHTML = SVGS.copy + ' 复制';
                 }, 1500);
             } catch {
                 btn.innerHTML = SVGS.xmark + ' 复制失败';
-                setTimeout(() => { btn.textContent = '复制'; }, 1000);
+                setTimeout(() => { btn.innerHTML = SVGS.copy + ' 复制'; }, 1000);
             }
         });
         pre.appendChild(btn);
@@ -7390,6 +7392,7 @@ function applyCodeHighlightThemeUI(themeName) {
  */
 function applyCodeHighlightTheme(themeName) {
     codeHighlightTheme = themeName;
+    applyAIHighlightTheme(themeName);
     // 若编辑器已打开，销毁重创建
     if (cmEditor) {
         const container = els.editorNoteContent;
@@ -7581,6 +7584,7 @@ async function loadSettings() {
 
         // --- 代码高亮主题 ---
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
+        applyAIHighlightTheme(codeHighlightTheme);
         applyCodeHighlightThemeUI(codeHighlightTheme);
 
         // --- AI: 服务商下拉 ---
