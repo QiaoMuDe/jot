@@ -1942,8 +1942,11 @@ function openRoleplaySelector() {
         if (refTagBtn) refTagBtn.classList.remove('active');
         if (refListWrap) refListWrap.scrollTop = 0;
         
-        // 加载笔记列表
-        await loadNoteList();
+        // 并行加载笔记本选项和笔记列表
+        await Promise.all([
+            loadAllNotebooks(),
+            loadNoteList()
+        ]);
     })();
 }
 
@@ -3111,7 +3114,7 @@ let typewriterTimer = null;
 function updateChatTitle() {
     const titleEl = document.getElementById('aiChatTitle');
     if (!titleEl) return;
-    if (activeSessionId !== null && chatHistory.length > 0) {
+    if (activeSessionId !== null) {
         const s = sessions.find(s => s.id === activeSessionId);
         titleEl.textContent = s ? s.title : 'AI 助手';
     } else {

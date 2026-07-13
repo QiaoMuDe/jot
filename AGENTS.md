@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-12（更新 131）
+> 生成日期: 2026-07-13（更新 134）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2621,3 +2621,27 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)（`init()`，+4 行） |
 
 | **update 计数** | `AGENTS.md` 从更新 131 到 更新 132 |
+
+## 一百七十九、新增记忆点（修复角色档案选择器笔记本筛选下拉为空）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 角色档案选择器打开时，笔记本筛选下拉菜单有时为空（无选项显示），而引用笔记选择器同一下拉正常 |
+| **根因** | `openRoleplaySelector()` 没有调用 `loadAllNotebooks()` 来填充笔记本缓存 `_notebooksCache`。该缓存初始值为 `null`，`rebuildRefNotebookOptions()` 检测到 `!_notebooksCache` 时直接 `return` 不渲染选项。详见 [ai-chat.js#L1875-L1948](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **"有时为空"原因** | 如果用户先打开引用笔记选择器（`_notebooksCache` 被填充），再打开角色档案选择器 → 下拉正常；如果用户直接打开角色档案选择器 → `_notebooksCache` 为 `null` → 下拉为空 |
+| **修复** | 在 `openRoleplaySelector()` 的异步 IIFE 中添加 `await loadAllNotebooks()`，与 `loadNoteList()` 并行调用（`Promise.all`），与 `openNoteRefModal()` 保持一致。详见 [ai-chat.js#L1946-L1951](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 132 到 更新 133 |
+
+## 一百八十、新增记忆点（修复空会话重命名后标题不更新）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 新建的空 AI 会话（无对话消息），在侧边栏重命名后，侧边栏条目名称正确更新，但页面顶部 `#aiChatTitle` 仍然显示"AI 助手" |
+| **根因** | `updateChatTitle()` 的条件 `activeSessionId !== null && chatHistory.length > 0` 要求会话必须有历史消息。空会话的 `chatHistory.length === 0` 导致条件不满足，始终走 `else` 分支显示"AI 助手"，即使会话已被重命名。详见 [ai-chat.js#L3114-L3123](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **修复** | 将条件 `if (activeSessionId !== null && chatHistory.length > 0)` 改为 `if (activeSessionId !== null)`。只要存在活跃会话就从 `sessions` 数组中读取 `title` 显示，`sessions.find()` 找不到时已有兜底逻辑回退"AI 助手"。详见 [ai-chat.js#L3117](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **影响范围** | 该函数共被 7 处调用（rename、switchSession、createSession、showWelcome 等场景），修改后所有调用场景统一受益：空会话重命名后标题正确更新、空会话切换时正确显示对应会话标题 |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 133 到 更新 134 |
