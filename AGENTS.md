@@ -2684,3 +2684,14 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [hljs-themes-data.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes-data.js)、[hljs-themes.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/hljs-themes.js)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 136 到 更新 137 |
+
+## 一百八十四、新增记忆点（优化表达提示词重写 — 从"文本润色器"改为"文本表达优化师"）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更内容** | 将 `OPTIMIZE_EXPRESSION_PROMPT`（输入框内嵌优化表达按钮的系统提示词）整体替换为用户提供的新版本。详见 [ai-chat.js#L134-L145](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L134-L145) |
+| **旧版** | 角色为"文本润色器"，规则以反例约束为主（"帮我写…"不真的写、"什么是…"不回答问题），输出格式要求严格（不要前缀/后缀/引号/说明） |
+| **新版** | 角色升级为"专业的文本表达优化师"，规则改为正向引导：100%保留原意、理顺逻辑去冗余、保持自然中文、自动适配语气。输出要求简化为"直接输出优化后的文本，不添加任何额外解释" |
+| **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`OPTIMIZE_EXPRESSION_PROMPT` 常量） |
+
+| **update 计数** | `AGENTS.md` 从更新 137 到 更新 138 |
