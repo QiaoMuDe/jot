@@ -2695,3 +2695,20 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`OPTIMIZE_EXPRESSION_PROMPT` 常量） |
 
 | **update 计数** | `AGENTS.md` 从更新 137 到 更新 138 |
+
+---
+
+## 一百八十五、新增记忆点（引入 fastlog 日志库 + 后端全面日志覆盖）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **引入日志库** | 后端引入 `gitee.com/MM-Q/fastlog` 日志库，日志目录 `~/.jot/logs`，基于 `Prod()` 配置(仅文件输出、启用级别路由、启用缓冲)，通过设置页分段滑块动态调整日志级别(DEBUG/INFO/WARN/ERROR) |
+| **LogService** | 新建 `internal/services/log_service.go`，封装 Init/SetLevel/Close/LevelFromInt/LevelToInt。Logger 注入到所有 Service 结构体 |
+| **App 层日志** | 覆盖 app.go 全部 ~110 个导出方法：读操作记 DEBUG(入口参数)+ERROR(错误)，写操作(创建/删除/导入/导出/设置变更)加 INFO 成功日志 |
+| **Service 层日志** | 6 个 Service(tag/note/notebook/ai/todo/profile)新增 `logger` 字段 + 所有错误路径 `Errorw` |
+| **Database 层日志** | `InitDB/InitBuiltinPrompts/InitDefaultSettings` 使用 `fmt.Printf` 打印初始化进度和结果 |
+| **日志审计覆盖** | `migrateSensitiveKeys` 从 `fmt.Printf` 转为结构化日志；`CallAIStream` 强化(搜索/召回/技能注入/完成耗时)；所有私有方法(exportSnapshot/replaceDatabase/importFromArchive/reconnectDB/rebuildServices)添加日志 |
+| **设置页 UI** | 新增日志级别分段滑块(DEBUG/INFO/WARN/ERROR)、打开日志目录按钮；三栏布局(标题/描述/控件) |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[log_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/log_service.go)、[note_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/note_service.go)、[tag_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/tag_service.go)、[notebook_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/notebook_service.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go)、[profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go)、[db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
+
+| **update 计数** | `AGENTS.md` 从更新 138 到 更新 139 |
