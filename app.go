@@ -1511,7 +1511,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, sessionID uint, isRegenerate bool, skillIds []string) {
+func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, sessionID uint, isRegenerate bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -1541,6 +1541,97 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 				messages = append([]services.Message{
 					{Role: "system", Content: "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI。你可以帮助用户写作、编程、翻译、总结、答疑以及完成其他文本处理任务。请根据用户的提问提供准确、有用的回答。"},
 				}, messages...)
+			}
+		}
+
+		// ── 步骤 2: 角色扮演上下文注入 ──
+		hasRoleplay := false
+		for _, sid := range skillIds {
+			if sid == "skill_roleplay" {
+				hasRoleplay = true
+				break
+			}
+		}
+		var roleplayContext string
+		if hasRoleplay && len(roleplayNoteIDs) > 0 {
+			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
+			if err == nil && refCtx != nil && refCtx.Context != "" {
+				roleplayContext = refCtx.Context
+				roleplayText := "以下是用户提供的人物设定笔记内容：\n\n" + refCtx.Context
+				found := false
+				for i := range messages {
+					if messages[i].Role == "system" {
+						messages[i].Content = messages[i].Content + "\n\n" + roleplayText
+						found = true
+						break
+					}
+				}
+				if !found {
+					messages = append([]services.Message{{Role: "system", Content: roleplayText}}, messages...)
+				}
+			}
+		}
+
+		// ── 步骤 3: 笔记引用上下文注入 ──
+		if len(referencedNoteIDs) > 0 {
+			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
+			if err == nil && refCtx != nil && refCtx.Context != "" {
+				found := false
+				for i := range messages {
+					if messages[i].Role == "system" {
+						messages[i].Content = messages[i].Content + "\n\n" + refCtx.Context
+						found = true
+						break
+					}
+				}
+				if !found {
+					messages = append([]services.Message{{Role: "system", Content: refCtx.Context}}, messages...)
+				}
+			}
+		}
+
+		// ── 步骤 4: 追问引用内容注入 ──
+		if followUpRefContent != "" {
+			refText := "用户正在追问以下内容：\n" + followUpRefContent
+			if len([]rune(followUpRefContent)) > 500 {
+				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
+			}
+			found := false
+			for i := range messages {
+				if messages[i].Role == "system" {
+					messages[i].Content = messages[i].Content + "\n\n" + refText
+					found = true
+					break
+				}
+			}
+			if !found {
+				messages = append([]services.Message{{Role: "system", Content: refText}}, messages...)
+			}
+		}
+
+		// ── 步骤 5: 上传文件内容注入 ──
+		if len(uploadedFiles) > 0 {
+			var b strings.Builder
+			b.WriteString("用户上传了以下文件内容，请基于这些内容回答用户的提问：\n")
+			for _, f := range uploadedFiles {
+				if f.Error != "" || f.Content == "" {
+					continue
+				}
+				sizeStr := formatFileSize(f.Size)
+				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
+			}
+			if b.Len() > 0 {
+				found := false
+				for i := range messages {
+					if messages[i].Role == "system" {
+						messages[i].Content = messages[i].Content + "\n\n" + b.String()
+						found = true
+						break
+					}
+				}
+				if !found {
+					messages = append([]services.Message{{Role: "system", Content: b.String()}}, messages...)
+				}
 			}
 		}
 
@@ -1749,6 +1840,10 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			a.LogSvc.Logger.Infow("AI 技能注入启动", fastlog.Int("skill_count", len(skillIds)))
 			skillPrompt, err := a.aiService.GetSkillPrompts(skillIds)
 			if err == nil && skillPrompt != "" {
+				// 替换角色扮演占位符
+				if hasRoleplay && roleplayContext != "" {
+					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
+				}
 				found := false
 				for i := range messages {
 					if messages[i].Role == "system" {
@@ -1861,6 +1956,17 @@ func (a *App) CallAIStream(streamGen int, messages []services.Message, thinkingE
 			},
 		)
 	}()
+}
+
+// formatFileSize 将字节数转为人类可读的文件大小字符串
+func formatFileSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	} else if size < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(size)/1024)
+	} else {
+		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	}
 }
 
 // estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致）

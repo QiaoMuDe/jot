@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-13（更新 137）
+> 生成日期: 2026-07-14（更新 138）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -56,7 +56,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块 ~3700 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步）
+│   │   │   ├── ai-chat.js              # AI 对话模块 ~4380 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -214,7 +214,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入（引用笔记/角色扮演/追问引用/上传文件）） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -482,7 +482,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
-5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计。Provider 通过前端设置页下拉切换，配置自动持久化。
+5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计 + **后端统一上下文注入**。Provider 通过前端设置页下拉切换，配置自动持久化。
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
@@ -504,11 +504,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 3650 | AI 对话 JS 逻辑（含引用笔记选择器/上下文注入/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送） |
+| `frontend/src/js/ai-chat.js` | 4385 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `app.go` | 1791 | Wails 绑定层（100+ API） |
+| `app.go` | 3027 | Wails 绑定层（100+ API） |
 | `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
 | `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
 | `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
@@ -602,6 +602,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 16. **AI 错误通知修复（`ai:stream-error` JSON 格式化）**：`app.go` 中搜索关键词精炼失败时（`services.RefineSearchQuery` 出错），原始代码拼接纯文本前缀 `"搜索关键词精炼失败: " + err.Error()` 发射事件，前端 `JSON.parse()` 失败，错误落入 `addErrorMessage()` 被插入对话流。修复后通过 `errors.As()` 解出 `*aicli.AIErrorWrapper`，直接透传其 JSON（含 `category/user_msg/raw`）；若不是 AI 错误则用 `CategoryUnknown` 创建标准 JSON。前端收到合法 JSON 后走 `showNotification()` 右上角通知。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1079-L1088)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L2227-L2237)、[errors.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/aicli/errors.go)
 
 17. **全局链接系统浏览器打开**：在 `main.js` 的 `initEventListeners()` 中添加 `document` 级 click 事件委托，拦截所有 `<a>` 标签点击，通过 `e.preventDefault()` + `window.runtime.BrowserOpenURL(href)` 在系统默认浏览器中打开。排除 `#` 锚点链接和 `javascript:` 伪协议。同时移除了 `ai-chat.js` 中 `messagesEl` 级别的区域委托和搜索来源面板中的冗余 `link.addEventListener` 代码。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L5131-L5138)
+
+18. **后端统一上下文注入架构**：AI 对话的上下文拼接逻辑全部迁移到后端 `CallAIStream`。8 步拼接顺序定义为 `1→2→3→4→5→6→7→8`：角色扮演笔记 → 笔记引用 → 追问引用 → 上传文件 → 联网搜索结果 → 卡片召回结果 → 技能提示词（含 `{roleplay_context}` 占位符替换）。前端只传元数据（角色扮演笔记 IDs / 引用笔记 IDs / 追问引用文本 / 上传文件列表），不再拼接 `systemContext`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1548-L1655)
 
 ---
 
@@ -2712,3 +2714,18 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[log_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/log_service.go)、[note_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/note_service.go)、[tag_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/tag_service.go)、[notebook_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/notebook_service.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[todo_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/todo_service.go)、[profile_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/profile_service.go)、[db.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/database/db.go)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[settings-panel.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/settings-panel.css)、[main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js) |
 
 | **update 计数** | `AGENTS.md` 从更新 138 到 更新 139 |
+
+## 一百八十六、新增记忆点（AI 上下文拼接迁移到后端）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 对话的上下文拼接（引用笔记/角色扮演/追问引用/上传文件）原由前端在 `onSend()` 中拼接 `systemContext` 后传给后端。职责分散、不易扩展、前端负担重 |
+| **迁移方案** | 将 4 项上下文拼接逻辑从 `ai-chat.js` 移至 `app.go` 的 `CallAIStream` 中。前端只传元数据（引用笔记 IDs / 角色扮演笔记 IDs / 追问引用文本 / 上传文件列表），后端统一拼接 |
+| **拼接顺序** | `1→2→3→4→5→6→7→8`：身份提示词 → 角色扮演笔记 → 笔记引用 → 追问引用 → 上传文件 → 联网搜索结果 → 卡片召回结果 → 技能提示词（含 `{roleplay_context}` 占位符替换） |
+| **后端变更** | `app.go` 中 `CallAIStream` 签名新增 4 个参数：`referencedNoteIDs []uint`、`roleplayNoteIDs []uint`、`followUpRefContent string`、`uploadedFiles []AIChatFileResult`。步骤 1-5 新增注入逻辑。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1548-L1655) |
+| **前端变更** | `ai-chat.js` 的 `onSend()` 删除 ~40 行 `systemContext` 拼接代码，`startStreaming()` 删除 `systemContext` 参数，直接传元数据给 `CallAIStream`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **角色扮演 Bug 修复** | 迁移前 `{roleplay_context}` 占位符在技能提示词中未被实际替换（前端只拼入了 raw 笔记内容，后端没做替换）。迁移后步骤 2 注入 raw 背景内容，步骤 8 使用 `strings.Replace` 实际替换占位符 |
+| **WailsJS 绑定同步** | `App.js` 和 `App.d.ts` 的 `CallAIStream` 签名同步更新至 12 参数。详见 [App.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.js)、[App.d.ts](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.d.ts) |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[App.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.js)、[App.d.ts](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.d.ts) |
+
+| **update 计数** | `AGENTS.md` 从更新 139 到 更新 140 |

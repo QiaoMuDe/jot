@@ -2000,45 +2000,7 @@ async function onSend() {
     chatHistory.push({ role: 'user', content: text, tokens: 0 });
     updateContextSize();
 
-    // 构建笔记引用上下文 (后端已处理截断) 
-    let systemContext = '';
-    if (referencedNotes.length > 0) {
-        systemContext = await getNoteContext();
-    }
-    
-    // 角色扮演上下文注入
-    if (activeSkills.roleplay && roleplayNotes.length > 0) {
-        const roleplayCtx = await getRoleplayContext();
-        if (roleplayCtx) {
-            systemContext = systemContext
-                ? roleplayCtx + '\n\n' + systemContext
-                : roleplayCtx;
-        }
-    }
-
-    // 追问引用注入 system context
-    if (followUpRef) {
-        const refText = '用户正在追问以下内容：\n' + followUpRef.slice(0, 500);
-        systemContext = systemContext
-            ? systemContext + '\n\n' + refText
-            : refText;
-    }
-
-    // 上传文件内容注入 system context
-    if (uploadedFiles.length > 0) {
-        let fileContext = '用户上传了以下文件内容，请基于这些内容回答用户的提问：\n';
-        uploadedFiles.forEach((f, idx) => {
-            const sizeStr = formatFileSize(f.size);
-            fileContext += '\n--- 文件: ' + f.name + ' (' + sizeStr + ') ---\n';
-            fileContext += f.content;
-            fileContext += '\n---';
-        });
-        systemContext = systemContext
-            ? systemContext + '\n\n' + fileContext
-            : fileContext;
-    }
-
-    startStreaming(false, systemContext);
+    startStreaming(false);
 
     // 发送后清空上传文件列表
     uploadedFiles = [];
@@ -2048,9 +2010,8 @@ async function onSend() {
 /**
  * 启动流式输出
  * @param {boolean} isRegenerate - 是否再生
- * @param {string} systemContext - 可选的 system prompt / 笔记上下文, 拼入 messages 开头但不存库
  */
-function startStreaming(isRegenerate = false, systemContext = '') {
+function startStreaming(isRegenerate = false) {
     if (isStreaming) return;
     isStreaming = true;
 
@@ -2446,13 +2407,6 @@ function startStreaming(isRegenerate = false, systemContext = '') {
     });
     unsubs.push(unsubError);
 
-    // 构建发送给 API 的消息列表 (system 上下文 + 历史对话) 
-    let systemContent = systemContext || '';
-    let messages = chatHistory;
-    if (systemContent) {
-        messages = [{ role: 'system', content: systemContent }, ...chatHistory];
-    }
-
     try {
         const skillIds = Object.entries(activeSkills).map(([id, config]) => {
             if (id === 'translate') {
@@ -2461,7 +2415,9 @@ function startStreaming(isRegenerate = false, systemContext = '') {
             return 'skill_' + id;
         });
         const searchSourcesArray = Array.from(searchSources);
-        window.go.main.App.CallAIStream(myGen, messages, enableThinking, searchSourcesArray, enableCardRecall, activeSessionId, isRegenerate, skillIds);
+        const refNoteIDs = referencedNotes.map(n => n.id);
+        const roleNoteIDs = roleplayNotes.map(n => n.id);
+        window.go.main.App.CallAIStream(myGen, chatHistory, enableThinking, searchSourcesArray, enableCardRecall, activeSessionId, isRegenerate, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
