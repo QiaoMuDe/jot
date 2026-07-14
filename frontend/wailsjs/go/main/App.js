@@ -282,6 +282,10 @@ export function OpenDataDir() {
   return window['go']['main']['App']['OpenDataDir']();
 }
 
+export function OpenLogDir() {
+  return window['go']['main']['App']['OpenLogDir']();
+}
+
 export function OpenProjectURL(arg1) {
   return window['go']['main']['App']['OpenProjectURL'](arg1);
 }

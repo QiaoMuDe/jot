@@ -132,6 +132,8 @@
 
 .font-size-btn:hover {
   border-color: var(--accent-light);
+  background: var(--accent-lighter);
+  transform: translateY(-1px);
 }
 
 .font-size-btn.active {

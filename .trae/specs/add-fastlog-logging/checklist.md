@@ -1,0 +1,22 @@
+# Checklist
+
+- [x] go.mod 添加了 `gitee.com/MM-Q/fastlog` 依赖
+- [x] `internal/services/log_service.go` 已创建，包含 LogService 结构体和 Init/SetLevel/Close 方法
+- [x] `SettingsConfig` 新增了 `LogLevel int` 字段
+- [x] `GetAllSettings()` 正确读取 `log_level`
+- [x] `SaveAllSettings()` 正确写入 `log_level`（含范围校验 0-5）
+- [x] `InitDefaultSettings` 新增 `log_level = "1"`
+- [x] `App` 结构体新增 `LogSvc *services.LogService` 字段
+- [x] `startup()` 中初始化 LogService 并设置日志级别
+- [x] `SaveAllSettings` 保存成功后调用 `SetLevel()` 动态调整日志级别
+- [x] `rebuildServices()` 中重建 LogService
+- [x] Logger 在应用退出时正确关闭
+- [x] `OpenLogDir()` 方法已实现，打开 `~/.jot/logs/`
+- [x] 后端关键路径已添加日志（startup/CallAIStream/SaveImage/ExportData/ResetDatabase 等）
+- [x] 前端设置页新增「日志设置」卡片
+- [x] 日志级别分段滑块（DEBUG / INFO / WARN / ERROR）正常显示
+- [x] 前端数据管理页新增「打开日志目录」按钮
+- [x] `loadSettings()` 正确读取并应用日志级别
+- [x] `saveSettings()` 正确保存日志级别
+- [x] 日志级别切换保存后后端实时生效
+- [x] 点击「打开日志目录」按钮正确打开文件管理器

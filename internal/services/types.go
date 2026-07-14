@@ -78,6 +78,7 @@ type SettingsConfig struct {
 	MaxFileSize               int    `json:"max_file_size"`
 	AISearchResultLimit       int    `json:"ai_search_result_limit"`
 	TrashCleanupRetentionDays int    `json:"trash_cleanup_retention_days"`
+	LogLevel                  int    `json:"log_level"`
 }
 
 // GetAllSettings 从 SettingService 读取全部设置项
@@ -108,6 +109,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		MaxFileSize:               parseIntSetting(s.Get("max_file_size"), 1),
 		AISearchResultLimit:       parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		TrashCleanupRetentionDays: parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
+		LogLevel:                  parseIntSetting(s.Get("log_level"), 1),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
@@ -152,6 +154,11 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.TrashCleanupRetentionDays > 365 {
 		cfg.TrashCleanupRetentionDays = 365
 	}
+	if cfg.LogLevel < 0 {
+		cfg.LogLevel = 1
+	} else if cfg.LogLevel > 5 {
+		cfg.LogLevel = 5
+	}
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
 	cfg.TavilyAPIKey = EncodeB64(cfg.TavilyAPIKey)
@@ -183,6 +190,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"max_file_size":                strconv.Itoa(cfg.MaxFileSize),
 		"ai_search_result_limit":       strconv.Itoa(cfg.AISearchResultLimit),
 		"trash_cleanup_retention_days": strconv.Itoa(cfg.TrashCleanupRetentionDays),
+		"log_level":                    strconv.Itoa(cfg.LogLevel),
 	}
 
 	for k, v := range sets {

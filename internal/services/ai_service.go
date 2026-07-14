@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"gitee.com/MM-Q/fastlog"
 	"jot/internal/aicli"
 	"jot/internal/models"
 
@@ -52,12 +53,13 @@ type SessionConfig struct {
 
 // AIService 封装 AI 相关的业务逻辑操作
 type AIService struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *fastlog.Logger
 }
 
 // NewAIService 创建一个新的 AIService 实例
-func NewAIService(db *gorm.DB) *AIService {
-	return &AIService{db: db}
+func NewAIService(db *gorm.DB, logger *fastlog.Logger) *AIService {
+	return &AIService{db: db, logger: logger}
 }
 
 // GetSkillPrompts 根据 skill key 列表从数据库查询并拼接技能提示词
@@ -67,6 +69,7 @@ func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
 	}
 	var prompts []models.AIPrompt
 	if err := s.db.Where("key IN ?", skillIds).Find(&prompts).Error; err != nil {
+		s.logger.Errorw("AIService.GetSkillPrompts 失败", fastlog.Error(err))
 		return "", fmt.Errorf("查询技能提示词失败: %w", err)
 	}
 	if len(prompts) == 0 {
@@ -100,21 +103,30 @@ func (a *AIService) GetConfig() AIConfig {
 func (a *AIService) SaveConfig(cfg AIConfig) error {
 	svc := NewSettingService(a.db)
 	if err := svc.Set("ai_provider", cfg.Provider); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
 	if err := svc.Set("ai_base_url", cfg.BaseURL); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
 	if err := svc.Set("ai_api_key", EncodeB64(cfg.APIKey)); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
 	if err := svc.Set("ai_model", cfg.Model); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
 	if err := svc.Set("tavily_api_key", EncodeB64(cfg.TavilyAPIKey)); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
-	return svc.Set("zhihu_access_secret", EncodeB64(cfg.ZhihuAccessSecret))
+	if err := svc.Set("zhihu_access_secret", EncodeB64(cfg.ZhihuAccessSecret)); err != nil {
+		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // CallAI 调用 AI 接口（非流式）
@@ -139,6 +151,7 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 
 	content, _, err := client.Chat(ctx, aicliMsgs, false)
 	if err != nil {
+		a.logger.Errorw("AIService.CallAI 失败", fastlog.Error(err))
 		return "", fmt.Errorf("AI 调用失败: %w", err)
 	}
 
@@ -451,12 +464,16 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnabledSkills:            cfg.EnabledSkills,
 		RoleplayNotes:            cfg.RoleplayNotes,
 	}
-	return a.db.Create(&record).Error
+	if err := a.db.Create(&record).Error; err != nil {
+		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // SaveSessionConfig 保存会话配置
 func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
-	return a.db.Where("session_id = ?", sessionID).Assign(map[string]interface{}{
+	err := a.db.Where("session_id = ?", sessionID).Assign(map[string]interface{}{
 		"model_name":                  cfg.ModelName,
 		"enable_thinking":             cfg.EnableThinking,
 		"zhihu_search_enabled":        cfg.ZhihuSearchEnabled,
@@ -467,6 +484,10 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"enabled_skills":              cfg.EnabledSkills,
 		"roleplay_notes":              cfg.RoleplayNotes,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
+	if err != nil {
+		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // LoadSessionConfig 加载会话配置，如果不存在则自动创建默认配置并返回
@@ -503,13 +524,19 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 func (a *AIService) DeleteAISession(id uint) error {
 	// 级联删除消息
 	if err := a.db.Where("session_id = ?", id).Delete(&models.AIMessage{}).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAISession 失败", fastlog.Error(err))
 		return err
 	}
 	// 删除会话配置
 	if err := a.db.Where("session_id = ?", id).Delete(&models.AISessionConfig{}).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAISession 失败", fastlog.Error(err))
 		return err
 	}
-	return a.db.Delete(&models.AISession{}, id).Error
+	if err := a.db.Delete(&models.AISession{}, id).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAISession 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // DeleteEmptyAISessions 删除没有关联消息的 AI 会话（同时清理对应的会话配置）
@@ -534,21 +561,34 @@ func (a *AIService) DeleteOrphanMessages() int64 {
 
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
-	return a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
+	err := a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
+	if err != nil {
+		a.logger.Errorw("AIService.RenameAISession 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // TogglePinAISession 切换会话置顶状态
 func (a *AIService) TogglePinAISession(id uint) error {
 	var session models.AISession
 	if err := a.db.First(&session, id).Error; err != nil {
+		a.logger.Errorw("AIService.TogglePinAISession 失败", fastlog.Error(err))
 		return err
 	}
-	return a.db.Model(&session).Update("is_pinned", gorm.Expr("NOT is_pinned")).Error
+	err := a.db.Model(&session).Update("is_pinned", gorm.Expr("NOT is_pinned")).Error
+	if err != nil {
+		a.logger.Errorw("AIService.TogglePinAISession 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // UpdateSessionContextTokens 更新会话的上下文 Token 数
 func (a *AIService) UpdateSessionContextTokens(sessionID uint, tokens int) error {
-	return a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("context_tokens", tokens).Error
+	err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("context_tokens", tokens).Error
+	if err != nil {
+		a.logger.Errorw("AIService.UpdateSessionContextTokens 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // LoadAISessionMessages 加载会话的所有消息（按 created_at ASC）
@@ -582,6 +622,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {
+			a.logger.Errorw("AIService.SaveAIMessages 失败", fastlog.Error(err))
 			return err
 		}
 	}
@@ -594,6 +635,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 	// 如果是首轮对话，自动生成标题（取第一条 user 消息前 30 字）
 	var session models.AISession
 	if err := a.db.First(&session, sessionID).Error; err != nil {
+		a.logger.Errorw("AIService.SaveAIMessages 失败", fastlog.Error(err))
 		return err
 	}
 	if session.Title == "新对话" {
@@ -604,7 +646,11 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 				if len(runes) > 30 {
 					title = string(runes[:30]) + "..."
 				}
-				return a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error
+				if err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
+					a.logger.Errorw("AIService.SaveAIMessages 失败", fastlog.Error(err))
+					return err
+				}
+				return nil
 			}
 		}
 	}
@@ -614,12 +660,20 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 
 // ClearAISessionMessages 清空指定会话的所有消息（不删除会话本身）
 func (a *AIService) ClearAISessionMessages(sessionID uint) error {
-	return a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
+	err := a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
+	if err != nil {
+		a.logger.Errorw("AIService.ClearAISessionMessages 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // UpdateAIMessageContent 更新指定 AI 消息的 content 字段
 func (a *AIService) UpdateAIMessageContent(id uint, content string) error {
-	return a.db.Model(&models.AIMessage{}).Where("id = ?", id).Update("content", content).Error
+	err := a.db.Model(&models.AIMessage{}).Where("id = ?", id).Update("content", content).Error
+	if err != nil {
+		a.logger.Errorw("AIService.UpdateAIMessageContent 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // UpdateLastUserMessageTokens 更新指定会话中最后一条用户消息的 tokens（用于编辑后同步）
@@ -629,12 +683,20 @@ func (a *AIService) UpdateLastUserMessageTokens(sessionID uint, tokens int) erro
 	if result.RowsAffected == 0 {
 		return nil
 	}
-	return a.db.Model(&msg).Update("tokens", tokens).Error
+	err := a.db.Model(&msg).Update("tokens", tokens).Error
+	if err != nil {
+		a.logger.Errorw("AIService.UpdateLastUserMessageTokens 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // DeleteAIMessage 按 ID 删除单条 AI 消息
 func (a *AIService) DeleteAIMessage(id uint) error {
-	return a.db.Delete(&models.AIMessage{}, id).Error
+	err := a.db.Delete(&models.AIMessage{}, id).Error
+	if err != nil {
+		a.logger.Errorw("AIService.DeleteAIMessage 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // DeleteAIMessagesAfter 删除指定会话中在指定消息之后的所有消息（按 created_at 比较）
@@ -642,28 +704,41 @@ func (a *AIService) DeleteAIMessagesAfter(sessionID uint, messageID uint) (int64
 	// 先查目标消息的 created_at
 	var msg models.AIMessage
 	if err := a.db.Select("created_at").First(&msg, messageID).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAIMessagesAfter 失败", fastlog.Error(err))
 		return 0, err
 	}
 	// 删除该 session 中 created_at 大于目标消息的所有记录
 	result := a.db.Where("session_id = ? AND created_at > ?", sessionID, msg.CreatedAt).Delete(&models.AIMessage{})
+	if result.Error != nil {
+		a.logger.Errorw("AIService.DeleteAIMessagesAfter 失败", fastlog.Error(result.Error))
+	}
 	return result.RowsAffected, result.Error
 }
 
 // ClearAllAISessions 清空所有 AI 会话、消息及会话配置
 func (a *AIService) ClearAllAISessions() error {
 	if err := a.db.Where("1 = 1").Delete(&models.AIMessage{}).Error; err != nil {
+		a.logger.Errorw("AIService.ClearAllAISessions 失败", fastlog.Error(err))
 		return err
 	}
 	if err := a.db.Where("1 = 1").Delete(&models.AISessionConfig{}).Error; err != nil {
+		a.logger.Errorw("AIService.ClearAllAISessions 失败", fastlog.Error(err))
 		return err
 	}
-	return a.db.Where("1 = 1").Delete(&models.AISession{}).Error
+	if err := a.db.Where("1 = 1").Delete(&models.AISession{}).Error; err != nil {
+		a.logger.Errorw("AIService.ClearAllAISessions 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // CountSessions 获取 AI 会话总数（不含软删除）
 func (a *AIService) CountSessions() (int64, error) {
 	var count int64
 	err := a.db.Model(&models.AISession{}).Where("deleted_at IS NULL").Count(&count).Error
+	if err != nil {
+		a.logger.Errorw("AIService.CountSessions 失败", fastlog.Error(err))
+	}
 	return count, err
 }
 
@@ -671,6 +746,9 @@ func (a *AIService) CountSessions() (int64, error) {
 func (a *AIService) CountMessages() (int64, error) {
 	var count int64
 	err := a.db.Model(&models.AIMessage{}).Count(&count).Error
+	if err != nil {
+		a.logger.Errorw("AIService.CountMessages 失败", fastlog.Error(err))
+	}
 	return count, err
 }
 
@@ -678,6 +756,9 @@ func (a *AIService) CountMessages() (int64, error) {
 func (a *AIService) SumTokens() (int64, error) {
 	var total int64
 	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(SUM(tokens), 0)").Scan(&total).Error
+	if err != nil {
+		a.logger.Errorw("AIService.SumTokens 失败", fastlog.Error(err))
+	}
 	return total, err
 }
 
@@ -685,6 +766,9 @@ func (a *AIService) SumTokens() (int64, error) {
 func (a *AIService) AvgResponseTime() (float64, error) {
 	var avg float64
 	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(AVG(total_elapsed), 0)").Where("total_elapsed > 0").Scan(&avg).Error
+	if err != nil {
+		a.logger.Errorw("AIService.AvgResponseTime 失败", fastlog.Error(err))
+	}
 	return avg, err
 }
 
@@ -692,6 +776,9 @@ func (a *AIService) AvgResponseTime() (float64, error) {
 func (a *AIService) AvgThinkingTime() (float64, error) {
 	var avg float64
 	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(AVG(thinking_elapsed), 0)").Where("thinking_elapsed > 0").Scan(&avg).Error
+	if err != nil {
+		a.logger.Errorw("AIService.AvgThinkingTime 失败", fastlog.Error(err))
+	}
 	return avg, err
 }
 
@@ -699,5 +786,8 @@ func (a *AIService) AvgThinkingTime() (float64, error) {
 func (a *AIService) MaxResponseTime() (float64, error) {
 	var max float64
 	err := a.db.Model(&models.AIMessage{}).Select("COALESCE(MAX(total_elapsed), 0)").Scan(&max).Error
+	if err != nil {
+		a.logger.Errorw("AIService.MaxResponseTime 失败", fastlog.Error(err))
+	}
 	return max, err
 }

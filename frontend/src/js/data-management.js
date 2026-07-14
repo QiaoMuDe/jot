@@ -327,6 +327,23 @@ export async function openDataDir() {
 }
 
 /**
+ * 在文件管理器中打开日志目录
+ */
+export async function openLogDir() {
+    const { nm } = window;
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenLogDir) {
+            await window.go.main.App.OpenLogDir();
+        } else {
+            nm.show('打开日志目录功能不可用', 'error');
+        }
+    } catch (e) {
+        console.error('打开日志目录失败:', e);
+        nm.show('打开日志目录失败', 'error');
+    }
+}
+
+/**
  * 导出笔记数据
  */
 export async function exportData() {

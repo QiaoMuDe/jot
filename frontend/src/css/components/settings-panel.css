@@ -10,7 +10,11 @@
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: var(--transition);
+  transition: all var(--anim-duration-fast) var(--anim-easing-spring);
+}
+
+.btn:active {
+  transform: scale(0.97);
 }
 
 .btn-sm {
@@ -27,6 +31,8 @@
 .btn-cancel:hover {
   background: var(--border);
   color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
 }
 
 .btn-save {
@@ -36,7 +42,8 @@
 
 .btn-save:hover {
   background: var(--accent-dark);
-  filter: brightness(1.1);
+  filter: brightness(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 /* 按钮加载状态 */
@@ -217,6 +224,7 @@
 
 .tag-delete-btn:hover {
   background: var(--tag-delete-hover-bg);
+  transform: scale(1.15);
 }
 
 .tag-add-form {
@@ -272,6 +280,39 @@
 }
 
 /* ==========================================================================
+   Section L: Settings Item Row (label + control horizontal layout)
+   ========================================================================== */
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+}
+
+.settings-label-title {
+    font-size: 0.813rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    min-width: 72px;
+}
+
+.settings-label-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.settings-item > :last-child {
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
    Section M: Sort Options & Page Size (Settings)
    ========================================================================== */
 
@@ -282,6 +323,15 @@
 
 .sort-segmented .segmented-indicator {
     width: calc(33.33% - 2px);
+}
+
+/* 日志级别分段控件（4 等分） */
+.log-level-segmented {
+    width: 280px;
+}
+
+.log-level-segmented .segmented-indicator {
+    width: calc(25% - 2px);
 }
 
 .page-size-control {
@@ -339,6 +389,11 @@
 
 .segmented-btn.active {
     color: #fff;
+}
+
+.segmented-btn:hover {
+    color: var(--text-primary);
+    background: rgba(0,0,0,0.03);
 }
 
 .page-size-label {
@@ -697,6 +752,7 @@
 .btn-secondary:hover {
   background: var(--border);
   color: var(--text-primary);
+  transform: translateY(-1px);
 }
 .btn-danger {
   background: var(--error, #ef4444);
@@ -704,7 +760,18 @@
   border: 1px solid transparent;
 }
 .btn-danger:hover {
-  filter: brightness(1.15);
+  filter: brightness(1.1);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+}
+
+/* ── 焦点环（键盘导航） ── */
+.btn:focus-visible,
+.segmented-btn:focus-visible,
+.font-size-btn:focus-visible,
+.preset-modal-close:focus-visible,
+.tag-delete-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ── API 配置预设 ── */
@@ -828,6 +895,7 @@
 .preset-modal-close:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    transform: scale(1.1);
 }
 
 .preset-modal-body {

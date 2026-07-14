@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
 	"jot/internal/models"
 )
@@ -14,11 +15,12 @@ import (
 type NoteService struct {
 	db             *gorm.DB
 	settingService *SettingService
+	logger         *fastlog.Logger
 }
 
 // NewNoteService 创建一个新的 NoteService 实例
-func NewNoteService(db *gorm.DB, settingService *SettingService) *NoteService {
-	return &NoteService{db: db, settingService: settingService}
+func NewNoteService(db *gorm.DB, settingService *SettingService, logger *fastlog.Logger) *NoteService {
+	return &NoteService{db: db, settingService: settingService, logger: logger}
 }
 
 // Create 创建一条新笔记，返回创建后的笔记对象
@@ -29,6 +31,7 @@ func (s *NoteService) Create(title, content, fileExt string) (*models.Note, erro
 		FileExt: fileExt,
 	}
 	if err := s.db.Create(&note).Error; err != nil {
+		s.logger.Errorw("NoteService.Create 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &note, nil
@@ -50,6 +53,7 @@ func (s *NoteService) Update(id uint, title, content, fileExt string) (*models.N
 		note.FileExt = fileExt
 	}
 	if err := s.db.Save(note).Error; err != nil {
+		s.logger.Errorw("NoteService.Update 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return note, nil
@@ -59,6 +63,7 @@ func (s *NoteService) Update(id uint, title, content, fileExt string) (*models.N
 func (s *NoteService) Delete(id uint) error {
 	result := s.db.Delete(&models.Note{}, id)
 	if result.Error != nil {
+		s.logger.Errorw("NoteService.Delete 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -71,6 +76,7 @@ func (s *NoteService) Delete(id uint) error {
 func (s *NoteService) PermanentDelete(id uint) error {
 	result := s.db.Unscoped().Delete(&models.Note{}, id)
 	if result.Error != nil {
+		s.logger.Errorw("NoteService.PermanentDelete 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -83,6 +89,7 @@ func (s *NoteService) PermanentDelete(id uint) error {
 func (s *NoteService) GetByID(id uint) (*models.Note, error) {
 	var note models.Note
 	if err := s.db.Preload("Tags").First(&note, id).Error; err != nil {
+		s.logger.Errorw("NoteService.GetByID 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("note not found")
 		}
@@ -98,6 +105,7 @@ func (s *NoteService) GetNoteContent(id uint) (string, error) {
 		Where("id = ? AND deleted_at IS NULL", id).
 		Select("content").
 		Take(&content).Error; err != nil {
+		s.logger.Errorw("NoteService.GetNoteContent 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("note not found")
 		}
@@ -227,6 +235,7 @@ func (s *NoteService) GetAllByNotebook(page, pageSize int, sortBy string, notebo
 		query = query.Where("notebook_id = ?", notebookID)
 	}
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NoteService.GetAllByNotebook 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -237,6 +246,7 @@ func (s *NoteService) GetAllByNotebook(page, pageSize int, sortBy string, notebo
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetAllByNotebook 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -249,6 +259,7 @@ func (s *NoteService) GetAllIDs() ([]uint, error) {
 	if err := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL").
 		Pluck("id", &ids).Error; err != nil {
+		s.logger.Errorw("NoteService.GetAllIDs 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return ids, nil
@@ -282,6 +293,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 	}
 
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NoteService.Search 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -292,6 +304,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.Search 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -325,6 +338,7 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	}
 
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NoteService.SearchByNotebook 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -335,6 +349,7 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.SearchByNotebook 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -362,6 +377,7 @@ func (s *NoteService) SearchNoteIDs(keyword string, tagIDs []uint) ([]uint, erro
 	}
 
 	if err := query.Pluck("id", &ids).Error; err != nil {
+		s.logger.Errorw("NoteService.SearchNoteIDs 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return ids, nil
@@ -388,6 +404,7 @@ func (s *NoteService) SearchNoteIDsByNotebook(keyword string, notebookID uint, t
 	}
 
 	if err := query.Pluck("id", &ids).Error; err != nil {
+		s.logger.Errorw("NoteService.SearchNoteIDsByNotebook 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return ids, nil
@@ -401,6 +418,7 @@ func (s *NoteService) TogglePin(id uint) (*models.Note, error) {
 	}
 	note.Pinned = !note.Pinned
 	if err := s.db.Model(note).UpdateColumn("pinned", note.Pinned).Error; err != nil {
+		s.logger.Errorw("NoteService.TogglePin 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return note, nil
@@ -413,6 +431,7 @@ func (s *NoteService) GetTrash(page, pageSize int) ([]models.Note, int64, error)
 
 	query := s.db.Model(&models.Note{}).Unscoped().Where("deleted_at IS NOT NULL")
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NoteService.GetTrash 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -422,6 +441,7 @@ func (s *NoteService) GetTrash(page, pageSize int) ([]models.Note, int64, error)
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetTrash 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -435,6 +455,7 @@ func (s *NoteService) RestoreAll() error {
 		Where("deleted_at IS NOT NULL").
 		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
 		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NoteService.RestoreAll 失败", fastlog.Error(err))
 		return err
 	}
 
@@ -442,6 +463,7 @@ func (s *NoteService) RestoreAll() error {
 		Where("deleted_at IS NOT NULL").
 		Update("deleted_at", nil)
 	if result.Error != nil {
+		s.logger.Errorw("NoteService.RestoreAll 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	return nil
@@ -451,6 +473,7 @@ func (s *NoteService) RestoreAll() error {
 func (s *NoteService) EmptyTrash() error {
 	result := s.db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.Note{})
 	if result.Error != nil {
+		s.logger.Errorw("NoteService.EmptyTrash 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	return nil
@@ -472,14 +495,20 @@ func (s *NoteService) MigrateOrphanNotes() int64 {
 
 // BatchPinNotes 批量置顶或取消置顶指定 ID 数组的笔记
 func (s *NoteService) BatchPinNotes(ids []uint, pin bool) error {
-	result := s.db.Model(&models.Note{}).Where("id IN ?", ids).UpdateColumn("pinned", pin)
-	return result.Error
+	err := s.db.Model(&models.Note{}).Where("id IN ?", ids).UpdateColumn("pinned", pin).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.BatchPinNotes 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // BatchDelete 批量软删除指定 ID 数组的笔记（移入回收站）
 func (s *NoteService) BatchDelete(ids []uint) error {
-	result := s.db.Where("id IN ?", ids).Delete(&models.Note{})
-	return result.Error
+	err := s.db.Where("id IN ?", ids).Delete(&models.Note{}).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.BatchDelete 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // BatchRestore 批量从回收站恢复指定 ID 数组的笔记
@@ -489,11 +518,15 @@ func (s *NoteService) BatchRestore(ids []uint) error {
 		Where("id IN ?", ids).
 		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
 		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NoteService.BatchRestore 失败", fastlog.Error(err))
 		return err
 	}
 
-	result := s.db.Unscoped().Model(&models.Note{}).Where("id IN ?", ids).Update("deleted_at", nil)
-	return result.Error
+	err := s.db.Unscoped().Model(&models.Note{}).Where("id IN ?", ids).Update("deleted_at", nil).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.BatchRestore 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // Restore 从回收站恢复指定 ID 的笔记（取消软删除）
@@ -501,6 +534,7 @@ func (s *NoteService) Restore(id uint) error {
 	// 先获取笔记信息（含软删除）
 	var note models.Note
 	if err := s.db.Unscoped().First(&note, id).Error; err != nil {
+		s.logger.Errorw("NoteService.Restore 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("note not found")
 		}
@@ -512,6 +546,7 @@ func (s *NoteService) Restore(id uint) error {
 	if err := s.db.Where("deleted_at IS NULL").First(&notebook, note.NotebookID).Error; err != nil {
 		// 笔记本不存在或已删除，迁移到默认笔记本（id=1）
 		if err := s.db.Unscoped().Model(&note).Update("notebook_id", 1).Error; err != nil {
+			s.logger.Errorw("NoteService.Restore 失败", fastlog.Error(err))
 			return err
 		}
 	}
@@ -519,6 +554,7 @@ func (s *NoteService) Restore(id uint) error {
 	// 恢复笔记
 	result := s.db.Unscoped().Model(&models.Note{}).Where("id = ?", id).Update("deleted_at", nil)
 	if result.Error != nil {
+		s.logger.Errorw("NoteService.Restore 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -538,6 +574,7 @@ func (s *NoteService) GetByTag(tagID uint, page, pageSize int, sortBy string) ([
 		Where("note_tags.tag_id = ? AND notes.deleted_at IS NULL", tagID)
 
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NoteService.GetByTag 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -547,6 +584,7 @@ func (s *NoteService) GetByTag(tagID uint, page, pageSize int, sortBy string) ([
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetByTag 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -560,18 +598,22 @@ func (s *NoteService) GetStats() (*DataStats, error) {
 
 	// 未删除笔记总数
 	if err := s.db.Model(&models.Note{}).Where("deleted_at IS NULL").Count(&totalNotes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetStats 失败", fastlog.Error(err))
 		return nil, err
 	}
 	// 回收站笔记数
 	if err := s.db.Model(&models.Note{}).Unscoped().Where("deleted_at IS NOT NULL").Count(&trashedNotes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetStats 失败", fastlog.Error(err))
 		return nil, err
 	}
 	// 置顶笔记数
 	if err := s.db.Model(&models.Note{}).Where("deleted_at IS NULL AND pinned = ?", true).Count(&pinnedNotes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetStats 失败", fastlog.Error(err))
 		return nil, err
 	}
 	// 笔记本数（包含软删除的保留计数，不统计已删除的笔记本）
 	if err := s.db.Model(&models.Notebook{}).Where("deleted_at IS NULL").Count(&totalNotebooks).Error; err != nil {
+		s.logger.Errorw("NoteService.GetStats 失败", fastlog.Error(err))
 		return nil, err
 	}
 
@@ -587,14 +629,17 @@ func (s *NoteService) GetStats() (*DataStats, error) {
 func (s *NoteService) ResetAll() error {
 	// 清空所有笔记（包括软删除，自动清理 note_tags 关联）
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Note{}).Error; err != nil {
+		s.logger.Errorw("NoteService.ResetAll 失败", fastlog.Error(err))
 		return err
 	}
 	// 清空所有标签（自动清理 note_tags 中残留关联）
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Tag{}).Error; err != nil {
+		s.logger.Errorw("NoteService.ResetAll 失败", fastlog.Error(err))
 		return err
 	}
 	// 清空所有待办
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Todo{}).Error; err != nil {
+		s.logger.Errorw("NoteService.ResetAll 失败", fastlog.Error(err))
 		return err
 	}
 	return nil
@@ -602,12 +647,20 @@ func (s *NoteService) ResetAll() error {
 
 // ExportBackup 使用 VACUUM INTO 创建数据库的压缩副本到指定路径
 func (s *NoteService) ExportBackup(destPath string) error {
-	return s.db.Exec("VACUUM INTO ?", destPath).Error
+	err := s.db.Exec("VACUUM INTO ?", destPath).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.ExportBackup 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // Vacuum 执行 SQLite VACUUM 命令，重建数据库文件以回收已删除数据占用的磁盘空间
 func (s *NoteService) Vacuum() error {
-	return s.db.Exec("VACUUM").Error
+	err := s.db.Exec("VACUUM").Error
+	if err != nil {
+		s.logger.Errorw("NoteService.Vacuum 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // GetAllNoteIDsByNotebook 获取指定笔记本中所有未删除笔记的 ID 数组
@@ -616,6 +669,7 @@ func (s *NoteService) GetAllNoteIDsByNotebook(notebookID uint) ([]uint, error) {
 	if err := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
 		Pluck("id", &ids).Error; err != nil {
+		s.logger.Errorw("NoteService.GetAllNoteIDsByNotebook 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return ids, nil
@@ -623,7 +677,11 @@ func (s *NoteService) GetAllNoteIDsByNotebook(notebookID uint) ([]uint, error) {
 
 // MigrateOrphanNotesToDefault 将 notebook_id=0 的存量笔记迁移到默认笔记本（id=1）
 func (s *NoteService) MigrateOrphanNotesToDefault() error {
-	return s.db.Model(&models.Note{}).Where("notebook_id = ?", 0).Update("notebook_id", 1).Error
+	err := s.db.Model(&models.Note{}).Where("notebook_id = ?", 0).Update("notebook_id", 1).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.MigrateOrphanNotesToDefault 失败", fastlog.Error(err))
+	}
+	return err
 }
 
 // MoveToNotebook 将单条笔记移动到目标笔记本
@@ -636,6 +694,7 @@ func (s *NoteService) MoveToNotebook(noteID uint, targetNotebookID uint) error {
 	// 检查目标笔记本是否存在
 	var notebook models.Notebook
 	if err := s.db.First(&notebook, targetNotebookID).Error; err != nil {
+		s.logger.Errorw("NoteService.MoveToNotebook 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("notebook not found")
 		}
@@ -643,7 +702,11 @@ func (s *NoteService) MoveToNotebook(noteID uint, targetNotebookID uint) error {
 	}
 
 	// 使用 UpdateColumn 以避免修改 UpdatedAt
-	return s.db.Model(&models.Note{}).Where("id = ?", noteID).UpdateColumn("notebook_id", targetNotebookID).Error
+	if err := s.db.Model(&models.Note{}).Where("id = ?", noteID).UpdateColumn("notebook_id", targetNotebookID).Error; err != nil {
+		s.logger.Errorw("NoteService.MoveToNotebook 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // BatchMoveToNotebook 批量将多条笔记移动到目标笔记本
@@ -651,6 +714,7 @@ func (s *NoteService) BatchMoveToNotebook(noteIDs []uint, targetNotebookID uint)
 	// 先检查目标笔记本是否存在
 	var notebook models.Notebook
 	if err := s.db.First(&notebook, targetNotebookID).Error; err != nil {
+		s.logger.Errorw("NoteService.BatchMoveToNotebook 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("notebook not found")
 		}
@@ -688,6 +752,7 @@ func (s *NoteService) UpdateFileExt(id uint, fileExt string) (*models.Note, erro
 	}
 	note.FileExt = fileExt
 	if err := s.db.Save(note).Error; err != nil {
+		s.logger.Errorw("NoteService.UpdateFileExt 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return note, nil
@@ -702,6 +767,7 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 		NotebookID: notebookID,
 	}
 	if err := s.db.Create(&note).Error; err != nil {
+		s.logger.Errorw("NoteService.CreateWithNotebook 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &note, nil
@@ -732,6 +798,7 @@ func (s *NoteService) SearchFull(keywords []string, limit int) ([]models.Note, e
 		Limit(limit)
 
 	if err := query.Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.SearchFull 失败", fastlog.Error(err))
 		return nil, err
 	}
 

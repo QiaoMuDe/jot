@@ -19,7 +19,7 @@ import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/cons
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos, cleanupOrphanImages } from './js/data-management.js';
+import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, openLogDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos, cleanupOrphanImages } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -423,6 +423,9 @@ const els = {
     resetAllBtn: $('resetAllBtn'),
     vacuumDbBtn: $('vacuumDbBtn'),
     openDataDirBtn: $('openDataDirBtn'),
+    openLogDirBtn: $('openLogDirBtn'),
+    logLevelControl: $('logLevelControl'),
+    logLevelIndicator: $('logLevelIndicator'),
     clearAISessionsBtn: $('clearAISessionsBtn'),
     clearCompletedTodosBtn: $('clearCompletedTodosBtn'),
     cleanupOrphanImagesBtn: $('cleanupOrphanImagesBtn'),
@@ -1201,7 +1204,10 @@ async function loadTags() {
 async function createTag() {
     const name = els.newTagName.value.trim();
     const color = els.newTagColor.value;
-    if (!name) return;
+    if (!name) {
+        nm.show('请输入标签名称', 'warning');
+        return;
+    }
 
     // 检查标签名是否已存在
     if (state.tags && state.tags.some(tag => tag.name === name)) {
@@ -5027,6 +5033,29 @@ function initEventListeners() {
     els.resetAllBtn.addEventListener('click', resetDatabase);
     els.vacuumDbBtn.addEventListener('click', vacuumDatabase);
     els.openDataDirBtn.addEventListener('click', openDataDir);
+    els.openLogDirBtn?.addEventListener('click', openLogDir);
+    if (els.logLevelControl && els.logLevelIndicator) {
+        const moveLogLevelIndicator = (btn) => {
+            const btns = Array.from(els.logLevelControl.querySelectorAll('.segmented-btn'));
+            const index = btns.indexOf(btn);
+            if (index >= 0) {
+                const cw = els.logLevelControl.offsetWidth;
+                const segW = (cw - 4) / btns.length;
+                els.logLevelIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+            }
+        };
+        els.logLevelControl.querySelectorAll('.segmented-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                // 切换 active 状态
+                els.logLevelControl.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                moveLogLevelIndicator(btn);
+                // 保存设置
+                await saveSettings();
+                window.nm?.show?.('日志级别已保存', 'success');
+            });
+        });
+    }
     els.clearAISessionsBtn.addEventListener('click', clearAISessions);
     els.clearCompletedTodosBtn.addEventListener('click', clearCompletedTodos);
     els.cleanupOrphanImagesBtn.addEventListener('click', cleanupOrphanImages);
@@ -7717,6 +7746,26 @@ async function loadSettings() {
         const retentionDays = document.getElementById('trashCleanupRetentionDays');
         if (retentionDays) retentionDays.value = cfg.trash_cleanup_retention_days || 30;
 
+        // --- 日志级别 ---
+        if (els.logLevelControl) {
+            const segBtns = els.logLevelControl.querySelectorAll('.segmented-btn');
+            const logLevel = cfg.log_level !== undefined ? cfg.log_level : 1;
+            segBtns.forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.value) === logLevel);
+            });
+            // 移动指示器
+            const activeBtn = els.logLevelControl.querySelector('.segmented-btn.active');
+            if (activeBtn && els.logLevelIndicator) {
+                const btns = Array.from(segBtns);
+                const index = btns.indexOf(activeBtn);
+                if (index >= 0) {
+                    const cw = els.logLevelControl.offsetWidth;
+                    const segW = (cw - 4) / btns.length;
+                    els.logLevelIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                }
+            }
+        }
+
         // --- AI: 获取模型按钮状态 ---
         const canFetch = cfg.ai_provider === 'openai' || cfg.ai_provider === 'ollama';
         if (els.aiFetchModelsBtn) {
@@ -7772,6 +7821,7 @@ async function saveSettings() {
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
+            log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
         };
         await window.go.main.App.SaveAllSettings(cfg);
     } catch (e) {

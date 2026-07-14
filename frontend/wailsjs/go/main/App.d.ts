@@ -144,6 +144,8 @@ export function MoveNoteToNotebook(arg1:number,arg2:number):Promise<void>;
 
 export function OpenDataDir():Promise<void>;
 
+export function OpenLogDir():Promise<void>;
+
 export function OpenProjectURL(arg1:string):Promise<string>;
 
 export function PermanentDeleteNote(arg1:number):Promise<void>;

@@ -3,18 +3,20 @@ package services
 import (
 	"errors"
 
+	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
 	"jot/internal/models"
 )
 
 // TagService 封装标签相关的业务逻辑操作
 type TagService struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *fastlog.Logger
 }
 
 // NewTagService 创建一个新的 TagService 实例
-func NewTagService(db *gorm.DB) *TagService {
-	return &TagService{db: db}
+func NewTagService(db *gorm.DB, logger *fastlog.Logger) *TagService {
+	return &TagService{db: db, logger: logger}
 }
 
 // Create 创建一个新标签，返回创建后的标签对象
@@ -27,6 +29,7 @@ func (s *TagService) Create(name, color string) (*models.Tag, error) {
 		Color: color,
 	}
 	if err := s.db.Create(&tag).Error; err != nil {
+		s.logger.Errorw("TagService.Create 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &tag, nil
@@ -36,6 +39,7 @@ func (s *TagService) Create(name, color string) (*models.Tag, error) {
 func (s *TagService) Update(id uint, name, color string) (*models.Tag, error) {
 	var tag models.Tag
 	if err := s.db.First(&tag, id).Error; err != nil {
+		s.logger.Errorw("TagService.Update 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("tag not found")
 		}
@@ -48,6 +52,7 @@ func (s *TagService) Update(id uint, name, color string) (*models.Tag, error) {
 		tag.Color = color
 	}
 	if err := s.db.Save(&tag).Error; err != nil {
+		s.logger.Errorw("TagService.Update 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &tag, nil
@@ -57,6 +62,7 @@ func (s *TagService) Update(id uint, name, color string) (*models.Tag, error) {
 func (s *TagService) Delete(id uint) error {
 	result := s.db.Select("Notes").Delete(&models.Tag{}, id)
 	if result.Error != nil {
+		s.logger.Errorw("TagService.Delete 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -69,6 +75,7 @@ func (s *TagService) Delete(id uint) error {
 func (s *TagService) GetAll() ([]models.Tag, error) {
 	var tags []models.Tag
 	if err := s.db.Order("created_at ASC").Find(&tags).Error; err != nil {
+		s.logger.Errorw("TagService.GetAll 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return tags, nil
@@ -78,6 +85,7 @@ func (s *TagService) GetAll() ([]models.Tag, error) {
 func (s *TagService) Count() (int64, error) {
 	var total int64
 	if err := s.db.Model(&models.Tag{}).Count(&total).Error; err != nil {
+		s.logger.Errorw("TagService.Count 失败", fastlog.Error(err))
 		return 0, err
 	}
 	return total, nil
@@ -177,6 +185,7 @@ func InitDefaultTags(db *gorm.DB) error {
 func (s *TagService) getNoteByID(id uint) (*models.Note, error) {
 	var note models.Note
 	if err := s.db.First(&note, id).Error; err != nil {
+		s.logger.Errorw("TagService.getNoteByID 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("note not found")
 		}
@@ -189,6 +198,7 @@ func (s *TagService) getNoteByID(id uint) (*models.Note, error) {
 func (s *TagService) getTagByID(id uint) (*models.Tag, error) {
 	var tag models.Tag
 	if err := s.db.First(&tag, id).Error; err != nil {
+		s.logger.Errorw("TagService.getTagByID 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("tag not found")
 		}

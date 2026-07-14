@@ -4,18 +4,20 @@ import (
 	"errors"
 	"fmt"
 
+	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
 	"jot/internal/models"
 )
 
 // NotebookService 封装笔记本相关的业务逻辑操作
 type NotebookService struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *fastlog.Logger
 }
 
 // NewNotebookService 创建一个新的 NotebookService 实例
-func NewNotebookService(db *gorm.DB) *NotebookService {
-	return &NotebookService{db: db}
+func NewNotebookService(db *gorm.DB, logger *fastlog.Logger) *NotebookService {
+	return &NotebookService{db: db, logger: logger}
 }
 
 // 检查笔记本名称是否已被占用（排除指定ID的笔记本，用于重命名时的自身排除）
@@ -27,6 +29,7 @@ func (s *NotebookService) isNameTaken(name string, excludeID uint) (bool, error)
 		query = query.Where("id != ?", excludeID)
 	}
 	if err := query.Count(&count).Error; err != nil {
+		s.logger.Errorw("NotebookService.isNameTaken 失败", fastlog.Error(err))
 		return false, err
 	}
 	return count > 0, nil
@@ -47,6 +50,7 @@ func (s *NotebookService) Create(name string) (*models.Notebook, error) {
 		Name: name,
 	}
 	if err := s.db.Create(&notebook).Error; err != nil {
+		s.logger.Errorw("NotebookService.Create 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &notebook, nil
@@ -61,6 +65,7 @@ func (s *NotebookService) Update(id uint, name string) (*models.Notebook, error)
 
 	var notebook models.Notebook
 	if err := s.db.First(&notebook, id).Error; err != nil {
+		s.logger.Errorw("NotebookService.Update 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("notebook not found")
 		}
@@ -78,6 +83,7 @@ func (s *NotebookService) Update(id uint, name string) (*models.Notebook, error)
 
 	notebook.Name = name
 	if err := s.db.Save(&notebook).Error; err != nil {
+		s.logger.Errorw("NotebookService.Update 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return &notebook, nil
@@ -93,6 +99,7 @@ func (s *NotebookService) Delete(id uint) error {
 	// 检查笔记本是否存在
 	var notebook models.Notebook
 	if err := s.db.First(&notebook, id).Error; err != nil {
+		s.logger.Errorw("NotebookService.Delete 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("notebook not found")
 		}
@@ -103,11 +110,13 @@ func (s *NotebookService) Delete(id uint) error {
 	if err := s.db.Unscoped().Model(&models.Note{}).
 		Where("notebook_id = ?", id).
 		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NotebookService.Delete 失败", fastlog.Error(err))
 		return err
 	}
 
 	// 软删除笔记本
 	if err := s.db.Delete(&notebook).Error; err != nil {
+		s.logger.Errorw("NotebookService.Delete 失败", fastlog.Error(err))
 		return err
 	}
 	return nil
@@ -117,12 +126,17 @@ func (s *NotebookService) Delete(id uint) error {
 func (s *NotebookService) ResetAll() error {
 	// 硬删除所有笔记本
 	if err := s.db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Notebook{}).Error; err != nil {
+		s.logger.Errorw("NotebookService.ResetAll 失败", fastlog.Error(err))
 		return err
 	}
 	// 重置 SQLite 自增序列，确保下一个笔记本 ID 为 1
 	s.db.Exec("DELETE FROM sqlite_sequence WHERE name='notebooks'")
 	// 创建默认笔记本
-	return s.db.Create(&models.Notebook{Name: "默认笔记本"}).Error
+	if err := s.db.Create(&models.Notebook{Name: "默认笔记本"}).Error; err != nil {
+		s.logger.Errorw("NotebookService.ResetAll 失败", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
 // DeleteWithNotes 删除笔记本并将其下所有笔记移入回收站
@@ -134,6 +148,7 @@ func (s *NotebookService) DeleteWithNotes(id uint) error {
 	// 检查笔记本是否存在
 	var notebook models.Notebook
 	if err := s.db.First(&notebook, id).Error; err != nil {
+		s.logger.Errorw("NotebookService.DeleteWithNotes 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("notebook not found")
 		}
@@ -142,11 +157,13 @@ func (s *NotebookService) DeleteWithNotes(id uint) error {
 
 	// 软删除笔记本下的所有笔记（进回收站）
 	if err := s.db.Where("notebook_id = ?", id).Delete(&models.Note{}).Error; err != nil {
+		s.logger.Errorw("NotebookService.DeleteWithNotes 失败", fastlog.Error(err))
 		return err
 	}
 
 	// 软删除笔记本
 	if err := s.db.Delete(&notebook).Error; err != nil {
+		s.logger.Errorw("NotebookService.DeleteWithNotes 失败", fastlog.Error(err))
 		return err
 	}
 	return nil
@@ -158,6 +175,7 @@ func (s *NotebookService) GetAll() ([]models.Notebook, error) {
 	if err := s.db.Where("deleted_at IS NULL").
 		Order("sort_order ASC, id ASC").
 		Find(&notebooks).Error; err != nil {
+		s.logger.Errorw("NotebookService.GetAll 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return notebooks, nil
@@ -176,6 +194,7 @@ func (s *NotebookService) GetAllNotesCount(db *gorm.DB) (map[uint]int, error) {
 		Where("deleted_at IS NULL").
 		Group("notebook_id").
 		Find(&rows).Error; err != nil {
+		s.logger.Errorw("NotebookService.GetAllNotesCount 失败", fastlog.Error(err))
 		return nil, err
 	}
 
@@ -194,6 +213,7 @@ func (s *NotebookService) EnsureDefaultNotebook() error {
 	result := s.db.First(&notebook)
 	if result.Error != nil {
 		if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			s.logger.Errorw("NotebookService.EnsureDefaultNotebook 失败", fastlog.Error(result.Error))
 			return result.Error
 		}
 
@@ -202,6 +222,7 @@ func (s *NotebookService) EnsureDefaultNotebook() error {
 			Name: "默认笔记本",
 		}
 		if err := s.db.Create(&defaultNotebook).Error; err != nil {
+			s.logger.Errorw("NotebookService.EnsureDefaultNotebook 失败", fastlog.Error(err))
 			return err
 		}
 
@@ -209,6 +230,7 @@ func (s *NotebookService) EnsureDefaultNotebook() error {
 		if err := s.db.Model(&models.Note{}).
 			Where("notebook_id = ?", 0).
 			Update("notebook_id", defaultNotebook.ID).Error; err != nil {
+			s.logger.Errorw("NotebookService.EnsureDefaultNotebook 失败", fastlog.Error(err))
 			return err
 		}
 	}
@@ -224,6 +246,7 @@ func (s *NotebookService) GetTrash(page, pageSize int) ([]models.Notebook, int64
 
 	query := s.db.Model(&models.Notebook{}).Unscoped().Where("deleted_at IS NOT NULL")
 	if err := query.Count(&total).Error; err != nil {
+		s.logger.Errorw("NotebookService.GetTrash 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -232,6 +255,7 @@ func (s *NotebookService) GetTrash(page, pageSize int) ([]models.Notebook, int64
 		Offset(offset).
 		Limit(pageSize).
 		Find(&notebooks).Error; err != nil {
+		s.logger.Errorw("NotebookService.GetTrash 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 
@@ -246,6 +270,7 @@ func (s *NotebookService) RestoreFromTrash(id uint) error {
 
 	result := s.db.Unscoped().Model(&models.Notebook{}).Where("id = ?", id).Update("deleted_at", nil)
 	if result.Error != nil {
+		s.logger.Errorw("NotebookService.RestoreFromTrash 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
@@ -264,6 +289,7 @@ func (s *NotebookService) PermanentDeleteFromTrash(id uint) error {
 	// 检查笔记本是否存在于回收站中
 	var notebook models.Notebook
 	if err := s.db.Unscoped().First(&notebook, id).Error; err != nil {
+		s.logger.Errorw("NotebookService.PermanentDeleteFromTrash 失败", fastlog.Error(err))
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("notebook not found")
 		}
@@ -274,11 +300,13 @@ func (s *NotebookService) PermanentDeleteFromTrash(id uint) error {
 	if err := s.db.Unscoped().Model(&models.Note{}).
 		Where("notebook_id = ? AND deleted_at IS NOT NULL", id).
 		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NotebookService.PermanentDeleteFromTrash 失败", fastlog.Error(err))
 		return err
 	}
 
 	// 硬删除笔记本
 	if err := s.db.Unscoped().Delete(&notebook).Error; err != nil {
+		s.logger.Errorw("NotebookService.PermanentDeleteFromTrash 失败", fastlog.Error(err))
 		return err
 	}
 	return nil
@@ -289,6 +317,9 @@ func (s *NotebookService) RestoreAllFromTrash() error {
 	result := s.db.Unscoped().Model(&models.Notebook{}).
 		Where("deleted_at IS NOT NULL").
 		Update("deleted_at", nil)
+	if result.Error != nil {
+		s.logger.Errorw("NotebookService.RestoreAllFromTrash 失败", fastlog.Error(result.Error))
+	}
 	return result.Error
 }
 
@@ -300,11 +331,15 @@ func (s *NotebookService) EmptyTrash() error {
 		Where("notebook_id IN (SELECT id FROM notebooks WHERE deleted_at IS NOT NULL)").
 		Where("deleted_at IS NOT NULL").
 		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NotebookService.EmptyTrash 失败", fastlog.Error(err))
 		return err
 	}
 
 	// 硬删除所有已软删除的笔记本
 	result := s.db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.Notebook{})
+	if result.Error != nil {
+		s.logger.Errorw("NotebookService.EmptyTrash 失败", fastlog.Error(result.Error))
+	}
 	return result.Error
 }
 
