@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-15（更新 143）
+> 生成日期: 2026-07-15（更新 144）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2825,3 +2825,25 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **教训** | 项目前端已全面使用 ES Modules（`type="module"`），所有定义在模块文件顶层的函数名/变量名不会暴露到全局。需要跨文件共享的工具函数，要么在模块内内联定义，要么显式挂载到 `window` 对象上。`escapeHtml`、`escapeHtmlAttr` 等工具函数定义在 main.js 但未挂载到 `window`，其他模块文件不可直接引用 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`renderRecallCards` 函数中替换 `innerHTML` + `escapeHtml` 为 `textContent`） |
 | **不变内容** | `escapeHtml` 函数本身不变；`renderSearchSources` 函数不变（其搜索来源数据本身不使用 `escapeHtml`） |
+
+## 一百九十三、新增记忆点（编辑器骨架屏 — 点击即动）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **优化背景** | 编辑器打开动画在等待后端数据（`GetNoteContent` ~50-200ms）+ 标签加载（~10-50ms）+ CM6 初始化（~100-500ms）之后播放，用户点击笔记后需等 200-700ms 才看到面板动画，期间页面已锁定（`overflow: hidden`）但画面不动 |
+| **方案** | 将 `openEditor` 拆为两个阶段。阶段一（同步）：读取 `state.notes` 缓存中的标题/后缀/只读状态设置 UI，立即显示面板 + 骨架屏 shimmer + 播放入场动画。阶段二（异步 + 并行）：`Promise.all([contentPromise, tagsPromise])` 加载数据，数据就绪后移除骨架屏 → `initCodeMirror` → `updatePreview`。详见 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) |
+| **骨架屏 CSS** | 新增 `.editor-skeleton` / `.editor-skeleton-line`，使用 `background-position` 滑动的 shimmer 效果（`linear-gradient(90deg, --border 25%, --hover-bg 50%, --border 75%)`），4 条变宽线条（92%/78%/85%/60%）模拟文本段落。`animation: skeletonPulse 1.5s ease-in-out infinite`。详见 [editor.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/editor.css) |
+| **关键改动** | 删除原 `opacity: 0` 强制隐藏逻辑（防闪烁）；删除 `void els.editorOverlay.offsetHeight` 强制回流；overlay/panel animation 移到 `await` 之前；`loadTagsForEditor` 改为 `Promise.all` 并行而非串行 `await`；从召回卡片（`noteId` 不在 `state.notes` 中）打开时 panel 先显示空骨架屏，后台 `GetNote` + `GetNoteContent` 加载后填充标题和内容 |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（重构 `openEditor` 流程）、[editor.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/editor.css)（新增 `.editor-skeleton` / `.editor-skeleton-line` / `@keyframes skeletonPulse`） |
+| **不变内容** | `closeEditor` 清理逻辑不变、`initCodeMirror` 参数/逻辑不变、`loadTagsForEditor` 函数签名不变、后端 `GetNoteContent`/`GetAllTags` 接口不变、全屏模式跳过动画但骨架屏流程一致 |
+
+## 一百九十四、新增记忆点（编辑器骨架屏回归修复 + scrollbar-gutter）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **回归 1：`.md` 查看模式底部按钮显示错误** | 阶段一重构时遗漏了 `els.editorModeBtns.forEach(...)` 切换到"预览"高亮 + `els.mdRendered.innerHTML` 初始占位，导致 `data-mode='preview'` 正常但底部按钮显示"纯文本"选中。修复：在 `isReadOnly && isMd` 分支中恢复这两行 |
+| **回归 2：召回卡片打开笔记显示错误** | `noteId` 不在 `state.notes` 缓存中时，阶段一 `noteData=null`，`ext` 默认 `.txt`，`isMd=false`，编辑时间和标签均不正确。修复：阶段二 `Promise.all` 完成后追加校正块，检测 `noteData.file_ext` 变化后重设 `ext`/`isMd` 并更新 UI（文件后缀、M/T 按钮、预览模式、编辑时间、标签重绘） |
+| **回归 3：标签未高亮** | 从召回卡片打开时 `state.selectedTags` 在 `loadTagsForEditor` 之后才填充，`renderTagSelector` 渲染时看不到选中标签。修复：校正块中调用 `renderTagSelector(isReadOnly)` 重绘 |
+| **技术改动** | `const ext`/`const isMd` → `let ext`/`let isMd`，允许阶段二重赋值；`renderTagSelector` 在 `openEditor` 中可被直接调用 |
+| **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
+| **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |

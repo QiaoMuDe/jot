@@ -3167,132 +3167,73 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
 
     const isReadOnly = readOnly && noteId != null;
     let noteData = null;
-    // 暂存初始内容，用于 initCodeMirror
     let editorContent = '';
 
+    // ── 阶段一：面板立即展示（同步，无 await） ──
+
+    // 笔记元数据从 state.notes 中同步获取（已有缓存）
     if (noteId) {
-        const note = state.notes.find((n) => n.id === noteId);
-        noteData = note;
-        if (note) {
-            // 查看/编辑模式
-            els.editorNoteTitle.value = note.title || '';
-            // 列表中的 content 是截断版本（前 200 字符），从后端加载完整内容
-            try {
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNoteContent) {
-                    editorContent = await window.go.main.App.GetNoteContent(noteId) || '';
-                } else {
-                    editorContent = note.content || '';
-                }
-            } catch (err) {
-                console.error('获取完整笔记内容失败:', err);
-                editorContent = note.content || '';
-            }
-            state.selectedTags = (note.tags || []).map((t) => t.id);
-        } else {
-            // noteId 存在但不在 state.notes 中（如从召回卡片打开），从后端加载
-            try {
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNote) {
-                    const fetchedNote = await window.go.main.App.GetNote(noteId);
-                    if (fetchedNote) {
-                        noteData = fetchedNote;
-                        els.editorNoteTitle.value = fetchedNote.title || '';
-                        try {
-                            if (window.go.main.App.GetNoteContent) {
-                                editorContent = await window.go.main.App.GetNoteContent(noteId) || '';
-                            } else {
-                                editorContent = fetchedNote.content || '';
-                            }
-                        } catch (err) {
-                            console.error('获取完整笔记内容失败:', err);
-                            editorContent = fetchedNote.content || '';
-                        }
-                        state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
-                    }
-                }
-            } catch (err) {
-                console.error('获取笔记失败:', err);
-            }
+        noteData = state.notes.find((n) => n.id === noteId) || null;
+        if (noteData) {
+            els.editorNoteTitle.value = noteData.title || '';
+            state.selectedTags = (noteData.tags || []).map((t) => t.id);
         }
     } else {
-        // 新建模式：默认标题为当前日期时间 + 表情
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         els.editorNoteTitle.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())} ☺️`;
-        editorContent = '';
-        // 缓存默认标题，用于判断用户是否改过标题
         state._defaultNewNoteTitle = els.editorNoteTitle.value;
     }
 
-    // 只读模式：禁用输入，隐藏保存/取消按钮
+    // 只读/编辑模式 UI 切换（同步）
     els.editorNoteTitle.readOnly = isReadOnly;
     els.editorNoteTitle.classList.toggle('editor-input-readonly', isReadOnly);
     els.editorSaveBtn.style.display = isReadOnly ? 'none' : '';
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
-    // 只读模式隐藏笔记类型切换按钮，编辑/新建模式显示
-    if (els.editorTypeToggle) {
+    if (els.editorTypeToggle)
         els.editorTypeToggle.style.display = isReadOnly ? 'none' : '';
-    }
-    // 只读模式显示编辑按钮，编辑/新建模式隐藏
-    // hideEditBtn 为 true 时强制隐藏编辑按钮（如从召回卡片打开）
     els.editorEditBtn.style.display = (isReadOnly && !hideEditBtn) ? '' : 'none';
-    // 从查看模式进入编辑时显示"返回查看模式"按钮
     els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
-    // 只读模式禁用后缀点击（查看模式不可点击，编辑/新建模式可点击）
     els.editorFileExt.classList.toggle('file-ext-readonly', !!isReadOnly);
 
-    // Markdown 模式显示底部「编辑/预览」切换按钮，纯文本模式隐藏
-    const ext = (noteData && noteData.file_ext) || '.txt';
-    const isMd = ext === '.md';
+    // 文件后缀和模式切换
+    let ext = (noteData && noteData.file_ext) || '.txt';
+    let isMd = ext === '.md';
     els.editorModes.style.display = isMd ? '' : 'none';
-
-    // 设置文件后缀显示
     updateFileExtDisplay(ext);
-
-    // 大纲按钮仅 .md 后缀笔记显示（预览模式才可见，由 CSS data-mode 控制）
-    if (els.tocToggleBtn) {
+    if (els.tocToggleBtn)
         els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
-    }
-
-    // 初始化类型切换按钮显示
     if (els.editorTypeToggle) {
         els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
         els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
     }
 
-    // 统一初始化编辑器模式为纯文本编辑（data-mode 值影响 flex 布局 CSS 选择器）
-    // 后续各分支根据情况可 override：查看+Markdown → 'preview'
     els.editorOverlay.dataset.mode = 'edit';
 
-    // 查看模式：显示最近编辑时间 + 按类型选择渲染方式
+    // 查看模式：预览状态显示（数据在阶段二填充）
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
-        if (els.editorFileExt.textContent !== '.md') {
-            // 纯文本：CM6 自动以只读模式展示（data-mode 已由默认值 'edit' 覆盖）
+        if (!isMd) {
             els.mdRendered.style.display = 'none';
             _setPreviewLayout(false);
             _closeToc();
         } else {
-            // Markdown：走 Worker 离线程渲染预览
             els.editorOverlay.dataset.mode = 'preview';
             els.editorModeBtns.forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === 'preview');
             });
-            if (editorContent.trim()) {
-                updatePreview(editorContent);
-            } else {
-                els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
-                _setPreviewLayout(false);
-                _closeToc();
-            }
+            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
+            _setPreviewLayout(false);
+            _closeToc();
+            // 内容在阶段二加载后触发 updatePreview
         }
     } else {
         els.editorEditTime.textContent = '';
-        // 编辑模式切换到纯文本
         switchEditorMode('edit');
     }
 
-    // 标题输入监听（CM6 内容变化由 ViewUpdate listener 自动处理）
+    // 标题输入监听
     if (!isReadOnly) {
         els.editorNoteTitle.addEventListener('input', onEditorInput);
         state._titleInputListenerAttached = true;
@@ -3301,23 +3242,142 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         state._titleInputListenerAttached = false;
     }
 
-    // 加载标签并渲染标签选择器（等待标签加载完毕再显示编辑器，避免闪烁）
-    await loadTagsForEditor(isReadOnly);
-    // 锁定主内容区滚动，隐藏滚动条槽位
+    // ── 立即显示面板 + 骨架屏（不等数据加载） ──
     els.mainContent.style.overflow = 'hidden';
-    // 强制确保 overlay 和 panel 在视图可见前 opacity:0（防闪烁）
-    els.editorOverlay.style.opacity = '0';
-    els.editorPanel.style.opacity = '0';
-    void els.editorOverlay.offsetHeight;
-    // 显示编辑器
     els.viewEditor.classList.add('active');
 
-    // 先初始化 CM6（此时编辑器 opacity: 0，用户还看不到）
+    // 在 CM6 挂载点显示骨架屏 shimmer
+    const contentArea = document.getElementById('editorNoteContent');
+    contentArea.innerHTML = ''
+        + '<div class="editor-skeleton">'
+        + '<div class="editor-skeleton-line"></div>'
+        + '<div class="editor-skeleton-line"></div>'
+        + '<div class="editor-skeleton-line"></div>'
+        + '<div class="editor-skeleton-line"></div>'
+        + '</div>';
+
+    // 启动入场动画
+    const overlay = els.editorOverlay;
+    const panel = els.editorPanel;
+    const body = panel.querySelector('.editor-body');
+    document.getElementById('topbar').classList.add('editor-fullscreen');
+
+    if (startFullscreen) {
+        panel.style.transition = 'none';
+        overlay.classList.add('fullscreening');
+        panel.classList.add('fullscreen');
+        void panel.offsetHeight;
+        panel.style.transition = '';
+        state._isFullscreen = true;
+        if (els.editorFullscreenBtn) {
+            els.editorFullscreenBtn.innerHTML = SVGS.editorExitFullscreen;
+            els.editorFullscreenBtn.title = '退出全屏';
+            els.editorFullscreenBtn.classList.add('fullscreen');
+        }
+        if (els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed'))
+            els.notebookSidebar.classList.add('collapsed');
+        overlay.style.opacity = '1';
+        panel.style.opacity = '1';
+        panel.style.transform = 'scale(1)';
+    } else {
+        overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
+        panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+        if (body)
+            body.style.animation = 'viewEnter 0.25s ease-out forwards';
+    }
+
+    // ── 阶段二：后台加载数据 + CM6（并行，不阻塞面板动画） ──
+    try {
+        const loadPromises = [];
+
+        // 加载完整内容（包含 noteId 不在缓存中的回退场景）
+        const contentPromise = (async () => {
+            let fullContent = '';
+            if (noteId) {
+                if (noteData) {
+                    try {
+                        if (window.go.main.App.GetNoteContent)
+                            fullContent = await window.go.main.App.GetNoteContent(noteId) || '';
+                    } catch (err) {
+                        console.error('获取完整笔记内容失败:', err);
+                        fullContent = noteData.content || '';
+                    }
+                } else {
+                    // noteId 存在但不在 state.notes 中（如从召回卡片打开），从后端加载完整笔记
+                    try {
+                        if (window.go.main.App.GetNote) {
+                            const fetchedNote = await window.go.main.App.GetNote(noteId);
+                            if (fetchedNote) {
+                                noteData = fetchedNote;
+                                els.editorNoteTitle.value = fetchedNote.title || '';
+                                state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
+                                try {
+                                    if (window.go.main.App.GetNoteContent)
+                                        fullContent = await window.go.main.App.GetNoteContent(noteId) || '';
+                                } catch (err) {
+                                    console.error('获取完整笔记内容失败:', err);
+                                    fullContent = fetchedNote.content || '';
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.error('获取笔记失败:', err);
+                    }
+                }
+            }
+            editorContent = fullContent;
+        })();
+        loadPromises.push(contentPromise);
+
+        // 加载标签（与内容加载并行）
+        const tagsPromise = loadTagsForEditor(isReadOnly);
+        loadPromises.push(tagsPromise);
+
+        await Promise.all(loadPromises);
+    } catch (err) {
+        console.error('编辑器数据加载失败:', err);
+    }
+
+    // 校正：从后端加载的笔记（不在缓存中），更新阶段一无法获取的信息
+    if (noteData) {
+        const loadedExt = (noteData.file_ext || '.txt');
+        if (loadedExt !== els.editorFileExt.textContent) {
+            ext = loadedExt;
+            isMd = ext === '.md';
+            updateFileExtDisplay(ext);
+            els.editorModes.style.display = isMd ? '' : 'none';
+            if (els.tocToggleBtn)
+                els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
+            if (els.editorTypeToggle) {
+                els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
+                els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
+            }
+            if (isReadOnly && isMd) {
+                els.editorOverlay.dataset.mode = 'preview';
+                els.editorModeBtns.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.mode === 'preview');
+                });
+                _setPreviewLayout(false);
+                _closeToc();
+            }
+        }
+        // 查看模式更新编辑时间
+        if (isReadOnly && !els.editorEditTime.textContent) {
+            els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
+        }
+        // 重绘标签选择器（校正并行加载时序：非缓存笔记的 state.selectedTags 可能在 loadTagsForEditor 之后才填充）
+        renderTagSelector(isReadOnly);
+    }
+
+    // 移除骨架屏
+    contentArea.innerHTML = '';
+
+    // 初始化 CM6（已拿到内容）
     const useSyntaxHighlight = els.mdHighlightToggle.checked;
-    initCodeMirror(els.editorNoteContent, editorContent, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, codeHighlightTheme);
-    // 字数统计（需在 CM6 初始化之后，否则 getEditorContent 返回空）
+    initCodeMirror(contentArea, editorContent, isReadOnly, useSyntaxHighlight, ext, codeHighlightTheme);
     updateWordCount();
-    // 编辑模式下记录快照，用于蒙层点击判断内容是否有改动
+
+    // 编辑模式下记录快照
     if (!isReadOnly && state.editingNoteId) {
         state._editSnapshot = {
             title: els.editorNoteTitle.value.trim(),
@@ -3326,57 +3386,13 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
             fileExt: els.editorFileExt.textContent
         };
     }
-    // CM6 就绪后刷新预览（解决查看模式下 CM6 初始化前预览无法渲染的问题）
-    if (els.editorOverlay.dataset.mode === 'preview') {
+
+    // 查看模式：Markdown 预览（CM6 就绪后刷新）
+    if (isReadOnly && isMd && els.editorOverlay.dataset.mode === 'preview') {
         updatePreview();
     }
 
-    // 再启动编辑器打开动画（CM6 已渲染完毕，随面板一起淡入）
-    const overlay = els.editorOverlay;
-    const panel = els.editorPanel;
-    const body = panel.querySelector('.editor-body');
-    // 编辑器打开时自动隐藏 #topbar 搜索框和更多菜单（不受全屏限制）
-    document.getElementById('topbar').classList.add('editor-fullscreen');
-
-    if (startFullscreen) {
-        // 快速笔记启动：直接以全屏尺寸打开，不经过悬浮卡片，跳过所有动画
-        // 先禁用 CSS transition，避免添加 fullscreen class 时触发尺寸过渡动画
-        panel.style.transition = 'none';
-        overlay.classList.add('fullscreening');
-        panel.classList.add('fullscreen');
-        // 强制回流确保 transition:none 生效
-        void panel.offsetHeight;
-        // 恢复 transition（后续用户操作的过渡仍需保留）
-        panel.style.transition = '';
-
-        state._isFullscreen = true;
-        if (els.editorFullscreenBtn) {
-            els.editorFullscreenBtn.innerHTML = SVGS.editorExitFullscreen;
-            els.editorFullscreenBtn.title = '退出全屏';
-            els.editorFullscreenBtn.classList.add('fullscreen');
-        }
-        // 收起侧栏
-        if (els.notebookSidebar && !els.notebookSidebar.classList.contains('collapsed')) {
-            els.notebookSidebar.classList.add('collapsed');
-        }
-
-        // 覆盖 CSS 初始 opacity:0/scale(0.85)，立即显示
-        overlay.style.opacity = '1';
-        panel.style.opacity = '1';
-        panel.style.transform = 'scale(1)';
-    } else {
-        // 清除内联 opacity，让 animation 控制淡入
-        overlay.style.opacity = '';
-        panel.style.opacity = '';
-        overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
-        panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
-        // 内容区域与面板同步入场
-        if (body) {
-            body.style.animation = 'viewEnter 0.25s ease-out forwards';
-        }
-    }
-
-    // 新建笔记时，光标自动聚焦到内容输入框（仅在窗口已激活时生效，启动时自动打开的快速笔记跳过）
+    // 新建笔记时自动聚焦
     if (!state.editingNoteId && els.editorOverlay.dataset.mode !== 'preview' && document.hasFocus()) {
         window.focus();
         cmEditor?.focus();

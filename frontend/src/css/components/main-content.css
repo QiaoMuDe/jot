@@ -5,6 +5,7 @@
 #mainContent {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   background: var(--bg);
   position: relative;
   overscroll-behavior: none;
