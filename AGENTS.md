@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-15（更新 142）
+> 生成日期: 2026-07-15（更新 143）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -2788,3 +2788,40 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [internal/aicli/client.go](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/client.go)（err == nil 守卫）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)（estimateUserTokens + onError 回调）、[frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（提前保存用户消息 + stream-error 显示 token）、[frontend/wailsjs/go/main/App.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/wailsjs/go/main/App.js)（CallAIStream 签名同步） |
 
 | **update 计数** | `AGENTS.md` 从更新 141 到 更新 142 |
+
+## 一百九十、新增记忆点（搜索来源 UI 优化 — 内联卡片 + 折叠面板 + SVG 图标 + 去重）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **优化背景** | AI 回复消息底部的搜索来源 UI 使用原生 `<details>` 折叠面板、emoji 图标、两处重复 ~40 行渲染代码。单一来源和多个来源使用相同的 UI 结构，缺少差异化展示。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **单一来源 → 内联引用卡片** | 当只有 1 条搜索结果时，展示紧凑链接预览卡片（`search-source-card`）：SVG 来源图标 + 标题（1 行省略）+ ↗ 外链图标 + 域名（等宽字体）+ 2 行渐隐摘要。整张卡片可点击打开原文，hover 时边框变色 + link 图标出现。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **多来源 → 自定义折叠面板** | 当有 2+ 条搜索结果时，展示自定义折叠面板（`search-sources-panel`）：折叠头使用 `<button>` 替代 `<details>`，包含地球 SVG 图标 + "来自 N 个来源 · M 条结果" + 展开箭头 ▶。展开/收起使用 `max-height` + `opacity` 过渡动画（300ms ease），箭头旋转 90°。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **来源分组展示** | 按 `source_label` 分组（Tavily / 知乎搜索 / 全网搜索），每组包含 SVG 类型图标 + 名称 + 计数徽章（等宽字体）。条目跨组连续编号（方便口头引用），每个条目展示标题（1 行省略）+ 域名标签（等宽）+ ↗ 外链图标 + 2 行渐隐摘要。hover 时显示背景 + 外链图标。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **emoji → SVG 图标** | 移除所有 emoji 图标：`SEARCH_SOURCE_ICON`（地球网格替代 `🌐`）、`SATELLITE_ICON`（卫星天线替代 `📡` Tavily）、`BOOK_ICON`（书本替代 `📖` 知乎搜索）、`GLOBE_ICON`（全球网络替代 `🌍` 全网搜索）、`EXTERNAL_ICON`（↗ 外链）、`CHEVRON_RIGHT_ICON`（▶ 展开箭头）。所有 SVG 使用 `currentColor` + `stroke-width="1.5"` + 14×14 viewBox，与项目现有图标体系一致。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **代码去重** | 将 stream-done 回调和 addMessage 函数中两份完全相同的 ~40 行渲染代码提取为共享函数 `renderSearchSources(el, sources)` → 派发到 `renderSingleSourceCard()` 或 `renderMultiSourcesPanel()`。辅助函数：`getSourceIcon(label)` SVG 图标映射、`getSourceLabel(label)` 显示名称映射、`extractDomain(url)` URL 域名提取。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（SVG 常量 + 4 个共享渲染函数 + 替换两处调用）、[frontend/src/css/components/ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（删除旧样式 + 新增卡片/面板/分组/条目完整样式） |
+| **不变内容** | 后端 SearchSource 结构体不变、数据传输链路不变、召回卡片 UI 不变、消息操作栏不变 |
+
+## 一百九十一、新增记忆点（召回笔记 UI 优化 — 折叠面板 + SVG 图标 + 去重）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **优化背景** | AI 消息中的召回笔记（Recall Cards）面板使用原生 `<details>` 元素（无动画）、emoji `📄` 作图标（高度不一致）、两处重复 ~40 行渲染代码、JS 硬截断 `slice(0, 100)` |
+| **自定义折叠面板** | 改为 `<button>` 折叠头 + `max-height`/`opacity` 过渡动画（300ms/200ms），点击切换 `panel.classList.toggle('open')`，折叠时箭头旋转 90°。与搜索来源面板共享同一套交互模式。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **NOTE_ICON SVG 常量** | 替换 emoji `📄` 为 layers SVG 图标常量（`stroke-width="1.5"`），折叠头 14×14，条目图标缩为 12×12。色值为 `var(--accent)`（折叠头）/ `var(--text-muted)`（条目），跟随主题色。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **新增 file_ext 徽章** | 条目标题末尾显示 `.md`/`.txt` 等文件后缀徽章，等宽字体 `var(--font-mono)`、小字号 0.7rem、灰底圆角标签，强化笔记类型感知。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **CSS line-clamp 替代 JS 硬截断** | 移除 `card.content.slice(0, 100) + '...'`，改为全文输出 + CSS `-webkit-line-clamp: 3` 行数截断，灵活自适应。详见 [ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **代码去重** | 将 stream-done 回调和 addMessage 函数中两份完全相同的 ~40 行重复代码提取为共享函数 `renderRecallCards(el, cards)`。行为不变：点击卡片条目调用 `window.openEditor(card.id, true, false, true)` 打开笔记。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **涉及文件** | [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（新增 NOTE_ICON 常量 + renderRecallCards 函数 + 替换两处调用）、[frontend/src/css/components/ai-chat.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（删除旧 .recall-cards 样式 + 新增 .recall-cards-panel 完整样式） |
+| **不变内容** | 后端 RecallCard 结构体不变、`ai:recall-cards` 事件传输不变、DB `ai_messages.recall_cards` 字段不变、搜索来源面板不变 |
+
+## 一百九十二、新增记忆点（修复 escapeHtml 跨模块作用域导致历史会话卡死）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Bug 现象** | 点击含有召回卡片的历史会话时，界面卡死无法进入会话；切换到无召回卡片的会话正常 |
+| **根因** | `escapeHtml` 函数定义在 [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js) 中，但 HTML 使用 `<script type="module">` 加载。模块脚本的顶层函数是**模块作用域**，非全局。`renderRecallCards` 中调用 `escapeHtml()` 抛出 `ReferenceError`，导致 `addMessage` 中途退出，消息无法渲染完成，会话卡住 |
+| **修复方式** | 将 `renderRecallCards` 中的 `innerHTML` + `escapeHtml(card.title)` / `escapeHtml(card.file_ext)` 替换为 `document.createElement('span')` + `textContent`。对于静态 SVG 图标部分（`NOTE_ICON` 常量）仍使用 `innerHTML`，用户数据一律用 `textContent` 天然防 XSS。详见 [ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **教训** | 项目前端已全面使用 ES Modules（`type="module"`），所有定义在模块文件顶层的函数名/变量名不会暴露到全局。需要跨文件共享的工具函数，要么在模块内内联定义，要么显式挂载到 `window` 对象上。`escapeHtml`、`escapeHtmlAttr` 等工具函数定义在 main.js 但未挂载到 `window`，其他模块文件不可直接引用 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`renderRecallCards` 函数中替换 `innerHTML` + `escapeHtml` 为 `textContent`） |
+| **不变内容** | `escapeHtml` 函数本身不变；`renderSearchSources` 函数不变（其搜索来源数据本身不使用 `escapeHtml`） |

@@ -2304,112 +2304,25 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             }
         }
 
-        // 展示联网搜索来源折叠面板（按来源分组）
+        // 展示搜索来源折叠面板
         if (streamSearchSources && streamSearchSources.length > 0) {
-            const details = document.createElement('details');
-            details.className = 'search-sources';
-            details.open = false;
-            const summary = document.createElement('summary');
-            summary.className = 'search-sources-summary';
-            summary.textContent = '🌐 搜索来源 (' + streamSearchSources.length + ' 个)';
-            details.appendChild(summary);
-            const list = document.createElement('div');
-            list.className = 'search-sources-content';
-
-            // 按 source_label 分组
-            var groups = {};
-            streamSearchSources.forEach(function(src) {
-                var label = src.source_label || 'unknown';
-                if (!groups[label]) groups[label] = [];
-                groups[label].push(src);
-            });
-
-            // 来源标签显示名称映射
-            var groupLabels = {
-                'tavily': '📡 Tavily搜索',
-                'zhihu_search': '📖 知乎搜索',
-                'zhihu_global': '🌍 全网搜索',
-            };
-
-            var groupOrder = ['tavily', 'zhihu_search', 'zhihu_global'];
-            groupOrder.forEach(function(labelKey) {
-                var items = groups[labelKey];
-                if (!items || items.length === 0) return;
-                var groupHeader = document.createElement('div');
-                groupHeader.className = 'search-sources-group-header';
-                groupHeader.textContent = groupLabels[labelKey] || labelKey + ' (' + items.length + ')';
-                list.appendChild(groupHeader);
-                items.forEach(function(src, idx) {
-                    var item = document.createElement('div');
-                    item.className = 'search-sources-item';
-                    var link = document.createElement('a');
-                    link.href = src.url;
-                    link.textContent = (idx + 1) + '. ' + src.title;
-                    item.appendChild(link);
-                    if (src.content) {
-                        var snippet = document.createElement('p');
-                        snippet.className = 'search-sources-snippet';
-                        snippet.textContent = src.content;
-                        item.appendChild(snippet);
-                    }
-                    list.appendChild(item);
-                });
-            });
-
-            details.appendChild(list);
-            // 插入到操作按钮之前
             var actionsEl = streamingEl.querySelector('.ai-msg-actions');
             if (actionsEl) {
-                streamingEl.insertBefore(details, actionsEl);
+                renderSearchSources(streamingEl, streamSearchSources);
+                streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
             } else {
-                streamingEl.appendChild(details);
+                renderSearchSources(streamingEl, streamSearchSources);
             }
         }
 
         // 展示卡片召回折叠面板
         if (recallCards && recallCards.length > 0) {
-            const details = document.createElement('details');
-            details.className = 'recall-cards';
-            details.open = false;
-            const summary = document.createElement('summary');
-            summary.className = 'recall-cards-summary';
-            summary.textContent = '📄 召回笔记 (' + recallCards.length + ' 篇)';
-            details.appendChild(summary);
-            const list = document.createElement('div');
-            list.className = 'recall-cards-content';
-            recallCards.forEach(function(card) {
-                const item = document.createElement('div');
-                item.className = 'recall-cards-item';
-                item.addEventListener('click', (function(c) {
-                    return function(e) {
-                        e.preventDefault();
-                        window.openEditor(c.id, true, false, true);
-                    };
-                })(card));
-                const titleRow = document.createElement('div');
-                titleRow.className = 'recall-cards-item-title';
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'recall-cards-item-title-icon';
-                iconSpan.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
-                titleRow.appendChild(iconSpan);
-                const titleSpan = document.createElement('span');
-                titleSpan.textContent = card.title;
-                titleRow.appendChild(titleSpan);
-                item.appendChild(titleRow);
-                if (card.content) {
-                    const snippet = document.createElement('p');
-                    snippet.className = 'recall-cards-snippet';
-                    snippet.textContent = card.content.length > 100 ? card.content.slice(0, 100) + '...' : card.content;
-                    item.appendChild(snippet);
-                }
-                list.appendChild(item);
-            });
-            details.appendChild(list);
             var actionsEl = streamingEl.querySelector('.ai-msg-actions');
             if (actionsEl) {
-                streamingEl.insertBefore(details, actionsEl);
+                renderRecallCards(streamingEl, recallCards);
+                streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
             } else {
-                streamingEl.appendChild(details);
+                renderRecallCards(streamingEl, recallCards);
             }
         }
 
@@ -2690,102 +2603,14 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         try { recallCards = JSON.parse(recallCards); } catch (_) { recallCards = null; }
     }
 
-    // 渲染搜索来源折叠面板（按 source_label 分组）
+    // 渲染搜索来源（单一来源→卡片，多个来源→折叠面板）
     if (role === 'assistant' && searchSources && searchSources.length > 0) {
-        const details = document.createElement('details');
-        details.className = 'search-sources';
-        details.open = false;
-        const summary = document.createElement('summary');
-        summary.className = 'search-sources-summary';
-        summary.textContent = '🌐 搜索来源 (' + searchSources.length + ' 个)';
-        details.appendChild(summary);
-        const list = document.createElement('div');
-        list.className = 'search-sources-content';
-
-        // 按 source_label 分组
-        var groups = {};
-        searchSources.forEach(function(src) {
-            var label = src.source_label || 'unknown';
-            if (!groups[label]) groups[label] = [];
-            groups[label].push(src);
-        });
-
-        // 来源标签显示名称映射
-        var groupLabels = {
-            'tavily': '📡 Tavily搜索',
-            'zhihu_search': '📖 知乎搜索',
-            'zhihu_global': '🌍 全网搜索',
-        };
-
-        var groupOrder = ['tavily', 'zhihu_search', 'zhihu_global'];
-        groupOrder.forEach(function(labelKey) {
-            var items = groups[labelKey];
-            if (!items || items.length === 0) return;
-            var groupHeader = document.createElement('div');
-            groupHeader.className = 'search-sources-group-header';
-            groupHeader.textContent = groupLabels[labelKey] || labelKey + ' (' + items.length + ')';
-            list.appendChild(groupHeader);
-            items.forEach(function(src, idx) {
-                var item = document.createElement('div');
-                item.className = 'search-sources-item';
-                var link = document.createElement('a');
-                link.href = src.url;
-                link.textContent = (idx + 1) + '. ' + src.title;
-                item.appendChild(link);
-                if (src.content) {
-                    var snippet = document.createElement('p');
-                    snippet.className = 'search-sources-snippet';
-                    snippet.textContent = src.content;
-                    item.appendChild(snippet);
-                }
-                list.appendChild(item);
-            });
-        });
-
-        details.appendChild(list);
-        el.appendChild(details);
+        renderSearchSources(el, searchSources);
     }
 
     // 渲染召回卡片折叠面板
     if (role === 'assistant' && recallCards && recallCards.length > 0) {
-        const details = document.createElement('details');
-        details.className = 'recall-cards';
-        details.open = false;
-        const summary = document.createElement('summary');
-        summary.className = 'recall-cards-summary';
-        summary.textContent = '📄 召回笔记 (' + recallCards.length + ' 篇)';
-        details.appendChild(summary);
-        const list = document.createElement('div');
-        list.className = 'recall-cards-content';
-        recallCards.forEach(function(card) {
-            const item = document.createElement('div');
-            item.className = 'recall-cards-item';
-            item.addEventListener('click', (function(c) {
-                return function(e) {
-                    e.preventDefault();
-                    window.openEditor(c.id, true, false, true);
-                };
-            })(card));
-            const titleRow = document.createElement('div');
-            titleRow.className = 'recall-cards-item-title';
-            const iconSpan = document.createElement('span');
-            iconSpan.className = 'recall-cards-item-title-icon';
-            iconSpan.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
-            titleRow.appendChild(iconSpan);
-            const titleSpan = document.createElement('span');
-            titleSpan.textContent = card.title;
-            titleRow.appendChild(titleSpan);
-            item.appendChild(titleRow);
-            if (card.content) {
-                const snippet = document.createElement('p');
-                snippet.className = 'recall-cards-snippet';
-                snippet.textContent = card.content.length > 100 ? card.content.slice(0, 100) + '...' : card.content;
-                item.appendChild(snippet);
-            }
-            list.appendChild(item);
-        });
-        details.appendChild(list);
-        el.appendChild(details);
+        renderRecallCards(el, recallCards);
     }
 
     messagesInnerEl.appendChild(el);
@@ -3210,6 +3035,17 @@ const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 const FOLLOWUP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 const DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
+// ── 搜索来源 SVG 图标 ──
+const SEARCH_SOURCE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 7v8"/><path d="M7 11h8"/></svg>';
+const SATELLITE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h10l-4 8"/><path d="M17 7l4 4"/><path d="M20 11l2 2"/></svg>';
+const BOOK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+const GLOBE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+const EXTERNAL_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+const CHEVRON_RIGHT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+
+// ── 召回笔记 SVG 图标 ──
+const NOTE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
+
 /**
  * 创建消息气泡操作按钮
  */
@@ -3236,6 +3072,263 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
     }
 
     return container;
+}
+
+// ── 搜索来源渲染 ──
+
+/**
+ * 搜索来源 SVG 图标映射
+ */
+function getSourceIcon(label) {
+    switch (label) {
+        case 'tavily': return SATELLITE_ICON;
+        case 'zhihu_search': return BOOK_ICON;
+        case 'zhihu_global': return GLOBE_ICON;
+        default: return SEARCH_SOURCE_ICON;
+    }
+}
+
+/**
+ * 来源标签显示名称映射
+ */
+function getSourceLabel(label) {
+    switch (label) {
+        case 'tavily': return 'Tavily';
+        case 'zhihu_search': return '知乎搜索';
+        case 'zhihu_global': return '全网搜索';
+        default: return label;
+    }
+}
+
+/**
+ * 来源分组排序（固定顺序）
+ */
+var SOURCE_GROUP_ORDER = ['tavily', 'zhihu_search', 'zhihu_global'];
+
+/**
+ * 从 URL 中提取域名 + 路径（短路径）用于展示
+ */
+function extractDomain(urlStr) {
+    try {
+        var u = new URL(urlStr);
+        var path = u.pathname;
+        if (path === '/') path = '';
+        // 只保留前两段路径
+        var parts = path.split('/').filter(Boolean);
+        if (parts.length > 2) parts = parts.slice(0, 2);
+        var shortPath = parts.length > 0 ? '/' + parts.join('/') : '';
+        return u.hostname + shortPath;
+    } catch (_) {
+        return urlStr;
+    }
+}
+
+/**
+ * 渲染搜索来源 — 统一使用折叠面板展示
+ * @param {HTMLElement} el - 插入位置（AI 消息气泡容器）
+ * @param {Array} sources - 搜索来源数组 [{title, url, content, source_label}]
+ */
+function renderSearchSources(el, sources) {
+    if (!sources || sources.length === 0) return;
+    renderMultiSourcesPanel(el, sources);
+}
+
+/**
+ * 多个来源 — 自定义折叠面板
+ */
+function renderMultiSourcesPanel(el, sources) {
+    var panel = document.createElement('div');
+    panel.className = 'search-sources-panel';
+
+    var header = document.createElement('button');
+    header.className = 'search-sources-header';
+
+    var headerIcon = document.createElement('span');
+    headerIcon.className = 'search-sources-header-icon';
+    headerIcon.innerHTML = SEARCH_SOURCE_ICON;
+    header.appendChild(headerIcon);
+
+    var headerText = document.createElement('span');
+    headerText.className = 'search-sources-header-text';
+
+    // 计算来源类型数量
+    var typeSet = {};
+    sources.forEach(function (s) { typeSet[s.source_label || 'unknown'] = true; });
+    var typeCount = Object.keys(typeSet).length;
+    headerText.textContent = '\u6765\u81EA ' + typeCount + ' \u4E2A\u6765\u6E90\u00B7' + sources.length + ' \u6761\u7ED3\u679C';
+    header.appendChild(headerText);
+
+    var arrow = document.createElement('span');
+    arrow.className = 'search-sources-header-arrow';
+    arrow.innerHTML = CHEVRON_RIGHT_ICON;
+    header.appendChild(arrow);
+
+    panel.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'search-sources-body';
+
+    // 按 source_label 分组
+    var groups = {};
+    sources.forEach(function (src) {
+        var label = src.source_label || 'unknown';
+        if (!groups[label]) groups[label] = [];
+        groups[label].push(src);
+    });
+
+    var globalIndex = 0;
+    SOURCE_GROUP_ORDER.forEach(function (labelKey) {
+        var items = groups[labelKey];
+        if (!items || items.length === 0) return;
+
+        var group = document.createElement('div');
+        group.className = 'search-sources-group';
+
+        var groupHeader = document.createElement('div');
+        groupHeader.className = 'search-sources-group-header';
+
+        var groupIcon = document.createElement('span');
+        groupIcon.className = 'search-sources-group-icon';
+        groupIcon.innerHTML = getSourceIcon(labelKey);
+        groupHeader.appendChild(groupIcon);
+
+        var groupLabel = document.createElement('span');
+        groupLabel.className = 'search-sources-group-label';
+        groupLabel.textContent = getSourceLabel(labelKey);
+        groupHeader.appendChild(groupLabel);
+
+        var groupCount = document.createElement('span');
+        groupCount.className = 'search-sources-group-count';
+        groupCount.textContent = items.length + ' \u6761';
+        groupHeader.appendChild(groupCount);
+
+        group.appendChild(groupHeader);
+
+        var itemList = document.createElement('div');
+        itemList.className = 'search-sources-group-items';
+
+        items.forEach(function (src) {
+            globalIndex++;
+            var item = document.createElement('div');
+            item.className = 'search-source-group-item';
+            item.addEventListener('click', function () {
+                window.runtime.BrowserOpenURL(src.url);
+            });
+
+            var num = document.createElement('span');
+            num.className = 'search-source-item-num';
+            num.textContent = globalIndex + '.';
+            item.appendChild(num);
+
+            var bodyWrap = document.createElement('div');
+            bodyWrap.className = 'search-source-item-body';
+
+            var top = document.createElement('div');
+            top.className = 'search-source-item-top';
+
+            var itemTitle = document.createElement('span');
+            itemTitle.className = 'search-source-item-title';
+            itemTitle.textContent = src.title;
+            top.appendChild(itemTitle);
+
+            var itemDomain = document.createElement('span');
+            itemDomain.className = 'search-source-item-domain';
+            itemDomain.textContent = extractDomain(src.url);
+            top.appendChild(itemDomain);
+
+            var itemLink = document.createElement('span');
+            itemLink.className = 'search-source-item-link';
+            itemLink.innerHTML = EXTERNAL_ICON;
+            top.appendChild(itemLink);
+
+            bodyWrap.appendChild(top);
+
+            if (src.content) {
+                var snippet = document.createElement('div');
+                snippet.className = 'search-source-item-snippet';
+                snippet.textContent = src.content;
+                bodyWrap.appendChild(snippet);
+            }
+
+            item.appendChild(bodyWrap);
+            itemList.appendChild(item);
+        });
+
+        group.appendChild(itemList);
+        body.appendChild(group);
+    });
+
+    panel.appendChild(body);
+    el.appendChild(panel);
+
+    // 点击 header 切换展开/收起
+    header.addEventListener('click', function () {
+        panel.classList.toggle('open');
+    });
+}
+
+/**
+ * 渲染召回笔记折叠面板
+ */
+function renderRecallCards(el, cards) {
+    if (!cards || cards.length === 0) return;
+
+    var panel = document.createElement('div');
+    panel.className = 'recall-cards-panel';
+
+    var header = document.createElement('button');
+    header.className = 'recall-cards-header';
+    header.setAttribute('aria-expanded', 'false');
+    header.innerHTML = '<span class="recall-cards-header-icon">' + NOTE_ICON + '</span>'
+        + '<span class="recall-cards-header-text">召回笔记 (' + cards.length + ' 篇)</span>'
+        + '<span class="recall-cards-header-arrow">' + CHEVRON_RIGHT_ICON + '</span>';
+
+    var body = document.createElement('div');
+    body.className = 'recall-cards-body';
+
+    cards.forEach(function(card) {
+        var item = document.createElement('div');
+        item.className = 'recall-cards-item';
+        item.addEventListener('click', function() {
+            window.openEditor(card.id, true, false, true);
+        });
+
+        var titleRow = document.createElement('div');
+        titleRow.className = 'recall-cards-item-title';
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'recall-cards-item-icon';
+        iconSpan.innerHTML = NOTE_ICON.replace('width="14"', 'width="12"').replace('height="14"', 'height="12"');
+        titleRow.appendChild(iconSpan);
+        var textSpan = document.createElement('span');
+        textSpan.className = 'recall-cards-item-text';
+        textSpan.textContent = card.title;
+        titleRow.appendChild(textSpan);
+        if (card.file_ext) {
+            var extSpan = document.createElement('span');
+            extSpan.className = 'recall-cards-item-ext';
+            extSpan.textContent = card.file_ext;
+            titleRow.appendChild(extSpan);
+        }
+        item.appendChild(titleRow);
+
+        if (card.content) {
+            var snippet = document.createElement('div');
+            snippet.className = 'recall-cards-snippet';
+            snippet.textContent = card.content;
+            item.appendChild(snippet);
+        }
+
+        body.appendChild(item);
+    });
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+    el.appendChild(panel);
+
+    header.addEventListener('click', function() {
+        var isOpen = panel.classList.toggle('open');
+        header.setAttribute('aria-expanded', isOpen);
+    });
 }
 
 /**
