@@ -162,6 +162,8 @@ export function RenameAISession(arg1:number,arg2:string):Promise<void>;
 
 export function RenameNotebook(arg1:number,arg2:string):Promise<models.Notebook>;
 
+export function ReplaceAISessionMessages(arg1:number,arg2:Array<services.Message>):Promise<void>;
+
 export function ResetDatabase():Promise<void>;
 
 export function RestoreAllNotes():Promise<void>;

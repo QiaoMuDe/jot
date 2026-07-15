@@ -3342,12 +3342,13 @@ async function applyEdit(msgEl, newContent) {
     msgEl.dataset.originalContent = newContent;
     cancelEdit(msgEl);
 
-    // 清理 DB: 清空该会话所有消息后重新保存截断后的 chatHistory
+    // 清理 DB: 原子替换该会话的消息（截断后的 chatHistory）
     if (activeSessionId !== null) {
         try {
-            await window.go.main.App.ClearAISessionMessages(activeSessionId);
             if (chatHistory.length > 0) {
-                await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+                await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
+            } else {
+                await window.go.main.App.ClearAISessionMessages(activeSessionId);
             }
         } catch (_) { /* 静默失败 */ }
     }
@@ -3392,13 +3393,14 @@ async function handleDeleteMsg(msgEl) {
     msgEl.remove();
     updateContextSize();
 
-    // 同步 DB：清空该会话所有消息后重新保存截断后的 chatHistory
+    // 同步 DB：原子替换该会话的消息（截断后的 chatHistory）
     // 避免当前会话消息没有 msgId 导致 DB 操作被跳过
     if (activeSessionId !== null) {
         try {
-            await window.go.main.App.ClearAISessionMessages(activeSessionId);
             if (chatHistory.length > 0) {
-                await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+                await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
+            } else {
+                await window.go.main.App.ClearAISessionMessages(activeSessionId);
             }
         } catch (_) { /* 静默失败 */ }
     }
@@ -3433,11 +3435,12 @@ async function handleRegenerate(msgEl) {
     updateContextSize();
     children.slice(idx).forEach(el => el.remove());
 
-    // 清空该会话的 DB 消息, 重新保存截断后的 chatHistory, 避免再生导致 user 消息重复
+    // 原子替换该会话的消息（截断后的 chatHistory）, 避免再生导致 user 消息重复
     try {
-        await window.go.main.App.ClearAISessionMessages(activeSessionId);
         if (chatHistory.length > 0) {
-            await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+            await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
+        } else {
+            await window.go.main.App.ClearAISessionMessages(activeSessionId);
         }
     } catch (_) { /* 静默 */ }
 
@@ -3463,9 +3466,10 @@ async function handleResend(msgEl) {
     children.slice(idx).forEach(el => el.remove());
 
     try {
-        await window.go.main.App.ClearAISessionMessages(activeSessionId);
         if (chatHistory.length > 0) {
-            await window.go.main.App.SaveAIMessages(activeSessionId, chatHistory);
+            await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
+        } else {
+            await window.go.main.App.ClearAISessionMessages(activeSessionId);
         }
     } catch (_) { /* 静默 */ }
 

@@ -658,6 +658,75 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 	return nil
 }
 
+// ReplaceAISessionMessages 原子替换指定会话的所有消息（清空 + 批量写入）
+// 整个操作在事务中完成，失败时自动回滚
+func (a *AIService) ReplaceAISessionMessages(sessionID uint, messages []Message) error {
+	err := a.db.Transaction(func(tx *gorm.DB) error {
+		// 清空现有消息
+		if err := tx.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error; err != nil {
+			a.logger.Errorw("AIService.ReplaceAISessionMessages 清空失败", fastlog.Error(err))
+			return err
+		}
+
+		// 批量写入新消息
+		now := time.Now()
+		for i, msg := range messages {
+			m := models.AIMessage{
+				SessionID:        sessionID,
+				Role:             msg.Role,
+				Content:          msg.Content,
+				ReasoningContent: msg.ReasoningContent,
+				ThinkingElapsed:  msg.ThinkingElapsed,
+				TotalElapsed:     msg.TotalElapsed,
+				Tokens:           msg.Tokens,
+				SearchSources:    msg.SearchSources,
+				RecallCards:      msg.RecallCards,
+				CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
+			}
+			if err := tx.Create(&m).Error; err != nil {
+				a.logger.Errorw("AIService.ReplaceAISessionMessages 写入失败", fastlog.Error(err))
+				return err
+			}
+		}
+
+		// 更新会话 updated_at
+		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", time.Now()).Error; err != nil {
+			a.logger.Errorw("AIService.ReplaceAISessionMessages 更新会话时间失败", fastlog.Error(err))
+			return err
+		}
+
+		// 自动生成标题（首轮对话）
+		var session models.AISession
+		if err := tx.First(&session, sessionID).Error; err != nil {
+			a.logger.Errorw("AIService.ReplaceAISessionMessages 查会话失败", fastlog.Error(err))
+			return err
+		}
+		if session.Title == "新对话" {
+			for _, msg := range messages {
+				if msg.Role == "user" {
+					title := msg.Content
+					runes := []rune(title)
+					if len(runes) > 30 {
+						title = string(runes[:30]) + "..."
+					}
+					if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
+						a.logger.Errorw("AIService.ReplaceAISessionMessages 自动标题失败", fastlog.Error(err))
+						return err
+					}
+					break
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		a.logger.Errorw("AIService.ReplaceAISessionMessages 事务失败", fastlog.Error(err))
+		return fmt.Errorf("替换会话消息失败: %w", err)
+	}
+	return nil
+}
+
 // ClearAISessionMessages 清空指定会话的所有消息（不删除会话本身）
 func (a *AIService) ClearAISessionMessages(sessionID uint) error {
 	err := a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error

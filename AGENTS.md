@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-14（更新 138）
+> 生成日期: 2026-07-15（更新 139）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -56,7 +56,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块 ~4380 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步）
+│   │   │   ├── ai-chat.js              # AI 对话模块 ~4380 行（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
@@ -504,12 +504,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 4385 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送） |
+| `frontend/src/js/ai-chat.js` | 4385 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送/消息替换后端原子方法） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `app.go` | 3027 | Wails 绑定层（100+ API） |
-| `services/ai_service.go` | 507 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理） |
+| `app.go` | 3039 | Wails 绑定层（100+ API） |
+| `services/ai_service.go` | 575 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理 + 原子替换消息方法） |
 | `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
 | `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
@@ -604,6 +604,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 17. **全局链接系统浏览器打开**：在 `main.js` 的 `initEventListeners()` 中添加 `document` 级 click 事件委托，拦截所有 `<a>` 标签点击，通过 `e.preventDefault()` + `window.runtime.BrowserOpenURL(href)` 在系统默认浏览器中打开。排除 `#` 锚点链接和 `javascript:` 伪协议。同时移除了 `ai-chat.js` 中 `messagesEl` 级别的区域委托和搜索来源面板中的冗余 `link.addEventListener` 代码。详见 [main.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/main.js#L5131-L5138)
 
 18. **后端统一上下文注入架构**：AI 对话的上下文拼接逻辑全部迁移到后端 `CallAIStream`。8 步拼接顺序定义为 `1→2→3→4→5→6→7→8`：角色扮演笔记 → 笔记引用 → 追问引用 → 上传文件 → 联网搜索结果 → 卡片召回结果 → 技能提示词（含 `{roleplay_context}` 占位符替换）。前端只传元数据（角色扮演笔记 IDs / 引用笔记 IDs / 追问引用文本 / 上传文件列表），不再拼接 `systemContext`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1548-L1655)
+
+19. **后端原子替换会话消息**：AI 消息的编辑/删除/重发/重新生成四个操作中的 DB 写入，从前端两步调用 `ClearAISessionMessages` + `SaveAIMessages` 合并为后端 `ReplaceAISessionMessages(sessionID, messages)` 单次调用。后端使用 GORM Transaction 保证清空+写入的原子性。前端 `chatHistory` 为空时 fallback 到 `ClearAISessionMessages`。详见 [ai_service.go#L661-L728](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go#L661-L728)、[app.go#L2048-L2059](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L2048-L2059)
 
 ---
 
@@ -2100,7 +2102,18 @@ await loadXxxSetting();
 | **scroll-behavior 临时禁用** | `scrollToBottom()` 中临时设置 `scrollBehavior = 'auto'` 覆盖 CSS 的 `scroll-behavior: smooth`，滚动完成后恢复。避免程序化滚动触发平滑动画导致视觉卡顿。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) `scrollToBottom()` |
 | **涉及文件** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（`switchSession()`/`addMessage()`/`renderMarkdown()`/`deferHighlightBlocks()`/`scrollToBottom()`）、[ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)（`.ai-msg-enter-anim` 分离类） |
 
-## 一百三十九、~~切换会话滚动跳跃修复 — collapseActionsIfNeeded sync 参数（已废弃）~~
+## 一百三十九、新增记忆点（AI 消息编辑/删除/重发/再生 Clear+Save 迁移为后端 ReplaceAISessionMessages）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **动机** | 前端编辑/删除/重发/重新生成四个消息操作中，都按先 `ClearAISessionMessages` 清空全部、再 `SaveAIMessages` 全量覆盖的两步写入 DB。这两步调用逻辑相同配对使用，应由后端提供原子方法封装。详见 [spec.md](file:///d:/资源池/下水道/Dev/本地项目/jot/.trae/specs/migrate-ai-msg-replace/spec.md) |
+| **后端新增方法** | `AIService.ReplaceAISessionMessages(sessionID, messages)` — GORM 事务内原子执行清空 + 批量写入 + 更新 `updated_at` + auto-title。详见 [ai_service.go#L661-L728](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go#L661-L728) |
+| **Wails 绑定** | `App.ReplaceAISessionMessages(sessionID, messages)` — 调用 service 方法，含日志。详见 [app.go#L2048-L2059](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L2048-L2059) |
+| **前端替换** | 4 处操作各自将 `ClearAISessionMessages` + `SaveAIMessages` 两行替换为一行 `ReplaceAISessionMessages`（`applyEdit`/`handleDeleteMsg`/`handleRegenerate`/`handleResend`），保留 `chatHistory` 为空时 `else` 分支 fallback 到 `ClearAISessionMessages`。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **效果** | 4 个操作从 Clear+Save 两次 RPC 简化为 Replace 一次 RPC，后端保证事务原子性，减少 8 行前端重复代码 |
+| **涉及文件** | [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)（+68 行）、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（+12 行）、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（4 处替换） |
+
+## 一百四十、~~切换会话滚动跳跃修复 — collapseActionsIfNeeded sync 参数（已废弃）~~
 
 | 记忆点 | 内容 |
 |--------|------|

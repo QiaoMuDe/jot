@@ -1,0 +1,8 @@
+- [x] 1. `AIService.ReplaceAISessionMessages` 在 `ai_service.go` 中实现，使用事务包裹
+- [x] 2. `App.ReplaceAISessionMessages` 在 `app.go` 中实现为 Wails 绑定
+- [x] 3. `applyEdit()` 中 Clear+Save 两行替换为单行 `ReplaceAISessionMessages`
+- [x] 4. `handleDeleteMsg()` 中替换为 `ReplaceAISessionMessages`
+- [x] 5. `handleRegenerate()` 中替换为 `ReplaceAISessionMessages`
+- [x] 6. `handleResend()` 中替换为 `ReplaceAISessionMessages`
+- [x] 7. 项目编译无错误
+- [x] 8. 前端 `ClearAISessionMessages` 的调用仅剩「清空会话」一处（L388）+ 4 处 empty chatHistory 兜底

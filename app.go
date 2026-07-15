@@ -2044,6 +2044,17 @@ func (a *App) LoadAISessionMessages(id uint) []services.Message {
 	return a.aiService.LoadAISessionMessages(id)
 }
 
+// ReplaceAISessionMessages 原子替换指定会话的所有消息（清空 + 批量写入）
+func (a *App) ReplaceAISessionMessages(sessionID uint, messages []services.Message) error {
+	a.LogSvc.Logger.Debugw("ReplaceAISessionMessages", fastlog.Uint("sessionID", sessionID), fastlog.Int("message_count", len(messages)))
+	if err := a.aiService.ReplaceAISessionMessages(sessionID, messages); err != nil {
+		a.LogSvc.Logger.Errorw("ReplaceAISessionMessages 失败", fastlog.Error(err))
+		return err
+	}
+	a.LogSvc.Logger.Infow("ReplaceAISessionMessages 成功", fastlog.Uint("sessionID", sessionID))
+	return nil
+}
+
 // SaveAIMessages 保存一轮 AI 对话消息到指定会话
 func (a *App) SaveAIMessages(sessionID uint, messages []services.Message) error {
 	a.LogSvc.Logger.Debugw("SaveAIMessages", fastlog.Uint("sessionID", sessionID), fastlog.Int("message_count", len(messages)))

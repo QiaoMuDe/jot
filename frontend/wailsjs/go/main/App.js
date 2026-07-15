@@ -318,6 +318,10 @@ export function RenameNotebook(arg1, arg2) {
   return window['go']['main']['App']['RenameNotebook'](arg1, arg2);
 }
 
+export function ReplaceAISessionMessages(arg1, arg2) {
+  return window['go']['main']['App']['ReplaceAISessionMessages'](arg1, arg2);
+}
+
 export function ResetDatabase() {
   return window['go']['main']['App']['ResetDatabase']();
 }
