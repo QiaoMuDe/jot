@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-15（更新 144）
+> 生成日期: 2026-07-16（更新 145）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 110+ 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 110+ 个 Go API 给前端，~3532 行
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -51,7 +51,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑 ~7521 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑 ~8391 行（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
@@ -2847,3 +2847,13 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **技术改动** | `const ext`/`const isMd` → `let ext`/`let isMd`，允许阶段二重赋值；`renderTagSelector` 在 `openEditor` 中可被直接调用 |
 | **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
 | **涉及文件** | [main.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |
+
+## 一百九十五、新增记忆点（顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动）
+
+| 记忆点 | 内容 |
+|--------|------|
+| 问题描述 | 打开/关闭编辑器时，顶部品牌标识和更多菜单按钮向左滑动动画卡顿（"先往左走一点卡一下再往左移动"），且关闭时品牌标识瞬间跳回右端 |
+| 迭代 1：加 margin 过渡 | 根因：`.topbar-dropdown` 的 `margin-left: -24px → 0` 没有过渡。修复：在 `editor.css` 和 `topbar.css` 的 `.topbar-dropdown` transition 中添加 `margin 0.35s`。结果：`#topbar` 的 `padding-left` 和 dropdown 的 `margin-left` 两个布局属性过渡时序冲突，品牌标识在 flex 流中位置抖动 |
+| 迭代 2：改用 transform 驱动父容器 | 用 `transform: translateX(-20px)` 替代 `#topbar` 的 `padding-left: 4px`，GPU 加速不触发 relayout。结果：品牌标识移动方向正确，但 `translateX` 加在 `.topbar-left` 父容器上 + dropdown 的 `width: 0` 导致 flex 布局中品牌标识被双重位移（父容器 transform 20px + flex 布局位移 ~44px = ~64px），太快且超出边界 |
+| 迭代 3（最终方案）：transform 直接加在品牌标识上 | `.topbar-brand` 本身已有 `transition: transform 0.35s`，直接加 `transform: translateX(-36px)`，dropdown 只淡出不变宽。品牌标识移动独立于 flex 布局，无抖动，最终 `translateX(-36px)` 将品牌标识从 flex 起始右侧 28px 处移动到更左位置 |
+| 涉及文件 | [editor.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/editor.css)（4 次修改：dropdown 加 margin 过渡 → padding-left 删除 → .topbar-left transform → .topbar-brand transform）、[topbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/topbar.css)（3 次修改：dropdown 加 margin 过渡 → 恢复 → .topbar-left 移除 transition） |

@@ -19,10 +19,6 @@
   --wails-draggable: drag;
 }
 
-#topbar.editor-fullscreen {
-  padding-left: 4px;
-}
-
 .topbar-left {
   display: flex;
   align-items: center;
