@@ -2299,7 +2299,9 @@ func (a *App) ExportAISessionAsMarkdown(sessionID uint) (string, error) {
 
 	// 构建 Markdown 内容
 	var buf strings.Builder
-	buf.WriteString("# " + session.Title + "\n\n---\n\n")
+	buf.WriteString("# ")
+	buf.WriteString(session.Title)
+	buf.WriteString("\n\n---\n\n")
 
 	for i, msg := range messages {
 		if i > 0 {
@@ -2308,17 +2310,22 @@ func (a *App) ExportAISessionAsMarkdown(sessionID uint) (string, error) {
 
 		switch msg.Role {
 		case "user":
-			buf.WriteString("**User**:\n" + msg.Content + "\n\n")
+			buf.WriteString("**User**:\n")
+			buf.WriteString(msg.Content)
+			buf.WriteString("\n\n")
 		case "assistant":
 			buf.WriteString("**AI Assistant**:\n")
 			if msg.ReasoningContent != "" {
 				buf.WriteString("> 思考过程：\n")
 				for _, line := range strings.Split(msg.ReasoningContent, "\n") {
-					buf.WriteString("> " + line + "\n")
+					buf.WriteString("> ")
+					buf.WriteString(line)
+					buf.WriteString("\n")
 				}
 				buf.WriteString("\n")
 			}
-			buf.WriteString(msg.Content + "\n\n")
+			buf.WriteString(msg.Content)
+			buf.WriteString("\n\n")
 		}
 	}
 
