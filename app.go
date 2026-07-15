@@ -1511,22 +1511,12 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-// 自动保存用户消息到数据库，然后从数据库加载会话所有消息
-func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
+// 前端已先调用 SaveAIMessage 保存用户消息并拿到 userMsgID，此处直接使用
+func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, userMsgID uint) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
-	// 保存用户消息到数据库，获取消息 ID
-	userMsgID, err := a.aiService.SaveAIMessage(sessionID, services.Message{
-		Role:    "user",
-		Content: userText,
-		Tokens:  estimateTokens(userText),
-	})
-	if err != nil {
-		a.LogSvc.Logger.Errorw("保存用户消息失败", fastlog.Error(err))
-		runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, "保存用户消息失败")
-		return
-	}
+	// userMsgID 由前端通过 SaveAIMessage 预先保存并传入，此处不再重复保存
 
 	var fullThinking strings.Builder
 	var searchSourcesJSON, recallCardsJSON string
@@ -1895,21 +1885,8 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			},
 			func(content string, elapsedThinking, elapsedTotal float64) {
 				// 在后端统一计算 tokens
-				userTokens := 0
+				userTokens := estimateUserTokens(messages)
 				assistantTokens := estimateTokens(content)
-				// 仅统计本轮 system 上下文（skill prompts、笔记引用、搜索注入、卡片召回）
-				for _, msg := range messages {
-					if msg.Role == "system" {
-						userTokens += estimateTokens(msg.Content)
-					}
-				}
-				// 仅统计最后一条用户消息（当前轮次的输入），不累加历史
-				for i := len(messages) - 1; i >= 0; i-- {
-					if messages[i].Role == "user" {
-						userTokens += estimateTokens(messages[i].Content)
-						break
-					}
-				}
 				totalTokens := userTokens + assistantTokens
 
 				// 由后端保存 assistant 消息到数据库
@@ -1958,7 +1935,14 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				a.LogSvc.Logger.Errorw("AI 流错误",
 					fastlog.String("error", err),
 				)
-				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
+
+				// 出错时也更新用户消息 token 和会话 token，确保 DB 中 token 数与实际一致
+				userTokens := estimateUserTokens(messages)
+				_ = a.aiService.UpdateAIMessageTokens(userMsgID, userTokens)
+				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+
+				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err, userTokens)
 			},
 		)
 	}()
@@ -2322,19 +2306,8 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
 			},
 			func(content string, elapsedThinking, elapsedTotal float64) {
-				userTokens := 0
+				userTokens := estimateUserTokens(messages)
 				assistantTokens := estimateTokens(content)
-				for _, msg := range messages {
-					if msg.Role == "system" {
-						userTokens += estimateTokens(msg.Content)
-					}
-				}
-				for i := len(messages) - 1; i >= 0; i-- {
-					if messages[i].Role == "user" {
-						userTokens += estimateTokens(messages[i].Content)
-						break
-					}
-				}
 				totalTokens := userTokens + assistantTokens
 
 				assistantMsg := services.Message{
@@ -2383,6 +2356,15 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				a.LogSvc.Logger.Errorw("AI 流错误（再生）",
 					fastlog.String("error", err),
 				)
+
+				// 出错时也更新用户消息 token 和会话 token
+				if lastUserMsgID > 0 {
+					userTokens := estimateUserTokens(messages)
+					_ = a.aiService.UpdateAIMessageTokens(lastUserMsgID, userTokens)
+				}
+				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+
 				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
 			},
 		)
@@ -2411,6 +2393,23 @@ func estimateTokens(text string) int {
 	runes := []rune(text)
 	otherCount := len(runes) - chineseCount
 	return int(math.Ceil(float64(chineseCount)/1.5 + float64(otherCount)/4))
+}
+
+// estimateUserTokens 计算会话中 system 消息与最后一条 user 消息的估算 token 数
+func estimateUserTokens(messages []services.Message) int {
+	tokens := 0
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			tokens += estimateTokens(msg.Content)
+		}
+	}
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			tokens += estimateTokens(messages[i].Content)
+			break
+		}
+	}
+	return tokens
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用
@@ -2556,6 +2555,24 @@ func (a *App) UpdateAIMessageContent(id uint, content string) error {
 	}
 	a.LogSvc.Logger.Infow("UpdateAIMessageContent 成功", fastlog.Uint("id", id))
 	return nil
+}
+
+// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID
+// 由前端在调用 CallAIStream 前预先保存用户消息，确保前端能立即拿到 msgId
+func (a *App) SaveAIMessage(sessionID uint, content string, role string) (uint, error) {
+	a.LogSvc.Logger.Debugw("SaveAIMessage", fastlog.Uint("sessionID", sessionID), fastlog.String("role", role))
+	msg := services.Message{
+		Role:    role,
+		Content: content,
+		Tokens:  estimateTokens(content),
+	}
+	msgID, err := a.aiService.SaveAIMessage(sessionID, msg)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("SaveAIMessage 失败", fastlog.Error(err))
+		return 0, err
+	}
+	a.LogSvc.Logger.Infow("SaveAIMessage 成功", fastlog.Uint("msgID", msgID), fastlog.Uint("sessionID", sessionID))
+	return msgID, nil
 }
 
 // DeleteAIMessage 按 ID 删除单条 AI 消息

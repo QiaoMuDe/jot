@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-15（更新 140）
+> 生成日期: 2026-07-15（更新 142）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -11,7 +11,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 105+ 个 Go API 给前端
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 110+ 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -2771,3 +2771,20 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **DOM 调整** | `index.html` 在 `#aiChatMessages` 内部新增 `<div class="ai-chat-messages-inner">` 内层容器。`ai-chat.js` 新增 `messagesInnerEl` 变量引用内层容器，所有 DOM 追加操作（消息渲染、加载更多、滚动到最新）从 `messagesEl` 迁移到 `messagesInnerEl`；滚动相关属性（`scrollTop`、`scrollHeight`、`scroll` 事件）保持在 `messagesEl` 上不变。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
 | **影响范围检查** | 确认移除 `scrollbar-gutter: stable` 对其他 7 个视图（笔记列表、设置、日待办等）无负面影响：全局 CSS 无定位元素依赖 gutter 空间，各视图 overflow 机制不变，视图切换时无布局抖动 |
 | **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+
+## 一百八十九、新增记忆点（AI 出错修复 — 空消息拦截 + Token 计算 + 统一 estimateUserTokens）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Bug：AI 报错时空消息写入 DB** | AI 流式请求出错时，`aicli/client.go` 的 `Stream()` 方法同时调用 `OnError` 和 `OnDone` 两个回调，导致 `app.go` 的 `onComplete` 回调将空的 assistant 消息保存到数据库。切换会话后显示空白 AI 气泡。详见 [internal/aicli/client.go](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/client.go) |
+| **修复 — 后端** | 在 `client.go` 的 `Stream()` 中给 `OnDone` 调用加 `err == nil` 守卫：`if err == nil && callbacks.OnDone != nil { callbacks.OnDone(...) }`。出错时仅触发 `OnError`，不再触发 `OnDone`，彻底阻止空消息入库。详见 [internal/aicli/client.go#L87](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/client.go) |
+| **Bug：出错时 Token 不显示** | AI 报错后用户消息下方不显示 Token 数，会话总 Token 不更新。因为 Token 显示依赖 `ai:stream-done` 事件更新 DOM，出错时只触发 `ai:stream-error`。 |
+| **修复 — Token 后端** | `CallAIStream` 和 `CallAIStreamRegenerate` 的 `onError` 回调中新增 Token 计算：调用 `estimateUserTokens(messages)` 计算 `userTokens`，通过 `UpdateAIMessageTokens` 和 `UpdateSessionContextTokens` 写入 DB，并通过 `runtime.EventsEmit("ai:stream-error", streamGen, err, userTokens)` 将 `userTokens` 传给前端。详见 [app.go#L1948](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [app.go#L2390](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **修复 — Token 前端** | `ai:stream-error` 事件处理器新增接收第 3 参数 `userTokens`：找到最后一条用户消息 DOM 元素，更新其 `.user-tokens` 显示，并调用 `updateContextSize()` 刷新会话总 Token。详见 [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **Bug：出错后用户消息操作无响应** | AI 报错后，用户消息的右键菜单（重新发送/删除）、重新生成等操作点击无反应，必须切换会话后恢复。根因：用户消息的 `data-msgId` 属性依赖 `ai:stream-done` 事件写入，出错时不触发 → `msgId` 始终为 0 → `handleResend()`/`handleDeleteMsg()` 等函数在 `msgId === 0` 时静默退出 |
+| **修复 — 提前入库** | `onSend()` 中提前调用 `SaveAIMessage` 保存用户消息到 DB 获取 `msgID`，不再依赖 `stream-done` 设置 `data-msgId`。同时对 `CallAIStream` 新增 `userMsgID` 参数传递。详见 [app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go) 和 [frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **重构：统一 estimateUserTokens** | 原 4 处（CallAIStream.onComplete、CallAIStream.onError、CallAIStreamRegenerate.onComplete、CallAIStreamRegenerate.onError）分散的 userTokens 计算代码（遍历 messages 累加 system + 最后 user 消息），统一提取为 `app.go` 中的 `estimateUserTokens(messages []services.Message) int` 函数。详见 [app.go#L2444](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **底层 estimateTokens** | 维持不变：`math.Ceil(中文字数/1.5 + 其他字符数/4)`。详见 [app.go#L2432](file:///d:/峡谷/Dev/本地项目/jot/app.go) |
+| **涉及文件** | [internal/aicli/client.go](file:///d:/峡谷/Dev/本地项目/jot/internal/aicli/client.go)（err == nil 守卫）、[app.go](file:///d:/峡谷/Dev/本地项目/jot/app.go)（estimateUserTokens + onError 回调）、[frontend/src/js/ai-chat.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（提前保存用户消息 + stream-error 显示 token）、[frontend/wailsjs/go/main/App.js](file:///d:/峡谷/Dev/本地项目/jot/frontend/wailsjs/go/main/App.js)（CallAIStream 签名同步） |
+
+| **update 计数** | `AGENTS.md` 从更新 141 到 更新 142 |

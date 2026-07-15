@@ -84,7 +84,7 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 	}
 	elapsedTotal := time.Since(streamStart).Seconds()
 
-	if callbacks.OnDone != nil {
+	if err == nil && callbacks.OnDone != nil {
 		callbacks.OnDone(fullContent.String(), elapsedThinking, elapsedTotal)
 	}
 }

@@ -2046,13 +2046,21 @@ async function onSend() {
 
     hideWelcome();
 
-    addMessage(text, 'user');
+    // 先保存用户消息到数据库，确保前端能立即拿到 msgId
+    let userMsgId = 0;
+    if (activeSessionId !== null) {
+        try {
+            userMsgId = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
+        } catch (_) { /* 静默失败，后续流程继续 */ }
+    }
+
+    addMessage(text, 'user', undefined, undefined, undefined, 0, userMsgId || undefined);
     const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
         bindMsgContextMenu(userMsgEl, text, 'user');
     }
-    startStreaming(text, false);
+    startStreaming(text, false, userMsgId);
 
     // 发送后清空上传文件列表
     uploadedFiles = [];
@@ -2062,8 +2070,9 @@ async function onSend() {
 /**
  * 启动流式输出
  * @param {boolean} isRegenerate - 是否再生
+ * @param {number} userMsgID - 已保存的用户消息 ID（由 onSend 或 handleResend 提前获取）
  */
-async function startStreaming(userText, isRegenerate) {
+async function startStreaming(userText, isRegenerate, userMsgID) {
     if (isStreaming) return;
     isStreaming = true;
 
@@ -2417,7 +2426,7 @@ async function startStreaming(userText, isRegenerate) {
     });
     unsubs.push(unsubDone);
 
-    const unsubError = window.runtime.EventsOn('ai:stream-error', (streamGen, err) => {
+    const unsubError = window.runtime.EventsOn('ai:stream-error', (streamGen, err, userTokens) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器
         unsubs.forEach(fn => fn());
@@ -2428,22 +2437,35 @@ async function startStreaming(userText, isRegenerate) {
         if (polishBtn) polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
         if (streamingEl && streamingEl.parentNode) streamingEl.remove();
 
-        // 尝试解析结构化错误 JSON
+        // 尝试解析结构化错误 JSON，仅通过通知展示，不再创建无菜单的错误气泡
         try {
             const errData = JSON.parse(err);
             if (errData.user_msg) {
                 window.showNotification(errData.user_msg, 'error', 5000);
             } else {
-                addErrorMessage(err);
+                window.showNotification(err, 'error', 5000);
             }
         } catch (_) {
-            addErrorMessage(err);
+            window.showNotification(err, 'error', 5000);
         }
 
         // 出错也清理追问引用
         followUpRef = '';
         const fb = document.getElementById('aiChatFollowUpBar');
         if (fb) fb.style.display = 'none';
+
+        // 更新用户消息的 token 显示（后端已计算并保存到 DB，通过 userTokens 返回）
+        if (userTokens !== undefined) {
+            const lastUserMsgEl = messagesInnerEl.querySelector('.ai-msg-user:last-child');
+            if (lastUserMsgEl) {
+                const tokensEl = lastUserMsgEl.querySelector('.user-tokens');
+                if (tokensEl && userTokens > 0) {
+                    tokensEl.textContent = formatTokens(userTokens) + ' tokens';
+                }
+            }
+        }
+        // 刷新会话 token 显示
+        updateContextSize();
     });
     unsubs.push(unsubError);
 
@@ -2460,7 +2482,7 @@ async function startStreaming(userText, isRegenerate) {
         if (isRegenerate) {
             window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
         } else {
-            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
+            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
         }
     } catch (e) {
         unsubs.forEach(fn => fn());
@@ -2475,10 +2497,10 @@ async function startStreaming(userText, isRegenerate) {
             if (errData.user_msg) {
                 window.showNotification(errData.user_msg, 'error', 5000);
             } else {
-                addErrorMessage('流式调用失败: ' + (e.message || e));
+                window.showNotification('流式调用失败: ' + (e.message || e), 'error', 5000);
             }
         } catch (_) {
-            addErrorMessage('流式调用失败: ' + (e.message || e));
+            window.showNotification('流式调用失败: ' + (e.message || e), 'error', 5000);
         }
     }
 }
@@ -3387,7 +3409,7 @@ async function applyEdit(msgEl, newContent) {
             window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
             return;
         }
-        await startStreaming(newContent, true);
+        await startStreaming(newContent, true, 0);
         scrollToBottom();
     }
 }
@@ -3481,8 +3503,8 @@ async function handleRegenerate(msgEl) {
         chatHistory = chatHistory.slice(0, idx);
     }
 
-    // 再生
-    await startStreaming('', true);
+    // 再生（regenerate 不新建用户消息，userMsgID 传 0）
+    await startStreaming('', true, 0);
     scrollToBottom();
 }
 
@@ -3522,8 +3544,16 @@ async function handleResend(msgEl) {
         chatHistory = chatHistory.slice(0, idx);
     }
 
-    // 重新添加用户消息气泡
-    addMessage(content, 'user');
+    // 先保存用户消息到数据库，拿到 msgId
+    let newUserMsgId = 0;
+    if (activeSessionId !== null) {
+        try {
+            newUserMsgId = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user');
+        } catch (_) { /* 静默 */ }
+    }
+
+    // 重新添加用户消息气泡（带上 msgId）
+    addMessage(content, 'user', undefined, undefined, undefined, 0, newUserMsgId || undefined);
     const newUserMsgEl = messagesInnerEl.lastElementChild;
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
@@ -3531,7 +3561,7 @@ async function handleResend(msgEl) {
     }
 
     // 重新发送
-    await startStreaming(content, false);
+    await startStreaming(content, false, newUserMsgId);
     scrollToBottom();
 }
 

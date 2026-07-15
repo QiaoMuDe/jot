@@ -38,8 +38,8 @@ export function CallAI(arg1) {
   return window['go']['main']['App']['CallAI'](arg1);
 }
 
-export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11);
+export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12) {
+  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
 }
 
 export function CallAIStreamRegenerate(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
@@ -360,6 +360,10 @@ export function RestoreTrashNotebook(arg1) {
 
 export function SaveAIConfig(arg1) {
   return window['go']['main']['App']['SaveAIConfig'](arg1);
+}
+
+export function SaveAIMessage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveAIMessage'](arg1, arg2, arg3);
 }
 
 export function SaveAIMessageAsNote(arg1) {

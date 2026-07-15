@@ -22,7 +22,7 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
-export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:boolean,arg7:Array<string>,arg8:Array<number>,arg9:Array<number>,arg10:string,arg11:Array<main.AIChatFileResult>):Promise<void>;
+export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:boolean,arg7:Array<string>,arg8:Array<number>,arg9:Array<number>,arg10:string,arg11:Array<main.AIChatFileResult>,arg12:number):Promise<void>;
 
 export function CallAIStreamRegenerate(arg1:number,arg2:number,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:Array<string>,arg7:Array<number>,arg8:Array<number>,arg9:string,arg10:Array<main.AIChatFileResult>):Promise<void>;
 
@@ -183,6 +183,8 @@ export function RestoreNote(arg1:number):Promise<void>;
 export function RestoreTrashNotebook(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
+
+export function SaveAIMessage(arg1:number,arg2:string,arg3:string):Promise<number>;
 
 export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 
