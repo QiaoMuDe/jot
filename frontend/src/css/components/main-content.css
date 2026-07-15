@@ -7,8 +7,6 @@
   overflow-y: auto;
   background: var(--bg);
   position: relative;
-  /* 预占滚动条空间，防止 overflow:hidden 切换时内容晃动 */
-  scrollbar-gutter: stable;
   overscroll-behavior: none;
 }
 

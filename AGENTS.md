@@ -2756,3 +2756,18 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **stream-done 事件** | 9 参数：`streamGen, content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID`。`userMsgID` 前端用于关联 DOM data-msg-id + 更新 `.user-tokens`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
 | **Bug 修复集** | ① **Scroll Handler 泄漏**：`scrollHandler` 从 `switchSession` 内部 `const` 提升为模块级 `_scrollHandler`，`removeEventListener` 使用同一引用避免 listener 累积 ② **编辑内容未写回 DB**：`applyEdit` 中 `TruncateAISessionAfterMessage` 后缺少 `UpdateAIMessageContent`，AI 回复基于旧内容。已在 `applyEdit` 补充写入 ③ **再生模式 token 不更新**：`CallAIStreamRegenerate` stream-done 中 `userMsgID=uint(0)` 改为查找最后用户消息 ID 并更新 ④ **编辑时旧 token 显示**：`cancelEdit` 恢复 `.user-tokens` 显示后立即隐藏，stream-done 更新时才重新展示 |
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（+476 行）、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)（+429 行）、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（+52 行）|
+
+| **update 计数** | `AGENTS.md` 从更新 140 到 更新 141 |
+
+## 一百八十八、新增记忆点（AI 聊天消息区滚动条贴右侧边框）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | AI 聊天消息列表的滚动条默认位于消息容器内部（距窗口右侧边框约 16px + 6px 间隙），要求将滚动条移到窗口右侧边框处贴边对齐，同时保留内容与边框之间的留白视觉 |
+| **方案** | 外层容器全宽 + 内层容器居中留白方案：`#aiChatMessages` 铺满父级宽度使滚动条自然出现在右侧边框，内部新增 `.ai-chat-messages-inner` 容器承载内容居中 + 左右 padding 留白。详见 [index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html) |
+| **根因一（16px 间隙）** | `.ai-chat-content` 的 `padding: 0 16px 16px` 左右各 16px 压缩了内容的可触及宽度，滚动条无法贴到容器右边缘。修复：移除左右 padding（`0 0 16px`），子元素通过自身 padding 补偿。详见 [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css) |
+| **根因二（6-17px 间隙，真正根因）** | `#mainContent` 的 `scrollbar-gutter: stable` 属性在全局主内容容器右侧预留了滚动条空间（约 6-17px），导致整个内容区左移，AI 聊天消息容器即使全宽也触不到右边缘。修复：移除 `scrollbar-gutter: stable`。详见 [main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css) |
+| **补偿策略** | 移除父级 padding 后，各子元素通过自身 padding 保持视觉间距不变：`.ai-chat-messages-inner` padding 从 `16px 20px 72px` 增至 `16px 36px 72px`（左右 +16px）；`.ai-chat-input-area` padding 从 `8px 32px 16px` 增至 `8px 48px 16px`（左右 +16px）；`.ai-chat-welcome` padding 从 `16px 20px` 增至 `16px 36px`（左右 +16px）；`.ai-chat-empty` 新增 `0 36px` |
+| **DOM 调整** | `index.html` 在 `#aiChatMessages` 内部新增 `<div class="ai-chat-messages-inner">` 内层容器。`ai-chat.js` 新增 `messagesInnerEl` 变量引用内层容器，所有 DOM 追加操作（消息渲染、加载更多、滚动到最新）从 `messagesEl` 迁移到 `messagesInnerEl`；滚动相关属性（`scrollTop`、`scrollHeight`、`scroll` 事件）保持在 `messagesEl` 上不变。详见 [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |
+| **影响范围检查** | 确认移除 `scrollbar-gutter: stable` 对其他 7 个视图（笔记列表、设置、日待办等）无负面影响：全局 CSS 无定位元素依赖 gutter 空间，各视图 overflow 机制不变，视图切换时无布局抖动 |
+| **涉及文件** | [ai-chat.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/ai-chat.css)、[main-content.css](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/css/components/main-content.css)、[index.html](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/index.html)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js) |

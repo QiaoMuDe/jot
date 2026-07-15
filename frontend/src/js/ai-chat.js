@@ -6,6 +6,7 @@ import { applyAIHighlightTheme } from './hljs-themes.js';
 import { marked } from 'marked';
 
 let messagesEl = null;        // #aiChatMessages
+let messagesInnerEl = null;   // .ai-chat-messages-inner
 let inputEl = null;           // #aiChatInput
 let sendBtnEl = null;         // #aiChatSendBtn
 let emptyEl = null;           // #aiChatEmpty
@@ -219,6 +220,7 @@ async function switchModel(model) {
  */
 export async function initAIChat() {
     messagesEl = document.getElementById('aiChatMessages');
+    messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
     inputEl = document.getElementById('aiChatInput');
     sendBtnEl = document.getElementById('aiChatSendBtn');
     emptyEl = document.getElementById('aiChatEmpty');
@@ -375,7 +377,7 @@ function bindEvents() {
     // 清空当前对话
     if (clearBtnEl) {
         clearBtnEl.addEventListener('click', async () => {
-            if (activeSessionId === null || messagesEl.children.length === 0) {
+            if (activeSessionId === null || messagesInnerEl.children.length === 0) {
                 window.showNotification?.('当前没有对话可以清空', 'info');
                 return;
             }
@@ -386,7 +388,7 @@ function bindEvents() {
                 await window.go.main.App.ClearAISessionMessages(activeSessionId);
             } catch (_) { /* 静态失败 */ }
 
-            messagesEl.innerHTML = '';
+            messagesInnerEl.innerHTML = '';
             chatHistory = [];
             updateContextSize();
             scrollToBottom();
@@ -1447,7 +1449,7 @@ function renderSessionList() {
                 if (s.id === activeSessionId) {
                     activeSessionId = null;
                     chatHistory = [];
-                    messagesEl.innerHTML = '';
+                    messagesInnerEl.innerHTML = '';
                 }
 
                 await loadSessionList();
@@ -1561,7 +1563,7 @@ async function switchSession(id) {
         _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
         // 清空消息列表
-        messagesEl.innerHTML = '';
+        messagesInnerEl.innerHTML = '';
 
         if (!msgs || msgs.length === 0) {
             // 更新侧栏高亮
@@ -1583,7 +1585,7 @@ async function switchSession(id) {
             for (const msg of chunk) {
                 if (msg.role === 'user') {
                     addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
-                    const userMsgEl = messagesEl.lastElementChild;
+                    const userMsgEl = messagesInnerEl.lastElementChild;
                     if (userMsgEl) {
                         userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
@@ -1629,12 +1631,12 @@ async function switchSession(id) {
                 }
                 _oldestMsgId = olderMsgs[0].id;
                 // 记录当前第一个子元素作为锚点
-                const firstChild = messagesEl.firstChild;
+                const firstChild = messagesInnerEl.firstChild;
                 // 渲染新消息（addMessage 会追加到末尾）
                 for (const msg of olderMsgs) {
                     if (msg.role === 'user') {
                         addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
-                        const userMsgEl = messagesEl.lastElementChild;
+                        const userMsgEl = messagesInnerEl.lastElementChild;
                         if (userMsgEl) {
                             userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
@@ -1646,10 +1648,10 @@ async function switchSession(id) {
                     }
                 }
                 // 将新消息按原有 ASC 顺序移到列表顶部
-                const firstNewIdx = messagesEl.children.length - olderMsgs.length;
-                const newChildren = Array.from(messagesEl.children).slice(firstNewIdx);
+                const firstNewIdx = messagesInnerEl.children.length - olderMsgs.length;
+                const newChildren = Array.from(messagesInnerEl.children).slice(firstNewIdx);
                 for (const el of newChildren) {
-                    messagesEl.insertBefore(el, firstChild);
+                    messagesInnerEl.insertBefore(el, firstChild);
                 }
                 // 恢复滚动位置
                 messagesEl.style.scrollBehavior = 'auto';
@@ -1732,7 +1734,7 @@ async function createSession() {
 
     chatHistory = [];
     updateContextSize();
-    messagesEl.innerHTML = '';
+    messagesInnerEl.innerHTML = '';
     hideEmptyState();
     showWelcome();
 
@@ -2045,7 +2047,7 @@ async function onSend() {
     hideWelcome();
 
     addMessage(text, 'user');
-    const userMsgEl = messagesEl.lastElementChild;
+    const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
         bindMsgContextMenu(userMsgEl, text, 'user');
@@ -2095,7 +2097,7 @@ async function startStreaming(userText, isRegenerate) {
     contentDiv.className = 'msg-content';
     contentDiv.appendChild(createTypingDots());
     streamingEl.appendChild(contentDiv);
-    messagesEl.appendChild(streamingEl);
+    messagesInnerEl.appendChild(streamingEl);
 
     let thinkingDetails = null;
     let thinkingContentEl = null;
@@ -2764,7 +2766,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         el.appendChild(details);
     }
 
-    messagesEl.appendChild(el);
+    messagesInnerEl.appendChild(el);
     if (!skipScroll) scrollToBottom();
     return el;
 }
@@ -2817,7 +2819,7 @@ function addErrorMessage(msg) {
     const el = document.createElement('div');
     el.className = 'ai-msg-error';
     el.textContent = msg;
-    messagesEl.appendChild(el);
+    messagesInnerEl.appendChild(el);
     scrollToBottom();
 }
 
@@ -3522,7 +3524,7 @@ async function handleResend(msgEl) {
 
     // 重新添加用户消息气泡
     addMessage(content, 'user');
-    const newUserMsgEl = messagesEl.lastElementChild;
+    const newUserMsgEl = messagesInnerEl.lastElementChild;
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
