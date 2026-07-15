@@ -26,7 +26,7 @@ let fileBar = null;           // #aiChatFileBar
 let fileChips = null;         // #aiChatFileChips
 
 // 状态
-let chatHistory = [];          // 当前会话的消息 (发送给模型用) 
+let chatHistory = []; // 仅渲染缓冲区，不再发送给后端 
 let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
@@ -40,7 +40,9 @@ let _contextMsgRole = '';     // 右键消息角色
 let _contextMsgEl = null;     // 右键消息元素
 let _contextTitleEl = null;    // 右键菜单当前会话标题元素
 let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
-let _pendingTokenSync = false; // 编辑消息后需在 stream-done 中同步 tokens 到 DB
+let _loadingMore = false;      // 加载更多消息防重复
+let _oldestMsgId = 0;          // 当前已加载的最旧消息 ID（用于分页）
+let _scrollHandler = null;     // 滚动加载更多句柄，避免 switchSession 累积重复绑定
 
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
@@ -317,36 +319,32 @@ export async function initAIChat() {
 
 /* ── 上下文大小 ── */
 
-/** 粗略估算文本的 token 数（中英文混合场景） */
-function estimateTokens(text) {
-    if (!text) return 0;
-    const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-    const otherChars = text.length - chineseChars;
-    return Math.ceil(chineseChars / 1.5 + otherChars / 4);
-}
-
 /** 格式化 token 数为可读字符串 */
 function formatTokens(count) {
     if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
     return String(count);
 }
 
-/** 更新上下文大小指示器（消息变更时调用，自动持久化到数据库） */
+/** 更新上下文大小指示器（从后端读取会话缓存 tokens） */
 async function updateContextSize() {
     if (!contextSizeEl) return;
-    const total = chatHistory.reduce((sum, msg) => sum + (msg.tokens || 0), 0);
-    if (total === 0) {
+    if (!activeSessionId) {
         contextSizeEl.textContent = '';
         contextSizeEl.style.display = 'none';
-    } else {
-        contextSizeEl.textContent = formatTokens(total) + ' tokens';
-        contextSizeEl.style.display = '';
+        return;
     }
-    // 持久化到数据库（仅在活跃会话且有 token 时）
-    if (activeSessionId && total > 0) {
-        try {
-            await window.go.main.App.UpdateSessionContextTokens(activeSessionId, total);
-        } catch (_) { /* 静默失败 */ }
+    try {
+        const tokens = await window.go.main.App.GetSessionContextTokens(activeSessionId);
+        if (tokens > 0) {
+            contextSizeEl.textContent = formatTokens(tokens) + ' tokens';
+            contextSizeEl.style.display = '';
+        } else {
+            contextSizeEl.textContent = '';
+            contextSizeEl.style.display = 'none';
+        }
+    } catch (_) {
+        contextSizeEl.textContent = '';
+        contextSizeEl.style.display = 'none';
     }
 }
 
@@ -1518,7 +1516,8 @@ async function switchSession(id) {
 
     try {
         activeSessionId = id;
-        const msgs = await window.go.main.App.LoadAISessionMessages(id);
+        _loadingMore = false;
+        const msgs = await window.go.main.App.LoadAISessionMessagesPaginated(id, 6, 0);
 
         // 加载会话配置并恢复操作栏状态
         try {
@@ -1556,8 +1555,10 @@ async function switchSession(id) {
             }
         } catch (_) {}
 
-        // 重建 chatHistory (只保留 role/content 供 API 使用) 
-        chatHistory = msgs ? msgs.map(msg => ({ role: msg.role, content: msg.content, tokens: msg.tokens || 0 })) : [];
+        // 重建 chatHistory (仅渲染缓冲区)
+        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null })) : [];
+        // 记录最旧消息 ID 用于分页加载
+        _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
         // 清空消息列表
         messagesEl.innerHTML = '';
@@ -1608,6 +1609,58 @@ async function switchSession(id) {
 
         // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
         updateContextSize();
+
+        // 添加滚动加载更多（移除旧监听器防止重复绑定）
+        if (_scrollHandler) {
+            messagesEl.removeEventListener('scroll', _scrollHandler);
+        }
+        _scrollHandler = async () => {
+            if (_loadingMore || !activeSessionId) return;
+            if (messagesEl.scrollTop > 0) return;
+            if (_oldestMsgId <= 0) return;
+            _loadingMore = true;
+            const prevScrollHeight = messagesEl.scrollHeight;
+            try {
+                const olderMsgs = await window.go.main.App.LoadAISessionMessagesPaginated(activeSessionId, 6, _oldestMsgId);
+                if (!olderMsgs || olderMsgs.length === 0) {
+                    _oldestMsgId = 0;
+                    _loadingMore = false;
+                    return;
+                }
+                _oldestMsgId = olderMsgs[0].id;
+                // 记录当前第一个子元素作为锚点
+                const firstChild = messagesEl.firstChild;
+                // 渲染新消息（addMessage 会追加到末尾）
+                for (const msg of olderMsgs) {
+                    if (msg.role === 'user') {
+                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
+                        const userMsgEl = messagesEl.lastElementChild;
+                        if (userMsgEl) {
+                            userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
+                            bindMsgContextMenu(userMsgEl, msg.content, 'user');
+                        }
+                    } else if (msg.role === 'assistant') {
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, true, true);
+                        el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
+                        bindMsgContextMenu(el, msg.content, 'assistant');
+                    }
+                }
+                // 将新消息按原有 ASC 顺序移到列表顶部
+                const firstNewIdx = messagesEl.children.length - olderMsgs.length;
+                const newChildren = Array.from(messagesEl.children).slice(firstNewIdx);
+                for (const el of newChildren) {
+                    messagesEl.insertBefore(el, firstChild);
+                }
+                // 恢复滚动位置
+                messagesEl.style.scrollBehavior = 'auto';
+                messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
+                messagesEl.style.scrollBehavior = '';
+                // 更新 chatHistory 缓冲区
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null })));
+            } catch (_) { /* 静默 */ }
+            _loadingMore = false;
+        };
+        messagesEl.addEventListener('scroll', _scrollHandler, { passive: true });
 
         inputEl?.focus();
     } catch (_) { /* 静默失败 */ }
@@ -1997,10 +2050,7 @@ async function onSend() {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
         bindMsgContextMenu(userMsgEl, text, 'user');
     }
-    chatHistory.push({ role: 'user', content: text, tokens: 0 });
-    updateContextSize();
-
-    startStreaming(false);
+    startStreaming(text, false);
 
     // 发送后清空上传文件列表
     uploadedFiles = [];
@@ -2011,7 +2061,7 @@ async function onSend() {
  * 启动流式输出
  * @param {boolean} isRegenerate - 是否再生
  */
-function startStreaming(isRegenerate = false) {
+async function startStreaming(userText, isRegenerate) {
     if (isStreaming) return;
     isStreaming = true;
 
@@ -2180,7 +2230,7 @@ function startStreaming(isRegenerate = false) {
     });
     unsubs.push(unsubChunk);
 
-    const unsubDone = window.runtime.EventsOn('ai:stream-done', async (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens) => {
+    const unsubDone = window.runtime.EventsOn('ai:stream-done', async (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
@@ -2211,20 +2261,25 @@ function startStreaming(isRegenerate = false) {
             renderMarkdown(thinkingContentEl, streamingThinking);
         }
 
-        // 使用后端计算的 tokens 更新 chatHistory
-        if (chatHistory.length > 0) {
-            const lastMsg = chatHistory[chatHistory.length - 1];
-            if (lastMsg.role === 'user') {
-                lastMsg.tokens = userTokens;
-                // 同步更新 DOM 中的用户消息 token 显示
-                const userMsgs = messagesEl.querySelectorAll('.ai-msg-user');
-                const tokensEl = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].querySelector('.user-tokens') : null;
+        // 同步更新 DOM 中的用户消息 token 显示
+        if (userMsgID) {
+            streamingEl.dataset.msgId = assistantMsgID;
+        }
+        // 给最后一条用户消息设置 data-msg-id
+        if (userMsgID) {
+            const userMsgs = messagesEl.querySelectorAll('.ai-msg-user');
+            const lastUserEl = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1] : null;
+            if (lastUserEl) {
+                lastUserEl.dataset.msgId = userMsgID;
+                const tokensEl = lastUserEl.querySelector('.user-tokens');
                 if (tokensEl) {
                     tokensEl.textContent = userTokens > 0 ? formatTokens(userTokens) + ' tokens' : '';
+                    tokensEl.style.display = '';
                 }
             }
         }
-        chatHistory.push({ role: 'assistant', content: finalContent, tokens: assistantTokens });
+
+        chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null });
         updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
@@ -2235,15 +2290,6 @@ function startStreaming(isRegenerate = false) {
             chatHistory.pop();
             if (streamingEl && streamingEl.parentNode) {
                 streamingEl.parentNode.removeChild(streamingEl);
-            }
-        }
-
-        // 编辑消息流完成后：将更新后的用户消息 token 同步到 DB（仅更新 tokens 字段，不影响其他字段）
-        if (_pendingTokenSync && activeSessionId !== null) {
-            _pendingTokenSync = false;
-            if (userTokens > 0) {
-                window.go.main.App.UpdateLastUserMessageTokens(activeSessionId, userTokens)
-                    .catch(() => {});
             }
         }
 
@@ -2392,14 +2438,6 @@ function startStreaming(isRegenerate = false) {
             addErrorMessage(err);
         }
 
-        // 出错时仅保存用户消息到数据库，避免切换会话后消息丢失
-        if (!isRegenerate && chatHistory.length > 0) {
-            const lastMsg = chatHistory[chatHistory.length - 1];
-            if (lastMsg && lastMsg.role === 'user') {
-                saveSessionMessages([{ role: 'user', content: lastMsg.content, tokens: lastMsg.tokens || 0 }]);
-            }
-        }
-
         // 出错也清理追问引用
         followUpRef = '';
         const fb = document.getElementById('aiChatFollowUpBar');
@@ -2417,7 +2455,11 @@ function startStreaming(isRegenerate = false) {
         const searchSourcesArray = Array.from(searchSources);
         const refNoteIDs = referencedNotes.map(n => n.id);
         const roleNoteIDs = roleplayNotes.map(n => n.id);
-        window.go.main.App.CallAIStream(myGen, chatHistory, enableThinking, searchSourcesArray, enableCardRecall, activeSessionId, isRegenerate, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
+        if (isRegenerate) {
+            window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
+        } else {
+            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
+        }
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -2437,19 +2479,6 @@ function startStreaming(isRegenerate = false) {
             addErrorMessage('流式调用失败: ' + (e.message || e));
         }
     }
-}
-
-/**
- * 保存一轮对话消息并刷新侧栏
- */
-async function saveSessionMessages(roundMessages) {
-    if (activeSessionId === null) return;
-    try {
-        await window.go.main.App.SaveAIMessages(activeSessionId, roundMessages);
-        // 更新侧栏标题和顺序
-        await loadSessionList();
-        updateChatTitle();
-    } catch (_) { /* 静默 */ }
 }
 
 /* ── 渲染与 UI ── */
@@ -3312,48 +3341,43 @@ async function applyEdit(msgEl, newContent) {
 
     _contextMsgContent = newContent;
 
-    // 通过遍历 nextElementSibling 删除后续所有消息 DOM
-    let sibling = msgEl.nextElementSibling;
-    const removed = [];
-    while (sibling) {
-        const next = sibling.nextElementSibling;
-        // 只移除消息元素，跳过搜索结果折叠面板等非消息元素
-        if (sibling.classList.contains('ai-msg')) {
-            removed.push(sibling);
+    // 从元素获取 msgId
+    const msgId = parseInt(msgEl.dataset.msgId);
+    if (!msgId) return;
+
+    // 删除后续所有消息 DOM
+    let nextEl = msgEl.nextElementSibling;
+    while (nextEl) {
+        const toRemove = nextEl;
+        nextEl = nextEl.nextElementSibling;
+        if (toRemove.classList.contains('ai-msg')) {
+            toRemove.remove();
         }
-        sibling.remove();
-        sibling = next;
     }
 
-    // 从 chatHistory 尾部逐个弹出，直到遇到编辑消息的前一条
-    // 方法：从尾部开始删，保留的消息数量 = 编辑消息前还有几条
-    const allChildren = Array.from(messagesEl.children);
-    const idx = allChildren.indexOf(msgEl);
-    if (idx !== -1) {
-        const keepCount = idx; // 编辑消息之前还有几条消息
-        chatHistory.splice(keepCount); // 保留前 keepCount 条，删除其余
+    // 后端截断（保留本条及之后的消息，删除本条之前的旧消息已通过后端处理）
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.TruncateAISessionAfterMessage(activeSessionId, msgId);
+        } catch (_) { /* 静默失败 */ }
+        try {
+            await window.go.main.App.UpdateAIMessageContent(msgId, newContent);
+        } catch (_) { /* 静默失败 */ }
     }
 
-    // 将编辑后的用户消息加回
-    chatHistory.push({ role: 'user', content: newContent, tokens: 0 });
-    updateContextSize();
+    // 截断 chatHistory 缓冲区
+    const idx = chatHistory.findIndex(m => m.id === msgId);
+    if (idx >= 0) {
+        chatHistory = chatHistory.slice(0, idx + 1);
+        chatHistory[chatHistory.length - 1].content = newContent;
+    }
 
     // 更新 dataset 后再 cancelEdit, 避免 cancelEdit 从 dataset 恢复旧内容
     msgEl.dataset.originalContent = newContent;
     cancelEdit(msgEl);
-
-    // 清理 DB: 原子替换该会话的消息（截断后的 chatHistory）
-    if (activeSessionId !== null) {
-        try {
-            if (chatHistory.length > 0) {
-                await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
-            } else {
-                await window.go.main.App.ClearAISessionMessages(activeSessionId);
-            }
-        } catch (_) { /* 静默失败 */ }
-    }
-
-    updateContextSize();
+    // 生成期间隐藏旧 token 数，待 stream-done 后更新时再显示
+    const oldTokensEl = msgEl.querySelector('.user-tokens');
+    if (oldTokensEl) oldTokensEl.style.display = 'none';
 
     if (!isStreaming) {
         const curModel = modelLabel?.textContent;
@@ -3361,8 +3385,8 @@ async function applyEdit(msgEl, newContent) {
             window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
             return;
         }
-        _pendingTokenSync = true;
-        startStreaming(true);
+        await startStreaming(newContent, true);
+        scrollToBottom();
     }
 }
 
@@ -3375,34 +3399,30 @@ async function handleDeleteMsg(msgEl) {
     const confirmed = await window.showConfirmDialog('确定要删除这条消息吗？');
     if (!confirmed) return;
 
-    // 移除该消息之后的所有后续消息（DOM）
-    let sibling = msgEl.nextElementSibling;
-    while (sibling) {
-        const next = sibling.nextElementSibling;
-        sibling.remove();
-        sibling = next;
+    const msgId = parseInt(msgEl.dataset.msgId);
+    if (!msgId) return;
+
+    // 移除该消息及之后的所有后续消息（DOM）
+    let nextEl = msgEl;
+    while (nextEl) {
+        const toRemove = nextEl;
+        nextEl = nextEl.nextElementSibling;
+        if (toRemove.classList.contains('ai-msg')) {
+            toRemove.remove();
+        }
     }
 
-    // 从 chatHistory 中截断
-    const allChildren = Array.from(messagesEl.children);
-    const idx = allChildren.indexOf(msgEl);
-    if (idx !== -1) {
-        chatHistory.splice(idx);
-    }
-
-    msgEl.remove();
-    updateContextSize();
-
-    // 同步 DB：原子替换该会话的消息（截断后的 chatHistory）
-    // 避免当前会话消息没有 msgId 导致 DB 操作被跳过
+    // 后端截断（删除本条及之后的消息）
     if (activeSessionId !== null) {
         try {
-            if (chatHistory.length > 0) {
-                await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
-            } else {
-                await window.go.main.App.ClearAISessionMessages(activeSessionId);
-            }
+            await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
         } catch (_) { /* 静默失败 */ }
+    }
+
+    // 截断 chatHistory 缓冲区
+    const idx = chatHistory.findIndex(m => m.id === msgId);
+    if (idx >= 0) {
+        chatHistory = chatHistory.slice(0, idx);
     }
 
     // 删除后如果 chatHistory 为空, 显示空对话欢迎语
@@ -3427,24 +3447,41 @@ function handleCopy(text, btn) {
 async function handleRegenerate(msgEl) {
     if (!msgEl || !msgEl.parentNode || isStreaming) return;
 
-    const children = Array.from(messagesEl.children);
-    const idx = children.indexOf(msgEl);
-    if (idx === -1) return;
+    const msgId = parseInt(msgEl.dataset.msgId);
+    if (!msgId) return;
 
-    chatHistory.splice(idx);
-    updateContextSize();
-    children.slice(idx).forEach(el => el.remove());
+    // 找到前一条消息（用户消息）
+    const prevEl = msgEl.previousElementSibling;
+    if (!prevEl || !prevEl.classList.contains('ai-msg')) return;
+    const prevMsgId = parseInt(prevEl.dataset.msgId);
+    if (!prevMsgId) return;
 
-    // 原子替换该会话的消息（截断后的 chatHistory）, 避免再生导致 user 消息重复
-    try {
-        if (chatHistory.length > 0) {
-            await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
-        } else {
-            await window.go.main.App.ClearAISessionMessages(activeSessionId);
+    // 移除该 AI 消息及之后的所有后续消息（DOM）
+    let nextEl = msgEl;
+    while (nextEl) {
+        const toRemove = nextEl;
+        nextEl = nextEl.nextElementSibling;
+        if (toRemove.classList.contains('ai-msg')) {
+            toRemove.remove();
         }
-    } catch (_) { /* 静默 */ }
+    }
 
-    startStreaming(true);
+    // 后端截断（保留前一条用户消息及之前的内容）
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.TruncateAISessionAfterMessage(activeSessionId, prevMsgId);
+        } catch (_) { /* 静默 */ }
+    }
+
+    // 截断 chatHistory 缓冲区
+    const idx = chatHistory.findIndex(m => m.id === msgId);
+    if (idx >= 0) {
+        chatHistory = chatHistory.slice(0, idx);
+    }
+
+    // 再生
+    await startStreaming('', true);
+    scrollToBottom();
 }
 
 /**
@@ -3453,36 +3490,47 @@ async function handleRegenerate(msgEl) {
 async function handleResend(msgEl) {
     if (!msgEl || !msgEl.parentNode || isStreaming) return;
 
-    const children = Array.from(messagesEl.children);
-    const idx = children.indexOf(msgEl);
-    if (idx === -1) return;
+    const msgId = parseInt(msgEl.dataset.msgId);
+    if (!msgId) return;
 
     const contentDiv = msgEl.querySelector('.msg-content');
     if (!contentDiv) return;
     const content = contentDiv.textContent || '';
 
-    chatHistory.splice(idx);
-    updateContextSize();
-    children.slice(idx).forEach(el => el.remove());
-
-    try {
-        if (chatHistory.length > 0) {
-            await window.go.main.App.ReplaceAISessionMessages(activeSessionId, chatHistory);
-        } else {
-            await window.go.main.App.ClearAISessionMessages(activeSessionId);
+    // 移除该消息及之后的所有后续消息（DOM）
+    let nextEl = msgEl;
+    while (nextEl) {
+        const toRemove = nextEl;
+        nextEl = nextEl.nextElementSibling;
+        if (toRemove.classList.contains('ai-msg')) {
+            toRemove.remove();
         }
-    } catch (_) { /* 静默 */ }
+    }
 
+    // 后端截断（删除本条及之后的消息）
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
+        } catch (_) { /* 静默 */ }
+    }
+
+    // 截断 chatHistory 缓冲区
+    const idx = chatHistory.findIndex(m => m.id === msgId);
+    if (idx >= 0) {
+        chatHistory = chatHistory.slice(0, idx);
+    }
+
+    // 重新添加用户消息气泡
     addMessage(content, 'user');
     const newUserMsgEl = messagesEl.lastElementChild;
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
     }
-    chatHistory.push({ role: 'user', content, tokens: 0 });
-    updateContextSize();
 
-    startStreaming(false);
+    // 重新发送
+    await startStreaming(content, false);
+    scrollToBottom();
 }
 
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */

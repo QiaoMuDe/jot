@@ -1,0 +1,21 @@
+# Checklist
+
+- [x] 后端 4 个新方法（LoadPaginated / TruncateAt / TruncateAfter / GetContextTokens）实现并绑定
+- [x] CallAIStream 签名改为 `(sessionID, userText, 元数据)`，不再接收 `messages[]`
+- [x] CallAIStream 内部从 DB 加载历史并构建上下文
+- [x] CallAIStreamRegenerate 方法实现
+- [x] ai:stream-done 事件携带 `userMsgID` 和 `assistantMsgID`
+- [x] 前端 `chatHistory` 不再传递给后端
+- [x] 前端 `onSend()` 调用新签名 CallAIStream
+- [x] 前端 `startStreaming()` 不再接收 `chatHistory` 参数
+- [x] 前端 `switchSession()` 使用分页加载（首次 6 条）
+- [x] 前端消息气泡 DOM 挂载 `data-msg-id`
+- [x] 前端滚动到顶部加载更多消息
+- [x] 前端 `applyEdit()` 基于 msgID 调用 TruncateAfterMessage + 新 CallAIStream
+- [x] 前端 `handleDeleteMsg()` 基于 msgID 调用 TruncateAtMessage
+- [x] 前端 `handleRegenerate()` 基于 msgID 调用 TruncateAfterMessage + CallAIStreamRegenerate
+- [x] 前端 `handleResend()` 基于 msgID 调用 TruncateAtMessage + 新 CallAIStream
+- [x] 前端 `updateContextSize()` 从后端 GetSessionContextTokens 读取
+- [x] 前端 `_pendingTokenSync` 已删除
+- [x] 前端 `estimateTokens` 已删除或不再引用
+- [x] 项目构建通过，无编译错误

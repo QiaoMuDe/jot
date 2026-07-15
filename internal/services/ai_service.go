@@ -18,6 +18,7 @@ import (
 
 // Message 表示 AI 对话中的一条消息
 type Message struct {
+	ID               uint    `json:"id"`
 	Role             string  `json:"role"`
 	Content          string  `json:"content"`
 	ReasoningContent string  `json:"reasoning_content"`
@@ -598,9 +599,150 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
+		result[i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
 	}
 	return result
+}
+
+// LoadAISessionMessagesPaginated 分页加载会话消息（游标分页，基于 ID 降序取 N 条后反转返回）
+// beforeID=0 表示取最新消息，否则取比 beforeID 更早的消息
+func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, beforeID uint) []Message {
+	var msgs []models.AIMessage
+	query := a.db.Where("session_id = ?", sessionID)
+	if beforeID > 0 {
+		query = query.Where("id < ?", beforeID)
+	}
+	query.Order("id DESC").Limit(limit).Find(&msgs)
+
+	// 反转为 ASC 顺序
+	result := make([]Message, len(msgs))
+	for i, m := range msgs {
+		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
+	}
+	return result
+}
+
+// TruncateAISessionAtMessage 删除指定消息及该消息之后的所有消息（用于删除/重发操作）
+// 事务内：先查目标消息的 created_at → 删除该 session 中 created_at >= 该时间戳的所有消息
+func (a *AIService) TruncateAISessionAtMessage(sessionID uint, msgID uint) error {
+	var msg models.AIMessage
+	if err := a.db.Select("created_at").First(&msg, msgID).Error; err != nil {
+		a.logger.Errorw("AIService.TruncateAISessionAtMessage 查消息失败", fastlog.Error(err))
+		return fmt.Errorf("消息不存在: %w", err)
+	}
+	return a.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("session_id = ? AND created_at >= ?", sessionID, msg.CreatedAt).Delete(&models.AIMessage{})
+		if result.Error != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAtMessage 删除失败", fastlog.Error(result.Error))
+			return result.Error
+		}
+		// 更新会话 updated_at
+		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", time.Now()).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAtMessage 更新会话时间失败", fastlog.Error(err))
+			return err
+		}
+		return nil
+	})
+}
+
+// TruncateAISessionAfterMessage 删除指定消息之后的所有消息，保留该消息本身（用于编辑/重新生成操作）
+// 事务内：先查目标消息的 created_at → 删除该 session 中 created_at > 该时间戳的所有消息
+func (a *AIService) TruncateAISessionAfterMessage(sessionID uint, msgID uint) error {
+	var msg models.AIMessage
+	if err := a.db.Select("created_at").First(&msg, msgID).Error; err != nil {
+		a.logger.Errorw("AIService.TruncateAISessionAfterMessage 查消息失败", fastlog.Error(err))
+		return fmt.Errorf("消息不存在: %w", err)
+	}
+	return a.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("session_id = ? AND created_at > ?", sessionID, msg.CreatedAt).Delete(&models.AIMessage{})
+		if result.Error != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAfterMessage 删除失败", fastlog.Error(result.Error))
+			return result.Error
+		}
+		// 更新会话 updated_at
+		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", time.Now()).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAfterMessage 更新会话时间失败", fastlog.Error(err))
+			return err
+		}
+		return nil
+	})
+}
+
+// GetSessionContextTokens 返回指定会话的 context_tokens 字段值
+func (a *AIService) GetSessionContextTokens(sessionID uint) (int, error) {
+	var session models.AISession
+	if err := a.db.Select("context_tokens").First(&session, sessionID).Error; err != nil {
+		a.logger.Errorw("AIService.GetSessionContextTokens 失败", fastlog.Error(err))
+		return 0, err
+	}
+	return session.ContextTokens, nil
+}
+
+// SumSessionTokens 返回指定会话所有消息的 tokens 累计和
+func (a *AIService) SumSessionTokens(sessionID uint) (int, error) {
+	var total int64
+	err := a.db.Model(&models.AIMessage{}).
+		Where("session_id = ?", sessionID).
+		Select("COALESCE(SUM(tokens), 0)").
+		Scan(&total).Error
+	if err != nil {
+		a.logger.Errorw("AIService.SumSessionTokens 失败", fastlog.Error(err))
+		return 0, err
+	}
+	return int(total), nil
+}
+
+// UpdateAIMessageTokens 更新指定消息的 tokens 字段
+func (a *AIService) UpdateAIMessageTokens(id uint, tokens int) error {
+	err := a.db.Model(&models.AIMessage{}).Where("id = ?", id).Update("tokens", tokens).Error
+	if err != nil {
+		a.logger.Errorw("AIService.UpdateAIMessageTokens 失败", fastlog.Error(err))
+	}
+	return err
+}
+
+// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID
+// 同时更新会话 updated_at，如果是首条用户消息则自动生成标题
+func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
+	now := time.Now()
+	m := models.AIMessage{
+		SessionID:        sessionID,
+		Role:             msg.Role,
+		Content:          msg.Content,
+		ReasoningContent: msg.ReasoningContent,
+		ThinkingElapsed:  msg.ThinkingElapsed,
+		TotalElapsed:     msg.TotalElapsed,
+		Tokens:           msg.Tokens,
+		SearchSources:    msg.SearchSources,
+		RecallCards:      msg.RecallCards,
+		CreatedAt:        now,
+	}
+	if err := a.db.Create(&m).Error; err != nil {
+		a.logger.Errorw("AIService.SaveAIMessage 失败", fastlog.Error(err))
+		return 0, err
+	}
+
+	// 更新会话 updated_at
+	if err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", time.Now()).Error; err != nil {
+		a.logger.Errorw("AIService.SaveAIMessage 更新会话时间失败", fastlog.Error(err))
+	}
+
+	// 首轮对话自动生成标题（取第一条用户消息前 30 字）
+	if msg.Role == "user" {
+		var session models.AISession
+		if err := a.db.First(&session, sessionID).Error; err == nil && session.Title == "新对话" {
+			runes := []rune(msg.Content)
+			title := msg.Content
+			if len(runes) > 30 {
+				title = string(runes[:30]) + "..."
+			}
+			if err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
+				a.logger.Errorw("AIService.SaveAIMessage 自动标题失败", fastlog.Error(err))
+			}
+		}
+	}
+
+	return m.ID, nil
 }
 
 // SaveAIMessages 保存一轮对话消息（user + assistant）到指定会话

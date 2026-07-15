@@ -22,7 +22,9 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
-export function CallAIStream(arg1:number,arg2:Array<services.Message>,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:number,arg7:boolean,arg8:Array<string>,arg9:Array<number>,arg10:Array<number>,arg11:string,arg12:Array<main.AIChatFileResult>):Promise<void>;
+export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:boolean,arg7:Array<string>,arg8:Array<number>,arg9:Array<number>,arg10:string,arg11:Array<main.AIChatFileResult>):Promise<void>;
+
+export function CallAIStreamRegenerate(arg1:number,arg2:number,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:Array<string>,arg7:Array<number>,arg8:Array<number>,arg9:string,arg10:Array<main.AIChatFileResult>):Promise<void>;
 
 export function CancelAIStream():Promise<void>;
 
@@ -118,6 +120,8 @@ export function GetPageSize():Promise<number>;
 
 export function GetProfiles():Promise<Array<models.APIProfile>>;
 
+export function GetSessionContextTokens(arg1:number):Promise<number>;
+
 export function GetSetting(arg1:string):Promise<string>;
 
 export function GetSortOrder():Promise<string>;
@@ -137,6 +141,8 @@ export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.F
 export function ListTodos():Promise<Array<models.Todo>>;
 
 export function LoadAISessionMessages(arg1:number):Promise<Array<services.Message>>;
+
+export function LoadAISessionMessagesPaginated(arg1:number,arg2:number,arg3:number):Promise<Array<services.Message>>;
 
 export function LoadSessionConfig(arg1:number):Promise<services.SessionConfig>;
 
@@ -221,6 +227,10 @@ export function TogglePinAISession(arg1:number):Promise<void>;
 export function TogglePinNote(arg1:number):Promise<models.Note>;
 
 export function ToggleTodo(arg1:number):Promise<models.Todo>;
+
+export function TruncateAISessionAfterMessage(arg1:number,arg2:number):Promise<void>;
+
+export function TruncateAISessionAtMessage(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateAIMessageContent(arg1:number,arg2:string):Promise<void>;
 

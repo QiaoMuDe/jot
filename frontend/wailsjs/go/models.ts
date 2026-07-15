@@ -414,6 +414,7 @@ export namespace services {
 	    }
 	}
 	export class Message {
+	    id: number;
 	    role: string;
 	    content: string;
 	    reasoning_content: string;
@@ -429,6 +430,7 @@ export namespace services {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.reasoning_content = source["reasoning_content"];

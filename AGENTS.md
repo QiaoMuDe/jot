@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-15（更新 139）
+> 生成日期: 2026-07-15（更新 140）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -504,12 +504,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 4385 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送/消息替换后端原子方法） |
+| `frontend/src/js/ai-chat.js` | 4437 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送/替换消息操作统一后端原子方法/消息分页懒加载+滚动加载更多/msgID 驱动操作） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `app.go` | 3039 | Wails 绑定层（100+ API） |
-| `services/ai_service.go` | 575 | AI 对话服务层（aicli 适配层 + 会话管理 + Token 计算 + 提示词迁移 + 空会话/孤儿消息清理 + 原子替换消息方法） |
+| `app.go` | 3515 | Wails 绑定层（100+ API，含 CallAIStream/CallAIStreamRegenerate 后端自取历史/8 步上下文拼接/再生模式 token 更新） |
+| `services/ai_service.go` | 1004 | AI 对话服务层（aicli 适配层 + 会话/消息 CRUD + Token 统计/更新 + 提示词迁移 + 空会话/孤儿消息清理 + 原子替换消息 + 分页加载 + 按 msgID 截断 + SumSessionTokens）|
 | `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
 | `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
 | `frontend/src/css/components/modals.css` | 746 | 弹窗样式（批量标签/确认框/关于/快捷键/通知） |
@@ -606,6 +606,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 18. **后端统一上下文注入架构**：AI 对话的上下文拼接逻辑全部迁移到后端 `CallAIStream`。8 步拼接顺序定义为 `1→2→3→4→5→6→7→8`：角色扮演笔记 → 笔记引用 → 追问引用 → 上传文件 → 联网搜索结果 → 卡片召回结果 → 技能提示词（含 `{roleplay_context}` 占位符替换）。前端只传元数据（角色扮演笔记 IDs / 引用笔记 IDs / 追问引用文本 / 上传文件列表），不再拼接 `systemContext`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L1548-L1655)
 
 19. **后端原子替换会话消息**：AI 消息的编辑/删除/重发/重新生成四个操作中的 DB 写入，从前端两步调用 `ClearAISessionMessages` + `SaveAIMessages` 合并为后端 `ReplaceAISessionMessages(sessionID, messages)` 单次调用。后端使用 GORM Transaction 保证清空+写入的原子性。前端 `chatHistory` 为空时 fallback 到 `ClearAISessionMessages`。详见 [ai_service.go#L661-L728](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go#L661-L728)、[app.go#L2048-L2059](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L2048-L2059)
+
+20. **AI 消息懒加载 + 后端上下文自取**：`CallAIStream` 重构为仅接收 `userText` 和元数据，后端自行从 DB 加载全部历史消息构建上下文。新增 `CallAIStreamRegenerate` 处理再生场景（接收元数据不含 userText，加载 DB 中最后一条用户消息）。新增 `LoadAISessionMessagesPaginated` 分页加载（游标 `beforeID`，默认 6 条 ASC）。编辑/删除/重发/再生从基于 `chatHistory.splice` 改为基于 `msgID` 的 `TruncateAISessionAtMessage`/`TruncateAISessionAfterMessage`。Token 显示改为后端 `SumSessionTokens` + `GetSessionContextTokens` 统计。`stream-done` 事件扩展为 9 参数（含 `userMsgID`/`assistantMsgID`）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)
 
 ---
 
@@ -2742,3 +2744,15 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)、[App.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.js)、[App.d.ts](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/wailsjs/go/main/App.d.ts) |
 
 | **update 计数** | `AGENTS.md` 从更新 139 到 更新 140 |
+
+## 一百八十七、新增记忆点（AI 消息懒加载 + 后端上下文自取 + 修复集）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **背景** | 前端 `chatHistory` 原先承担双重职责：API 上下文（每次发消息全量传给后端）+ DOM 渲染源。导致切换会话全量加载、发消息全量传输、编辑/删除/重发/再生高度依赖前端数组索引 |
+| **消息分页懒加载** | `switchSession` 改为首次只加载 6 条（最新），滚动到顶部触发 `LoadAISessionMessagesPaginated(beforeID)` 游标分页再加载 6 条（ASC），prepend 到消息列表。`chatHistory` 降级为纯渲染缓冲区。详见 [ai-chat.js#L1612-L1661](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js#L1612-L1661)、[app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **CallAIStream 重构** | 签名从 `(streamGen, sessionID, messages[], userTokens, ...元数据)` 改为 `(streamGen, sessionID, userText, ...元数据)`，后端自取历史 + 保存用户消息 + 拼接 8 步上下文。新增 `CallAIStreamRegenerate` 处理编辑/重发/再生（不自创建用户消息，加载 DB 最新用户消息）。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **后端新增方法与模型** | `LoadAISessionMessagesPaginated`（游标分页）、`TruncateAISessionAtMessage`（删本条及后续）、`TruncateAISessionAfterMessage`（删后续保留本条）、`SaveAIMessage`（单条追加）、`GetSessionContextTokens`（读 `context_tokens`）、`SumSessionTokens`（累加统计）、`UpdateAIMessageTokens`（更新单条 token）。详见 [ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go) |
+| **stream-done 事件** | 9 参数：`streamGen, content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID`。`userMsgID` 前端用于关联 DOM data-msg-id + 更新 `.user-tokens`。详见 [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go) |
+| **Bug 修复集** | ① **Scroll Handler 泄漏**：`scrollHandler` 从 `switchSession` 内部 `const` 提升为模块级 `_scrollHandler`，`removeEventListener` 使用同一引用避免 listener 累积 ② **编辑内容未写回 DB**：`applyEdit` 中 `TruncateAISessionAfterMessage` 后缺少 `UpdateAIMessageContent`，AI 回复基于旧内容。已在 `applyEdit` 补充写入 ③ **再生模式 token 不更新**：`CallAIStreamRegenerate` stream-done 中 `userMsgID=uint(0)` 改为查找最后用户消息 ID 并更新 ④ **编辑时旧 token 显示**：`cancelEdit` 恢复 `.user-tokens` 显示后立即隐藏，stream-done 更新时才重新展示 |
+| **涉及文件** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)（+476 行）、[ai_service.go](file:///d:/资源池/下水道/Dev/本地项目/jot/internal/services/ai_service.go)（+429 行）、[ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)（+52 行）|

@@ -38,8 +38,12 @@ export function CallAI(arg1) {
   return window['go']['main']['App']['CallAI'](arg1);
 }
 
-export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
+export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11) {
+  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11);
+}
+
+export function CallAIStreamRegenerate(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  return window['go']['main']['App']['CallAIStreamRegenerate'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
 
 export function CancelAIStream() {
@@ -230,6 +234,10 @@ export function GetProfiles() {
   return window['go']['main']['App']['GetProfiles']();
 }
 
+export function GetSessionContextTokens(arg1) {
+  return window['go']['main']['App']['GetSessionContextTokens'](arg1);
+}
+
 export function GetSetting(arg1) {
   return window['go']['main']['App']['GetSetting'](arg1);
 }
@@ -268,6 +276,10 @@ export function ListTodos() {
 
 export function LoadAISessionMessages(arg1) {
   return window['go']['main']['App']['LoadAISessionMessages'](arg1);
+}
+
+export function LoadAISessionMessagesPaginated(arg1, arg2, arg3) {
+  return window['go']['main']['App']['LoadAISessionMessagesPaginated'](arg1, arg2, arg3);
 }
 
 export function LoadSessionConfig(arg1) {
@@ -436,6 +448,14 @@ export function TogglePinNote(arg1) {
 
 export function ToggleTodo(arg1) {
   return window['go']['main']['App']['ToggleTodo'](arg1);
+}
+
+export function TruncateAISessionAfterMessage(arg1, arg2) {
+  return window['go']['main']['App']['TruncateAISessionAfterMessage'](arg1, arg2);
+}
+
+export function TruncateAISessionAtMessage(arg1, arg2) {
+  return window['go']['main']['App']['TruncateAISessionAtMessage'](arg1, arg2);
 }
 
 export function UpdateAIMessageContent(arg1, arg2) {
