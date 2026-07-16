@@ -33,18 +33,37 @@ release_name = '{{app_name}}_windows_amd64_{{git_version}}.zip'
 
 # 任务定义
 [task]
+[task.frontend]
+# 任务描述
+desc = '构建前端资源'
+# 命令列表
+cmds = [
+    'cd frontend && [ ! -d dist ] && npm install vite && npm install',
+    'cd frontend && npm run build'
+]
+# 任务工作目录
+work_dir = ''
+# 依赖任务列表
+depends_on = []
+# 后继任务列表
+run_after = []
+# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
+platform = []
+# 是否为内部任务
+internal = false
+
 [task.build]
 # 任务描述
 desc = '构建程序'
 # 命令列表
 cmds = [
-    'cd frontend && npm install && npm run build',
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean'
 ]
 # 任务工作目录
 work_dir = ''
-# 依赖任务列表
+# 依赖任务列表 注意: 依赖任务按声明顺序执行
 depends_on = [
+    'frontend',
     'fc'
 ]
 # 后继任务列表
@@ -78,7 +97,6 @@ internal = false
 desc = '发布程序'
 # 命令列表
 cmds = [
-    'cd frontend && npm install && npm run build',
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean -nsis',
     'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
     'fck rm -f {{exe_path}}',
@@ -86,8 +104,9 @@ cmds = [
 ]
 # 任务工作目录
 work_dir = ''
-# 依赖任务列表
+# 依赖任务列表 注意: 依赖任务按声明顺序执行
 depends_on = [
+    'frontend',
     'fc'
 ]
 # 后继任务列表
@@ -102,14 +121,14 @@ internal = false
 desc = '运行程序'
 # 命令列表
 cmds = [
-    'cd frontend && npm install && npm run build',
     'wails build -debug -ldflags "{{ldflags}}" -o {{exe_name}} -clean',
     '{{exe_path}}'
 ]
 # 任务工作目录
 work_dir = ''
-# 依赖任务列表
+# 依赖任务列表 注意: 依赖任务按声明顺序执行
 depends_on = [
+    'frontend',
     'fc'
 ]
 # 后继任务列表
