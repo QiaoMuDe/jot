@@ -527,18 +527,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：编辑器骨架屏 — 点击即动
-
-| 记忆点 | 内容 |
-|--------|------|
-| **优化背景** | 编辑器打开动画在等待后端数据（`GetNoteContent` ~50-200ms）+ 标签加载（~10-50ms）+ CM6 初始化（~100-500ms）之后播放，用户点击笔记后需等 200-700ms 才看到面板动画，期间页面已锁定（`overflow: hidden`）但画面不动 |
-| **方案** | 将 `openEditor` 拆为两个阶段。阶段一（同步）：读取 `state.notes` 缓存中的标题/后缀/只读状态设置 UI，立即显示面板 + 骨架屏 shimmer + 播放入场动画。阶段二（异步 + 并行）：`Promise.all([contentPromise, tagsPromise])` 加载数据，数据就绪后移除骨架屏 → `initCodeMirror` → `updatePreview`。详见 [main.js](frontend/src/main.js) |
-| **骨架屏 CSS** | 新增 `.editor-skeleton` / `.editor-skeleton-line`，使用 `background-position` 滑动的 shimmer 效果（`linear-gradient(90deg, --border 25%, --hover-bg 50%, --border 75%)`），4 条变宽线条（92%/78%/85%/60%）模拟文本段落。`animation: skeletonPulse 1.5s ease-in-out infinite`。详见 [editor.css](frontend/src/css/components/editor.css) |
-| **关键改动** | 删除原 `opacity: 0` 强制隐藏逻辑（防闪烁）；删除 `void els.editorOverlay.offsetHeight` 强制回流；overlay/panel animation 移到 `await` 之前；`loadTagsForEditor` 改为 `Promise.all` 并行而非串行 `await`；从召回卡片（`noteId` 不在 `state.notes` 中）打开时 panel 先显示空骨架屏，后台 `GetNote` + `GetNoteContent` 加载后填充标题和内容 |
-| **涉及文件** | [main.js](frontend/src/main.js)（重构 `openEditor` 流程）、[editor.css](frontend/src/css/components/editor.css)（新增 `.editor-skeleton` / `.editor-skeleton-line` / `@keyframes skeletonPulse`） |
-| **不变内容** | `closeEditor` 清理逻辑不变、`initCodeMirror` 参数/逻辑不变、`loadTagsForEditor` 函数签名不变、后端 `GetNoteContent`/`GetAllTags` 接口不变、全屏模式跳过动画但骨架屏流程一致 |
-
-## 记忆点 2：编辑器骨架屏回归修复 + scrollbar-gutter
+## 记忆点 1：编辑器骨架屏回归修复 + scrollbar-gutter
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -549,7 +538,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |
 
-## 记忆点 3：顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
+## 记忆点 2：顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -561,7 +550,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：用户消息 Token 提前展示
+## 记忆点 3：用户消息 Token 提前展示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +562,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
+## 记忆点 4：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +574,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：修复日志初始化顺序
+## 记忆点 5：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：移除快速笔记功能
+## 记忆点 6：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 8：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 7：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -619,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 9：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 8：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：更多技能菜单固定高度与滚动支持
+## 记忆点 9：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,6 +629,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 给 `.ai-chat-skills-dropdown` 添加 `max-height: 300px` 和 `overflow-y: auto`，超出时显示纵向滚动条；② 添加 `scrollbar-color` 和 `::-webkit-scrollbar` 样式确保滚动条在 Firefox 和 WebKit 中均可见；③ 从 `min-width: 150px` 加宽到 `170px`；④ 缩短逐项动画延迟从 0.06~0.54s 到 0.02~0.26s，避免滚动容器中动画异常 |
 | **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-skills-dropdown` 样式修改）|
 | **涉及的 spec** | [`.trae/specs/fix-skills-dropdown-overflow/`](.trae/specs/fix-skills-dropdown-overflow/) |
+
+---
+
+## 记忆点 10：大文件 .md 笔记自动切换纯文本模式
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能** | 后缀为 `.md` 的笔记在查看模式下，当内容长度超过用户设置的"引用截断字数"（`ai_ref_max_chars`，默认 10000）时，自动跳过 Markdown 预览渲染，以 CM6 纯文本只读模式显示，避免大文件 Markdown 渲染（`marked.parse()` + `hljs`）导致的卡顿 |
+| **阈值来源** | 复用设置页中已有的"引用截断字数"输入框（`#aiRefMaxChars`）的值，从 DOM 读取，默认 10000 |
+| **实现** | 在 `openEditor` 阶段二内容加载完成后、预览渲染触发前（[main.js#L3397-L3410](frontend/src/main.js#L3397-L3410)），插入大小检查：`editorContent.length > refMaxChars` 时调用 `switchEditorMode('edit')` + `_setPreviewLayout(false)` + `_closeToc()` 并提示用户；否则正常走 `updatePreview()` |
+| **用户交互** | 大文件自动显示为 CM6 纯文本（只读），用户仍可手动点击"预览"按钮切换到 Markdown 渲染 |
+| **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
+| **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
 ---
 

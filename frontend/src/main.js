@@ -3395,8 +3395,18 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     }
 
     // 查看模式：Markdown 预览（CM6 就绪后刷新）
+    // 大文件自动切换纯文本模式：内容长度超过引用截断字数（ai_ref_max_chars）时跳过预览
     if (isReadOnly && isMd && els.editorOverlay.dataset.mode === 'preview') {
-        updatePreview();
+        const refMaxChars = parseInt(document.getElementById('aiRefMaxChars')?.value) || 10000;
+        if (editorContent.length > refMaxChars) {
+            // 内容过长，自动切换为纯文本模式
+            switchEditorMode('edit');
+            _setPreviewLayout(false);
+            _closeToc();
+            window.showNotification?.('笔记内容超过引用截断字数，已自动切换为纯文本模式', 'info');
+        } else {
+            updatePreview();
+        }
     }
 
     // 新建笔记时自动聚焦
