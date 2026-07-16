@@ -129,7 +129,7 @@
 }
 
 .editor-body {
-  padding: 0 20px 10px;
+  padding: 0;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -176,7 +176,7 @@
 
 .editor-input {
   width: 100%;
-  padding: 2px 0;
+  padding: 2px 20px;
   border: none;
   border-bottom: 1px solid transparent;
   font-size: 1.5rem;
@@ -257,8 +257,9 @@
 
 .cm-gutters {
   background-color: var(--card-bg) !important;
-  z-index: 10;
-  position: relative;
+  position: sticky;
+  left: 0;
+  z-index: 200;
 }
 
 /* ==========================================================================
@@ -301,6 +302,7 @@
 
 .editor-section {
   margin: 2px 0 12px;
+  padding: 0 20px;
 }
 
 .editor-label {
@@ -754,8 +756,32 @@
 /* 编辑器内部滚动条：CM6 scroller 和 editor-body 精致微调样式 */
 /* 编辑器文本区滚动条：CM6 scroller 填满面板，精致微调融合 */
 .cm-scroller {
-  padding-right: 1px;
-  padding-bottom: 1px;
+  padding: 0 1px 1px 0;
+  /* 匹配预览区的细滚动条 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.cm-scroller::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+.cm-scroller::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.cm-scroller::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
 }
 
 /* Firefox */
@@ -980,7 +1006,7 @@
   min-height: 0;
   position: relative;
   scroll-padding-top: 0.75rem;
-  padding: 0.5em 1rem 1rem 1.5rem;
+  padding: 0.5em 0.5rem 1rem 1.25rem;
   font-size: 0.938rem;
   line-height: 1.7;
   color: var(--text-primary);

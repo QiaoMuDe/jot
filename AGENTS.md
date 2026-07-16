@@ -527,19 +527,6 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 一百九十、新增记忆点（搜索来源 UI 优化 — 内联卡片 + 折叠面板 + SVG 图标 + 去重）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **优化背景** | AI 回复消息底部的搜索来源 UI 使用原生 `<details>` 折叠面板、emoji 图标、两处重复 ~40 行渲染代码。单一来源和多个来源使用相同的 UI 结构，缺少差异化展示。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **单一来源 → 内联引用卡片** | 当只有 1 条搜索结果时，展示紧凑链接预览卡片（`search-source-card`）：SVG 来源图标 + 标题（1 行省略）+ ↗ 外链图标 + 域名（等宽字体）+ 2 行渐隐摘要。整张卡片可点击打开原文，hover 时边框变色 + link 图标出现。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **多来源 → 自定义折叠面板** | 当有 2+ 条搜索结果时，展示自定义折叠面板（`search-sources-panel`）：折叠头使用 `<button>` 替代 `<details>`，包含地球 SVG 图标 + "来自 N 个来源 · M 条结果" + 展开箭头 ▶。展开/收起使用 `max-height` + `opacity` 过渡动画（300ms ease），箭头旋转 90°。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
-| **来源分组展示** | 按 `source_label` 分组（Tavily / 知乎搜索 / 全网搜索），每组包含 SVG 类型图标 + 名称 + 计数徽章（等宽字体）。条目跨组连续编号（方便口头引用），每个条目展示标题（1 行省略）+ 域名标签（等宽）+ ↗ 外链图标 + 2 行渐隐摘要。hover 时显示背景 + 外链图标。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **emoji → SVG 图标** | 移除所有 emoji 图标：`SEARCH_SOURCE_ICON`（地球网格替代 `🌐`）、`SATELLITE_ICON`（卫星天线替代 `📡` Tavily）、`BOOK_ICON`（书本替代 `📖` 知乎搜索）、`GLOBE_ICON`（全球网络替代 `🌍` 全网搜索）、`EXTERNAL_ICON`（↗ 外链）、`CHEVRON_RIGHT_ICON`（▶ 展开箭头）。所有 SVG 使用 `currentColor` + `stroke-width="1.5"` + 14×14 viewBox，与项目现有图标体系一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **代码去重** | 将 stream-done 回调和 addMessage 函数中两份完全相同的 ~40 行渲染代码提取为共享函数 `renderSearchSources(el, sources)` → 派发到 `renderSingleSourceCard()` 或 `renderMultiSourcesPanel()`。辅助函数：`getSourceIcon(label)` SVG 图标映射、`getSourceLabel(label)` 显示名称映射、`extractDomain(url)` URL 域名提取。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 常量 + 4 个共享渲染函数 + 替换两处调用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除旧样式 + 新增卡片/面板/分组/条目完整样式） |
-| **不变内容** | 后端 SearchSource 结构体不变、数据传输链路不变、召回卡片 UI 不变、消息操作栏不变 |
-
 ## 一百九十一、新增记忆点（召回笔记 UI 优化 — 折叠面板 + SVG 图标 + 去重）
 
 | 记忆点 | 内容 |
@@ -646,12 +633,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
+## 二百、新增记忆点（CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 水平拖动 CM6 编辑器滚动条时，编辑内容向左移动，穿过行号栏（gutter）显示在左侧空白区域 |
+| **根因** | `.cm-scroller` 的 `padding-left: 20px` 将 flex 布局中 gutter 的初始位置推到 `left: 20px`。虽然 `position: sticky; left: 0` 理论上应把 gutter 拉回 `left: 0`，但 sticky 的"回拉"只在元素即将滚出视口时生效，初始状态下 gutter 停留在 `left: 20px`，左侧出现 20px 空白区域，内容移入该区域即"穿过"行号栏 |
+| **修复** | ① 移除 `.cm-scroller` 的 `padding-left`（`padding: 0 1px 1px 20px` → `padding: 0 1px 1px 0`，注意 CSS 三值简写 `padding: 0 1px 1px` 中 left 继承 right 值 1px，需显式四值保证 left=0）；② 将左间距转移到 `.cm-content` 主题的 `paddingLeft: '20px'`，保持编辑内容起始位置不变（`.cm-line` 已有 6px padding，合计 26px 不变） |
+| **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
+| **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
+
 ---
 
 ## 十、AGENTS.md 维护规范
 
 1. **第 1-9 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
-2. **新增记忆点只保留最近 10 个**（即 `一百八十九` ~ `一百九十八`），每次新增一个记忆点时，删除最早的一个（例如新增 `一百九十九` 时，删除 `一百八十九`）
+2. **新增记忆点只保留最近 10 个**（即 `一百九十一` ~ `二百`），每次新增一个记忆点时，删除最早的一个（例如新增 `二百零一` 时，删除 `一百九十一`）
 3. **不要无序追加"新增记忆点"章节**——保持编号连续，超出 10 个时执行"先进先出"淘汰
 4. **详细的变更记录请写在 `.trae/specs/` 或 `.trae/documents/` 中**，AGENTS.md 仅作为快速参考
 5. **更新关键文件统计**时，用 `Measure-Object -Line`（Windows）或 `wc -l`（Linux/macOS）获取实际行数

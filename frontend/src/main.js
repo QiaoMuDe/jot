@@ -3277,12 +3277,20 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
             els.notebookSidebar.classList.add('collapsed');
         overlay.style.opacity = '1';
         panel.style.opacity = '1';
-        panel.style.transform = 'scale(1)';
+        panel.style.transform = 'none';   // scale(1) 与 none 视觉一致，但 none 不破坏 position: sticky
     } else {
         overlay.style.animation = 'overlayFadeIn 0.2s ease-out forwards';
         panel.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
         if (body)
             body.style.animation = 'viewEnter 0.25s ease-out forwards';
+        // 动画结束后清除 transform（scale(1) 与 none 视觉一致，但 none 不破坏 position: sticky）
+        panel.addEventListener('animationend', function editorPanelEnterEnd(e) {
+            if (e.target !== panel || e.animationName !== 'modalEnter') return;
+            panel.removeEventListener('animationend', editorPanelEnterEnd);
+            panel.style.animation = 'none';
+            panel.style.transform = 'none';
+            panel.style.opacity = '1';
+        }, { once: true });
     }
 
     // ── 阶段二：后台加载数据 + CM6（并行，不阻塞面板动画） ──
@@ -4068,6 +4076,8 @@ function closeEditor() {
         // 重置动画
         overlay.style.animation = '';
         panel.style.animation = '';
+        panel.style.transform = '';   // 清除 inline transform，让 CSS 默认值生效
+        panel.style.opacity = '';     // 清除 inline opacity，让 CSS 默认值生效
         if (body) body.style.animation = '';
         els.mdRendered.style.animation = '';
 

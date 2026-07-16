@@ -79,6 +79,7 @@ export const jotTheme = EditorView.theme({
     '.cm-content': {
         caretColor: 'var(--accent)',
         padding: '0',
+        paddingLeft: '20px',
         fontFamily: 'var(--font-family)',
         fontSize: '0.938rem',
     },
@@ -100,12 +101,12 @@ export const jotTheme = EditorView.theme({
         color: 'var(--text-muted)',
         fontSize: '0.75rem',
         lineHeight: '2.13',
-        padding: '0 4px 0 4px',
+        padding: '0 2px 0 4px',
     },
     '.cm-foldGutter .cm-gutterElement': {
         color: 'var(--text-muted)',
         fontSize: '0.75rem',
-        padding: '0 2px 0 8px',
+        padding: '0 2px 0 4px',
         cursor: 'default',
     },
     '.cm-matchingBracket': {
