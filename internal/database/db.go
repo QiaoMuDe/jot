@@ -538,7 +538,6 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "note_open_fullscreen", Value: "false"},
 		{Key: "sort_order", Value: "updated_at"},
 		{Key: "page_size", Value: "20"},
-		{Key: "quick_note_enabled", Value: "false"},
 		{Key: "cm_syntax_highlight", Value: "true"},
 		{Key: "ai_provider", Value: "openai"},
 		{Key: "ai_base_url", Value: ""},

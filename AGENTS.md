@@ -525,22 +525,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百八十九、新增记忆点（AI 出错修复 — 空消息拦截 + Token 计算 + 统一 estimateUserTokens）
 
-| 记忆点 | 内容 |
-|--------|------|
-| **Bug：AI 报错时空消息写入 DB** | AI 流式请求出错时，`aicli/client.go` 的 `Stream()` 方法同时调用 `OnError` 和 `OnDone` 两个回调，导致 `app.go` 的 `onComplete` 回调将空的 assistant 消息保存到数据库。切换会话后显示空白 AI 气泡。详见 [internal/aicli/client.go](internal/aicli/client.go) |
-| **修复 — 后端** | 在 `client.go` 的 `Stream()` 中给 `OnDone` 调用加 `err == nil` 守卫：`if err == nil && callbacks.OnDone != nil { callbacks.OnDone(...) }`。出错时仅触发 `OnError`，不再触发 `OnDone`，彻底阻止空消息入库。详见 [internal/aicli/client.go#L87](internal/aicli/client.go) |
-| **Bug：出错时 Token 不显示** | AI 报错后用户消息下方不显示 Token 数，会话总 Token 不更新。因为 Token 显示依赖 `ai:stream-done` 事件更新 DOM，出错时只触发 `ai:stream-error`。 |
-| **修复 — Token 后端** | `CallAIStream` 和 `CallAIStreamRegenerate` 的 `onError` 回调中新增 Token 计算：调用 `estimateUserTokens(messages)` 计算 `userTokens`，通过 `UpdateAIMessageTokens` 和 `UpdateSessionContextTokens` 写入 DB，并通过 `runtime.EventsEmit("ai:stream-error", streamGen, err, userTokens)` 将 `userTokens` 传给前端。详见 [app.go#L1948](app.go) 和 [app.go#L2390](app.go) |
-| **修复 — Token 前端** | `ai:stream-error` 事件处理器新增接收第 3 参数 `userTokens`：找到最后一条用户消息 DOM 元素，更新其 `.user-tokens` 显示，并调用 `updateContextSize()` 刷新会话总 Token。详见 [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) |
-| **Bug：出错后用户消息操作无响应** | AI 报错后，用户消息的右键菜单（重新发送/删除）、重新生成等操作点击无反应，必须切换会话后恢复。根因：用户消息的 `data-msgId` 属性依赖 `ai:stream-done` 事件写入，出错时不触发 → `msgId` 始终为 0 → `handleResend()`/`handleDeleteMsg()` 等函数在 `msgId === 0` 时静默退出 |
-| **修复 — 提前入库** | `onSend()` 中提前调用 `SaveAIMessage` 保存用户消息到 DB 获取 `msgID`，不再依赖 `stream-done` 设置 `data-msgId`。同时对 `CallAIStream` 新增 `userMsgID` 参数传递。详见 [app.go](app.go) 和 [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) |
-| **重构：统一 estimateUserTokens** | 原 4 处（CallAIStream.onComplete、CallAIStream.onError、CallAIStreamRegenerate.onComplete、CallAIStreamRegenerate.onError）分散的 userTokens 计算代码（遍历 messages 累加 system + 最后 user 消息），统一提取为 `app.go` 中的 `estimateUserTokens(messages []services.Message) int` 函数。详见 [app.go#L2444](app.go) |
-| **底层 estimateTokens** | 维持不变：`math.Ceil(中文字数/1.5 + 其他字符数/4)`。详见 [app.go#L2432](app.go) |
-| **涉及文件** | [internal/aicli/client.go](internal/aicli/client.go)（err == nil 守卫）、[app.go](app.go)（estimateUserTokens + onError 回调）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（提前保存用户消息 + stream-error 显示 token）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js)（CallAIStream 签名同步） |
-
-| **update 计数** | `AGENTS.md` 从更新 141 到 更新 142 |
 
 ## 一百九十、新增记忆点（搜索来源 UI 优化 — 内联卡片 + 折叠面板 + SVG 图标 + 去重）
 
@@ -647,6 +632,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **migrateSensitiveKeys nil 检查移除** | 两处 `if a.LogSvc.Logger != nil { Infow }` 改为直接调用 LogSvc，因 Logger 在 NewApp 阶段已保证非 nil。详见 [app.go#L187-L199](app.go#L187-L199) |
 | **NewApp panic 兜底资源清理** | `NewApp()` 初始化过程中 `os.Exit(1)` 或 `panic(err)` 均绕过 Wails `OnShutdown` 回调，Logger 来不及落盘、DB 连接未释放。修复：所有 `os.Exit` 改为 `panic`，新增 `defer recover` 兜底，在退出前依次执行 `logSvc.Close()`（缓冲落盘）+ `sqlDB.Close()`（DB 连接关闭），然后 `println` 错误信息 + `os.Exit(1)`。详见 [app.go#L54-L63](app.go#L54-L63) |
 | **shutdown() 增加 DB Close** | 在 Wails `OnShutdown` 回调 `shutdown()` 中补充 `a.db.DB()` → `sqlDB.Close()`，确保正常退出时 DB 连接也释放。详见 [app.go#L171-L176](app.go#L171-L176) |
+
+---
+
+## 一百九十九、新增记忆点（移除快速笔记功能）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **移除原因** | 快速笔记功能（启动时自动打开全屏新建编辑器）存在启动闪烁问题，反复修复未能彻底解决，决定直接移除 |
+| **移除内容** | ① 设置页 HTML 删除"快速笔记"开关行；② JS 删除 DOM 引用、change 事件、init 启动触发、loadSettings/saveSettings 中 quick_note_enabled 相关代码；③ 后端 `SettingsConfig` 结构体删除 `QuickNoteEnabled` 字段及读写；④ 数据库默认值删除 `quick_note_enabled`；⑤ TypeScript model 删除 `quick_note_enabled` 字段 |
+| **受影响文件** | [frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[frontend/wailsjs/go/models.ts](frontend/wailsjs/go/models.ts) |
+| **未改动** | CSS 文件（`.quick-note-hint` 类仍被代码语法高亮提示使用）、`openEditor` 函数中的 `startFullscreen` 参数保留（对非快速笔记的调用不受影响） |
+| **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
+| **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
 ---
 

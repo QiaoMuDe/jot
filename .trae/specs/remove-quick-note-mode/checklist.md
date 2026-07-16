@@ -1,0 +1,13 @@
+- [x] 设置页不再显示"快速笔记"开关
+- [x] 前端 JS 不再引用 quickNoteToggle 元素
+- [x] 前端 JS 不再监听快速笔记开关变更
+- [x] 前端 JS 启动时不再自动打开全屏编辑器
+- [x] 前端 JS loadSettings 不再同步 quick_note_enabled
+- [x] 前端 JS saveSettings 不再收集 quick_note_enabled
+- [x] 后端 SettingsConfig 结构体不再包含 QuickNoteEnabled
+- [x] 后端 GetAllSettings 不再读取 quick_note_enabled
+- [x] 后端 SaveAllSettings 不再写入 quick_note_enabled
+- [x] 数据库默认值不再包含 quick_note_enabled
+- [x] TypeScript SettingsConfig 模型不再包含 quick_note_enabled
+- [x] 编译通过，无类型错误
+- [x] 代码语法高亮开关的提示文字仍正常显示

@@ -60,7 +60,6 @@ type SettingsConfig struct {
 	NoteOpenFullscreen        bool   `json:"note_open_fullscreen"`
 	SortOrder                 string `json:"sort_order"`
 	PageSize                  int    `json:"page_size"`
-	QuickNoteEnabled          bool   `json:"quick_note_enabled"`
 	CMSyntaxHighlight         bool   `json:"cm_syntax_highlight"`
 	AIProvider                string `json:"ai_provider"`
 	AIBaseURL                 string `json:"ai_base_url"`
@@ -91,7 +90,6 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		NoteOpenFullscreen:        parseBoolSetting(s.Get("note_open_fullscreen")),
 		SortOrder:                 s.Get("sort_order"),
 		PageSize:                  parseIntSetting(s.Get("page_size"), 20),
-		QuickNoteEnabled:          parseBoolSetting(s.Get("quick_note_enabled")),
 		CMSyntaxHighlight:         parseBoolSetting(s.Get("cm_syntax_highlight")),
 		AIProvider:                s.Get("ai_provider"),
 		AIBaseURL:                 s.Get("ai_base_url"),
@@ -172,7 +170,6 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"note_open_fullscreen":         strconv.FormatBool(cfg.NoteOpenFullscreen),
 		"sort_order":                   cfg.SortOrder,
 		"page_size":                    strconv.Itoa(cfg.PageSize),
-		"quick_note_enabled":           strconv.FormatBool(cfg.QuickNoteEnabled),
 		"cm_syntax_highlight":          strconv.FormatBool(cfg.CMSyntaxHighlight),
 		"ai_provider":                  cfg.AIProvider,
 		"ai_base_url":                  cfg.AIBaseURL,

@@ -1,25 +1,25 @@
-import './css/index.css';
-import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit, EventsOn, WindowFullscreen, WindowUnfullscreen, WindowIsFullscreen } from '../wailsjs/runtime/runtime.js';
-import { marked } from 'marked';
 import hljs from 'highlight.js';
+import { marked } from 'marked';
+import { EventsOn, Quit, WindowFullscreen, WindowIsFullscreen, WindowIsMaximised, WindowMinimise, WindowToggleMaximise, WindowUnfullscreen } from '../wailsjs/runtime/runtime.js';
+import './css/index.css';
 import { applyAIHighlightTheme } from './js/hljs-themes.js';
 
 // CodeMirror 6 导入
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightSpecialChars, drawSelection, highlightActiveLine, placeholder, scrollPastEnd } from '@codemirror/view';
-import { javascript } from '@codemirror/lang-javascript';
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { searchKeymap, highlightSelectionMatches, openSearchPanel, setSearchQuery, SearchQuery } from '@codemirror/search';
-import { closeBrackets, closeBracketsKeymap, completionKeymap, autocompletion } from '@codemirror/autocomplete';
-import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
-import { jotTheme, getHighlightExtension, codeHighlightThemeNames, codeHighlightThemeLabels } from './js/cm6-syntax-highlight.js';
+import { javascript } from '@codemirror/lang-javascript';
+import { bracketMatching, foldGutter, foldKeymap, indentOnInput } from '@codemirror/language';
+import { SearchQuery, highlightSelectionMatches, openSearchPanel, searchKeymap, setSearchQuery } from '@codemirror/search';
+import { Compartment, EditorState } from '@codemirror/state';
+import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, placeholder, scrollPastEnd } from '@codemirror/view';
+import { codeHighlightThemeLabels, getHighlightExtension, jotTheme } from './js/cm6-syntax-highlight.js';
 
 // 独立模块
-import { SVGS, formatTime, highlightText, getSummary, debounce } from './js/constants.js';
+import { SVGS, debounce, formatTime, getSummary } from './js/constants.js';
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { animateCountUp, loadDataStats, resetDatabase, vacuumDatabase, openDataDir, openLogDir, exportData, importData, loadBackupInfo, backupToDir, restoreFromDir, clearAISessions, clearCompletedTodos, cleanupOrphanImages } from './js/data-management.js';
+import { backupToDir, cleanupOrphanImages, clearAISessions, clearCompletedTodos, exportData, importData, loadDataStats, openDataDir, openLogDir, resetDatabase, restoreFromDir, vacuumDatabase } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -381,7 +381,6 @@ const els = {
     // 格式化工具栏
     // 设置
     tagList: $('tagList'),
-    quickNoteToggle: $('quickNoteToggle'),
     mdHighlightToggle: $('mdHighlightToggle'),
     noteOpenFullscreenToggle: $('noteOpenFullscreenToggle'),
     newTagName: $('newTagName'),
@@ -5091,12 +5090,6 @@ function initEventListeners() {
         loadNotes();
     });
 
-    // 快速笔记开关
-    els.quickNoteToggle.addEventListener('change', async () => {
-        await saveSettings();
-        nm.show('设置已保存', 'success');
-    });
-
     // 语法高亮开关
     els.mdHighlightToggle.addEventListener('change', async () => {
         await saveSettings();
@@ -7048,10 +7041,6 @@ async function init() {
 
     state.selectedTags = [];
     await loadSettings();
-    // 快速笔记：启用时自动打开全屏编辑器
-    if (els.quickNoteToggle?.checked) {
-        await openEditor(null, false, true);
-    }
     await initSortSettings();
     initAISettings();
     // 先恢复侧栏折叠状态
@@ -7624,9 +7613,6 @@ async function loadSettings() {
         // --- 全屏打开 checkbox ---
         if (els.noteOpenFullscreenToggle) els.noteOpenFullscreenToggle.checked = cfg.note_open_fullscreen;
 
-        // --- 快速笔记 checkbox ---
-        if (els.quickNoteToggle) els.quickNoteToggle.checked = cfg.quick_note_enabled;
-
         // --- 代码高亮主题 ---
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
         applyAIHighlightTheme(codeHighlightTheme);
@@ -7816,7 +7802,6 @@ async function saveSettings() {
                 const active = els.pageSizeControl?.querySelector('.segmented-btn.active');
                 return parseInt(active?.dataset.value) || 20;
             })(),
-            quick_note_enabled: els.quickNoteToggle?.checked || false,
             cm_syntax_highlight: els.mdHighlightToggle?.checked || false,
             ai_provider: (() => {
                 const active = els.aiProviderDropdown?.querySelector('.theme-select-item.active');

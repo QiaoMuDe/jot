@@ -560,7 +560,6 @@ export namespace services {
 	    note_open_fullscreen: boolean;
 	    sort_order: string;
 	    page_size: number;
-	    quick_note_enabled: boolean;
 	    cm_syntax_highlight: boolean;
 	    ai_provider: string;
 	    ai_base_url: string;
@@ -593,7 +592,6 @@ export namespace services {
 	        this.note_open_fullscreen = source["note_open_fullscreen"];
 	        this.sort_order = source["sort_order"];
 	        this.page_size = source["page_size"];
-	        this.quick_note_enabled = source["quick_note_enabled"];
 	        this.cm_syntax_highlight = source["cm_syntax_highlight"];
 	        this.ai_provider = source["ai_provider"];
 	        this.ai_base_url = source["ai_base_url"];
