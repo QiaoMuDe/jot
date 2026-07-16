@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-16（更新 147）
+> 生成日期: 2026-07-16（更新 148）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -508,7 +508,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
-| `app.go` | 3515 | Wails 绑定层（100+ API，含 CallAIStream/CallAIStreamRegenerate 后端自取历史/8 步上下文拼接/再生模式 token 更新） |
+| `app.go` | 3620 | Wails 绑定层（100+ API，含 CallAIStream/CallAIStreamRegenerate 后端自取历史/8 步上下文拼接/再生模式 token 更新） |
 | `services/ai_service.go` | 1004 | AI 对话服务层（aicli 适配层 + 会话/消息 CRUD + Token 统计/更新 + 提示词迁移 + 空会话/孤儿消息清理 + 原子替换消息 + 分页加载 + 按 msgID 截断 + SumSessionTokens）|
 | `services/note_service.go` | 733 | 笔记 CRUD 服务 + 引用上下文构建 + 搜索标签 AND 过滤 + 全量 ID 搜索 + 过期回收站清理 + 孤儿笔记迁移 + ResetAll 清空待办 |
 | `frontend/src/css/components/settings-panel.css` | 758 | 设置页样式（主题预览卡片/分段控件/开关/按钮加载动画） |
@@ -2881,3 +2881,18 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | **前端修复** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：共 3 处。停止按钮点击时（∼455）立即移除当前 streaming 气泡（`messagesInnerEl.querySelector('.ai-msg-assistant:last-child')`）；`ai:search-error` 处理器（∼2200）增加 `!isStreaming` 防护；`ai:stream-done` 空内容时（∼2262）增加 `isStreaming` 检查，用户取消时抑制"AI 未返回内容"通知。 |
 | **DB 保障** | LLM 阶段取消时 `OnDone` 不被触发，assistant 消息不会保存到数据库。后端所有兜底路径均不调用 `SaveAIMessage`。✅ |
 | **不变部分** | 正常流式完成（不点击停止）的 `OnDone`/`OnError` 逻辑不变。`RefineSearchQuery` 同步调用不变。`ai:stream-done` 非空内容的处理和渲染逻辑不变。 |
+
+---
+
+## 一百九十八、新增记忆点（修复日志初始化顺序）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **Logger Init 移到 NewApp（DB Init 之前）** | 原来 `startup()` 中才初始化 Logger，导致 `NewApp()` 中 6 个 Service 全拿到 nil Logger，调用 `s.logger.Errorw()` 会 panic。修复：`NewApp()` 最前面以 `fastlog.INFO` 默认级别 Init Logger，再初始化 DB，然后从库读 `log_level` 调 `LogSvc.SetLevel()` 调整级别。最后创建 Service 时传入非 nil Logger。详见 [app.go#L65-L94](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L65-L94) |
+| **startup() 清理** | 删除 `startup()` 中的 `LogSvc.Init()`、`logLevelStr` 读取、`LevelFromInt`、nil 检查 + `os.Exit(1)` 共 14 行。startup 只做业务初始化（图片目录/notebook/profile/key 迁移）。详见 [app.go#L100-L158](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L100-L158) |
+| **startup() fmt → Logger 替换** | `startup()` 中所有 `fmt.Printf`/`Println` 替换为 `a.LogSvc.Logger.Errorw`/`Infow`。移除初始化后的三条回顾性 INFO 日志（"数据库连接成功/默认笔记本已就绪/密钥迁移完成"）。详见 [app.go#L108-L158](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L108-L158) |
+| **migrateSensitiveKeys nil 检查移除** | 两处 `if a.LogSvc.Logger != nil { Infow }` 改为直接调用 LogSvc，因 Logger 在 NewApp 阶段已保证非 nil。详见 [app.go#L187-L199](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L187-L199) |
+| **NewApp panic 兜底资源清理** | `NewApp()` 初始化过程中 `os.Exit(1)` 或 `panic(err)` 均绕过 Wails `OnShutdown` 回调，Logger 来不及落盘、DB 连接未释放。修复：所有 `os.Exit` 改为 `panic`，新增 `defer recover` 兜底，在退出前依次执行 `logSvc.Close()`（缓冲落盘）+ `sqlDB.Close()`（DB 连接关闭），然后 `println` 错误信息 + `os.Exit(1)`。详见 [app.go#L54-L63](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L54-L63) |
+| **shutdown() 增加 DB Close** | 在 Wails `OnShutdown` 回调 `shutdown()` 中补充 `a.db.DB()` → `sqlDB.Close()`，确保正常退出时 DB 连接也释放。详见 [app.go#L171-L176](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go#L171-L176) |
+
+

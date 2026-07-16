@@ -48,17 +48,59 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	home, _ := os.UserHomeDir()
+	logSvc := services.NewLogService()
+	var db *gorm.DB
+
+	// 兜底：初始化过程中 panic 时确保日志落盘、数据库关闭后再退出
+	defer func() {
+		if r := recover(); r != nil {
+			if logSvc.Logger != nil {
+				logSvc.Close()
+			}
+			if db != nil {
+				sqlDB, err := db.DB()
+				if err == nil && sqlDB != nil {
+					_ = sqlDB.Close()
+				}
+			}
+			println("启动失败:", r)
+			os.Exit(1)
+		}
+	}()
+
+	// 1. 默认 INFO 级别初始化 Logger，使后续操作可用日志记录
+	logDir := filepath.Join(home, ".jot", "logs")
+	if err := logSvc.Init(logDir, fastlog.INFO); err != nil {
+		println("日志初始化失败:", err.Error())
+		panic(err)
+	}
+	if logSvc.Logger == nil {
+		panic("日志实例为空，无法继续启动")
+	}
+
+	// 2. 初始化数据库
 	dbPath, err := database.DefaultDBPath()
 	if err != nil {
+		logSvc.Logger.Errorw("获取数据库路径失败", fastlog.Error(err))
 		panic(err)
 	}
-	db, err := database.InitDB(dbPath)
+	db, err = database.InitDB(dbPath)
 	if err != nil {
+		logSvc.Logger.Errorw("数据库初始化失败", fastlog.Error(err))
 		panic(err)
 	}
+
+	// 3. 从库读取日志级别，动态调整
 	settingService := services.NewSettingService(db)
-	// 初始化日志服务（先创建设置读取日志级别，等 startup 再真正初始化 logger）
-	logSvc := services.NewLogService()
+	logLevelStr := settingService.Get("log_level")
+	logLevelVal := 1
+	if n, err := strconv.Atoi(logLevelStr); err == nil {
+		logLevelVal = n
+	}
+	logSvc.SetLevel(services.LevelFromInt(logLevelVal))
+
+	// 4. 创建各服务（Logger 已就绪，非 nil）
 	return &App{
 		db:              db,
 		noteService:     services.NewNoteService(db, settingService, logSvc.Logger),
@@ -77,16 +119,17 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// 确保图片存储目录存在
 	home, _ := os.UserHomeDir()
+
+	// 确保图片存储目录存在
 	imageDir := filepath.Join(home, ".jot", "images")
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
-		fmt.Printf("创建图片目录失败: %v\n", err)
+		a.LogSvc.Logger.Errorw("创建图片目录失败", fastlog.Error(err))
 	}
 
 	// 确保默认笔记本存在（首次启动自动创建）
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
-		fmt.Printf("初始化默认笔记本失败: %v\n", err)
+		a.LogSvc.Logger.Errorw("初始化默认笔记本失败", fastlog.Error(err))
 	}
 	// 迁移：已有配置但无预设时，自动创建"默认配置"
 	profiles := a.profileService.ListProfiles()
@@ -101,9 +144,9 @@ func (a *App) startup(ctx context.Context) {
 			profile := a.profileService.CreateProfile("默认配置", provider, baseURL, apiKey, true)
 			// 标记为激活
 			if err := a.profileService.SwitchProfile(profile.ID); err != nil {
-				fmt.Printf("迁移警告：激活默认配置失败: %v\n", err)
+				a.LogSvc.Logger.Errorw("迁移警告：激活默认配置失败", fastlog.Error(err))
 			}
-			fmt.Println("迁移完成：已从现有配置创建'默认配置'预设")
+			a.LogSvc.Logger.Infow("迁移完成：已从现有配置创建'默认配置'预设")
 		}
 	} else {
 		// 旧数据迁移：如有预设但无一激活，值匹配补标
@@ -121,9 +164,9 @@ func (a *App) startup(ctx context.Context) {
 				for _, p := range profiles {
 					if p.BaseURL == baseURL && p.APIKey == apiKey {
 						if err := a.profileService.SwitchProfile(p.ID); err != nil {
-							fmt.Printf("迁移警告：标记激活预设失败: %v\n", err)
+							a.LogSvc.Logger.Errorw("迁移警告：标记激活预设失败", fastlog.Error(err))
 						}
-						fmt.Println("迁移完成：已标记匹配预设为激活")
+						a.LogSvc.Logger.Infow("迁移完成：已标记匹配预设为激活")
 						break
 					}
 				}
@@ -133,31 +176,21 @@ func (a *App) startup(ctx context.Context) {
 	// 迁移存量明文密钥为 Base64 编码格式（放在旧迁移之后，确保旧迁移逻辑读到的是明文）
 	a.migrateSensitiveKeys()
 
-	// 初始化日志服务
-	logDir := filepath.Join(home, ".jot", "logs")
-	logLevelStr := a.settingService.Get("log_level")
-	logLevelVal := 1
-	if n, err := strconv.Atoi(logLevelStr); err == nil {
-		logLevelVal = n
-	}
-	logLevel := services.LevelFromInt(logLevelVal)
-	if err := a.LogSvc.Init(logDir, logLevel); err != nil {
-		// 日志初始化失败不应阻止应用启动
-		println("日志初始化失败:", err.Error())
-	} else {
-		a.LogSvc.Logger.Infow("数据库连接成功")
-		a.LogSvc.Logger.Infow("默认笔记本已就绪")
-		a.LogSvc.Logger.Infow("密钥迁移完成")
-		a.LogSvc.Logger.Infow("启动初始化完成",
-			fastlog.String("version", verman.V.GitVersion),
-		)
-	}
+	a.LogSvc.Logger.Infow("启动初始化完成",
+		fastlog.String("version", verman.V.GitVersion),
+	)
 }
 
 // shutdown is called when the app is closing.
 func (a *App) shutdown(ctx context.Context) {
 	if a.LogSvc != nil {
 		a.LogSvc.Close()
+	}
+	if a.db != nil {
+		sqlDB, err := a.db.DB()
+		if err == nil && sqlDB != nil {
+			_ = sqlDB.Close()
+		}
 	}
 }
 
