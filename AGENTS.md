@@ -527,20 +527,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 一百九十一、新增记忆点（召回笔记 UI 优化 — 折叠面板 + SVG 图标 + 去重）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **优化背景** | AI 消息中的召回笔记（Recall Cards）面板使用原生 `<details>` 元素（无动画）、emoji `📄` 作图标（高度不一致）、两处重复 ~40 行渲染代码、JS 硬截断 `slice(0, 100)` |
-| **自定义折叠面板** | 改为 `<button>` 折叠头 + `max-height`/`opacity` 过渡动画（300ms/200ms），点击切换 `panel.classList.toggle('open')`，折叠时箭头旋转 90°。与搜索来源面板共享同一套交互模式。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **NOTE_ICON SVG 常量** | 替换 emoji `📄` 为 layers SVG 图标常量（`stroke-width="1.5"`），折叠头 14×14，条目图标缩为 12×12。色值为 `var(--accent)`（折叠头）/ `var(--text-muted)`（条目），跟随主题色。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **新增 file_ext 徽章** | 条目标题末尾显示 `.md`/`.txt` 等文件后缀徽章，等宽字体 `var(--font-mono)`、小字号 0.7rem、灰底圆角标签，强化笔记类型感知。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
-| **CSS line-clamp 替代 JS 硬截断** | 移除 `card.content.slice(0, 100) + '...'`，改为全文输出 + CSS `-webkit-line-clamp: 3` 行数截断，灵活自适应。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
-| **代码去重** | 将 stream-done 回调和 addMessage 函数中两份完全相同的 ~40 行重复代码提取为共享函数 `renderRecallCards(el, cards)`。行为不变：点击卡片条目调用 `window.openEditor(card.id, true, false, true)` 打开笔记。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增 NOTE_ICON 常量 + renderRecallCards 函数 + 替换两处调用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除旧 .recall-cards 样式 + 新增 .recall-cards-panel 完整样式） |
-| **不变内容** | 后端 RecallCard 结构体不变、`ai:recall-cards` 事件传输不变、DB `ai_messages.recall_cards` 字段不变、搜索来源面板不变 |
-
-## 一百九十二、新增记忆点（修复 escapeHtml 跨模块作用域导致历史会话卡死）
+## 一百九十一、新增记忆点（修复 escapeHtml 跨模块作用域导致历史会话卡死）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -551,7 +538,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`renderRecallCards` 函数中替换 `innerHTML` + `escapeHtml` 为 `textContent`） |
 | **不变内容** | `escapeHtml` 函数本身不变；`renderSearchSources` 函数不变（其搜索来源数据本身不使用 `escapeHtml`） |
 
-## 一百九十三、新增记忆点（编辑器骨架屏 — 点击即动）
+## 一百九十二、新增记忆点（编辑器骨架屏 — 点击即动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -562,7 +549,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（重构 `openEditor` 流程）、[editor.css](frontend/src/css/components/editor.css)（新增 `.editor-skeleton` / `.editor-skeleton-line` / `@keyframes skeletonPulse`） |
 | **不变内容** | `closeEditor` 清理逻辑不变、`initCodeMirror` 参数/逻辑不变、`loadTagsForEditor` 函数签名不变、后端 `GetNoteContent`/`GetAllTags` 接口不变、全屏模式跳过动画但骨架屏流程一致 |
 
-## 一百九十四、新增记忆点（编辑器骨架屏回归修复 + scrollbar-gutter）
+## 一百九十三、新增记忆点（编辑器骨架屏回归修复 + scrollbar-gutter）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |
 
-## 一百九十五、新增记忆点（顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动）
+## 一百九十四、新增记忆点（顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十六、新增记忆点（用户消息 Token 提前展示）
+## 一百九十五、新增记忆点（用户消息 Token 提前展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -597,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十七、新增记忆点（修复停止按钮在搜索/LLM 阶段的动画残留与错误误报）
+## 一百九十六、新增记忆点（修复停止按钮在搜索/LLM 阶段的动画残留与错误误报）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +596,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十八、新增记忆点（修复日志初始化顺序）
+## 一百九十七、新增记忆点（修复日志初始化顺序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十九、新增记忆点（移除快速笔记功能）
+## 一百九十八、新增记忆点（移除快速笔记功能）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 二百、新增记忆点（CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content）
+## 一百九十九、新增记忆点（CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,6 +629,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除 `.cm-scroller` 的 `padding-left`（`padding: 0 1px 1px 20px` → `padding: 0 1px 1px 0`，注意 CSS 三值简写 `padding: 0 1px 1px` 中 left 继承 right 值 1px，需显式四值保证 left=0）；② 将左间距转移到 `.cm-content` 主题的 `paddingLeft: '20px'`，保持编辑内容起始位置不变（`.cm-line` 已有 6px padding，合计 26px 不变） |
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
+
+## 二百、新增记忆点（代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突，多轮调试中）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 笔记预览区（`.md-rendered pre`）和 AI 消息区（`.ai-msg-assistant pre`）代码块的水平滚动条太粗（~6px），无法缩减到 4px，且 hover 显隐调试困难 |
+| **根因** | 两套 CSS 滚动条控制机制冲突：① `scrollbar-width: thin`（CSS 标准）在 `overflow-y: hidden` 的 `pre` 上对水平滚动条不生效（Chromium 已知行为），回退到默认粗滚动条；② `::-webkit-scrollbar` 伪元素的宽高被 `scrollbar-width: thin` 压制无法生效；③ 全局 [scrollbar.css](frontend/src/css/scrollbar.css) 的 `::-webkit-scrollbar { width: 6px; height: 6px }` 作用于所有元素，`pre` 自定义 4px 宽高被覆盖 |
+| **当前状态** | 改用 `scrollbar-color` 控制 hover 显隐（`transparent transparent` → hover 时 `var(--scrollbar-thumb) transparent`），`overflow: auto` 让 `scrollbar-width: thin` 对水平滚动条生效。但粗细问题仍未解决——`scrollbar-width: thin` 和 `::-webkit-scrollbar` 两套机制在 Chromium WebView2 中互相干扰，自定义 4px 宽高无法生效 |
+| **尝试过的方案** | ① 移除 `scrollbar-width: thin` 只留 `::-webkit-scrollbar { width: 4px }` + `scrollbar-color` → 滚动条完全消失；② 移除 `::-webkit-scrollbar` 只留 `scrollbar-width: thin` + `scrollbar-color` → hover 显隐工作但粗细仍为 6px（`scrollbar-width: thin` 被全局 `::-webkit-scrollbar { width: 6px }` 压制）；③ 同时保留 `scrollbar-width: thin` + `::-webkit-scrollbar { width: 4px }` + `scrollbar-color` → hover 显隐工作但粗细仍为 6px（两套机制互相压制）|
+| **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.md-rendered pre` 滚动条样式）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-msg-assistant pre` 滚动条样式）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（全局 `::-webkit-scrollbar { width: 6px }` 压制 `pre` 自定义宽度）|
+| **未解决问题** | 代码块水平滚动条仍为 6px（全局默认宽度），无法缩减到 4px。可能需要从全局 `scrollbar.css` 中移除 `::-webkit-scrollbar { width: 6px }` 或添加 `!important` 覆盖 `pre` 上的 `::-webkit-scrollbar` 宽高 |
 
 ---
 

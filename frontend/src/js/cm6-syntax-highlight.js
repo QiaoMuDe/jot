@@ -79,7 +79,6 @@ export const jotTheme = EditorView.theme({
     '.cm-content': {
         caretColor: 'var(--accent)',
         padding: '0',
-        paddingLeft: '20px',
         fontFamily: 'var(--font-family)',
         fontSize: '0.938rem',
     },

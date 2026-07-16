@@ -182,38 +182,24 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 10px 14px 8px 14px;
+    padding: 10px 14px 4px 14px;
     margin: 0.5em 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
     font-size: 0.82em;
     line-height: 1.6;
-    /* 与编辑器 .md-rendered 一致的滚动条控制 */
-    scrollbar-width: thin;
+    /* 滚动条控制：尺寸由 ::-webkit-scrollbar 控制，显隐由 scrollbar-color 控制 */
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+}
+
+.ai-msg-assistant pre:hover {
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }
-/* AI 代码块滚动条：与编辑器预览完全一致的实现 */
+
+/* AI 代码块滚动条：宽度覆盖全局 6px，显隐由 scrollbar-color 控制 */
 .ai-msg-assistant pre::-webkit-scrollbar {
     width: 4px;
     height: 4px;
-}
-.ai-msg-assistant pre::-webkit-scrollbar-track {
-    background: transparent;
-}
-.ai-msg-assistant pre::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
-}
-.ai-msg-assistant pre::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
-}
-.ai-msg-assistant pre::-webkit-scrollbar-corner {
-    background: transparent;
-}
-.ai-msg-assistant pre::-webkit-scrollbar-button {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
 }
 .ai-msg-assistant pre code {
     background: none;

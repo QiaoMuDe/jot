@@ -365,41 +365,27 @@
 
 .md-rendered pre {
     position: relative;
-    padding: 12px 16px 10px 16px;
+    padding: 12px 16px 4px 16px;
     border-radius: var(--radius-sm);
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     min-height: 52px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
+    /* 滚动条控制：尺寸由 ::-webkit-scrollbar 控制，显隐由 scrollbar-color 控制 */
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
     font-size: 0.82em;
     line-height: 1.6;
 }
 
-/* 预览区代码块滚动条：专属 4px 细滚动条，靠近边框 */
+.md-rendered pre:hover {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* 预览区代码块滚动条：宽度覆盖全局 6px，显隐由 scrollbar-color 控制 */
 .md-rendered pre::-webkit-scrollbar {
     width: 4px;
     height: 4px;
-}
-.md-rendered pre::-webkit-scrollbar-track {
-    background: transparent;
-}
-.md-rendered pre::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 2px;
-}
-.md-rendered pre::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
-}
-.md-rendered pre::-webkit-scrollbar-corner {
-    background: transparent;
-}
-.md-rendered pre::-webkit-scrollbar-button {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
 }
 
 /* ==========================================================================
@@ -757,9 +743,10 @@
 /* 编辑器文本区滚动条：CM6 scroller 填满面板，精致微调融合 */
 .cm-scroller {
   padding: 0 1px 1px 0;
-  /* 匹配预览区的细滚动条 */
+  /* 默认透明隐藏，hover 时显示 */
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
 }
 .cm-scroller::-webkit-scrollbar {
   width: 6px;
@@ -769,11 +756,9 @@
   background: transparent;
 }
 .cm-scroller::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: transparent;
   border-radius: 3px;
-}
-.cm-scroller::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  transition: background 0.3s ease;
 }
 .cm-scroller::-webkit-scrollbar-corner {
   background: transparent;
@@ -784,9 +769,24 @@
   display: none !important;
 }
 
+/* hover 编辑器文本区时 — 显示滚动条 */
+.editor-textarea:hover .cm-scroller {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.editor-textarea:hover .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+.editor-textarea:hover .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
 /* Firefox */
 .editor-textarea {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+.editor-textarea:hover {
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
@@ -1003,16 +1003,18 @@
 .md-rendered {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 0;
   position: relative;
   scroll-padding-top: 0.75rem;
-  padding: 0.5em 0.5rem 1rem 1.25rem;
+  padding: 0.5em 8% 1rem;
   font-size: 0.938rem;
   line-height: 1.7;
   color: var(--text-primary);
-  /* 精致微调滚动条：Firefox */
+  /* 默认透明隐藏，hover 时显示 */
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
 }
 
 /* 交叉淡入覆盖层：Worker 返回后从 loading → 内容的平滑过渡 */
@@ -1031,16 +1033,25 @@
   background: transparent;
 }
 .md-rendered::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: transparent;
   border-radius: 3px;
-}
-.md-rendered::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  transition: background 0.3s ease;
 }
 .md-rendered::-webkit-scrollbar-button {
   width: 0 !important;
   height: 0 !important;
   display: none !important;
+}
+
+/* hover 预览区时 — 显示滚动条 */
+.md-rendered:hover {
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.md-rendered:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+}
+.md-rendered:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* 预览加载状态：脉动"加载中…"提示 */
