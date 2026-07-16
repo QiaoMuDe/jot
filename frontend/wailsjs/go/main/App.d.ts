@@ -184,7 +184,7 @@ export function RestoreTrashNotebook(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
 
-export function SaveAIMessage(arg1:number,arg2:string,arg3:string):Promise<number>;
+export function SaveAIMessage(arg1:number,arg2:string,arg3:string):Promise<main.SaveAIMessageResult>;
 
 export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 

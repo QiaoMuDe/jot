@@ -1657,6 +1657,10 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				// 精炼 query
 				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
 				if err != nil {
+					if ctx.Err() != nil {
+						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+						return
+					}
 					var aiErr *aicli.AIErrorWrapper
 					if errors.As(err, &aiErr) {
 						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
@@ -1715,6 +1719,10 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				for i := 0; i < len(searchSources); i++ {
 					r := <-resultCh
 					if r.err != nil {
+						// 用户取消导致的错误跳过，不报通知
+						if ctx.Err() != nil {
+							continue
+						}
 						// 发射错误事件给前端
 						errEvent := map[string]interface{}{
 							"source": r.source,
@@ -1945,6 +1953,10 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err, userTokens)
 			},
 		)
+		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡
+		if ctx.Err() != nil {
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+		}
 	}()
 }
 
@@ -2099,6 +2111,10 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			if query != "" {
 				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
 				if err != nil {
+					if ctx.Err() != nil {
+						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+						return
+					}
 					var aiErr *aicli.AIErrorWrapper
 					if errors.As(err, &aiErr) {
 						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
@@ -2153,6 +2169,10 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				for i := 0; i < len(searchSources); i++ {
 					r := <-resultCh
 					if r.err != nil {
+						// 用户取消导致的错误跳过，不报通知
+						if ctx.Err() != nil {
+							continue
+						}
 						errEvent := map[string]interface{}{
 							"source": r.source,
 							"error":  r.err.Error(),
@@ -2368,6 +2388,10 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
 			},
 		)
+		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡
+		if ctx.Err() != nil {
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+		}
 	}()
 }
 
@@ -2557,22 +2581,29 @@ func (a *App) UpdateAIMessageContent(id uint, content string) error {
 	return nil
 }
 
-// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID
-// 由前端在调用 CallAIStream 前预先保存用户消息，确保前端能立即拿到 msgId
-func (a *App) SaveAIMessage(sessionID uint, content string, role string) (uint, error) {
+// SaveAIMessageResult SaveAIMessage 的返回结果
+type SaveAIMessageResult struct {
+	MsgID  uint `json:"msgID"`
+	Tokens int  `json:"tokens"`
+}
+
+// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID 和 token 数
+// 由前端在调用 CallAIStream 前预先保存用户消息，确保前端能立即拿到 msgId 和 tokens
+func (a *App) SaveAIMessage(sessionID uint, content string, role string) (SaveAIMessageResult, error) {
 	a.LogSvc.Logger.Debugw("SaveAIMessage", fastlog.Uint("sessionID", sessionID), fastlog.String("role", role))
+	tokens := estimateTokens(content)
 	msg := services.Message{
 		Role:    role,
 		Content: content,
-		Tokens:  estimateTokens(content),
+		Tokens:  tokens,
 	}
 	msgID, err := a.aiService.SaveAIMessage(sessionID, msg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("SaveAIMessage 失败", fastlog.Error(err))
-		return 0, err
+		return SaveAIMessageResult{}, err
 	}
 	a.LogSvc.Logger.Infow("SaveAIMessage 成功", fastlog.Uint("msgID", msgID), fastlog.Uint("sessionID", sessionID))
-	return msgID, nil
+	return SaveAIMessageResult{MsgID: msgID, Tokens: tokens}, nil
 }
 
 // DeleteAIMessage 按 ID 删除单条 AI 消息

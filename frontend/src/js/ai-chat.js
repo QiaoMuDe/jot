@@ -458,6 +458,11 @@ function bindEvents() {
             stopBtnEl.style.display = 'none';
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
+            // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
+            const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
+            if (streamingBubble) {
+                streamingBubble.remove();
+            }
             // 停止后恢复润色按钮状态
             if (polishBtn) {
                 polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
@@ -2046,18 +2051,21 @@ async function onSend() {
 
     hideWelcome();
 
-    // 先保存用户消息到数据库，确保前端能立即拿到 msgId
+    // 先保存用户消息到数据库，确保前端能立即拿到 msgId 和 token 数
     let userMsgId = 0;
+    let userTokens = 0;
     if (activeSessionId !== null) {
         try {
-            userMsgId = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
+            const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
+            userMsgId = result?.msgID || 0;
+            userTokens = result?.tokens || 0;
         } catch (_) { /* 静默失败，后续流程继续 */ }
     }
 
-    addMessage(text, 'user', undefined, undefined, undefined, 0, userMsgId || undefined);
+    addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined);
     const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
-        userMsgEl.appendChild(createMsgActions(text, 'user', undefined, 0));
+        userMsgEl.appendChild(createMsgActions(text, 'user', undefined, userTokens));
         bindMsgContextMenu(userMsgEl, text, 'user');
     }
     startStreaming(text, false, userMsgId);
@@ -2198,6 +2206,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         try {
             const data = typeof errJSON === 'string' ? JSON.parse(errJSON) : errJSON;
             searchSourceStates[data.source] = { source: data.source, status: 'error', error: data.error };
+            // 流已停止（用户主动取消），不弹错误通知
+            if (!isStreaming) return;
             window.showNotification?.('联网搜索失败 (' + (sourceLabels[data.source] || data.source) + '): ' + data.error, 'error', 5000);
         } catch (_) {}
     });
@@ -2258,10 +2268,12 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         let finalContent = streamingContent || fullContent;
         renderMarkdown(contentDiv, finalContent);
 
-        // 空回复：通知用户，不保存到数据库
+        // 空回复：通知用户，不保存到数据库（用户主动取消不弹通知）
         const isEmptyMsg = !finalContent || !finalContent.trim();
         if (isEmptyMsg) {
-            window.showNotification('AI 未返回内容，请尝试重新生成', 'warning');
+            if (isStreaming) {
+                window.showNotification('AI 未返回内容，请尝试重新生成', 'warning');
+            }
         }
 
         if (thinkingDetails && thinkingContentEl && streamingThinking) {
@@ -3637,19 +3649,22 @@ async function handleResend(msgEl) {
         chatHistory = chatHistory.slice(0, idx);
     }
 
-    // 先保存用户消息到数据库，拿到 msgId
+    // 先保存用户消息到数据库，拿到 msgId 和 token 数
     let newUserMsgId = 0;
+    let resendTokens = 0;
     if (activeSessionId !== null) {
         try {
-            newUserMsgId = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user');
+            const result = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user');
+            newUserMsgId = result?.msgID || 0;
+            resendTokens = result?.tokens || 0;
         } catch (_) { /* 静默 */ }
     }
 
-    // 重新添加用户消息气泡（带上 msgId）
-    addMessage(content, 'user', undefined, undefined, undefined, 0, newUserMsgId || undefined);
+    // 重新添加用户消息气泡（带上 msgId 和 token）
+    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined);
     const newUserMsgEl = messagesInnerEl.lastElementChild;
     if (newUserMsgEl) {
-        newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, 0));
+        newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, resendTokens));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
     }
 

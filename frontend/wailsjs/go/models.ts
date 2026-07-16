@@ -80,6 +80,20 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class SaveAIMessageResult {
+	    msgID: number;
+	    tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveAIMessageResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.msgID = source["msgID"];
+	        this.tokens = source["tokens"];
+	    }
+	}
 
 }
 

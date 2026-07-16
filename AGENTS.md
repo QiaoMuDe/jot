@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 生成日期: 2026-07-16（更新 145）
+> 生成日期: 2026-07-16（更新 147）
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ go-openai + ollama/ollama/api（AI 对话适配层）
 
@@ -504,7 +504,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 文件 | 行数（约） | 说明 |
 |------|-----------|------|
-| `frontend/src/js/ai-chat.js` | 4437 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送/替换消息操作统一后端原子方法/消息分页懒加载+滚动加载更多/msgID 驱动操作） |
+| `frontend/src/js/ai-chat.js` | ~4450 | AI 对话 JS 逻辑（含引用笔记选择器/标签筛选/更多按钮下拉菜单/会话置顶/Enter 确认引用/多来源搜索/分块渲染/右键菜单（含 SVG 图标）/用户消息编辑/删除/重新发送/替换消息操作统一后端原子方法/消息分页懒加载+滚动加载更多/msgID 驱动操作） |
 | `frontend/src/main.js` | 7868 | 前端核心逻辑（含批量管理 + TOC + 回到顶部 + 主题系统 + 设置统一重构 + 存储优化） |
 | `frontend/src/js/data-management.js` | 426 | 数据管理页：信笺统计/操作列表（导出导入/存储优化/数据清理/备份）/清空已完成待办 |
 | `frontend/src/css/components/ai-chat.css` | 2340 | AI 对话全部样式（含消息常驻操作栏/右键菜单图标/编辑模式/引用笔记浮层/chip/骨架屏动画/标签筛选/条目标签 badge/下拉菜单/置顶状态） |
@@ -2857,3 +2857,27 @@ Ctrl+8 AI 助手       ← 原 Ctrl+7
 | 迭代 2：改用 transform 驱动父容器 | 用 `transform: translateX(-20px)` 替代 `#topbar` 的 `padding-left: 4px`，GPU 加速不触发 relayout。结果：品牌标识移动方向正确，但 `translateX` 加在 `.topbar-left` 父容器上 + dropdown 的 `width: 0` 导致 flex 布局中品牌标识被双重位移（父容器 transform 20px + flex 布局位移 ~44px = ~64px），太快且超出边界 |
 | 迭代 3（最终方案）：transform 直接加在品牌标识上 | `.topbar-brand` 本身已有 `transition: transform 0.35s`，直接加 `transform: translateX(-36px)`，dropdown 只淡出不变宽。品牌标识移动独立于 flex 布局，无抖动，最终 `translateX(-36px)` 将品牌标识从 flex 起始右侧 28px 处移动到更左位置 |
 | 涉及文件 | [editor.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/editor.css)（4 次修改：dropdown 加 margin 过渡 → padding-left 删除 → .topbar-left transform → .topbar-brand transform）、[topbar.css](file:///d:/峡谷/Dev/本地项目/jot/frontend/src/css/components/topbar.css)（3 次修改：dropdown 加 margin 过渡 → 恢复 → .topbar-left 移除 transition） |
+
+---
+
+## 一百九十六、新增记忆点（用户消息 Token 提前展示）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 用户发送消息后，`SaveAIMessage` 已计算了用户消息自身的 token 数（`estimateTokens(content)`），但只返回了 `msgID`，前端传硬编码 `0` 给 `addMessage` 和 `createMsgActions`，导致 token 显示为"0 tokens"，要等 AI 完全回复完后 `ai:stream-done` 事件到达才更新为真实值。 |
+| **方案** | `SaveAIMessage` 改为返回 `SaveAIMessageResult{msgID, tokens}` 结构体，前端在调用后立即拿到 token 数并显示。 |
+| **后端变更** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：定义 `SaveAIMessageResult` 结构体（`MsgID uint` + `Tokens int`）；`SaveAIMessage()` 返回类型从 `(uint, error)` 改为 `(SaveAIMessageResult, error)`。详见 ∼2560 行。 |
+| **前端变更** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：`onSend()` 和 `handleResend()` 中从返回结果提取 `result.msgID` 和 `result.tokens`，将 tokens 传给 `addMessage` 和 `createMsgActions`（替代硬编码 0）。详见 ∼2050 行和 ∼3640 行。 |
+| **不变部分** | AI 流式流程完全不变。`ai:stream-done` 仍会用完整上下文 token 数（含 system 提示词）更新显示，从"自身 token"升为"完整上下文 token"，更精确。 |
+
+---
+
+## 一百九十七、新增记忆点（修复停止按钮在搜索/LLM 阶段的动画残留与错误误报）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 1) 联网搜索阶段点击停止后，搜索收集循环将 `context.Canceled` 当真实错误发射 `ai:search-error`，前端弹"联网搜失败"通知；2) LLM 流式阶段点击停止后，`client.Stream()` 检测到 `ctx.Err()` 后跳过 `OnDone` 和 `OnError` 静默返回，导致前端收不到任何完成事件，streaming bubble 永久残留（打字动画一直在转），事件监听器泄露；3) 用户点击停止后不该保存部分 AI 回复到数据库。 |
+| **后端修复** | [app.go](file:///d:/资源池/下水道/Dev/本地项目/jot/app.go)：共 6 处修改。精炼错误发射前（∼1659/∼2101）和搜索收集循环中（∼1717/∼2155）增加 `ctx.Err()` 检查，取消时跳过错误发射；`CallAIStream`/`CallAIStreamRegenerate` 的 LLM 调用返回后（∼1947/∼2374）增加兜底检测，取消时补发 `ai:stream-done`（空内容）确保前端清理。 |
+| **前端修复** | [ai-chat.js](file:///d:/资源池/下水道/Dev/本地项目/jot/frontend/src/js/ai-chat.js)：共 3 处。停止按钮点击时（∼455）立即移除当前 streaming 气泡（`messagesInnerEl.querySelector('.ai-msg-assistant:last-child')`）；`ai:search-error` 处理器（∼2200）增加 `!isStreaming` 防护；`ai:stream-done` 空内容时（∼2262）增加 `isStreaming` 检查，用户取消时抑制"AI 未返回内容"通知。 |
+| **DB 保障** | LLM 阶段取消时 `OnDone` 不被触发，assistant 消息不会保存到数据库。后端所有兜底路径均不调用 `SaveAIMessage`。✅ |
+| **不变部分** | 正常流式完成（不点击停止）的 `OnDone`/`OnError` 逻辑不变。`RefineSearchQuery` 同步调用不变。`ai:stream-done` 非空内容的处理和渲染逻辑不变。 |
