@@ -527,18 +527,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 一百九十一、新增记忆点（修复 escapeHtml 跨模块作用域导致历史会话卡死）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **Bug 现象** | 点击含有召回卡片的历史会话时，界面卡死无法进入会话；切换到无召回卡片的会话正常 |
-| **根因** | `escapeHtml` 函数定义在 [main.js](frontend/src/main.js) 中，但 HTML 使用 `<script type="module">` 加载。模块脚本的顶层函数是**模块作用域**，非全局。`renderRecallCards` 中调用 `escapeHtml()` 抛出 `ReferenceError`，导致 `addMessage` 中途退出，消息无法渲染完成，会话卡住 |
-| **修复方式** | 将 `renderRecallCards` 中的 `innerHTML` + `escapeHtml(card.title)` / `escapeHtml(card.file_ext)` 替换为 `document.createElement('span')` + `textContent`。对于静态 SVG 图标部分（`NOTE_ICON` 常量）仍使用 `innerHTML`，用户数据一律用 `textContent` 天然防 XSS。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **教训** | 项目前端已全面使用 ES Modules（`type="module"`），所有定义在模块文件顶层的函数名/变量名不会暴露到全局。需要跨文件共享的工具函数，要么在模块内内联定义，要么显式挂载到 `window` 对象上。`escapeHtml`、`escapeHtmlAttr` 等工具函数定义在 main.js 但未挂载到 `window`，其他模块文件不可直接引用 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`renderRecallCards` 函数中替换 `innerHTML` + `escapeHtml` 为 `textContent`） |
-| **不变内容** | `escapeHtml` 函数本身不变；`renderSearchSources` 函数不变（其搜索来源数据本身不使用 `escapeHtml`） |
-
-## 一百九十二、新增记忆点（编辑器骨架屏 — 点击即动）
+## 记忆点 1：编辑器骨架屏 — 点击即动
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -549,7 +538,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（重构 `openEditor` 流程）、[editor.css](frontend/src/css/components/editor.css)（新增 `.editor-skeleton` / `.editor-skeleton-line` / `@keyframes skeletonPulse`） |
 | **不变内容** | `closeEditor` 清理逻辑不变、`initCodeMirror` 参数/逻辑不变、`loadTagsForEditor` 函数签名不变、后端 `GetNoteContent`/`GetAllTags` 接口不变、全屏模式跳过动画但骨架屏流程一致 |
 
-## 一百九十三、新增记忆点（编辑器骨架屏回归修复 + scrollbar-gutter）
+## 记忆点 2：编辑器骨架屏回归修复 + scrollbar-gutter
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -560,7 +549,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |
 
-## 一百九十四、新增记忆点（顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动）
+## 记忆点 3：顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -572,7 +561,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十五、新增记忆点（用户消息 Token 提前展示）
+## 记忆点 4：用户消息 Token 提前展示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -584,7 +573,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十六、新增记忆点（修复停止按钮在搜索/LLM 阶段的动画残留与错误误报）
+## 记忆点 5：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -596,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十七、新增记忆点（修复日志初始化顺序）
+## 记忆点 6：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 一百九十八、新增记忆点（移除快速笔记功能）
+## 记忆点 7：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 一百九十九、新增记忆点（CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content）
+## 记忆点 8：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +619,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 二百、新增记忆点（代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突，多轮调试中）
+## 记忆点 9：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -643,10 +632,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
+## 记忆点 10：更多技能菜单固定高度与滚动支持
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | AI 助手"更多技能"下拉菜单向上展开时，若窗口高度不足或工具栏位置偏上，菜单内容被顶部视口遮挡，部分技能项无法查看和点击 |
+| **修复** | ① 给 `.ai-chat-skills-dropdown` 添加 `max-height: 300px` 和 `overflow-y: auto`，超出时显示纵向滚动条；② 添加 `scrollbar-color` 和 `::-webkit-scrollbar` 样式确保滚动条在 Firefox 和 WebKit 中均可见；③ 从 `min-width: 150px` 加宽到 `170px`；④ 缩短逐项动画延迟从 0.06~0.54s 到 0.02~0.26s，避免滚动容器中动画异常 |
+| **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-skills-dropdown` 样式修改）|
+| **涉及的 spec** | [`.trae/specs/fix-skills-dropdown-overflow/`](.trae/specs/fix-skills-dropdown-overflow/) |
+
+---
+
 ## 十、AGENTS.md 维护规范
 
 1. **第 1-9 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
-2. **新增记忆点只保留最近 10 个**（即 `一百九十一` ~ `二百`），每次新增一个记忆点时，删除最早的一个（例如新增 `二百零一` 时，删除 `一百九十一`）
+2. **新增记忆点只保留最近 10 个**（即 `记忆点 1` ~ `记忆点 10`），每次新增一个记忆点时，删除最早的一个（例如新增 `记忆点 11` 时，删除 `记忆点 1`）
 3. **不要无序追加"新增记忆点"章节**——保持编号连续，超出 10 个时执行"先进先出"淘汰
 4. **详细的变更记录请写在 `.trae/specs/` 或 `.trae/documents/` 中**，AGENTS.md 仅作为快速参考
 5. **更新关键文件统计**时，用 `Measure-Object -Line`（Windows）或 `wc -l`（Linux/macOS）获取实际行数

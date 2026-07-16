@@ -1119,7 +1119,11 @@
     position: absolute;
     bottom: calc(100% + 4px);
     right: 0;
-    min-width: 150px;
+    min-width: 170px;
+    max-height: 300px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1132,7 +1136,24 @@
         opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
         transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 4px 0;
-    overflow: visible;
+}
+
+.ai-chat-skills-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-chat-skills-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-chat-skills-dropdown::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+
+.ai-chat-skills-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
 }
 
 .ai-chat-skills-dropdown.open {
@@ -1153,19 +1174,19 @@
     transform: translateX(0);
 }
 
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(1) { transition-delay: 0.06s, 0.06s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(2) { transition-delay: 0.10s, 0.10s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(3) { transition-delay: 0.14s, 0.14s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(4) { transition-delay: 0.18s, 0.18s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(5) { transition-delay: 0.22s, 0.22s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(6) { transition-delay: 0.26s, 0.26s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(7) { transition-delay: 0.30s, 0.30s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(8) { transition-delay: 0.34s, 0.34s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(9) { transition-delay: 0.38s, 0.38s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(10) { transition-delay: 0.42s, 0.42s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(11) { transition-delay: 0.46s, 0.46s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(12) { transition-delay: 0.50s, 0.50s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(13) { transition-delay: 0.54s, 0.54s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(1) { transition-delay: 0.02s, 0.02s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(2) { transition-delay: 0.04s, 0.04s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(3) { transition-delay: 0.06s, 0.06s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(4) { transition-delay: 0.08s, 0.08s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(5) { transition-delay: 0.10s, 0.10s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(6) { transition-delay: 0.12s, 0.12s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(7) { transition-delay: 0.14s, 0.14s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(8) { transition-delay: 0.16s, 0.16s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(9) { transition-delay: 0.18s, 0.18s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(10) { transition-delay: 0.20s, 0.20s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(11) { transition-delay: 0.22s, 0.22s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(12) { transition-delay: 0.24s, 0.24s, 0s; }
+.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(13) { transition-delay: 0.26s, 0.26s, 0s; }
 
 .ai-chat-skills-item {
     display: flex;
