@@ -534,19 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 1) 联网搜索阶段点击停止后，搜索收集循环将 `context.Canceled` 当真实错误发射 `ai:search-error`，前端弹"联网搜失败"通知；2) LLM 流式阶段点击停止后，`client.Stream()` 检测到 `ctx.Err()` 后跳过 `OnDone` 和 `OnError` 静默返回，导致前端收不到任何完成事件，streaming bubble 永久残留（打字动画一直在转），事件监听器泄露；3) 用户点击停止后不该保存部分 AI 回复到数据库。 |
-| **后端修复** | [app.go](app.go)：共 6 处修改。精炼错误发射前（∼1659/∼2101）和搜索收集循环中（∼1717/∼2155）增加 `ctx.Err()` 检查，取消时跳过错误发射；`CallAIStream`/`CallAIStreamRegenerate` 的 LLM 调用返回后（∼1947/∼2374）增加兜底检测，取消时补发 `ai:stream-done`（空内容）确保前端清理。 |
-| **前端修复** | [ai-chat.js](frontend/src/js/ai-chat.js)：共 3 处。停止按钮点击时（∼455）立即移除当前 streaming 气泡（`messagesInnerEl.querySelector('.ai-msg-assistant:last-child')`）；`ai:search-error` 处理器（∼2200）增加 `!isStreaming` 防护；`ai:stream-done` 空内容时（∼2262）增加 `isStreaming` 检查，用户取消时抑制"AI 未返回内容"通知。 |
-| **DB 保障** | LLM 阶段取消时 `OnDone` 不被触发，assistant 消息不会保存到数据库。后端所有兜底路径均不调用 `SaveAIMessage`。✅ |
-| **不变部分** | 正常流式完成（不点击停止）的 `OnDone`/`OnError` 逻辑不变。`RefineSearchQuery` 同步调用不变。`ai:stream-done` 非空内容的处理和渲染逻辑不变。 |
-
----
-
-## 记忆点 2：修复日志初始化顺序
+## 记忆点 1：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -559,7 +547,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：移除快速笔记功能
+## 记忆点 2：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -570,7 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 4：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 3：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 5：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 4：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：更多技能菜单固定高度与滚动支持
+## 记忆点 5：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 6：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 8：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 7：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 8：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 9：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,6 +639,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端快捷键** | [main.js](frontend/src/main.js) `handleKeyboardNavigation` 中新增 `case '0'` 分支：异步检查设置 → switchView('grid') + loadNotes() → 显示 #lockScreen 遮罩带 entering 入场动画 → 激活后自动清空密码输入框。锁屏状态已有底层的 `lockScreen` 拦截守卫。 |
 | **锁子动效优化** | SVG 从单层 Feather 图标升级为 4 层结构（发光底层/锁体填充/锁梁独立/锁芯光点）。新增 5 组 keyframes 动效：`lockBreathe` 4s 机械呼吸（弹起→微过冲→保持→缓释 + drop-shadow 深度变化）、`lockAlert` 2s 聚焦光晕（scale 1.08 + 光晕脉动）、`keyholePulse` 2s 锁芯光点呼吸、`lockReject` 0.7s 错误拒绝（三次微颤→锁紧收缩→弹簧回弹）、`shackleEnter` 0.5s 入场锁梁弹性抬起。`overflow: visible` 防止锁梁被 viewBox 裁切。 |
 | **涉及文件** | [main.js](frontend/src/main.js)（Ctrl+0 快捷键）、[modals.css](frontend/src/css/components/modals.css)（5 组 keyframes + SVG 分层样式 + overflow visible）、[index.html](frontend/index.html)（SVG 分层结构更新） |
+
+---
+
+## 记忆点 10：NSIS 安装包记住安装路径
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | NSIS 安装包（`build/windows/installer/project.nsi`）在首次安装后，将用户选择的安装路径存入注册表 `HKCU\Software\jot\jot\InstallPath`。下次安装时自动恢复该路径。卸载时清理注册表记录。 |
+| **修改位置** | [project.nsi](build/windows/installer/project.nsi) 仅此一个文件，`wails_tools.nsh` 不动（自动生成）。三处修改：① `.onInit` 中用临时变量 `$0` 读取注册表，非空时覆盖 `$INSTDIR`（避免首次安装时置空）；② `Section` 安装段末尾写注册表保存路径；③ `Section "uninstall"` 卸载段末尾删除注册表值。 |
+| **边界处理** | 全新安装 → 注册表无值，`$INSTDIR` 保持 `InstallDir` 指令默认值；升级/重装 → 自动恢复上次路径；静默安装 `/S` → `.onInit` 照样执行；卸载 → 清理注册表记录。 |
+| **涉及文件** | [project.nsi](build/windows/installer/project.nsi) |
 
 ---
 

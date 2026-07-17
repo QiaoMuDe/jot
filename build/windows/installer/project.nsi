@@ -77,6 +77,10 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   ReadRegStr $0 HKCU "Software\jot\jot" "InstallPath"
+   ${If} $0 != ""
+       StrCpy $INSTDIR $0
+   ${EndIf}
 FunctionEnd
 
 Section
@@ -95,6 +99,8 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+
+    WriteRegStr HKCU "Software\jot\jot" "InstallPath" "$INSTDIR"
 SectionEnd
 
 Section "uninstall"
@@ -111,4 +117,6 @@ Section "uninstall"
     !insertmacro wails.unassociateCustomProtocols
 
     !insertmacro wails.deleteUninstaller
+
+    DeleteRegValue HKCU "Software\jot\jot" "InstallPath"
 SectionEnd
