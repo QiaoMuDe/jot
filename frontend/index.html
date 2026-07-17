@@ -509,8 +509,8 @@
                     <!-- 深度思考 -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">深度思考</span>
-                        <div class="ai-setting-toggle-row" id="aiSettingSearchLine">
-                            <span class="ai-setting-toggle-desc">发送消息时启用深度思考</span>
+                        <span class="font-setting-desc">发送消息时启用深度思考</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <div class="ai-chat-toggle-switch" id="aiSettingSearchToggle">
                                 <div class="ai-chat-toggle-knob"></div>
                             </div>
@@ -519,24 +519,24 @@
                     <!-- 引用截断字数 -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">引用截断</span>
-                        <div class="ai-setting-control">
+                        <span class="font-setting-desc">限制 AI 引用笔记内容的最大字符数（字符）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <input type="number" id="aiRefMaxChars" class="settings-input" value="10000" min="1" max="100000" style="width:100px;" />
-                            <span class="ai-setting-hint" style="white-space:nowrap;">字符/条</span>
                         </div>
                     </div>
                     <!-- 最大文件限制数 -->
                     <div class="ai-setting-item">
-                        <span class="ai-setting-label">最大文件限制数</span>
-                        <div class="ai-setting-control">
+                        <span class="ai-setting-label">最大上传文件大小</span>
+                        <span class="font-setting-desc">限制上传文件的最大大小（MB）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <input type="number" id="maxFileSize" class="settings-input" value="1" min="1" max="100" style="width:80px;" />
-                            <span class="ai-setting-hint" style="white-space:nowrap;">MB</span>
                         </div>
                     </div>
                     <!-- 卡片召回 -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">卡片召回</span>
-                        <div class="ai-setting-toggle-row" id="aiSettingCardRecallLine">
-                            <span class="ai-setting-toggle-desc">发送消息时自动召回相关笔记</span>
+                        <span class="font-setting-desc">发送消息时自动召回相关笔记</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <div class="ai-chat-toggle-switch" id="aiSettingCardRecallToggle">
                                 <div class="ai-chat-toggle-knob"></div>
                             </div>
@@ -545,15 +545,15 @@
                     <!-- 卡片召回数 -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">卡片召回数</span>
-                        <div class="ai-setting-control">
+                        <span class="font-setting-desc">设置每次召回的最大笔记数量（条）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <input type="number" id="aiSettingCardRecallLimit" class="settings-input" value="5" min="1" max="30" style="width:80px;" />
-                            <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
                         </div>
                     </div>
                         <!-- 知乎 Access Secret -->
                         <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
                             <span class="ai-setting-label">Access Secret</span>
-                            <div class="ai-setting-control" style="max-width:380px;">
+                            <div class="ai-setting-control" style="flex:1;max-width:none;">
                                 <input type="password" id="aiZhihuAccessSecret" class="settings-input" placeholder="输入知乎 Access Secret 后按回车保存" />
                                 <button id="aiZhihuToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                     <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -568,12 +568,12 @@
                                 </button>
                                 <button id="aiTestZhihuBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
                             </div>
-                            <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link zhihu-link">developer.zhihu.com</span> 注册获取 Access Secret，用于知乎搜索能力</span>
+                            <span class="ai-setting-hint" style="width:100%;padding-left:80px;">前往 <span class="ai-link zhihu-link">developer.zhihu.com</span> 注册获取 Access Secret，用于知乎搜索能力</span>
                         </div>
                         <!-- Tavily API Key -->
                         <div class="ai-setting-item" style="flex-wrap:wrap;row-gap:6px;">
                             <span class="ai-setting-label">API Key</span>
-                            <div class="ai-setting-control" style="max-width:380px;">
+                            <div class="ai-setting-control" style="flex:1;max-width:none;">
                                 <input type="password" id="aiTavilyApiKey" class="settings-input" placeholder="输入 Tavily API Key 后按回车保存" />
                                 <button id="aiTavilyToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                     <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -588,41 +588,41 @@
                                 </button>
                                 <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
                             </div>
-                            <span class="ai-setting-hint" style="width:100%;padding-left:92px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于联网搜索能力</span>
+                            <span class="ai-setting-hint" style="width:100%;padding-left:80px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于 Tavily 联网搜索</span>
                         </div>
                         <!-- 搜索结果数 -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">搜索结果数</span>
-                            <div class="ai-setting-control">
-                                <input type="number" id="aiSearchResultLimit" class="settings-input" value="5" min="1" max="30" style="width:80px;" />
-                                <span class="ai-setting-hint" style="white-space:nowrap;">条/次</span>
-                            </div>
+                            <span class="font-setting-desc">设置每次联网搜索的返回结果数量（条）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSearchResultLimit" class="settings-input" value="5" min="1" max="30" style="width:80px;" />
+                        </div>
                         </div>
                         <!-- 知乎搜索开关 -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">知乎搜索</span>
-                            <div class="ai-setting-toggle-row" id="aiSettingZhihuSearchLine">
-                                <span class="ai-setting-toggle-desc">发送消息时启用知乎站内搜索</span>
+                            <span class="font-setting-desc">发送消息时启用知乎站内搜索</span>
+                            <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                                 <div class="ai-chat-toggle-switch" id="aiSettingZhihuSearchToggle">
                                     <div class="ai-chat-toggle-knob"></div>
                                 </div>
                             </div>
-                        </div>
-                        <!-- 知乎全网搜索开关 -->
+                    </div>
+                    <!-- 知乎全网搜索开关 -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">全网搜索</span>
-                            <div class="ai-setting-toggle-row" id="aiSettingZhihuGlobalSearchLine">
-                                <span class="ai-setting-toggle-desc">发送消息时启用知乎全网搜索</span>
+                            <span class="font-setting-desc">发送消息时启用知乎全网搜索</span>
+                            <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                                 <div class="ai-chat-toggle-switch" id="aiSettingZhihuGlobalSearchToggle">
                                     <div class="ai-chat-toggle-knob"></div>
                                 </div>
                             </div>
-                        </div>
-                        <!-- Tavily搜索开关 -->
+                    </div>
+                    <!-- Tavily搜索开关 -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">Tavily搜索</span>
-                            <div class="ai-setting-toggle-row" id="aiSettingTavilySearchLine">
-                                <span class="ai-setting-toggle-desc">发送消息时启用 Tavily 联网搜索</span>
+                            <span class="font-setting-desc">发送消息时启用 Tavily 联网搜索</span>
+                            <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                                 <div class="ai-chat-toggle-switch" id="aiSettingTavilySearchToggle">
                                     <div class="ai-chat-toggle-knob"></div>
                                 </div>
@@ -657,18 +657,20 @@
                         </svg>
                         <span class="ai-group-title">笔记列表</span>
                     </div>
-                    <div class="page-size-control">
-                        <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">排序方式</label>
-                        <div class="segmented-control sort-segmented" id="sortControl">
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">排序方式</span>
+                        <span class="font-setting-desc">选择笔记列表的默认排序方式</span>
+                        <div class="segmented-control sort-segmented" id="sortControl" style="flex-shrink:0;">
                             <div class="segmented-indicator" id="sortIndicator"></div>
                             <button class="segmented-btn active" data-sort-value="updated_at">更新时间</button>
                             <button class="segmented-btn" data-sort-value="created_at">创建时间</button>
                             <button class="segmented-btn" data-sort-value="title">名称</button>
                         </div>
                     </div>
-                    <div class="page-size-control" style="margin-top:16px;">
-                        <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">每页条数</label>
-                        <div class="segmented-control" id="pageSizeControl">
+                    <div class="ai-setting-item" style="margin-top:12px;">
+                        <span class="ai-setting-label">每页条数</span>
+                        <span class="font-setting-desc" id="pageSizeSettingDesc">每页显示 20 条</span>
+                        <div class="segmented-control" id="pageSizeControl" style="flex-shrink:0;">
                             <div class="segmented-indicator" id="pageSizeIndicator"></div>
                             <button class="segmented-btn" data-value="20">20</button>
                             <button class="segmented-btn" data-value="40">40</button>
@@ -676,7 +678,6 @@
                             <button class="segmented-btn" data-value="80">80</button>
                             <button class="segmented-btn" data-value="100">100</button>
                         </div>
-                        <span class="page-size-label" id="pageSizeLabel">20 条 / 页</span>
                     </div>
                 </div>
                 <!-- 日志设置 -->
@@ -717,17 +718,18 @@
                     </div>
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">启用密码</span>
-                        <div class="ai-setting-toggle-row" id="screenLockToggleLine">
-                            <span class="ai-setting-toggle-desc">启动应用时需要输入密码</span>
+                        <span class="font-setting-desc">启动应用时需要输入密码</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
                             <div class="ai-chat-toggle-switch" id="screenLockToggle">
                                 <div class="ai-chat-toggle-knob"></div>
                             </div>
                         </div>
                     </div>
-                    <div class="ai-setting-item screen-lock-pwd-item" id="screenLockPasswordRow" style="display:none;">
+                    <div class="ai-setting-item" id="screenLockPasswordRow" style="display:none;">
                         <span class="ai-setting-label">设置密码</span>
-                        <div class="ai-setting-control" style="max-width:380px;">
-                            <input type="password" id="screenLockPasswordInput" class="settings-input" placeholder="输入锁屏密码后失焦自动保存" />
+                        <span class="font-setting-desc">设置锁屏密码保护你的笔记数据</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="password" id="screenLockPasswordInput" class="settings-input" placeholder="已设置密码，输入新密码可修改" style="width:260px;" />
                             <button id="screenLockPwdToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                 <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -751,10 +753,10 @@
                         <span class="ai-group-title">回收站清理</span>
                     </div>
                     <div class="ai-setting-item">
-                        <span class="ai-setting-label" style="width:100px;">自动清理天数</span>
-                        <div class="ai-setting-control" style="justify-content:flex-end;">
-                            <input type="number" id="trashCleanupRetentionDays" class="settings-input" value="30" min="1" max="365" style="width:260px;flex:none;" />
-                            <span class="ai-setting-hint" style="white-space:nowrap;">天前的笔记自动清理</span>
+                        <span class="ai-setting-label">自动清理天数</span>
+                        <span class="font-setting-desc">设置回收站笔记的自动清理天数</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="trashCleanupRetentionDays" class="settings-input" value="30" min="1" max="365" style="width:100px;" />
                         </div>
                     </div>
                 </div>

@@ -483,6 +483,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **服务商切换改为分段控件**（下拉菜单 → segmented-control + 弹簧曲线动画）
 - [x] **字体大小滑条**（按钮组 → range slider 10-32px + 实时预览区）
 - [x] **分段滑块指示器精度修复**（`(cw-8)/n` 公式消除溢出）
+- [x] **标签管理卡片重设计**（pill 形状标签芯片 + stagger 入场动画 + hover 上浮 + 删除动画 + 预设色圈选择器 + 虚线边框空状态 + 圆角输入框/按钮）
 
 ---
 
@@ -532,20 +533,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：设置页布局统一 + 分段控件重设计 + 锁屏密码功能
+## 记忆点 10：标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
-| **锁屏密码功能** | 新增完整锁屏密码功能：`SettingsConfig` 新增 `ScreenLockEnabled`/`ScreenLockPassword`（SHA-256 哈希存储）；前端锁屏遮罩层（全屏固定、毛玻璃 `backdrop-filter: blur(8px)`、解锁动画 blur+fade+translateY）；设置页开关+密码输入框（失焦自动保存、关闭时清空密码）；后端 `VerifyScreenLockPassword` 绑定方法。默认关闭不影响现有用户。涉及文件：[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[internal/app.go](internal/app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css) |
-| **设置项布局统一** | 所有设置项卡片改为三列布局：label 80px 左固定 / description flex:1 居中对齐 / control 右侧固定。涉及：外观（字体/大小/主题）、编辑器（语法高亮/全屏/代码主题）、AI 连接（配置预设/服务商/API地址/Key/模型）、搜索（深度思考/召回/知乎/全网/Tavily/密码开关）、数据管理（回收站清理）。所有 toggle 开关/输入框/下拉框在同一条垂直线上结束。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
-| **服务商切换改为分段控件** | AI 服务商选择从下拉菜单（theme-select/theme-select-dropdown）改为分段控件（segmented-control + segmented-btn）。切换时自动填充默认 URL、清空模型列表、保存配置。指示器跟随 spring 曲线动画移动。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
-| **分段滑块 CSS 重设计** | 所有分段控件统一重设计：高度 38px→38px（不变）、padding 2px、`inset box-shadow` 细腻微光、指示器弹簧曲线 `cubic-bezier(0.34, 1.2, 0.64, 1)` + `box-shadow` 浮起立体感、未选中文字 `--text-muted`、仅非 active 按钮 hover 变色、`user-select: none`。修复指示器溢出问题：`segW = (cw-8)/btns.length` 替代 `(cw-4)/n`，7 处统一修改，确保最后一个按钮指示器右边缘不超出容器。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
-| **字体大小滑条** | 字体大小设置从按钮组（小/偏小/默认/大/特大+自定义 16px 输入）改为 range slider（10-32px）+ 实时预览区（铺满卡片宽度，使用当前字体渲染示例文本）。拖动实时更新页面字号，松开自动保存。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
-| **涉及的 spec** | 无专门 spec 文档（均为渐进式修复，未创建独立 spec） |
+| **标签芯片 redesign** | 设置页标签管理卡片全新设计：标签从简单 `border-radius: var(--radius-md)` 矩形改为 `border-radius: 20px` pill 形状，圆润柔和。hover 时整体上浮 `translateY(-1px) scale(1.03)` + 投影加深。带有入场动画 `tagEnter`（scale 0.7 + fade in），JS 控制 `animation-delay: index * 40ms` 实现 stagger 波浪效果。删除时添加 `.removing` class 触发 `tagRemove` 动画（scale 0.5 + fade out）。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
+| **预设色圈选择器** | 移除原生 `<input type="color">`，改为 9 个预设颜色圆点（`.tag-color-dot`），hover 放大 1.2x，选中时双层边框高亮（`box-shadow: 0 0 0 2px card-bg, 0 0 0 4px text-primary`）。点击切换 `.active` 并同步 `els.newTagColor.value`。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
+| **添加按钮与输入框** | 输入框 `.tag-input` 为 pill 圆角 + `1.5px` 边框 + focus 彩色光晕（`color-mix(in srgb, var(--accent) 12%, transparent)`）。添加按钮 `.tag-add-btn` 含 SVG 加号图标，pill 形状 + hover 上浮投影 + active 缩放反馈。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+| **删除按钮** | 删除按钮改为白色半透明圆（`rgba(255,255,255,0.25)`），hover 时背景加深 + 旋转 90° + 不透明度 1，active 时缩小。使用 `closest('.tag-item')` 传递 DOM 引用实现局部动画，不影响其他标签。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
+| **空状态** | 空标签列表改为虚线边框容器（`border: 1.5px dashed var(--border)`）+ 标签 SVG 图标 + 提示文案"暂无标签，在上方输入名称添加"，带 fadeIn + translateY 入场动画。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
+| **涉及的 spec** | [`.trae/documents/settings-tag-management-redesign-plan.md`](.trae/documents/settings-tag-management-redesign-plan.md) |
 
 ---
 
-## 记忆点 2：品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
+## 记忆点 1：品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -557,7 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：用户消息 Token 提前展示
+## 记忆点 2：用户消息 Token 提前展示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -569,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
+## 记忆点 3：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：修复日志初始化顺序
+## 记忆点 4：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：移除快速笔记功能
+## 记忆点 5：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 7：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 6：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 8：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 7：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：更多技能菜单固定高度与滚动支持
+## 记忆点 8：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 9：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|

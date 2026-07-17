@@ -754,6 +754,19 @@
   left: 14px;
 }
 
+/* AI 设置项三栏布局中的 toggle 开关（ai-setting-item > ai-setting-control > .ai-chat-toggle-switch） */
+.ai-setting-item .ai-setting-control .ai-chat-toggle-switch {
+  cursor: pointer;
+}
+
+.ai-setting-item .ai-setting-control .ai-chat-toggle-switch.active {
+  background: var(--accent);
+}
+
+.ai-setting-item .ai-setting-control .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
+  left: 14px;
+}
+
 /* 设置页开关禁用状态 */
 .ai-setting-toggle-row.disabled {
     opacity: 0.5;
@@ -1008,7 +1021,7 @@
 }
 
 /* ── 锁屏密码设置卡片 ── */
-.screen-lock-pwd-item {
+#screenLockPasswordRow {
   overflow: hidden;
   max-height: 60px;
   opacity: 1;
@@ -1016,8 +1029,8 @@
   transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin 0.2s ease-out;
 }
 
-.screen-lock-pwd-item[style*="display: none"],
-.screen-lock-pwd-item[style*="display:none"] {
+#screenLockPasswordRow[style*="display: none"],
+#screenLockPasswordRow[style*="display:none"] {
   max-height: 0;
   opacity: 0;
   margin-top: 0;
