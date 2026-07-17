@@ -105,71 +105,83 @@
   display: none !important;
 }
 
-/* 字体大小控制 */
-.font-size-controls {
+/* ===== 字体大小滑条 ===== */
+.font-size-slider-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.font-size-presets {
-  display: flex;
-  gap: 4px;
-}
-
-.font-size-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font-size: 0.75rem;
-  font-family: var(--font-family);
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.font-size-btn:hover {
-  border-color: var(--accent-light);
-  background: var(--accent-lighter);
-  transform: translateY(-1px);
-}
-
-.font-size-btn.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.font-size-custom {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.font-size-input {
-  width: 56px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 0.75rem;
-  font-family: var(--font-family);
-  color: var(--text-primary);
+.font-size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
   outline: none;
-  background: var(--input-bg);
-  transition: var(--transition);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.font-size-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.font-size-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+
+.font-size-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.font-size-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 36px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.font-size-input:focus {
-  border-color: var(--accent);
-  background: var(--card-bg);
+/* ===== 字体预览区 ===== */
+.font-preview-row {
+  margin-top: 6px;
 }
 
-.font-size-unit {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.font-preview-text {
+  padding: 10px 14px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: font-size 0.1s;
 }
 
 /* iOS 风格开关 */

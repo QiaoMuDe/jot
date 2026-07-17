@@ -821,3 +821,187 @@
     transform: translateX(40px) scale(0.96);
   }
 }
+
+/* ==========================================================================
+   Section L: Lock Screen (雾散之门)
+   ========================================================================== */
+
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease-out;
+}
+
+.lock-screen-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg, #1a1a2e) 85%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: backdrop-filter 0.4s ease-out, -webkit-backdrop-filter 0.4s ease-out;
+}
+
+.lock-screen-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+
+.lock-screen-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--accent, #6366f1);
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+.lock-screen-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.lock-screen-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #9ca3af);
+  margin: -8px 0 4px 0;
+}
+
+.lock-screen-input-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+}
+
+.lock-screen-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 44px 0 16px;
+  background: var(--card-bg, #1e1e2e);
+  border: 1.5px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-lg, 12px);
+  color: var(--text-primary, #e0e0e0);
+  font-size: 0.938rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.lock-screen-input::placeholder {
+  color: var(--text-muted, #6b7280);
+}
+
+.lock-screen-input:focus {
+  border-color: var(--accent, #6366f1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #6366f1) 20%, transparent);
+}
+
+/* 隐藏浏览器原生密码显示/清除按钮 */
+.lock-screen-input::-ms-reveal,
+.lock-screen-input::-ms-clear {
+  display: none;
+}
+
+.lock-screen-toggle-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+  padding: 0;
+}
+
+.lock-screen-toggle-btn:hover {
+  color: var(--text-secondary, #9ca3af);
+  background: var(--hover-bg, rgba(128,128,128,0.08));
+}
+
+.lock-screen-btn {
+  width: 100%;
+  max-width: 280px;
+  height: 44px;
+  background: var(--accent, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-lg, 12px);
+  font-size: 0.938rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  font-family: inherit;
+}
+
+.lock-screen-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent, #6366f1) 30%, transparent);
+}
+
+.lock-screen-btn:active {
+  transform: translateY(0);
+}
+
+.lock-screen-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.lock-screen-error {
+  font-size: 0.813rem;
+  color: var(--error, #ef4444);
+  margin: -8px 0 0 0;
+}
+
+/* 解锁退出动画 */
+.lock-screen.exit {
+  pointer-events: none;
+}
+
+.lock-screen.exit .lock-screen-backdrop {
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  opacity: 0;
+}
+
+.lock-screen.exit .lock-screen-content {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+/* 输入的抖动动画（错误密码） */
+@keyframes lock-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.lock-screen-input.shake {
+  animation: lock-shake 0.4s ease-in-out;
+  border-color: var(--error, #ef4444);
+}

@@ -50,7 +50,7 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
@@ -72,7 +72,7 @@ jot/                                    # 项目根目录
 │   │           ├── editor.css          # 编辑器面板/CM6 主题/全屏/预览/代码块复制按钮
 │   │           ├── dropdowns.css       # 右键菜单/更多菜单/下拉选择器
 │   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层/快捷键页面样式（shortcut-row flex 水平布局）
-│   │           ├── settings-panel.css  # 设置页分段控件/开关/按钮
+│   │           ├── settings-panel.css  # 设置页分段控件/滑块/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
@@ -144,7 +144,7 @@ jot/                                    # 项目根目录
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
-| **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小预设/自定义 + 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
+| **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
 | **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入（引用笔记/角色扮演/追问引用/上传文件）） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
@@ -417,7 +417,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
-7. **过度动画与交互反馈**：13 个 keyframes、stagger 延迟、hover 分层反馈、spring 弹性缓动、骨架屏 shimmer
+7. **过度动画与交互反馈**：13 个 keyframes、stagger 延迟、hover 分层反馈、spring 弹性缓动、骨架屏 shimmer、分段滑块弹簧曲线（`cubic-bezier(0.34, 1.2, 0.64, 1)`）、字体滑条实时预览
 
 8. **无 UI 框架依赖**：无 Vue/React/Svelte，纯手写 DOM 操作，极致轻量
 
@@ -478,6 +478,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **用户消息 Token 提前展示**（SaveAIMessage 返回 token 数，立即显示）
 - [x] **停止按钮全阶段防护**（搜索/LLM 阶段取消不报错不残留）
 - [x] **Logger 初始化顺序修复**（NewApp 阶段初始化 Logger，startup 清理冗余代码）
+- [x] **锁屏密码功能**（SHA-256 哈希存储 + 毛玻璃锁屏遮罩 + 设置页开关/密码配置 + 启动验证）
+- [x] **设置项布局统一**（所有卡片 label 左/描述中/控件右三列对齐）
+- [x] **服务商切换改为分段控件**（下拉菜单 → segmented-control + 弹簧曲线动画）
+- [x] **字体大小滑条**（按钮组 → range slider 10-32px + 实时预览区）
+- [x] **分段滑块指示器精度修复**（`(cw-8)/n` 公式消除溢出）
 
 ---
 
@@ -527,18 +532,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：编辑器骨架屏回归修复 + scrollbar-gutter
+## 记忆点 1：设置页布局统一 + 分段控件重设计 + 锁屏密码功能
 
 | 记忆点 | 内容 |
 |--------|------|
-| **回归 1：`.md` 查看模式底部按钮显示错误** | 阶段一重构时遗漏了 `els.editorModeBtns.forEach(...)` 切换到"预览"高亮 + `els.mdRendered.innerHTML` 初始占位，导致 `data-mode='preview'` 正常但底部按钮显示"纯文本"选中。修复：在 `isReadOnly && isMd` 分支中恢复这两行 |
-| **回归 2：召回卡片打开笔记显示错误** | `noteId` 不在 `state.notes` 缓存中时，阶段一 `noteData=null`，`ext` 默认 `.txt`，`isMd=false`，编辑时间和标签均不正确。修复：阶段二 `Promise.all` 完成后追加校正块，检测 `noteData.file_ext` 变化后重设 `ext`/`isMd` 并更新 UI（文件后缀、M/T 按钮、预览模式、编辑时间、标签重绘） |
-| **回归 3：标签未高亮** | 从召回卡片打开时 `state.selectedTags` 在 `loadTagsForEditor` 之后才填充，`renderTagSelector` 渲染时看不到选中标签。修复：校正块中调用 `renderTagSelector(isReadOnly)` 重绘 |
-| **技术改动** | `const ext`/`const isMd` → `let ext`/`let isMd`，允许阶段二重赋值；`renderTagSelector` 在 `openEditor` 中可被直接调用 |
-| **笔记卡片宽度跳动** | `overflow: hidden` 导致滚动条消失，`#mainContent` 内容区变宽 ~17px，网格卡片随之变宽。修复：[main-content.css](frontend/src/css/components/main-content.css) 添加 `scrollbar-gutter: stable`，让滚动条始终预留空间，卡片宽度不再跳动 |
-| **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 校正块 + `ext`/`isMd` 改为 `let`）、[main-content.css](frontend/src/css/components/main-content.css)（新增 `scrollbar-gutter: stable`） |
+| **锁屏密码功能** | 新增完整锁屏密码功能：`SettingsConfig` 新增 `ScreenLockEnabled`/`ScreenLockPassword`（SHA-256 哈希存储）；前端锁屏遮罩层（全屏固定、毛玻璃 `backdrop-filter: blur(8px)`、解锁动画 blur+fade+translateY）；设置页开关+密码输入框（失焦自动保存、关闭时清空密码）；后端 `VerifyScreenLockPassword` 绑定方法。默认关闭不影响现有用户。涉及文件：[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[internal/app.go](internal/app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css) |
+| **设置项布局统一** | 所有设置项卡片改为三列布局：label 80px 左固定 / description flex:1 居中对齐 / control 右侧固定。涉及：外观（字体/大小/主题）、编辑器（语法高亮/全屏/代码主题）、AI 连接（配置预设/服务商/API地址/Key/模型）、搜索（深度思考/召回/知乎/全网/Tavily/密码开关）、数据管理（回收站清理）。所有 toggle 开关/输入框/下拉框在同一条垂直线上结束。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+| **服务商切换改为分段控件** | AI 服务商选择从下拉菜单（theme-select/theme-select-dropdown）改为分段控件（segmented-control + segmented-btn）。切换时自动填充默认 URL、清空模型列表、保存配置。指示器跟随 spring 曲线动画移动。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
+| **分段滑块 CSS 重设计** | 所有分段控件统一重设计：高度 38px→38px（不变）、padding 2px、`inset box-shadow` 细腻微光、指示器弹簧曲线 `cubic-bezier(0.34, 1.2, 0.64, 1)` + `box-shadow` 浮起立体感、未选中文字 `--text-muted`、仅非 active 按钮 hover 变色、`user-select: none`。修复指示器溢出问题：`segW = (cw-8)/btns.length` 替代 `(cw-4)/n`，7 处统一修改，确保最后一个按钮指示器右边缘不超出容器。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
+| **字体大小滑条** | 字体大小设置从按钮组（小/偏小/默认/大/特大+自定义 16px 输入）改为 range slider（10-32px）+ 实时预览区（铺满卡片宽度，使用当前字体渲染示例文本）。拖动实时更新页面字号，松开自动保存。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+| **涉及的 spec** | 无专门 spec 文档（均为渐进式修复，未创建独立 spec） |
 
-## 记忆点 2：顶栏品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
+---
+
+## 记忆点 2：品牌标识动画重构 — 3 次迭代终用 transform 独立驱动
 
 | 记忆点 | 内容 |
 |--------|------|

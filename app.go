@@ -4,7 +4,9 @@ import (
 	"archive/zip"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1176,6 +1178,18 @@ func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
 		}
 	}
 	return nil
+}
+
+// VerifyScreenLockPassword 验证锁屏密码
+// 返回 true 表示验证通过，false 表示验证失败
+// 如果数据库中密码为空（功能关闭），始终返回 true
+func (a *App) VerifyScreenLockPassword(password string) bool {
+	stored := a.settingService.Get("screen_lock_password")
+	if stored == "" {
+		return true
+	}
+	hash := sha256.Sum256([]byte(password + "jot-screen-lock-salt"))
+	return hex.EncodeToString(hash[:]) == stored
 }
 
 // GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 10000

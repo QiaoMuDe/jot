@@ -497,3 +497,7 @@ export function UpdateTodo(arg1, arg2) {
 export function VacuumDatabase() {
   return window['go']['main']['App']['VacuumDatabase']();
 }
+
+export function VerifyScreenLockPassword(arg1) {
+  return window['go']['main']['App']['VerifyScreenLockPassword'](arg1);
+}

@@ -1,6 +1,10 @@
 package services
 
-import "strconv"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
+)
 
 // PaginatedResult 分页查询结果的通用结构
 type PaginatedResult struct {
@@ -78,6 +82,8 @@ type SettingsConfig struct {
 	AISearchResultLimit       int    `json:"ai_search_result_limit"`
 	TrashCleanupRetentionDays int    `json:"trash_cleanup_retention_days"`
 	LogLevel                  int    `json:"log_level"`
+	ScreenLockEnabled         bool   `json:"screen_lock_enabled"`
+	ScreenLockPassword        string `json:"screen_lock_password"`
 }
 
 // GetAllSettings 从 SettingService 读取全部设置项
@@ -108,6 +114,8 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AISearchResultLimit:       parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		TrashCleanupRetentionDays: parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 		LogLevel:                  parseIntSetting(s.Get("log_level"), 1),
+		ScreenLockEnabled:         parseBoolSetting(s.Get("screen_lock_enabled")),
+		ScreenLockPassword:        s.Get("screen_lock_password"),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
@@ -162,6 +170,18 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	cfg.TavilyAPIKey = EncodeB64(cfg.TavilyAPIKey)
 	cfg.ZhihuAccessSecret = EncodeB64(cfg.ZhihuAccessSecret)
 
+	// 处理锁屏密码：非空则 SHA-256 哈希后存储，空则从数据库读取旧值保留
+	// 如果锁屏被关闭，清空密码
+	if !cfg.ScreenLockEnabled {
+		cfg.ScreenLockPassword = ""
+	} else if cfg.ScreenLockPassword == "" {
+		oldPassword := s.Get("screen_lock_password")
+		cfg.ScreenLockPassword = oldPassword
+	} else {
+		hash := sha256.Sum256([]byte(cfg.ScreenLockPassword + "jot-screen-lock-salt"))
+		cfg.ScreenLockPassword = hex.EncodeToString(hash[:])
+	}
+
 	sets := map[string]string{
 		"theme":                        cfg.Theme,
 		"font_family":                  cfg.FontFamily,
@@ -188,6 +208,8 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_search_result_limit":       strconv.Itoa(cfg.AISearchResultLimit),
 		"trash_cleanup_retention_days": strconv.Itoa(cfg.TrashCleanupRetentionDays),
 		"log_level":                    strconv.Itoa(cfg.LogLevel),
+		"screen_lock_enabled":          strconv.FormatBool(cfg.ScreenLockEnabled),
+		"screen_lock_password":         cfg.ScreenLockPassword,
 	}
 
 	for k, v := range sets {

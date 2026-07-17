@@ -556,6 +556,8 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_search_result_limit", Value: "5"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},
 		{Key: "log_level", Value: "1"},
+		{Key: "screen_lock_enabled", Value: "false"},
+		{Key: "screen_lock_password", Value: ""},
 	}
 
 	var toInsert []models.Setting

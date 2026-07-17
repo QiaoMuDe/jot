@@ -403,8 +403,9 @@ const els = {
     // 排序分段控件
     sortControl: $('sortControl'),
     sortIndicator: $('sortIndicator'),
-    fontSizePresets: $('fontSizePresets'),
-    fontSizeInput: $('fontSizeInput'),
+    fontSizeSlider: $('fontSizeSlider'),
+    fontSizeValue: $('fontSizeValue'),
+    fontPreviewText: $('fontPreviewText'),
     // 回收站
     trashList: $('trashList'),
     trashListInner: $('trashListInner'),
@@ -517,10 +518,8 @@ const els = {
     // AI 配置
     aiBaseURL: $('aiBaseURL'),
     aiAPIKey: $('aiAPIKey'),
-    aiProviderSelect: $('aiProviderSelect'),
-    aiProviderTrigger: $('aiProviderTrigger'),
-    aiProviderDropdown: $('aiProviderDropdown'),
-    aiProviderLabel: $('aiProviderLabel'),
+    aiProviderSegmented: $('aiProviderSegmented'),
+    aiProviderIndicator: $('aiProviderIndicator'),
     aiModelTrigger: $('aiModelTrigger'),
     aiModelDropdown: $('aiModelDropdown'),
     aiModelLabel: $('aiModelLabel'),
@@ -1244,13 +1243,25 @@ function updateFontSettingsUI(fontFamily, fontSize) {
     // 更新字体族显示
     els.fontFamilyDisplay.textContent = fontFamily;
 
-    // 更新大小预设高亮
-    els.fontSizePresets.querySelectorAll('.font-size-btn').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.size, 10) === fontSize);
-    });
+    // 更新滑条和数值显示
+    if (els.fontSizeSlider) {
+        els.fontSizeSlider.value = fontSize;
+    }
+    if (els.fontSizeValue) {
+        els.fontSizeValue.textContent = fontSize + 'px';
+    }
 
-    // 更新自定义输入框
-    els.fontSizeInput.value = fontSize;
+    // 更新预览区
+    updateFontPreview(fontFamily, fontSize);
+}
+
+/**
+ * 更新字体预览区
+ */
+function updateFontPreview(fontFamily, fontSize) {
+    if (!els.fontPreviewText) return;
+    els.fontPreviewText.style.fontFamily = fontFamily + ', system-ui, -apple-system, sans-serif';
+    els.fontPreviewText.style.fontSize = fontSize + 'px';
 }
 
 // 缓存全量字体列表，供搜索过滤使用
@@ -1542,24 +1553,15 @@ function initFontSettings() {
         }
     });
 
-    // 字体大小预设
-    els.fontSizePresets.addEventListener('click', (e) => {
-        const btn = e.target.closest('.font-size-btn');
-        if (!btn) return;
-        const size = parseInt(btn.dataset.size, 10);
+    // 字体大小滑条
+    els.fontSizeSlider.addEventListener('input', () => {
+        const size = parseInt(els.fontSizeSlider.value, 10);
         applyFontSize(size);
         updateFontSettingsUI(getCurrentFontFamily(), size);
-        saveSettings();
-        nm.show('字体设置已保存', 'success');
     });
 
-    // 自定义字体大小输入
-    els.fontSizeInput.addEventListener('change', () => {
-        const size = parseInt(els.fontSizeInput.value, 10);
-        if (isNaN(size) || size < 10 || size > 32) {
-            els.fontSizeInput.value = getCurrentFontSize();
-            return;
-        }
+    els.fontSizeSlider.addEventListener('change', () => {
+        const size = parseInt(els.fontSizeSlider.value, 10);
         applyFontSize(size);
         updateFontSettingsUI(getCurrentFontFamily(), size);
         saveSettings();
@@ -1603,8 +1605,9 @@ async function initSortSettings() {
             const index = btns.indexOf(btn);
             if (index >= 0) {
                 const cw = els.sortControl.offsetWidth;
-                const segW = (cw - 4) / btns.length;
+                const segW = (cw - 8) / btns.length;
                 els.sortIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                els.sortIndicator.style.width = `${segW}px`;
             }
         };
         els.sortControl.querySelectorAll('.segmented-btn').forEach(btn => {
@@ -1629,8 +1632,9 @@ async function initSortSettings() {
             const index = btns.indexOf(btn);
             if (index >= 0) {
                 const cw = els.pageSizeControl.offsetWidth;
-                const segW = (cw - 4) / btns.length;
+                const segW = (cw - 8) / btns.length;
                 els.pageSizeIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                els.pageSizeIndicator.style.width = `${segW}px`;
             }
         };
         els.pageSizeControl.querySelectorAll('.segmented-btn').forEach(btn => {
@@ -1654,18 +1658,29 @@ async function initSortSettings() {
 
 // ── 全局 AI 辅助函数 ──
 function getActiveProvider() {
-    const dropdown = els.aiProviderDropdown;
-    const active = dropdown?.querySelector('.theme-select-item.active');
+    const seg = els.aiProviderSegmented;
+    const active = seg?.querySelector('.segmented-btn.active');
     return active?.dataset.providerValue || 'openai';
 }
 
 function setActiveProvider(value) {
-    const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
-    const dropdown = els.aiProviderDropdown;
-    dropdown.querySelectorAll('.theme-select-item').forEach(i => i.classList.remove('active'));
-    const target = dropdown?.querySelector(`[data-provider-value="${value}"]`);
+    const seg = els.aiProviderSegmented;
+    if (!seg) return;
+    seg.querySelectorAll('.segmented-btn').forEach(btn => btn.classList.remove('active'));
+    const target = seg.querySelector(`[data-provider-value="${value}"]`);
     if (target) target.classList.add('active');
-    if (els.aiProviderLabel) els.aiProviderLabel.textContent = labels[value] || value;
+    // 移动指示器
+    const indicator = els.aiProviderIndicator;
+    if (indicator && target) {
+        const btns = Array.from(seg.querySelectorAll('.segmented-btn'));
+        const index = btns.indexOf(target);
+        if (index >= 0) {
+            const cw = seg.offsetWidth;
+            const segW = (cw - 8) / btns.length;
+            indicator.style.transform = `translateX(${2 + index * segW}px)`;
+            indicator.style.width = `${segW}px`;
+        }
+    }
 }
 
 function updateProviderUI() {
@@ -1786,52 +1801,36 @@ async function initAISettings() {
         }
     }
 
-    // ── 服务商下拉菜单事件 ──
-    const provTrigger = els.aiProviderTrigger;
-    const provDropdown = els.aiProviderDropdown;
+    // ── 服务商分段控件事件 ──
+    const provSeg = els.aiProviderSegmented;
+    if (provSeg) {
+        provSeg.addEventListener('click', (e) => {
+            const btn = e.target.closest('.segmented-btn');
+            if (!btn) return;
+            const value = btn.dataset.providerValue;
+            if (!value || value === getActiveProvider()) return;
 
-    if (provTrigger && provDropdown) {
-        // 点击触发按钮切换下拉菜单
-        provTrigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            provTrigger.classList.toggle('open');
-            provDropdown.classList.toggle('open');
-        });
-
-        // 点击选项
-        provDropdown.addEventListener('click', (e) => {
-            const item = e.target.closest('.theme-select-item');
-            if (!item) return;
-            const value = item.dataset.providerValue;
-            if (!value) return;
             setActiveProvider(value);
-            provDropdown.classList.remove('open');
-            provTrigger.classList.remove('open');
-            // 更新 UI 并保存
-            updateProviderUI();
-            // 切换服务商时：如果 URL 为空或匹配旧默认值，则填入新默认 URL
+
+            // 切换时清空模型列表、为 URL 空或匹配旧默认值时填入新默认 URL
             const defaultURLs = {
                 openai: 'https://api.openai.com/v1',
                 ollama: 'http://localhost:11434',
             };
             const oldDefaults = { openai: 'https://api.openai.com/v1', ollama: 'http://localhost:11434' };
             const currentURL = els.aiBaseURL.value.trim();
-            // 反向映射：判断当前 URL 是否属于某个服务商的默认值
             const isOldDefault = Object.values(oldDefaults).includes(currentURL);
             if (!currentURL || isOldDefault) {
                 els.aiBaseURL.value = defaultURLs[value] || currentURL;
             }
+
+            // 清空模型列表
             els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
             els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
             const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
             if (wrap) wrap.style.display = 'none';
-            saveSettings().then(() => nm.show('AI 配置已保存', 'success'));
-        });
 
-        // 点击外部关闭
-        document.addEventListener('click', () => {
-            provDropdown.classList.remove('open');
-            provTrigger.classList.remove('open');
+            saveSettings().then(() => nm.show('AI 配置已保存', 'success'));
         });
     }
 
@@ -2277,6 +2276,57 @@ async function initAISettings() {
         });
     }
 
+    // ── 锁屏密码 toggle ──
+    const screenLockToggleLine = document.getElementById('screenLockToggleLine');
+    if (screenLockToggleLine) {
+        screenLockToggleLine.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const toggleSwitch = document.getElementById('screenLockToggle');
+            if (!toggleSwitch) return;
+            const isActive = toggleSwitch.classList.toggle('active');
+            const pwdRow = document.getElementById('screenLockPasswordRow');
+            if (pwdRow) {
+                pwdRow.style.display = isActive ? '' : 'none';
+            }
+            // 关闭锁屏时清空密码输入框，使后端清除密码
+            if (!isActive) {
+                const pwdInput = document.getElementById('screenLockPasswordInput');
+                if (pwdInput) pwdInput.value = '';
+            } else {
+                // 重新开启时，因密码已被清空，重置占位提示
+                const pwdInput = document.getElementById('screenLockPasswordInput');
+                if (pwdInput) pwdInput.placeholder = '输入锁屏密码后失焦自动保存';
+            }
+            await saveSettings();
+            nm.show(isActive ? '锁屏密码已启用' : '锁屏密码已关闭', 'info');
+        });
+    }
+
+    // 锁屏密码输入框失去焦点时保存（参考其他输入框的 change 事件模式）
+    const screenLockPwdInput = document.getElementById('screenLockPasswordInput');
+    if (screenLockPwdInput) {
+        screenLockPwdInput.addEventListener('change', async () => {
+            await saveSettings();
+            // 输入框非空 → 已设置密码，清空输入框 + 更新占位提示
+            if (screenLockPwdInput.value) {
+                screenLockPwdInput.value = '';
+                screenLockPwdInput.placeholder = '已设置密码，输入新密码可修改';
+            }
+            nm.show('锁屏密码已保存', 'success');
+        });
+    }
+
+    // 锁屏密码输入框的显示/隐藏
+    const screenLockPwdToggle = document.getElementById('screenLockPwdToggleBtn');
+    if (screenLockPwdToggle && screenLockPwdInput) {
+        screenLockPwdToggle.addEventListener('click', () => {
+            const isPassword = screenLockPwdInput.type === 'password';
+            screenLockPwdInput.type = isPassword ? 'text' : 'password';
+            screenLockPwdToggle.querySelector('.toggle-eye').style.display = isPassword ? 'none' : '';
+            screenLockPwdToggle.querySelector('.toggle-eye-off').style.display = isPassword ? '' : 'none';
+        });
+    }
+
     // ── 引用截断字数自动保存 ──
     const refMaxChars = document.getElementById('aiRefMaxChars');
     if (refMaxChars) {
@@ -2499,15 +2549,8 @@ async function switchProfile(id, silent) {
         const cfg = await window.go.main.App.GetAIConfig();
         els.aiBaseURL.value = cfg.base_url || '';
         els.aiAPIKey.value = cfg.api_key || '';
-        // 更新服务商下拉
-        if (els.aiProviderDropdown) {
-            const items = els.aiProviderDropdown.querySelectorAll('.theme-select-item');
-            items.forEach(item => item.classList.toggle('active', item.dataset.providerValue === cfg.provider));
-        }
-        if (els.aiProviderLabel) {
-            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
-            els.aiProviderLabel.textContent = labels[cfg.provider] || 'OpenAI 兼容';
-        }
+        // 更新服务商分段控件
+        setActiveProvider(cfg.provider);
         // 重置模型下拉
         els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
         els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
@@ -5075,8 +5118,9 @@ function initEventListeners() {
             const index = btns.indexOf(btn);
             if (index >= 0) {
                 const cw = els.logLevelControl.offsetWidth;
-                const segW = (cw - 4) / btns.length;
+                const segW = (cw - 8) / btns.length;
                 els.logLevelIndicator.style.transform = `translateX(${2 + index * segW}px)`;
+                els.logLevelIndicator.style.width = `${segW}px`;
             }
         };
         els.logLevelControl.querySelectorAll('.segmented-btn').forEach(btn => {
@@ -7036,6 +7080,7 @@ function initSearchModalListeners() {
 
 async function init() {
     initEventListeners();
+    initLockScreenEvents();
     initFontSettings();
     initThemeSettings();
     initScrollLoading();
@@ -7083,6 +7128,110 @@ async function init() {
     initFileDrop();
     // 初始化 AI 对话页面
     initAIChat();
+    // --- 锁屏密码检查 ---
+    await checkScreenLock();
+}
+
+/**
+ * 检查是否需要显示锁屏
+ */
+async function checkScreenLock() {
+    try {
+        if (!window.go?.main?.App?.GetAllSettings) return;
+        const cfg = await window.go.main.App.GetAllSettings();
+        const enabled = cfg.screen_lock_enabled === true || cfg.screen_lock_enabled === 'true';
+        if (!enabled) return;
+
+        const lockScreen = document.getElementById('lockScreen');
+        if (!lockScreen) return;
+
+        // 延迟短暂时间后显示锁屏（等待UI完全渲染）
+        setTimeout(() => {
+            lockScreen.style.display = 'flex';
+            const input = document.getElementById('lockPasswordInput');
+            if (input) setTimeout(() => input.focus(), 100);
+        }, 100);
+    } catch (e) {
+        console.warn('锁屏检查失败:', e);
+    }
+}
+
+/**
+ * 执行解锁操作
+ */
+async function unlockApp() {
+    const input = document.getElementById('lockPasswordInput');
+    const lockScreen = document.getElementById('lockScreen');
+    const errorMsg = document.getElementById('lockErrorMsg');
+    const unlockBtn = document.getElementById('lockUnlockBtn');
+
+    if (!input || !lockScreen) return;
+
+    const password = input.value.trim();
+    if (!password) return;
+
+    // 禁用按钮，防止重复点击
+    if (unlockBtn) unlockBtn.disabled = true;
+    if (errorMsg) errorMsg.style.display = 'none';
+
+    try {
+        const ok = await window.go.main.App.VerifyScreenLockPassword(password);
+        if (ok) {
+            // 解锁成功 - "雾散"动画
+            lockScreen.classList.add('exit');
+            setTimeout(() => {
+                lockScreen.style.display = 'none';
+                lockScreen.classList.remove('exit');
+                if (unlockBtn) unlockBtn.disabled = false;
+            }, 450);
+        } else {
+            // 解锁失败 - 抖动动画
+            input.classList.add('shake');
+            if (errorMsg) errorMsg.style.display = '';
+            input.value = '';
+            if (unlockBtn) unlockBtn.disabled = false;
+
+            // 动画结束后移除 shake 类
+            setTimeout(() => {
+                input.classList.remove('shake');
+                input.focus();
+            }, 400);
+        }
+    } catch (e) {
+        console.error('验证密码失败:', e);
+        if (unlockBtn) unlockBtn.disabled = false;
+    }
+}
+
+/**
+ * 初始化锁屏交互事件
+ */
+function initLockScreenEvents() {
+    const input = document.getElementById('lockPasswordInput');
+    const unlockBtn = document.getElementById('lockUnlockBtn');
+    const toggleBtn = document.getElementById('lockPasswordToggle');
+
+    // 回车触发解锁
+    if (input) {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') unlockApp();
+        });
+    }
+
+    // 点击解锁按钮
+    if (unlockBtn) {
+        unlockBtn.addEventListener('click', unlockApp);
+    }
+
+    // 显示/隐藏密码
+    if (toggleBtn && input) {
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            toggleBtn.querySelector('.toggle-eye').style.display = isPassword ? 'none' : '';
+            toggleBtn.querySelector('.toggle-eye-off').style.display = isPassword ? '' : 'none';
+        });
+    }
 }
 
 /**
@@ -7602,7 +7751,7 @@ async function loadSettings() {
         if (els.sortControl) {
             const btns = els.sortControl.querySelectorAll('.segmented-btn');
             const cw = els.sortControl.offsetWidth;
-            const segW = (cw - 4) / btns.length;
+            const segW = (cw - 8) / btns.length;
             btns.forEach((b, i) => {
                 const isActive = b.dataset.sortValue === cfg.sort_order;
                 b.classList.toggle('active', isActive);
@@ -7616,7 +7765,7 @@ async function loadSettings() {
         if (els.pageSizeControl) {
             const btns = els.pageSizeControl.querySelectorAll('.segmented-btn');
             const cw = els.pageSizeControl.offsetWidth;
-            const segW = (cw - 4) / btns.length;
+            const segW = (cw - 8) / btns.length;
             btns.forEach((b, i) => {
                 const isActive = parseInt(b.dataset.value, 10) === cfg.page_size;
                 b.classList.toggle('active', isActive);
@@ -7638,16 +7787,8 @@ async function loadSettings() {
         applyAIHighlightTheme(codeHighlightTheme);
         applyCodeHighlightThemeUI(codeHighlightTheme);
 
-        // --- AI: 服务商下拉 ---
-        if (els.aiProviderDropdown) {
-            els.aiProviderDropdown.querySelectorAll('.theme-select-item').forEach(item =>
-                item.classList.toggle('active', item.dataset.providerValue === cfg.ai_provider)
-            );
-        }
-        if (els.aiProviderLabel) {
-            const labels = { openai: 'OpenAI 兼容', ollama: 'Ollama' };
-            els.aiProviderLabel.textContent = labels[cfg.ai_provider] || 'OpenAI 兼容';
-        }
+        // --- AI: 服务商分段控件 ---
+        setActiveProvider(cfg.ai_provider);
 
         // --- AI: base_url & api_key ---
         if (els.aiBaseURL) els.aiBaseURL.value = cfg.ai_base_url || '';
@@ -7782,7 +7923,7 @@ async function loadSettings() {
                 const index = btns.indexOf(activeBtn);
                 if (index >= 0) {
                     const cw = els.logLevelControl.offsetWidth;
-                    const segW = (cw - 4) / btns.length;
+                    const segW = (cw - 8) / btns.length;
                     els.logLevelIndicator.style.transform = `translateX(${2 + index * segW}px)`;
                 }
             }
@@ -7798,6 +7939,23 @@ async function loadSettings() {
 
         // --- AI: 预设配置 ---
         await loadProfiles();
+
+        // --- 锁屏密码 ---
+        if (document.getElementById('screenLockToggle')) {
+            const isEnabled = cfg.screen_lock_enabled === true || cfg.screen_lock_enabled === 'true';
+            const toggle = document.getElementById('screenLockToggle');
+            const pwdRow = document.getElementById('screenLockPasswordRow');
+            const pwdInput = document.getElementById('screenLockPasswordInput');
+            toggle.classList.toggle('active', isEnabled);
+            if (pwdRow) {
+                pwdRow.style.display = isEnabled ? '' : 'none';
+            }
+            // 密码已设置时显示占位提示，否则使用默认占位文字
+            if (pwdInput) {
+                const hasPassword = cfg.screen_lock_password && cfg.screen_lock_password !== '';
+                pwdInput.placeholder = hasPassword ? '已设置密码，输入新密码可修改' : '输入锁屏密码后失焦自动保存';
+            }
+        }
     } catch (e) {
         console.warn('loadSettings: 加载设置失败', e);
     }
@@ -7811,7 +7969,7 @@ async function saveSettings() {
         const cfg = {
             theme: localStorage.getItem('jot_theme') || 'default',
             font_family: els.fontFamilyDisplay?.textContent || '',
-            font_size: parseInt(els.fontSizeInput?.value) || 16,
+            font_size: parseInt(els.fontSizeSlider?.value) || 16,
             code_highlight_theme: codeHighlightTheme || 'monokai-dimmed',
             note_open_fullscreen: els.noteOpenFullscreenToggle?.checked || false,
             sort_order: (() => {
@@ -7824,7 +7982,7 @@ async function saveSettings() {
             })(),
             cm_syntax_highlight: els.mdHighlightToggle?.checked || false,
             ai_provider: (() => {
-                const active = els.aiProviderDropdown?.querySelector('.theme-select-item.active');
+                const active = els.aiProviderSegmented?.querySelector('.segmented-btn.active');
                 return active?.dataset.providerValue || 'openai';
             })(),
             ai_base_url: els.aiBaseURL?.value || '',
@@ -7843,6 +8001,8 @@ async function saveSettings() {
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
+            screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
+            screen_lock_password: document.getElementById('screenLockPasswordInput')?.value || '',
         };
         await window.go.main.App.SaveAllSettings(cfg);
     } catch (e) {

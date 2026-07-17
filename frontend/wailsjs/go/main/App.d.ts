@@ -251,3 +251,5 @@ export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Ta
 export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
 
 export function VacuumDatabase():Promise<string>;
+
+export function VerifyScreenLockPassword(arg1:string):Promise<boolean>;

@@ -578,6 +578,8 @@ export namespace services {
 	    ai_search_result_limit: number;
 	    trash_cleanup_retention_days: number;
 	    log_level: number;
+	    screen_lock_enabled: boolean;
+	    screen_lock_password: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SettingsConfig(source);
@@ -610,6 +612,8 @@ export namespace services {
 	        this.ai_search_result_limit = source["ai_search_result_limit"];
 	        this.trash_cleanup_retention_days = source["trash_cleanup_retention_days"];
 	        this.log_level = source["log_level"];
+	        this.screen_lock_enabled = source["screen_lock_enabled"];
+	        this.screen_lock_password = source["screen_lock_password"];
 	    }
 	}
 

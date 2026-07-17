@@ -284,6 +284,7 @@
                     <div class="font-settings">
                         <div class="font-setting-row">
                             <label class="font-setting-label">字体</label>
+                            <span class="font-setting-desc">设置笔记编辑和界面显示字体</span>
                             <div class="font-family-select" id="fontFamilySelect">
                                 <div class="font-family-trigger" id="fontFamilyTrigger">
                                     <span id="fontFamilyDisplay">DM Sans</span>
@@ -296,22 +297,20 @@
                         </div>
                         <div class="font-setting-row">
                             <label class="font-setting-label">大小</label>
-                            <div class="font-size-controls">
-                                <div class="font-size-presets" id="fontSizePresets">
-                                    <button class="font-size-btn" data-size="12">小</button>
-                                    <button class="font-size-btn" data-size="14">偏小</button>
-                                    <button class="font-size-btn active" data-size="16">默认</button>
-                                    <button class="font-size-btn" data-size="18">大</button>
-                                    <button class="font-size-btn" data-size="20">特大</button>
-                                </div>
-                                <div class="font-size-custom">
-                                    <input type="number" id="fontSizeInput" class="font-size-input" min="10" max="32" placeholder="16" />
-                                    <span class="font-size-unit">px</span>
-                                </div>
+                            <span class="font-setting-desc">调整笔记编辑和显示的字体大小</span>
+                            <div class="font-size-slider-wrap">
+                                <input type="range" id="fontSizeSlider" class="font-size-slider" min="10" max="32" value="16" step="1" />
+                                <span class="font-size-value" id="fontSizeValue">16px</span>
+                            </div>
+                        </div>
+                        <div class="font-preview-row" id="fontPreviewRow">
+                            <div class="font-preview-text" id="fontPreviewText">
+                                The quick brown fox jumps over the lazy dog
                             </div>
                         </div>
                         <div class="font-setting-row">
                             <label class="font-setting-label">主题</label>
+                            <span class="font-setting-desc">切换应用的整体配色与视觉风格</span>
                             <div class="theme-select" id="themeControl">
                                 <div class="theme-select-trigger" id="themeTrigger">
                                     <span id="themeLabel">默认</span>
@@ -371,7 +370,8 @@
                     </div>
                     <div class="font-settings">
                         <div class="font-setting-row">
-                            <label class="font-setting-label">启用 CM6 语法高亮</label>
+                            <label class="font-setting-label">语法高亮</label>
+                            <span class="font-setting-desc">启用 CM6 引擎的代码语法高亮功能，关闭后笔记代码块无高亮</span>
                             <div class="toggle-switch">
                                 <input type="checkbox" id="mdHighlightToggle">
                                 <label class="toggle-track" for="mdHighlightToggle">
@@ -379,10 +379,10 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="quick-note-hint">关闭后所有笔记不再显示代码语法高亮</div>
 
                         <div class="font-setting-row">
                             <label class="font-setting-label">全屏打开</label>
+                            <span class="font-setting-desc">默认在全屏模式下打开笔记</span>
                             <div class="toggle-switch">
                                 <input type="checkbox" id="noteOpenFullscreenToggle">
                                 <label class="toggle-track" for="noteOpenFullscreenToggle">
@@ -392,6 +392,7 @@
                         </div>
                         <div class="font-setting-row">
                             <label class="font-setting-label">代码高亮主题</label>
+                            <span class="font-setting-desc">选择代码块所使用的配色主题方案</span>
                             <div class="theme-select" id="codeHighlightThemeControl">
                                 <div class="theme-select-trigger" id="codeHighlightThemeTrigger">
                                     <span id="codeHighlightThemeLabel">Monokai</span>
@@ -426,7 +427,7 @@
                         <!-- 配置预设 -->
                         <div class="ai-setting-item preset-select-row">
                             <span class="ai-setting-label">配置预设</span>
-                            <div class="ai-setting-control">
+                            <div class="ai-setting-control" style="max-width:none;">
                                 <div class="theme-select" id="presetSelect" style="max-width:none;flex:1;">
                                     <div class="theme-select-trigger" id="presetTrigger">
                                         <span id="presetLabel">无预设配置</span>
@@ -434,38 +435,34 @@
                                     </div>
                                     <div class="theme-select-dropdown" id="presetDropdown"></div>
                                 </div>
-                                <button id="presetAddBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">+ 新增</button>
+                                <button id="presetAddBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">+ 新增</button>
                                 <button id="presetMgrBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">管理</button>
                             </div>
                         </div>
                         <!-- Base URL -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">API 地址</span>
-                            <div class="ai-setting-control">
+                            <div class="ai-setting-control" style="max-width:none;">
                                 <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
-                                <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试 URL</button>
+                                <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">测试 URL</button>
                             </div>
                         </div>
                         <!-- 服务商 -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">服务商</span>
-                            <div class="ai-setting-control ai-setting-control--full">
-                                <div class="theme-select" id="aiProviderSelect">
-                                    <div class="theme-select-trigger" id="aiProviderTrigger">
-                                        <span id="aiProviderLabel">OpenAI 兼容</span>
-                                        <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                                    </div>
-                                    <div class="theme-select-dropdown" id="aiProviderDropdown">
-                                        <div class="theme-select-item active" data-provider-value="openai">OpenAI 兼容</div>
-                                        <div class="theme-select-item" data-provider-value="ollama">Ollama</div>
-                                    </div>
+                            <span class="font-setting-desc" style="flex:1;">选择 AI 接口类型</span>
+                            <div class="ai-setting-control" style="flex:none;max-width:none;">
+                                <div class="segmented-control" id="aiProviderSegmented">
+                                    <div class="segmented-indicator" id="aiProviderIndicator"></div>
+                                    <button class="segmented-btn active" data-provider-value="openai">OpenAI</button>
+                                    <button class="segmented-btn" data-provider-value="ollama">Ollama</button>
                                 </div>
                             </div>
                         </div>
                         <!-- API Key -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">API Key</span>
-                            <div class="ai-setting-control">
+                            <div class="ai-setting-control" style="max-width:none;">
                                 <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." autocomplete="off" />
                                 <button id="aiAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                     <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -483,7 +480,7 @@
                         <!-- Model -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">模型</span>
-                            <div class="ai-setting-control">
+                            <div class="ai-setting-control" style="max-width:none;">
                                 <div class="theme-select" id="aiModelSelect" style="max-width:none;flex:1;">
                                     <div class="theme-select-trigger" id="aiModelTrigger">
                                         <span id="aiModelLabel">-- 请先获取模型列表 --</span>
@@ -495,7 +492,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">获取列表</button>
+                                <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">获取列表</button>
                             </div>
                         </div>
                 </div>
@@ -708,6 +705,41 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                             打开日志目录
                         </button>
+                    </div>
+                </div>
+                <!-- 锁屏密码 -->
+                <div class="settings-section">
+                    <div class="ai-group-header">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        <span class="ai-group-title">锁屏密码</span>
+                    </div>
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">启用密码</span>
+                        <div class="ai-setting-toggle-row" id="screenLockToggleLine">
+                            <span class="ai-setting-toggle-desc">启动应用时需要输入密码</span>
+                            <div class="ai-chat-toggle-switch" id="screenLockToggle">
+                                <div class="ai-chat-toggle-knob"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-setting-item screen-lock-pwd-item" id="screenLockPasswordRow" style="display:none;">
+                        <span class="ai-setting-label">设置密码</span>
+                        <div class="ai-setting-control" style="max-width:380px;">
+                            <input type="password" id="screenLockPasswordInput" class="settings-input" placeholder="输入锁屏密码后失焦自动保存" />
+                            <button id="screenLockPwdToggleBtn" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
+                                <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <svg class="toggle-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <!-- 回收站清理 -->
@@ -1905,5 +1937,37 @@ console.log(greet("Jot"));
         </div>
         </div>
 <script src="./src/main.js" type="module"></script>
+
+<!-- 锁屏遮罩层 -->
+<div id="lockScreen" class="lock-screen" style="display:none;">
+    <div class="lock-screen-backdrop"></div>
+    <div class="lock-screen-content">
+        <div class="lock-screen-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+        </div>
+        <h1 class="lock-screen-title">jot</h1>
+        <p class="lock-screen-subtitle">请输入密码解锁</p>
+        <div class="lock-screen-input-wrap">
+            <input type="password" id="lockPasswordInput" class="lock-screen-input" placeholder="输入密码" autocomplete="off" />
+            <button id="lockPasswordToggle" class="lock-screen-toggle-btn" type="button" title="显示/隐藏密码">
+                <svg class="toggle-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="toggle-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+            </button>
+        </div>
+        <button id="lockUnlockBtn" class="lock-screen-btn">解锁</button>
+        <p id="lockErrorMsg" class="lock-screen-error" style="display:none;">密码错误，请重试</p>
+    </div>
+</div>
+
 </body>
 </html>
