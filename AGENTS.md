@@ -61,7 +61,7 @@ jot/                                    # 项目根目录
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
-│   │       ├── variables.css           # 12 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
+│   │       ├── variables.css           # 14 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
 │   │       ├── reset.css               # 全局 reset（box-sizing/body 边距/overscroll-behavior）
 │   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 透明轨道 + 主题变量联动（含主内容区/搜索/AI 对话消息列表）
 │   │       ├── animations.css          # 13 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
@@ -145,7 +145,7 @@ jot/                                    # 项目根目录
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
-| **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（12 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
+| **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
 | **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化） | `services/ai_service.go` + `aicli/` + `frontend/src/js/ai-chat.js` + `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
@@ -410,7 +410,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 2. **CodeMirror 6 编辑器集成**：主流 Markdown 编辑器引擎，支持行号/撤销重做/查找替换/Tab缩进/自动补全/语法高亮（11 套配色 + 46+ 语言）
 
-3. **CSS 变量主题系统（12 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 12 套系统主题 + 11 套代码高亮主题，所有组件自动适配
+3. **CSS 变量主题系统（14 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 14 套系统主题 + 11 套代码高亮主题，所有组件自动适配
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
@@ -451,7 +451,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **AI 对话自实现**（流式输出 + Markdown 渲染 + 思维链 + 代码高亮 + 多会话 + 侧栏折叠）
 - [x] **笔记软删除与回收站**（Trash/Restore/PermanentDelete/RestoreAll/EmptyTrash）
 - [x] **Markdown 语法手册页面**（10 张语法卡片 + 双栏源码/预览 + 打开编辑器试试）
-- [x] **12 系统主题 + 11 代码高亮主题**（统一 CSS 变量体系）
+- [x] **14 系统主题 + 11 代码高亮主题**（统一 CSS 变量体系）
 - [x] **搜索弹窗**（200ms 防抖 + 笔记本/日期/排序/标签筛选器）
 - [x] **一键备份/还原**（BackupToDir/RestoreFromDir + VACUUM）
 - [x] **返回查看/保存脏检测**（无变更不触发保存 + 不弹出通知）
@@ -534,31 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：修复日志初始化顺序
-
-| 记忆点 | 内容 |
-|--------|------|
-| **Logger Init 移到 NewApp（DB Init 之前）** | 原来 `startup()` 中才初始化 Logger，导致 `NewApp()` 中 6 个 Service 全拿到 nil Logger，调用 `s.logger.Errorw()` 会 panic。修复：`NewApp()` 最前面以 `fastlog.INFO` 默认级别 Init Logger，再初始化 DB，然后从库读 `log_level` 调 `LogSvc.SetLevel()` 调整级别。最后创建 Service 时传入非 nil Logger。详见 [app.go#L65-L94](app.go#L65-L94) |
-| **startup() 清理** | 删除 `startup()` 中的 `LogSvc.Init()`、`logLevelStr` 读取、`LevelFromInt`、nil 检查 + `os.Exit(1)` 共 14 行。startup 只做业务初始化（图片目录/notebook/profile/key 迁移）。详见 [app.go#L100-L158](app.go#L100-L158) |
-| **startup() fmt → Logger 替换** | `startup()` 中所有 `fmt.Printf`/`Println` 替换为 `a.LogSvc.Logger.Errorw`/`Infow`。移除初始化后的三条回顾性 INFO 日志（"数据库连接成功/默认笔记本已就绪/密钥迁移完成"）。详见 [app.go#L108-L158](app.go#L108-L158) |
-| **migrateSensitiveKeys nil 检查移除** | 两处 `if a.LogSvc.Logger != nil { Infow }` 改为直接调用 LogSvc，因 Logger 在 NewApp 阶段已保证非 nil。详见 [app.go#L187-L199](app.go#L187-L199) |
-| **NewApp panic 兜底资源清理** | `NewApp()` 初始化过程中 `os.Exit(1)` 或 `panic(err)` 均绕过 Wails `OnShutdown` 回调，Logger 来不及落盘、DB 连接未释放。修复：所有 `os.Exit` 改为 `panic`，新增 `defer recover` 兜底，在退出前依次执行 `logSvc.Close()`（缓冲落盘）+ `sqlDB.Close()`（DB 连接关闭），然后 `println` 错误信息 + `os.Exit(1)`。详见 [app.go#L54-L63](app.go#L54-L63) |
-| **shutdown() 增加 DB Close** | 在 Wails `OnShutdown` 回调 `shutdown()` 中补充 `a.db.DB()` → `sqlDB.Close()`，确保正常退出时 DB 连接也释放。详见 [app.go#L171-L176](app.go#L171-L176) |
-
----
-
-## 记忆点 2：移除快速笔记功能
-
-| 记忆点 | 内容 |
-|--------|------|
-| **移除原因** | 快速笔记功能（启动时自动打开全屏新建编辑器）存在启动闪烁问题，反复修复未能彻底解决，决定直接移除 |
-| **移除内容** | ① 设置页 HTML 删除"快速笔记"开关行；② JS 删除 DOM 引用、change 事件、init 启动触发、loadSettings/saveSettings 中 quick_note_enabled 相关代码；③ 后端 `SettingsConfig` 结构体删除 `QuickNoteEnabled` 字段及读写；④ 数据库默认值删除 `quick_note_enabled`；⑤ TypeScript model 删除 `quick_note_enabled` 字段 |
-| **受影响文件** | [frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[frontend/wailsjs/go/models.ts](frontend/wailsjs/go/models.ts) |
-| **未改动** | CSS 文件（`.quick-note-hint` 类仍被代码语法高亮提示使用）、`openEditor` 函数中的 `startFullscreen` 参数保留（对非快速笔记的调用不受影响） |
-| **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
-| **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
-
-## 记忆点 3：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 1：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -568,7 +544,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 4：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 2：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：更多技能菜单固定高度与滚动支持
+## 记忆点 3：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 4：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 7：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 5：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +596,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 6：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 7：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：NSIS 安装包记住安装路径
+## 记忆点 8：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,6 +626,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修改位置** | [project.nsi](build/windows/installer/project.nsi) 仅此一个文件，`wails_tools.nsh` 不动（自动生成）。三处修改：① `.onInit` 中用临时变量 `$0` 读取注册表，非空时覆盖 `$INSTDIR`（避免首次安装时置空）；② `Section` 安装段末尾写注册表保存路径；③ `Section "uninstall"` 卸载段末尾删除注册表值。 |
 | **边界处理** | 全新安装 → 注册表无值，`$INSTDIR` 保持 `InstallDir` 指令默认值；升级/重装 → 自动恢复上次路径；静默安装 `/S` → `.onInit` 照样执行；卸载 → 清理注册表记录。 |
 | **涉及文件** | [project.nsi](build/windows/installer/project.nsi) |
+
+---
+
+## 记忆点 9：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | 参考 Typora 的 `alice.css`（暖米色背景 + 清新蓝调）和 `lightmind.css`（森林纸面绿意 + 精致山林氛围）设计语言，新增两个完整的 CSS 变量系统主题 |
+| **主题配色** | 爱丽丝：`--bg: #F9F5E8`（暖米黄）、`--accent: #0079D2`（清新蓝）、`--text-primary: #5C3A1E`（暖棕）；山林：`--bg: #F2EFE6`（纸面）、`--accent: #4A7C59`（森林绿）、`--text-primary: #2C3A32`（深森林绿） |
+| **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
+| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
+
+## 记忆点 10：主题下拉菜单自动化生成
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 系统主题和代码高亮主题的菜单项硬编码在 `index.html` 中，新增主题时需同时修改 JS 数据和 HTML 两处 |
+| **修复** | ① 删除 [index.html](frontend/index.html) 中两处硬编码的 `.theme-select-item` 列表（系统主题 14 项 + 代码高亮 11 项），容器改为 `<div class="theme-select-dropdown" id="themeDropdown">` 空结构；② 在 [main.js](frontend/src/main.js) 中新增 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 函数，遍历 JS 数据（`themeLabels` / `codeHighlightThemeLabels`）动态创建 `.theme-select-item` 并绑定点击事件；③ 简化 `initThemeSettings()` 和 `initCodeHighlightThemeSettings()` 只保留触发按钮 toggle + 外部点击关闭逻辑；④ 调用顺序调整为先 build 再 init |
+| **效果** | 今后新增主题只需修改 JS 数据（`themeLabels` / `codeHighlightThemePairing` + `variables.css` 变量块），无需改 HTML |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)、[frontend/index.html](frontend/index.html) |
 
 ---
 

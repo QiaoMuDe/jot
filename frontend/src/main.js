@@ -593,6 +593,7 @@ function switchView(view) {
         switch (view) {
             case 'settings':
                 loadSettings();
+                buildCodeHighlightThemeDropdown();
                 initCodeHighlightThemeSettings();
                 initCodePreview();
                 loadTags();
@@ -1360,6 +1361,8 @@ const codeHighlightThemePairing = {
     'tokyo-night': 'github-dark',
     'dark': 'github-dark',
     'eye-protection': 'github-light',
+    'alice': 'github-light',
+    'lightmind': 'monokai-dimmed',
 };
 
 const themeLabels = {
@@ -1375,6 +1378,8 @@ const themeLabels = {
     'eye-protection': '护眼',
     'dark': '深色',
     'dracula': '德古拉',
+    'alice': '爱丽丝',
+    'lightmind': '山林',
 };
 
 function applyTheme(themeName) {
@@ -1419,12 +1424,63 @@ function getCurrentTheme() {
     return document.documentElement.getAttribute('data-theme') || 'default';
 }
 
+/**
+ * 构建主题下拉菜单列表
+ * 从 themeLabels 数据动态生成菜单项，新增主题时无需修改 HTML
+ */
+function buildThemeDropdown() {
+    const dropdown = els.themeDropdown;
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+    const currentTheme = getCurrentTheme();
+    for (const [key, label] of Object.entries(themeLabels)) {
+        const item = document.createElement('div');
+        item.className = 'theme-select-item' + (key === currentTheme ? ' active' : '');
+        item.dataset.themeValue = key;
+        item.textContent = label;
+        item.addEventListener('click', async () => {
+            dropdown.classList.remove('open');
+            document.getElementById('themeTrigger').classList.remove('open');
+            applyTheme(key);
+            localStorage.setItem('jot_theme', key);
+            await saveSettings();
+            nm.show('主题设置已保存', 'success');
+        });
+        dropdown.appendChild(item);
+    }
+}
 
+/**
+ * 构建代码高亮主题下拉菜单列表
+ * 从 codeHighlightThemeLabels 数据动态生成菜单项
+ */
+function buildCodeHighlightThemeDropdown() {
+    const dropdown = document.getElementById('codeHighlightThemeDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = '';
+    for (const [key, label] of Object.entries(codeHighlightThemeLabels)) {
+        const item = document.createElement('div');
+        item.className = 'theme-select-item' + (key === codeHighlightTheme ? ' active' : '');
+        item.dataset.themeValue = key;
+        item.textContent = label;
+        item.addEventListener('click', async () => {
+            dropdown.classList.remove('open');
+            document.getElementById('codeHighlightThemeTrigger').classList.remove('open');
+            applyCodeHighlightThemeUI(key);
+            applyCodeHighlightTheme(key);
+            codeHighlightTheme = key;
+            await saveSettings();
+            nm.show('代码高亮主题已保存', 'success');
+        });
+        dropdown.appendChild(item);
+    }
+}
 
 let _themeInited = false;
 
 /**
- * 初始化主题设置下拉菜单事件
+ * 初始化主题设置下拉菜单事件（只处理触发按钮和外部点击关闭）
+ * 菜单项由 buildThemeDropdown() 动态生成并绑定事件
  */
 function initThemeSettings() {
     if (_themeInited) return;
@@ -1432,8 +1488,7 @@ function initThemeSettings() {
 
     const trigger = els.themeTrigger;
     const dropdown = els.themeDropdown;
-    const items = dropdown?.querySelectorAll('.theme-select-item');
-    if (!trigger || !dropdown || !items) return;
+    if (!trigger || !dropdown) return;
 
     // 点击触发按钮切换下拉菜单
     trigger.addEventListener('click', (e) => {
@@ -1441,20 +1496,6 @@ function initThemeSettings() {
         if (dropdown.children.length === 0) return;
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
-    });
-
-    // 点击选项切换主题
-    items.forEach(item => {
-        item.addEventListener('click', async () => {
-            const theme = item.dataset.themeValue;
-            if (!theme) return;
-            dropdown.classList.remove('open');
-            trigger.classList.remove('open');
-            applyTheme(theme);
-            localStorage.setItem('jot_theme', theme);
-            await saveSettings();
-            nm.show('主题设置已保存', 'success');
-        });
     });
 
     // 点击外部关闭下拉菜单
@@ -7204,6 +7245,7 @@ async function init() {
     initEventListeners();
     initLockScreenEvents();
     initFontSettings();
+    buildThemeDropdown();
     initThemeSettings();
     initScrollLoading();
     initScrollbarAutoHide();
@@ -7793,8 +7835,8 @@ function applyCodeHighlightTheme(themeName) {
 let _codeHighlightThemeInited = false;
 
 /**
- * 初始化代码高亮主题设置（绑定下拉菜单事件）
- * 只执行一次，避免事件监听器累加。
+ * 初始化代码高亮主题设置（只处理触发按钮和外部点击关闭）
+ * 菜单项由 buildCodeHighlightThemeDropdown() 动态生成并绑定事件
  */
 function initCodeHighlightThemeSettings() {
     if (_codeHighlightThemeInited) return;
@@ -7802,29 +7844,13 @@ function initCodeHighlightThemeSettings() {
 
     const trigger = document.getElementById('codeHighlightThemeTrigger');
     const dropdown = document.getElementById('codeHighlightThemeDropdown');
-    const items = dropdown?.querySelectorAll('.theme-select-item');
-    if (!trigger || !dropdown || !items) return;
+    if (!trigger || !dropdown) return;
 
     // 点击触发按钮切换下拉菜单
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
-    });
-
-    // 点击选项切换主题
-    items.forEach(item => {
-        item.addEventListener('click', async () => {
-            const theme = item.dataset.themeValue;
-            if (!theme) return;
-            dropdown.classList.remove('open');
-            trigger.classList.remove('open');
-            applyCodeHighlightThemeUI(theme);
-            applyCodeHighlightTheme(theme);
-            codeHighlightTheme = theme;
-            await saveSettings();
-            nm.show('代码高亮主题已保存', 'success');
-        });
     });
 
     // 点击外部关闭下拉菜单
