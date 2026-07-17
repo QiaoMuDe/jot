@@ -1205,6 +1205,11 @@ func (a *App) SetScreenLockPassword(oldPwd, newPwd string) error {
 		if hex.EncodeToString(oldHash[:]) != stored {
 			return errors.New("旧密码不正确")
 		}
+		// 新密码不能与旧密码相同
+		newHash := sha256.Sum256([]byte(newPwd + "jot-screen-lock-salt"))
+		if hex.EncodeToString(newHash[:]) == stored {
+			return errors.New("新密码不能与旧密码相同")
+		}
 	}
 	newHash := sha256.Sum256([]byte(newPwd + "jot-screen-lock-salt"))
 	return a.settingService.Set("screen_lock_password", hex.EncodeToString(newHash[:]))

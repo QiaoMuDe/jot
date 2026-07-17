@@ -2271,6 +2271,9 @@ async function initAISettings() {
                 pwdRow.classList.toggle('collapsed', !isActive);
             }
             await saveSettings();
+            // 关闭后密码已被清空，按钮重置为"设置密码"；开启时密码也是空的，同样显示"设置密码"
+            const changeBtn = document.getElementById('pwdChangeBtn');
+            if (changeBtn) changeBtn.textContent = '设置密码';
             nm.show(isActive ? '锁屏密码已启用' : '锁屏密码已关闭', 'info');
         });
     }
@@ -2295,11 +2298,18 @@ async function initAISettings() {
             }, 200);
         });
 
-        // 关闭弹窗
+        // 关闭弹窗（仅移除 visible 触发退出动画，transitionend 负责隐藏）
         const closeModal = () => {
             pwdModal.classList.remove('visible');
-            pwdModal.style.display = 'none';
         };
+
+        // 动画结束后自动隐藏 DOM
+        pwdModal.addEventListener('transitionend', () => {
+            if (!pwdModal.classList.contains('visible')) {
+                pwdModal.style.display = 'none';
+            }
+        });
+
         document.getElementById('pwdModalCloseBtn').addEventListener('click', closeModal);
         document.getElementById('pwdModalCancelBtn').addEventListener('click', closeModal);
         pwdModal.addEventListener('click', (e) => { if (e.target === pwdModal) closeModal(); });
@@ -2321,24 +2331,42 @@ async function initAISettings() {
                 errorEl.style.display = '';
                 return;
             }
+            // 修改密码时新密码不能与旧密码相同
+            if (isPasswordSet && newVal === oldVal) {
+                saveBtn.disabled = true;
+                errorEl.textContent = '新密码不能与旧密码相同';
+                errorEl.style.display = '';
+                return;
+            }
             saveBtn.disabled = false;
         };
         document.getElementById('pwdOldInput').addEventListener('input', validatePwdForm);
         document.getElementById('pwdNewInput').addEventListener('input', validatePwdForm);
         document.getElementById('pwdConfirmInput').addEventListener('input', validatePwdForm);
 
-        // 密码可见切换（按住显示）
+        // 密码可见切换（点击切换）
         document.querySelectorAll('.pwd-modal-eye').forEach(btn => {
             const input = document.getElementById(btn.dataset.target);
             if (!input) return;
-            const showPassword = () => { input.type = 'text'; };
-            const hidePassword = () => { input.type = 'password'; };
-            btn.addEventListener('mousedown', (e) => { e.preventDefault(); showPassword(); });
-            btn.addEventListener('mouseup', hidePassword);
-            btn.addEventListener('mouseleave', hidePassword);
-            // 触屏支持
-            btn.addEventListener('touchstart', (e) => { e.preventDefault(); showPassword(); });
-            btn.addEventListener('touchend', hidePassword);
+            btn.addEventListener('click', () => {
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                btn.querySelector('.eye-icon').style.display = isPassword ? 'none' : '';
+                btn.querySelector('.eye-off-icon').style.display = isPassword ? '' : 'none';
+            });
+        });
+
+        // Enter 键提交
+        const pwdInputs = [document.getElementById('pwdOldInput'), document.getElementById('pwdNewInput'), document.getElementById('pwdConfirmInput')];
+        pwdInputs.forEach(input => {
+            if (!input) return;
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const saveBtn = document.getElementById('pwdModalSaveBtn');
+                    if (!saveBtn.disabled) saveBtn.click();
+                }
+            });
         });
 
         // 保存密码
@@ -5495,6 +5523,12 @@ async function handleKeyboardNavigation(e) {
             closePresetModal();
             return;
         }
+        // 密码弹窗打开时关闭它
+        const pwdModal = document.getElementById('pwdModal');
+        if (pwdModal && pwdModal.style.display !== 'none' && pwdModal.classList.contains('visible')) {
+            pwdModal.classList.remove('visible');
+            return;
+        }
         // 关于页面打开时关闭它
         if (els.viewAbout.style.display === 'flex') {
             closeAbout();
@@ -5556,6 +5590,11 @@ async function handleKeyboardNavigation(e) {
 
     // Ctrl+数字键快捷导航（仅在非输入框内生效）
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.target.closest('input, textarea, [contenteditable]')) {
+        // 锁屏界面打开时屏蔽 Ctrl+数字快捷键
+        const lockScreen = document.getElementById('lockScreen');
+        if (lockScreen && lockScreen.style.display !== 'none') {
+            return;
+        }
         // 笔记编辑器/查看器/新建页面打开时屏蔽 Ctrl+数字快捷键
         const viewEditor = document.getElementById('viewEditor');
         const viewPreview = document.getElementById('viewPreview');

@@ -534,18 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：锁屏密码状态标签精简 — 按钮文本自述状态
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 设置页锁屏密码行同时存在状态标签（"已启用"）和按钮（"设置密码"/"修改密码"），信息冗余。密码是否已设置由按钮文本和独立标签双重指示 |
-| **方案** | 移除独立状态标签，仅靠按钮文本自述状态。未设密码时按钮显示"设置密码"，已设密码时显示"修改密码"。模态框根据当前状态动态切换旧密码输入框的 `display` |
-| **前端变更** | [index.html](frontend/index.html)：移除 `.pwd-status-label` span 元素；[main.js](frontend/src/main.js)：4 处密码状态判断从 `pwdStatusLabel.textContent` 改为 `pwdChangeBtn.textContent`（含开锁逻辑、模态框旧密码场可见性、保存回调）；[settings-panel.css](frontend/src/css/components/settings-panel.css)：移除 `.pwd-status-label` 相关样式 |
-| **涉及的 spec** | [`.trae/documents/refine-lock-password-status-display.md`](.trae/documents/refine-lock-password-status-display.md) |
-
----
-
-## 记忆点 2：标签管理卡片重设计
+## 记忆点 1：标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -558,7 +547,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：用户消息 Token 提前展示
+## 记忆点 2：用户消息 Token 提前展示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -570,7 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
+## 记忆点 3：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -582,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：修复日志初始化顺序
+## 记忆点 4：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：移除快速笔记功能
+## 记忆点 5：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 7：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 6：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 8：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 7：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：更多技能菜单固定高度与滚动支持
+## 记忆点 8：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 9：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,6 +639,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **用户交互** | 大文件自动显示为 CM6 纯文本（只读），用户仍可手动点击"预览"按钮切换到 Markdown 渲染 |
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
+
+## 记忆点 10：密码弹窗增强（键盘/动画/原生按钮隐藏）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 围绕锁屏密码弹窗（`#pwdModal`）的多项体验优化：隐藏浏览器原生密码显示按钮、toggle 关闭后按钮文字同步、改为点击切换密码显隐、新增新旧密码一致性校验、ESC/Enter 快捷键支持、关闭动画 |
+| **隐藏原生按钮** | 在 [settings-panel.css](frontend/src/css/components/settings-panel.css) 中为 `.pwd-modal-input` 添加 `::-ms-reveal`/`::-ms-clear`/`::-webkit-credentials-auto-fill-button` 规则，隐藏浏览器自带的密码显示按钮 |
+| **按钮文字同步** | [main.js](frontend/src/main.js) toggle 关闭锁屏后重置 `pwdChangeBtn.textContent` 为"设置密码"，防止密码已清空仍显示"修改密码" |
+| **密码显隐切换** | 三个密码输入框的 `.pwd-modal-eye` 从"按住显示"（`mousedown`/`mouseup`/`mouseleave`）改为"点击切换"（`click` 事件 + 图标显隐切换），与 API Key 输入框行为一致 |
+| **新旧密码一致性** | 修改密码时前后端（[main.js](frontend/src/main.js) 和 [app.go](app.go)）均校验 `newPwd !== oldPwd`，相同则显示"新密码不能与旧密码相同" |
+| **ESC 快捷键** | 在全局 `handleKeyboardNavigation`（[main.js](frontend/src/main.js)）中新增 `#pwdModal` 可见性检查，按下 ESC 移除 `visible` class 触发退出动画 |
+| **Enter 快捷键** | 在密码弹窗 JS 块中为三个输入框注册 `keydown` 事件，Enter 键且保存按钮可用时触发 `saveBtn.click()` |
+| **关闭动画** | CSS 为 `.pwd-modal-card` 添加 `opacity: 0` 基态 + fade 过渡；JS `closeModal` 仅移除 `visible` class，通过 `transitionend` 事件自动设置 `display: none`，实现 0.2s 平滑淡出+微缩效果 |
+| **Ctrl+数字屏蔽** | 在 `handleKeyboardNavigation` 的 Ctrl+数字处理入口（[main.js](frontend/src/main.js)）新增 `#lockScreen` 可见性检查，锁屏打开时直接 return |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[app.go](app.go) |
 
 ---
 
@@ -662,3 +666,4 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 5. **更新关键文件统计**时，用 `Measure-Object -Line`（Windows）或 `wc -l`（Linux/macOS）获取实际行数
 6. **第 八 章"待优化点"** 中的"已实现"列表仅在重大功能完成时归档，小修改不必追加条目
 7. **所有文件引用必须使用相对路径**（从项目根目录开始，如 `frontend/src/js/ai-chat.js`），禁止使用绝对路径（如 `file:///d:/.../frontend/...`），确保项目克隆到任意机器后链接仍然有效，且不泄露本地目录结构
+8. **ESC 快捷键统一在全局 `handleKeyboardNavigation` 函数（[main.js](frontend/src/main.js)）中处理**，不要在模块或组件中单独注册 ESC 监听器（如密码弹窗、确认对话框、自定义浮层等），确保快捷键入口集中、行为可控、避免冲突

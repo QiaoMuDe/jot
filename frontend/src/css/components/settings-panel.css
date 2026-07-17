@@ -1066,10 +1066,12 @@
   max-width: 88vw;
   box-shadow: var(--shadow-xl);
   overflow: hidden;
+  opacity: 0;
   transform: translateY(8px) scale(0.97);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
 }
 .pwd-modal-overlay.visible .pwd-modal-card {
+  opacity: 1;
   transform: translateY(0) scale(1);
 }
 
@@ -1125,6 +1127,20 @@
   display: flex;
   align-items: center;
 }
+
+/* 隐藏密码弹窗输入框的浏览器原生显示/清除按钮 */
+.pwd-modal-input::-ms-reveal,
+.pwd-modal-input::-ms-clear {
+  display: none;
+}
+
+/* 隐藏 WebView2/Edge 自动填充按钮（钥匙图标） */
+.pwd-modal-input::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  display: none !important;
+}
+
 .pwd-modal-input {
   width: 100%;
   height: 36px;
