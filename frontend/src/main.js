@@ -5639,6 +5639,40 @@ async function handleKeyboardNavigation(e) {
                 e.preventDefault();
                 switchView('ai-chat');
                 return;
+            case '0':
+                e.preventDefault();
+
+                // 获取设置，检查锁屏状态
+                const lockCfg = await window.go.main.App.GetAllSettings();
+                const lockEnabled = lockCfg.screen_lock_enabled === true || lockCfg.screen_lock_enabled === 'true';
+                const hasPassword = lockCfg.screen_lock_password && lockCfg.screen_lock_password !== '';
+
+                // 未启用锁屏 → 提示
+                if (!lockEnabled) {
+                    nm.show('请先在「设置 → 锁屏密码」中启用锁屏功能', 'warning');
+                    return;
+                }
+
+                // 已启用但无密码 → 提示
+                if (!hasPassword) {
+                    nm.show('请先设置锁屏密码后再使用锁屏功能', 'warning');
+                    return;
+                }
+
+                // 已启用且有密码 → 切首页 → 锁屏
+                switchView('grid');
+                await loadNotes();
+
+                const lockScreen = document.getElementById('lockScreen');
+                if (!lockScreen) return;
+                lockScreen.style.display = 'flex';
+                // 清空输入框，防止异步期间残余键盘事件填充字符
+                const lockPwdInput = document.getElementById('lockPasswordInput');
+                if (lockPwdInput) lockPwdInput.value = '';
+                requestAnimationFrame(() => lockScreen.classList.add('entering'));
+                setTimeout(() => lockScreen.classList.remove('entering'), 700);
+                setTimeout(() => lockPwdInput?.focus(), 100);
+                return;
         }
     }
 
@@ -5867,6 +5901,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + 6', desc: '待办清单' },
         { key: 'Ctrl + 7', desc: '设置' },
         { key: 'Ctrl + 8', desc: 'AI 助手' },
+        { key: 'Ctrl + 0', desc: '锁屏（需先在设置中启用）' },
         { key: 'Ctrl + J', desc: 'AI 侧栏折叠/展开' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
@@ -7274,7 +7309,7 @@ async function unlockApp() {
             input.classList.remove('shake');
             if (lockIcon) lockIcon.classList.remove('error-shake');
             input.focus();
-        }, 400);
+        }, 750);
         setTimeout(() => {
             if (errorMsg) errorMsg.style.display = 'none';
         }, 800);
@@ -7306,12 +7341,12 @@ async function unlockApp() {
             input.value = '';
             if (unlockBtn) unlockBtn.disabled = false;
 
-            // 动画结束后移除 shake 类，0.8 秒后隐藏提示
+            // 动画结束后移除 error-shake，0.9 秒后隐藏提示
             setTimeout(() => {
                 input.classList.remove('shake');
                 if (lockIcon) lockIcon.classList.remove('error-shake');
                 input.focus();
-            }, 400);
+            }, 750);
             setTimeout(() => {
                 if (errorMsg) errorMsg.style.display = 'none';
             }, 800);

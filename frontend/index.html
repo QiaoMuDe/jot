@@ -1935,8 +1935,18 @@ console.log(greet("Jot"));
     <div class="lock-screen-content">
         <div class="lock-screen-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0110 0v4"/>
+                <!-- 发光底层 -->
+                <rect class="lock-glow" x="2.5" y="10.5" width="19" height="12" rx="2.5" fill="currentColor" opacity="0.06"/>
+                <!-- 锁体填充 -->
+                <rect class="lock-body-fill" x="3" y="11" width="18" height="11" rx="2" fill="currentColor" opacity="0.1"/>
+                <!-- 锁体轮廓 -->
+                <rect class="lock-body" x="3" y="11" width="18" height="11" rx="2"/>
+                <!-- 锁梁（独立分组，可单独动画） -->
+                <g class="lock-shackle-group">
+                    <path class="lock-shackle" d="M7 11V7a5 5 0 0110 0v4"/>
+                </g>
+                <!-- 锁芯光点 -->
+                <circle class="lock-keyhole" cx="12" cy="16" r="1.5" fill="currentColor" opacity="0.35"/>
             </svg>
         </div>
         <h1 class="lock-screen-title">jot</h1>

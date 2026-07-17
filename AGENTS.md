@@ -534,19 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：用户消息 Token 提前展示
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 用户发送消息后，`SaveAIMessage` 已计算了用户消息自身的 token 数（`estimateTokens(content)`），但只返回了 `msgID`，前端传硬编码 `0` 给 `addMessage` 和 `createMsgActions`，导致 token 显示为"0 tokens"，要等 AI 完全回复完后 `ai:stream-done` 事件到达才更新为真实值。 |
-| **方案** | `SaveAIMessage` 改为返回 `SaveAIMessageResult{msgID, tokens}` 结构体，前端在调用后立即拿到 token 数并显示。 |
-| **后端变更** | [app.go](app.go)：定义 `SaveAIMessageResult` 结构体（`MsgID uint` + `Tokens int`）；`SaveAIMessage()` 返回类型从 `(uint, error)` 改为 `(SaveAIMessageResult, error)`。详见 ∼2560 行。 |
-| **前端变更** | [ai-chat.js](frontend/src/js/ai-chat.js)：`onSend()` 和 `handleResend()` 中从返回结果提取 `result.msgID` 和 `result.tokens`，将 tokens 传给 `addMessage` 和 `createMsgActions`（替代硬编码 0）。详见 ∼2050 行和 ∼3640 行。 |
-| **不变部分** | AI 流式流程完全不变。`ai:stream-done` 仍会用完整上下文 token 数（含 system 提示词）更新显示，从"自身 token"升为"完整上下文 token"，更精确。 |
-
----
-
-## 记忆点 2：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
+## 记忆点 1：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -558,7 +546,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：修复日志初始化顺序
+## 记忆点 2：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -571,7 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：移除快速笔记功能
+## 记忆点 3：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -582,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 5：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 4：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 6：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 5：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：更多技能菜单固定高度与滚动支持
+## 记忆点 6：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 7：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 9：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 8：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,13 +632,25 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 9：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
 | **`appendToSystemMessage` 辅助函数** | 在 [app.go](app.go) 中新增 `appendToSystemMessage(msgs []services.Message, content string) []services.Message` 函数，消除 `CallAIStream` 和 `CallAIStreamRegenerate` 中 14 处重复的"往 system 消息追加内容，不存在则新建"的 10 行代码块。每处调用从 10 行缩为 1 行 `messages = appendToSystemMessage(messages, content)`，净消除约 130 行重复。详见 [app.go#L2364-L2373](app.go#L2364-L2373) |
 | **搜索精炼使用 `userText`** | `CallAIStream` 签名中已有前端传入的 `userText` 参数，但搜索精炼阶段仍从 DB 加载消息列表再反向遍历找最后一条 user 消息。改为直接使用 `userText` 参数，消除不必要的数据库遍历。`CallAIStreamRegenerate` 保持不变（它没有 `userText` 参数）。详见 [app.go#L1678](app.go#L1678) |
 | **涉及文件** | [app.go](app.go) |
+
+---
+
+## 记忆点 10：锁屏快捷键 + 精密机械感锁子动效
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | 新增全局快捷键 `Ctrl+0` 切换到笔记首页后进入锁屏。启用锁屏 + 有密码时执行锁屏；未启用时提示"请先在设置中启用锁屏功能"；已启用无密码时提示"请先设置密码"。快捷键说明页同步更新。 |
+| **后端变更** | 无。复用现有 [app.go](app.go) 的 `GetAllSettings()` 绑定读取 `screen_lock_enabled` 和 `screen_lock_password`。 |
+| **前端快捷键** | [main.js](frontend/src/main.js) `handleKeyboardNavigation` 中新增 `case '0'` 分支：异步检查设置 → switchView('grid') + loadNotes() → 显示 #lockScreen 遮罩带 entering 入场动画 → 激活后自动清空密码输入框。锁屏状态已有底层的 `lockScreen` 拦截守卫。 |
+| **锁子动效优化** | SVG 从单层 Feather 图标升级为 4 层结构（发光底层/锁体填充/锁梁独立/锁芯光点）。新增 5 组 keyframes 动效：`lockBreathe` 4s 机械呼吸（弹起→微过冲→保持→缓释 + drop-shadow 深度变化）、`lockAlert` 2s 聚焦光晕（scale 1.08 + 光晕脉动）、`keyholePulse` 2s 锁芯光点呼吸、`lockReject` 0.7s 错误拒绝（三次微颤→锁紧收缩→弹簧回弹）、`shackleEnter` 0.5s 入场锁梁弹性抬起。`overflow: visible` 防止锁梁被 viewBox 裁切。 |
+| **涉及文件** | [main.js](frontend/src/main.js)（Ctrl+0 快捷键）、[modals.css](frontend/src/css/components/modals.css)（5 组 keyframes + SVG 分层样式 + overflow visible）、[index.html](frontend/index.html)（SVG 分层结构更新） |
 
 ---
 

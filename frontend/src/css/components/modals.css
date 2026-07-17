@@ -867,14 +867,44 @@
   color: var(--accent, #6366f1);
   margin-bottom: 8px;
   opacity: 0.9;
-  animation: lockHover 3s ease-in-out infinite;
+  /* 允许 SVG 内容在 viewBox 外可见（锁梁抬起时不被裁切） */
+  overflow: visible;
+  /* 机械呼吸动效，4s 循环 */
+  animation: lockBreathe 4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
 }
 
+.lock-screen-icon svg {
+  overflow: visible;
+}
+
+/* ── 锁梁空闲态过渡（聚焦抬起/回落时平滑） ── */
+.lock-shackle-group {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── 聚焦态：锁芯光点脉冲 ── */
+.lock-keyhole {
+  transition: opacity 0.3s ease;
+}
+
+/* ── 聚焦：锁梁抬起 + 光晕脉动 ── */
 .lock-screen-icon.focused {
-  transform: scale(1.08);
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 50%, transparent));
-  transition: transform 0.3s ease, filter 0.3s ease;
-  animation: none;
+  animation: lockAlert 2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+.lock-screen-icon.focused .lock-shackle-group {
+  transform: translateY(-2px);
+}
+
+.lock-screen-icon.focused .lock-keyhole {
+  opacity: 0.85;
+  animation: keyholePulse 2s ease-in-out infinite;
+}
+
+/* ── 发光底层聚焦时增强 ── */
+.lock-screen-icon.focused .lock-glow {
+  opacity: 0.12;
+  transition: opacity 0.3s ease;
 }
 
 .lock-screen-title {
@@ -1052,6 +1082,11 @@
 .lock-screen.entering .lock-screen-btn      { animation: lockContentEnter 0.4s ease-out 0.2s both; }
 .lock-screen.entering .lock-screen-exit-btn { animation: lockContentEnter 0.4s ease-out 0.25s both; }
 
+/* 锁梁入场：从下压位弹起到正常位 */
+.lock-screen.entering .lock-shackle-group {
+  animation: shackleEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s both;
+}
+
 /* 输入的抖动动画（错误密码） */
 @keyframes lock-shake {
   0%, 100% { transform: translateX(0); }
@@ -1064,26 +1099,102 @@
   border-color: var(--error, #ef4444);
 }
 
-/* ── 锁子图标呼吸悬浮 ── */
-@keyframes lockHover {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+/* ════════════════════════════════════
+   精密机械感锁子动效 — Keyframes
+   ════════════════════════════════════ */
+
+/* ── 机械呼吸 (4s) ──
+   快速"咔嗒"弹起 → 微过冲回落 → 二次微调就位 → 缓慢释放 */
+@keyframes lockBreathe {
+  0% {
+    transform: scale(1) translateY(0);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  /* 快速弹起 + 光晕 */
+  10% {
+    transform: scale(1.022) translateY(-3px);
+    filter: drop-shadow(0 6px 20px color-mix(in srgb, var(--accent) 22%, transparent));
+  }
+  /* 微过冲回落 — 机械就位 */
+  14% {
+    transform: scale(1.014) translateY(-1px);
+    filter: drop-shadow(0 3px 8px color-mix(in srgb, var(--accent) 12%, transparent));
+  }
+  /* 二次微调 — 齿轮咬合 */
+  18% {
+    transform: scale(1.018) translateY(-1.8px);
+    filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--accent) 16%, transparent));
+  }
+  /* 短暂保持 */
+  22% {
+    transform: scale(1.018) translateY(-1.8px);
+    filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--accent) 16%, transparent));
+  }
+  /* 缓慢回落释放 */
+  100% {
+    transform: scale(1) translateY(0);
+    filter: drop-shadow(0 0 0 transparent);
+  }
 }
 
-/* ── 锁子受惊微颤 ── */
-@keyframes lockShake {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  20% { transform: translateY(-2px) rotate(-5deg); }
-  40% { transform: translateY(-1px) rotate(5deg); }
-  60% { transform: translateY(-2px) rotate(-3deg); }
-  80% { transform: translateY(-1px) rotate(3deg); }
+/* ── 聚焦光晕脉动 (2s) ── */
+@keyframes lockAlert {
+  0%, 100% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 35%, transparent));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 55%, transparent));
+  }
+}
+
+/* ── 锁芯光点脉冲 (2s) ── */
+@keyframes keyholePulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ── 错误拒绝 (0.7s) ──
+   三次微颤 → 锁紧缩 → 弹簧回弹 */
+@keyframes lockReject {
+  0%   { transform: translateX(0) scale(1); filter: drop-shadow(0 0 0 transparent); }
+  8%   { transform: translateX(-5px) scale(1); }
+  16%  { transform: translateX(4px) scale(1); }
+  24%  { transform: translateX(-3px) scale(1); }
+  /* 锁紧缩 */
+  32%  { transform: translateX(0) scale(0.96);
+         filter: drop-shadow(0 0 10px color-mix(in srgb, var(--error, #ef4444) 35%, transparent)); }
+  45%  { transform: translateX(0) scale(0.94);
+         filter: drop-shadow(0 0 14px color-mix(in srgb, var(--error, #ef4444) 45%, transparent)); }
+  /* 弹性回弹 */
+  70%  { transform: translateX(0) scale(1.025); }
+  85%  { transform: translateX(0) scale(0.98); }
+  100% { transform: translateX(0) scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
 
 .lock-screen-icon.error-shake {
-  animation: lockShake 0.4s ease;
+  animation: lockReject 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  pointer-events: none;
 }
 
-/* ── 内容区入场 ── */
+/* 错误时锁芯变红 */
+.lock-screen-icon.error-shake .lock-keyhole {
+  opacity: 0.9;
+  color: var(--error, #ef4444);
+  transition: color 0.1s ease;
+}
+
+/* ── 锁梁入场：从下压位弹起到正常位 ── */
+@keyframes shackleEnter {
+  0%   { transform: translateY(5px); }
+  55%  { transform: translateY(-1.5px); }
+  75%  { transform: translateY(0.8px); }
+  90%  { transform: translateY(-0.3px); }
+  100% { transform: translateY(0); }
+}
+
+/* ── 内容区淡入 ── */
 @keyframes lockContentEnter {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
