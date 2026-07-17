@@ -1634,17 +1634,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			if err == nil && refCtx != nil && refCtx.Context != "" {
 				roleplayContext = refCtx.Context
 				roleplayText := "以下是用户提供的人物设定笔记内容：\n\n" + refCtx.Context
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + roleplayText
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: roleplayText}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, roleplayText)
 			}
 		}
 
@@ -1652,17 +1642,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		if len(referencedNoteIDs) > 0 {
 			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + refCtx.Context
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: refCtx.Context}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, refCtx.Context)
 			}
 		}
 
@@ -1672,17 +1652,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			if len([]rune(followUpRefContent)) > 500 {
 				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
 			}
-			found := false
-			for i := range messages {
-				if messages[i].Role == "system" {
-					messages[i].Content = messages[i].Content + "\n\n" + refText
-					found = true
-					break
-				}
-			}
-			if !found {
-				messages = append([]services.Message{{Role: "system", Content: refText}}, messages...)
-			}
+			messages = appendToSystemMessage(messages, refText)
 		}
 
 		// ── 步骤 5: 上传文件内容注入 ──
@@ -1697,17 +1667,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
 			}
 			if b.Len() > 0 {
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + b.String()
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: b.String()}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, b.String())
 			}
 		}
 
@@ -1715,13 +1675,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		if len(searchSources) > 0 {
 			cfg := a.aiService.GetConfig()
 
-			var query string
-			for i := len(messages) - 1; i >= 0; i-- {
-				if messages[i].Role == "user" {
-					query = messages[i].Content
-					break
-				}
-			}
+			query := userText
 
 			if query != "" {
 				// 精炼 query
@@ -1802,17 +1756,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 						runtime.EventsEmit(a.ctx, "ai:search-error", string(errJSON))
 					} else if r.result != nil {
 						// 注入搜索结果到 system message
-						found := false
-						for i := range messages {
-							if messages[i].Role == "system" {
-								messages[i].Content = messages[i].Content + "\n\n" + r.result.FormattedText
-								found = true
-								break
-							}
-						}
-						if !found {
-							messages = append([]services.Message{{Role: "system", Content: r.result.FormattedText}}, messages...)
-						}
+						messages = appendToSystemMessage(messages, r.result.FormattedText)
 
 						// 发射来源状态 success
 						sourceStatus := map[string]interface{}{
@@ -1894,17 +1838,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				recallResult := services.CardRecallSearch(ctx, query, recallLimit, maxChars, a.noteService)
 				if recallResult != nil {
 					// 注入格式化文本到 system role
-					found := false
-					for i := range messages {
-						if messages[i].Role == "system" {
-							messages[i].Content = messages[i].Content + "\n\n" + recallResult.FormattedText
-							found = true
-							break
-						}
-					}
-					if !found {
-						messages = append([]services.Message{{Role: "system", Content: recallResult.FormattedText}}, messages...)
-					}
+					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 
 					// 发射结构化卡片数据给前端，并缓存用于持久化
 					if len(recallResult.Cards) > 0 {
@@ -1928,17 +1862,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				if hasRoleplay && roleplayContext != "" {
 					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
 				}
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + skillPrompt
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: skillPrompt}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, skillPrompt)
 			} else if err != nil {
 				a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
 			}
@@ -2089,17 +2013,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			if err == nil && refCtx != nil && refCtx.Context != "" {
 				roleplayContext = refCtx.Context
 				roleplayText := "以下是用户提供的人物设定笔记内容：\n\n" + refCtx.Context
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + roleplayText
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: roleplayText}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, roleplayText)
 			}
 		}
 
@@ -2107,17 +2021,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		if len(referencedNoteIDs) > 0 {
 			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + refCtx.Context
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: refCtx.Context}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, refCtx.Context)
 			}
 		}
 
@@ -2127,17 +2031,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			if len([]rune(followUpRefContent)) > 500 {
 				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
 			}
-			found := false
-			for i := range messages {
-				if messages[i].Role == "system" {
-					messages[i].Content = messages[i].Content + "\n\n" + refText
-					found = true
-					break
-				}
-			}
-			if !found {
-				messages = append([]services.Message{{Role: "system", Content: refText}}, messages...)
-			}
+			messages = appendToSystemMessage(messages, refText)
 		}
 
 		// ── 步骤 5: 上传文件内容注入 ──
@@ -2152,17 +2046,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
 			}
 			if b.Len() > 0 {
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + b.String()
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: b.String()}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, b.String())
 			}
 		}
 
@@ -2250,17 +2134,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 						errJSON, _ := json.Marshal(errEvent)
 						runtime.EventsEmit(a.ctx, "ai:search-error", string(errJSON))
 					} else if r.result != nil {
-						found := false
-						for i := range messages {
-							if messages[i].Role == "system" {
-								messages[i].Content = messages[i].Content + "\n\n" + r.result.FormattedText
-								found = true
-								break
-							}
-						}
-						if !found {
-							messages = append([]services.Message{{Role: "system", Content: r.result.FormattedText}}, messages...)
-						}
+						messages = appendToSystemMessage(messages, r.result.FormattedText)
 
 						sourceStatus := map[string]interface{}{
 							"source": r.source,
@@ -2334,17 +2208,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				}
 				recallResult := services.CardRecallSearch(ctx, query, recallLimit, maxChars, a.noteService)
 				if recallResult != nil {
-					found := false
-					for i := range messages {
-						if messages[i].Role == "system" {
-							messages[i].Content = messages[i].Content + "\n\n" + recallResult.FormattedText
-							found = true
-							break
-						}
-					}
-					if !found {
-						messages = append([]services.Message{{Role: "system", Content: recallResult.FormattedText}}, messages...)
-					}
+					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 					if len(recallResult.Cards) > 0 {
 						cardsJSON, _ := json.Marshal(recallResult.Cards)
 						recallCardsJSON = string(cardsJSON)
@@ -2363,17 +2227,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				if hasRoleplay && roleplayContext != "" {
 					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
 				}
-				found := false
-				for i := range messages {
-					if messages[i].Role == "system" {
-						messages[i].Content = messages[i].Content + "\n\n" + skillPrompt
-						found = true
-						break
-					}
-				}
-				if !found {
-					messages = append([]services.Message{{Role: "system", Content: skillPrompt}}, messages...)
-				}
+				messages = appendToSystemMessage(messages, skillPrompt)
 			} else if err != nil {
 				a.LogSvc.Logger.Errorw("获取技能提示词失败（再生）", fastlog.Error(err))
 			}
@@ -2504,6 +2358,18 @@ func estimateUserTokens(messages []services.Message) int {
 		}
 	}
 	return tokens
+}
+
+// appendToSystemMessage 往消息列表中的 system 角色消息追加内容。
+// 如果不存在 system 消息，则在头部插入一条新的 system 消息。
+func appendToSystemMessage(msgs []services.Message, content string) []services.Message {
+	for i := range msgs {
+		if msgs[i].Role == "system" {
+			msgs[i].Content = msgs[i].Content + "\n\n" + content
+			return msgs
+		}
+	}
+	return append([]services.Message{{Role: "system", Content: content}}, msgs...)
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用

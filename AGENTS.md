@@ -534,20 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：标签管理卡片重设计
-
-| 记忆点 | 内容 |
-|--------|------|
-| **标签芯片 redesign** | 设置页标签管理卡片全新设计：标签从简单 `border-radius: var(--radius-md)` 矩形改为 `border-radius: 20px` pill 形状，圆润柔和。hover 时整体上浮 `translateY(-1px) scale(1.03)` + 投影加深。带有入场动画 `tagEnter`（scale 0.7 + fade in），JS 控制 `animation-delay: index * 40ms` 实现 stagger 波浪效果。删除时添加 `.removing` class 触发 `tagRemove` 动画（scale 0.5 + fade out）。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
-| **预设色圈选择器** | 移除原生 `<input type="color">`，改为 9 个预设颜色圆点（`.tag-color-dot`），hover 放大 1.2x，选中时双层边框高亮（`box-shadow: 0 0 0 2px card-bg, 0 0 0 4px text-primary`）。点击切换 `.active` 并同步 `els.newTagColor.value`。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
-| **添加按钮与输入框** | 输入框 `.tag-input` 为 pill 圆角 + `1.5px` 边框 + focus 彩色光晕（`color-mix(in srgb, var(--accent) 12%, transparent)`）。添加按钮 `.tag-add-btn` 含 SVG 加号图标，pill 形状 + hover 上浮投影 + active 缩放反馈。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
-| **删除按钮** | 删除按钮改为白色半透明圆（`rgba(255,255,255,0.25)`），hover 时背景加深 + 旋转 90° + 不透明度 1，active 时缩小。使用 `closest('.tag-item')` 传递 DOM 引用实现局部动画，不影响其他标签。涉及文件：[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
-| **空状态** | 空标签列表改为虚线边框容器（`border: 1.5px dashed var(--border)`）+ 标签 SVG 图标 + 提示文案"暂无标签，在上方输入名称添加"，带 fadeIn + translateY 入场动画。涉及文件：[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
-| **涉及的 spec** | [`.trae/documents/settings-tag-management-redesign-plan.md`](.trae/documents/settings-tag-management-redesign-plan.md) |
-
----
-
-## 记忆点 2：用户消息 Token 提前展示
+## 记忆点 1：用户消息 Token 提前展示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -559,7 +546,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
+## 记忆点 2：修复停止按钮在搜索/LLM 阶段的动画残留与错误误报
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -571,7 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：修复日志初始化顺序
+## 记忆点 3：修复日志初始化顺序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -584,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：移除快速笔记功能
+## 记忆点 4：移除快速笔记功能
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **迁移** | 用户如需快速记录，可手动点击 "+" 按钮或使用 Ctrl+N 快捷键 |
 | **涉及的 spec** | [`.trae/specs/remove-quick-note-mode/`](.trae/specs/remove-quick-note-mode/) |
 
-## 记忆点 6：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
+## 记忆点 5：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
 | **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
 
-## 记忆点 7：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
+## 记忆点 6：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：更多技能菜单固定高度与滚动支持
+## 记忆点 7：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 8：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 10：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 9：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,6 +641,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **关闭动画** | CSS 为 `.pwd-modal-card` 添加 `opacity: 0` 基态 + fade 过渡；JS `closeModal` 仅移除 `visible` class，通过 `transitionend` 事件自动设置 `display: none`，实现 0.2s 平滑淡出+微缩效果 |
 | **Ctrl+数字屏蔽** | 在 `handleKeyboardNavigation` 的 Ctrl+数字处理入口（[main.js](frontend/src/main.js)）新增 `#lockScreen` 可见性检查，锁屏打开时直接 return |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[app.go](app.go) |
+
+---
+
+## 记忆点 10：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+
+| 记忆点 | 内容 |
+|--------|------|
+| **`appendToSystemMessage` 辅助函数** | 在 [app.go](app.go) 中新增 `appendToSystemMessage(msgs []services.Message, content string) []services.Message` 函数，消除 `CallAIStream` 和 `CallAIStreamRegenerate` 中 14 处重复的"往 system 消息追加内容，不存在则新建"的 10 行代码块。每处调用从 10 行缩为 1 行 `messages = appendToSystemMessage(messages, content)`，净消除约 130 行重复。详见 [app.go#L2364-L2373](app.go#L2364-L2373) |
+| **搜索精炼使用 `userText`** | `CallAIStream` 签名中已有前端传入的 `userText` 参数，但搜索精炼阶段仍从 DB 加载消息列表再反向遍历找最后一条 user 消息。改为直接使用 `userText` 参数，消除不必要的数据库遍历。`CallAIStreamRegenerate` 保持不变（它没有 `userText` 参数）。详见 [app.go#L1678](app.go#L1678) |
+| **涉及文件** | [app.go](app.go) |
 
 ---
 
