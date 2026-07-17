@@ -2257,47 +2257,121 @@ async function initAISettings() {
     if (screenLockToggle) {
         screenLockToggle.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const isActive = screenLockToggle.classList.toggle('active');
+            const wasActive = screenLockToggle.classList.contains('active');
             const pwdRow = document.getElementById('screenLockPasswordRow');
-            if (pwdRow) {
-                pwdRow.style.display = isActive ? '' : 'none';
+
+            // 关闭锁屏时先确认
+            if (wasActive) {
+                const confirmed = await showConfirmDialog('确定关闭锁屏密码？关闭后已设置的密码将被清除。');
+                if (!confirmed) return;
             }
-            // 关闭锁屏时清空密码输入框，使后端清除密码
-            if (!isActive) {
-                const pwdInput = document.getElementById('screenLockPasswordInput');
-                if (pwdInput) pwdInput.value = '';
-            } else {
-                // 重新开启时，因密码已被清空，重置占位提示
-                const pwdInput = document.getElementById('screenLockPasswordInput');
-                if (pwdInput) pwdInput.placeholder = '输入锁屏密码后失焦自动保存';
+
+            const isActive = screenLockToggle.classList.toggle('active');
+            if (pwdRow) {
+                pwdRow.classList.toggle('collapsed', !isActive);
             }
             await saveSettings();
             nm.show(isActive ? '锁屏密码已启用' : '锁屏密码已关闭', 'info');
         });
     }
 
-    // 锁屏密码输入框失去焦点时保存（参考其他输入框的 change 事件模式）
-    const screenLockPwdInput = document.getElementById('screenLockPasswordInput');
-    if (screenLockPwdInput) {
-        screenLockPwdInput.addEventListener('change', async () => {
-            await saveSettings();
-            // 输入框非空 → 已设置密码，清空输入框 + 更新占位提示
-            if (screenLockPwdInput.value) {
-                screenLockPwdInput.value = '';
-                screenLockPwdInput.placeholder = '已设置密码，输入新密码可修改';
-            }
-            nm.show('锁屏密码已保存', 'success');
+    // ── 锁屏密码修改弹窗 ──
+    const pwdChangeBtn = document.getElementById('pwdChangeBtn');
+    const pwdModal = document.getElementById('pwdModal');
+    if (pwdChangeBtn && pwdModal) {
+        // 打开弹窗
+        pwdChangeBtn.addEventListener('click', () => {
+            const isPasswordSet = pwdChangeBtn.textContent.includes('修改密码');
+            document.getElementById('pwdOldField').style.display = isPasswordSet ? '' : 'none';
+            document.getElementById('pwdOldInput').value = '';
+            document.getElementById('pwdNewInput').value = '';
+            document.getElementById('pwdConfirmInput').value = '';
+            document.getElementById('pwdModalError').style.display = 'none';
+            document.getElementById('pwdModalSaveBtn').disabled = true;
+            pwdModal.style.display = 'flex';
+            requestAnimationFrame(() => pwdModal.classList.add('visible'));
+            setTimeout(() => {
+                (isPasswordSet ? document.getElementById('pwdOldInput') : document.getElementById('pwdNewInput')).focus();
+            }, 200);
         });
-    }
 
-    // 锁屏密码输入框的显示/隐藏
-    const screenLockPwdToggle = document.getElementById('screenLockPwdToggleBtn');
-    if (screenLockPwdToggle && screenLockPwdInput) {
-        screenLockPwdToggle.addEventListener('click', () => {
-            const isPassword = screenLockPwdInput.type === 'password';
-            screenLockPwdInput.type = isPassword ? 'text' : 'password';
-            screenLockPwdToggle.querySelector('.toggle-eye').style.display = isPassword ? 'none' : '';
-            screenLockPwdToggle.querySelector('.toggle-eye-off').style.display = isPassword ? '' : 'none';
+        // 关闭弹窗
+        const closeModal = () => {
+            pwdModal.classList.remove('visible');
+            pwdModal.style.display = 'none';
+        };
+        document.getElementById('pwdModalCloseBtn').addEventListener('click', closeModal);
+        document.getElementById('pwdModalCancelBtn').addEventListener('click', closeModal);
+        pwdModal.addEventListener('click', (e) => { if (e.target === pwdModal) closeModal(); });
+
+        // 表单输入验证
+        const validatePwdForm = () => {
+            const isPasswordSet = pwdChangeBtn.textContent.includes('修改密码');
+            const oldVal = document.getElementById('pwdOldInput').value;
+            const newVal = document.getElementById('pwdNewInput').value;
+            const confirmVal = document.getElementById('pwdConfirmInput').value;
+            const errorEl = document.getElementById('pwdModalError');
+            const saveBtn = document.getElementById('pwdModalSaveBtn');
+            errorEl.style.display = 'none';
+            if (isPasswordSet && !oldVal) { saveBtn.disabled = true; return; }
+            if (!newVal || !confirmVal) { saveBtn.disabled = true; return; }
+            if (newVal !== confirmVal) {
+                saveBtn.disabled = true;
+                errorEl.textContent = '两次密码输入不一致';
+                errorEl.style.display = '';
+                return;
+            }
+            saveBtn.disabled = false;
+        };
+        document.getElementById('pwdOldInput').addEventListener('input', validatePwdForm);
+        document.getElementById('pwdNewInput').addEventListener('input', validatePwdForm);
+        document.getElementById('pwdConfirmInput').addEventListener('input', validatePwdForm);
+
+        // 密码可见切换（按住显示）
+        document.querySelectorAll('.pwd-modal-eye').forEach(btn => {
+            const input = document.getElementById(btn.dataset.target);
+            if (!input) return;
+            const showPassword = () => { input.type = 'text'; };
+            const hidePassword = () => { input.type = 'password'; };
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); showPassword(); });
+            btn.addEventListener('mouseup', hidePassword);
+            btn.addEventListener('mouseleave', hidePassword);
+            // 触屏支持
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); showPassword(); });
+            btn.addEventListener('touchend', hidePassword);
+        });
+
+        // 保存密码
+        document.getElementById('pwdModalSaveBtn').addEventListener('click', async () => {
+            const saveBtn = document.getElementById('pwdModalSaveBtn');
+            saveBtn.disabled = true;
+            const isPasswordSet = pwdChangeBtn.textContent.includes('修改密码');
+            const oldPwd = isPasswordSet ? document.getElementById('pwdOldInput').value : '';
+            const newPwd = document.getElementById('pwdNewInput').value;
+            const confirmPwd = document.getElementById('pwdConfirmInput').value;
+            const errorEl = document.getElementById('pwdModalError');
+            if (newPwd !== confirmPwd) {
+                errorEl.textContent = '两次密码输入不一致';
+                errorEl.style.display = '';
+                saveBtn.disabled = false;
+                return;
+            }
+            if (!newPwd) {
+                errorEl.textContent = '新密码不能为空';
+                errorEl.style.display = '';
+                saveBtn.disabled = false;
+                return;
+            }
+            try {
+                await window.go.main.App.SetScreenLockPassword(oldPwd, newPwd);
+                closeModal();
+                document.getElementById('pwdChangeBtn').textContent = '修改密码';
+                nm.show('锁屏密码已保存', 'success');
+            } catch (err) {
+                errorEl.textContent = err.message || '保存失败，请重试';
+                errorEl.style.display = '';
+                saveBtn.disabled = false;
+            }
         });
     }
 
@@ -7122,6 +7196,13 @@ async function checkScreenLock() {
         // 延迟短暂时间后显示锁屏（等待UI完全渲染）
         setTimeout(() => {
             lockScreen.style.display = 'flex';
+            requestAnimationFrame(() => {
+                lockScreen.classList.add('entering');
+            });
+            // 入场动画约 650ms 后清除 entering class（最长 stagger 0.25s+0.4s）
+            setTimeout(() => {
+                lockScreen.classList.remove('entering');
+            }, 700);
             const input = document.getElementById('lockPasswordInput');
             if (input) setTimeout(() => input.focus(), 100);
         }, 100);
@@ -7138,11 +7219,28 @@ async function unlockApp() {
     const lockScreen = document.getElementById('lockScreen');
     const errorMsg = document.getElementById('lockErrorMsg');
     const unlockBtn = document.getElementById('lockUnlockBtn');
+    const lockIcon = document.querySelector('.lock-screen-icon');
 
     if (!input || !lockScreen) return;
 
     const password = input.value.trim();
-    if (!password) return;
+    if (!password) {
+        input.classList.add('shake');
+        if (lockIcon) lockIcon.classList.add('error-shake');
+        if (errorMsg) {
+            errorMsg.textContent = '请输入密码';
+            errorMsg.style.display = '';
+        }
+        setTimeout(() => {
+            input.classList.remove('shake');
+            if (lockIcon) lockIcon.classList.remove('error-shake');
+            input.focus();
+        }, 400);
+        setTimeout(() => {
+            if (errorMsg) errorMsg.style.display = 'none';
+        }, 800);
+        return;
+    }
 
     // 禁用按钮，防止重复点击
     if (unlockBtn) unlockBtn.disabled = true;
@@ -7151,25 +7249,33 @@ async function unlockApp() {
     try {
         const ok = await window.go.main.App.VerifyScreenLockPassword(password);
         if (ok) {
-            // 解锁成功 - "雾散"动画
+            // 解锁成功 - 内容向上飘散 + 模糊渐隐
             lockScreen.classList.add('exit');
             setTimeout(() => {
                 lockScreen.style.display = 'none';
                 lockScreen.classList.remove('exit');
                 if (unlockBtn) unlockBtn.disabled = false;
-            }, 450);
+            }, 500);
         } else {
-            // 解锁失败 - 抖动动画
+            // 解锁失败 - 抖动动画 + 提示
             input.classList.add('shake');
-            if (errorMsg) errorMsg.style.display = '';
+            if (lockIcon) lockIcon.classList.add('error-shake');
+            if (errorMsg) {
+                errorMsg.textContent = '密码错误，请重试';
+                errorMsg.style.display = '';
+            }
             input.value = '';
             if (unlockBtn) unlockBtn.disabled = false;
 
-            // 动画结束后移除 shake 类
+            // 动画结束后移除 shake 类，0.8 秒后隐藏提示
             setTimeout(() => {
                 input.classList.remove('shake');
+                if (lockIcon) lockIcon.classList.remove('error-shake');
                 input.focus();
             }, 400);
+            setTimeout(() => {
+                if (errorMsg) errorMsg.style.display = 'none';
+            }, 800);
         }
     } catch (e) {
         console.error('验证密码失败:', e);
@@ -7184,17 +7290,37 @@ function initLockScreenEvents() {
     const input = document.getElementById('lockPasswordInput');
     const unlockBtn = document.getElementById('lockUnlockBtn');
     const toggleBtn = document.getElementById('lockPasswordToggle');
+    const lockIcon = document.querySelector('.lock-screen-icon');
+
+    // 输入聚焦时锁子注视效果
+    if (input && lockIcon) {
+        input.addEventListener('focus', () => lockIcon.classList.add('focused'));
+        input.addEventListener('blur', () => lockIcon.classList.remove('focused'));
+    }
 
     // 回车触发解锁
     if (input) {
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') unlockApp();
         });
+        // 输入时清除错误提示
+        input.addEventListener('input', () => {
+            const errorMsg = document.getElementById('lockErrorMsg');
+            if (errorMsg) errorMsg.style.display = 'none';
+        });
     }
 
     // 点击解锁按钮
     if (unlockBtn) {
         unlockBtn.addEventListener('click', unlockApp);
+    }
+
+    // 退出应用按钮
+    const quitBtn = document.getElementById('lockQuitBtn');
+    if (quitBtn) {
+        quitBtn.addEventListener('click', () => {
+            Quit();
+        });
     }
 
     // 显示/隐藏密码
@@ -7911,15 +8037,14 @@ async function loadSettings() {
             const isEnabled = cfg.screen_lock_enabled === true || cfg.screen_lock_enabled === 'true';
             const toggle = document.getElementById('screenLockToggle');
             const pwdRow = document.getElementById('screenLockPasswordRow');
-            const pwdInput = document.getElementById('screenLockPasswordInput');
+            const changeBtn = document.getElementById('pwdChangeBtn');
             toggle.classList.toggle('active', isEnabled);
             if (pwdRow) {
-                pwdRow.style.display = isEnabled ? '' : 'none';
+                pwdRow.classList.toggle('collapsed', !isEnabled);
             }
-            // 密码已设置时显示占位提示，否则使用默认占位文字
-            if (pwdInput) {
+            if (changeBtn) {
                 const hasPassword = cfg.screen_lock_password && cfg.screen_lock_password !== '';
-                pwdInput.placeholder = hasPassword ? '已设置密码，输入新密码可修改' : '输入锁屏密码后失焦自动保存';
+                changeBtn.textContent = hasPassword ? '修改密码' : '设置密码';
             }
         }
     } catch (e) {
@@ -7968,7 +8093,6 @@ async function saveSettings() {
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
             screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
-            screen_lock_password: document.getElementById('screenLockPasswordInput')?.value || '',
         };
         await window.go.main.App.SaveAllSettings(cfg);
     } catch (e) {

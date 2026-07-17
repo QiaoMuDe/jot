@@ -833,7 +833,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.4s ease-out;
+}
+
+.lock-screen.entering .lock-screen-backdrop {
+  animation: lockBackdropEnter 0.35s ease-out both;
 }
 
 .lock-screen-backdrop {
@@ -842,7 +845,7 @@
   background: color-mix(in srgb, var(--bg, #1a1a2e) 85%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: backdrop-filter 0.4s ease-out, -webkit-backdrop-filter 0.4s ease-out;
+  transition: backdrop-filter 0.4s ease-out, -webkit-backdrop-filter 0.4s ease-out, opacity 0.4s ease-out;
 }
 
 .lock-screen-content {
@@ -864,6 +867,14 @@
   color: var(--accent, #6366f1);
   margin-bottom: 8px;
   opacity: 0.9;
+  animation: lockHover 3s ease-in-out infinite;
+}
+
+.lock-screen-icon.focused {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 50%, transparent));
+  transition: transform 0.3s ease, filter 0.3s ease;
+  animation: none;
 }
 
 .lock-screen-title {
@@ -971,6 +982,41 @@
   box-shadow: none;
 }
 
+/* ── 退出应用按钮 ── */
+.lock-screen-exit-btn {
+  width: 100%;
+  max-width: 280px;
+  height: 44px;
+  background: transparent;
+  color: var(--text-muted, #6b7280);
+  border: 1.5px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-lg, 12px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.lock-screen-exit-btn:hover {
+  color: var(--text-secondary, #9ca3af);
+  background: var(--hover-bg, rgba(128,128,128,0.06));
+  border-color: var(--text-muted, #6b7280);
+}
+
+.lock-screen-exit-btn:active {
+  transform: scale(0.98);
+}
+
+.lock-screen-exit-btn svg {
+  flex-shrink: 0;
+}
+
 .lock-screen-error {
   font-size: 0.813rem;
   color: var(--error, #ef4444);
@@ -982,17 +1028,29 @@
   pointer-events: none;
 }
 
+.lock-screen.exit .lock-screen-content {
+  opacity: 0;
+  transform: translateY(-24px) scale(0.95);
+  transition: all 0.45s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
 .lock-screen.exit .lock-screen-backdrop {
   backdrop-filter: blur(0px);
   -webkit-backdrop-filter: blur(0px);
   opacity: 0;
 }
 
-.lock-screen.exit .lock-screen-content {
+/* ── 入场 staggered 动画 ── */
+.lock-screen.entering .lock-screen-content > * {
   opacity: 0;
-  transform: translateY(-20px);
-  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+  transform: translateY(16px);
 }
+
+.lock-screen.entering .lock-screen-icon     { animation: lockContentEnter 0.4s ease-out 0.05s both; }
+.lock-screen.entering .lock-screen-title    { animation: lockContentEnter 0.4s ease-out 0.1s both; }
+.lock-screen.entering .lock-screen-input-wrap { animation: lockContentEnter 0.4s ease-out 0.15s both; }
+.lock-screen.entering .lock-screen-btn      { animation: lockContentEnter 0.4s ease-out 0.2s both; }
+.lock-screen.entering .lock-screen-exit-btn { animation: lockContentEnter 0.4s ease-out 0.25s both; }
 
 /* 输入的抖动动画（错误密码） */
 @keyframes lock-shake {
@@ -1004,4 +1062,35 @@
 .lock-screen-input.shake {
   animation: lock-shake 0.4s ease-in-out;
   border-color: var(--error, #ef4444);
+}
+
+/* ── 锁子图标呼吸悬浮 ── */
+@keyframes lockHover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ── 锁子受惊微颤 ── */
+@keyframes lockShake {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  20% { transform: translateY(-2px) rotate(-5deg); }
+  40% { transform: translateY(-1px) rotate(5deg); }
+  60% { transform: translateY(-2px) rotate(-3deg); }
+  80% { transform: translateY(-1px) rotate(3deg); }
+}
+
+.lock-screen-icon.error-shake {
+  animation: lockShake 0.4s ease;
+}
+
+/* ── 内容区入场 ── */
+@keyframes lockContentEnter {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 背景入场 ── */
+@keyframes lockBackdropEnter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

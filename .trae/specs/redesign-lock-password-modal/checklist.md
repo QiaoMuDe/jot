@@ -1,0 +1,27 @@
+# Checklist
+
+- [x] Task 1: 后端 SetScreenLockPassword 方法实现
+  - [x] app.go 新增 `SetScreenLockPassword(oldPwd, newPwd string) error`
+  - [x] 旧密码验证逻辑（已设密码时校验 oldPwd）
+  - [x] 新密码哈希保存（复用 sha256+salt 方案）
+  - [x] Go 构建通过
+- [x] Task 2: 前端 HTML 改造
+  - [x] 密码输入行替换为状态行（未设置/已启用 + 按钮）
+  - [x] 密码修改模态框 HTML 结构
+- [x] Task 3: 前端 CSS
+  - [x] 模态框遮罩层 + 卡片样式
+  - [x] 表单输入 + 错误提示样式
+  - [x] 按钮样式（保存/取消）
+- [x] Task 4: 前端 JS 逻辑
+  - [x] 移除 screenLockPwdInput 的 change 自动保存事件
+  - [x] 移除 screenLockPwdToggleBtn 的 click 事件
+  - [x] 实现模态框打开
+  - [x] 实现模态框关闭
+  - [x] 实现表单验证（新旧密码匹配、非空）
+  - [x] 实现保存（调用后端 SetScreenLockPassword）
+  - [x] 实现显示/隐藏按钮（mousedown/mouseup hold-to-show）
+  - [x] 更新设置加载时的密码行处理逻辑
+  - [x] 关闭 toggle 时保留确认弹窗
+- [x] Task 5: 验证
+  - [x] 前端 Vite 构建无错误
+  - [x] 后端 Go 构建无错误

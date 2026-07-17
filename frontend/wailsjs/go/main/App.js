@@ -418,6 +418,10 @@ export function SetPageSize(arg1) {
   return window['go']['main']['App']['SetPageSize'](arg1);
 }
 
+export function SetScreenLockPassword(arg1, arg2) {
+  return window['go']['main']['App']['SetScreenLockPassword'](arg1, arg2);
+}
+
 export function SetSetting(arg1, arg2) {
   return window['go']['main']['App']['SetSetting'](arg1, arg2);
 }

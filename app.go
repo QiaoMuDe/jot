@@ -1192,6 +1192,24 @@ func (a *App) VerifyScreenLockPassword(password string) bool {
 	return hex.EncodeToString(hash[:]) == stored
 }
 
+// SetScreenLockPassword 设置/修改锁屏密码
+// oldPwd: 旧密码（首次设置时传 ""），newPwd: 新密码
+// 仅当数据库中已有密码且 oldPwd 不匹配时返回错误
+func (a *App) SetScreenLockPassword(oldPwd, newPwd string) error {
+	if newPwd == "" {
+		return errors.New("新密码不能为空")
+	}
+	stored := a.settingService.Get("screen_lock_password")
+	if stored != "" {
+		oldHash := sha256.Sum256([]byte(oldPwd + "jot-screen-lock-salt"))
+		if hex.EncodeToString(oldHash[:]) != stored {
+			return errors.New("旧密码不正确")
+		}
+	}
+	newHash := sha256.Sum256([]byte(newPwd + "jot-screen-lock-salt"))
+	return a.settingService.Set("screen_lock_password", hex.EncodeToString(newHash[:]))
+}
+
 // GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 10000
 func (a *App) GetAIRefMaxChars() int {
 	a.LogSvc.Logger.Debugw("GetAIRefMaxChars")

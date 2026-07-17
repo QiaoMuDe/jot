@@ -212,6 +212,8 @@ export function SetAISearchResultLimit(arg1:number):Promise<void>;
 
 export function SetPageSize(arg1:number):Promise<void>;
 
+export function SetScreenLockPassword(arg1:string,arg2:string):Promise<void>;
+
 export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
 export function SetSortOrder(arg1:string):Promise<void>;

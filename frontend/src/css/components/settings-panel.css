@@ -1024,15 +1024,169 @@
 #screenLockPasswordRow {
   overflow: hidden;
   max-height: 60px;
+  min-height: 36px;
   opacity: 1;
   margin-top: 12px;
-  transition: max-height 0.2s ease-out, opacity 0.2s ease-out, margin 0.2s ease-out;
+  transition: max-height 0.2s ease-out, min-height 0.2s ease-out, opacity 0.2s ease-out, margin-top 0.2s ease-out, visibility 0.2s ease-out;
 }
 
-#screenLockPasswordRow[style*="display: none"],
-#screenLockPasswordRow[style*="display:none"] {
+#screenLockPasswordRow.collapsed {
   max-height: 0;
+  min-height: 0;
   opacity: 0;
   margin-top: 0;
   overflow: hidden;
+  visibility: hidden;
 }
+
+/* ── 锁屏密码修改弹窗 ── */
+.pwd-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.pwd-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pwd-modal-card {
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  width: 380px;
+  max-width: 88vw;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  transform: translateY(8px) scale(0.97);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pwd-modal-overlay.visible .pwd-modal-card {
+  transform: translateY(0) scale(1);
+}
+
+.pwd-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+.pwd-modal-title {
+  font-size: 1.063rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.pwd-modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+.pwd-modal-close-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.pwd-modal-body {
+  padding: 20px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pwd-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pwd-modal-label {
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.pwd-modal-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pwd-modal-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  padding-right: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+.pwd-modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.pwd-modal-eye {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+  z-index: 1;
+  padding: 0;
+}
+.pwd-modal-eye:hover {
+  color: var(--text-secondary);
+  background: var(--hover-bg);
+}
+.pwd-modal-eye:active .eye-off-icon,
+.pwd-modal-eye:active .eye-icon {
+  /* 视觉反馈 */
+}
+
+.pwd-modal-error {
+  font-size: 0.813rem;
+  color: var(--error);
+  padding: 6px 10px;
+  background: var(--error-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--error-border);
+  line-height: 1.4;
+}
+
+.pwd-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 4px 24px 20px;
+}
+
