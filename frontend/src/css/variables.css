@@ -1,30 +1,6 @@
-/* 设计系统变量 — Jot 温暖极简主题 */
+/* 设计系统共享令牌 */
 
 :root {
-    /* 配色 */
-    --bg: #F7F5F0;
-    --card-bg: #FFFFFF;
-    --text-primary: #2D2A24;
-    --text-secondary: #8B867C;
-    --text-muted: #A39E96;
-    --accent: #D97706;
-    --accent-light: #FDE68A;
-    --accent-lighter: #FEF3C7;
-    --selection-bg: rgba(var(--accent-rgb), 0.30);
-    --accent-dark: #B45309;
-    --border: #E5E0D8;
-    --divider: #EBE6DE;
-    --danger: #DC2626;
-    --hover-bg: #F3F0EB;
-    --topbar-bg: #FFFFFF;
-    --input-bg: #F3F1ED;
-
-    /* 阴影 */
-    --shadow-sm: 0 1px 3px rgba(45, 42, 36, 0.06);
-    --shadow-md: 0 4px 12px rgba(45, 42, 36, 0.08);
-    --shadow-lg: 0 8px 24px rgba(45, 42, 36, 0.10);
-    --shadow-xl: 0 12px 36px rgba(45, 42, 36, 0.12);
-
     /* 圆角 */
     --radius-sm: 6px;
     --radius-md: 8px;
@@ -73,8 +49,35 @@
                         color var(--anim-duration-slow) ease-out,
                         border-color var(--anim-duration-slow) ease-out,
                         box-shadow var(--anim-duration-slow) ease-out;
+}
 
-    /* 主题系统 - 新增变量 */
+/* ===== 默认主题（温暖极简） ===== */
+[data-theme="default"] {
+    /* 配色 */
+    --bg: #F7F5F0;
+    --card-bg: #FFFFFF;
+    --text-primary: #2D2A24;
+    --text-secondary: #8B867C;
+    --text-muted: #A39E96;
+    --accent: #D97706;
+    --accent-light: #FDE68A;
+    --accent-lighter: #FEF3C7;
+    --selection-bg: rgba(var(--accent-rgb), 0.30);
+    --accent-dark: #B45309;
+    --border: #E5E0D8;
+    --divider: #EBE6DE;
+    --danger: #DC2626;
+    --hover-bg: #F3F0EB;
+    --topbar-bg: #FFFFFF;
+    --input-bg: #F3F1ED;
+
+    /* 阴影 */
+    --shadow-sm: 0 1px 3px rgba(45, 42, 36, 0.06);
+    --shadow-md: 0 4px 12px rgba(45, 42, 36, 0.08);
+    --shadow-lg: 0 8px 24px rgba(45, 42, 36, 0.10);
+    --shadow-xl: 0 12px 36px rgba(45, 42, 36, 0.12);
+
+    /* 主题系统变量 */
     --accent-rgb: 217, 119, 6;
     --danger-bg: #fef2f2;
     --danger-border: #fecaca;

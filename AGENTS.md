@@ -534,30 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：CM6 行号栏内容穿透修复 — padding 从 scroller 移到 content
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 水平拖动 CM6 编辑器滚动条时，编辑内容向左移动，穿过行号栏（gutter）显示在左侧空白区域 |
-| **根因** | `.cm-scroller` 的 `padding-left: 20px` 将 flex 布局中 gutter 的初始位置推到 `left: 20px`。虽然 `position: sticky; left: 0` 理论上应把 gutter 拉回 `left: 0`，但 sticky 的"回拉"只在元素即将滚出视口时生效，初始状态下 gutter 停留在 `left: 20px`，左侧出现 20px 空白区域，内容移入该区域即"穿过"行号栏 |
-| **修复** | ① 移除 `.cm-scroller` 的 `padding-left`（`padding: 0 1px 1px 20px` → `padding: 0 1px 1px 0`，注意 CSS 三值简写 `padding: 0 1px 1px` 中 left 继承 right 值 1px，需显式四值保证 left=0）；② 将左间距转移到 `.cm-content` 主题的 `paddingLeft: '20px'`，保持编辑内容起始位置不变（`.cm-line` 已有 6px padding，合计 26px 不变） |
-| **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.cm-scroller` padding 修改）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（`.cm-content` 新增 `paddingLeft: '20px'`） |
-| **不变内容** | gutter 的 `position: sticky` 由 CM6 内联设置不变；`left: 0` 和 `z-index: 200` CSS 不变；CM6 基类样式不变；`.cm-gutters` 背景色不变 |
-
-## 记忆点 2：代码块水平滚动条粗细问题 — `::-webkit-scrollbar` 与 `scrollbar-width` 冲突
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 笔记预览区（`.md-rendered pre`）和 AI 消息区（`.ai-msg-assistant pre`）代码块的水平滚动条太粗（~6px），无法缩减到 4px，且 hover 显隐调试困难 |
-| **根因** | 两套 CSS 滚动条控制机制冲突：① `scrollbar-width: thin`（CSS 标准）在 `overflow-y: hidden` 的 `pre` 上对水平滚动条不生效（Chromium 已知行为），回退到默认粗滚动条；② `::-webkit-scrollbar` 伪元素的宽高被 `scrollbar-width: thin` 压制无法生效；③ 全局 [scrollbar.css](frontend/src/css/scrollbar.css) 的 `::-webkit-scrollbar { width: 6px; height: 6px }` 作用于所有元素，`pre` 自定义 4px 宽高被覆盖 |
-| **当前状态** | 改用 `scrollbar-color` 控制 hover 显隐（`transparent transparent` → hover 时 `var(--scrollbar-thumb) transparent`），`overflow: auto` 让 `scrollbar-width: thin` 对水平滚动条生效。但粗细问题仍未解决——`scrollbar-width: thin` 和 `::-webkit-scrollbar` 两套机制在 Chromium WebView2 中互相干扰，自定义 4px 宽高无法生效 |
-| **尝试过的方案** | ① 移除 `scrollbar-width: thin` 只留 `::-webkit-scrollbar { width: 4px }` + `scrollbar-color` → 滚动条完全消失；② 移除 `::-webkit-scrollbar` 只留 `scrollbar-width: thin` + `scrollbar-color` → hover 显隐工作但粗细仍为 6px（`scrollbar-width: thin` 被全局 `::-webkit-scrollbar { width: 6px }` 压制）；③ 同时保留 `scrollbar-width: thin` + `::-webkit-scrollbar { width: 4px }` + `scrollbar-color` → hover 显隐工作但粗细仍为 6px（两套机制互相压制）|
-| **涉及文件** | [frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.md-rendered pre` 滚动条样式）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-msg-assistant pre` 滚动条样式）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（全局 `::-webkit-scrollbar { width: 6px }` 压制 `pre` 自定义宽度）|
-| **未解决问题** | 代码块水平滚动条仍为 6px（全局默认宽度），无法缩减到 4px。可能需要从全局 `scrollbar.css` 中移除 `::-webkit-scrollbar { width: 6px }` 或添加 `!important` 覆盖 `pre` 上的 `::-webkit-scrollbar` 宽高 |
-
----
-
-## 记忆点 3：更多技能菜单固定高度与滚动支持
+## 记忆点 1：更多技能菜单固定高度与滚动支持
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -568,7 +545,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 2：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +556,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 5：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 3：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -596,7 +573,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 4：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 5：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：NSIS 安装包记住安装路径
+## 记忆点 6：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 7：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,20 +615,40 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 10：主题下拉菜单自动化生成
+## 记忆点 8：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
 | **问题** | 系统主题和代码高亮主题的菜单项硬编码在 `index.html` 中，新增主题时需同时修改 JS 数据和 HTML 两处 |
 | **修复** | ① 删除 [index.html](frontend/index.html) 中两处硬编码的 `.theme-select-item` 列表（系统主题 14 项 + 代码高亮 11 项），容器改为 `<div class="theme-select-dropdown" id="themeDropdown">` 空结构；② 在 [main.js](frontend/src/main.js) 中新增 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 函数，遍历 JS 数据（`themeLabels` / `codeHighlightThemeLabels`）动态创建 `.theme-select-item` 并绑定点击事件；③ 简化 `initThemeSettings()` 和 `initCodeHighlightThemeSettings()` 只保留触发按钮 toggle + 外部点击关闭逻辑；④ 调用顺序调整为先 build 再 init |
 | **效果** | 今后新增主题只需修改 JS 数据（`themeLabels` / `codeHighlightThemePairing` + `variables.css` 变量块），无需改 HTML |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)、[frontend/index.html](frontend/index.html) |
+| **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（数据）、[frontend/src/main.js](frontend/src/main.js)（构建函数）、[frontend/index.html](frontend/index.html)（容器） |
 
 ---
 
-## 十、AGENTS.md 维护规范
+## 记忆点 9：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
-1. **第 1-9 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
+| 记忆点 | 内容 |
+|--------|------|
+| **变更** | 将 `variables.css` 中 `:root` 的双重职责（共享设计令牌 + 默认主题值）分离，`:root` 仅保留共享令牌，默认主题值移至独立的 `[data-theme="default"]` 块 |
+| **原因** | 之前 `:root` 同时承担共享令牌和默认主题双重职责，不利于主题系统的纯净性。剥离后每个主题块（含 default）都是完整自洽的，共享令牌从 `:root` 继承 |
+| **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
+| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
+
+## 记忆点 10：主题配置数据从 `main.js` 提取到独立模块
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更** | 将 `main.js` 中的 `themeLabels` 和 `codeHighlightThemePairing` 两个纯数据对象提取到 `js/theme-config.js`，通过 ES module export/import 供 `main.js` 使用 |
+| **原因** | 减少 `main.js` 体积，让主题配置集中管理，遵循已有的模块化分离模式（如 `constants.js`、`hljs-themes.js`） |
+| **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
+| **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 十二、AGENTS.md 维护规范
+
+1. **第 1-12 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
 2. **新增记忆点只保留最近 10 个**（即 `记忆点 1` ~ `记忆点 10`），每次新增一个记忆点时，删除最早的一个（例如新增 `记忆点 11` 时，删除 `记忆点 1`）
 3. **不要无序追加"新增记忆点"章节**——保持编号连续，超出 10 个时执行"先进先出"淘汰
 4. **详细的变更记录请写在 `.trae/specs/` 或 `.trae/documents/` 中**，AGENTS.md 仅作为快速参考
@@ -659,3 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 6. **第 八 章"待优化点"** 中的"已实现"列表仅在重大功能完成时归档，小修改不必追加条目
 7. **所有文件引用必须使用相对路径**（从项目根目录开始，如 `frontend/src/js/ai-chat.js`），禁止使用绝对路径（如 `file:///d:/.../frontend/...`），确保项目克隆到任意机器后链接仍然有效，且不泄露本地目录结构
 8. **ESC 快捷键统一在全局 `handleKeyboardNavigation` 函数（[main.js](frontend/src/main.js)）中处理**，不要在模块或组件中单独注册 ESC 监听器（如密码弹窗、确认对话框、自定义浮层等），确保快捷键入口集中、行为可控、避免冲突
+9. **系统主题维护规范**：新增或修改系统主题需同时修改以下两处文件——
+   - **[variables.css](frontend/src/css/variables.css)**：新增一个完整的 `[data-theme="..."]` 变量块，包含所有主题色变量（配色、阴影、主题系统变量、语义色、分层阴影），参照已有主题块的结构和值类型
+   - **[theme-config.js](frontend/src/js/theme-config.js)**：在 `themeLabels` 中添加主题 key → 中文显示名的映射；在 `codeHighlightThemePairing` 中添加主题 key → 推荐代码高亮主题的配对映射
+   - 无需修改 `index.html` 或 `main.js`（主题下拉菜单已由 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 自动生成）
