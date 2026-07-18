@@ -135,15 +135,8 @@ let skillChips = null;           // #aiChatSkillChips
 
 
 // 优化表达提示词（输入框内嵌按钮专用，与下拉菜单的「文本润色」技能区分）
-const OPTIMIZE_EXPRESSION_PROMPT = `你是专业的文本表达优化师，负责将用户的口语化表述、零散想法，优化为逻辑清晰、表达精准、语气得体的正式文本。
-
-【规则】
-1. 100%保留用户的核心意思和观点，绝不改变原意
-2. 理顺逻辑结构，去掉冗余口语、重复表述，让表达更凝练
-3. 保持自然的中文表达习惯，不生硬、不堆砌辞藻
-4. 根据内容自动适配语气：日常交流保持平实，正式内容保持严谨
-
-请直接输出优化后的文本，不添加任何额外解释。`;
+// 仅保留身份设定，优化指令嵌入到 user 消息中，避免模型将用户输入当作问题回答
+const OPTIMIZE_EXPRESSION_PROMPT = `你是专业的文本表达优化师，负责优化用户提供的文本。`;
 
 /**
  * 加载模型配置到选择器 UI
@@ -509,7 +502,7 @@ function bindEvents() {
             try {
                 const result = await window.go.main.App.CallAI([
                     { role: 'system', content: OPTIMIZE_EXPRESSION_PROMPT },
-                    { role: 'user', content: text }
+                    { role: 'user', content: '请优化以下文本，只输出优化后的结果，不要回答任何问题。\n\n【规则】\n1. 100%保留用户的核心意思和观点，绝不改变原意\n2. 理顺逻辑结构，去掉冗余口语、重复表述，让表达更凝练\n3. 保持自然的中文表达习惯，不生硬、不堆砌辞藻\n4. 根据内容自动适配语气：日常交流保持平实，正式内容保持严谨\n\n【输出要求】\n- 只输出优化后的文本，不添加任何额外解释、说明、开头语或结尾语\n- 绝对不要对用户输入的内容进行回答、评论或补充\n\n以下是需要优化的文本：\n\n"""\n' + text + '\n"""' }
                 ]);
                 if (result) {
                     // 清除加载态
@@ -2491,7 +2484,7 @@ function renderMarkdown(el, content, deferHighlight) {
         // 复制按钮 (放在 pre-wrapper 内、pre 外部，避免随 pre 滚动)
         const copyBtn = document.createElement('button');
         const isSingleLine = code && !code.textContent.trim().includes('\n');
-        copyBtn.className = 'code-copy-btn' + (isSingleLine ? ' code-copy-btn--single' : '');
+        copyBtn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
         copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制`;
         copyBtn.title = '复制代码';
         copyBtn.addEventListener('click', async () => {

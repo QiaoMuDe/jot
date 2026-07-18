@@ -363,7 +363,7 @@
    预览区代码块复制按钮
    ========================================================================== */
 
-.md-rendered pre {
+:is(.md-rendered, .ai-msg-assistant) pre {
     position: relative;
     padding: 12px 16px 4px 16px;
     border-radius: var(--radius-sm);
@@ -378,12 +378,12 @@
     line-height: 1.6;
 }
 
-.md-rendered pre:hover {
+:is(.md-rendered, .ai-msg-assistant) pre:hover {
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 /* 预览区代码块滚动条：宽度覆盖全局 6px，显隐由 scrollbar-color 控制 */
-.md-rendered pre::-webkit-scrollbar {
+:is(.md-rendered, .ai-msg-assistant) pre::-webkit-scrollbar {
     width: 4px;
     height: 4px;
 }
@@ -420,7 +420,13 @@
     vertical-align: middle;
 }
 
-.md-rendered pre:hover .copy-code-btn {
+:is(.md-rendered, .ai-msg-assistant) pre:hover .copy-code-btn {
+    opacity: 1;
+}
+
+/* AI 消息代码块：复制按钮在 .pre-wrapper 内、pre 外部，需额外 hover 规则 */
+.ai-msg-assistant .pre-wrapper:hover .copy-code-btn,
+.ai-msg-assistant .copy-code-btn:hover {
     opacity: 1;
 }
 
@@ -1119,7 +1125,7 @@
   color: var(--text-secondary);
 }
 
-.md-rendered code {
+:is(.md-rendered, .ai-msg-assistant) code {
   font-family: var(--font-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
   font-size: 0.85em;
   padding: 0.15em 0.4em;
@@ -1128,7 +1134,7 @@
   color: var(--text-primary);
 }
 
-.md-rendered pre code {
+:is(.md-rendered, .ai-msg-assistant) pre code {
   display: block;
   padding: 0;
   font-size: 0.85rem;
@@ -1140,7 +1146,7 @@
 }
 
 /* highlight.js 在浅色背景下的代码高亮适配 */
-.md-rendered .hljs {
+:is(.md-rendered, .ai-msg-assistant) .hljs {
   background: transparent;
   padding: 0;
 }

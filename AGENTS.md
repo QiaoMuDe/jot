@@ -69,14 +69,14 @@ jot/                                    # 项目根目录
 │   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮/更多菜单含图标）
 │   │           ├── main-content.css    # 主内容区布局（卡片网格/视图容器/滚动）
 │   │           ├── sidebar.css         # 笔记本侧边栏三段式设计 + 折叠按钮
-│   │           ├── editor.css          # 编辑器面板/CM6 主题/全屏/预览/代码块复制按钮
+│   │   │   │   ├── editor.css          # 编辑器面板/CM6 主题/全屏/预览/代码块复制按钮（含 AI 消息代码块）
 │   │           ├── dropdowns.css       # 右键菜单/更多菜单/下拉选择器
 │   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层/快捷键页面样式（shortcut-row flex 水平布局）
 │   │           ├── settings-panel.css  # 设置页分段控件/滑块/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
-│   │           ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/代码高亮/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
+│   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距）
 │   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -546,20 +546,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
----
-
-## 记忆点 1：大文件 .md 笔记自动切换纯文本模式
-
-| 记忆点 | 内容 |
-|--------|------|
-| **功能** | 后缀为 `.md` 的笔记在查看模式下，当内容长度超过用户设置的"引用截断字数"（`ai_ref_max_chars`，默认 10000）时，自动跳过 Markdown 预览渲染，以 CM6 纯文本只读模式显示，避免大文件 Markdown 渲染（`marked.parse()` + `hljs`）导致的卡顿 |
-| **阈值来源** | 复用设置页中已有的"引用截断字数"输入框（`#aiRefMaxChars`）的值，从 DOM 读取，默认 10000 |
-| **实现** | 在 `openEditor` 阶段二内容加载完成后、预览渲染触发前（[main.js#L3397-L3410](frontend/src/main.js#L3397-L3410)），插入大小检查：`editorContent.length > refMaxChars` 时调用 `switchEditorMode('edit')` + `_setPreviewLayout(false)` + `_closeToc()` 并提示用户；否则正常走 `updatePreview()` |
-| **用户交互** | 大文件自动显示为 CM6 纯文本（只读），用户仍可手动点击"预览"按钮切换到 Markdown 渲染 |
-| **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
-| **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
-
-## 记忆点 2：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 1：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -576,7 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 2：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -586,7 +573,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 3：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：NSIS 安装包记住安装路径
+## 记忆点 4：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +596,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 5：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 7：主题下拉菜单自动化生成
+## 记忆点 6：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 7：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 9：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 8：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -647,7 +634,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 10：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 9：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,6 +645,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitDB` 中 4 个 PRAGMA）、[app.go](app.go)（`replaceDatabase` 中 WAL 文件清理） |
 
 ---
+
+## 记忆点 10：代码块样式统一 + 优化表达提示词修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **代码块样式统一** | 将 AI 消息代码块样式合并到 [editor.css](frontend/src/css/components/editor.css)，删除 [ai-chat.css](frontend/src/css/components/ai-chat.css) 中重复的 ~133 行样式。editor.css 中 `.md-rendered` 选择器改为 `:is(.md-rendered, .ai-msg-assistant)` 覆盖两个区域。AI 消息复制按钮类名从 `code-copy-btn` 改为 `copy-code-btn`，与笔记预览保持一致。`pre:hover` 的复制按钮显隐扩展为 `pre:hover .copy-code-btn, .pre-wrapper:hover .copy-code-btn, .copy-code-btn:hover` 以适配 AI 消息的 DOM 结构。 |
+| **优化表达提示词修复** | 优化按钮 `CallAI` 调用时模型常将用户输入当作问题回答。根因：优化指令在 `system` 角色消息中，模型对 `user` 角色消息的权重更高。修复方案：精简 system 提示词为简短身份设定，将完整优化规则嵌入 `user` 消息中（`'请优化以下文本...\n\n"""\n' + text + '\n"""'`），使模型将用户输入视为待优化文本而非问题。 |
+| **涉及文件** | [editor.css](frontend/src/css/components/editor.css)（`:is()` 选择器扩展）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（删除重复样式）、[ai-chat.js](frontend/src/js/ai-chat.js)（类名 + 消息结构） |
 
 ## 十二、AGENTS.md 维护规范
 
