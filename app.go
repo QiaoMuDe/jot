@@ -3018,6 +3018,10 @@ func (a *App) replaceDatabase(srcDBPath, srcImagesDir string) error {
 	}
 	_ = sqlDB.Close()
 
+	// 清理 WAL 模式残留文件，防止导入/还原时旧 WAL/SHM 文件干扰新数据库
+	_ = os.Remove(dbPath + "-wal")
+	_ = os.Remove(dbPath + "-shm")
+
 	// Step 3: 复制 db 文件
 	if err := fs.CopyEx(srcDBPath, dbPath, true); err != nil {
 		rollback()

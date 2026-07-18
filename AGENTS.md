@@ -18,7 +18,7 @@ jot/                                    # 项目根目录
 │
 ├── internal/                           # 【内部包】Go 子包统一目录
 │   ├── database/
-│   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ DefaultDBPath() 路径函数
+│   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
 │   ├── fontutil/
 │   │   └── fonts_windows.go           # EnumFontFamiliesW API 封装
 │   ├── models/
@@ -400,6 +400,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **API Key 存储** | Base64 编码存储在 DB 中，带 `(zk)` 前缀标识，前端读写均为解码后明文。仅防肉眼查看，非真实加密 |
 | **XSS 风险** | AI 回复经 `marked.parse()` 渲染，`marked` 默认 Sanitize |
 
+### 6.5 数据库优化
+
+| 优化项 | 配置 | 说明 |
+|--------|------|------|
+| **WAL 模式** | `PRAGMA journal_mode=WAL` | 允许并发读取，写入不阻塞读取，显著提升多线程场景性能 |
+| **busy_timeout** | `PRAGMA busy_timeout=5000` | 忙等待超时 5 秒，避免 "database is locked" 错误 |
+| **synchronous** | `PRAGMA synchronous=NORMAL` | WAL 模式下 NORMAL 级别安全且性能比 FULL 快得多 |
+| **cache_size** | `PRAGMA cache_size=-8000` | 8MB 页面缓存（负值表示 KB 单位） |
+- 初始化位置：`internal/database/db.go` 的 `InitDB()` 函数中，`SetMaxOpenConns(1)` 之后
+- PRAGMA 执行失败不影响初始化流程（忽略错误），由调用方统一处理错误日志
+- 导入/还原场景需清理 WAL 残留文件（`-wal`/`-shm`），防止旧文件干扰新数据库，清理逻辑在 `app.go` 的 `replaceDatabase()` 函数中
+
 ---
 
 ## 七、项目核心特点
@@ -532,20 +544,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 20. **AI 消息懒加载 + 后端上下文自取**：`CallAIStream` 重构为仅接收 `userText` 和元数据，后端自行从 DB 加载全部历史消息构建上下文。新增 `CallAIStreamRegenerate` 处理再生场景（接收元数据不含 userText，加载 DB 中最后一条用户消息）。新增 `LoadAISessionMessagesPaginated` 分页加载（游标 `beforeID`，默认 6 条 ASC）。编辑/删除/重发/再生从基于 `chatHistory.splice` 改为基于 `msgID` 的 `TruncateAISessionAtMessage`/`TruncateAISessionAfterMessage`。Token 显示改为后端 `SumSessionTokens` + `GetSessionContextTokens` 统计。`stream-done` 事件扩展为 9 参数（含 `userMsgID`/`assistantMsgID`）。详见 [app.go](app.go)、[ai_service.go](internal/services/ai_service.go)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
----
-
-## 记忆点 1：更多技能菜单固定高度与滚动支持
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | AI 助手"更多技能"下拉菜单向上展开时，若窗口高度不足或工具栏位置偏上，菜单内容被顶部视口遮挡，部分技能项无法查看和点击 |
-| **修复** | ① 给 `.ai-chat-skills-dropdown` 添加 `max-height: 300px` 和 `overflow-y: auto`，超出时显示纵向滚动条；② 添加 `scrollbar-color` 和 `::-webkit-scrollbar` 样式确保滚动条在 Firefox 和 WebKit 中均可见；③ 从 `min-width: 150px` 加宽到 `170px`；④ 缩短逐项动画延迟从 0.06~0.54s 到 0.02~0.26s，避免滚动容器中动画异常 |
-| **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-skills-dropdown` 样式修改）|
-| **涉及的 spec** | [`.trae/specs/fix-skills-dropdown-overflow/`](.trae/specs/fix-skills-dropdown-overflow/) |
+21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
 ---
 
-## 记忆点 2：大文件 .md 笔记自动切换纯文本模式
+## 记忆点 1：大文件 .md 笔记自动切换纯文本模式
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -556,7 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [main.js](frontend/src/main.js)（`openEditor` 中新增内容长度检查逻辑）|
 | **涉及的 spec** | [`.trae/documents/large-md-preview-auto-text-plan.md`](.trae/documents/large-md-preview-auto-text-plan.md) |
 
-## 记忆点 3：密码弹窗增强（键盘/动画/原生按钮隐藏）
+## 记忆点 2：密码弹窗增强（键盘/动画/原生按钮隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 3：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -583,7 +586,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 4：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：NSIS 安装包记住安装路径
+## 记忆点 5：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 6：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 8：主题下拉菜单自动化生成
+## 记忆点 7：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 8：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 10：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 9：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,13 +647,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
+## 记忆点 10：SQLite WAL 模式 + 多维度 PRAGMA 优化
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | 在数据库初始化阶段启用 WAL 模式并配置多项优化 PRAGMA，提升并发读取性能和写入响应速度。同时修复导入/还原场景下 WAL 残留文件导致的数据损坏风险。 |
+| **PRAGMA 配置** | ① `journal_mode=WAL` — 允许并发读取，写入不阻塞读取；② `busy_timeout=5000` — 忙等待 5 秒，减少 "database is locked" 错误；③ `synchronous=NORMAL` — WAL 下安全且性能比 FULL 快很多；④ `cache_size=-8000` — 8MB 页面缓存 |
+| **错误处理策略** | 所有 PRAGMA 执行失败均忽略错误（`_ = db.Exec(...).Error`），不中断初始化流程。调用方（`app.go`）根据 `InitDB` 返回值统一记录错误日志 |
+| **导入/还原兼容** | `replaceDatabase` 在关闭旧连接后、复制新数据库前，主动删除 `-wal` 和 `-shm` 残留文件，确保导入/还原后数据库一致 |
+| **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitDB` 中 4 个 PRAGMA）、[app.go](app.go)（`replaceDatabase` 中 WAL 文件清理） |
+
 ---
 
 ## 十二、AGENTS.md 维护规范
 
 1. **第 1-12 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
-2. **新增记忆点只保留最近 10 个**（即 `记忆点 1` ~ `记忆点 10`），每次新增一个记忆点时，删除最早的一个（例如新增 `记忆点 11` 时，删除 `记忆点 1`）
-3. **不要无序追加"新增记忆点"章节**——保持编号连续，超出 10 个时执行"先进先出"淘汰
+2. **记忆点顺序**：编号 1（最旧）→ 10（最新），从上到下按时间升序排列。新增记忆点时严格执行以下三步：
+   - **第一步**：删除最旧的条目（即 `记忆点 1`）
+   - **第二步**：将剩余条目顺移重新编号（原 2→1、原 3→2、……、原 10→9）
+   - **第三步**：在末尾追加新条目作为 `记忆点 10`
+3. **上限 10 条**，不得超出。禁止在顶部或中间插入新条目，新条目只追加在末尾
 4. **详细的变更记录请写在 `.trae/specs/` 或 `.trae/documents/` 中**，AGENTS.md 仅作为快速参考
 5. **更新关键文件统计**时，用 `Measure-Object -Line`（Windows）或 `wc -l`（Linux/macOS）获取实际行数
 6. **第 八 章"待优化点"** 中的"已实现"列表仅在重大功能完成时归档，小修改不必追加条目

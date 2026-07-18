@@ -24,56 +24,55 @@ func DefaultDBPath() (string, error) {
 // InitDB 初始化 SQLite 数据库连接并执行自动迁移
 // dbPath 为数据库文件路径, 默认为 ~/.jot/data/jot.db
 func InitDB(dbPath string) (*gorm.DB, error) {
-	fmt.Printf("正在初始化数据库...\n")
-
 	// 确保数据库文件所在目录存在
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		fmt.Printf("创建数据库目录失败: %v\n", err)
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// 打开 SQLite 连接 (使用纯 Go 实现的 glebarez/sqlite 驱动, 免 cgo)
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		fmt.Printf("连接数据库失败: %v\n", err)
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
 
 	// 配置连接池: SQLite 仅支持单连接写入
 	sqlDB, err := db.DB()
 	if err != nil {
-		fmt.Printf("获取 sql.DB 失败: %v\n", err)
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
 
+	// 配置 SQLite 优化 PRAGMA，提升并发读写性能
+	// WAL 模式：允许并发读取，写入不阻塞读取
+	_ = db.Exec("PRAGMA journal_mode=WAL").Error
+	// busy_timeout：忙等待超时 5 秒，避免 "database is locked" 错误
+	_ = db.Exec("PRAGMA busy_timeout=5000").Error
+	// synchronous=NORMAL：WAL 模式下安全且性能更好（比 FULL 快得多）
+	_ = db.Exec("PRAGMA synchronous=NORMAL").Error
+	// cache_size：8MB 页面缓存（负值表示 KB 单位）
+	_ = db.Exec("PRAGMA cache_size=-8000").Error
+
 	// 自动迁移数据模型
 	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}, &models.AISessionConfig{}); err != nil {
-		fmt.Printf("数据库迁移失败: %v\n", err)
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	fmt.Printf("数据库连接成功，正在初始化内置提示词...\n")
 	// 初始化内置技能提示词
 	if err := InitBuiltinPrompts(db); err != nil {
-		fmt.Printf("初始化内置提示词失败: %v\n", err)
 		return nil, fmt.Errorf("初始化内置提示词失败: %w", err)
 	}
 
 	// 初始化默认标签
 	if err := services.InitDefaultTags(db); err != nil {
-		fmt.Printf("初始化默认标签失败: %v\n", err)
 		return nil, fmt.Errorf("初始化默认标签失败: %w", err)
 	}
 
 	// 初始化默认设置（仅插入表中不存在的 key）
 	if err := InitDefaultSettings(db); err != nil {
-		fmt.Printf("初始化默认设置失败: %v\n", err)
 		return nil, fmt.Errorf("初始化默认设置失败: %w", err)
 	}
 
-	fmt.Printf("数据库就绪: %s\n", dbPath)
 	return db, nil
 }
 
@@ -505,10 +504,8 @@ func InitBuiltinPrompts(db *gorm.DB) error {
 		return nil
 	}
 	if err := db.Create(&prompts).Error; err != nil {
-		fmt.Printf("初始化内置提示词失败: %v\n", err)
 		return err
 	}
-	fmt.Printf("默认提示词已就绪 (共 %d 条)\n", len(prompts))
 	return nil
 }
 
@@ -570,9 +567,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		return nil
 	}
 	if err := db.Create(&toInsert).Error; err != nil {
-		fmt.Printf("初始化默认设置失败: %v\n", err)
 		return err
 	}
-	fmt.Printf("默认设置已就绪 (共 %d 条)\n", len(toInsert))
 	return nil
 }
