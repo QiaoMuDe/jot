@@ -5215,6 +5215,8 @@ function initEventListeners() {
                 switchView('todo');
             } else if (item.dataset.action === 'help') {
                 openShortcuts();
+            } else if (item.dataset.action === 'about') {
+                showAbout();
             }
         }
     });
@@ -5237,10 +5239,11 @@ function initEventListeners() {
     }
     setupSubmenu();
 
-    // 点击品牌名返回所有笔记
+    // 点击品牌名返回所有笔记（与其他页面返回逻辑一致）
     document.querySelector('.topbar-brand')?.addEventListener('click', () => {
         state.searchKeyword = '';
         switchView('grid');
+        loadNotes();
     });
 
     // 编辑器
@@ -5455,11 +5458,7 @@ function initEventListeners() {
         if (e.target === els.moveNotebookDialog) closeMoveDialog();
     });
 
-    // 关于页面
-    document.querySelector('.brand-name').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showAbout();
-    });
+    // 关于页面入口已移至菜单“帮助参考 > 关于”，品牌名点击由父级 .topbar-brand 统一处理
     els.aboutCloseBtn.addEventListener('click', closeAbout);
     els.viewAbout.addEventListener('click', (e) => {
         if (e.target === els.viewAbout) closeAbout();

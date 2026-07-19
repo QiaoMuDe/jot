@@ -484,7 +484,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **设置页 Token 默认隐藏 + 知乎 URL 修正**
 - [x] **存储优化增强**（回收站自动清理 + 孤儿笔记迁移 + 空 AI 会话清理 + VACUUM 整合流程）
 - [x] **批量管理重构**（FAB 入口 + CSS transition 动效 + 复选框移除 + 置顶按钮可操作）
-- [x] **更多菜单子菜单**（"帮助参考"合并快捷键/MD 语法，Ctrl+7→AI 助手）
+- [x] **更多菜单子菜单**（"帮助参考"合并快捷键/MD 语法/关于，Ctrl+7→AI 助手）
 - [x] **待办清单功能**（Todo CRUD + 输入筛选一体化工具栏 + 6 个 keyframes 动画 + 筛选按钮数量显示）
 - [x] **骨架屏编辑器**（点击笔记立即显示骨架屏 shimmer，异步加载内容后替换）
 - [x] **搜索来源 UI 优化**（内联卡片+折叠面板+SVG 图标+代码去重）
@@ -550,17 +550,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
-## 记忆点 1：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
-
-| 记忆点 | 内容 |
-|--------|------|
-| **`appendToSystemMessage` 辅助函数** | 在 [app.go](app.go) 中新增 `appendToSystemMessage(msgs []services.Message, content string) []services.Message` 函数，消除 `CallAIStream` 和 `CallAIStreamRegenerate` 中 14 处重复的"往 system 消息追加内容，不存在则新建"的 10 行代码块。每处调用从 10 行缩为 1 行 `messages = appendToSystemMessage(messages, content)`，净消除约 130 行重复。详见 [app.go#L2364-L2373](app.go#L2364-L2373) |
-| **搜索精炼使用 `userText`** | `CallAIStream` 签名中已有前端传入的 `userText` 参数，但搜索精炼阶段仍从 DB 加载消息列表再反向遍历找最后一条 user 消息。改为直接使用 `userText` 参数，消除不必要的数据库遍历。`CallAIStreamRegenerate` 保持不变（它没有 `userText` 参数）。详见 [app.go#L1678](app.go#L1678) |
-| **涉及文件** | [app.go](app.go) |
-
----
-
-## 记忆点 2：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 1：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -572,7 +562,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：NSIS 安装包记住安装路径
+## 记忆点 2：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -583,7 +573,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 3：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 5：主题下拉菜单自动化生成
+## 记忆点 4：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 5：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -612,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 7：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 6：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 8：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 7：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：代码块样式统一 + 优化表达提示词修复
+## 记忆点 8：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -643,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 9：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,6 +644,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **SVG 图标** | 在 [constants.js](frontend/src/js/constants.js) 新增 `SVGS.diagram`（流程图/网络图图标）和 `SVGS.code`（尖括号代码图标），Lucide 风格。按钮初始显示 `SVGS.diagram + ' 渲染'`，切换后 `SVGS.code + ' 源码'`。 |
 | **hljs 跳过** | `hljs.highlightElement()` 跳过 `code.language-mermaid`，避免语法高亮与 Mermaid 冲突。 |
 | **涉及文件** | [constants.js](frontend/src/js/constants.js)（图标）、[main.js](frontend/src/main.js)（渲染/切换/按钮创建）、[editor.css](frontend/src/css/components/editor.css)（按钮 + 切换样式）、[theme-config.js](frontend/src/js/theme-config.js)（`isDarkTheme`）、[package.json](frontend/package.json)（mermaid 依赖） |
+
+---
+
+## 记忆点 10：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将品牌名"Jot"的点击行为从"打开关于页面"改为"返回笔记首页"（与其他页面返回逻辑一致），同时在"帮助参考"子菜单中新增"关于"入口以保留关于页面的访问途径。 |
+| **移除 `.brand-name` 点击事件** | 删除 [main.js](frontend/src/main.js) 中 `.brand-name` 的 click 事件监听（原调用 `stopPropagation()` + `showAbout()`），品牌名点击事件冒泡到父级 `.topbar-brand`，统一执行返回首页逻辑。见 [main.js#L5458](frontend/src/main.js) |
+| **对齐返回行为** | `.topbar-brand` 的 click handler 新增 `loadNotes()`，与其他页面返回按钮完全一致（`switchView('grid'); loadNotes()`）。见 [main.js#L5240-L5245](frontend/src/main.js) |
+| **帮助参考子菜单新增"关于"** | 在 [index.html](frontend/index.html) 的"帮助参考"子菜单中新增 `data-action="about"` 的"关于"菜单项（带 info 圆圈图标）。见 [index.html#L91](frontend/index.html) |
+| **菜单点击事件分发** | [main.js](frontend/src/main.js) 中菜单 `data-action` 分发新增 `case 'about': showAbout()`，点击"关于"菜单项调用已有 `showAbout()` 函数打开关于浮层。见 [main.js#L5218-L5219](frontend/src/main.js) |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（移除 event listener + 对齐返回行为 + 增加 about 分发）、[frontend/index.html](frontend/index.html)（新增菜单项） |
 
 ## 十二、AGENTS.md 维护规范
 
