@@ -2429,7 +2429,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
  * 渐进式延迟处理代码块语法高亮，每批最多 8ms 后 yield
  */
 function deferHighlightBlocks(el) {
-    const blocks = [...el.querySelectorAll('pre code[class*="language-"]')];
+    const blocks = [...el.querySelectorAll('pre code[class*="language-"]')].filter(
+        b => !b.classList.contains('language-mermaid')
+    );
     if (!blocks.length) return;
     let index = 0;
     const schedule = () => {
@@ -2455,8 +2457,9 @@ function renderMarkdown(el, content, deferHighlight) {
         // 延迟高亮：渲染后渐进式处理代码高亮，不阻塞首次渲染
         deferHighlightBlocks(el);
     } else {
-        // 立即高亮（流式回复等需要即时展示的场景）
+        // 立即高亮（流式回复等需要即时展示的场景，跳过 Mermaid 代码块）
         el.querySelectorAll('pre code[class*="language-"]').forEach((block) => {
+            if (block.classList.contains('language-mermaid')) return;
             try { hljs.highlightElement(block); } catch (_) {}
         });
     }
@@ -2490,8 +2493,12 @@ function renderMarkdown(el, content, deferHighlight) {
         copyBtn.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(code.textContent);
+                // 先触发渲染按钮滑出动画，再变"已复制"
+                wrapper.classList.add('copying');
+                await new Promise(r => setTimeout(r, 200));
                 copyBtn.classList.add('copied');
                 copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制`;
+                wrapper.classList.remove('copying');
                 setTimeout(() => {
                     copyBtn.classList.remove('copied');
                     copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制`;
@@ -2541,6 +2548,11 @@ function renderMarkdown(el, content, deferHighlight) {
         });
         lastTh.appendChild(copyBtn);
     });
+
+    // 为 Mermaid 代码块设置交互结构（默认显示源码，不自动渲染）
+    if (window.renderMermaidBlocks) {
+        window.renderMermaidBlocks(el);
+    }
 }
 
 /**

@@ -1,9 +1,10 @@
 import hljs from 'highlight.js';
+import mermaid from 'mermaid';
 import { marked } from 'marked';
 import { EventsOn, Quit, WindowFullscreen, WindowIsFullscreen, WindowIsMaximised, WindowMinimise, WindowToggleMaximise, WindowUnfullscreen } from '../wailsjs/runtime/runtime.js';
 import './css/index.css';
 import { applyAIHighlightTheme } from './js/hljs-themes.js';
-import { themeLabels, codeHighlightThemePairing } from './js/theme-config.js';
+import { themeLabels, codeHighlightThemePairing, isDarkTheme } from './js/theme-config.js';
 
 // CodeMirror 6 导入
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
@@ -3568,14 +3569,17 @@ function initPreviewWorker() {
             const oldLoading = els.mdRendered.querySelector('.md-rendered-loading');
             // 设置渲染结果
             els.mdRendered.innerHTML = html;
-            // hljs 高亮（必须在主线程，需要 DOM 环境）
+            // hljs 高亮（必须在主线程，需要 DOM 环境，跳过 Mermaid 代码块）
             els.mdRendered.querySelectorAll('pre code').forEach((block) => {
+                if (block.classList.contains('language-mermaid')) return;
                 if (typeof hljs !== 'undefined') {
                     hljs.highlightElement(block);
                 }
             });
             // 复制按钮、语言标签、表格按钮等 DOM 后处理
             _applyPreviewDOMHelpers();
+            // 为 Mermaid 代码块设置交互结构（默认显示源码，不自动渲染）
+            renderMermaidBlocks(els.mdRendered);
             // 生成标题锚点 ID 并渲染 TOC
             _ensureHeadingIds();
             _renderToc(headings || []);
@@ -3612,39 +3616,16 @@ function initPreviewWorker() {
  * 预览渲染后的 DOM 辅助处理（复制按钮、语言标签、表格按钮）
  */
 function _applyPreviewDOMHelpers() {
-    // 代码高亮
+    // 代码高亮（跳过 Mermaid 代码块，由其独立渲染）
     els.mdRendered.querySelectorAll('pre code').forEach((block) => {
+        if (block.classList.contains('language-mermaid')) return;
         if (typeof hljs !== 'undefined') {
             hljs.highlightElement(block);
         }
     });
-    // 为每个代码块添加复制按钮
-    els.mdRendered.querySelectorAll('pre').forEach((pre) => {
-        if (pre.querySelector('.copy-code-btn')) return;
-        const btn = document.createElement('button');
-        const codeEl = pre.querySelector('code');
-        const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
-        btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
-        btn.innerHTML = SVGS.copy + ' 复制';
-        btn.title = '复制代码';
-        btn.addEventListener('click', async () => {
-            const code = pre.querySelector('code').textContent;
-            try {
-                await navigator.clipboard.writeText(code);
-                btn.classList.add('copied');
-                btn.innerHTML = SVGS.checkmark + ' 已复制';
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    btn.innerHTML = SVGS.copy + ' 复制';
-                }, 1500);
-            } catch {
-                btn.innerHTML = SVGS.xmark + ' 复制失败';
-                setTimeout(() => { btn.innerHTML = SVGS.copy + ' 复制'; }, 1000);
-            }
-        });
-        pre.appendChild(btn);
-    });
-    // 为每个代码块添加语言标签
+    // 先包裹 pre → .pre-wrapper，再添加语言标签
+    // （需要在添加复制按钮前完成包裹，使复制按钮直接放在 .pre-wrapper 内，
+    //  与 AI 消息的 DOM 结构一致，消除两个按钮间 1px 合成层偏移）
     els.mdRendered.querySelectorAll('pre').forEach((pre) => {
         if (pre.parentNode.classList.contains('pre-wrapper')) return;
         const code = pre.querySelector('code');
@@ -3660,6 +3641,37 @@ function _applyPreviewDOMHelpers() {
         badge.className = 'code-lang-badge';
         badge.textContent = lang.charAt(0).toUpperCase() + lang.slice(1);
         wrapper.appendChild(badge);
+    });
+    // 为每个代码块添加复制按钮（放在 .pre-wrapper 内，与 AI 消息 DOM 结构一致）
+    els.mdRendered.querySelectorAll('.pre-wrapper').forEach((wrapper) => {
+        if (wrapper.querySelector('.copy-code-btn')) return;
+        const pre = wrapper.querySelector('pre');
+        const codeEl = pre && pre.querySelector('code');
+        const btn = document.createElement('button');
+        const isSingleLine = codeEl && !codeEl.textContent.trim().includes('\n');
+        btn.className = 'copy-code-btn' + (isSingleLine ? ' copy-code-btn--single' : '');
+        btn.innerHTML = SVGS.copy + ' 复制';
+        btn.title = '复制代码';
+        btn.addEventListener('click', async () => {
+            const code = pre.querySelector('code').textContent;
+            try {
+                await navigator.clipboard.writeText(code);
+                // 先触发渲染按钮滑出动画，再变"已复制"
+                wrapper.classList.add('copying');
+                await new Promise(r => setTimeout(r, 200));
+                btn.classList.add('copied');
+                btn.innerHTML = SVGS.checkmark + ' 已复制';
+                wrapper.classList.remove('copying');
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = SVGS.copy + ' 复制';
+                }, 1500);
+            } catch {
+                btn.innerHTML = SVGS.xmark + ' 复制失败';
+                setTimeout(() => { btn.innerHTML = SVGS.copy + ' 复制'; }, 1000);
+            }
+        });
+        wrapper.appendChild(btn);
     });
     // 为每个表格添加复制按钮
     els.mdRendered.querySelectorAll('table').forEach((table) => {
@@ -3757,6 +3769,152 @@ function _applyPreviewDOMHelpers() {
         });
     });
 }
+
+/* ===== Mermaid 图表渲染 ===== */
+
+/** Mermaid 引擎是否已初始化 */
+let _mermaidInited = false;
+
+/**
+ * 一次性初始化 mermaid 引擎
+ * 设置 startOnLoad: false 由用户手动触发渲染，securityLevel: 'loose' 允许渲染 HTML
+ */
+function initMermaid() {
+    if (_mermaidInited) return;
+    mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        theme: getMermaidTheme(),
+    });
+    _mermaidInited = true;
+}
+
+/**
+ * 根据当前系统主题获取 Mermaid 主题名称
+ * @returns {'dark'|'default'}
+ */
+function getMermaidTheme() {
+    const themeName = document.documentElement.getAttribute('data-theme') || 'default';
+    return isDarkTheme[themeName] ? 'dark' : 'default';
+}
+
+/**
+ * 为单个 Mermaid 代码块设置交互结构
+ * 创建 .mermaid-rendered 容器 + .mermaid-toggle 按钮，默认显示源码
+ * @param {HTMLPreElement} pre - <pre> 元素
+ */
+function setupMermaidBlock(pre) {
+    if (pre.dataset.mermaidProcessed) return;
+    pre.dataset.mermaidProcessed = 'true';
+
+    const code = pre.querySelector('code.language-mermaid');
+    if (!code) return;
+
+    // 确保 pre 已被 pre-wrapper 包裹
+    let wrapper = pre.parentNode;
+    if (!wrapper.classList.contains('pre-wrapper')) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'pre-wrapper has-mermaid';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+    } else {
+        wrapper.classList.add('has-mermaid');
+    }
+
+    // 在 data-mermaid-code 中存储原始源码（去除首尾空白）
+    const mermaidCode = code.textContent.trim();
+    pre.dataset.mermaidCode = mermaidCode;
+
+    // 创建渲染结果容器（初始隐藏）
+    const rendered = document.createElement('div');
+    rendered.className = 'mermaid-rendered';
+    rendered.style.display = 'none';
+    wrapper.appendChild(rendered);
+
+    // 初始状态标记：源码视图
+    wrapper.dataset.mermaidView = 'source';
+
+    // 创建切换按钮
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'mermaid-toggle';
+    toggleBtn.innerHTML = SVGS.diagram + ' 渲染';
+    toggleBtn.title = '渲染为 Mermaid 图表';
+    toggleBtn.addEventListener('click', () => toggleMermaidView(toggleBtn));
+    wrapper.appendChild(toggleBtn);
+}
+
+
+/**
+ * 在渲染视图和源码视图之间切换，用 dataset.mermaidView 追踪状态
+ * 渲染流程：pre 淡出（200ms）→ display:none 彻底隐藏 → rendered 显示
+ * 切回流程：rendered 隐藏 → pre 即刻恢复（无动画）
+ * @param {HTMLButtonElement} btn - 切换按钮
+ */
+async function toggleMermaidView(btn) {
+    const wrapper = btn.parentNode;
+    const pre = wrapper.querySelector('pre');
+    const rendered = wrapper.querySelector('.mermaid-rendered');
+    if (!pre || !rendered) return;
+
+    if (wrapper.dataset.mermaidView === 'rendered') {
+        // 切回源码视图：取消未执行的切换定时器，恢复 pre，隐藏 rendered
+        if (wrapper._mermaidTimer) {
+            clearTimeout(wrapper._mermaidTimer);
+            wrapper._mermaidTimer = null;
+        }
+        rendered.style.display = 'none';
+        pre.style.display = '';
+        pre.classList.remove('pre-hiding');
+        wrapper.dataset.mermaidView = 'source';
+        btn.innerHTML = SVGS.diagram + ' 渲染';
+        btn.title = '渲染为 Mermaid 图表';
+    } else {
+        // 切到渲染视图
+        wrapper.dataset.mermaidView = 'rendered';
+        btn.innerHTML = SVGS.code + ' 源码';
+        btn.title = '显示源码';
+
+        // 异步渲染 SVG
+        const mermaidCode = pre.dataset.mermaidCode;
+        if (mermaidCode) {
+            mermaid.initialize({ theme: getMermaidTheme() });
+            const id = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+            try {
+                const { svg } = await mermaid.render(id, mermaidCode);
+                rendered.innerHTML = svg;
+            } catch (err) {
+                console.warn('Mermaid render error:', err);
+                rendered.innerHTML = `<div class="mermaid-error">Mermaid 渲染失败：${err.message}</div>`;
+            }
+        }
+
+        // 触发 pre 淡出
+        pre.classList.add('pre-hiding');
+        // 淡出完成后：隐藏 pre，显示 rendered
+        wrapper._mermaidTimer = setTimeout(() => {
+            pre.style.display = 'none';
+            pre.classList.remove('pre-hiding');
+            rendered.style.display = '';
+            wrapper._mermaidTimer = null;
+        }, 220);
+    }
+}
+
+/**
+ * 遍历容器中所有未处理的 Mermaid 代码块，为每个设置交互结构
+ * @param {HTMLElement} container - 包含渲染后 HTML 的容器元素
+ */
+function renderMermaidBlocks(container) {
+    if (!container) return;
+    initMermaid();
+    container.querySelectorAll('pre code.language-mermaid').forEach((code) => {
+        const pre = code.parentNode;
+        setupMermaidBlock(pre);
+    });
+}
+
+// 暴露给 AI 模块使用
+window.renderMermaidBlocks = renderMermaidBlocks;
 
 /**
  * 为预览中的 h1~h6 元素生成唯一锚点 ID
@@ -4037,6 +4195,7 @@ function updatePreview(content) {
     // 无 Worker 或 Worker 正忙时回退到主线程同步渲染
     els.mdRendered.innerHTML = marked.parse(content);
     _applyPreviewDOMHelpers();
+    renderMermaidBlocks(els.mdRendered);
     // 主线程回退路径，自己提取标题
     _integrateToc();
     // 回退路径的淡入动画

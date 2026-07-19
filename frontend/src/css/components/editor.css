@@ -394,7 +394,7 @@
 
 .copy-code-btn {
     position: absolute;
-    top: 6px;
+    top: 8px;
     right: 6px;
     padding: 2px 8px;
     border: 1px solid var(--border);
@@ -410,7 +410,10 @@
     z-index: 1;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    min-width: 62px;
+    text-align: center;
 }
 
 .copy-code-btn svg {
@@ -424,9 +427,10 @@
     opacity: 1;
 }
 
-/* AI 消息代码块：复制按钮在 .pre-wrapper 内、pre 外部，需额外 hover 规则 */
-.ai-msg-assistant .pre-wrapper:hover .copy-code-btn,
-.ai-msg-assistant .copy-code-btn:hover {
+/* 代码块复制按钮 hover 兜底：鼠标在 .pre-wrapper（含 Mermaid 切换按钮）或按钮自身上时也保持显示
+   覆盖笔记（复制按钮在 pre 内部）和 AI 消息（复制按钮在 pre-wrapper 内部）两种 DOM 结构 */
+:is(.md-rendered, .ai-msg-assistant) .pre-wrapper:hover .copy-code-btn,
+:is(.md-rendered, .ai-msg-assistant) .copy-code-btn:hover {
     opacity: 1;
 }
 
@@ -1297,4 +1301,92 @@
   color: #fff;
   border-color: rgba(255,255,255,.25);
   transform: scale(1.08);
+}
+
+/* ==========================================================================
+   Mermaid 图表渲染
+   ========================================================================== */
+
+/* 渲染结果容器：居中显示 SVG，处理溢出 */
+.mermaid-rendered {
+    padding: 16px 0;
+    text-align: center;
+    overflow-x: auto;
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-rendered svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Mermaid 源码淡出动画：点击渲染后 pre 执行 200ms 淡出后彻底隐藏 */
+.pre-wrapper.has-mermaid pre {
+    transition: opacity 0.2s ease;
+}
+.pre-wrapper.has-mermaid pre.pre-hiding {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Mermaid 切换按钮：与复制按钮相同风格，定位在右上角复制按钮左侧 */
+:is(.md-rendered, .ai-msg-assistant) .pre-wrapper.has-mermaid .mermaid-toggle {
+    position: absolute;
+    top: 8px;
+    right: 72px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1.6;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    z-index: 2;
+    user-select: none;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 62px;
+    text-align: center;
+}
+:is(.md-rendered, .ai-msg-assistant) .pre-wrapper.has-mermaid:hover .mermaid-toggle,
+:is(.md-rendered, .ai-msg-assistant) .pre-wrapper.has-mermaid .mermaid-toggle:hover {
+    opacity: 1;
+}
+:is(.md-rendered, .ai-msg-assistant) .pre-wrapper.has-mermaid .mermaid-toggle:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-color: var(--accent);
+    transform: scale(1.08);
+}
+
+/* 复制过程中或已复制时，Mermaid 切换按钮平滑滑出隐藏（防宽度膨胀遮挡）
+   .copying 用于首次触发动画，:has() 在 1500ms 延续期内保持隐藏 */
+.pre-wrapper.has-mermaid.copying .mermaid-toggle,
+.pre-wrapper.has-mermaid:has(.copy-code-btn.copied) .mermaid-toggle {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-8px);
+}
+
+/* Mermaid 错误提示 */
+.mermaid-error {
+    color: #e74c3c;
+    font-size: 13px;
+    padding: 8px 16px;
+    text-align: left;
+    word-break: break-word;
+    max-width: 100%;
 }

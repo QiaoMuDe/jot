@@ -337,6 +337,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **编辑器** | CodeMirror 6 | @codemirror/view v6.26 | 笔记编辑器 |
 | **Markdown 解析** | marked | v12.0 | Markdown → HTML 渲染 |
 | **代码高亮** | highlight.js | v11.10 | 代码块语法高亮 |
+| **Mermaid 图表** | mermaid | v11.4 | Markdown 代码块图表渲染（mermaid/render 子路径） |
 | **AI 对话** | 自研 aicli 客户端（go-openai + ollama 双驱动） | github.com/sashabaranov/go-openai v1.41.2 + github.com/ollama/ollama v0.31.1 | 流式对话/深度思考/多会话/联网搜索/卡片召回 |
 | **本地存储** | localStorage | — | UI 状态持久化（主题/侧栏状态等） |
 
@@ -434,6 +435,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 8. **无 UI 框架依赖**：无 Vue/React/Svelte，纯手写 DOM 操作，极致轻量
 
+9. **Mermaid 图表渲染集成**：为 Markdown 代码块中的 `language-mermaid` 块提供按需渲染，默认显示源码，点击渲染按钮后直接主线程渲染 SVG。切换按钮与复制按钮风格统一，CSS `:has()` 处理双按钮防碰撞。
+
 ### 设计系统
 
 - **尺寸**：`--radius-md`(8px) / `--radius-sm`(6px)，全局统一
@@ -499,6 +502,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **标签管理卡片重设计**（pill 形状标签芯片 + stagger 入场动画 + hover 上浮 + 删除动画 + 预设色圈选择器 + 虚线边框空状态 + 圆角输入框/按钮）
 - [x] **AI 消息懒加载 + 后端上下文自取**（CallAIStream 从 DB 加载历史、LoadAISessionMessagesPaginated 分页、TruncateAISessionAtMessage/AfterMessage 截断、CallAIStreamRegenerate 后端读取末条用户消息再生、SumSessionTokens 后端统计 Token）
 - [x] **锁屏密码 UI 精简**（移除独立状态标签，按钮文本自述状态，模态框根据状态动态显示旧密码输入框）
+- [x] **Mermaid 图表支持**（代码块按需渲染 + 源码/视图切换 + 主题联动 isDarkTheme + 双按钮 SVG 图标 + 复制/渲染按钮防碰撞动画）
 
 ---
 
@@ -546,24 +550,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
-## 记忆点 1：密码弹窗增强（键盘/动画/原生按钮隐藏）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 围绕锁屏密码弹窗（`#pwdModal`）的多项体验优化：隐藏浏览器原生密码显示按钮、toggle 关闭后按钮文字同步、改为点击切换密码显隐、新增新旧密码一致性校验、ESC/Enter 快捷键支持、关闭动画 |
-| **隐藏原生按钮** | 在 [settings-panel.css](frontend/src/css/components/settings-panel.css) 中为 `.pwd-modal-input` 添加 `::-ms-reveal`/`::-ms-clear`/`::-webkit-credentials-auto-fill-button` 规则，隐藏浏览器自带的密码显示按钮 |
-| **按钮文字同步** | [main.js](frontend/src/main.js) toggle 关闭锁屏后重置 `pwdChangeBtn.textContent` 为"设置密码"，防止密码已清空仍显示"修改密码" |
-| **密码显隐切换** | 三个密码输入框的 `.pwd-modal-eye` 从"按住显示"（`mousedown`/`mouseup`/`mouseleave`）改为"点击切换"（`click` 事件 + 图标显隐切换），与 API Key 输入框行为一致 |
-| **新旧密码一致性** | 修改密码时前后端（[main.js](frontend/src/main.js) 和 [app.go](app.go)）均校验 `newPwd !== oldPwd`，相同则显示"新密码不能与旧密码相同" |
-| **ESC 快捷键** | 在全局 `handleKeyboardNavigation`（[main.js](frontend/src/main.js)）中新增 `#pwdModal` 可见性检查，按下 ESC 移除 `visible` class 触发退出动画 |
-| **Enter 快捷键** | 在密码弹窗 JS 块中为三个输入框注册 `keydown` 事件，Enter 键且保存按钮可用时触发 `saveBtn.click()` |
-| **关闭动画** | CSS 为 `.pwd-modal-card` 添加 `opacity: 0` 基态 + fade 过渡；JS `closeModal` 仅移除 `visible` class，通过 `transitionend` 事件自动设置 `display: none`，实现 0.2s 平滑淡出+微缩效果 |
-| **Ctrl+数字屏蔽** | 在 `handleKeyboardNavigation` 的 Ctrl+数字处理入口（[main.js](frontend/src/main.js)）新增 `#lockScreen` 可见性检查，锁屏打开时直接 return |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[app.go](app.go) |
-
----
-
-## 记忆点 2：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
+## 记忆点 1：抽取 `appendToSystemMessage` 辅助函数 + 修复 `CallAIStream` 搜索精炼使用 `userText`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：锁屏快捷键 + 精密机械感锁子动效
+## 记忆点 2：锁屏快捷键 + 精密机械感锁子动效
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：NSIS 安装包记住安装路径
+## 记忆点 3：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -596,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 4：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 6：主题下拉菜单自动化生成
+## 记忆点 5：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 6：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +612,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 8：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 7：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -634,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 9：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 8：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,13 +633,27 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：代码块样式统一 + 优化表达提示词修复
+## 记忆点 9：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
 | **代码块样式统一** | 将 AI 消息代码块样式合并到 [editor.css](frontend/src/css/components/editor.css)，删除 [ai-chat.css](frontend/src/css/components/ai-chat.css) 中重复的 ~133 行样式。editor.css 中 `.md-rendered` 选择器改为 `:is(.md-rendered, .ai-msg-assistant)` 覆盖两个区域。AI 消息复制按钮类名从 `code-copy-btn` 改为 `copy-code-btn`，与笔记预览保持一致。`pre:hover` 的复制按钮显隐扩展为 `pre:hover .copy-code-btn, .pre-wrapper:hover .copy-code-btn, .copy-code-btn:hover` 以适配 AI 消息的 DOM 结构。 |
 | **优化表达提示词修复** | 优化按钮 `CallAI` 调用时模型常将用户输入当作问题回答。根因：优化指令在 `system` 角色消息中，模型对 `user` 角色消息的权重更高。修复方案：精简 system 提示词为简短身份设定，将完整优化规则嵌入 `user` 消息中（`'请优化以下文本...\n\n"""\n' + text + '\n"""'`），使模型将用户输入视为待优化文本而非问题。 |
 | **涉及文件** | [editor.css](frontend/src/css/components/editor.css)（`:is()` 选择器扩展）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（删除重复样式）、[ai-chat.js](frontend/src/js/ai-chat.js)（类名 + 消息结构） |
+
+---
+
+## 记忆点 10：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为 Markdown 代码块中的 `language-mermaid` 块添加 Mermaid 图表渲染支持。默认显示源码，点击"渲染"按钮后按需渲染 SVG。切换按钮与复制按钮风格统一（同 `min-width:62px`、`top:8px`、`inline-flex` 布局）。 |
+| **渲染方式** | 使用 `mermaid/render` 子路径导入（`import { render } from 'mermaid/render'`），在 `main.js` 主线程直接渲染，**不**使用 Web Worker。主题选择通过 `getMermaidTheme()` 读取 `isDarkTheme` 映射表（[theme-config.js](frontend/src/js/theme-config.js)）决定 `dark`/`default`。 |
+| **视图切换方案** | 经多轮尝试后确定为**直接 `display: none/block` 交换 + 无动画**。之前尝试的 CSS Grid 叠加 + opacity 过渡会导致 GPU 合成层持续闪烁、两阶段定时器方案仍有微跳变。加上 `will-change: transform; transform: translateZ(0)` 防止 GPU 图层重建闪烁。 |
+| **按钮交互集成** | "复制"+"渲染"两按钮并排在代码块右上角。复制点击时 200ms 延迟（`copying` class）让渲染按钮先淡出，再变"已复制"。CSS `:has(.copy-code-btn.copied)` 隐藏渲染按钮，避免"已复制"文字膨胀戳到下方。详见 [editor.css](frontend/src/css/components/editor.css)。 |
+| **SVG 图标** | 在 [constants.js](frontend/src/js/constants.js) 新增 `SVGS.diagram`（流程图/网络图图标）和 `SVGS.code`（尖括号代码图标），Lucide 风格。按钮初始显示 `SVGS.diagram + ' 渲染'`，切换后 `SVGS.code + ' 源码'`。 |
+| **hljs 跳过** | `hljs.highlightElement()` 跳过 `code.language-mermaid`，避免语法高亮与 Mermaid 冲突。 |
+| **涉及文件** | [constants.js](frontend/src/js/constants.js)（图标）、[main.js](frontend/src/main.js)（渲染/切换/按钮创建）、[editor.css](frontend/src/css/components/editor.css)（按钮 + 切换样式）、[theme-config.js](frontend/src/js/theme-config.js)（`isDarkTheme`）、[package.json](frontend/package.json)（mermaid 依赖） |
 
 ## 十二、AGENTS.md 维护规范
 

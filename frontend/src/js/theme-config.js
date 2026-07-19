@@ -35,3 +35,21 @@ export const codeHighlightThemePairing = {
     'alice': 'github-light',
     'lightmind': 'monokai-dimmed',
 };
+
+/** 系统主题 → Mermaid 明暗主题映射（true=暗色, false=亮色） */
+export const isDarkTheme = {
+    'default': false,
+    'catppuccin-latte': false,
+    'nord': false,
+    'gruvbox-light': false,
+    'light': false,
+    'one-dark-pro': true,
+    'quiet-light': false,
+    'ysgrifennwr': false,
+    'tokyo-night': true,
+    'eye-protection': false,
+    'dark': true,
+    'dracula': true,
+    'alice': false,
+    'lightmind': false,
+};
