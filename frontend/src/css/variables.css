@@ -70,6 +70,7 @@
     --hover-bg: #F3F0EB;
     --topbar-bg: #FFFFFF;
     --input-bg: #F3F1ED;
+    --more-menu-bg: #FAFAFA;
 
     /* 阴影 */
     --shadow-sm: 0 1px 3px rgba(45, 42, 36, 0.06);
@@ -136,6 +137,7 @@
     --hover-bg: #F5F5F5;
     --topbar-bg: #FFFFFF;
     --input-bg: #F5F5F5;
+    --more-menu-bg: #F8F8F8;
     --overlay-bg: rgba(0, 0, 0, 0.25);
     --toast-bg: #1A1A1A;
     --toast-text: #FFFFFF;
@@ -193,6 +195,7 @@
     --hover-bg: #252525;
     --topbar-bg: #141414;
     --input-bg: #252525;
+    --more-menu-bg: rgba(26,26,26,0.95);
     --overlay-bg: rgba(0, 0, 0, 0.7);
     --toast-bg: #2D2A24;
     --toast-text: #F7F5F0;
@@ -250,6 +253,7 @@
     --hover-bg: #E8ECF3;
     --topbar-bg: #FFFFFF;
     --input-bg: #E8ECF3;
+    --more-menu-bg: #F0F3F8;
     --overlay-bg: rgba(46, 52, 64, 0.4);
     --toast-bg: #2E3440;
     --toast-text: #ECEFF4;
@@ -307,6 +311,7 @@
     --hover-bg: #292E42;
     --topbar-bg: #1F2335;
     --input-bg: #292E42;
+    --more-menu-bg: rgba(36,40,59,0.95);
     --overlay-bg: rgba(0, 0, 0, 0.7);
     --toast-bg: #24283B;
     --toast-text: #C0CAF5;
@@ -364,6 +369,7 @@
     --hover-bg: #D0ECD5;
     --topbar-bg: #D8F5DD;
     --input-bg: #D0ECD5;
+    --more-menu-bg: #D0ECD5;
     --overlay-bg: rgba(44, 74, 62, 0.35);
     --toast-bg: #2C4A3E;
     --toast-text: #C7EDCC;
@@ -414,8 +420,9 @@
   --divider: #E6E9EF;
   --hover-bg: #E6E9EF;
   --topbar-bg: #FFFFFF;
-  --input-bg: #E6E9EF;
-  --overlay-bg: rgba(76, 79, 105, 0.3);
+    --input-bg: #E6E9EF;
+    --more-menu-bg: #F8F8FA;
+    --overlay-bg: rgba(76, 79, 105, 0.3);
   --toast-bg: #4C4F69;
   --toast-text: #EFF1F5;
   --danger-bg: #FEF2F2;
@@ -465,8 +472,9 @@
   --divider: #E0CFB0;
   --hover-bg: #EBDBB2;
   --topbar-bg: #F9F5D7;
-  --input-bg: #EBDBB2;
-  --overlay-bg: rgba(60, 56, 54, 0.35);
+    --input-bg: #EBDBB2;
+    --more-menu-bg: #F5F0D0;
+    --overlay-bg: rgba(60, 56, 54, 0.35);
   --toast-bg: #3C3836;
   --toast-text: #FBF1C7;
   --danger-bg: #FEF2F2;
@@ -516,8 +524,9 @@
   --divider: #44475A;
   --hover-bg: #44475A;
   --topbar-bg: #21222C;
-  --input-bg: #44475A;
-  --overlay-bg: rgba(0, 0, 0, 0.7);
+    --input-bg: #44475A;
+    --more-menu-bg: rgba(33,34,44,0.95);
+    --overlay-bg: rgba(0, 0, 0, 0.7);
   --toast-bg: #21222C;
   --toast-text: #F8F8F2;
   --danger-bg: rgba(255, 85, 85, 0.1);
@@ -568,8 +577,9 @@
   --danger: #E06C75;
   --hover-bg: #3E4452;
   --topbar-bg: #2C313A;
-  --input-bg: #3E4452;
-  --overlay-bg: rgba(0, 0, 0, 0.7);
+    --input-bg: #3E4452;
+    --more-menu-bg: rgba(44,49,58,0.95);
+    --overlay-bg: rgba(0, 0, 0, 0.7);
   --toast-bg: #21252B;
   --toast-text: #ABB2BF;
   --danger-bg: rgba(224, 108, 117, 0.1);
@@ -620,8 +630,9 @@
   --danger: #DC2626;
   --hover-bg: #E8E2F4;
   --topbar-bg: #FCF8F2;
-  --input-bg: #FFFFFF;
-  --overlay-bg: rgba(58, 53, 58, 0.25);
+    --input-bg: #FFFFFF;
+    --more-menu-bg: #F7F2EC;
+    --overlay-bg: rgba(58, 53, 58, 0.25);
   --toast-bg: #3A353A;
   --toast-text: #F5F0E8;
   --danger-bg: rgba(220, 38, 38, 0.08);
@@ -672,8 +683,9 @@
   --danger: #C7474B;
   --hover-bg: #F0E4D0;
   --topbar-bg: #FAF4E3;
-  --input-bg: #FAF4E3;
-  --overlay-bg: rgba(58, 53, 50, 0.30);
+    --input-bg: #FAF4E3;
+    --more-menu-bg: #F5EDD8;
+    --overlay-bg: rgba(58, 53, 50, 0.30);
   --toast-bg: #3A3532;
   --toast-text: #F5EDDA;
   --danger-bg: rgba(199, 71, 75, 0.08);
@@ -726,6 +738,7 @@
     --hover-bg: #F5EDE0;
     --topbar-bg: #FFFCF5;
     --input-bg: #F5EDE0;
+    --more-menu-bg: #FAF5EC;
     --overlay-bg: rgba(92, 58, 30, 0.3);
     --toast-bg: #5C3A1E;
     --toast-text: #F9F5E8;
@@ -779,6 +792,7 @@
     --hover-bg: #EDE8DC;
     --topbar-bg: #FAF7EF;
     --input-bg: #EDE8DC;
+    --more-menu-bg: #F5F0E5;
     --overlay-bg: rgba(44, 58, 50, 0.3);
     --toast-bg: #2C3A32;
     --toast-text: #F2EFE6;

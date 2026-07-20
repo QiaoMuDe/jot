@@ -5991,16 +5991,10 @@ function openShortcuts() {
     // 内容卡片缩放淡入
     const card = els.shortcutsView.querySelector('.shortcuts-card');
     card.style.animation = 'modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    // 重置滚动位置到顶部
+    els.shortcutsBody.scrollTop = 0;
     // 渲染快捷键列表
     renderShortcutsPage();
-    // 快捷键列表项交错入场（确保 DOM 已渲染）
-    requestAnimationFrame(() => {
-        const rows = els.shortcutsBody.querySelectorAll('.shortcut-row');
-        rows.forEach((row, index) => {
-            row.style.animation = `viewEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards`;
-            row.style.animationDelay = `${index * 30}ms`;
-        });
-    });
 }
 
 /**
@@ -6013,14 +6007,9 @@ function closeShortcuts() {
     // 动画完成后隐藏
     setTimeout(() => {
         els.shortcutsView.style.display = 'none';
-        // 重置动画
+        // 重置遮罩和卡片的动画
         els.shortcutsView.style.animation = '';
         card.style.animation = '';
-        const rows = els.shortcutsBody.querySelectorAll('.shortcut-row');
-        rows.forEach(row => {
-            row.style.animation = '';
-            row.style.animationDelay = '';
-        });
     }, 200);
 }
 
@@ -6659,7 +6648,7 @@ function updateSidebarMenuItem() {
     const label = isCollapsed ? '展开侧栏' : '折叠侧栏';
     const showSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>';
     const hideSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>';
-    menuItem.innerHTML = (isCollapsed ? showSvg : hideSvg) + label + '<span class="shortcut-hint">Ctrl+2</span>';
+    menuItem.innerHTML = (isCollapsed ? showSvg : hideSvg) + label;
     menuItem.title = `Ctrl+2 ${label}`;
 }
 

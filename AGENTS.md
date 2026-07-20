@@ -551,16 +551,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
-## 记忆点 1：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
-| 记忆点 | 内容 |
-|--------|------|
-| **功能描述** | 参考 Typora 的 `alice.css`（暖米色背景 + 清新蓝调）和 `lightmind.css`（森林纸面绿意 + 精致山林氛围）设计语言，新增两个完整的 CSS 变量系统主题 |
-| **主题配色** | 爱丽丝：`--bg: #F9F5E8`（暖米黄）、`--accent: #0079D2`（清新蓝）、`--text-primary: #5C3A1E`（暖棕）；山林：`--bg: #F2EFE6`（纸面）、`--accent: #4A7C59`（森林绿）、`--text-primary: #2C3A32`（深森林绿） |
-| **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
-| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
-
-## 记忆点 2：主题下拉菜单自动化生成
+## 记忆点 1：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -571,7 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 2：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 4：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 3：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 5：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 4：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：代码块样式统一 + 优化表达提示词修复
+## 记忆点 5：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 6：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 7：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 8：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,18 +641,24 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 10：更多菜单视觉重设计 + 子菜单拍平
+## 记忆点 9：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **功能描述** | 对"更多菜单"进行第二轮视觉迭代和交互优化。核心变更：毛玻璃半透明背景增强层次分离、入场动画改为 overshoot 三段式、离场动画对称化、图标 hover 位移、快捷键 KBD 标签化、子菜单（帮助参考）拍平直接作为"帮助"分组下的普通条目。 |
-| **视觉效果升级** | ① 背景从纯 `--card-bg` 改为半透明毛玻璃 `rgba(255,255,255,0.82) + backdrop-filter: blur(24px)`，暗色主题自动加深到 `rgba(26,26,26,0.88)`——菜单与顶栏天然区分、透过半透明背景看到下方笔记内容产生悬浮感；② 双层阴影 `0 12px 48px`(环境) + `0 2px 8px`(接触) 替代单层浅阴影；③ 入场动画 `moreMenuIn` 改为三段式 overshoot：`scale(0.88) translateY(12px) → scale(1.015) → scale(0.995) → scale(1) translateY(0)`，产生"从顶栏弹出来"的物理感；④ 离场动画 `moreMenuOut` 对称缩小+下沉，0.15s ease-in。 |
-| **图标交互修复** | ① 图标基础 `opacity 0.5→0.65` 提升可见度；② hover 时 `translateX(2px)` 右移 + color accent 色；③ 子菜单条目 hover 不生效的根因为 `left: calc(100% + 4px)` 导致 4px 间隙使 trigger 短暂失去 `:hover`，改为平铺条目彻底解决。 |
-| **快捷键改进** | 从纯文本 `opacity: 0.6` 改为 KBD 风格标签：小灰底 + `border-radius: 4px`，更清晰醒目。 |
-| **分组标签改进** | 从极小字号 `opacity: 0.55` 改为 semibold + 左侧 2px accent 色装饰条。 |
-| **子菜单拍平** | 删除整个子菜单体系（`.dropdown-submenu-trigger` / `.dropdown-submenu` / `.submenu-arrow` / `setupSubmenu()` 共 ~110 行 CSS + 35 行 JS）。"快捷键说明"/"MD 语法"/"关于" 三个条目直接作为 `#moreMenu` 的子元素拍平到"帮助"分组下，hover 行为与其他菜单项完全一致。 |
-| **动画重构** | 从 JS 内联 `style.animation` 改为 CSS class 驱动：`openMoreMenu()` 添加 `active` + `stagger-enter` class，`closeMoreMenu()` 添加 `exiting` class 触发离场动画，`animationend` 事件清理。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（删除子菜单 HTML 结构，三个条目拍平）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（毛玻璃/阴影/动画/图标 hover/快捷键 KBD/分组装饰条/删除 ~88 行子菜单 CSS）、[frontend/src/main.js](frontend/src/main.js)（删除 `setupSubmenu()` ~35 行 JS + 删除 `closeMoreMenu` 中 `.open` 清理）、[frontend/src/css/animations.css](frontend/src/css/animations.css)（新增 `moreMenuOut`/`menuItemFadeIn` keyframes） |
+| **功能描述** | 对更多菜单进行第三轮精简优化：去掉毛玻璃半透明效果，改为按主题色系自定义纯色背景；移除快捷键提示标签；缩小菜单宽度；分组标签替换为纯分割线。 |
+| **各主题背景色定制** | 14 个主题新增 `--more-menu-bg` CSS 变量：纯白底主题使用 `#FAFAFA` 或 `#F8F8FA`（略深于顶栏 `#FFFFFF` 以区分）；暖黄底主题（gruvbox-light/ysgrifennwr/alice/lightmind）取各自 `--card-bg` 暗 3-5%；冷色底（nord/quiet-light）取 `#F0F3F8`/`#F7F2EC`；特殊护眼绿取 `#D0ECD5`；暗色主题使用 `rgba(..,..,..,0.95)` 高不透明度。详见 [variables.css](frontend/src/css/variables.css)。 |
+| **移除快捷键** | 删除所有 8 个菜单项的 `<span class="shortcut-hint">Ctrl+N</span>` 标签，同时删除对应的 CSS 样式（基础样式 + hover 联动），菜单宽度从 200px 缩窄到 150px。 |
+| **分组标签 → 分割线** | 移除 4 个 `.dropdown-group-label`（导航/管理/AI/帮助）及其 accent 装饰条样式，分组之间改用已有的 `.dropdown-divider` 元素（共 3 条分割线）。"设置"归入管理组。 |
+| **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
+| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
+
+## 记忆点 10：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 打开快捷键说明页面时，每行条目会"抖动"：先可见在正常位置，再消失+下移，最后淡入+上滑。根因是 staggered 动画中所有行的 `animation-fill-mode: forwards` 在 delay 期间不生效，元素以 CSS 默认值（`opacity: 1`）渲染，delay 结束后跳转到 `from` 关键帧（`opacity: 0; translateY(12px)`），产生闪烁。 |
+| **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理） |
 
 ## 十二、AGENTS.md 维护规范
 

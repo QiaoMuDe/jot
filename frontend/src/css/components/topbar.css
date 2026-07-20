@@ -174,19 +174,17 @@ button :only-child:is(svg) {
 #moreMenu {
   /* 双层阴影制造悬浮感：远层环境阴影 + 近层接触阴影 */
   box-shadow:
-    0 12px 48px rgba(0,0,0,0.10),
-    0 2px 8px rgba(0,0,0,0.06);
+    0 12px 48px rgba(0,0,0,0.12),
+    0 2px 8px rgba(0,0,0,0.08);
   /* 增大圆角更精致 */
   border-radius: var(--radius-xl);
-  /* 顶部 accent 色腰线 — 渐变版本 */
+  /* 顶部 accent 色腰线 */
   border-top: 3px solid var(--accent);
-  /* 毛玻璃半透明背景 — 与顶栏/笔记内容产生层次 */
-  background: rgba(255,255,255,0.82);
-  backdrop-filter: blur(24px) saturate(1.2);
-  -webkit-backdrop-filter: blur(24px) saturate(1.2);
-  /* 加宽容器容纳快捷键 */
-  min-width: 200px;
-  padding: 8px;
+  /* 背景色由 --more-menu-bg 变量按主题控制，略深于顶栏以产生层次分离 */
+  background: var(--more-menu-bg);
+  /* 宽度按内容自适应，仅设最小宽度 */
+  min-width: 150px;
+  padding: 6px;
   /* 入场/离场动画由 CSS class 控制 */
 }
 
@@ -194,15 +192,6 @@ button :only-child:is(svg) {
 #moreMenu.active {
     animation: moreMenuIn 0.3s var(--anim-easing-spring) forwards;
     pointer-events: auto;
-}
-
-/* 暗色主题下毛玻璃背景需加深 */
-[data-theme="dark"] #moreMenu,
-[data-theme="tokyo-night"] #moreMenu,
-[data-theme="dracula"] #moreMenu,
-[data-theme="one-dark-pro"] #moreMenu,
-[data-theme="nord"] #moreMenu {
-    background: rgba(26,26,26,0.88);
 }
 
 /* 更多菜单入场 — 平滑落下（无 overshoot，不浮动） */
@@ -222,13 +211,6 @@ button :only-child:is(svg) {
   opacity: 1;
   color: var(--accent);
   transform: translateX(2px);
-}
-
-/* 快捷键提示 hover 联动 */
-#moreMenu .dropdown-item:hover .shortcut-hint {
-  background: var(--accent-lighter);
-  color: var(--accent);
-  opacity: 1;
 }
 
 /* 更多菜单 - exiting 离场状态 */
@@ -274,44 +256,3 @@ button :only-child:is(svg) {
   opacity: 0.6;
 }
 
-/* ─── 快捷键提示 — KBD 风格标签 ─── */
-#moreMenu .shortcut-hint {
-    margin-left: auto;
-    background: var(--hover-bg);
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    opacity: 0.7;
-    font-family: inherit;
-    letter-spacing: -0.1px;
-    transition: opacity 0.12s, color 0.12s, background 0.12s;
-    flex-shrink: 0;
-    padding-left: 6px;
-}
-
-/* ─── 分组标签 — 左侧 accent 装饰条 ─── */
-#moreMenu .dropdown-group-label {
-    position: relative;
-    padding: 6px 12px 4px 18px;  /* 左侧留出装饰条空间 */
-    font-size: 0.675rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    opacity: 0.65;
-    user-select: none;
-}
-
-#moreMenu .dropdown-group-label::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 2px;
-    height: 10px;
-    border-radius: 2px;
-    background: var(--accent);
-    opacity: 0.45;
-}
