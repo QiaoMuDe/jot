@@ -484,7 +484,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **设置页 Token 默认隐藏 + 知乎 URL 修正**
 - [x] **存储优化增强**（回收站自动清理 + 孤儿笔记迁移 + 空 AI 会话清理 + VACUUM 整合流程）
 - [x] **批量管理重构**（FAB 入口 + CSS transition 动效 + 复选框移除 + 置顶按钮可操作）
-- [x] **更多菜单子菜单**（"帮助参考"合并快捷键/MD 语法/关于，Ctrl+7→AI 助手）
+- [x] **更多菜单子菜单拍平**（"帮助参考"子菜单取消，快捷键说明/MD 语法/关于 直接平铺到"帮助"分组下）
 - [x] **待办清单功能**（Todo CRUD + 输入筛选一体化工具栏 + 6 个 keyframes 动画 + 筛选按钮数量显示）
 - [x] **骨架屏编辑器**（点击笔记立即显示骨架屏 shimmer，异步加载内容后替换）
 - [x] **搜索来源 UI 优化**（内联卡片+折叠面板+SVG 图标+代码去重）
@@ -503,6 +503,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **AI 消息懒加载 + 后端上下文自取**（CallAIStream 从 DB 加载历史、LoadAISessionMessagesPaginated 分页、TruncateAISessionAtMessage/AfterMessage 截断、CallAIStreamRegenerate 后端读取末条用户消息再生、SumSessionTokens 后端统计 Token）
 - [x] **锁屏密码 UI 精简**（移除独立状态标签，按钮文本自述状态，模态框根据状态动态显示旧密码输入框）
 - [x] **Mermaid 图表支持**（代码块按需渲染 + 源码/视图切换 + 主题联动 isDarkTheme + 双按钮 SVG 图标 + 复制/渲染按钮防碰撞动画）
+- [x] **更多菜单精工卡重设计**（毛玻璃 `blur(24px)` + 双层阴影悬浮感 + 三段式 overshoot 入场动画 + KBD 风格快捷键标签 + 分组左侧 accent 色装饰条 + 条目 hover 上浮微交互 + 子菜单拍平到帮助分组）
 
 ---
 
@@ -550,18 +551,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
-## 记忆点 1：NSIS 安装包记住安装路径
-
-| 记忆点 | 内容 |
-|--------|------|
-| **功能描述** | NSIS 安装包（`build/windows/installer/project.nsi`）在首次安装后，将用户选择的安装路径存入注册表 `HKCU\Software\jot\jot\InstallPath`。下次安装时自动恢复该路径。卸载时清理注册表记录。 |
-| **修改位置** | [project.nsi](build/windows/installer/project.nsi) 仅此一个文件，`wails_tools.nsh` 不动（自动生成）。三处修改：① `.onInit` 中用临时变量 `$0` 读取注册表，非空时覆盖 `$INSTDIR`（避免首次安装时置空）；② `Section` 安装段末尾写注册表保存路径；③ `Section "uninstall"` 卸载段末尾删除注册表值。 |
-| **边界处理** | 全新安装 → 注册表无值，`$INSTDIR` 保持 `InstallDir` 指令默认值；升级/重装 → 自动恢复上次路径；静默安装 `/S` → `.onInit` 照样执行；卸载 → 清理注册表记录。 |
-| **涉及文件** | [project.nsi](build/windows/installer/project.nsi) |
-
----
-
-## 记忆点 2：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 1：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -570,7 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 3：主题下拉菜单自动化生成
+## 记忆点 2：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 3：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -590,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 5：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 4：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +589,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 6：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 5：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：代码块样式统一 + 优化表达提示词修复
+## 记忆点 6：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 7：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 8：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,16 +638,29 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 9：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
 | **功能描述** | 对顶栏"更多菜单"进行全面视觉升级和结构重组。从平铺无分组 + 3 条分隔线，转变为 4 分组（导航/管理/AI/帮助）+ 快捷键提示的精工卡设计。 |
 | **视觉升级** | ① 按钮 active 态（`#moreMenuBtn.active`）——菜单打开时按钮显示 hover-bg + accent 色图标；② 菜单顶部 3px accent 色腰线作为视觉锚点；③ 增强阴影 `--shadow-dropdown` 替代 `--shadow-lg` 加深层次分离；④ 圆角从 8px 增大到 12px（`--radius-xl`）；⑤ 自定义 spring 动画 `moreMenuIn`——`scale(0.92) + translateY(-4px) → scale(1)`，`0.2s var(--anim-easing-spring)`；⑥ 图标 hover 亮起 accent 色；⑦ 分组标签小号大写字母 + muted 色。 |
 | **快捷键提示** | 7 个菜单项追加 `<span class="shortcut-hint">Ctrl+N</span>`，hover 时联动 accent 色。 |
-| **分组重构** | 原无分组 + 3 条 `dropdown-divider` 改为 4 个 `dropdown-group-label`：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/待办清单/设置）、AI（AI 助手）、帮助（帮助参考含子菜单）。 |
+| **分组重构** | 原无分组 + 3 条 `dropdown-divider` 改为 4 个 `dropdown-group-label`：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/待办清单/设置）、AI（AI 助手）、帮助（快捷键说明/MD 语法/关于）。 |
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
+
+## 记忆点 10：更多菜单视觉重设计 + 子菜单拍平
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | 对"更多菜单"进行第二轮视觉迭代和交互优化。核心变更：毛玻璃半透明背景增强层次分离、入场动画改为 overshoot 三段式、离场动画对称化、图标 hover 位移、快捷键 KBD 标签化、子菜单（帮助参考）拍平直接作为"帮助"分组下的普通条目。 |
+| **视觉效果升级** | ① 背景从纯 `--card-bg` 改为半透明毛玻璃 `rgba(255,255,255,0.82) + backdrop-filter: blur(24px)`，暗色主题自动加深到 `rgba(26,26,26,0.88)`——菜单与顶栏天然区分、透过半透明背景看到下方笔记内容产生悬浮感；② 双层阴影 `0 12px 48px`(环境) + `0 2px 8px`(接触) 替代单层浅阴影；③ 入场动画 `moreMenuIn` 改为三段式 overshoot：`scale(0.88) translateY(12px) → scale(1.015) → scale(0.995) → scale(1) translateY(0)`，产生"从顶栏弹出来"的物理感；④ 离场动画 `moreMenuOut` 对称缩小+下沉，0.15s ease-in。 |
+| **图标交互修复** | ① 图标基础 `opacity 0.5→0.65` 提升可见度；② hover 时 `translateX(2px)` 右移 + color accent 色；③ 子菜单条目 hover 不生效的根因为 `left: calc(100% + 4px)` 导致 4px 间隙使 trigger 短暂失去 `:hover`，改为平铺条目彻底解决。 |
+| **快捷键改进** | 从纯文本 `opacity: 0.6` 改为 KBD 风格标签：小灰底 + `border-radius: 4px`，更清晰醒目。 |
+| **分组标签改进** | 从极小字号 `opacity: 0.55` 改为 semibold + 左侧 2px accent 色装饰条。 |
+| **子菜单拍平** | 删除整个子菜单体系（`.dropdown-submenu-trigger` / `.dropdown-submenu` / `.submenu-arrow` / `setupSubmenu()` 共 ~110 行 CSS + 35 行 JS）。"快捷键说明"/"MD 语法"/"关于" 三个条目直接作为 `#moreMenu` 的子元素拍平到"帮助"分组下，hover 行为与其他菜单项完全一致。 |
+| **动画重构** | 从 JS 内联 `style.animation` 改为 CSS class 驱动：`openMoreMenu()` 添加 `active` + `stagger-enter` class，`closeMoreMenu()` 添加 `exiting` class 触发离场动画，`animationend` 事件清理。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（删除子菜单 HTML 结构，三个条目拍平）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（毛玻璃/阴影/动画/图标 hover/快捷键 KBD/分组装饰条/删除 ~88 行子菜单 CSS）、[frontend/src/main.js](frontend/src/main.js)（删除 `setupSubmenu()` ~35 行 JS + 删除 `closeMoreMenu` 中 `.open` 清理）、[frontend/src/css/animations.css](frontend/src/css/animations.css)（新增 `moreMenuOut`/`menuItemFadeIn` keyframes） |
 
 ## 十二、AGENTS.md 维护规范
 

@@ -5120,7 +5120,9 @@ function escapeHtml(text) {
  * 打开更多菜单
  */
 function openMoreMenu(menu) {
-    menu.style.animation = 'moreMenuIn 0.2s var(--anim-easing-spring) forwards';
+    // 清除可能残留的离场标记
+    menu.classList.remove('exiting');
+    // 使用 CSS class 触发入场动画（moreMenuIn 由 CSS 控制）
     menu.classList.add('active');
     els.moreMenuBtn.classList.add('active');
 }
@@ -5130,12 +5132,10 @@ function openMoreMenu(menu) {
  */
 function closeMoreMenu(menu) {
     if (!menu.classList.contains('active')) return;
-    menu.querySelector('.dropdown-submenu-trigger')?.classList.remove('open');
-    menu.style.animation = 'modalExit 0.1s ease-in forwards';
+    menu.classList.add('exiting');
     els.moreMenuBtn.classList.remove('active');
     const onEnd = () => {
-        menu.classList.remove('active');
-        menu.style.animation = '';
+        menu.classList.remove('active', 'exiting');
         menu.removeEventListener('animationend', onEnd);
     };
     menu.addEventListener('animationend', onEnd);
@@ -5222,24 +5222,6 @@ function initEventListeners() {
             }
         }
     });
-
-    // 更多菜单 - 子菜单 hover 交互
-    function setupSubmenu() {
-        const submenuTrigger = els.moreMenu.querySelector('.dropdown-submenu-trigger');
-        if (!submenuTrigger) return;
-
-        submenuTrigger.addEventListener('mouseenter', () => {
-            submenuTrigger.classList.add('open');
-        });
-
-        submenuTrigger.addEventListener('mouseleave', (e) => {
-            const submenu = submenuTrigger.querySelector('.dropdown-submenu');
-            if (submenu && !submenu.contains(e.relatedTarget)) {
-                submenuTrigger.classList.remove('open');
-            }
-        });
-    }
-    setupSubmenu();
 
     // 点击品牌名返回所有笔记（与其他页面返回逻辑一致）
     document.querySelector('.topbar-brand')?.addEventListener('click', () => {
