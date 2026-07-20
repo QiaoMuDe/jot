@@ -5120,8 +5120,9 @@ function escapeHtml(text) {
  * 打开更多菜单
  */
 function openMoreMenu(menu) {
-    menu.style.animation = 'menuEnter 0.15s ease-out forwards';
+    menu.style.animation = 'moreMenuIn 0.2s var(--anim-easing-spring) forwards';
     menu.classList.add('active');
+    els.moreMenuBtn.classList.add('active');
 }
 
 /**
@@ -5131,6 +5132,7 @@ function closeMoreMenu(menu) {
     if (!menu.classList.contains('active')) return;
     menu.querySelector('.dropdown-submenu-trigger')?.classList.remove('open');
     menu.style.animation = 'modalExit 0.1s ease-in forwards';
+    els.moreMenuBtn.classList.remove('active');
     const onEnd = () => {
         menu.classList.remove('active');
         menu.style.animation = '';
@@ -6675,7 +6677,7 @@ function updateSidebarMenuItem() {
     const label = isCollapsed ? '展开侧栏' : '折叠侧栏';
     const showSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>';
     const hideSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>';
-    menuItem.innerHTML = (isCollapsed ? showSvg : hideSvg) + label;
+    menuItem.innerHTML = (isCollapsed ? showSvg : hideSvg) + label + '<span class="shortcut-hint">Ctrl+2</span>';
     menuItem.title = `Ctrl+2 ${label}`;
 }
 

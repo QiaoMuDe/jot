@@ -550,19 +550,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
-## 记忆点 1：锁屏快捷键 + 精密机械感锁子动效
-
-| 记忆点 | 内容 |
-|--------|------|
-| **功能描述** | 新增全局快捷键 `Ctrl+0` 切换到笔记首页后进入锁屏。启用锁屏 + 有密码时执行锁屏；未启用时提示"请先在设置中启用锁屏功能"；已启用无密码时提示"请先设置密码"。快捷键说明页同步更新。 |
-| **后端变更** | 无。复用现有 [app.go](app.go) 的 `GetAllSettings()` 绑定读取 `screen_lock_enabled` 和 `screen_lock_password`。 |
-| **前端快捷键** | [main.js](frontend/src/main.js) `handleKeyboardNavigation` 中新增 `case '0'` 分支：异步检查设置 → switchView('grid') + loadNotes() → 显示 #lockScreen 遮罩带 entering 入场动画 → 激活后自动清空密码输入框。锁屏状态已有底层的 `lockScreen` 拦截守卫。 |
-| **锁子动效优化** | SVG 从单层 Feather 图标升级为 4 层结构（发光底层/锁体填充/锁梁独立/锁芯光点）。新增 5 组 keyframes 动效：`lockBreathe` 4s 机械呼吸（弹起→微过冲→保持→缓释 + drop-shadow 深度变化）、`lockAlert` 2s 聚焦光晕（scale 1.08 + 光晕脉动）、`keyholePulse` 2s 锁芯光点呼吸、`lockReject` 0.7s 错误拒绝（三次微颤→锁紧收缩→弹簧回弹）、`shackleEnter` 0.5s 入场锁梁弹性抬起。`overflow: visible` 防止锁梁被 viewBox 裁切。 |
-| **涉及文件** | [main.js](frontend/src/main.js)（Ctrl+0 快捷键）、[modals.css](frontend/src/css/components/modals.css)（5 组 keyframes + SVG 分层样式 + overflow visible）、[index.html](frontend/index.html)（SVG 分层结构更新） |
-
----
-
-## 记忆点 2：NSIS 安装包记住安装路径
+## 记忆点 1：NSIS 安装包记住安装路径
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +561,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：新增爱丽丝（alice）和山林（lightmind）两个系统主题
+## 记忆点 2：新增爱丽丝（alice）和山林（lightmind）两个系统主题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -582,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **注册位置** | [variables.css](frontend/src/css/variables.css)（新增两个 `[data-theme="..."]` 变量块，~811 行）、[main.js](frontend/src/main.js)（`themeLabels` 注册显示名、"爱丽丝"/"山林"；`codeHighlightThemePairing` 注册推荐代码高亮配对：alice→github-light、lightmind→monokai-dimmed）、[index.html](frontend/index.html)（手动添加菜单项，后改为自动生成） |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 4：主题下拉菜单自动化生成
+## 记忆点 3：主题下拉菜单自动化生成
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 4：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 6：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 5：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 7：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 6：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：代码块样式统一 + 优化表达提示词修复
+## 记忆点 7：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 8：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -647,7 +635,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 9：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,6 +645,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **帮助参考子菜单新增"关于"** | 在 [index.html](frontend/index.html) 的"帮助参考"子菜单中新增 `data-action="about"` 的"关于"菜单项（带 info 圆圈图标）。见 [index.html#L91](frontend/index.html) |
 | **菜单点击事件分发** | [main.js](frontend/src/main.js) 中菜单 `data-action` 分发新增 `case 'about': showAbout()`，点击"关于"菜单项调用已有 `showAbout()` 函数打开关于浮层。见 [main.js#L5218-L5219](frontend/src/main.js) |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（移除 event listener + 对齐返回行为 + 增加 about 分发）、[frontend/index.html](frontend/index.html)（新增菜单项） |
+
+---
+
+## 记忆点 10：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+
+| 记忆点 | 内容 |
+|--------|------|
+| **功能描述** | 对顶栏"更多菜单"进行全面视觉升级和结构重组。从平铺无分组 + 3 条分隔线，转变为 4 分组（导航/管理/AI/帮助）+ 快捷键提示的精工卡设计。 |
+| **视觉升级** | ① 按钮 active 态（`#moreMenuBtn.active`）——菜单打开时按钮显示 hover-bg + accent 色图标；② 菜单顶部 3px accent 色腰线作为视觉锚点；③ 增强阴影 `--shadow-dropdown` 替代 `--shadow-lg` 加深层次分离；④ 圆角从 8px 增大到 12px（`--radius-xl`）；⑤ 自定义 spring 动画 `moreMenuIn`——`scale(0.92) + translateY(-4px) → scale(1)`，`0.2s var(--anim-easing-spring)`；⑥ 图标 hover 亮起 accent 色；⑦ 分组标签小号大写字母 + muted 色。 |
+| **快捷键提示** | 7 个菜单项追加 `<span class="shortcut-hint">Ctrl+N</span>`，hover 时联动 accent 色。 |
+| **分组重构** | 原无分组 + 3 条 `dropdown-divider` 改为 4 个 `dropdown-group-label`：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/待办清单/设置）、AI（AI 助手）、帮助（帮助参考含子菜单）。 |
+| **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
 ## 十二、AGENTS.md 维护规范
 

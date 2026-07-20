@@ -116,6 +116,13 @@ button :only-child:is(svg) {
   background: var(--hover-bg);
 }
 
+/* 更多菜单按钮打开态 — 使用 hover-bg + accent 色图标高亮 */
+#moreMenuBtn.active {
+  background: var(--hover-bg);
+  color: var(--accent);
+  border-color: transparent;
+}
+
 #batchModeBtn.active {
   background-color: var(--accent);
   color: #fff;
@@ -161,6 +168,44 @@ button :only-child:is(svg) {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
+}
+
+/* ─── 更多菜单专属样式 ─── */
+#moreMenu {
+  /* 增强阴影分离感 */
+  box-shadow: var(--shadow-dropdown);
+  /* 增大圆角更精致 */
+  border-radius: var(--radius-xl);
+  /* 顶部 accent 色腰线 — 视觉锚点 */
+  border-top: 3px solid var(--accent);
+  /* 加宽容器容纳快捷键 */
+  min-width: 186px;
+  padding: 6px;
+  /* 入场动画由 JS 通过 style.animation 控制 */
+}
+
+/* 更多菜单自定义 spring 入场 */
+@keyframes moreMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 图标 hover 高亮为 accent 色 */
+#moreMenu .dropdown-item:hover svg {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* 快捷键提示 hover 联动 */
+#moreMenu .dropdown-item:hover .shortcut-hint {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .dropdown-item {
@@ -241,4 +286,29 @@ button :only-child:is(svg) {
 
 .dropdown-submenu .dropdown-item {
     white-space: nowrap;
+}
+
+/* ─── 快捷键提示 ─── */
+.shortcut-hint {
+    margin-left: auto;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.6;
+    font-family: inherit;
+    letter-spacing: -0.2px;
+    transition: opacity 0.12s, color 0.12s;
+    flex-shrink: 0;
+    padding-left: 12px;
+}
+
+/* ─── 分组标签 ─── */
+#moreMenu .dropdown-group-label {
+    padding: 5px 12px 3px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.55;
+    user-select: none;
 }
