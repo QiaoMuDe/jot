@@ -508,6 +508,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **待办清单移入 AI 分组**（从管理分组移动到 AI 分组，与 AI 助手同组）
 - [x] **统一表格复制按钮样式**（SVG 图标 + 毛玻璃 backdrop-filter + min-width + 主题色 hover 边框 + 锚定 th 而非表格右边缘）
 - [x] **优化 Mermaid 复制动画延迟**（200ms → 80ms，transition 0.15s → 0.08s）
+- [x] **系统主题下拉菜单键盘导航**（ArrowUp/Down + 250ms 节流 + scrollIntoView + 打开聚焦 + 保持打开 + 外部点击区域判断）
+- [x] **代码高亮主题下拉菜单键盘导航**（同上）
 
 ---
 
@@ -556,16 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
 
-## 记忆点 1：主题配置数据从 `main.js` 提取到独立模块
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更** | 将 `main.js` 中的 `themeLabels` 和 `codeHighlightThemePairing` 两个纯数据对象提取到 `js/theme-config.js`，通过 ES module export/import 供 `main.js` 使用 |
-| **原因** | 减少 `main.js` 体积，让主题配置集中管理，遵循已有的模块化分离模式（如 `constants.js`、`hljs-themes.js`） |
-| **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
-| **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
-
-## 记忆点 2：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 1：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -577,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：代码块样式统一 + 优化表达提示词修复
+## 记忆点 2：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 3：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 4：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +607,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 5：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 7：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 6：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 8：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 7：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
 
-## 记忆点 9：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 8：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 10：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 9：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,6 +654,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **表格按钮统一** | [main.js](frontend/src/main.js) 中使用 `lastTh.appendChild(btn)` 将按钮放入首行最后一个 `<th>`，移除 `ResizeObserver` 和 JS 位置计算；[editor.css](frontend/src/css/components/editor.css) 增加 `position: relative` 锚点、`backdrop-filter`、`min-width`、`border-color: var(--accent)` hover；[ai-chat.js](frontend/src/js/ai-chat.js) Unicode 字符替换为 `SVGS.*` 图标常量；[ai-chat.css](frontend/src/css/components/ai-chat.css) 同步增加毛玻璃和主题色边框样式。 |
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
+
+## 记忆点 10：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为设置页的系统主题和代码高亮主题两个下拉菜单增加键盘方向键导航（ArrowUp/ArrowDown）支持。方向键切换主题的行为与鼠标点击一致（即时应用并保存）。同时修复了两个下拉菜单的交互一致性：菜单保持打开以连续切换、点击菜单项不关闭、点击外部区域才关闭。 |
+| **系统主题下拉菜单** | [main.js](frontend/src/main.js) `buildThemeDropdown()` 末尾添加 `tabindex="-1"` + `keydown` 监听，ArrowUp/ArrowDown 循环导航（按到底回卷），调用 `item.click()` 复用已有保存逻辑。打开时自动 `focus({preventScroll: true})` 防止聚焦滚动。250ms 节流防止长按快捷键时狂奔遍历。`scrollIntoView({ block: 'nearest' })` 使当前选中项可见。 |
+| **代码高亮主题下拉菜单** | [main.js](frontend/src/main.js) `buildCodeHighlightThemeDropdown()` 移除 item click handler 中的关闭逻辑（`dropdown.classList.remove('open')`），同步添加 `tabindex` + `keydown` 监听、250ms 节流、`scrollIntoView`。`initCodeHighlightThemeSettings()` 同步修复：打开时 `focus({preventScroll: true})`，document click handler 改为判断点击在触发按钮和下拉菜单外部才关闭。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（两个 dropdown build 函数 + 高亮主题 init 函数） |
 
 ## 十二、AGENTS.md 维护规范
 

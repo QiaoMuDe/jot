@@ -883,6 +883,8 @@ function bindEvents() {
             e.stopPropagation();
             skillsDropdown.classList.toggle('open');
             if (skillsDropdown.classList.contains('open')) {
+                // 每次打开菜单，滚动位置重置到顶部
+                skillsDropdown.scrollTop = 0;
                 // 打开菜单时，同步翻译方向的视觉状态
                 if (skillsTranslateOptions) {
                     if (activeSkills.translate) {

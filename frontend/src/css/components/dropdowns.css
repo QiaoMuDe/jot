@@ -343,7 +343,9 @@
 .theme-select-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  background: var(--hover-bg);
+}
+
+.theme-select-item.active:focus-visible { background: var(--hover-bg);
 }
 
 .theme-select-item.active:focus-visible {

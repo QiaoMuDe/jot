@@ -1408,8 +1408,6 @@ function buildThemeDropdown() {
         item.dataset.themeValue = key;
         item.textContent = label;
         item.addEventListener('click', async () => {
-            dropdown.classList.remove('open');
-            document.getElementById('themeTrigger').classList.remove('open');
             applyTheme(key);
             localStorage.setItem('jot_theme', key);
             await saveSettings();
@@ -1417,6 +1415,35 @@ function buildThemeDropdown() {
         });
         dropdown.appendChild(item);
     }
+    // 使下拉菜单可聚焦以接收键盘方向键事件
+    dropdown.setAttribute('tabindex', '-1');
+    let _lastKeyTime = 0;
+    const KEY_DELAY = 250;
+    dropdown.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        if (now - _lastKeyTime < KEY_DELAY) {
+            e.preventDefault();
+            return;
+        }
+        const items = dropdown.querySelectorAll('.theme-select-item');
+        if (items.length === 0) return;
+        const currentIndex = Array.from(items).findIndex(item =>
+            item.classList.contains('active')
+        );
+        let targetIndex;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            targetIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            targetIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        } else {
+            return;
+        }
+        _lastKeyTime = now;
+        items[targetIndex].click();
+        items[targetIndex].scrollIntoView({ block: 'nearest' });
+    });
 }
 
 /**
@@ -1433,8 +1460,6 @@ function buildCodeHighlightThemeDropdown() {
         item.dataset.themeValue = key;
         item.textContent = label;
         item.addEventListener('click', async () => {
-            dropdown.classList.remove('open');
-            document.getElementById('codeHighlightThemeTrigger').classList.remove('open');
             applyCodeHighlightThemeUI(key);
             applyCodeHighlightTheme(key);
             codeHighlightTheme = key;
@@ -1443,6 +1468,35 @@ function buildCodeHighlightThemeDropdown() {
         });
         dropdown.appendChild(item);
     }
+    // 使下拉菜单可聚焦以接收键盘方向键事件
+    dropdown.setAttribute('tabindex', '-1');
+    let _lastCodeKeyTime = 0;
+    const CODE_KEY_DELAY = 250;
+    dropdown.addEventListener('keydown', (e) => {
+        const now = Date.now();
+        if (now - _lastCodeKeyTime < CODE_KEY_DELAY) {
+            e.preventDefault();
+            return;
+        }
+        const items = dropdown.querySelectorAll('.theme-select-item');
+        if (items.length === 0) return;
+        const currentIndex = Array.from(items).findIndex(item =>
+            item.classList.contains('active')
+        );
+        let targetIndex;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            targetIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            targetIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+        } else {
+            return;
+        }
+        _lastCodeKeyTime = now;
+        items[targetIndex].click();
+        items[targetIndex].scrollIntoView({ block: 'nearest' });
+    });
 }
 
 let _themeInited = false;
@@ -1465,12 +1519,20 @@ function initThemeSettings() {
         if (dropdown.children.length === 0) return;
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
+        // 打开时让下拉菜单聚焦，以接收键盘事件
+        if (dropdown.classList.contains('open')) {
+            dropdown.focus({preventScroll: true});
+        }
     });
 
     // 点击外部关闭下拉菜单
-    document.addEventListener('click', () => {
-        dropdown.classList.remove('open');
-        trigger.classList.remove('open');
+    document.addEventListener('click', (e) => {
+        if (dropdown.classList.contains('open') &&
+            !trigger.contains(e.target) &&
+            !dropdown.contains(e.target)) {
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+        }
     });
 }
 
@@ -7890,12 +7952,20 @@ function initCodeHighlightThemeSettings() {
         e.stopPropagation();
         trigger.classList.toggle('open');
         dropdown.classList.toggle('open');
+        // 打开时让下拉菜单聚焦，以接收键盘事件
+        if (dropdown.classList.contains('open')) {
+            dropdown.focus({preventScroll: true});
+        }
     });
 
     // 点击外部关闭下拉菜单
-    document.addEventListener('click', () => {
-        dropdown.classList.remove('open');
-        trigger.classList.remove('open');
+    document.addEventListener('click', (e) => {
+        if (dropdown.classList.contains('open') &&
+            !trigger.contains(e.target) &&
+            !dropdown.contains(e.target)) {
+            dropdown.classList.remove('open');
+            trigger.classList.remove('open');
+        }
     });
 }
 
