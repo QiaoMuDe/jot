@@ -5753,77 +5753,41 @@ async function handleKeyboardNavigation(e) {
             (viewPreview && viewPreview.classList.contains('active'))) {
             return;
         }
-        switch (e.key) {
-            case '1':
-                e.preventDefault();
-                state.searchKeyword = '';
-                switchView('grid');
-                await loadNotes();
-                return;
-            case '2':
-                e.preventDefault();
-                toggleSidebar();
-                updateSidebarMenuItem();
-                return;
-            case '3':
-                e.preventDefault();
-                switchView('grid');
-                toggleBatchMode();
-                return;
-            case '4':
-                e.preventDefault();
-                switchView('data');
-                return;
-            case '5':
-                e.preventDefault();
-                switchView('trash');
-                return;
-            case '6':
-                e.preventDefault();
-                switchView('todo');
-                return;
-            case '7':
-                e.preventDefault();
-                switchView('settings');
-                return;
-            case '8':
-                e.preventDefault();
-                switchView('ai-chat');
-                return;
-            case '0':
-                e.preventDefault();
+        // Ctrl+0: 锁屏（需先在设置中启用）
+        if (e.key === '0') {
+            e.preventDefault();
 
-                // 获取设置，检查锁屏状态
-                const lockCfg = await window.go.main.App.GetAllSettings();
-                const lockEnabled = lockCfg.screen_lock_enabled === true || lockCfg.screen_lock_enabled === 'true';
-                const hasPassword = lockCfg.screen_lock_password && lockCfg.screen_lock_password !== '';
+            // 获取设置，检查锁屏状态
+            const lockCfg = await window.go.main.App.GetAllSettings();
+            const lockEnabled = lockCfg.screen_lock_enabled === true || lockCfg.screen_lock_enabled === 'true';
+            const hasPassword = lockCfg.screen_lock_password && lockCfg.screen_lock_password !== '';
 
-                // 未启用锁屏 → 提示
-                if (!lockEnabled) {
-                    nm.show('请先在「设置 → 锁屏密码」中启用锁屏功能', 'warning');
-                    return;
-                }
-
-                // 已启用但无密码 → 提示
-                if (!hasPassword) {
-                    nm.show('请先设置锁屏密码后再使用锁屏功能', 'warning');
-                    return;
-                }
-
-                // 已启用且有密码 → 切首页 → 锁屏
-                switchView('grid');
-                await loadNotes();
-
-                const lockScreen = document.getElementById('lockScreen');
-                if (!lockScreen) return;
-                lockScreen.style.display = 'flex';
-                // 清空输入框，防止异步期间残余键盘事件填充字符
-                const lockPwdInput = document.getElementById('lockPasswordInput');
-                if (lockPwdInput) lockPwdInput.value = '';
-                requestAnimationFrame(() => lockScreen.classList.add('entering'));
-                setTimeout(() => lockScreen.classList.remove('entering'), 700);
-                setTimeout(() => lockPwdInput?.focus(), 100);
+            // 未启用锁屏 → 提示
+            if (!lockEnabled) {
+                nm.show('请先在「设置 → 锁屏密码」中启用锁屏功能', 'warning');
                 return;
+            }
+
+            // 已启用但无密码 → 提示
+            if (!hasPassword) {
+                nm.show('请先设置锁屏密码后再使用锁屏功能', 'warning');
+                return;
+            }
+
+            // 已启用且有密码 → 切首页 → 锁屏
+            switchView('grid');
+            await loadNotes();
+
+            const lockScreen = document.getElementById('lockScreen');
+            if (!lockScreen) return;
+            lockScreen.style.display = 'flex';
+            // 清空输入框，防止异步期间残余键盘事件填充字符
+            const lockPwdInput = document.getElementById('lockPasswordInput');
+            if (lockPwdInput) lockPwdInput.value = '';
+            requestAnimationFrame(() => lockScreen.classList.add('entering'));
+            setTimeout(() => lockScreen.classList.remove('entering'), 700);
+            setTimeout(() => lockPwdInput?.focus(), 100);
+            return;
         }
     }
 
@@ -6033,14 +5997,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + Home', desc: '回到顶部' },
         { key: 'Ctrl + End', desc: '加载全部并滚到底部' },
         { key: 'Escape', desc: '关闭弹窗 / 返回上一页' },
-        { key: 'Ctrl + 1', desc: '笔记首页' },
-        { key: 'Ctrl + 2', desc: '展开侧栏' },
-        { key: 'Ctrl + 3', desc: '批量管理' },
-        { key: 'Ctrl + 4', desc: '数据管理' },
-        { key: 'Ctrl + 5', desc: '回收站' },
-        { key: 'Ctrl + 6', desc: '待办清单' },
-        { key: 'Ctrl + 7', desc: '设置' },
-        { key: 'Ctrl + 8', desc: 'AI 助手' },
+
         { key: 'Ctrl + 0', desc: '锁屏（需先在设置中启用）' },
         { key: 'Ctrl + J', desc: 'AI 侧栏折叠/展开' },
     ];
@@ -6649,7 +6606,6 @@ function updateSidebarMenuItem() {
     const showSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>';
     const hideSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>';
     menuItem.innerHTML = (isCollapsed ? showSvg : hideSvg) + label;
-    menuItem.title = `Ctrl+2 ${label}`;
 }
 
 /**

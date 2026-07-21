@@ -139,7 +139,7 @@ jot/                                    # 项目根目录
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
-| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+数字键 1-9 导航（Ctrl+7 切换快捷键页开关） | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
+| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
 | **打开外链** | 调用 runtime.BrowserOpenURL 在默认浏览器打开链接 | `app.go:OpenProjectURL()` | URL 字符串 | — |
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
@@ -504,6 +504,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **锁屏密码 UI 精简**（移除独立状态标签，按钮文本自述状态，模态框根据状态动态显示旧密码输入框）
 - [x] **Mermaid 图表支持**（代码块按需渲染 + 源码/视图切换 + 主题联动 isDarkTheme + 双按钮 SVG 图标 + 复制/渲染按钮防碰撞动画）
 - [x] **更多菜单精工卡重设计**（毛玻璃 `blur(24px)` + 双层阴影悬浮感 + 三段式 overshoot 入场动画 + KBD 风格快捷键标签 + 分组左侧 accent 色装饰条 + 条目 hover 上浮微交互 + 子菜单拍平到帮助分组）
+- [x] **移除更多菜单 Ctrl+1~8 快捷键**（删除 title 属性 + 全局 keydown handler + 快捷键说明页 + 动态 title 设置）
+- [x] **待办清单移入 AI 分组**（从管理分组移动到 AI 分组，与 AI 助手同组）
 
 ---
 
@@ -552,18 +554,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
 
-## 记忆点 1：主题下拉菜单自动化生成
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 系统主题和代码高亮主题的菜单项硬编码在 `index.html` 中，新增主题时需同时修改 JS 数据和 HTML 两处 |
-| **修复** | ① 删除 [index.html](frontend/index.html) 中两处硬编码的 `.theme-select-item` 列表（系统主题 14 项 + 代码高亮 11 项），容器改为 `<div class="theme-select-dropdown" id="themeDropdown">` 空结构；② 在 [main.js](frontend/src/main.js) 中新增 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 函数，遍历 JS 数据（`themeLabels` / `codeHighlightThemeLabels`）动态创建 `.theme-select-item` 并绑定点击事件；③ 简化 `initThemeSettings()` 和 `initCodeHighlightThemeSettings()` 只保留触发按钮 toggle + 外部点击关闭逻辑；④ 调用顺序调整为先 build 再 init |
-| **效果** | 今后新增主题只需修改 JS 数据（`themeLabels` / `codeHighlightThemePairing` + `variables.css` 变量块），无需改 HTML |
-| **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（数据）、[frontend/src/main.js](frontend/src/main.js)（构建函数）、[frontend/index.html](frontend/index.html)（容器） |
-
----
-
-## 记忆点 2：默认主题从 `:root` 剥离到 `[data-theme="default"]`
+## 记忆点 1：默认主题从 `:root` 剥离到 `[data-theme="default"]`
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -572,7 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | `:root` 现在只包含圆角、字体、间距、过渡、图标尺寸、动画、主题切换过渡；`[data-theme="default"]` 包含配色、阴影、主题系统变量、语义色、分层阴影 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css) |
 
-## 记忆点 3：主题配置数据从 `main.js` 提取到独立模块
+## 记忆点 2：主题配置数据从 `main.js` 提取到独立模块
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **影响范围** | 新建 `frontend/src/js/theme-config.js`，`main.js` 删除原定义改为 import 引用，行为完全不变 |
 | **涉及文件** | [frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)、[frontend/src/main.js](frontend/src/main.js) |
 
-## 记忆点 4：SQLite WAL 模式 + 多维度 PRAGMA 优化
+## 记忆点 3：SQLite WAL 模式 + 多维度 PRAGMA 优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：代码块样式统一 + 优化表达提示词修复
+## 记忆点 4：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 5：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 6：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 7：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 9：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 8：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,13 +643,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 10：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 9：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
 | **问题** | 打开快捷键说明页面时，每行条目会"抖动"：先可见在正常位置，再消失+下移，最后淡入+上滑。根因是 staggered 动画中所有行的 `animation-fill-mode: forwards` 在 delay 期间不生效，元素以 CSS 默认值（`opacity: 1`）渲染，delay 结束后跳转到 `from` 关键帧（`opacity: 0; translateY(12px)`），产生闪烁。 |
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理） |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
+
+## 记忆点 10：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对顶栏更多菜单进行两项精简调整：① 移除 8 个菜单项的 `title` 属性快捷键提示（Ctrl+1~8），同时删除全局 keydown 中对应的 switch case 分支，快捷键说明页同步移除相关条目；② 将"待办清单"菜单项从数据管理分组移至 AI 助手分组（保留同一个 divider 组内），调整后分组为：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/设置）、AI（待办清单/AI 助手）、帮助（快捷键说明/MD 语法/关于）。 |
+| **移除快捷键** | 删除 [index.html](frontend/index.html) 中 8 个 `.dropdown-item` 的 `title` 属性；删除 [main.js](frontend/src/main.js) 全局 keydown 中 `case '1' ~ '8'` 的 switch 分支（约 30 行），Ctrl+0 重构为独立 `if` 块保留；删除 `renderShortcutsPage()` 中 Ctrl+1~8 共 8 条快捷键说明；删除 `updateSidebarMenuItem()` 中动态设置 `menuItem.title` 的代码。 |
+| **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title） |
 
 ## 十二、AGENTS.md 维护规范
 
