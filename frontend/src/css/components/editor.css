@@ -493,22 +493,27 @@
     opacity: 1;
 }
 
-/* 表格 wrapper：为复制按钮提供 absolute 定位容器 */
+/* 表格 wrapper：为表格提供间距，不再承载按钮定位 */
 .md-rendered .table-wrapper {
-    position: relative;
     margin: 1.2em 0;
 }
 
-/* 表格复制按钮：悬停显示，表头行右侧居中定位（top 由 JS 根据 thead 中心计算） */
+/* 为包含复制按钮的 <th> 建立定位锚点 */
+.md-rendered tr:first-child th:last-child:has(.copy-table-btn) {
+    position: relative;
+}
+
+/* 表格复制按钮：锚定在首行最后一列 <th> 内，与代码块复制按钮同风格 */
 .copy-table-btn {
     position: absolute;
-    top: 0;
+    top: 50%;
     right: 6px;
-    transform: none;
+    transform: translateY(-50%);
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--card-bg);
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(4px);
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.6;
@@ -518,7 +523,10 @@
     z-index: 1;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    min-width: 62px;
+    text-align: center;
 }
 
 .copy-table-btn svg {
@@ -528,14 +536,17 @@
     vertical-align: middle;
 }
 
-.md-rendered .table-wrapper:hover .copy-table-btn {
+/* 悬停表格任意位置时显示复制按钮 */
+.md-rendered .table-wrapper:hover .copy-table-btn,
+.md-rendered .copy-table-btn:hover {
     opacity: 1;
 }
 
 .copy-table-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
-    transform: scale(1.08);
+    border-color: var(--accent);
+    transform: translateY(-50%) scale(1.08);
 }
 
 .copy-table-btn.copied {
@@ -1350,7 +1361,7 @@
     color: var(--text-muted);
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    transition: opacity 0.08s, background 0.08s, transform 0.08s;
     z-index: 2;
     user-select: none;
     white-space: nowrap;

@@ -210,7 +210,8 @@
     padding: 2px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--card-bg);
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(4px);
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.6;
@@ -220,13 +221,17 @@
     z-index: 1;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    min-width: 62px;
+    text-align: center;
     white-space: nowrap;
 }
 
 .ai-msg-assistant .table-copy-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+    border-color: var(--accent);
     transform: translateY(-50%) scale(1.08);
 }
 

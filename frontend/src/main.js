@@ -3658,7 +3658,7 @@ function _applyPreviewDOMHelpers() {
                 await navigator.clipboard.writeText(code);
                 // 先触发渲染按钮滑出动画，再变"已复制"
                 wrapper.classList.add('copying');
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 80));
                 btn.classList.add('copied');
                 btn.innerHTML = SVGS.checkmark + ' 已复制';
                 wrapper.classList.remove('copying');
@@ -3673,17 +3673,22 @@ function _applyPreviewDOMHelpers() {
         });
         wrapper.appendChild(btn);
     });
-    // 为每个表格添加复制按钮
+    // 为每个表格添加复制按钮（按钮放在首行最后一个 <th> 内，锚定 HTML 列而非可视边缘）
     els.mdRendered.querySelectorAll('table').forEach((table) => {
-        let wrapper = table.parentNode;
-        if (wrapper.classList.contains('table-wrapper')) return;
-        wrapper = document.createElement('div');
-        wrapper.className = 'table-wrapper';
-        table.parentNode.insertBefore(wrapper, table);
-        wrapper.appendChild(table);
+        // 仅保证 table 被 .table-wrapper 包裹（用于间距），不重复创建
+        if (!table.parentNode.classList.contains('table-wrapper')) {
+            const w = document.createElement('div');
+            w.className = 'table-wrapper';
+            table.parentNode.insertBefore(w, table);
+            w.appendChild(table);
+        }
+        const lastTh = table.querySelector('tr:first-child th:last-child');
+        if (!lastTh) return;
+        if (lastTh.querySelector('.copy-table-btn')) return;
+
         const btn = document.createElement('button');
         btn.className = 'copy-table-btn';
-        btn.textContent = '复制';
+        btn.innerHTML = SVGS.copy + ' 复制';
         btn.title = '复制表格';
         btn.addEventListener('click', async () => {
             const md = tableToMarkdown(table);
@@ -3693,35 +3698,14 @@ function _applyPreviewDOMHelpers() {
                 btn.innerHTML = SVGS.checkmark + ' 已复制';
                 setTimeout(() => {
                     btn.classList.remove('copied');
-                    btn.textContent = '复制';
+                    btn.innerHTML = SVGS.copy + ' 复制';
                 }, 1500);
             } catch {
                 btn.innerHTML = SVGS.xmark + ' 复制失败';
-                setTimeout(() => { btn.textContent = '复制'; }, 1000);
+                setTimeout(() => { btn.innerHTML = SVGS.copy + ' 复制'; }, 1000);
             }
         });
-        wrapper.appendChild(btn);
-        // 将按钮 top 定位到第一行(表头)的垂直中线
-        // 单纯 CSS 无法跨越 thead 边界(HTML 不允许 button 放在 thead 内),
-        // 通过 JS 测量第一行相对 wrapper 的偏移来精确对齐
-        const updateBtnPosition = () => {
-            // 用 tr:first-child 作为参考(兼容没有 thead 标签的情况)
-            const firstRow = table.querySelector('tr');
-            if (!firstRow) return;
-            const rowRect = firstRow.getBoundingClientRect();
-            const wrapperRect = wrapper.getBoundingClientRect();
-            const centerY = rowRect.top - wrapperRect.top + rowRect.height / 2;
-            const btnHeight = btn.offsetHeight || 24;
-            btn.style.top = (centerY - btnHeight / 2) + 'px';
-        };
-        // 双重 rAF 兜底：第一次 layout 刚完成, 第二次确保样式完全稳定
-        requestAnimationFrame(() => {
-            updateBtnPosition();
-            requestAnimationFrame(updateBtnPosition);
-        });
-        // 监听 table 尺寸变化, 响应式 / 字体加载等场景下自动重新对齐
-        const ro = new ResizeObserver(updateBtnPosition);
-        ro.observe(table);
+        lastTh.appendChild(btn);
     });
 
     // 图片灯箱：点击图片展开全屏查看（丝滑开合动画）

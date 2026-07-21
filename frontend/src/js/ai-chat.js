@@ -2529,21 +2529,21 @@ function renderMarkdown(el, content, deferHighlight) {
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'table-copy-btn';
-        copyBtn.textContent = '复制';
+        copyBtn.innerHTML = SVGS.copy + ' 复制';
         copyBtn.title = '复制表格';
         copyBtn.addEventListener('click', async () => {
             try {
                 const md = tableToMarkdown(table);
                 await navigator.clipboard.writeText(md);
                 copyBtn.classList.add('copied');
-                copyBtn.textContent = '✓ 已复制';
+                copyBtn.innerHTML = SVGS.checkmark + ' 已复制';
                 setTimeout(() => {
                     copyBtn.classList.remove('copied');
-                    copyBtn.textContent = '复制';
+                    copyBtn.innerHTML = SVGS.copy + ' 复制';
                 }, 1500);
             } catch (_) {
-                copyBtn.textContent = '✗ 复制失败';
-                setTimeout(() => { copyBtn.textContent = '复制'; }, 1000);
+                copyBtn.innerHTML = SVGS.xmark + ' 复制失败';
+                setTimeout(() => { copyBtn.innerHTML = SVGS.copy + ' 复制'; }, 1000);
             }
         });
         lastTh.appendChild(copyBtn);
