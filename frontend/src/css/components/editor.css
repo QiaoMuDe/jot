@@ -1337,12 +1337,10 @@
 }
 
 /* Mermaid 源码淡出动画：点击渲染后 pre 执行 200ms 淡出后彻底隐藏 */
-.pre-wrapper.has-mermaid pre {
-    transition: opacity 0.2s ease;
-}
 .pre-wrapper.has-mermaid pre.pre-hiding {
     opacity: 0;
     pointer-events: none;
+    transition: opacity 0.2s ease;
 }
 
 /* Mermaid 切换按钮：与复制按钮相同风格，定位在右上角复制按钮左侧 */

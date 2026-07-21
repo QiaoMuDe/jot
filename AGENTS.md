@@ -560,23 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
----
-
-## 记忆点 1：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为 Markdown 代码块中的 `language-mermaid` 块添加 Mermaid 图表渲染支持。默认显示源码，点击"渲染"按钮后按需渲染 SVG。切换按钮与复制按钮风格统一（同 `min-width:62px`、`top:8px`、`inline-flex` 布局）。 |
-| **渲染方式** | 使用 `mermaid/render` 子路径导入（`import { render } from 'mermaid/render'`），在 `main.js` 主线程直接渲染，**不**使用 Web Worker。主题选择通过 `getMermaidTheme()` 读取 `isDarkTheme` 映射表（[theme-config.js](frontend/src/js/theme-config.js)）决定 `dark`/`default`。 |
-| **视图切换方案** | 经多轮尝试后确定为**直接 `display: none/block` 交换 + 无动画**。之前尝试的 CSS Grid 叠加 + opacity 过渡会导致 GPU 合成层持续闪烁、两阶段定时器方案仍有微跳变。加上 `will-change: transform; transform: translateZ(0)` 防止 GPU 图层重建闪烁。 |
-| **按钮交互集成** | "复制"+"渲染"两按钮并排在代码块右上角。复制点击时 200ms 延迟（`copying` class）让渲染按钮先淡出，再变"已复制"。CSS `:has(.copy-code-btn.copied)` 隐藏渲染按钮，避免"已复制"文字膨胀戳到下方。详见 [editor.css](frontend/src/css/components/editor.css)。 |
-| **SVG 图标** | 在 [constants.js](frontend/src/js/constants.js) 新增 `SVGS.diagram`（流程图/网络图图标）和 `SVGS.code`（尖括号代码图标），Lucide 风格。按钮初始显示 `SVGS.diagram + ' 渲染'`，切换后 `SVGS.code + ' 源码'`。 |
-| **hljs 跳过** | `hljs.highlightElement()` 跳过 `code.language-mermaid`，避免语法高亮与 Mermaid 冲突。 |
-| **涉及文件** | [constants.js](frontend/src/js/constants.js)（图标）、[main.js](frontend/src/main.js)（渲染/切换/按钮创建）、[editor.css](frontend/src/css/components/editor.css)（按钮 + 切换样式）、[theme-config.js](frontend/src/js/theme-config.js)（`isDarkTheme`）、[package.json](frontend/package.json)（mermaid 依赖） |
-
----
-
-## 记忆点 2：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 1：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +573,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 2：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 4：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 3：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 5：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 4：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -619,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
 
-## 记忆点 6：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 5：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +612,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 7：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 6：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 8：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 7：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 8：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 9：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,6 +654,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **已完成排序优化** | 后端 [todo_service.go](internal/services/todo_service.go) 排序从统一的 `done ASC, created_at DESC` 改为 `done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC`。待办按创建时间倒序、已完成按完成（更新）时间倒序，利用 GORM `Save` 自动更新 `UpdatedAt` 字段。 |
 | **自动聚焦** | 切换到待办页面时，`switchView('todo')` 中通过 `setTimeout(() => els.todoInput?.focus(), 100)` 自动聚焦输入框，减少一次点击操作。详见 [main.js](frontend/src/main.js)。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（textarea 替换 input + 删除提交按钮 + SVG 图标）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（垂直堆叠 + textarea 样式 + 筛选栏重写 + 按钮图标）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+Enter 换行 + 移除提交按钮控制 + 自动聚焦）、[internal/services/todo_service.go](internal/services/todo_service.go)（排序逻辑） |
+
+---
+
+## 记忆点 10：修复 Mermaid 渲染→源码切换闪烁问题
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | 从渲染模式切换回源码模式时，代码块会出现闪烁。根因是 `pre` 元素上持久的 `transition: opacity 0.2s ease` 在反向切换时产生副作用——`pre-hiding` 类在 `display: none` 状态下被移除时触发了 opacity 过渡，浏览器内部追踪了此过渡状态，导致 `display: ''` 恢复时错误地应用了从透明到可见的淡入动画。 |
+| **修复** | 将 CSS 的 `transition: opacity 0.2s ease` 从 `.pre-wrapper.has-mermaid pre` 基础选择器移到 `.pre-wrapper.has-mermaid pre.pre-hiding` 上，使过渡只在淡出动画期间生效。反向切换时 `pre` 无过渡，直接以 `opacity: 1` 显示，消除闪烁。 |
+| **涉及文件** | [editor.css](frontend/src/css/components/editor.css)（L1339-L1343，transition 从基础选择器移到 pre-hiding 类选择器） |
 
 ## 十二、AGENTS.md 维护规范
 
