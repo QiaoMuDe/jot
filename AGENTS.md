@@ -423,7 +423,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 2. **CodeMirror 6 编辑器集成**：主流 Markdown 编辑器引擎，支持行号/撤销重做/查找替换/Tab缩进/自动补全/语法高亮（11 套配色 + 46+ 语言）
 
-3. **CSS 变量主题系统（14 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 14 套系统主题 + 11 套代码高亮主题，所有组件自动适配
+3. **CSS 变量主题系统（14 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 14 套系统主题 + 11 套代码高亮主题，所有组件自动适配。2026-07 完成配色全面重构——每套主题重新设计 `--bg`/`--card-bg`/`--bg-secondary` 等核心颜色值，E 护眼/深色/浅色等主题彻底重做，共修改 ~140 个变量
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
@@ -466,7 +466,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **AI 对话自实现**（流式输出 + Markdown 渲染 + 思维链 + 代码高亮 + 多会话 + 侧栏折叠）
 - [x] **笔记软删除与回收站**（Trash/Restore/PermanentDelete/RestoreAll/EmptyTrash）
 - [x] **Markdown 语法手册页面**（10 张语法卡片 + 双栏源码/预览 + 打开编辑器试试）
-- [x] **14 系统主题 + 11 代码高亮主题**（统一 CSS 变量体系）
+- [x] **14 系统主题 + 11 代码高亮主题**（统一 CSS 变量体系，2026-07 完成配色全面重构）
+- [x] **代码高亮主题推荐配对优化**（3 个系统主题的推荐映射重新匹配新配色：nord→github-dark、light→vscode-light-plus、quiet-light→material-palenight）
 - [x] **搜索弹窗**（200ms 防抖 + 笔记本/日期/排序/标签筛选器）
 - [x] **一键备份/还原**（BackupToDir/RestoreFromDir + VACUUM）
 - [x] **返回查看/保存脏检测**（无变更不触发保存 + 不弹出通知）
@@ -558,19 +559,10 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
 
-## 记忆点 1：SQLite WAL 模式 + 多维度 PRAGMA 优化
-
-| 记忆点 | 内容 |
-|--------|------|
-| **功能描述** | 在数据库初始化阶段启用 WAL 模式并配置多项优化 PRAGMA，提升并发读取性能和写入响应速度。同时修复导入/还原场景下 WAL 残留文件导致的数据损坏风险。 |
-| **PRAGMA 配置** | ① `journal_mode=WAL` — 允许并发读取，写入不阻塞读取；② `busy_timeout=5000` — 忙等待 5 秒，减少 "database is locked" 错误；③ `synchronous=NORMAL` — WAL 下安全且性能比 FULL 快很多；④ `cache_size=-8000` — 8MB 页面缓存 |
-| **错误处理策略** | 所有 PRAGMA 执行失败均忽略错误（`_ = db.Exec(...).Error`），不中断初始化流程。调用方（`app.go`）根据 `InitDB` 返回值统一记录错误日志 |
-| **导入/还原兼容** | `replaceDatabase` 在关闭旧连接后、复制新数据库前，主动删除 `-wal` 和 `-shm` 残留文件，确保导入/还原后数据库一致 |
-| **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitDB` 中 4 个 PRAGMA）、[app.go](app.go)（`replaceDatabase` 中 WAL 文件清理） |
 
 ---
 
-## 记忆点 2：代码块样式统一 + 优化表达提示词修复
+## 记忆点 1：代码块样式统一 + 优化表达提示词修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
+## 记忆点 2：Mermaid 图表支持（按需渲染 + 源码/视图切换 + 主题联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +586,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
+## 记忆点 3：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -607,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 4：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 6：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 5：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 7：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 6：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
 
-## 记忆点 8：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 7：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 9：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 8：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +647,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 10：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 9：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,6 +655,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **系统主题下拉菜单** | [main.js](frontend/src/main.js) `buildThemeDropdown()` 末尾添加 `tabindex="-1"` + `keydown` 监听，ArrowUp/ArrowDown 循环导航（按到底回卷），调用 `item.click()` 复用已有保存逻辑。打开时自动 `focus({preventScroll: true})` 防止聚焦滚动。250ms 节流防止长按快捷键时狂奔遍历。`scrollIntoView({ block: 'nearest' })` 使当前选中项可见。 |
 | **代码高亮主题下拉菜单** | [main.js](frontend/src/main.js) `buildCodeHighlightThemeDropdown()` 移除 item click handler 中的关闭逻辑（`dropdown.classList.remove('open')`），同步添加 `tabindex` + `keydown` 监听、250ms 节流、`scrollIntoView`。`initCodeHighlightThemeSettings()` 同步修复：打开时 `focus({preventScroll: true})`，document click handler 改为判断点击在触发按钮和下拉菜单外部才关闭。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（两个 dropdown build 函数 + 高亮主题 init 函数） |
+
+---
+
+## 记忆点 10：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对 14 套系统主题的核心配色进行完整重设计（2026-07），基于"陈年纸本 / 雪光 / 极光黎明 / 柔黑 / 柔和米绿 / 热拿铁"等情绪方向重新定义每个主题的 `--bg`/`--card-bg`/`--bg-secondary`/`--text-primary`/`--border` 等颜色值，共修改 ~140 个 CSS 变量。同时更新 3 个系统主题的代码高亮推荐配对以匹配新配色。 |
+| **重点主题变更** | ① **eye-protection**：彻底重做 — 豆沙绿 `#C7EDCC` → 柔和米绿 `#E4ECD9`，饱和度和色相均大幅调整；② **dark**：纯黑 `#0D0D0D` → 柔灰 `#18181C`，避免 OLED 晕影效应；③ **default**：暖米 `#F7F5F0` → 陈年纸本 `#F2EDE3`；④ **catppuccin-latte**：偏蓝灰 → 暖粉拿铁调；⑤ **light**：冷白微蓝灰 `#F4F4F7` 告别纯白平庸。 |
+| **更多菜单背景修正** | default 主题 `--more-menu-bg: #FAFAFA`（冷白）→ `#FAF5EE`（暖白）；catppuccin-latte 主题 `--more-menu-bg: #F8F8FA`（冷蓝灰）→ `#F0E8E6`（暖粉），并同步修正该主题的 overlay/toast/scrollbar 等 5 个遗漏变量。 |
+| **代码高亮推荐更新** | nord → `github-dark`（从 warm 的 monokai 改为 cool 蓝调）；light → `vscode-light-plus`（冷雪光配冷代码）；quiet-light → `material-palenight`（粉紫底配紫调代码）。 |
+| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（全部 ~140 个颜色值变更）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（3 个配对更新） |
 
 ## 十二、AGENTS.md 维护规范
 
