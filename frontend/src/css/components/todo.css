@@ -21,16 +21,17 @@
     flex: 1;
 }
 
-/* 输入区 + 筛选行 — 一体化工具栏 */
+/* 输入区 + 筛选行 — 一体化卡片 */
 .todo-input-wrap {
     display: flex;
-    align-items: stretch;
+    flex-direction: column;
     margin-bottom: 20px;
     background: var(--input-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
 }
 
 .todo-input-wrap:focus-within {
@@ -39,41 +40,58 @@
 }
 
 .todo-input {
-    flex: 1;
     padding: 12px 16px;
     border: none;
     background: transparent;
     color: var(--text-primary);
     font-size: 0.9rem;
     font-family: inherit;
+    line-height: 1.6;
     outline: none;
     box-sizing: border-box;
+    resize: none;
+    overflow: hidden;
+    width: 100%;
+    min-height: 44px;
+    max-height: 200px;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+.todo-input::-webkit-scrollbar {
+    width: 3px;
+}
+
+.todo-input::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 2px;
+}
+
+.todo-input:hover::-webkit-scrollbar-thumb,
+.todo-input:focus::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
 }
 
 .todo-input::placeholder {
     color: var(--text-muted);
 }
 
-/* 垂直分割线 */
-.todo-input-divider {
-    width: 1px;
-    background: var(--border);
-    align-self: center;
-    height: 24px;
-    flex-shrink: 0;
-}
-
-/* 筛选栏 */
+/* 筛选栏 — 输入区下方水平条 */
 .todo-filter-bar {
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 4px;
-    flex-shrink: 0;
+    gap: 4px;
+    padding: 6px 16px;
+    border-top: 1px solid var(--border);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .todo-filter-btn {
-    padding: 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
     border: none;
     border-radius: var(--radius-md);
     background: transparent;
@@ -86,15 +104,28 @@
     white-space: nowrap;
 }
 
+.todo-filter-btn svg {
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
 .todo-filter-btn:hover {
     background: var(--hover-bg);
     color: var(--text-primary);
+}
+
+.todo-filter-btn:hover svg {
+    opacity: 0.8;
 }
 
 .todo-filter-btn.active {
     background: var(--accent);
     color: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.todo-filter-btn.active svg {
+    opacity: 1;
 }
 
 /* 列表区 */
@@ -221,21 +252,25 @@
     transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* 待办文本 */
+/* 待办文本 — 支持多行展示，最多显示 3 行 */
 .todo-text {
     flex: 1;
     font-size: 0.9rem;
     color: var(--text-primary);
     line-height: 1.5;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     cursor: pointer;
     padding: 4px 6px;
     border-radius: var(--radius-sm);
     transition: color 0.2s ease;
     border: 1px solid transparent;
     outline: none;
+    /* 多行展示：保留换行 + 最多 3 行截断 */
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .todo-text.done {

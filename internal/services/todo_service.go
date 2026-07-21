@@ -26,7 +26,7 @@ func (s *TodoService) Create(text string) (*models.Todo, error) {
 
 func (s *TodoService) List() ([]models.Todo, error) {
 	var todos []models.Todo
-	if err := s.db.Order("done ASC, created_at DESC").Find(&todos).Error; err != nil {
+	if err := s.db.Order("done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC").Find(&todos).Error; err != nil {
 		s.logger.Errorw("TodoService.List 失败", fastlog.Error(err))
 		return nil, err
 	}

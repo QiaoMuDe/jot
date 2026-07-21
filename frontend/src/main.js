@@ -354,6 +354,7 @@ const els = {
     viewTodo: $('viewTodo'),
     todoBackBtn: $('todoBackBtn'),
     todoInput: $('todoInput'),
+
     todoList: $('todoList'),
     todoEmpty: $('todoEmpty'),
     viewEditor: $('viewEditor'),
@@ -625,6 +626,8 @@ function switchView(view) {
                 const activeFilterBtn = document.querySelector('.todo-filter-btn[data-filter="active"]');
                 if (activeFilterBtn) activeFilterBtn.classList.add('active');
                 loadTodos();
+                // 切换到待办页时自动聚焦输入框
+                setTimeout(() => els.todoInput?.focus(), 100);
                 break;
         }
 
@@ -5540,12 +5543,28 @@ function initEventListeners() {
     document.querySelector('.file-ext-dialog-overlay').addEventListener('click', closeFileExtDialog);
 
     // 待办清单事件
-    els.todoInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addTodo();
-        }
-    });
+    if (els.todoInput) {
+        // 键盘：Enter 提交，Ctrl+Enter 换行
+        els.todoInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                e.preventDefault();
+                addTodo();
+            } else if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                // 在光标处插入换行 + 触发 auto-resize
+                const start = els.todoInput.selectionStart;
+                const end = els.todoInput.selectionEnd;
+                const val = els.todoInput.value;
+                els.todoInput.value = val.substring(0, start) + '\n' + val.substring(end);
+                els.todoInput.selectionStart = els.todoInput.selectionEnd = start + 1;
+                autoResizeTodoInput();
+            }
+        });
+
+        // 输入时自动扩展高度
+        els.todoInput.addEventListener('input', autoResizeTodoInput);
+    }
+
     els.viewTodo?.addEventListener('click', (e) => {
         // 筛选按钮切换委托
         const filterBtn = e.target.closest('.todo-filter-btn');
@@ -8401,6 +8420,16 @@ function renderTodos(todos, filter) {
 }
 
 /**
+ * 自动扩展待办输入框高度
+ */
+function autoResizeTodoInput() {
+    const textarea = els.todoInput;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+}
+
+/**
  * 更新筛选按钮上的数量显示
  */
 function updateTodoStats(todos) {
@@ -8426,6 +8455,8 @@ async function addTodo() {
         if (!window.go?.main?.App?.CreateTodo) return;
         const newTodo = await window.go.main.App.CreateTodo(text);
         input.value = '';
+        // 重置输入框高度
+        input.style.height = 'auto';
 
         // 如果不在"待办"分类，自动切换到待办并刷新
         if (_todoFilter !== 'active') {

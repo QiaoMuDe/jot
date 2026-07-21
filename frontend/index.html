@@ -1604,11 +1604,16 @@ console.log(greet("Jot"));
             <div class="todo-container">
                 <!-- 输入区 + 筛选 -->
                 <div class="todo-input-wrap">
-                    <input type="text" id="todoInput" class="todo-input" placeholder="添加新的待办事项..." autocomplete="off">
-                    <div class="todo-input-divider"></div>
+                    <textarea id="todoInput" class="todo-input" placeholder="添加新的待办事项..." rows="1" autocomplete="off"></textarea>
                     <div class="todo-filter-bar">
-                        <button class="todo-filter-btn active" data-filter="active">待办</button>
-                        <button class="todo-filter-btn" data-filter="done">已完成</button>
+                        <button class="todo-filter-btn active" data-filter="active">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            待办
+                        </button>
+                        <button class="todo-filter-btn" data-filter="done">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            已完成
+                        </button>
                     </div>
                 </div>
                 <!-- 列表区 -->
