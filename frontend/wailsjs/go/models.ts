@@ -580,6 +580,7 @@ export namespace services {
 	    log_level: number;
 	    screen_lock_enabled: boolean;
 	    screen_lock_password: string;
+	    editor_word_wrap: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SettingsConfig(source);
@@ -614,6 +615,7 @@ export namespace services {
 	        this.log_level = source["log_level"];
 	        this.screen_lock_enabled = source["screen_lock_enabled"];
 	        this.screen_lock_password = source["screen_lock_password"];
+	        this.editor_word_wrap = source["editor_word_wrap"];
 	    }
 	}
 

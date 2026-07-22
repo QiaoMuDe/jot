@@ -62,7 +62,7 @@ let codeHighlightTheme = 'monokai-dimmed';
  * @param {string} [fileExt='.md'] - 文件扩展名（含前导点号），用于选择语言解析器
  * @returns {EditorView}
  */
-function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md', themeName = 'monokai-dimmed') {
+function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md', themeName = 'monokai-dimmed', enableWordWrap = false) {
     // 每次初始化创建新的 Compartment（旧实例销毁后旧 compartment 随之失效）
     cmReadOnlyCompartment = new Compartment();
     const extensions = [
@@ -90,6 +90,7 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         closeBrackets(),
         autocompletion(),
         ...(useSyntaxHighlight ? getHighlightExtension(fileExt, themeName) : []),
+        ...(enableWordWrap ? [EditorView.lineWrapping] : []),
         highlightSelectionMatches(),
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
@@ -386,6 +387,7 @@ const els = {
     tagList: $('tagList'),
     mdHighlightToggle: $('mdHighlightToggle'),
     noteOpenFullscreenToggle: $('noteOpenFullscreenToggle'),
+    editorWordWrapToggle: $('editorWordWrapToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -3305,7 +3307,8 @@ async function saveFileExt() {
         cmEditor.destroy();
         cmEditor = null;
         const useSyntaxHighlight = els.mdHighlightToggle.checked;
-        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme);
+        const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme, enableWordWrap);
     }
 }
 
@@ -3343,7 +3346,8 @@ async function toggleFileExt() {
         cmEditor.destroy();
         cmEditor = null;
         const useSyntaxHighlight = els.mdHighlightToggle.checked;
-        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, newExt, codeHighlightTheme);
+        const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, newExt, codeHighlightTheme, enableWordWrap);
     }
 }
 
@@ -3575,7 +3579,8 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
 
     // 初始化 CM6（已拿到内容）
     const useSyntaxHighlight = els.mdHighlightToggle.checked;
-    initCodeMirror(contentArea, editorContent, isReadOnly, useSyntaxHighlight, ext, codeHighlightTheme);
+    const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+    initCodeMirror(contentArea, editorContent, isReadOnly, useSyntaxHighlight, ext, codeHighlightTheme, enableWordWrap);
     updateWordCount();
 
     // 编辑模式下记录快照
@@ -5442,6 +5447,12 @@ function initEventListeners() {
 
     // 全屏打开笔记开关
     els.noteOpenFullscreenToggle.addEventListener('change', async () => {
+        await saveSettings();
+        nm.show('设置已保存', 'success');
+    });
+
+    // 自动换行开关
+    els.editorWordWrapToggle.addEventListener('change', async () => {
         await saveSettings();
         nm.show('设置已保存', 'success');
     });
@@ -7941,7 +7952,8 @@ function applyCodeHighlightTheme(themeName) {
         cmEditor = null;
         // 从设置中获取当前的 useSyntaxHighlight
         const useSyntaxHighlight = els.mdHighlightToggle.checked;
-        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, themeName);
+        const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, themeName, enableWordWrap);
     }
     // 同步更新设置页代码预览
     if (_codePreviewInited) {
@@ -8109,6 +8121,9 @@ async function loadSettings() {
 
         // --- 全屏打开 checkbox ---
         if (els.noteOpenFullscreenToggle) els.noteOpenFullscreenToggle.checked = cfg.note_open_fullscreen;
+
+        // --- 自动换行 checkbox ---
+        if (els.editorWordWrapToggle) els.editorWordWrapToggle.checked = cfg.editor_word_wrap;
 
         // --- 代码高亮主题 ---
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
@@ -8321,6 +8336,7 @@ async function saveSettings() {
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
             screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
+            editor_word_wrap: els.editorWordWrapToggle?.checked || false,
         };
         await window.go.main.App.SaveAllSettings(cfg);
     } catch (e) {

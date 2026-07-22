@@ -560,20 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：品牌名点击改为返回笔记首页，帮助参考新增"关于"入口
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将品牌名"Jot"的点击行为从"打开关于页面"改为"返回笔记首页"（与其他页面返回逻辑一致），同时在"帮助参考"子菜单中新增"关于"入口以保留关于页面的访问途径。 |
-| **移除 `.brand-name` 点击事件** | 删除 [main.js](frontend/src/main.js) 中 `.brand-name` 的 click 事件监听（原调用 `stopPropagation()` + `showAbout()`），品牌名点击事件冒泡到父级 `.topbar-brand`，统一执行返回首页逻辑。见 [main.js#L5458](frontend/src/main.js) |
-| **对齐返回行为** | `.topbar-brand` 的 click handler 新增 `loadNotes()`，与其他页面返回按钮完全一致（`switchView('grid'); loadNotes()`）。见 [main.js#L5240-L5245](frontend/src/main.js) |
-| **帮助参考子菜单新增"关于"** | 在 [index.html](frontend/index.html) 的"帮助参考"子菜单中新增 `data-action="about"` 的"关于"菜单项（带 info 圆圈图标）。见 [index.html#L91](frontend/index.html) |
-| **菜单点击事件分发** | [main.js](frontend/src/main.js) 中菜单 `data-action` 分发新增 `case 'about': showAbout()`，点击"关于"菜单项调用已有 `showAbout()` 函数打开关于浮层。见 [main.js#L5218-L5219](frontend/src/main.js) |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（移除 event listener + 对齐返回行为 + 增加 about 分发）、[frontend/index.html](frontend/index.html)（新增菜单项） |
-
----
-
-## 记忆点 2：更多菜单分组优化 + 快捷键提示 + 精工卡设计
+## 记忆点 1：更多菜单分组优化 + 快捷键提示 + 精工卡设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -584,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
 
-## 记忆点 3：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 2：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 4：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 3：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
 
-## 记忆点 5：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 4：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -612,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 6：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 5：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 7：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 6：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +619,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 7：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +631,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 8：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,13 +644,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 9：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
 | **问题** | 从渲染模式切换回源码模式时，代码块会出现闪烁。根因是 `pre` 元素上持久的 `transition: opacity 0.2s ease` 在反向切换时产生副作用——`pre-hiding` 类在 `display: none` 状态下被移除时触发了 opacity 过渡，浏览器内部追踪了此过渡状态，导致 `display: ''` 恢复时错误地应用了从透明到可见的淡入动画。 |
 | **修复** | 将 CSS 的 `transition: opacity 0.2s ease` 从 `.pre-wrapper.has-mermaid pre` 基础选择器移到 `.pre-wrapper.has-mermaid pre.pre-hiding` 上，使过渡只在淡出动画期间生效。反向切换时 `pre` 无过渡，直接以 `opacity: 1` 显示，消除闪烁。 |
 | **涉及文件** | [editor.css](frontend/src/css/components/editor.css)（L1339-L1343，transition 从基础选择器移到 pre-hiding 类选择器） |
+
+---
+
+## 记忆点 10：编辑器设置新增自动换行开关
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在设置页编辑器设置卡片中新增"自动换行"开关（默认关闭），启用后 CM6 编辑器在查看/编辑/新建三种模式下均根据配置决定是否自动换行。该设置项纳入前后端统一的 SettingsConfig 加载/保存体系。 |
+| **后端改动** | [internal/services/types.go](internal/services/types.go) 中 `SettingsConfig` 结构体新增 `EditorWordWrap bool` 字段（JSON tag: `editor_word_wrap`），`GetAllSettings`/`SaveAllSettings` 同步处理该键的读写映射。 |
+| **前端设置 UI** | [frontend/index.html](frontend/index.html) 编辑器设置卡片中新增 id 为 `editorWordWrapToggle` 的 toggle 开关（置于"全屏打开"与"代码高亮主题"之间），描述：启用后编辑器内容超出宽度时自动换行显示。 |
+| **CM6 集成** | [main.js](frontend/src/main.js) `initCodeMirror()` 新增第 7 参数 `enableWordWrap`（默认 false），为 true 时条件性注入 `EditorView.lineWrapping` 扩展。该配置来自 `els.editorWordWrapToggle.checked`，在 `openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 全部 5 个调用点透传。 |
+| **加载/保存** | [main.js](frontend/src/main.js) `loadSettings()` 中同步 `editorWordWrapToggle.checked = cfg.editor_word_wrap`；`saveSettings()` 中收集 `editor_word_wrap` 字段。toggle change 事件自动保存并弹出"设置已保存"通知（与语法高亮/全屏打开模式一致）。 |
+| **涉及文件** | [internal/services/types.go](internal/services/types.go)（结构体 + 读写映射）、[frontend/index.html](frontend/index.html)（toggle HTML）、[frontend/src/main.js](frontend/src/main.js)（els 注册 + import/initCodeMirror/loadSettings/saveSettings/openEditor/事件绑定，共 7 处改动） |
 
 ## 十二、AGENTS.md 维护规范
 
@@ -682,3 +682,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
    - **[variables.css](frontend/src/css/variables.css)**：新增一个完整的 `[data-theme="..."]` 变量块，包含所有主题色变量（配色、阴影、主题系统变量、语义色、分层阴影），参照已有主题块的结构和值类型
    - **[theme-config.js](frontend/src/js/theme-config.js)**：在 `themeLabels` 中添加主题 key → 中文显示名的映射；在 `codeHighlightThemePairing` 中添加主题 key → 推荐代码高亮主题的配对映射
    - 无需修改 `index.html` 或 `main.js`（主题下拉菜单已由 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 自动生成）
+10. **设置页新增设置项流程**：如需在设置页新增一个设置项（如 toggle/输入框/下拉菜单），需依次修改以下 3 个文件共 6-7 处——
+    - **[internal/services/types.go](internal/services/types.go)**：三处——① `SettingsConfig` 结构体新增对应类型字段（bool/int/string）；② `GetAllSettings()` 中初始化读取映射（`parseBoolSetting`/`parseIntSetting`/`s.Get()`）；③ `SaveAllSettings()` 的 `sets` map 中新增写入映射（`strconv.FormatBool`/`strconv.Itoa`/直接赋值）
+    - **[frontend/index.html](frontend/index.html)**：在对应设置分区卡片内新增 HTML 控件（参考现有 toggle/输入框/下拉菜单的结构和 class）
+    - **[frontend/src/main.js](frontend/src/main.js)**：三至四处——④ `els` 对象中注册元素引用（`$('elementId')`）；⑤ `loadSettings()` 中读取 `cfg.xxx` 同步到 DOM；⑥ `saveSettings()` 的 `cfg` 对象中收集 DOM 值；⑦ 若需要自动保存，在事件绑定区域添加 `addEventListener('change', ...)` 调用 `saveSettings()` + 通知
+    - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 5 处）

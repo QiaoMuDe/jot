@@ -84,6 +84,7 @@ type SettingsConfig struct {
 	LogLevel                  int    `json:"log_level"`
 	ScreenLockEnabled         bool   `json:"screen_lock_enabled"`
 	ScreenLockPassword        string `json:"screen_lock_password"`
+	EditorWordWrap            bool   `json:"editor_word_wrap"`
 }
 
 // GetAllSettings 从 SettingService 读取全部设置项
@@ -116,6 +117,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		LogLevel:                  parseIntSetting(s.Get("log_level"), 1),
 		ScreenLockEnabled:         parseBoolSetting(s.Get("screen_lock_enabled")),
 		ScreenLockPassword:        s.Get("screen_lock_password"),
+		EditorWordWrap:            parseBoolSetting(s.Get("editor_word_wrap")),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
@@ -210,6 +212,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"log_level":                    strconv.Itoa(cfg.LogLevel),
 		"screen_lock_enabled":          strconv.FormatBool(cfg.ScreenLockEnabled),
 		"screen_lock_password":         cfg.ScreenLockPassword,
+		"editor_word_wrap":             strconv.FormatBool(cfg.EditorWordWrap),
 	}
 
 	for k, v := range sets {
