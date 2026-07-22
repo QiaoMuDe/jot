@@ -561,18 +561,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
+22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-## 记忆点 1：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对顶栏更多菜单进行两项精简调整：① 移除 8 个菜单项的 `title` 属性快捷键提示（Ctrl+1~8），同时删除全局 keydown 中对应的 switch case 分支，快捷键说明页同步移除相关条目；② 将"待办清单"菜单项从数据管理分组移至 AI 助手分组（保留同一个 divider 组内），调整后分组为：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/设置）、AI（待办清单/AI 助手）、帮助（快捷键说明/MD 语法/关于）。 |
-| **移除快捷键** | 删除 [index.html](frontend/index.html) 中 8 个 `.dropdown-item` 的 `title` 属性；删除 [main.js](frontend/src/main.js) 全局 keydown 中 `case '1' ~ '8'` 的 switch 分支（约 30 行），Ctrl+0 重构为独立 `if` 块保留；删除 `renderShortcutsPage()` 中 Ctrl+1~8 共 8 条快捷键说明；删除 `updateSidebarMenuItem()` 中动态设置 `menuItem.title` 的代码。 |
-| **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
-
-## 记忆点 2：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 1：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +574,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 3：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 2：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 3：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +597,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 4：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 5：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：编辑器设置新增自动换行开关
+## 记忆点 6：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 7：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 8：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 9：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,6 +666,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **移除对号** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 删除 `.ai-chat-skills-item.active::after` 规则块（`{ content: '✓'; ... }`），选中态不再显示右侧对号。 |
 | **按钮隐藏** | [ai-chat.js](frontend/src/js/ai-chat.js) `renderSkillChips()` 中新增两行：有技能激活时 `skillsBtn.style.display = 'none'`，无技能时 `skillsBtn.style.display = ''`。按钮显示状态随 chip 栏联动，取消技能（点 X）后自动恢复。 |
 | **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 ::after 对号）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（renderSkillChips 中控制按钮显隐） |
+
+---
+
+## 记忆点 10：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对 AI 基础 system prompt 进行两轮重构：① 将单句硬编码 prompt 拆分为三层结构（身份层 + 规范层 + 边界层），提取为包级常量消除两处重复；② 修复技能激活时完全跳过基础 prompt 的问题，改为始终注入规范层+边界层，仅身份层在技能激活时跳过（由技能 prompt 的角色定义替代）。 |
+| **Step 1: 常量拆分** | [app.go](app.go) 中定义 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范+边界层）、`baseSystemPrompt = baseIdentity + baseNormsBoundaries`（完整三层），替换 `CallAIStream` 和 `CallAIStreamRegenerate` 中两处重复硬编码。 |
+| **Step 2: 注入逻辑修复** | 原 `if len(skillIds) == 0` 跳过全部基础 prompt；改为 `if` 分支注入完整三层，`else` 分支注入 `baseNormsBoundaries`。规范层内容：结构化优先/适度追问/深度适配/保持简洁；边界层内容：不编造/不危险操作/保持客观。 |
+| **涉及文件** | [app.go](app.go)（常量定义 + 两处注入逻辑） |
 
 ## 十二、AGENTS.md 维护规范
 

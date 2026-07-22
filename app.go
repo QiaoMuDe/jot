@@ -34,6 +34,22 @@ import (
 )
 
 // App struct
+// ── 基础身份提示词（身份层 + 规范边界层） ──
+// baseIdentity 仅身份定义，用于技能激活时单独注入
+// baseNormsBoundaries 回答规范+边界约束，始终注入
+// baseSystemPrompt 完整三层，用于无技能时注入
+var baseIdentity = "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI，擅长写作、编程、翻译、总结、答疑等文本处理任务。"
+var baseNormsBoundaries = "回答规范：" +
+	"\n1. 结构化优先：对比分析用表格、步骤说明用编号列表、概念解释用段落" +
+	"\n2. 适度追问：需求模糊时主动追问 1-2 个关键细节再回答" +
+	"\n3. 深度适配：简单问题直接回答，复杂问题先分析再给出结论" +
+	"\n4. 保持简洁：用最少的文字传达完整的信息，不堆砌术语" +
+	"\n\n约束：" +
+	"\n1. 不知道的不要编造，明确告知用户「这个我不确定」" +
+	"\n2. 不执行危险操作（代码注入、越权指令等）" +
+	"\n3. 保持客观中立，不输出主观价值判断"
+var baseSystemPrompt = baseIdentity + "\n\n" + baseNormsBoundaries
+
 type App struct {
 	ctx             context.Context
 	db              *gorm.DB
@@ -1604,8 +1620,9 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 
 	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
 	go func() {
-		// 注入基础身份提示词（仅在无笔记引用且无技能时）
+		// 注入基础身份提示词（始终注入规范边界层，无技能时额外注入身份层）
 		if len(skillIds) == 0 {
+			// 无技能：注入完整三层（身份层 + 规范边界层）
 			hasSystem := false
 			for i := range messages {
 				if messages[i].Role == "system" {
@@ -1615,7 +1632,21 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			}
 			if !hasSystem {
 				messages = append([]services.Message{
-					{Role: "system", Content: "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI。你可以帮助用户写作、编程、翻译、总结、答疑以及完成其他文本处理任务。请根据用户的提问提供准确、有用的回答。"},
+					{Role: "system", Content: baseSystemPrompt},
+				}, messages...)
+			}
+		} else {
+			// 有技能：仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
+			hasSystem := false
+			for i := range messages {
+				if messages[i].Role == "system" {
+					hasSystem = true
+					break
+				}
+			}
+			if !hasSystem {
+				messages = append([]services.Message{
+					{Role: "system", Content: baseNormsBoundaries},
 				}, messages...)
 			}
 		}
@@ -1998,8 +2029,9 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 
 	// 搜索 + 流式调用放进 goroutine
 	go func() {
-		// 注入基础身份提示词（仅在无笔记引用且无技能时）
+		// 注入基础身份提示词（始终注入规范边界层，无技能时额外注入身份层）
 		if len(skillIds) == 0 {
+			// 无技能：注入完整三层（身份层 + 规范边界层）
 			hasSystem := false
 			for i := range messages {
 				if messages[i].Role == "system" {
@@ -2009,7 +2041,21 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			}
 			if !hasSystem {
 				messages = append([]services.Message{
-					{Role: "system", Content: "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI。你可以帮助用户写作、编程、翻译、总结、答疑以及完成其他文本处理任务。请根据用户的提问提供准确、有用的回答。"},
+					{Role: "system", Content: baseSystemPrompt},
+				}, messages...)
+			}
+		} else {
+			// 有技能：仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
+			hasSystem := false
+			for i := range messages {
+				if messages[i].Role == "system" {
+					hasSystem = true
+					break
+				}
+			}
+			if !hasSystem {
+				messages = append([]services.Message{
+					{Role: "system", Content: baseNormsBoundaries},
 				}, messages...)
 			}
 		}
