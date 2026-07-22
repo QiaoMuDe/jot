@@ -10,7 +10,7 @@
 ```
 jot/                                    # 项目根目录
 ├── main.go                             # 【入口文件】Wails 应用启动入口，配置窗口/资源/绑定
-├── app.go                              # 【核心文件】Wails 绑定层，暴露 95+ 个 Go API 给前端（~3050 行）
+├── app.go                              # 【核心文件】Wails 绑定层，暴露 95+ 个 Go API 给前端
 ├── go.mod                              # Go 模块定义，声明依赖版本
 ├── go.sum                              # Go 依赖锁文件
 ├── wails.json                          # Wails 项目配置（名称/构建脚本/作者）
@@ -32,10 +32,10 @@ jot/                                    # 项目根目录
 │   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
 │   │   └── todo.go                    # Todo 实体（待办/文本/完成状态/时间戳）
 │   └── services/
-│       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs（~680 行）
+│       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 业务层（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）（~875 行）
+│       ├── ai_service.go               # AI 业务层（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
 │       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
 │       ├── profile_service.go          # API 配置预设 CRUD + 切换/激活
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
@@ -50,33 +50,33 @@ jot/                                    # 项目根目录
 │   ├── index.html                      # 入口 HTML，7 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）（~8120 行）
+│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能选中指示 + 点击切换 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）（~4180 行）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
-│   │       ├── variables.css           # 14 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等（~795 行）
+│   │       ├── variables.css           # 14 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
 │   │       ├── reset.css               # 全局 reset（box-sizing/body 边距/overscroll-behavior）
 │   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 透明轨道 + 主题变量联动（含主内容区/搜索/AI 对话消息列表）
 │   │       ├── animations.css          # 13 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
 │   │       └── components/
-│   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮/更多菜单含图标）（~225 行）
+│   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮/更多菜单含图标）
 │   │           ├── main-content.css    # 主内容区布局（卡片网格/视图容器/滚动）
 │   │           ├── sidebar.css         # 笔记本侧边栏三段式设计 + 折叠按钮
 │   │   │   │   ├── editor.css          # 编辑器面板/CM6 主题/全屏/预览/代码块复制按钮（含 AI 消息代码块）
 │   │           ├── dropdowns.css       # 右键菜单/更多菜单/下拉选择器
 │   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层/快捷键页面样式（shortcut-row flex 水平布局）
-│   │           ├── settings-panel.css  # 设置页分段控件/滑块/开关/按钮（~1050 行）
+│   │           ├── settings-panel.css  # 设置页分段控件/滑块/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
-│   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局）（~3020 行）
+│   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局）
 │   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -108,7 +108,7 @@ jot/                                    # 项目根目录
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
 | **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
-| **Wails 绑定层** | Go API → JS Bridge，95+ 个绑定方法，含 runtime.SaveFileDialog | `app.go`（~3050 行） | Wails v2 binding + runtime |
+| **Wails 绑定层** | Go API → JS Bridge，95+ 个绑定方法，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
 | **前端构建流程** | `wails build` 自动执行 `npm run build`（Vite）→ `frontend/dist/`，再嵌入 Go 二进制 | `go:embed all:frontend/dist` | 前端构建和后端编译都由 `wails build` 一条命令完成 |
 | **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
@@ -146,7 +146,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化） | `services/ai_service.go`（~875 行）+ `aicli/` + `frontend/src/js/ai-chat.js`（~4180 行）+ `frontend/src/css/components/ai-chat.css`（~3020 行） | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -563,15 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 打开快捷键说明页面时，每行条目会"抖动"：先可见在正常位置，再消失+下移，最后淡入+上滑。根因是 staggered 动画中所有行的 `animation-fill-mode: forwards` 在 delay 期间不生效，元素以 CSS 默认值（`opacity: 1`）渲染，delay 结束后跳转到 `from` 关键帧（`opacity: 0; translateY(12px)`），产生闪烁。 |
-| **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
-
-## 记忆点 2：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 1：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 3：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 2：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 4：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 3：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 4：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -612,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 5：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 6：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：编辑器设置新增自动换行开关
+## 记忆点 7：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 8：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 9：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,6 +662,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **选中指示 + 点击切换** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.active` 样式（accent 色 + `::after { ✓ }`）；[ai-chat.js](frontend/src/js/ai-chat.js) 新增 `updateSkillsMenuActiveState()` 函数，菜单打开时刷新所有菜单项的 `.active` 状态；12 个 `else if` 分支重构为通用 toggle 逻辑，点击已激活技能取消引用（互斥原则不变）。 |
 | **离场动画** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.closing` class + `@keyframes skillsDropdownOut`（缩小 + 淡出 0.18s）+ `@keyframes skillsItemOut`（右滑 + 淡出 0.1s）+ 13 个 nth-child 反向交错 delay。`closeSkillsDropdown()` 用 `setTimeout` 360ms 替代 `animationend` 事件清理 class。点击按钮/选择技能/点击外部三处关闭场景统一调用。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除翻译子菜单结构）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（active 样式 + closing 动画 + 反向交错 ~130 行）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（updateSkillsMenuActiveState + toggle 重构 + closeSkillsDropdown）、[internal/database/db.go](internal/database/db.go)（合并翻译 prompt）、[internal/services/ai_service.go](internal/services/ai_service.go) + [app.go](app.go)（动态 source/target 占位符替换） |
+
+---
+
+## 记忆点 10：移除技能选中对号 + 激活时隐藏更多技能按钮
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对「更多技能」菜单进行两项交互调整：① 移除技能菜单选中项的 `✓` 对号标记，选中态仅以 accent 色高亮文字和图标；② 激活技能时自动隐藏"更多技能"按钮（减少工具栏冗余），取消技能后按钮重新显示。 |
+| **移除对号** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 删除 `.ai-chat-skills-item.active::after` 规则块（`{ content: '✓'; ... }`），选中态不再显示右侧对号。 |
+| **按钮隐藏** | [ai-chat.js](frontend/src/js/ai-chat.js) `renderSkillChips()` 中新增两行：有技能激活时 `skillsBtn.style.display = 'none'`，无技能时 `skillsBtn.style.display = ''`。按钮显示状态随 chip 栏联动，取消技能（点 X）后自动恢复。 |
+| **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 ::after 对号）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（renderSkillChips 中控制按钮显隐） |
 
 ## 十二、AGENTS.md 维护规范
 
@@ -694,3 +697,4 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
     - **[frontend/index.html](frontend/index.html)**：在对应设置分区卡片内新增 HTML 控件（参考现有 toggle/输入框/下拉菜单的结构和 class）
     - **[frontend/src/main.js](frontend/src/main.js)**：三至四处——④ `els` 对象中注册元素引用（`$('elementId')`）；⑤ `loadSettings()` 中读取 `cfg.xxx` 同步到 DOM；⑥ `saveSettings()` 的 `cfg` 对象中收集 DOM 值；⑦ 若需要自动保存，在事件绑定区域添加 `addEventListener('change', ...)` 调用 `saveSettings()` + 通知
     - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）
+11. **禁止维护实际文件行数**：`AGENTS.md` 中不得出现 `（~XXX 行）` 类标记，文件名后也无需标注行数，避免频繁维护。

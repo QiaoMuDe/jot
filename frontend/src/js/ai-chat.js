@@ -1708,9 +1708,11 @@ function renderSkillChips() {
     const keys = Object.keys(activeSkills);
     if (keys.length === 0) {
         skillBar.style.display = 'none';
+        if (skillsBtn) skillsBtn.style.display = '';
         return;
     }
     skillBar.style.display = '';
+    if (skillsBtn) skillsBtn.style.display = 'none';
     skillChips.innerHTML = keys.map(skillId => {
         const config = activeSkills[skillId];
         if (skillId === 'translate') {

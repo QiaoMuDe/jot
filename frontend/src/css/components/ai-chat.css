@@ -1131,13 +1131,6 @@
 .ai-chat-skills-item.active {
     color: var(--accent);
 }
-.ai-chat-skills-item.active::after {
-    content: '✓';
-    margin-left: auto;
-    font-weight: 600;
-    color: var(--accent);
-    font-size: 0.72rem;
-}
 .ai-chat-skills-item.active svg {
     color: var(--accent);
 }
