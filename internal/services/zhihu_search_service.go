@@ -12,7 +12,8 @@ import (
 // SearchZhihuContent 使用知乎搜索 API 搜索知乎内容
 // 返回格式与 SearchWebResult 一致，Sources 中 SourceLabel 为 "zhihu_search"
 // 失败时返回 error（不再静默跳过）
-func SearchZhihuContent(ctx context.Context, query string, accessSecret string, maxResults int) (*SearchWebResult, error) {
+// maxChars 控制每条记录的最大字符数，超过时从头截断；<=0 表示不截断
+func SearchZhihuContent(ctx context.Context, query string, accessSecret string, maxResults int, maxChars int) (*SearchWebResult, error) {
 	if accessSecret == "" {
 		return nil, fmt.Errorf("知乎 Access Secret 未配置")
 	}
@@ -39,6 +40,11 @@ func SearchZhihuContent(ctx context.Context, query string, accessSecret string, 
 		fmt.Fprintf(&b, "[%d] %s\n", i+1, item.Title)
 		fmt.Fprintf(&b, "    来源: %s\n", item.Url)
 		content := strings.TrimSpace(item.ContentText)
+		// 按 maxChars 截断（用 rune 处理以支持中文）
+		if maxChars > 0 && len([]rune(content)) > maxChars {
+			runes := []rune(content)
+			content = string(runes[:maxChars]) + "\n\n...(内容已截断)"
+		}
 		if content != "" {
 			fmt.Fprintf(&b, "    内容: %s\n", content)
 		}
@@ -61,7 +67,8 @@ func SearchZhihuContent(ctx context.Context, query string, accessSecret string, 
 // SearchGlobalContent 使用知乎全网搜索 API 搜索互联网内容
 // 返回格式与 SearchWebResult 一致，Sources 中 SourceLabel 为 "zhihu_global"
 // 失败时返回 error（不再静默跳过）
-func SearchGlobalContent(ctx context.Context, query string, accessSecret string, maxResults int) (*SearchWebResult, error) {
+// maxChars 控制每条记录的最大字符数，超过时从头截断；<=0 表示不截断
+func SearchGlobalContent(ctx context.Context, query string, accessSecret string, maxResults int, maxChars int) (*SearchWebResult, error) {
 	if accessSecret == "" {
 		return nil, fmt.Errorf("知乎 Access Secret 未配置")
 	}
@@ -88,6 +95,11 @@ func SearchGlobalContent(ctx context.Context, query string, accessSecret string,
 		fmt.Fprintf(&b, "[%d] %s\n", i+1, item.Title)
 		fmt.Fprintf(&b, "    来源: %s\n", item.Url)
 		content := strings.TrimSpace(item.ContentText)
+		// 按 maxChars 截断（用 rune 处理以支持中文）
+		if maxChars > 0 && len([]rune(content)) > maxChars {
+			runes := []rune(content)
+			content = string(runes[:maxChars]) + "\n\n...(内容已截断)"
+		}
 		if content != "" {
 			fmt.Fprintf(&b, "    内容: %s\n", content)
 		}

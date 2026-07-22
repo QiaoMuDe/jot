@@ -565,16 +565,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两处改动：① 统一笔记预览和 AI 消息中表格复制按钮的视觉风格，与代码块复制按钮一致（SVG 图标 + `backdrop-filter: blur(4px)` 毛玻璃 + `min-width: 62px` + hover 主题色边框 `border-color: var(--accent)`），并将按钮锚定在 HTML 首行最后一列 `<th>` 内而非可视右边缘；② 优化 Mermaid 代码块复制时渲染按钮的滑出动画延迟（200ms → 80ms）和 CSS transition 时长（0.15s → 0.08s），使"已复制"反馈更快出现。 |
-| **表格按钮统一** | [main.js](frontend/src/main.js) 中使用 `lastTh.appendChild(btn)` 将按钮放入首行最后一个 `<th>`，移除 `ResizeObserver` 和 JS 位置计算；[editor.css](frontend/src/css/components/editor.css) 增加 `position: relative` 锚点、`backdrop-filter`、`min-width`、`border-color: var(--accent)` hover；[ai-chat.js](frontend/src/js/ai-chat.js) Unicode 字符替换为 `SVGS.*` 图标常量；[ai-chat.css](frontend/src/css/components/ai-chat.css) 同步增加毛玻璃和主题色边框样式。 |
-| **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
-
-## 记忆点 2：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 1：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 2：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -597,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 3：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 4：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：编辑器设置新增自动换行开关
+## 记忆点 5：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 6：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 7：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 8：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 9：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,6 +668,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **Step 1: 常量拆分** | [app.go](app.go) 中定义 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范+边界层）、`baseSystemPrompt = baseIdentity + baseNormsBoundaries`（完整三层），替换 `CallAIStream` 和 `CallAIStreamRegenerate` 中两处重复硬编码。 |
 | **Step 2: 注入逻辑修复** | 原 `if len(skillIds) == 0` 跳过全部基础 prompt；改为 `if` 分支注入完整三层，`else` 分支注入 `baseNormsBoundaries`。规范层内容：结构化优先/适度追问/深度适配/保持简洁；边界层内容：不编造/不危险操作/保持客观。 |
 | **涉及文件** | [app.go](app.go)（常量定义 + 两处注入逻辑） |
+
+---
+
+## 记忆点 10：联网搜索结果按引用截断数截断
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对三个联网搜索来源（Tavily/知乎搜索/知乎全网搜索）的每条搜索结果记录，按 `ai_ref_max_chars`（引用截断字数，默认 10000）配置截断其 `Content`，避免过长内容消耗过多 token。 |
+| **SearchWeb 截断** | [search_service.go](internal/services/search_service.go) 签名新增 `maxChars int` 参数；遍历结果时对 `r.Content` 用 `[]rune` 处理中文，超过 `maxChars` 时截取前 N 字符并追加 `...(内容已截断)`。 |
+| **知乎搜索截断** | [zhihu_search_service.go](internal/services/zhihu_search_service.go) 中 `SearchZhihuContent` 和 `SearchGlobalContent` 签名各新增 `maxChars int` 参数，截断逻辑同 `SearchWeb`。 |
+| **调用方传参** | [app.go](app.go) 中两处搜索调用（首次对话 + 再生）各在 goroutine 前读取 `a.GetAIRefMaxChars()` 传入三个搜索函数；`TestTavilyConnection`/`TestZhihuConnection` 传 `0` 表示不截断。 |
+| **涉及文件** | [internal/services/search_service.go](internal/services/search_service.go)（签名变更 + 截断逻辑）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（签名变更 + 截断逻辑）、[app.go](app.go)（4 处调用传参） |
 
 ## 十二、AGENTS.md 维护规范
 

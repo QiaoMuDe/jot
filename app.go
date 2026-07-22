@@ -1449,7 +1449,7 @@ func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := services.SearchWeb(ctx, "test", apiKey, 1)
+	result, err := services.SearchWeb(ctx, "test", apiKey, 1, 0)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("TestTavilyConnection 失败", fastlog.Error(err))
 		return false, fmt.Errorf("连接失败: %v", err)
@@ -1473,7 +1473,7 @@ func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := services.SearchZhihuContent(ctx, "test", accessSecret, 1)
+	result, err := services.SearchZhihuContent(ctx, "test", accessSecret, 1, 0)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("TestZhihuConnection 失败", fastlog.Error(err))
 		return false, fmt.Errorf("连接失败: %v", err)
@@ -1744,6 +1744,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				}
 
 				searchResultLimit := a.GetAISearchResultLimit()
+				searchMaxChars := a.GetAIRefMaxChars()
 				type searchResult struct {
 					source string
 					result *services.SearchWebResult
@@ -1758,11 +1759,11 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 						r.source = src
 						switch src {
 						case "tavily":
-							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
+							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit, searchMaxChars)
 						case "zhihu_search":
-							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
 						case "zhihu_global":
-							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
 						default:
 							r.err = fmt.Errorf("未知搜索源: %s", src)
 						}
@@ -2156,6 +2157,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				}
 
 				searchResultLimit := a.GetAISearchResultLimit()
+				searchMaxChars := a.GetAIRefMaxChars()
 				type searchResult struct {
 					source string
 					result *services.SearchWebResult
@@ -2169,11 +2171,11 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 						r.source = src
 						switch src {
 						case "tavily":
-							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit)
+							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit, searchMaxChars)
 						case "zhihu_search":
-							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
 						case "zhihu_global":
-							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit)
+							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
 						default:
 							r.err = fmt.Errorf("未知搜索源: %s", src)
 						}

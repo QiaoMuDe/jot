@@ -27,7 +27,8 @@ type SearchWebResult struct {
 // SearchWeb 使用 Tavily 搜索互联网，返回结构化的搜索结果
 // 如果 apiKey 为空，返回 error
 // ctx 用于支持超时和取消（与 CallAIStream 共用 cancel，停止按钮可中断搜索）
-func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int) (*SearchWebResult, error) {
+// maxChars 控制每条记录的最大字符数，超过时从头截断；<=0 表示不截断
+func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int, maxChars int) (*SearchWebResult, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("tavily API Key 未配置")
 	}
@@ -60,6 +61,11 @@ func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int)
 		fmt.Fprintf(&b, "[%d] %s\n", i+1, r.Title)
 		fmt.Fprintf(&b, "    来源: %s\n", r.URL.String())
 		content := strings.TrimSpace(r.Content)
+		// 按 maxChars 截断（用 rune 处理以支持中文）
+		if maxChars > 0 && len([]rune(content)) > maxChars {
+			runes := []rune(content)
+			content = string(runes[:maxChars]) + "\n\n...(内容已截断)"
+		}
 		if content != "" {
 			fmt.Fprintf(&b, "    内容: %s\n", content)
 		}
