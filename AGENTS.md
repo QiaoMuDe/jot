@@ -661,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **变更概览** | 在设置页编辑器设置卡片中新增"自动换行"开关（默认关闭），启用后 CM6 编辑器在查看/编辑/新建三种模式下均根据配置决定是否自动换行。该设置项纳入前后端统一的 SettingsConfig 加载/保存体系。 |
 | **后端改动** | [internal/services/types.go](internal/services/types.go) 中 `SettingsConfig` 结构体新增 `EditorWordWrap bool` 字段（JSON tag: `editor_word_wrap`），`GetAllSettings`/`SaveAllSettings` 同步处理该键的读写映射。 |
 | **前端设置 UI** | [frontend/index.html](frontend/index.html) 编辑器设置卡片中新增 id 为 `editorWordWrapToggle` 的 toggle 开关（置于"全屏打开"与"代码高亮主题"之间），描述：启用后编辑器内容超出宽度时自动换行显示。 |
-| **CM6 集成** | [main.js](frontend/src/main.js) `initCodeMirror()` 新增第 7 参数 `enableWordWrap`（默认 false），为 true 时条件性注入 `EditorView.lineWrapping` 扩展。该配置来自 `els.editorWordWrapToggle.checked`，在 `openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 全部 5 个调用点透传。 |
+| **CM6 集成** | [main.js](frontend/src/main.js) `initCodeMirror()` 新增第 7 参数 `enableWordWrap`（默认 false），为 true 时条件性注入 `EditorView.lineWrapping` 扩展。该配置来自 `els.editorWordWrapToggle.checked`，在 `openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 个调用点透传。 |
 | **加载/保存** | [main.js](frontend/src/main.js) `loadSettings()` 中同步 `editorWordWrapToggle.checked = cfg.editor_word_wrap`；`saveSettings()` 中收集 `editor_word_wrap` 字段。toggle change 事件自动保存并弹出"设置已保存"通知（与语法高亮/全屏打开模式一致）。 |
 | **涉及文件** | [internal/services/types.go](internal/services/types.go)（结构体 + 读写映射）、[frontend/index.html](frontend/index.html)（toggle HTML）、[frontend/src/main.js](frontend/src/main.js)（els 注册 + import/initCodeMirror/loadSettings/saveSettings/openEditor/事件绑定，共 7 处改动） |
 
@@ -682,8 +682,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
    - **[variables.css](frontend/src/css/variables.css)**：新增一个完整的 `[data-theme="..."]` 变量块，包含所有主题色变量（配色、阴影、主题系统变量、语义色、分层阴影），参照已有主题块的结构和值类型
    - **[theme-config.js](frontend/src/js/theme-config.js)**：在 `themeLabels` 中添加主题 key → 中文显示名的映射；在 `codeHighlightThemePairing` 中添加主题 key → 推荐代码高亮主题的配对映射
    - 无需修改 `index.html` 或 `main.js`（主题下拉菜单已由 `buildThemeDropdown()` 和 `buildCodeHighlightThemeDropdown()` 自动生成）
-10. **设置页新增设置项流程**：如需在设置页新增一个设置项（如 toggle/输入框/下拉菜单），需依次修改以下 3 个文件共 6-7 处——
+10. **设置页新增设置项流程**：如需在设置页新增一个设置项（如 toggle/输入框/下拉菜单），需依次修改以下 4 个文件共 7-8 处——
+    - **[internal/database/db.go](internal/database/db.go)**：在 `InitDefaultSettings` 的 defaults 列表末尾添加该设置的 key 和默认值（增量插入，仅对新用户生效）
     - **[internal/services/types.go](internal/services/types.go)**：三处——① `SettingsConfig` 结构体新增对应类型字段（bool/int/string）；② `GetAllSettings()` 中初始化读取映射（`parseBoolSetting`/`parseIntSetting`/`s.Get()`）；③ `SaveAllSettings()` 的 `sets` map 中新增写入映射（`strconv.FormatBool`/`strconv.Itoa`/直接赋值）
     - **[frontend/index.html](frontend/index.html)**：在对应设置分区卡片内新增 HTML 控件（参考现有 toggle/输入框/下拉菜单的结构和 class）
     - **[frontend/src/main.js](frontend/src/main.js)**：三至四处——④ `els` 对象中注册元素引用（`$('elementId')`）；⑤ `loadSettings()` 中读取 `cfg.xxx` 同步到 DOM；⑥ `saveSettings()` 的 `cfg` 对象中收集 DOM 值；⑦ 若需要自动保存，在事件绑定区域添加 `addEventListener('change', ...)` 调用 `saveSettings()` + 通知
-    - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 5 处）
+    - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）

@@ -555,6 +555,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "log_level", Value: "1"},
 		{Key: "screen_lock_enabled", Value: "false"},
 		{Key: "screen_lock_password", Value: ""},
+		{Key: "editor_word_wrap", Value: "false"},
 	}
 
 	var toInsert []models.Setting
