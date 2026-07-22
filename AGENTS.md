@@ -52,7 +52,7 @@ jot/                                    # 项目根目录
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
-│   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（11 套配色 + 46+ 语言解析器映射）
+│   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
@@ -421,9 +421,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 1. **Wails v2 跨平台桌面应用**：Go + 原生前端（HTML/CSS/JS）架构，兼顾后端性能和前端灵活性
 
-2. **CodeMirror 6 编辑器集成**：主流 Markdown 编辑器引擎，支持行号/撤销重做/查找替换/Tab缩进/自动补全/语法高亮（11 套配色 + 46+ 语言）
+2. **CodeMirror 6 编辑器集成**：主流 Markdown 编辑器引擎，支持行号/撤销重做/查找替换/Tab缩进/自动补全/语法高亮（13 套配色 + 46+ 语言）
 
-3. **CSS 变量主题系统（14 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 14 套系统主题 + 11 套代码高亮主题，所有组件自动适配。2026-07 完成配色全面重构——每套主题重新设计 `--bg`/`--card-bg`/`--bg-secondary` 等核心颜色值，E 护眼/深色/浅色等主题彻底重做，共修改 ~140 个变量
+3. **CSS 变量主题系统（14 主题）**：全局 CSS 变量联动（`--bg`/`--accent`/`--border` 等），一键切换 14 套系统主题 + 13 套代码高亮主题，所有组件自动适配。2026-07 完成配色全面重构——每套主题重新设计 `--bg`/`--card-bg`/`--bg-secondary` 等核心颜色值，E 护眼/深色/浅色等主题彻底重做，共修改 ~140 个变量
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
@@ -466,7 +466,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **AI 对话自实现**（流式输出 + Markdown 渲染 + 思维链 + 代码高亮 + 多会话 + 侧栏折叠）
 - [x] **笔记软删除与回收站**（Trash/Restore/PermanentDelete/RestoreAll/EmptyTrash）
 - [x] **Markdown 语法手册页面**（10 张语法卡片 + 双栏源码/预览 + 打开编辑器试试）
-- [x] **14 系统主题 + 11 代码高亮主题**（统一 CSS 变量体系，2026-07 完成配色全面重构）
+- [x] **14 系统主题 + 13 代码高亮主题**（统一 CSS 变量体系，2026-07 完成配色全面重构）
 - [x] **代码高亮主题推荐配对优化**（3 个系统主题的推荐映射重新匹配新配色：nord→github-dark、light→vscode-light-plus、quiet-light→material-palenight）
 - [x] **搜索弹窗**（200ms 防抖 + 笔记本/日期/排序/标签筛选器）
 - [x] **一键备份/还原**（BackupToDir/RestoreFromDir + VACUUM）
@@ -560,18 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：更多菜单分组优化 + 快捷键提示 + 精工卡设计
-
-| 记忆点 | 内容 |
-|--------|------|
-| **功能描述** | 对顶栏"更多菜单"进行全面视觉升级和结构重组。从平铺无分组 + 3 条分隔线，转变为 4 分组（导航/管理/AI/帮助）+ 快捷键提示的精工卡设计。 |
-| **视觉升级** | ① 按钮 active 态（`#moreMenuBtn.active`）——菜单打开时按钮显示 hover-bg + accent 色图标；② 菜单顶部 3px accent 色腰线作为视觉锚点；③ 增强阴影 `--shadow-dropdown` 替代 `--shadow-lg` 加深层次分离；④ 圆角从 8px 增大到 12px（`--radius-xl`）；⑤ 自定义 spring 动画 `moreMenuIn`——`scale(0.92) + translateY(-4px) → scale(1)`，`0.2s var(--anim-easing-spring)`；⑥ 图标 hover 亮起 accent 色；⑦ 分组标签小号大写字母 + muted 色。 |
-| **快捷键提示** | 7 个菜单项追加 `<span class="shortcut-hint">Ctrl+N</span>`，hover 时联动 accent 色。 |
-| **分组重构** | 原无分组 + 3 条 `dropdown-divider` 改为 4 个 `dropdown-group-label`：导航（笔记首页/展开侧栏/批量管理）、管理（数据管理/回收站/待办清单/设置）、AI（AI 助手）、帮助（快捷键说明/MD 语法/关于）。 |
-| **`updateSidebarMenuItem` 修复** | 侧栏折叠/展开时该函数用 `innerHTML` 重写菜单项（切换"展开侧栏"/"折叠侧栏"文字和图标），原未保留快捷键 `<span>` 导致 Ctrl+2 提示消失。已修复并始终追加 `<span class="shortcut-hint">Ctrl+2</span>`。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（分组标签 + 快捷键 span）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（全部视觉升级样式 + 动画）、[frontend/src/main.js](frontend/src/main.js)（active class 切换 + 修复 updateSidebarMenuItem） |
-
-## 记忆点 2：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
+## 记忆点 1：更多菜单终版优化（主题色背景 + 分割线 + 移除快捷键）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -582,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **保留的视觉元素** | 顶部 3px accent 色腰线、入场/离场动画（CSS class 驱动 + animationend 清理）、hover 上浮微交互、按钮 active 态、双层阴影、图标 hover accent 色、圆角 `--radius-xl`。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（14 个主题各新增 `--more-menu-bg`）、[frontend/src/css/components/topbar.css](frontend/src/css/components/topbar.css)（背景色改为纯色 + 移除毛玻璃 backdrop-filter + 移除快捷键样式 + 移除分组标签样式 + 缩窄宽度）、[frontend/index.html](frontend/index.html)（移除快捷键 span + 分组标签 → 分割线）、[frontend/src/main.js](frontend/src/main.js)（移除动态快捷键拼接） |
 
-## 记忆点 3：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
+## 记忆点 2：快捷键说明页修复（移除交错入场动画 + 重置滚动位置）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -590,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复** | ① 移除整个 `requestAnimationFrame` 交错入场代码块（`viewEnter` 动画 + `animationDelay`），快捷键条目不再有入场动效；② 在 `openShortcuts()` 中新增 `els.shortcutsBody.scrollTop = 0` 每次打开滚动列表回到顶部；③ 同步清理 `closeShortcuts()` 中不再需要的行动画重置代码。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`openShortcuts` 中去掉交错动画 + 添加 scrollTop 重置；`closeShortcuts` 中去掉行样式清理）
 
-## 记忆点 4：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
+## 记忆点 3：移除更多菜单 Ctrl+1~8 快捷键绑定 + 待办清单移入 AI 分组
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调整分组** | 将 `[data-action="todo"]` 的 `<div>` 从 divider 之前移到 divider 之后、AI 助手之前，仅改 HTML 顺序。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（移除 title + 移动待办清单位置）、[frontend/src/main.js](frontend/src/main.js)（移除快捷键 handler + 快捷键说明 + 动态 title）
 
-## 记忆点 5：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
+## 记忆点 4：统一表格复制按钮样式 + 优化 Mermaid 复制动画延迟
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -608,7 +597,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **复制动画优化** | [main.js](frontend/src/main.js) 第 3661 行 `setTimeout(r, 200)` → `setTimeout(r, 80)`；[editor.css](frontend/src/css/components/editor.css) mermaid-toggle transition `0.15s` → `0.08s`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（表格按钮重构 + 延迟调整）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（SVG 图标）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（样式升级 + transition 调整）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（样式升级） |
 
-## 记忆点 6：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
+## 记忆点 5：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -619,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 6：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 7：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 8：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,7 +643,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：编辑器设置新增自动换行开关
+## 记忆点 9：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,7 +652,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端设置 UI** | [frontend/index.html](frontend/index.html) 编辑器设置卡片中新增 id 为 `editorWordWrapToggle` 的 toggle 开关（置于"全屏打开"与"代码高亮主题"之间），描述：启用后编辑器内容超出宽度时自动换行显示。 |
 | **CM6 集成** | [main.js](frontend/src/main.js) `initCodeMirror()` 新增第 7 参数 `enableWordWrap`（默认 false），为 true 时条件性注入 `EditorView.lineWrapping` 扩展。该配置来自 `els.editorWordWrapToggle.checked`，在 `openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 个调用点透传。 |
 | **加载/保存** | [main.js](frontend/src/main.js) `loadSettings()` 中同步 `editorWordWrapToggle.checked = cfg.editor_word_wrap`；`saveSettings()` 中收集 `editor_word_wrap` 字段。toggle change 事件自动保存并弹出"设置已保存"通知（与语法高亮/全屏打开模式一致）。 |
-| **涉及文件** | [internal/services/types.go](internal/services/types.go)（结构体 + 读写映射）、[frontend/index.html](frontend/index.html)（toggle HTML）、[frontend/src/main.js](frontend/src/main.js)（els 注册 + import/initCodeMirror/loadSettings/saveSettings/openEditor/事件绑定，共 7 处改动） |
+| **涉及文件** | [internal/services/types.go](internal/services/types.go)（结构体 + 读写映射）、[frontend/index.html](frontend/index.html)（toggle HTML）、[frontend/src/main.js](frontend/src/main.js)（els 注册 + import/initCodeMirror/loadSettings/saveSettings/openEditor/事件绑定，共 7 处改动）
+
+---
+
+## 记忆点 10：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对代码高亮主题系统进行多轮优化：① 新增 One Light / Catppuccin Latte 两个亮色代码高亮主题（原仅 2 个亮色代码主题），移除 Tokyo Night / Nord 两个新增但不满意的暗色代码主题，最终保留 13 个代码高亮主题（11 原 + 2 新）；② 修正三个系统主题的 `--more-menu-bg` 使其融入各自色彩家族（山林 `#EEEDE0` 绿灰米 / 静谧 `#F4EEF0` 粉紫灰白 / 护眼 `#DAE6D0` 暖豆沙绿）而非通用暖黄；③ 修正 github-dark / one-dark-pro / vscode-dark-plus 代码主题中过浅或不易辨识的颜色（粉彩→中饱和 / 浅灰→有色调）；④ 更新 8 个主题中被引号包围的字符串颜色，降低亮度提高可读性；⑤ 将 `codeHighlightThemeLabels` 全改为中文描述性名称（霓虹幻彩 / 暗夜流光 / 柔和粉彩 等），后台 key 不变；⑥ 修正设置页描述 `选择代码块所使用的配色主题方案` → `选择笔记编辑器的语法高亮配色方案`，避免误解覆盖 AI 消息代码块；⑦ 修复设置页代码预览不随加载主题更新的 Bug。 |
+| **主题配对映射更新** | [cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) 和 [theme-config.js](frontend/src/js/theme-config.js) 中同步更新配对：tokyo-night→github-dark（回退）、nord→github-dark（回退）、default→one-light、catppuccin-latte→catppuccin-latte。 |
+| **设置描述修正** | [index.html](frontend/index.html) L390 描述文本已修正，明确告知用户该设置仅影响笔记编辑器。 |
+| **代码预览 Bug 修复** | [main.js](frontend/src/main.js) `loadSettings()` 中加载主题后新增 `_codePreviewInited` 判断重建预览，解决再次进入设置页时 `initCodePreview()` 被守卫跳过、预览与加载主题不同步的问题。 |
+| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（新增 2 主题 + 移除 2 主题 + 颜色调优 + 中文标签）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（3 主题 more-menu-bg 修正）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（配对映射更新）、[frontend/src/js/hljs-themes.js](frontend/src/js/hljs-themes.js)（hljs 回退映射更新）、[frontend/index.html](frontend/index.html)（描述修正）、[frontend/src/main.js](frontend/src/main.js)（预览重建 Bug 修复） |
 
 ## 十二、AGENTS.md 维护规范
 

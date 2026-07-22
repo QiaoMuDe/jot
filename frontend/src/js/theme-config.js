@@ -20,13 +20,13 @@ export const themeLabels = {
 
 /** 系统主题 → 推荐代码高亮主题配对映射 */
 export const codeHighlightThemePairing = {
-    'catppuccin-latte': 'catppuccin-mocha',
+    'catppuccin-latte': 'catppuccin-latte',
     'gruvbox-light': 'github-dark',
     'one-dark-pro': 'one-dark-pro',
     'quiet-light': 'material-palenight',
     'ysgrifennwr': 'github-light',
     'dracula': 'dracula',
-    'default': 'monokai-dimmed',
+    'default': 'one-light',
     'nord': 'github-dark',
     'light': 'vscode-light-plus',
     'tokyo-night': 'github-dark',

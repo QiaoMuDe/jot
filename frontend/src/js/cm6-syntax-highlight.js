@@ -188,9 +188,9 @@ const codeHighlightStyle = HighlightStyle.define([
 
     // ── 字面量 ──────────────────────────────────────────────────
     { tag: tags.number, color: '#AE81FF' },                  // 紫（同关键字）
-    { tag: tags.string, color: '#E6DB74' },                  // 金色
-    { tag: tags.special(tags.string), color: '#E6DB74', fontWeight: '600' },
-    { tag: tags.regexp, color: '#E6DB74', background: 'rgba(230, 219, 116, 0.1)', borderRadius: '2px' },
+    { tag: tags.string, color: '#C8B84C' },                  // 暗金
+    { tag: tags.special(tags.string), color: '#C8B84C', fontWeight: '600' },
+    { tag: tags.regexp, color: '#C8B84C', background: 'rgba(200, 184, 76, 0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#AE81FF' },                    // null / true / false
 
     // ── 注释 ──────────────────────────────────────────────────
@@ -274,10 +274,10 @@ const vscodeDarkPlusHighlightStyle = HighlightStyle.define([
     { tag: tags.docComment, color: '#6A9955', fontStyle: 'italic' },
 
     // ── 运算符 ──
-    { tag: tags.operator, color: '#D4D4D4' },
-    { tag: tags.arithmeticOperator, color: '#D4D4D4' },
-    { tag: tags.logicOperator, color: '#D4D4D4' },
-    { tag: tags.compareOperator, color: '#D4D4D4' },
+    { tag: tags.operator, color: '#C586C0' },
+    { tag: tags.arithmeticOperator, color: '#C586C0' },
+    { tag: tags.logicOperator, color: '#C586C0' },
+    { tag: tags.compareOperator, color: '#C586C0' },
 
     // ── 标点 / 分隔符 ──
     { tag: tags.punctuation, color: 'var(--text-secondary)' },
@@ -426,10 +426,10 @@ const oneDarkProHighlightStyle = HighlightStyle.define([
     { tag: tags.docComment, color: '#5C6370', fontStyle: 'italic' },
 
     // ── 运算符 ──
-    { tag: tags.operator, color: '#ABB2BF' },
-    { tag: tags.arithmeticOperator, color: '#ABB2BF' },
-    { tag: tags.logicOperator, color: '#ABB2BF' },
-    { tag: tags.compareOperator, color: '#ABB2BF' },
+    { tag: tags.operator, color: '#56B6C2' },
+    { tag: tags.arithmeticOperator, color: '#56B6C2' },
+    { tag: tags.logicOperator, color: '#56B6C2' },
+    { tag: tags.compareOperator, color: '#56B6C2' },
 
     // ── 标点 / 分隔符 ──
     { tag: tags.punctuation, color: 'var(--text-secondary)' },
@@ -448,14 +448,14 @@ const oneDarkProHighlightStyle = HighlightStyle.define([
     { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
 
     // ── 预处理 / 元信息 ──
-    { tag: tags.meta, color: '#ABB2BF', fontWeight: '600' },
+    { tag: tags.meta, color: '#E5C07B', fontWeight: '600' },
     { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
 
     // ── 标签 / goto ──
     { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
 
     // ── 转义 / 特殊字符 ──
-    { tag: tags.escape, color: '#ABB2BF', fontWeight: '600' },
+    { tag: tags.escape, color: '#D19A66', fontWeight: '600' },
     { tag: tags.character, color: '#98C379' },
 
     // ── 行内代码 ──
@@ -483,18 +483,18 @@ const githubDarkHighlightStyle = HighlightStyle.define([
     { tag: tags.className, color: '#FFA657', fontWeight: '700' },
 
     // ── 函数 ──
-    { tag: tags.definition(tags.variableName), color: '#D2A8FF', fontWeight: '600' },
+    { tag: tags.definition(tags.variableName), color: '#C58BFF', fontWeight: '600' },
 
     // ── 变量 / 属性 ──
     { tag: tags.variableName, color: 'var(--text-primary)' },
     { tag: tags.definition(tags.variableName), color: 'var(--text-primary)' },
-    { tag: tags.propertyName, color: '#79C0FF' },
+    { tag: tags.propertyName, color: '#58A6FF' },
 
     // ── 字面量 ──
-    { tag: tags.number, color: '#79C0FF' },
-    { tag: tags.string, color: '#A5D6FF' },
-    { tag: tags.special(tags.string), color: '#A5D6FF', fontWeight: '600' },
-    { tag: tags.regexp, color: '#A5D6FF', background: 'rgba(165,214,255,0.1)', borderRadius: '2px' },
+    { tag: tags.number, color: '#58A6FF' },
+    { tag: tags.string, color: '#79C0FF' },
+    { tag: tags.special(tags.string), color: '#79C0FF', fontWeight: '600' },
+    { tag: tags.regexp, color: '#58A6FF', background: 'rgba(88,166,255,0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#FF7B72' },
 
     // ── 注释 ──
@@ -517,7 +517,7 @@ const githubDarkHighlightStyle = HighlightStyle.define([
 
     // ── HTML / XML ──
     { tag: tags.attributeName, color: '#FFA657' },
-    { tag: tags.attributeValue, color: '#A5D6FF' },
+    { tag: tags.attributeValue, color: '#79C0FF' },
     { tag: tags.tagName, color: '#7EE787' },
 
     // ── 名称空间 ──
@@ -532,7 +532,7 @@ const githubDarkHighlightStyle = HighlightStyle.define([
 
     // ── 转义 / 特殊字符 ──
     { tag: tags.escape, color: '#FF7B72', fontWeight: '600' },
-    { tag: tags.character, color: '#A5D6FF' },
+    { tag: tags.character, color: '#79C0FF' },
 
     // ── 行内代码 ──
     { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
@@ -568,9 +568,9 @@ const catppuccinMochaHighlightStyle = HighlightStyle.define([
 
     // ── 字面量 ──
     { tag: tags.number, color: '#FAB387' },
-    { tag: tags.string, color: '#A6E3A1' },
-    { tag: tags.special(tags.string), color: '#A6E3A1', fontWeight: '600' },
-    { tag: tags.regexp, color: '#A6E3A1', background: 'rgba(166,227,161,0.1)', borderRadius: '2px' },
+    { tag: tags.string, color: '#82C77E' },
+    { tag: tags.special(tags.string), color: '#82C77E', fontWeight: '600' },
+    { tag: tags.regexp, color: '#82C77E', background: 'rgba(130,199,126,0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#CBA6F7' },
 
     // ── 注释 ──
@@ -720,9 +720,9 @@ const draculaHighlightStyle = HighlightStyle.define([
 
     // ── 字面量 ──
     { tag: tags.number, color: '#BD93F9' },
-    { tag: tags.string, color: '#F1FA8C' },
-    { tag: tags.special(tags.string), color: '#F1FA8C', fontWeight: '600' },
-    { tag: tags.regexp, color: '#F1FA8C', background: 'rgba(241,250,140,0.1)', borderRadius: '2px' },
+    { tag: tags.string, color: '#C8D86A' },
+    { tag: tags.special(tags.string), color: '#C8D86A', fontWeight: '600' },
+    { tag: tags.regexp, color: '#C8D86A', background: 'rgba(200,216,106,0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#FF79C6' },
 
     // ── 注释 ──
@@ -796,9 +796,9 @@ const ayuMirageHighlightStyle = HighlightStyle.define([
 
     // ── 字面量 ──
     { tag: tags.number, color: '#FFCC66' },
-    { tag: tags.string, color: '#BAE67E' },
-    { tag: tags.special(tags.string), color: '#BAE67E', fontWeight: '600' },
-    { tag: tags.regexp, color: '#BAE67E', background: 'rgba(186,230,126,0.1)', borderRadius: '2px' },
+    { tag: tags.string, color: '#9ACC6A' },
+    { tag: tags.special(tags.string), color: '#9ACC6A', fontWeight: '600' },
+    { tag: tags.regexp, color: '#9ACC6A', background: 'rgba(154,204,106,0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#FF8F40' },
 
     // ── 注释 ──
@@ -872,9 +872,9 @@ const materialPalenightHighlightStyle = HighlightStyle.define([
 
     // ── 字面量 ──
     { tag: tags.number, color: '#F78C6C' },
-    { tag: tags.string, color: '#C3E88D' },
-    { tag: tags.special(tags.string), color: '#C3E88D', fontWeight: '600' },
-    { tag: tags.regexp, color: '#C3E88D', background: 'rgba(195,232,141,0.1)', borderRadius: '2px' },
+    { tag: tags.string, color: '#A5CC72' },
+    { tag: tags.special(tags.string), color: '#A5CC72', fontWeight: '600' },
+    { tag: tags.regexp, color: '#A5CC72', background: 'rgba(165,204,114,0.1)', borderRadius: '2px' },
     { tag: tags.atom, color: '#C792EA' },
 
     // ── 注释 ──
@@ -989,6 +989,160 @@ const githubLightHighlightStyle = HighlightStyle.define([
     // ── 转义 / 特殊字符 ──
     { tag: tags.escape, color: '#D73A49', fontWeight: '600' },
     { tag: tags.character, color: '#032F62' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
+/* One Light 主题                                                             */
+/* ======================================================================== */
+
+const oneLightHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#A626A4' },
+    { tag: [tags.keyword, tags.operator], color: '#A626A4' },
+    { tag: [tags.keyword, tags.modifier], color: '#A626A4' },
+    { tag: [tags.keyword, tags.typeName], color: '#A626A4' },
+    { tag: tags.controlKeyword, color: '#A626A4' },
+    { tag: tags.moduleKeyword, color: '#A626A4' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#E45649' },
+    { tag: tags.className, color: '#E45649' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: '#383A42' },
+    { tag: tags.definition(tags.variableName), color: '#4078F2', fontWeight: '600' },
+    { tag: tags.propertyName, color: '#E45649' },
+
+    // ── 语言内置 ──
+    { tag: tags.self, color: '#0184BC' },
+    { tag: tags.typeOperator, color: '#0184BC' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#986801' },
+    { tag: tags.string, color: '#50A14F' },
+    { tag: tags.special(tags.string), color: '#50A14F', fontWeight: '600' },
+    { tag: tags.regexp, color: '#50A14F', background: 'rgba(80,161,79,0.08)' },
+    { tag: tags.atom, color: '#986801' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#A0A1A7', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#A0A1A7', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: '#0184BC' },
+    { tag: tags.arithmeticOperator, color: '#0184BC' },
+    { tag: tags.logicOperator, color: '#0184BC' },
+    { tag: tags.compareOperator, color: '#0184BC' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#E45649' },
+    { tag: tags.attributeValue, color: '#50A14F' },
+    { tag: tags.tagName, color: '#E45649' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#986801', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#986801', fontWeight: '600' },
+    { tag: tags.character, color: '#50A14F' },
+
+    // ── 行内代码 ──
+    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+
+    // ── 删除线 ──
+    { tag: tags.strikethrough, textDecoration: 'line-through' },
+]);
+
+/* ======================================================================== */
+/* Catppuccin Latte 主题                                                      */
+/* ======================================================================== */
+
+const catppuccinLatteHighlightStyle = HighlightStyle.define([
+    // ── 关键字 ──
+    { tag: tags.keyword, color: '#8839EF' },
+    { tag: [tags.keyword, tags.operator], color: '#8839EF' },
+    { tag: [tags.keyword, tags.modifier], color: '#8839EF' },
+    { tag: [tags.keyword, tags.typeName], color: '#8839EF' },
+    { tag: tags.controlKeyword, color: '#8839EF' },
+    { tag: tags.moduleKeyword, color: '#8839EF' },
+
+    // ── 类型 / 类 ──
+    { tag: tags.typeName, color: '#EA76CB' },
+    { tag: tags.className, color: '#EA76CB' },
+
+    // ── 变量 / 属性 ──
+    { tag: tags.variableName, color: '#4C4F69' },
+    { tag: tags.definition(tags.variableName), color: '#1E66F5', fontWeight: '600' },
+    { tag: tags.propertyName, color: '#EA76CB' },
+
+    // ── 语言内置 ──
+    { tag: tags.self, color: '#04A5E5' },
+    { tag: tags.typeOperator, color: '#04A5E5' },
+
+    // ── 字面量 ──
+    { tag: tags.number, color: '#FE640B' },
+    { tag: tags.string, color: '#40A02B' },
+    { tag: tags.special(tags.string), color: '#40A02B', fontWeight: '600' },
+    { tag: tags.regexp, color: '#40A02B', background: 'rgba(64,160,43,0.08)' },
+    { tag: tags.atom, color: '#FE640B' },
+
+    // ── 注释 ──
+    { tag: tags.comment, color: '#8C8FA7', fontStyle: 'italic' },
+    { tag: tags.docComment, color: '#8C8FA7', fontStyle: 'italic' },
+
+    // ── 运算符 ──
+    { tag: tags.operator, color: '#04A5E5' },
+    { tag: tags.arithmeticOperator, color: '#04A5E5' },
+    { tag: tags.logicOperator, color: '#04A5E5' },
+    { tag: tags.compareOperator, color: '#04A5E5' },
+
+    // ── 标点 / 分隔符 ──
+    { tag: tags.punctuation, color: 'var(--text-secondary)' },
+    { tag: tags.bracket, color: 'var(--text-secondary)' },
+    { tag: tags.squareBracket, color: 'var(--text-secondary)' },
+    { tag: tags.paren, color: 'var(--text-secondary)' },
+    { tag: tags.brace, color: 'var(--text-secondary)' },
+    { tag: tags.separator, color: 'var(--text-muted)' },
+
+    // ── HTML / XML ──
+    { tag: tags.attributeName, color: '#EA76CB' },
+    { tag: tags.attributeValue, color: '#40A02B' },
+    { tag: tags.tagName, color: '#1E66F5' },
+
+    // ── 名称空间 ──
+    { tag: tags.namespace, color: 'var(--text-muted)', fontStyle: 'italic' },
+
+    // ── 预处理 / 元信息 ──
+    { tag: tags.meta, color: '#FE640B', fontWeight: '600' },
+    { tag: tags.processingInstruction, color: 'var(--text-muted)', opacity: '0.6' },
+
+    // ── 标签 / goto ──
+    { tag: tags.labelName, color: 'var(--text-secondary)', fontStyle: 'italic' },
+
+    // ── 转义 / 特殊字符 ──
+    { tag: tags.escape, color: '#FE640B', fontWeight: '600' },
+    { tag: tags.character, color: '#40A02B' },
 
     // ── 行内代码 ──
     { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
@@ -1191,6 +1345,8 @@ const codeHighlightThemes = {
     'ayu-mirage': ayuMirageHighlightStyle,
     'material-palenight': materialPalenightHighlightStyle,
     'github-light': githubLightHighlightStyle,
+    'one-light': oneLightHighlightStyle,
+    'catppuccin-latte': catppuccinLatteHighlightStyle,
 };
 
 /** 主题名称列表，用于设置页分段控件渲染 */
@@ -1206,23 +1362,27 @@ const codeHighlightThemeNames = Object.freeze([
     'ayu-mirage',
     'material-palenight',
     'github-light',
+    'one-light',
+    'catppuccin-latte',
 ]);
 
 /**
  * 主题名称 → 显示文案映射
  */
 const codeHighlightThemeLabels = Object.freeze({
-    'monokai-dimmed': 'Monokai',
-    'vscode-dark-plus': 'Dark+',
-    'vscode-light-plus': 'Light+',
-    'one-dark-pro': 'One Dark Pro',
-    'github-dark': 'GitHub Dark',
-    'catppuccin-mocha': 'Catppuccin',
-    'gruvbox-dark': 'Gruvbox',
-    'dracula': 'Dracula',
-    'ayu-mirage': 'Ayu Mirage',
-    'material-palenight': 'Material',
-    'github-light': 'GitHub Light',
+    'monokai-dimmed': '霓虹幻彩',
+    'vscode-dark-plus': 'VS 暗色',
+    'vscode-light-plus': 'VS 亮色',
+    'one-dark-pro': '暗夜流光',
+    'github-dark': 'GitHub 暗色',
+    'catppuccin-mocha': '柔和粉彩',
+    'gruvbox-dark': '复古暖色',
+    'dracula': '德古拉',
+    'ayu-mirage': '蓝橙交辉',
+    'material-palenight': '靛青幻夜',
+    'github-light': 'GitHub 亮色',
+    'one-light': '温润亮白',
+    'catppuccin-latte': '暖粉晨曦',
 });
 
 /* ======================================================================== */

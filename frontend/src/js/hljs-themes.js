@@ -19,6 +19,8 @@ const hljsFileMap = {
     'ayu-mirage':        'monokai-sublime',
     'material-palenight':'atom-one-dark',
     'github-light':      'github',
+    'one-light':         'atom-one-light',
+    'catppuccin-latte':  'github',
 };
 
 /**

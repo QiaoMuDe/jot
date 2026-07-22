@@ -8129,6 +8129,13 @@ async function loadSettings() {
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
         applyAIHighlightTheme(codeHighlightTheme);
         applyCodeHighlightThemeUI(codeHighlightTheme);
+        // 同步重建预览代码块（覆盖再次进入设置页时 _codePreviewInited 守卫跳过的问题）
+        if (_codePreviewInited) {
+            const container = document.getElementById('codePreview');
+            if (container) {
+                buildCodePreview(container, codeHighlightTheme);
+            }
+        }
 
         // --- AI: 服务商分段控件 ---
         setActiveProvider(cfg.ai_provider);
