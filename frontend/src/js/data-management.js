@@ -419,10 +419,15 @@ export async function loadBackupInfo() {
  * 一键备份（带按钮加载状态）
  */
 export async function backupToDir() {
-    const { els, nm } = window;
+    const { els, nm, showConfirmDialog } = window;
     const btn = els.backupBtn;
     const labelEl = btn.querySelector('.dar-label');
     const origText = labelEl ? labelEl.textContent : '';
+
+    // 确认弹窗，防止误触覆盖上次备份
+    const confirmed = await showConfirmDialog('一键备份将覆盖上次备份内容，确定继续吗？');
+    if (!confirmed) return;
+
     btn.disabled = true;
     if (labelEl) labelEl.textContent = '⏳ 备份中…';
     try {

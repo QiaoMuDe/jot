@@ -660,11 +660,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 对代码高亮主题系统进行多轮优化：① 新增 One Light / Catppuccin Latte 两个亮色代码高亮主题（原仅 2 个亮色代码主题），移除 Tokyo Night / Nord 两个新增但不满意的暗色代码主题，最终保留 13 个代码高亮主题（11 原 + 2 新）；② 修正三个系统主题的 `--more-menu-bg` 使其融入各自色彩家族（山林 `#EEEDE0` 绿灰米 / 静谧 `#F4EEF0` 粉紫灰白 / 护眼 `#DAE6D0` 暖豆沙绿）而非通用暖黄；③ 修正 github-dark / one-dark-pro / vscode-dark-plus 代码主题中过浅或不易辨识的颜色（粉彩→中饱和 / 浅灰→有色调）；④ 更新 8 个主题中被引号包围的字符串颜色，降低亮度提高可读性；⑤ 将 `codeHighlightThemeLabels` 全改为中文描述性名称（霓虹幻彩 / 暗夜流光 / 柔和粉彩 等），后台 key 不变；⑥ 修正设置页描述 `选择代码块所使用的配色主题方案` → `选择笔记编辑器的语法高亮配色方案`，避免误解覆盖 AI 消息代码块；⑦ 修复设置页代码预览不随加载主题更新的 Bug。 |
+| **变更概览** | 对代码高亮主题系统进行多轮优化：① 新增 One Light / Catppuccin Latte 两个亮色代码高亮主题（原仅 2 个亮色代码主题），移除 Tokyo Night / Nord 两个新增但不满意的暗色代码主题，最终保留 13 个代码高亮主题（11 原 + 2 新）；② 修正三个系统主题的 `--more-menu-bg` 使其融入各自色彩家族（山林 `#EEEDE0` 绿灰米 / 静谧 `#F4EEF0` 粉紫灰白 / 护眼 `#DAE6D0` 暖豆沙绿）而非通用暖黄；③ 修正 github-dark / one-dark-pro / vscode-dark-plus 代码主题中过浅或不易辨识的颜色（粉彩→中饱和 / 浅灰→有色调）；④ 更新 8 个主题中被引号包围的字符串颜色，降低亮度提高可读性；⑤ 将 `codeHighlightThemeLabels` 全改为中文描述性名称（霓虹幻彩 / 暗夜流光 / 柔和粉彩 等），后台 key 不变；⑥ 修正设置页描述 `选择代码块所使用的配色主题方案` → `选择笔记编辑器的语法高亮配色方案`，避免误解覆盖 AI 消息代码块；⑦ 修复设置页代码预览不随加载主题更新的 Bug；⑧ 快速备份添加确认弹窗，防止误触覆盖上次备份。 |
 | **主题配对映射更新** | [cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) 和 [theme-config.js](frontend/src/js/theme-config.js) 中同步更新配对：tokyo-night→github-dark（回退）、nord→github-dark（回退）、default→one-light、catppuccin-latte→catppuccin-latte。 |
 | **设置描述修正** | [index.html](frontend/index.html) L390 描述文本已修正，明确告知用户该设置仅影响笔记编辑器。 |
 | **代码预览 Bug 修复** | [main.js](frontend/src/main.js) `loadSettings()` 中加载主题后新增 `_codePreviewInited` 判断重建预览，解决再次进入设置页时 `initCodePreview()` 被守卫跳过、预览与加载主题不同步的问题。 |
-| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（新增 2 主题 + 移除 2 主题 + 颜色调优 + 中文标签）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（3 主题 more-menu-bg 修正）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（配对映射更新）、[frontend/src/js/hljs-themes.js](frontend/src/js/hljs-themes.js)（hljs 回退映射更新）、[frontend/index.html](frontend/index.html)（描述修正）、[frontend/src/main.js](frontend/src/main.js)（预览重建 Bug 修复） |
+| **备份确认弹窗** | [data-management.js](frontend/src/js/data-management.js) `backupToDir()` 函数首部添加 `showConfirmDialog` 确认弹窗，文案：「一键备份将覆盖上次备份内容，确定继续吗？」，与一键还原的确认弹窗模式一致。 |
+| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（新增 2 主题 + 移除 2 主题 + 颜色调优 + 中文标签）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（3 主题 more-menu-bg 修正）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（配对映射更新）、[frontend/src/js/hljs-themes.js](frontend/src/js/hljs-themes.js)（hljs 回退映射更新）、[frontend/index.html](frontend/index.html)（描述修正）、[frontend/src/main.js](frontend/src/main.js)（预览重建 Bug 修复）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（备份确认弹窗） |
 
 ## 十二、AGENTS.md 维护规范
 
