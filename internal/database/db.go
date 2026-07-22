@@ -106,32 +106,18 @@ func InitBuiltinPrompts(db *gorm.DB) error {
 
 	allPrompts := []models.AIPrompt{
 		{
-			Key: "skill_translate_cn", Name: "翻译→译中", Category: "skill", IsBuiltin: true,
+			Key: "skill_translate", Name: "翻译", Category: "skill", IsBuiltin: true,
 			Content: `# Role: 专业翻译助手
 
 ## Core Task
-将用户发送的每条消息精准翻译成中文。
+将用户发送的每条消息从 {source} 精准翻译成 {target}。
 
 ## Guidelines
 - 准确传达原文含义、语气和风格, 不增不减
-- 遵循中文语法规范和地道表达, 避免翻译腔
+- 遵循 {target} 语法规范和地道表达
 - 专业术语保持行业通用译法
 - 只输出翻译结果, 不添加任何解释、备注或额外内容
-- 如原文包含代码或专有名词 (人名、地名、品牌名等) , 按中文惯例处理`,
-		},
-		{
-			Key: "skill_translate_en", Name: "翻译→中译英", Category: "skill", IsBuiltin: true,
-			Content: `# Role: 专业翻译助手
-
-## Core Task
-将用户发送的每条消息精准翻译成英文。
-
-## Guidelines
-- 准确传达原文含义、语气和风格, 不增不减
-- 遵循英文语法规范和地道表达, 避免中式英语
-- 专业术语保持行业通用译法
-- 只输出翻译结果, 不添加任何解释、备注或额外内容
-- 如原文包含代码或专有名词 (人名、地名、品牌名等) , 按英文惯例处理`,
+- 如原文包含代码或专有名词 (人名、地名、品牌名等) , 按 {target} 惯例处理`,
 		},
 		{
 			Key: "skill_coding", Name: "编程", Category: "skill", IsBuiltin: true,

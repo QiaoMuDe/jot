@@ -64,7 +64,8 @@ func NewAIService(db *gorm.DB, logger *fastlog.Logger) *AIService {
 }
 
 // GetSkillPrompts 根据 skill key 列表从数据库查询并拼接技能提示词
-func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
+// translateArgs 用于翻译技能的 {source}/{target} 占位符替换, 可为 nil
+func (s *AIService) GetSkillPrompts(skillIds []string, translateArgs map[string]string) (string, error) {
 	if len(skillIds) == 0 {
 		return "", nil
 	}
@@ -78,7 +79,23 @@ func (s *AIService) GetSkillPrompts(skillIds []string) (string, error) {
 	}
 	var parts []string
 	for _, p := range prompts {
-		parts = append(parts, p.Content)
+		content := p.Content
+		// 翻译技能: 替换 {source} 和 {target} 占位符
+		if p.Key == "skill_translate" {
+			source := "English"
+			target := "Chinese"
+			if translateArgs != nil {
+				if v, ok := translateArgs["source"]; ok {
+					source = v
+				}
+				if v, ok := translateArgs["target"]; ok {
+					target = v
+				}
+			}
+			content = strings.ReplaceAll(content, "{source}", source)
+			content = strings.ReplaceAll(content, "{target}", target)
+		}
+		parts = append(parts, content)
 	}
 	return strings.Join(parts, "\n\n"), nil
 }

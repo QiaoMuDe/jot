@@ -1856,7 +1856,22 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		// 技能提示词注入（在搜索和卡片召回之后执行）
 		if len(skillIds) > 0 {
 			a.LogSvc.Logger.Infow("AI 技能注入启动", fastlog.Int("skill_count", len(skillIds)))
-			skillPrompt, err := a.aiService.GetSkillPrompts(skillIds)
+			// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
+			translateArgs := make(map[string]string)
+			cleanSkillIds := make([]string, 0, len(skillIds))
+			for _, id := range skillIds {
+				if strings.HasPrefix(id, "skill_translate:") {
+					parts := strings.SplitN(id, ":", 3)
+					if len(parts) == 3 {
+						translateArgs["source"] = parts[1]
+						translateArgs["target"] = parts[2]
+					}
+					cleanSkillIds = append(cleanSkillIds, "skill_translate")
+				} else {
+					cleanSkillIds = append(cleanSkillIds, id)
+				}
+			}
+			skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
 			if err == nil && skillPrompt != "" {
 				// 替换角色扮演占位符
 				if hasRoleplay && roleplayContext != "" {
@@ -2222,7 +2237,22 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		// 技能提示词注入
 		if len(skillIds) > 0 {
 			a.LogSvc.Logger.Infow("AI 技能注入启动（再生）", fastlog.Int("skill_count", len(skillIds)))
-			skillPrompt, err := a.aiService.GetSkillPrompts(skillIds)
+			// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
+			translateArgs := make(map[string]string)
+			cleanSkillIds := make([]string, 0, len(skillIds))
+			for _, id := range skillIds {
+				if strings.HasPrefix(id, "skill_translate:") {
+					parts := strings.SplitN(id, ":", 3)
+					if len(parts) == 3 {
+						translateArgs["source"] = parts[1]
+						translateArgs["target"] = parts[2]
+					}
+					cleanSkillIds = append(cleanSkillIds, "skill_translate")
+				} else {
+					cleanSkillIds = append(cleanSkillIds, id)
+				}
+			}
+			skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
 			if err == nil && skillPrompt != "" {
 				if hasRoleplay && roleplayContext != "" {
 					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
