@@ -198,6 +198,10 @@ export function GetMaxFileSize() {
   return window['go']['main']['App']['GetMaxFileSize']();
 }
 
+export function GetMonthNoteCounts(arg1, arg2) {
+  return window['go']['main']['App']['GetMonthNoteCounts'](arg1, arg2);
+}
+
 export function GetNote(arg1) {
   return window['go']['main']['App']['GetNote'](arg1);
 }
@@ -220,6 +224,10 @@ export function GetNotebookNoteCounts() {
 
 export function GetNotes(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetNotes'](arg1, arg2, arg3, arg4);
+}
+
+export function GetNotesByDate(arg1) {
+  return window['go']['main']['App']['GetNotesByDate'](arg1);
 }
 
 export function GetNotesByTag(arg1, arg2, arg3, arg4) {

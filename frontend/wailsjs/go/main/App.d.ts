@@ -102,6 +102,8 @@ export function GetDataStats():Promise<services.DataStats>;
 
 export function GetMaxFileSize():Promise<number>;
 
+export function GetMonthNoteCounts(arg1:number,arg2:number):Promise<Record<number, number>>;
+
 export function GetNote(arg1:number):Promise<models.Note>;
 
 export function GetNoteContent(arg1:number):Promise<string>;
@@ -113,6 +115,8 @@ export function GetNoteRefContext(arg1:Array<number>):Promise<services.NoteRefCo
 export function GetNotebookNoteCounts():Promise<Record<number, number>>;
 
 export function GetNotes(arg1:number,arg2:number,arg3:string,arg4:number):Promise<services.PaginatedResult>;
+
+export function GetNotesByDate(arg1:string):Promise<Array<models.Note>>;
 
 export function GetNotesByTag(arg1:number,arg2:number,arg3:number,arg4:string):Promise<services.PaginatedResult>;
 

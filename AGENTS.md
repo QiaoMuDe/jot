@@ -47,7 +47,7 @@ jot/                                    # 项目根目录
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
-│   ├── index.html                      # 入口 HTML，7 个视图
+│   ├── index.html                      # 入口 HTML，8 个视图
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
@@ -58,6 +58,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
+│   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 按日笔记列表 / 点击笔记跳转）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
@@ -77,7 +78,8 @@ jot/                                    # 项目根目录
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局）
-│   │           └── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
+│   │           ├── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
+│   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/笔记列表/入场动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -135,6 +137,7 @@ jot/                                    # 项目根目录
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
 | **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期/排序筛选器（排序 3 选项：更新时间/创建时间/名称，均 pinned 优先） | `frontend/src/main.js` | 关键词 + 过滤条件 + sortBy | 搜索弹窗结果列表 |
+| **笔记日历视图** | 日历导航（上/下月切换） + 创建时间墨水圆点统计（1/2-5/6+ 三档） + 按日笔记列表 + 点击笔记网格视图打开 | `frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css` + `services/note_service.go:GetByDate/GetMonthCounts` + `app.go:GetNotesByDate/GetMonthNoteCounts` | 年月参数/日期字符串 | 按月统计 map / 按日笔记列表 |
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
@@ -474,7 +477,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **数据库瘦身 VACUUM**（数据管理页面按钮触发）
 - [x] **字体设置**（族+大小，联动 CSS 变量）
 - [x] **通知系统**（右上角 NotificationManager，4 种类型 + undo 撤销）
-- [x] **更多菜单**（7 个选项，`min-width: 120px`）
+- [x] **更多菜单**（8 个选项，`min-width: 120px`）
 - [x] **数字键导航**（Ctrl+数字键 1-9）
 - [x] **快捷键说明页**（Ctrl+7 打开，可滚动列表）
 - [x] **拖拽导入闪烁动画**（3 次红色慢闪）
@@ -488,6 +491,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **更多菜单子菜单拍平**（"帮助参考"子菜单取消，快捷键说明/MD 语法/关于 直接平铺到"帮助"分组下）
 - [x] **待办清单功能**（Todo CRUD + 输入筛选一体化工具栏 + 6 个 keyframes 动画 + 筛选按钮数量显示）
 - [x] **骨架屏编辑器**（点击笔记立即显示骨架屏 shimmer，异步加载内容后替换）
+- [x] **笔记日历视图**（日历网格 + 创建时间墨水圆点 + 按日笔记列表 + 点击笔记网格视图打开编辑器）
 - [x] **搜索来源 UI 优化**（内联卡片+折叠面板+SVG 图标+代码去重）
 - [x] **召回卡片 UI 优化**（折叠面板+file_ext 徽章+CSS line-clamp+代码去重）
 - [x] **编辑器骨架屏回归修复**（非缓存笔记打开校正+scrollbar-gutter 稳定）
@@ -564,19 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-## 记忆点 1：14 系统主题配色全面重构 + 代码高亮推荐同步更新
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对 14 套系统主题的核心配色进行完整重设计（2026-07），基于"陈年纸本 / 雪光 / 极光黎明 / 柔黑 / 柔和米绿 / 热拿铁"等情绪方向重新定义每个主题的 `--bg`/`--card-bg`/`--bg-secondary`/`--text-primary`/`--border` 等颜色值，共修改 ~140 个 CSS 变量。同时更新 3 个系统主题的代码高亮推荐配对以匹配新配色。 |
-| **重点主题变更** | ① **eye-protection**：彻底重做 — 豆沙绿 `#C7EDCC` → 柔和米绿 `#E4ECD9`，饱和度和色相均大幅调整；② **dark**：纯黑 `#0D0D0D` → 柔灰 `#18181C`，避免 OLED 晕影效应；③ **default**：暖米 `#F7F5F0` → 陈年纸本 `#F2EDE3`；④ **catppuccin-latte**：偏蓝灰 → 暖粉拿铁调；⑤ **light**：冷白微蓝灰 `#F4F4F7` 告别纯白平庸。 |
-| **更多菜单背景修正** | default 主题 `--more-menu-bg: #FAFAFA`（冷白）→ `#FAF5EE`（暖白）；catppuccin-latte 主题 `--more-menu-bg: #F8F8FA`（冷蓝灰）→ `#F0E8E6`（暖粉），并同步修正该主题的 overlay/toast/scrollbar 等 5 个遗漏变量。 |
-| **代码高亮推荐更新** | nord → `github-dark`（从 warm 的 monokai 改为 cool 蓝调）；light → `vscode-light-plus`（冷雪光配冷代码）；quiet-light → `material-palenight`（粉紫底配紫调代码）。 |
-| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（全部 ~140 个颜色值变更）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（3 个配对更新） |
-
----
-
-## 记忆点 2：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 1：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 2：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：编辑器设置新增自动换行开关
+## 记忆点 3：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -612,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 4：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 5：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 6：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 7：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -659,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：联网搜索结果按引用截断数截断
+## 记忆点 8：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,13 +663,25 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 消息删除从截断改为单条删除
+## 记忆点 9：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 将 AI 对话中右键删除消息的行为从"截断删除（删除本条及后续所有消息）"改为"仅删除本条消息"。仅修改前端 1 个函数，后端无需改动。 |
 | **前端改动** | [ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg()` 函数三处变更：① DOM 移除从遍历所有 `.ai-msg` 兄弟节点改为仅 `msgEl.remove()`；② 后端 API 从 `TruncateAISessionAtMessage` 改为 `DeleteAIMessage`；③ `chatHistory` 缓冲区操作从 `slice(0, idx)` 截断改为 `filter(m => m.id !== msgId)` 过滤移除单条。详见实现计划 [.trae/documents/AI消息删除改为单条删除实现计划.md](.trae/documents/AI消息删除改为单条删除实现计划.md)。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleDeleteMsg` 函数） |
+
+---
+
+## 记忆点 10：笔记日历视图（笔记日历）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增笔记日历视图（`frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css`），提供按创建日期回顾笔记的日历导航。包括日历网格渲染、三档墨水圆点统计（1条/2-5条/6+条）、月份切换、点击日期加载当日笔记列表、点击笔记跳转到网格视图以查看模式打开编辑器。 |
+| **后端改动** | [note_service.go](internal/services/note_service.go) 新增 `GetByDate(date)` 和 `GetMonthCounts(year, month)` 方法；[app.go](app.go) 新增 `GetNotesByDate` 和 `GetMonthNoteCounts` 绑定接口。Note 模型新增 `Notebook *Notebook` 关联字段以正确展示笔记本名称。 |
+| **前端改动** | [calendar.js](frontend/src/js/calendar.js) (~280 行)：日历渲染/日期圆点/笔记列表/点击跳转；[calendar.css](frontend/src/css/components/calendar.css) (~280 行)：双栏布局/日历网格/墨水圆点/入场动画；[index.html](frontend/index.html) 新增 viewCalendar 容器 + 更多菜单项；[main.js](frontend/src/main.js) switchView 注册 + import。 |
+| **耗时修复** | 修复两个竞态：① `closeEditor` 的 200ms 清理定时器在 `openEditor` 后关闭编辑器（添加 `viewEditor.active` 守卫）；② `loadNotes` 的 `renderCardGrid` 与 `openEditor` 时序冲突（`await loadNotes()`）。 |
+| **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[internal/services/note_service.go](internal/services/note_service.go)、[app.go](app.go)、[internal/models/note.go](internal/models/note.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
 
 ## 十二、AGENTS.md 维护规范
 

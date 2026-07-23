@@ -18,4 +18,5 @@ type Note struct {
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Tags       []Tag          `gorm:"many2many:note_tags;" json:"tags,omitempty"`
+	Notebook   *Notebook      `gorm:"foreignKey:NotebookID" json:"notebook,omitempty"`
 }

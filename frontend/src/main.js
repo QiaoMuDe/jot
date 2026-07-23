@@ -29,6 +29,7 @@ import { loadTrashNotes } from './js/trash-page.js';
 
 // AI 对话页面模块
 import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
+import { initCalendarView } from './js/calendar.js';
 
 // 暴露到 window，供 data-management.js 等模块在重置/还原后预加载 AI 聊天页面
 window.onAIChatViewActivated = onAIChatViewActivated;
@@ -353,6 +354,7 @@ const els = {
     viewMdRef: $('viewMdRef'),
     viewAiChat: $('viewAiChat'),
     viewTodo: $('viewTodo'),
+    viewCalendar: $('viewCalendar'),
     todoBackBtn: $('todoBackBtn'),
     todoInput: $('todoInput'),
 
@@ -564,6 +566,7 @@ function switchView(view) {
         'md-ref': els.viewMdRef,
         'ai-chat': els.viewAiChat,
         todo: els.viewTodo,
+        'calendar': els.viewCalendar,
     };
     const targetView = viewMap[view];
     if (!targetView || _viewAnimating) return;
@@ -621,6 +624,11 @@ function switchView(view) {
             case 'ai-chat':
                 // 使用 setTimeout 确保 DOM 已更新
                 setTimeout(() => onAIChatViewActivated(), 50);
+                break;
+            case 'calendar':
+                if (typeof window.refreshCalendarView === 'function') {
+                    window.refreshCalendarView();
+                }
                 break;
             case 'todo':
                 _todoFilter = 'active';
@@ -5267,6 +5275,8 @@ function initEventListeners() {
                 switchView('md-ref');
             } else if (item.dataset.action === 'ai-chat') {
                 switchView('ai-chat');
+            } else if (item.dataset.action === 'calendar') {
+                switchView('calendar');
             } else if (item.dataset.action === 'todo') {
                 switchView('todo');
             } else if (item.dataset.action === 'help') {
@@ -7423,6 +7433,8 @@ async function init() {
     initFileDrop();
     // 初始化 AI 对话页面
     initAIChat();
+    // 初始化日历视图
+    initCalendarView();
     // --- 锁屏密码检查 ---
     await checkScreenLock();
 }
@@ -8903,6 +8915,7 @@ window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
 window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;
+window.closeEditorSafe = closeEditorSafe;
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

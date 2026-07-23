@@ -706,6 +706,28 @@ func (a *App) GetNotesByTag(tagID uint, page, pageSize int, sortBy string) (*ser
 	}, nil
 }
 
+// GetNotesByDate 获取指定创建日期的笔记列表，按创建时间降序排列
+func (a *App) GetNotesByDate(date string) ([]models.Note, error) {
+	a.LogSvc.Logger.Debugw("GetNotesByDate", fastlog.String("date", date))
+	notes, err := a.noteService.GetByDate(date)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetNotesByDate 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return notes, nil
+}
+
+// GetMonthNoteCounts 获取指定月份中每天创建的笔记数量
+func (a *App) GetMonthNoteCounts(year int, month int) (map[int]int, error) {
+	a.LogSvc.Logger.Debugw("GetMonthNoteCounts", fastlog.Int("year", year), fastlog.Int("month", month))
+	counts, err := a.noteService.GetMonthCounts(year, month)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetMonthNoteCounts 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return counts, nil
+}
+
 // GetDataStats 获取数据统计概览
 func (a *App) GetDataStats() (*services.DataStats, error) {
 	a.LogSvc.Logger.Debugw("GetDataStats")

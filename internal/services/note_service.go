@@ -805,4 +805,49 @@ func (s *NoteService) SearchFull(keywords []string, limit int) ([]models.Note, e
 	return notes, nil
 }
 
+// GetByDate 按创建日期查询非删除笔记，使用 noteThinSelect 避免加载大文本内容
+func (s *NoteService) GetByDate(date string) ([]models.Note, error) {
+	var notes []models.Note
+	start := date + " 00:00:00"
+	end := date + " 23:59:59"
+	if err := s.db.Model(&models.Note{}).
+		Where("created_at BETWEEN ? AND ?", start, end).
+		Where("deleted_at IS NULL").
+		Select(noteThinSelect).
+		Order("created_at DESC").
+		Preload("Tags").
+		Preload("Notebook").
+		Find(&notes).Error; err != nil {
+		s.logger.Errorw("NoteService.GetByDate 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return notes, nil
+}
+
+// GetMonthCounts 按月统计某月每天创建的非删除笔记数量，返回 map[int]int（key 为日期数字 1-31）
+func (s *NoteService) GetMonthCounts(year, month int) (map[int]int, error) {
+	yearStr := fmt.Sprintf("%04d", year)
+	monthStr := fmt.Sprintf("%02d", month)
+
+	type dayCount struct {
+		Day   int `gorm:"column:day"`
+		Count int `gorm:"column:count"`
+	}
+	var results []dayCount
+	if err := s.db.Model(&models.Note{}).
+		Select("strftime('%d', created_at) as day, COUNT(*) as count").
+		Where("strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ? AND deleted_at IS NULL", yearStr, monthStr).
+		Group("strftime('%d', created_at)").
+		Find(&results).Error; err != nil {
+		s.logger.Errorw("NoteService.GetMonthCounts 失败", fastlog.Error(err))
+		return nil, err
+	}
+
+	counts := make(map[int]int, len(results))
+	for _, r := range results {
+		counts[r.Day] = r.Count
+	}
+	return counts, nil
+}
+
 // SearchByNotebook 在指定笔记本范围内按标题或内容关键词
