@@ -557,26 +557,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 19. **后端原子替换会话消息**：AI 消息的编辑/删除/重发/重新生成四个操作中的 DB 写入，从前端两步调用 `ClearAISessionMessages` + `SaveAIMessages` 合并为后端 `ReplaceAISessionMessages(sessionID, messages)` 单次调用。后端使用 GORM Transaction 保证清空+写入的原子性。前端 `chatHistory` 为空时 fallback 到 `ClearAISessionMessages`。详见 [ai_service.go#L661-L728](internal/services/ai_service.go#L661-L728)、[app.go#L2048-L2059](app.go#L2048-L2059)
 
-20. **AI 消息懒加载 + 后端上下文自取**：`CallAIStream` 重构为仅接收 `userText` 和元数据，后端自行从 DB 加载全部历史消息构建上下文。新增 `CallAIStreamRegenerate` 处理再生场景（接收元数据不含 userText，加载 DB 中最后一条用户消息）。新增 `LoadAISessionMessagesPaginated` 分页加载（游标 `beforeID`，默认 6 条 ASC）。编辑/删除/重发/再生从基于 `chatHistory.splice` 改为基于 `msgID` 的 `TruncateAISessionAtMessage`/`TruncateAISessionAfterMessage`。Token 显示改为后端 `SumSessionTokens` + `GetSessionContextTokens` 统计。`stream-done` 事件扩展为 9 参数（含 `userMsgID`/`assistantMsgID`）。详见 [app.go](app.go)、[ai_service.go](internal/services/ai_service.go)、[ai-chat.js](frontend/src/js/ai-chat.js)
+20. **AI 消息懒加载 + 后端上下文自取**：`CallAIStream` 重构为仅接收 `userText` 和元数据，后端自行从 DB 加载全部历史消息构建上下文。新增 `CallAIStreamRegenerate` 处理再生场景（接收元数据不含 userText，加载 DB 中最后一条用户消息）。新增 `LoadAISessionMessagesPaginated` 分页加载（游标 `beforeID`，默认 6 条 ASC）。编辑/重发/再生从基于 `chatHistory.splice` 改为基于 `msgID` 的 `TruncateAISessionAfterMessage`，删除操作从 `TruncateAISessionAtMessage` 改为 `DeleteAIMessage`（仅删单条而非截断）。Token 显示改为后端 `SumSessionTokens` + `GetSessionContextTokens` 统计。`stream-done` 事件扩展为 9 参数（含 `userMsgID`/`assistantMsgID`）。详见 [app.go](app.go)、[ai_service.go](internal/services/ai_service.go)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
 21. **SQLite WAL 模式 + 优化 PRAGMA**：`InitDB()` 中配置 `journal_mode=WAL`、`busy_timeout=5000`、`synchronous=NORMAL`、`cache_size=-8000`。PRAGMA 执行失败不中断初始化，由调用方统一记录日志。`replaceDatabase()` 中清理 `-wal`/`-shm` 残留文件防止导入/还原数据损坏。详见 [db.go](internal/database/db.go)、[app.go](app.go)
 
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-
-## 记忆点 1：系统主题 + 代码高亮主题下拉菜单增加键盘方向键导航
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为设置页的系统主题和代码高亮主题两个下拉菜单增加键盘方向键导航（ArrowUp/ArrowDown）支持。方向键切换主题的行为与鼠标点击一致（即时应用并保存）。同时修复了两个下拉菜单的交互一致性：菜单保持打开以连续切换、点击菜单项不关闭、点击外部区域才关闭。 |
-| **系统主题下拉菜单** | [main.js](frontend/src/main.js) `buildThemeDropdown()` 末尾添加 `tabindex="-1"` + `keydown` 监听，ArrowUp/ArrowDown 循环导航（按到底回卷），调用 `item.click()` 复用已有保存逻辑。打开时自动 `focus({preventScroll: true})` 防止聚焦滚动。250ms 节流防止长按快捷键时狂奔遍历。`scrollIntoView({ block: 'nearest' })` 使当前选中项可见。 |
-| **代码高亮主题下拉菜单** | [main.js](frontend/src/main.js) `buildCodeHighlightThemeDropdown()` 移除 item click handler 中的关闭逻辑（`dropdown.classList.remove('open')`），同步添加 `tabindex` + `keydown` 监听、250ms 节流、`scrollIntoView`。`initCodeHighlightThemeSettings()` 同步修复：打开时 `focus({preventScroll: true})`，document click handler 改为判断点击在触发按钮和下拉菜单外部才关闭。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（两个 dropdown build 函数 + 高亮主题 init 函数） |
-
----
-
-## 记忆点 2：14 系统主题配色全面重构 + 代码高亮推荐同步更新
+## 记忆点 1：14 系统主题配色全面重构 + 代码高亮推荐同步更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -588,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：待办清单输入区重设计 + 已完成排序优化
+## 记忆点 2：待办清单输入区重设计 + 已完成排序优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +589,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 3：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：编辑器设置新增自动换行开关
+## 记忆点 4：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -624,7 +612,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 5：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 6：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 7：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +648,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 8：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +659,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：联网搜索结果按引用截断数截断
+## 记忆点 9：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,6 +668,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **知乎搜索截断** | [zhihu_search_service.go](internal/services/zhihu_search_service.go) 中 `SearchZhihuContent` 和 `SearchGlobalContent` 签名各新增 `maxChars int` 参数，截断逻辑同 `SearchWeb`。 |
 | **调用方传参** | [app.go](app.go) 中两处搜索调用（首次对话 + 再生）各在 goroutine 前读取 `a.GetAIRefMaxChars()` 传入三个搜索函数；`TestTavilyConnection`/`TestZhihuConnection` 传 `0` 表示不截断。 |
 | **涉及文件** | [internal/services/search_service.go](internal/services/search_service.go)（签名变更 + 截断逻辑）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（签名变更 + 截断逻辑）、[app.go](app.go)（4 处调用传参） |
+
+---
+
+## 记忆点 10：AI 消息删除从截断改为单条删除
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将 AI 对话中右键删除消息的行为从"截断删除（删除本条及后续所有消息）"改为"仅删除本条消息"。仅修改前端 1 个函数，后端无需改动。 |
+| **前端改动** | [ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg()` 函数三处变更：① DOM 移除从遍历所有 `.ai-msg` 兄弟节点改为仅 `msgEl.remove()`；② 后端 API 从 `TruncateAISessionAtMessage` 改为 `DeleteAIMessage`；③ `chatHistory` 缓冲区操作从 `slice(0, idx)` 截断改为 `filter(m => m.id !== msgId)` 过滤移除单条。详见实现计划 [.trae/documents/AI消息删除改为单条删除实现计划.md](.trae/documents/AI消息删除改为单条删除实现计划.md)。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleDeleteMsg` 函数） |
 
 ## 十二、AGENTS.md 维护规范
 

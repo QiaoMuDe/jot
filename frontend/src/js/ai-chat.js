@@ -3522,28 +3522,18 @@ async function handleDeleteMsg(msgEl) {
     const msgId = parseInt(msgEl.dataset.msgId);
     if (!msgId) return;
 
-    // 移除该消息及之后的所有后续消息（DOM）
-    let nextEl = msgEl;
-    while (nextEl) {
-        const toRemove = nextEl;
-        nextEl = nextEl.nextElementSibling;
-        if (toRemove.classList.contains('ai-msg')) {
-            toRemove.remove();
-        }
-    }
+    // 仅移除本条消息（DOM）
+    msgEl.remove();
 
-    // 后端截断（删除本条及之后的消息）
+    // 后端仅删除本条消息
     if (activeSessionId !== null) {
         try {
-            await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
+            await window.go.main.App.DeleteAIMessage(msgId);
         } catch (_) { /* 静默失败 */ }
     }
 
-    // 截断 chatHistory 缓冲区
-    const idx = chatHistory.findIndex(m => m.id === msgId);
-    if (idx >= 0) {
-        chatHistory = chatHistory.slice(0, idx);
-    }
+    // 从 chatHistory 中移除本条消息
+    chatHistory = chatHistory.filter(m => m.id !== msgId);
 
     // 删除后如果 chatHistory 为空, 显示空对话欢迎语
     if (chatHistory.length === 0) {
