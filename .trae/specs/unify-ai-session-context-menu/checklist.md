@@ -1,0 +1,13 @@
+- [x] HTML 中 `#aiSessionContextMenu` 已被移除
+- [x] CSS 中 `.ai-session-context-menu` 及相关样式已被移除
+- [x] JS 中 `sessionContextMenu`、`closeSessionContextMenu()`、`showSessionContextMenu()` 已被移除
+- [x] 右击会话条目弹出统一菜单，包含置顶/取消置顶、重命名、导出、删除会话
+- [x] 更多按钮点击弹出统一菜单，内容与右击一致
+- [x] 右击菜单位置跟随鼠标位置
+- [x] 更多按钮菜单位置跟随按钮位置
+- [x] 统一菜单中各项功能正常工作：
+  - 置顶/取消置顶 → 切换置顶状态并刷新列表
+  - 重命名 → 触发内联编辑
+  - 导出 → 导出会话并显示通知
+  - 删除会话 → 弹出确认框，确认后删除
+- [x] 点击菜单外区域或 Escape 键可关闭菜单

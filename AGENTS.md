@@ -55,7 +55,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 右键菜单（含 SVG 图标）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 按日笔记列表 / 点击笔记跳转）
@@ -570,19 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对「更多技能」菜单进行三轮交互优化：① 翻译技能从子菜单改为扁平结构，chip 显示源语言→目标语言方向组件 + 点击语言标签弹出浮层选择 6 种常用语言；② 技能菜单增加选中状态指示（已激活技能显示 ✓ + accent 色高亮）+ 点击切换引用/取消引用（toggle 模式）；③ 更多技能菜单增加离场动画（反向交错消失 + 容器缩小淡出 0.18s）。 |
-| **翻译技能扁平化** | [index.html](frontend/index.html) 移除 `#aiChatTranslateOptions` chevron 和 radio 子菜单；[ai-chat.js](frontend/src/js/ai-chat.js) 移除 ~40 行展开/收起逻辑，翻译改为直接激活技能，`activeSkills.translate` 从 `{ direction }` 改为 `{ source, target }`；chip 渲染为 `[🌐] [English] ⇄ [Chinese] [×]`，点击源/目标语言弹出浮层选择语言。后端 `skill_translate_cn` + `skill_translate_en` 合并为一条动态 `skill_translate` prompt，`{source}/{target}` 占位符运行时替换。 |
-| **选中指示 + 点击切换** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.active` 样式（accent 色 + `::after { ✓ }`）；[ai-chat.js](frontend/src/js/ai-chat.js) 新增 `updateSkillsMenuActiveState()` 函数，菜单打开时刷新所有菜单项的 `.active` 状态；12 个 `else if` 分支重构为通用 toggle 逻辑，点击已激活技能取消引用（互斥原则不变）。 |
-| **离场动画** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.closing` class + `@keyframes skillsDropdownOut`（缩小 + 淡出 0.18s）+ `@keyframes skillsItemOut`（右滑 + 淡出 0.1s）+ 13 个 nth-child 反向交错 delay。`closeSkillsDropdown()` 用 `setTimeout` 360ms 替代 `animationend` 事件清理 class。点击按钮/选择技能/点击外部三处关闭场景统一调用。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（移除翻译子菜单结构）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（active 样式 + closing 动画 + 反向交错 ~130 行）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（updateSkillsMenuActiveState + toggle 重构 + closeSkillsDropdown）、[internal/database/db.go](internal/database/db.go)（合并翻译 prompt）、[internal/services/ai_service.go](internal/services/ai_service.go) + [app.go](app.go)（动态 source/target 占位符替换） |
-
----
-
-## 记忆点 2：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 1：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 2：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：联网搜索结果按引用截断数截断
+## 记忆点 3：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 消息删除从截断改为单条删除
+## 记忆点 4：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记日历视图（笔记日历）
+## 记忆点 5：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 6：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 7：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,11 +649,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 8：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 笔记日历视图（记忆点 6）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
+| **变更概览** | 笔记日历视图（记忆点 5）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
 | **滚动条移至窗口右侧** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar.view` 的右侧 padding 设为 0，面板延伸到窗口右边缘。同时添加 `#mainContent:has(#viewCalendar.active) { scrollbar-gutter: auto; overflow-y: hidden; }`，去掉 `#mainContent` 的 scrollbar-gutter 预留空间，使笔记列表滚动条出现在窗口右侧而非面板右侧边框。 |
 | **日历侧边栏加宽** | [calendar.css](frontend/src/css/components/calendar.css) 中 `.calendar-sidebar { width: 340px; }`（原 280px），笔记面板 `flex: 1` 自动缩小。 |
 | **标题右侧缩进** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar .view-header { padding-right: 32px; }`，匹配默认 `.view` 的右侧 padding，避免面板延伸到窗口右侧后标题贴边。 |
@@ -673,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 9：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,6 +669,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **原地打开** | [calendar.js](frontend/src/js/calendar.js) 中 `openNoteFromCalendar()` 删除 `switchView('grid')`、笔记本切换（`activeNotebookId`/`updateSidebarMenuItem`）和 `await loadNotes()` 三行，直接调用 `window.openEditor(note.id, true)`。 |
 | **竞态修复** | 原代码中 `closeEditorSafe()` 调用 `closeEditor()` 后立即返回，不等待其内部 200ms `setTimeout` 清理定时器。之前有 `loadNotes()` 等操作垫时间，删除后 `openEditor` 立即执行，200ms 后定时器触发撤销 `openEditor` 的设置。在 `closeEditorSafe()` 后添加 200ms 延迟等待清理完成。仅编辑器已打开时生效（`if` 块内），首次点击无延迟。 |
 | **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)（openNoteFromCalendar 重写 + 200ms 延迟） |
+
+---
+
+## 记忆点 10：AI 会话侧栏统一菜单（右击/更多按钮合并）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将 AI 会话侧栏中的右击菜单（重命名 + 导出）和更多按钮菜单（置顶 + 重命名 + 删除会话）合并为一个统一菜单。右击和更多按钮点击弹出完全相同的菜单，包含置顶/取消置顶、重命名、导出、删除会话四项。 |
+| **移除旧右键菜单** | [index.html](frontend/index.html) 删除 `#aiSessionContextMenu` 元素；[ai-chat.css](frontend/src/css/components/ai-chat.css) 删除 `.ai-session-context-menu` 全部样式（~50 行）；[ai-chat.js](frontend/src/js/ai-chat.js) 删除 `sessionContextMenu`、`_contextSessionId`、`_contextTitleEl` 变量和 `closeSessionContextMenu()`/`showSessionContextMenu()` 函数。 |
+| **提取共享函数** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `showSessionMenu(s, item, left, top)` 函数，统一构建菜单：置顶/取消置顶 → 重命名 → 导出 → 分隔线 → 删除会话。更多按钮点击和右击都调用此函数，仅位置参数不同（按钮用 `getBoundingClientRect()`，右击用 `e.clientX/e.clientY`）。 |
+| **更多按钮切换关闭** | 更多按钮点击时若菜单已打开且是同一会话条目，则直接关闭菜单而非重新打开。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（删除旧菜单 DOM）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除旧菜单样式）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（删除旧变量/函数 + 新增 showSessionMenu + 修改右击/更多按钮事件绑定）
 
 ## 十二、AGENTS.md 维护规范
 
