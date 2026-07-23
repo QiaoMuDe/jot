@@ -568,20 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-## 记忆点 1：待办清单输入区重设计 + 已完成排序优化
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对待办清单的输入区和筛选栏进行布局重构，并优化已完成事项的排序逻辑。输入区从 `<input type="text">` 单行控件升级为 `<textarea>` auto-expand，支持 `Ctrl+Enter` 换行；输入区与筛选栏从水平同行改为垂直堆叠布局，解决 textarea 扩展高度影响筛选栏位置的问题；已完成事项排序从 `created_at DESC` 改为 `updated_at DESC`，让最近完成的事项排在最前面。 |
-| **输入区升级** | 将 `index.html` 中的 `<input type="text">` 替换为 `<textarea>`，添加 auto-resize（初始单行 44px，最大 200px），`Enter` 提交、`Ctrl+Enter` 换行。移除了之前引入的提交按钮（勾号 SVG）。登录框右侧切换为纯分割线。详见 [main.js](frontend/src/main.js)、[todo.css](frontend/src/css/components/todo.css)。 |
-| **垂直堆叠布局（方案 A）** | 输入区卡片从 `flex-direction: row`（输入框 + 分割线 + 筛选栏同行）改为 `column`：textarea 全宽占满上方，筛选栏通过 `border-top` 分割线固定在卡片底部，高度变化不影响其位置。筛选按钮增加 SVG 图标（时钟/勾号），左对齐排列。详见 [todo.css](frontend/src/css/components/todo.css)。 |
-| **已完成排序优化** | 后端 [todo_service.go](internal/services/todo_service.go) 排序从统一的 `done ASC, created_at DESC` 改为 `done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC`。待办按创建时间倒序、已完成按完成（更新）时间倒序，利用 GORM `Save` 自动更新 `UpdatedAt` 字段。 |
-| **自动聚焦** | 切换到待办页面时，`switchView('todo')` 中通过 `setTimeout(() => els.todoInput?.focus(), 100)` 自动聚焦输入框，减少一次点击操作。详见 [main.js](frontend/src/main.js)。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（textarea 替换 input + 删除提交按钮 + SVG 图标）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（垂直堆叠 + textarea 样式 + 筛选栏重写 + 按钮图标）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+Enter 换行 + 移除提交按钮控制 + 自动聚焦）、[internal/services/todo_service.go](internal/services/todo_service.go)（排序逻辑） |
-
----
-
-## 记忆点 2：修复 Mermaid 渲染→源码切换闪烁问题
+## 记忆点 1：修复 Mermaid 渲染→源码切换闪烁问题
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器设置新增自动换行开关
+## 记忆点 2：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 3：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 4：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 5：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 6：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：联网搜索结果按引用截断数截断
+## 记忆点 7：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 消息删除从截断改为单条删除
+## 记忆点 8：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记日历视图（笔记日历）
+## 记忆点 9：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,6 +669,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端改动** | [calendar.js](frontend/src/js/calendar.js) (~280 行)：日历渲染/日期圆点/笔记列表/点击跳转；[calendar.css](frontend/src/css/components/calendar.css) (~280 行)：双栏布局/日历网格/墨水圆点/入场动画；[index.html](frontend/index.html) 新增 viewCalendar 容器 + 更多菜单项；[main.js](frontend/src/main.js) switchView 注册 + import。 |
 | **耗时修复** | 修复两个竞态：① `closeEditor` 的 200ms 清理定时器在 `openEditor` 后关闭编辑器（添加 `viewEditor.active` 守卫）；② `loadNotes` 的 `renderCardGrid` 与 `openEditor` 时序冲突（`await loadNotes()`）。 |
 | **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[internal/services/note_service.go](internal/services/note_service.go)、[app.go](app.go)、[internal/models/note.go](internal/models/note.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 10：AI 流式回复期间禁用拖拽上传文件
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在 AI 流式回复期间（`isStreaming === true`），禁用 AI 聊天区的拖拽文件上传功能。涉及两条防御路径：① AI 聊天区自身的拖拽事件（`dragenter`/`dragleave`/`drop`）全部跳过遮罩操作；② Wails 全局 `OnFileDrop` 回调中的 `handleAiChatFileDrop` 函数弹"AI 正在回复中，请稍后再试"通知并返回。同步方式：`window.__aiStreaming` 与 `isStreaming` 在 5 个赋值点同步，供 `main.js` 全局拖拽系统读取，避免全局 `#dropOverlay` 在光标进入 AI 区前闪烁。 |
+| **AI 遮罩守卫** | [ai-chat.js](frontend/src/js/ai-chat.js) `initAiChatFileDrop()` 中 `dragenter`/`dragleave`/`drop` 三事件首部各加 `if (isStreaming) return;`，流式回复期间遮罩不显示、状态不操作。 |
+| **功能层阻断** | [ai-chat.js](frontend/src/js/ai-chat.js) `handleAiChatFileDrop()` 首部加 `if (isStreaming)` 检查，弹 `showNotification('AI 正在回复中，请稍后再试', 'warning')` 后 return。 |
+| **全局遮罩抑制** | [main.js](frontend/src/main.js) `initFileDrop()` 的 `dragenter`/`dragleave`/`drop` 三事件首部各加 `if (window.__aiStreaming) return;`，防止光标从非 AI 区进入时全局 `#dropOverlay` 闪烁。 |
+| **同步机制** | [ai-chat.js](frontend/src/js/ai-chat.js) 声明 `window.__aiStreaming = false` 并在 5 个 `isStreaming` 赋值点同步（`startStreaming` 的 true、`stream-done`/`stream-error`/`catch`/`stopBtn` 的 false）。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（drag 三事件守卫 + handleAiChatFileDrop 守卫 + __aiStreaming 同步）、[frontend/src/main.js](frontend/src/main.js)（全局 drag 三事件守卫） |
 
 ## 十二、AGENTS.md 维护规范
 

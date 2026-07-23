@@ -7615,6 +7615,9 @@ function initFileDrop() {
         e.preventDefault();
         if (!e.dataTransfer.types.includes('Files')) return;
 
+        // AI 流式回复期间不显示全局拖拽遮罩（文件上传被禁用）
+        if (window.__aiStreaming) return;
+
         // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
         if (e.target.closest('.ai-chat-content')) return;
 
@@ -7646,6 +7649,9 @@ function initFileDrop() {
     document.addEventListener('dragleave', (e) => {
         e.preventDefault();
 
+        // AI 流式回复期间不操作全局拖拽遮罩
+        if (window.__aiStreaming) return;
+
         // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
         if (e.target.closest('.ai-chat-content')) return;
 
@@ -7662,6 +7668,9 @@ function initFileDrop() {
     // HTML5 drop 仅重置遮罩，不处理文件（由 OnFileDrop 接手）
     document.addEventListener('drop', (e) => {
         e.preventDefault();
+
+        // AI 流式回复期间不操作全局拖拽遮罩
+        if (window.__aiStreaming) return;
 
         // 在 AI 聊天区域内拖拽时不操作全局遮罩（由 ai-chat.js 自行处理）
         if (e.target.closest('.ai-chat-content')) return;

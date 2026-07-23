@@ -33,6 +33,8 @@ let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
 let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
+// 窗口级标志，与 isStreaming 同步，供 main.js 全局拖拽系统读取
+window.__aiStreaming = false;
 let sessionContextMenu = null; // AI 会话右键菜单
 let _contextSessionId = null;  // 右键菜单当前会话 ID
 let aiMsgContextMenu = null;   // AI 消息右键菜单
@@ -449,6 +451,7 @@ function bindEvents() {
             stopBtnEl.style.display = 'none';
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
+            window.__aiStreaming = false;
             // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
             const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
             if (streamingBubble) {
@@ -2062,6 +2065,7 @@ async function onSend() {
 async function startStreaming(userText, isRegenerate, userMsgID) {
     if (isStreaming) return;
     isStreaming = true;
+    window.__aiStreaming = true;
 
     // 递增 generation, 后续事件回调据此判断是否属于当前流
     _aiStreamGen++;
@@ -2235,6 +2239,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
         isStreaming = false;
+        window.__aiStreaming = false;
 
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
@@ -2335,6 +2340,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         stopThinkingTimer(0); // 清理计时器
         unsubs.forEach(fn => fn());
         isStreaming = false;
+        window.__aiStreaming = false;
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
@@ -2391,6 +2397,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
+        window.__aiStreaming = false;
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
@@ -4378,6 +4385,8 @@ function initAiChatFileDrop() {
     // ── 拖拽进入：显示遮罩 ──
     aiChatContent.addEventListener('dragenter', (e) => {
         e.preventDefault();
+        // AI 正在回复时不显示拖拽遮罩
+        if (isStreaming) return;
         if (!e.dataTransfer.types.includes('Files')) return;
         _aiDragCounter++;
         if (_aiDragCounter === 1) {
@@ -4397,6 +4406,8 @@ function initAiChatFileDrop() {
     // ── 拖拽离开：隐藏遮罩 ──
     aiChatContent.addEventListener('dragleave', (e) => {
         e.preventDefault();
+        // AI 正在回复时跳过拖拽状态管理（无遮罩可关闭）
+        if (isStreaming) return;
         _aiDragCounter--;
         if (_aiDragCounter <= 0) {
             _aiDragCounter = 0;
@@ -4413,6 +4424,8 @@ function initAiChatFileDrop() {
     // ── 拖拽释放：隐藏遮罩（实际文件由 OnFileDrop 处理） ──
     aiChatContent.addEventListener('drop', (e) => {
         e.preventDefault();
+        // AI 正在回复时跳过拖拽状态管理（无遮罩可关闭）
+        if (isStreaming) return;
         _aiDragCounter = 0;
         aiChatDropOverlay.classList.remove('active');
         aiChatDropOverlay.style.display = 'none';
@@ -4426,6 +4439,12 @@ window.handleAiChatFileDrop = async function(paths) {
     if (aiChatDropOverlay) {
         aiChatDropOverlay.classList.remove('active');
         aiChatDropOverlay.style.display = 'none';
+    }
+
+    // AI 正在回复时禁止上传文件
+    if (isStreaming) {
+        window.showNotification?.('AI 正在回复中，请稍后再试', 'warning');
+        return;
     }
 
     if (!paths || paths.length === 0) return;
