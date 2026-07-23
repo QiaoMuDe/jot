@@ -123,7 +123,7 @@ export async function loadDataStats() {
             <hr class="letter-divider">
             <p class="letter-section-title">🤖 AI 统计数据</p>
             <p>
-                在 AI 方面，你进行了 <strong>${aiSessions}</strong> 次对话，
+                在 AI 方面，你进行了 <strong>${aiSessions}</strong> 次会话，
                 累计发送 <strong>${aiMessages.toLocaleString()}</strong> 条消息，
                 消耗 <strong>${totalTokens.toLocaleString()}</strong> Token。
             </p>
