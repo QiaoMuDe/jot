@@ -1609,18 +1609,22 @@ console.log(greet("Jot"));
                 <!-- 左侧：日历组件 -->
                 <div class="calendar-sidebar">
                     <div class="calendar-header">
-                        <button id="calendarPrevBtn" class="cal-nav-btn" title="上月"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                        <button id="calendarPrevBtn" class="cal-nav-btn" title="上月"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
                         <span class="calendar-title" id="calendarTitle">2026年 7月</span>
-                        <button id="calendarNextBtn" class="cal-nav-btn" title="下月"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+                        <button id="calendarNextBtn" class="cal-nav-btn" title="下月"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
                     </div>
                     <div class="calendar-grid" id="calendarGrid">
                         <!-- 由 JS 动态渲染 -->
+                    </div>
+                    <div class="calendar-stats" id="calendarStats">
+                        <!-- 由 JS 动态填充 -->
                     </div>
                 </div>
                 <!-- 右侧：日期笔记列表 -->
                 <div class="calendar-notes-panel" id="calendarNotesPanel">
                     <div class="calendar-notes-header">
                         <span class="calendar-date-label" id="calendarDateLabel">选择日期查看笔记</span>
+                        <button class="calendar-today-btn" id="calendarTodayBtn" style="display:none;">回到今天</button>
                     </div>
                     <div class="calendar-notes-list" id="calendarNotesList">
                         <!-- 由 JS 动态渲染 -->

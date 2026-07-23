@@ -5754,6 +5754,11 @@ async function handleKeyboardNavigation(e) {
         if (refModal && refModal.style.display !== 'none') {
             return;
         }
+        // 搜索弹窗打开时关闭它（不继续执行导航逻辑）
+        if (els.searchModal && els.searchModal.classList.contains('visible')) {
+            closeSearchModal();
+            return;
+        }
         // 预设弹窗打开时关闭它（不继续执行导航逻辑）
         const presetOverlay = document.getElementById('presetModalOverlay');
         if (presetOverlay && presetOverlay.classList.contains('visible')) {
@@ -6976,11 +6981,6 @@ function handleSearchModalKeydown(e) {
     if (!els.searchModal || !els.searchModal.classList.contains('visible')) return;
     // 输入框内的输入事件由 input 监听处理,这里只处理功能键
     const items = els.searchModalResults ? els.searchModalResults.querySelectorAll('.search-modal-item') : [];
-    if (e.key === 'Escape') {
-        e.preventDefault();
-        closeSearchModal();
-        return;
-    }
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (items.length === 0) return;

@@ -58,7 +58,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
-│   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 按日笔记列表 / 点击笔记跳转）
+│   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 本月摘要统计 / 按日笔记列表 / 回到今天 / 点击笔记跳转 / 切月自动重置今天）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
 │   │       ├── index.css               # 入口文件，@import 引入所有子文件（设计系统 → 组件）
@@ -79,7 +79,7 @@ jot/                                    # 项目根目录
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局）
 │   │           ├── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
-│   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/笔记列表/入场动画）
+│   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/统计卡片/笔记列表/入场动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
 │   │       ├── App.js                  # 后端 API 的 JS 封装
@@ -570,18 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：移除技能选中对号 + 激活时隐藏更多技能按钮
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对「更多技能」菜单进行两项交互调整：① 移除技能菜单选中项的 `✓` 对号标记，选中态仅以 accent 色高亮文字和图标；② 激活技能时自动隐藏"更多技能"按钮（减少工具栏冗余），取消技能后按钮重新显示。 |
-| **移除对号** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 删除 `.ai-chat-skills-item.active::after` 规则块（`{ content: '✓'; ... }`），选中态不再显示右侧对号。 |
-| **按钮隐藏** | [ai-chat.js](frontend/src/js/ai-chat.js) `renderSkillChips()` 中新增两行：有技能激活时 `skillsBtn.style.display = 'none'`，无技能时 `skillsBtn.style.display = ''`。按钮显示状态随 chip 栏联动，取消技能（点 X）后自动恢复。 |
-| **涉及文件** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 ::after 对号）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（renderSkillChips 中控制按钮显隐） |
-
----
-
-## 记忆点 2：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 1：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：联网搜索结果按引用截断数截断
+## 记忆点 2：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 消息删除从截断改为单条删除
+## 记忆点 3：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记日历视图（笔记日历）
+## 记忆点 4：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 5：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 6：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,11 +638,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 7：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 笔记日历视图（记忆点 5）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
+| **变更概览** | 笔记日历视图（记忆点 4）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
 | **滚动条移至窗口右侧** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar.view` 的右侧 padding 设为 0，面板延伸到窗口右边缘。同时添加 `#mainContent:has(#viewCalendar.active) { scrollbar-gutter: auto; overflow-y: hidden; }`，去掉 `#mainContent` 的 scrollbar-gutter 预留空间，使笔记列表滚动条出现在窗口右侧而非面板右侧边框。 |
 | **日历侧边栏加宽** | [calendar.css](frontend/src/css/components/calendar.css) 中 `.calendar-sidebar { width: 340px; }`（原 280px），笔记面板 `flex: 1` 自动缩小。 |
 | **标题右侧缩进** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar .view-header { padding-right: 32px; }`，匹配默认 `.view` 的右侧 padding，避免面板延伸到窗口右侧后标题贴边。 |
@@ -661,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 8：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 9：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,6 +670,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **提取共享函数** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `showSessionMenu(s, item, left, top)` 函数，统一构建菜单：置顶/取消置顶 → 重命名 → 导出 → 分隔线 → 删除会话。更多按钮点击和右击都调用此函数，仅位置参数不同（按钮用 `getBoundingClientRect()`，右击用 `e.clientX/e.clientY`）。 |
 | **更多按钮切换关闭** | 更多按钮点击时若菜单已打开且是同一会话条目，则直接关闭菜单而非重新打开。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（删除旧菜单 DOM）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除旧菜单样式）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（删除旧变量/函数 + 新增 showSessionMenu + 修改右击/更多按钮事件绑定）
+
+---
+
+## 记忆点 10：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对笔记日历视图进行多轮视觉和交互优化：① 日历 UI 全面美化（面板间距取消硬分割线、导航箭头放大、选中日期外圈高亮、日期格子 36px→40px）；② 新增"本月统计"区域（三张统计卡：总笔记/记天数/最长连续 + 活跃度进度条）；③ 仅在非今天日期显示"回到今天"按钮；④ 切月自动重置到当前年月的今天；⑤ 全局 ESC 按下时先关闭搜索弹窗，再执行导航逻辑。 |
+| **面板布局** | [calendar.css](frontend/src/css/components/calendar.css)：`gap: 0 → 12px`、删除 `.calendar-sidebar` 的 `border-right` 改为圆角卡片背景、`.calendar-notes-panel` 去掉左内边距。 |
+| **日历网格 UI** | [calendar.css](frontend/src/css/components/calendar.css)：日期格子 `36px→40px`、选中态新增 `box-shadow` 外圈光晕、`margin-top: 6px→12px` 使底部墨水圆点不贴边。 |
+| **本月统计** | [calendar.js](frontend/src/js/calendar.js) 新增 `computeMonthStats()`（总笔记数/记天数/最长连续天数计算）和 `renderMonthStats()` 渲染 HTML；[calendar.css](frontend/src/css/components/calendar.css) 新增统计卡片样式（flex:1 三栏 + 数据值 `1.375rem` + gap 16px + 活跃度进度条渐变 + 弹性动画）。 |
+| **回到今天按钮** | [index.html](frontend/index.html) 在 `#calendarTodayBtn` 新增按钮；[calendar.js](frontend/src/js/calendar.js) 新增 `updateTodayBtnVisibility()` 判断非今天才显示；点击按钮回到今月今月并选中今天。 |
+| **切月自动重置今天** | [calendar.js](frontend/src/js/calendar.js) `refreshCalendarView()` 每次调用将 `calendarYear`/`calendarMonth` 重置为今天，使每次切到日历视图都回到当前月份。 |
+| **ESC 关闭搜索弹窗** | [main.js](frontend/src/main.js) 全局 ESC 处理器新增搜索弹窗可见性检查：可见则关闭弹窗并 return。移除了 `handleSearchModalKeydown` 中的 Escape 处理（避免 capture/bubble 双处理器冲突）。 |
+| **笔记列表重设计** | [calendar.css](frontend/src/css/components/calendar.css)：条目去掉方框改为 `border-bottom` 底部分割线、hover 从 `translateX(4px)` 改为 `background: var(--hover-bg)`。笔记本标签新增彩色 pill 样式、时间文字 `opacity: 0.6` 弱化。笔记列表日期标题 `font-size: 1rem→1.25rem`。 |
+| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
 
 ## 十二、AGENTS.md 维护规范
 
