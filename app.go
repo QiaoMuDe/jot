@@ -3444,6 +3444,11 @@ func (a *App) ResetDatabase() error {
 		}
 	}
 
+	// 显式删除多对多关联表（没有对应的 model struct）
+	if err := a.db.Exec("DROP TABLE IF EXISTS note_tags").Error; err != nil {
+		return err
+	}
+
 	// 2. 重新 AutoMigrate（与 InitDB 保持同步）
 	if err := a.db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{},
 		&models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.AISessionConfig{},

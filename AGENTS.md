@@ -568,17 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-## 记忆点 1：修复 Mermaid 渲染→源码切换闪烁问题
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | 从渲染模式切换回源码模式时，代码块会出现闪烁。根因是 `pre` 元素上持久的 `transition: opacity 0.2s ease` 在反向切换时产生副作用——`pre-hiding` 类在 `display: none` 状态下被移除时触发了 opacity 过渡，浏览器内部追踪了此过渡状态，导致 `display: ''` 恢复时错误地应用了从透明到可见的淡入动画。 |
-| **修复** | 将 CSS 的 `transition: opacity 0.2s ease` 从 `.pre-wrapper.has-mermaid pre` 基础选择器移到 `.pre-wrapper.has-mermaid pre.pre-hiding` 上，使过渡只在淡出动画期间生效。反向切换时 `pre` 无过渡，直接以 `opacity: 1` 显示，消除闪烁。 |
-| **涉及文件** | [editor.css](frontend/src/css/components/editor.css)（L1339-L1343，transition 从基础选择器移到 pre-hiding 类选择器） |
-
----
-
-## 记忆点 2：编辑器设置新增自动换行开关
+## 记忆点 1：编辑器设置新增自动换行开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 2：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 3：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 4：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 5：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：联网搜索结果按引用截断数截断
+## 记忆点 6：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 消息删除从截断改为单条删除
+## 记忆点 7：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记日历视图（笔记日历）
+## 记忆点 8：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 9：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,6 +672,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **全局遮罩抑制** | [main.js](frontend/src/main.js) `initFileDrop()` 的 `dragenter`/`dragleave`/`drop` 三事件首部各加 `if (window.__aiStreaming) return;`，防止光标从非 AI 区进入时全局 `#dropOverlay` 闪烁。 |
 | **同步机制** | [ai-chat.js](frontend/src/js/ai-chat.js) 声明 `window.__aiStreaming = false` 并在 5 个 `isStreaming` 赋值点同步（`startStreaming` 的 true、`stream-done`/`stream-error`/`catch`/`stopBtn` 的 false）。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（drag 三事件守卫 + handleAiChatFileDrop 守卫 + __aiStreaming 同步）、[frontend/src/main.js](frontend/src/main.js)（全局 drag 三事件守卫） |
+
+---
+
+## 记忆点 10：重置出厂设置遗漏清理 note_tags 多对多关联表
+
+| 记忆点 | 内容 |
+|--------|------|
+| **问题** | `App.ResetDatabase()` 使用 `Migrator().DropTable` 删除 10 张 model 表，但漏掉了自动化多对多关联表 `note_tags`（由 `Note` ↔ `Tag` 的 `many2many:note_tags` 注解自动创建，无对应 model struct）。重置后重建 `notes` 和 `tags` 表时 ID 从 1 重新开始，旧 `note_tags` 数据中的 `note_id` 命中新笔记，导致 `Preload("Tags")` 误报出旧标签。 |
+| **修复** | 在 DropTable 循环后追加 `a.db.Exec("DROP TABLE IF EXISTS note_tags")`，确保关联表也一并清除。`AutoMigrate` 在关联表不存在时会自动重建。 |
+| **涉及文件** | [app.go](app.go)（DropTable 后追加 note_tags 显式 DROP） |
 
 ## 十二、AGENTS.md 维护规范
 
