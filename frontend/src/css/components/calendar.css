@@ -1,15 +1,34 @@
 /* ===== 日历视图样式 ===== */
 
+/* 覆盖默认 .view 的 padding，去掉右侧内边距，
+   使 .calendar-notes-panel 延伸到窗口右边缘，滚动条贴在窗口右侧 */
+#viewCalendar.view {
+    padding: 24px 0 24px 32px;
+}
+
+/* 日历视图下，#mainContent 无需滚动，去掉 scrollbar-gutter 预留空间，
+   使日历面板真正延伸到窗口右侧边缘，滚动条贴在窗口右侧 */
+#mainContent:has(#viewCalendar.active) {
+    scrollbar-gutter: auto;
+    overflow-y: hidden;
+}
+
+/* 日历视图标题右侧缩进，避免因面板延伸到窗口右侧导致标题贴边 */
+#viewCalendar .view-header {
+    padding-right: 32px;
+}
+
 .calendar-layout {
     flex: 1;
     display: flex;
     overflow: hidden;
     gap: 0;
+    min-height: 0;
 }
 
 /* 左侧日历 */
 .calendar-sidebar {
-    width: 280px;
+    width: 340px;
     flex-shrink: 0;
     border-right: 1px solid var(--border);
     padding: 20px 16px;
@@ -151,11 +170,13 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 20px 24px;
+    padding: 20px 0 20px 24px;
+    /* 嵌套 flex 布局中需要显式 min-height: 0 约束高度，使子元素 overflow-y: auto 生效 */
+    min-height: 0;
 }
 
 .calendar-notes-header {
-    padding-bottom: 16px;
+    padding: 0 24px 16px 0;
     border-bottom: 1px solid var(--border);
     margin-bottom: 12px;
 }
@@ -180,6 +201,28 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    padding-right: 24px;
+    /* 继承自 #mainContent 的 scrollbar-color: transparent transparent，默认隐藏滚动条 */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+}
+
+/* 滚动时或悬停时显示滚动条 */
+.calendar-notes-list.scrolling,
+.calendar-notes-list:hover {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* WebKit 滚动条滑块：默认透明，滚动/悬停时显示 */
+.calendar-notes-list::-webkit-scrollbar-thumb {
+    background: transparent;
+    transition: background 0.3s ease;
+}
+
+.calendar-notes-list.scrolling::-webkit-scrollbar-thumb,
+.calendar-notes-list:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
 }
 
 .calendar-note-item {

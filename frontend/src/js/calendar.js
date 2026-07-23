@@ -53,6 +53,17 @@ export function initCalendarView() {
         window.switchView('grid');
     });
 
+    // 初始化滚动条自动显隐（滚动时显示，静止 1 秒后隐藏）
+    let scrollTimer = null;
+    calendarNotesList.addEventListener('scroll', (e) => {
+        if (e.target !== calendarNotesList) return;
+        calendarNotesList.classList.add('scrolling');
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+            calendarNotesList.classList.remove('scrolling');
+        }, 1000);
+    });
+
     // 初始渲染
     renderCalendar(calendarYear, calendarMonth);
 }

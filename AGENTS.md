@@ -568,20 +568,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
 
-## 记忆点 1：编辑器设置新增自动换行开关
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在设置页编辑器设置卡片中新增"自动换行"开关（默认关闭），启用后 CM6 编辑器在查看/编辑/新建三种模式下均根据配置决定是否自动换行。该设置项纳入前后端统一的 SettingsConfig 加载/保存体系。 |
-| **后端改动** | [internal/services/types.go](internal/services/types.go) 中 `SettingsConfig` 结构体新增 `EditorWordWrap bool` 字段（JSON tag: `editor_word_wrap`），`GetAllSettings`/`SaveAllSettings` 同步处理该键的读写映射。 |
-| **前端设置 UI** | [frontend/index.html](frontend/index.html) 编辑器设置卡片中新增 id 为 `editorWordWrapToggle` 的 toggle 开关（置于"全屏打开"与"代码高亮主题"之间），描述：启用后编辑器内容超出宽度时自动换行显示。 |
-| **CM6 集成** | [main.js](frontend/src/main.js) `initCodeMirror()` 新增第 7 参数 `enableWordWrap`（默认 false），为 true 时条件性注入 `EditorView.lineWrapping` 扩展。该配置来自 `els.editorWordWrapToggle.checked`，在 `openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 个调用点透传。 |
-| **加载/保存** | [main.js](frontend/src/main.js) `loadSettings()` 中同步 `editorWordWrapToggle.checked = cfg.editor_word_wrap`；`saveSettings()` 中收集 `editor_word_wrap` 字段。toggle change 事件自动保存并弹出"设置已保存"通知（与语法高亮/全屏打开模式一致）。 |
-| **涉及文件** | [internal/services/types.go](internal/services/types.go)（结构体 + 读写映射）、[frontend/index.html](frontend/index.html)（toggle HTML）、[frontend/src/main.js](frontend/src/main.js)（els 注册 + import/initCodeMirror/loadSettings/saveSettings/openEditor/事件绑定，共 7 处改动）
 
----
-
-## 记忆点 2：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
+## 记忆点 1：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 2：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 3：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 4：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：联网搜索结果按引用截断数截断
+## 记忆点 5：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 消息删除从截断改为单条删除
+## 记忆点 6：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记日历视图（笔记日历）
+## 记忆点 7：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 8：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -675,13 +664,25 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 9：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
 | **问题** | `App.ResetDatabase()` 使用 `Migrator().DropTable` 删除 10 张 model 表，但漏掉了自动化多对多关联表 `note_tags`（由 `Note` ↔ `Tag` 的 `many2many:note_tags` 注解自动创建，无对应 model struct）。重置后重建 `notes` 和 `tags` 表时 ID 从 1 重新开始，旧 `note_tags` 数据中的 `note_id` 命中新笔记，导致 `Preload("Tags")` 误报出旧标签。 |
 | **修复** | 在 DropTable 循环后追加 `a.db.Exec("DROP TABLE IF EXISTS note_tags")`，确保关联表也一并清除。`AutoMigrate` 在关联表不存在时会自动重建。 |
 | **涉及文件** | [app.go](app.go)（DropTable 后追加 note_tags 显式 DROP） |
+
+---
+
+## 记忆点 10：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 笔记日历视图（记忆点 7）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
+| **滚动条移至窗口右侧** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar.view` 的右侧 padding 设为 0，面板延伸到窗口右边缘。同时添加 `#mainContent:has(#viewCalendar.active) { scrollbar-gutter: auto; overflow-y: hidden; }`，去掉 `#mainContent` 的 scrollbar-gutter 预留空间，使笔记列表滚动条出现在窗口右侧而非面板右侧边框。 |
+| **日历侧边栏加宽** | [calendar.css](frontend/src/css/components/calendar.css) 中 `.calendar-sidebar { width: 340px; }`（原 280px），笔记面板 `flex: 1` 自动缩小。 |
+| **标题右侧缩进** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar .view-header { padding-right: 32px; }`，匹配默认 `.view` 的右侧 padding，避免面板延伸到窗口右侧后标题贴边。 |
+| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)（#viewCalendar.view padding + #mainContent:has() + .view-header padding-right + .calendar-sidebar width） |
 
 ## 十二、AGENTS.md 维护规范
 
