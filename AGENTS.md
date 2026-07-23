@@ -137,7 +137,7 @@ jot/                                    # 项目根目录
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
 | **前端搜索交互** | 搜索弹窗 200ms 防抖自动搜索，支持标题/内容/标签（多标签 AND 语义过滤）、笔记本/日期/排序筛选器（排序 3 选项：更新时间/创建时间/名称，均 pinned 优先） | `frontend/src/main.js` | 关键词 + 过滤条件 + sortBy | 搜索弹窗结果列表 |
-| **笔记日历视图** | 日历导航（上/下月切换） + 创建时间墨水圆点统计（1/2-5/6+ 三档） + 按日笔记列表 + 点击笔记网格视图打开 | `frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css` + `services/note_service.go:GetByDate/GetMonthCounts` + `app.go:GetNotesByDate/GetMonthNoteCounts` | 年月参数/日期字符串 | 按月统计 map / 按日笔记列表 |
+| **笔记日历视图** | 日历导航（上/下月切换） + 创建时间墨水圆点统计（1/2-5/6+ 三档） + 按日笔记列表 + 点击笔记原地打开编辑器查看模式 | `frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css` + `services/note_service.go:GetByDate/GetMonthCounts` + `app.go:GetNotesByDate/GetMonthNoteCounts` | 年月参数/日期字符串 | 按月统计 map / 按日笔记列表 |
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
@@ -570,20 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：代码高亮主题系统扩展 + 配色调优 + 设置描述修正
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对代码高亮主题系统进行多轮优化：① 新增 One Light / Catppuccin Latte 两个亮色代码高亮主题（原仅 2 个亮色代码主题），移除 Tokyo Night / Nord 两个新增但不满意的暗色代码主题，最终保留 13 个代码高亮主题（11 原 + 2 新）；② 修正三个系统主题的 `--more-menu-bg` 使其融入各自色彩家族（山林 `#EEEDE0` 绿灰米 / 静谧 `#F4EEF0` 粉紫灰白 / 护眼 `#DAE6D0` 暖豆沙绿）而非通用暖黄；③ 修正 github-dark / one-dark-pro / vscode-dark-plus 代码主题中过浅或不易辨识的颜色（粉彩→中饱和 / 浅灰→有色调）；④ 更新 8 个主题中被引号包围的字符串颜色，降低亮度提高可读性；⑤ 将 `codeHighlightThemeLabels` 全改为中文描述性名称（霓虹幻彩 / 暗夜流光 / 柔和粉彩 等），后台 key 不变；⑥ 修正设置页描述 `选择代码块所使用的配色主题方案` → `选择笔记编辑器的语法高亮配色方案`，避免误解覆盖 AI 消息代码块；⑦ 修复设置页代码预览不随加载主题更新的 Bug；⑧ 快速备份添加确认弹窗，防止误触覆盖上次备份。 |
-| **主题配对映射更新** | [cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) 和 [theme-config.js](frontend/src/js/theme-config.js) 中同步更新配对：tokyo-night→github-dark（回退）、nord→github-dark（回退）、default→one-light、catppuccin-latte→catppuccin-latte。 |
-| **设置描述修正** | [index.html](frontend/index.html) L390 描述文本已修正，明确告知用户该设置仅影响笔记编辑器。 |
-| **代码预览 Bug 修复** | [main.js](frontend/src/main.js) `loadSettings()` 中加载主题后新增 `_codePreviewInited` 判断重建预览，解决再次进入设置页时 `initCodePreview()` 被守卫跳过、预览与加载主题不同步的问题。 |
-| **备份确认弹窗** | [data-management.js](frontend/src/js/data-management.js) `backupToDir()` 函数首部添加 `showConfirmDialog` 确认弹窗，文案：「一键备份将覆盖上次备份内容，确定继续吗？」，与一键还原的确认弹窗模式一致。 |
-| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（新增 2 主题 + 移除 2 主题 + 颜色调优 + 中文标签）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（3 主题 more-menu-bg 修正）、[frontend/src/js/theme-config.js](frontend/src/js/theme-config.js)（配对映射更新）、[frontend/src/js/hljs-themes.js](frontend/src/js/hljs-themes.js)（hljs 回退映射更新）、[frontend/index.html](frontend/index.html)（描述修正）、[frontend/src/main.js](frontend/src/main.js)（预览重建 Bug 修复）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（备份确认弹窗） |
-
----
-
-## 记忆点 2：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
+## 记忆点 1：翻译技能扁平化 + 技能菜单选中指示 + 更多技能离场动画
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：移除技能选中对号 + 激活时隐藏更多技能按钮
+## 记忆点 2：移除技能选中对号 + 激活时隐藏更多技能按钮
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
+## 记忆点 3：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：联网搜索结果按引用截断数截断
+## 记忆点 4：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 消息删除从截断改为单条删除
+## 记忆点 5：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,11 +626,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记日历视图（笔记日历）
+## 记忆点 6：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增笔记日历视图（`frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css`），提供按创建日期回顾笔记的日历导航。包括日历网格渲染、三档墨水圆点统计（1条/2-5条/6+条）、月份切换、点击日期加载当日笔记列表、点击笔记跳转到网格视图以查看模式打开编辑器。 |
+| **变更概览** | 新增笔记日历视图（`frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css`），提供按创建日期回顾笔记的日历导航。包括日历网格渲染、三档墨水圆点统计（1条/2-5条/6+条）、月份切换、点击日期加载当日笔记列表、点击笔记原地打开编辑器查看模式。 |
 | **后端改动** | [note_service.go](internal/services/note_service.go) 新增 `GetByDate(date)` 和 `GetMonthCounts(year, month)` 方法；[app.go](app.go) 新增 `GetNotesByDate` 和 `GetMonthNoteCounts` 绑定接口。Note 模型新增 `Notebook *Notebook` 关联字段以正确展示笔记本名称。 |
 | **前端改动** | [calendar.js](frontend/src/js/calendar.js) (~280 行)：日历渲染/日期圆点/笔记列表/点击跳转；[calendar.css](frontend/src/css/components/calendar.css) (~280 行)：双栏布局/日历网格/墨水圆点/入场动画；[index.html](frontend/index.html) 新增 viewCalendar 容器 + 更多菜单项；[main.js](frontend/src/main.js) switchView 注册 + import。 |
 | **耗时修复** | 修复两个竞态：① `closeEditor` 的 200ms 清理定时器在 `openEditor` 后关闭编辑器（添加 `viewEditor.active` 守卫）；② `loadNotes` 的 `renderCardGrid` 与 `openEditor` 时序冲突（`await loadNotes()`）。 |
@@ -651,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 7：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 8：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -674,15 +661,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 9：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 笔记日历视图（记忆点 7）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
+| **变更概览** | 笔记日历视图（记忆点 6）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
 | **滚动条移至窗口右侧** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar.view` 的右侧 padding 设为 0，面板延伸到窗口右边缘。同时添加 `#mainContent:has(#viewCalendar.active) { scrollbar-gutter: auto; overflow-y: hidden; }`，去掉 `#mainContent` 的 scrollbar-gutter 预留空间，使笔记列表滚动条出现在窗口右侧而非面板右侧边框。 |
 | **日历侧边栏加宽** | [calendar.css](frontend/src/css/components/calendar.css) 中 `.calendar-sidebar { width: 340px; }`（原 280px），笔记面板 `flex: 1` 自动缩小。 |
 | **标题右侧缩进** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar .view-header { padding-right: 32px; }`，匹配默认 `.view` 的右侧 padding，避免面板延伸到窗口右侧后标题贴边。 |
 | **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)（#viewCalendar.view padding + #mainContent:has() + .view-header padding-right + .calendar-sidebar width） |
+
+---
+
+## 记忆点 10：日历笔记原地打开编辑器查看模式 + 竞态修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 优化日历笔记的打开行为：① `openNoteFromCalendar()` 不再切换到网格视图，改为在日历视图内直接调用 `openEditor(note.id, true)` 打开编辑器浮层查看模式；② 修复新增路径下的竞态条件——`closeEditor()` 的 200ms 清理定时器与后续 `openEditor()` 冲突，添加 `await new Promise(r => setTimeout(r, 200))` 等待清理完成后再打开新编辑器。 |
+| **原地打开** | [calendar.js](frontend/src/js/calendar.js) 中 `openNoteFromCalendar()` 删除 `switchView('grid')`、笔记本切换（`activeNotebookId`/`updateSidebarMenuItem`）和 `await loadNotes()` 三行，直接调用 `window.openEditor(note.id, true)`。 |
+| **竞态修复** | 原代码中 `closeEditorSafe()` 调用 `closeEditor()` 后立即返回，不等待其内部 200ms `setTimeout` 清理定时器。之前有 `loadNotes()` 等操作垫时间，删除后 `openEditor` 立即执行，200ms 后定时器触发撤销 `openEditor` 的设置。在 `closeEditorSafe()` 后添加 200ms 延迟等待清理完成。仅编辑器已打开时生效（`if` 块内），首次点击无延迟。 |
+| **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)（openNoteFromCalendar 重写 + 200ms 延迟） |
 
 ## 十二、AGENTS.md 维护规范
 

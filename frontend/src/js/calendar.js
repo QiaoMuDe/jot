@@ -260,7 +260,7 @@ function renderNotes(notes) {
 }
 
 /**
- * 从日历打开笔记 - 切换到网格视图并打开编辑器
+ * 从日历打开笔记 - 在日历视图内直接打开编辑器查看模式
  * @param {Object} note - 笔记对象
  */
 async function openNoteFromCalendar(note) {
@@ -269,19 +269,11 @@ async function openNoteFromCalendar(note) {
     if (viewEditor && viewEditor.classList.contains('active')) {
         const closeEditorSafe = getCloseEditorSafe();
         if (closeEditorSafe) await closeEditorSafe();
+        // 等待 closeEditor 的 200ms 清理定时器完成，防止其撤销 openEditor 的设置
+        await new Promise(r => setTimeout(r, 200));
     }
 
-    window.switchView('grid');
-
-    if (note.notebook_id) {
-        window.state.activeNotebookId = note.notebook_id;
-        if (typeof window.updateSidebarMenuItem === 'function') {
-            window.updateSidebarMenuItem(note.notebook_id);
-        }
-    }
-
-    // 等笔记列表加载完毕后再打开编辑器，避免 loadNotes 的 renderCardGrid 干扰
-    await window.loadNotes();
+    // 直接在日历视图内打开编辑器查看模式，编辑器是独立浮层，不依赖视图切换
     window.openEditor(note.id, true);
 }
 
