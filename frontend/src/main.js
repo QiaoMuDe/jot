@@ -357,9 +357,11 @@ const els = {
     viewCalendar: $('viewCalendar'),
     todoBackBtn: $('todoBackBtn'),
     todoInput: $('todoInput'),
-
+    todoFab: $('todoFab'),
+    todoFabPanel: $('todoFabPanel'),
     todoList: $('todoList'),
     todoEmpty: $('todoEmpty'),
+    todoClearCompletedBtn: $('todoClearCompletedBtn'),
     viewEditor: $('viewEditor'),
     editorPanel: $('editorPanel'),
 
@@ -581,10 +583,20 @@ function switchView(view) {
 
     state.currentView = view;
 
-    // 悬浮操作按钮仅在网格视图显示
-    els.fabGroup.style.display = view === 'grid' ? '' : 'none';
+    // 悬浮操作按钮仅在网格视图显示（带过渡动画）
+    els.fabGroup.classList.toggle('fab-hidden', view !== 'grid');
     // 笔记本侧栏折叠按钮仅在网格视图显示
     els.notebookSidebarToggle.style.display = view === 'grid' ? '' : 'none';
+    // 待办 FAB + 输入面板仅在待办视图显示（带过渡动画）
+    if (els.todoFab) els.todoFab.classList.toggle('fab-hidden', view !== 'todo');
+    if (els.todoFabPanel) {
+        if (view !== 'todo') {
+            // 离开待办视图时关闭面板，避免切回时面板意外打开
+            els.todoFabPanel.classList.remove('open');
+            els.todoFab?.classList.remove('open');
+        }
+        els.todoFabPanel.classList.toggle('fab-hidden', view !== 'todo');
+    }
 
     _viewAnimating = true;
 
@@ -632,12 +644,13 @@ function switchView(view) {
                 break;
             case 'todo':
                 _todoFilter = 'active';
+                window._todoFilter = _todoFilter;
                 document.querySelectorAll('.todo-filter-btn').forEach(btn => btn.classList.remove('active'));
                 const activeFilterBtn = document.querySelector('.todo-filter-btn[data-filter="active"]');
                 if (activeFilterBtn) activeFilterBtn.classList.add('active');
                 loadTodos();
-                // 切换到待办页时自动聚焦输入框
-                setTimeout(() => els.todoInput?.focus(), 100);
+                // 切换到待办页时自动弹出输入面板
+                setTimeout(() => openTodoInputPanel(), 100);
                 break;
         }
 
@@ -5563,41 +5576,113 @@ function initEventListeners() {
     });
     document.querySelector('.file-ext-dialog-overlay').addEventListener('click', closeFileExtDialog);
 
-    // 待办清单事件
-    if (els.todoInput) {
-        // 键盘：Enter 提交，Ctrl+Enter 换行
-        els.todoInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-                e.preventDefault();
-                addTodo();
-            } else if (e.key === 'Enter' && e.ctrlKey) {
-                e.preventDefault();
-                // 在光标处插入换行 + 触发 auto-resize
-                const start = els.todoInput.selectionStart;
-                const end = els.todoInput.selectionEnd;
-                const val = els.todoInput.value;
-                els.todoInput.value = val.substring(0, start) + '\n' + val.substring(end);
-                els.todoInput.selectionStart = els.todoInput.selectionEnd = start + 1;
-                autoResizeTodoInput();
+    // 待办清单事件：FAB + 内联输入面板
+    if (els.todoFab && els.todoFabPanel) {
+        // FAB 点击切换面板
+        els.todoFab.addEventListener('click', () => {
+            if (els.todoFabPanel.classList.contains('open')) {
+                closeTodoInputPanel();
+            } else {
+                openTodoInputPanel();
             }
         });
 
-        // 输入时自动扩展高度
-        els.todoInput.addEventListener('input', autoResizeTodoInput);
+        // 面板内输入框键盘事件
+        const panelInput = els.todoInput;
+        if (panelInput) {
+            panelInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                    e.preventDefault();
+                    addTodo();
+                } else if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    const start = panelInput.selectionStart;
+                    const end = panelInput.selectionEnd;
+                    const val = panelInput.value;
+                    panelInput.value = val.substring(0, start) + '\n' + val.substring(end);
+                    panelInput.selectionStart = panelInput.selectionEnd = start + 1;
+                    autoResizeTodoInput();
+                }
+            });
+
+            // 输入时自动扩展高度
+            panelInput.addEventListener('input', autoResizeTodoInput);
+        }
+
+        // 点击面板外部关闭
+        document.addEventListener('click', (e) => {
+            if (!els.todoFabPanel.classList.contains('open')) return;
+            const target = e.target;
+            if (!els.todoFabPanel.contains(target) && !els.todoFab.contains(target)) {
+                closeTodoInputPanel();
+            }
+        });
     }
 
+    // 清空已完成按钮
+    els.todoClearCompletedBtn?.addEventListener('click', clearCompletedTodos);
+
+    // 事件委托：筛选按钮 + 待办项操作（checkbox、删除、编辑）
     els.viewTodo?.addEventListener('click', (e) => {
-        // 筛选按钮切换委托
+        // 筛选按钮切换
         const filterBtn = e.target.closest('.todo-filter-btn');
         if (filterBtn) {
             const filter = filterBtn.dataset.filter;
             if (!filter) return;
             _todoFilter = filter;
+            window._todoFilter = _todoFilter;
             document.querySelectorAll('.todo-filter-btn').forEach(btn => btn.classList.remove('active'));
             filterBtn.classList.add('active');
             loadTodos();
+            return;
+        }
+
+        // 待办项操作：通过 data-action 委托
+        const actionEl = e.target.closest('[data-action]');
+        if (!actionEl) return;
+        const item = actionEl.closest('.todo-item');
+        if (!item) return;
+        const id = parseInt(item.dataset.id);
+        const action = actionEl.dataset.action;
+
+        if (action === 'toggle') {
+            toggleTodo(id);
+        } else if (action === 'delete') {
+            deleteTodo(id);
+        } else if (action === 'edit') {
+            // 双击编辑由 dblclick 事件处理，这里防止单击干扰
         }
     });
+
+    // 待办项双击编辑（事件委托）
+    els.viewTodo?.addEventListener('dblclick', (e) => {
+        const textEl = e.target.closest('.todo-text');
+        if (!textEl) return;
+        const item = textEl.closest('.todo-item');
+        if (!item) return;
+        const id = parseInt(item.dataset.id);
+        editTodo(id);
+    });
+
+    // 待办项 tooltip 委托
+    els.todoList?.addEventListener('mouseenter', (e) => {
+        const item = e.target.closest('.todo-item');
+        if (!item || item.classList.contains('editing')) return;
+        const textEl = item.querySelector('.todo-text');
+        if (!textEl) return;
+        const text = textEl.textContent || '';
+        if (!text) return;
+        clearTimeout(todoTooltipTimer);
+        todoTooltipTimer = setTimeout(() => {
+            if (item.classList.contains('editing')) return;
+            showTodoTooltip(item, text, e.clientX, e.clientY);
+        }, 600);
+    }, true);
+
+    els.todoList?.addEventListener('mouseleave', () => {
+        clearTimeout(todoTooltipTimer);
+        hideTodoTooltip();
+    }, true);
 
     // 搜索弹窗事件绑定(替代原 topbar 搜索框)
     initSearchModalListeners();
@@ -5757,6 +5842,11 @@ async function handleKeyboardNavigation(e) {
         // 搜索弹窗打开时关闭它（不继续执行导航逻辑）
         if (els.searchModal && els.searchModal.classList.contains('visible')) {
             closeSearchModal();
+            return;
+        }
+        // 待办输入面板打开时关闭它
+        if (els.todoFabPanel && els.todoFabPanel.classList.contains('open')) {
+            closeTodoInputPanel();
             return;
         }
         // 预设弹窗打开时关闭它（不继续执行导航逻辑）
@@ -7383,6 +7473,9 @@ function initSearchModalListeners() {
 /* ===== 初始化 ===== */
 
 async function init() {
+    // 待办 FAB 默认隐藏（初始视图为笔记网格）
+    if (els.todoFab) els.todoFab.classList.add('fab-hidden');
+    if (els.todoFabPanel) els.todoFabPanel.classList.add('fab-hidden');
     initEventListeners();
     initLockScreenEvents();
     initFontSettings();
@@ -8376,6 +8469,7 @@ async function saveSettings() {
 
 /** 当前待办筛选状态：active | done */
 let _todoFilter = 'active';
+window._todoFilter = _todoFilter;
 
 /**
  * 从后端加载所有待办项并渲染
@@ -8391,6 +8485,11 @@ async function loadTodos() {
     }
 }
 
+/**
+ * 渲染待办列表
+ * @param {Array} todos - 待办项数组
+ * @param {string} filter - all | active | done
+ */
 /**
  * 渲染待办列表
  * @param {Array} todos - 待办项数组
@@ -8412,20 +8511,21 @@ function renderTodos(todos, filter) {
     if (filtered.length === 0) {
         listEl.innerHTML = '';
         if (emptyEl) emptyEl.style.display = 'flex';
+        updateTodoStats(todos);
         return;
     }
 
     if (emptyEl) emptyEl.style.display = 'none';
 
-    listEl.innerHTML = filtered.map(todo => `
-        <div class="todo-item todo-enter${todo.done ? ' completed' : ''}" data-id="${todo.id}">
-            <button class="todo-checkbox ${todo.done ? 'checked' : ''}" onclick="toggleTodo(${todo.id})">
+    listEl.innerHTML = filtered.map((todo, idx) => `
+        <div class="todo-item${todo.done ? ' completed' : ''}" data-id="${todo.id}" data-completed="${todo.done}" style="animation-delay:${idx * 40}ms;">
+            <button class="todo-checkbox ${todo.done ? 'checked' : ''}" data-action="toggle">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"/>
                 </svg>
             </button>
-            <span class="todo-text ${todo.done ? 'done' : ''}" ondblclick="editTodo(${todo.id})">${escapeHtml(todo.text)}</span>
-            <button class="todo-delete-btn" onclick="deleteTodo(${todo.id})" title="删除">
+            <span class="todo-text ${todo.done ? 'done' : ''}" data-action="edit">${escapeHtml(todo.text)}</span>
+            <button class="todo-delete-btn" data-action="delete" title="删除">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -8433,34 +8533,17 @@ function renderTodos(todos, filter) {
         </div>
     `).join('');
 
-    // 入场动画结束后移除类，避免后续动画冲突
+    // 入场动画：每个条目交错弹入 —— 动画由 CSS 的 animation-delay 控制
     requestAnimationFrame(() => {
-        listEl.querySelectorAll('.todo-enter').forEach(el => {
+        listEl.querySelectorAll('.todo-item').forEach(el => {
+            el.classList.add('todo-enter');
             el.addEventListener('animationend', () => {
                 el.classList.remove('todo-enter');
             }, { once: true });
         });
     });
 
-    // 绑定悬浮预览 tooltip
-    listEl.querySelectorAll('.todo-item').forEach(item => {
-        if (item.querySelector('.todo-text')) {
-            item.addEventListener('mouseenter', (e) => {
-                if (item.classList.contains('editing')) return;
-                const text = item.querySelector('.todo-text')?.textContent || '';
-                if (!text) return;
-                clearTimeout(todoTooltipTimer);
-                todoTooltipTimer = setTimeout(() => {
-                    if (item.classList.contains('editing')) return;
-                    showTodoTooltip(item, text, e.clientX, e.clientY);
-                }, 1000);
-            });
-            item.addEventListener('mouseleave', () => {
-                clearTimeout(todoTooltipTimer);
-                hideTodoTooltip();
-            });
-        }
-    });
+    updateTodoStats(todos);
 }
 
 /**
@@ -8482,8 +8565,38 @@ function updateTodoStats(todos) {
     const done = total - pending;
     const activeBtn = document.querySelector('.todo-filter-btn[data-filter="active"]');
     const doneBtn = document.querySelector('.todo-filter-btn[data-filter="done"]');
-    if (activeBtn) activeBtn.textContent = `待办 ${pending}`;
-    if (doneBtn) doneBtn.textContent = `已完成 ${done}`;
+    const allBtn = document.querySelector('.todo-filter-btn[data-filter="all"]');
+    if (activeBtn) activeBtn.textContent = pending > 0 ? `待办 ${pending}` : '待办';
+    if (doneBtn) doneBtn.textContent = done > 0 ? `已完成 ${done}` : '已完成';
+    if (allBtn) allBtn.textContent = total > 0 ? `全部 ${total}` : '全部';
+}
+
+/**
+ * 更新进度条和统计标签
+ * @param {Array} todos
+ */
+function updateTodoProgress(todos) {
+    const total = todos.length;
+    const done = todos.filter(t => t.done).length;
+    const pending = total - done;
+    const pct = total > 0 ? (done / total) * 100 : 0;
+
+    if (els.todoStatsLabel) els.todoStatsLabel.textContent = '待办 ';
+    if (els.todoStatsCount) els.todoStatsCount.textContent = pending;
+    if (els.todoStatsTotal) els.todoStatsTotal.textContent = total;
+
+    // 进度条动画：平滑过渡
+    if (els.todoProgressFill) {
+        els.todoProgressFill.style.width = pct + '%';
+        // 完成度颜色语义
+        els.todoProgressFill.style.background = pct >= 100
+            ? 'var(--success)'
+            : pct > 50
+                ? 'var(--accent)'
+                : 'var(--text-muted)';
+    }
+
+    updateTodoStats(todos);
 }
 
 /**
@@ -8493,7 +8606,10 @@ async function addTodo() {
     const input = els.todoInput;
     if (!input) return;
     const text = input.value.trim();
-    if (!text) return;
+    if (!text) {
+        nm.show('请输入待办内容', 'warning');
+        return;
+    }
 
     try {
         if (!window.go?.main?.App?.CreateTodo) return;
@@ -8505,6 +8621,7 @@ async function addTodo() {
         // 如果不在"待办"分类，自动切换到待办并刷新
         if (_todoFilter !== 'active') {
             _todoFilter = 'active';
+            window._todoFilter = _todoFilter;
             document.querySelectorAll('.todo-filter-btn').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.querySelector('.todo-filter-btn[data-filter="active"]');
             if (activeBtn) activeBtn.classList.add('active');
@@ -8574,18 +8691,35 @@ async function addTodo() {
 }
 
 /**
- * 构建待办条目的 HTML 字符串
+ * 打开待办输入面板
+ */
+function openTodoInputPanel() {
+    els.todoFabPanel?.classList.add('open');
+    els.todoFab?.classList.add('open');
+    setTimeout(() => els.todoInput?.focus(), 100);
+}
+
+/**
+ * 关闭待办输入面板
+ */
+function closeTodoInputPanel() {
+    els.todoFabPanel?.classList.remove('open');
+    els.todoFab?.classList.remove('open');
+}
+
+/**
+ * 构建待办条目的 HTML 字符串（用于新增条目）
  */
 function buildTodoItemHTML(todo) {
     return `
-        <div class="todo-item" data-id="${todo.id}">
-            <button class="todo-checkbox" onclick="toggleTodo(${todo.id})">
+        <div class="todo-item" data-id="${todo.id}" data-completed="${todo.done}">
+            <button class="todo-checkbox" data-action="toggle">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"/>
                 </svg>
             </button>
-            <span class="todo-text" ondblclick="editTodo(${todo.id})">${escapeHtml(todo.text)}</span>
-            <button class="todo-delete-btn" onclick="deleteTodo(${todo.id})" title="删除">
+            <span class="todo-text" data-action="edit">${escapeHtml(todo.text)}</span>
+            <button class="todo-delete-btn" data-action="delete" title="删除">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -8608,24 +8742,7 @@ function insertNewTodoItem(newTodo) {
     itemEl.addEventListener('animationend', () => {
         itemEl.classList.remove('todo-item-enter');
     }, { once: true });
-
-    // 绑定悬浮预览 tooltip
-    if (itemEl.querySelector('.todo-text')) {
-        itemEl.addEventListener('mouseenter', (e) => {
-            if (itemEl.classList.contains('editing')) return;
-            const text = itemEl.querySelector('.todo-text')?.textContent || '';
-            if (!text) return;
-            clearTimeout(todoTooltipTimer);
-            todoTooltipTimer = setTimeout(() => {
-                if (itemEl.classList.contains('editing')) return;
-                showTodoTooltip(itemEl, text, e.clientX, e.clientY);
-            }, 1000);
-        });
-        itemEl.addEventListener('mouseleave', () => {
-            clearTimeout(todoTooltipTimer);
-            hideTodoTooltip();
-        });
-    }
+    // tooltip 由事件委托处理
 }
 
 /**
@@ -8651,11 +8768,7 @@ async function toggleTodo(id) {
 
     if (_todoFilter === 'all') {
         // "全部"筛选下：原地切换样式，不播 exit anim，移动位置
-        item.classList.toggle('completed', newDone);
-        const checkbox = item.querySelector('.todo-checkbox');
-        checkbox?.classList.toggle('checked', newDone);
-        const text = item.querySelector('.todo-text');
-        text?.classList.toggle('done', newDone);
+        setTodoItemDone(item, newDone);
 
         // 标记完成 → 移到底部；取消完成 → 移到顶部
         if (newDone) {
@@ -8734,6 +8847,18 @@ async function refreshTodoStats() {
     } catch (err) {
         console.error('刷新统计失败:', err);
     }
+}
+
+/**
+ * 设置待办项完成状态并切换 DOM 样式
+ */
+function setTodoItemDone(item, done) {
+    item.classList.toggle('completed', done);
+    item.dataset.completed = done ? 'true' : 'false';
+    const checkbox = item.querySelector('.todo-checkbox');
+    checkbox?.classList.toggle('checked', done);
+    const text = item.querySelector('.todo-text');
+    text?.classList.toggle('done', done);
 }
 
 /**
@@ -8903,11 +9028,12 @@ function hideTodoTooltip() {
 window.addEventListener('scroll', hideTodoTooltip, true);
 window.addEventListener('resize', hideTodoTooltip);
 
-// 将待办函数暴露到 window（供 HTML onclick 调用）
+// 将待办函数暴露到 window（供 data-management.js 等模块调用）
 window.addTodo = addTodo;
 window.toggleTodo = toggleTodo;
 window.deleteTodo = deleteTodo;
 window.editTodo = editTodo;
+window.loadTodos = loadTodos;
 
 // 将内部引用暴露到 window，供 data-management.js / trash-page.js 模块使用
 window.els = els;

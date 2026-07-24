@@ -1650,10 +1650,13 @@ console.log(greet("Jot"));
                 <h2 class="view-title">待办清单</h2>
             </div>
             <div class="todo-container">
-                <!-- 输入区 + 筛选 -->
-                <div class="todo-input-wrap">
-                    <textarea id="todoInput" class="todo-input" placeholder="添加新的待办事项..." rows="1" autocomplete="off"></textarea>
-                    <div class="todo-filter-bar">
+                <!-- 筛选 + 操作栏 -->
+                <div class="todo-filter-bar">
+                    <div class="todo-filter-group">
+                        <button class="todo-filter-btn" data-filter="all">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            全部
+                        </button>
                         <button class="todo-filter-btn active" data-filter="active">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                             待办
@@ -1663,22 +1666,39 @@ console.log(greet("Jot"));
                             已完成
                         </button>
                     </div>
+                    <button class="todo-clear-btn" id="todoClearCompletedBtn" title="清空已完成">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        清空
+                    </button>
                 </div>
                 <!-- 列表区 -->
-                <div id="todoList" class="todo-list">
-                    <!-- 动态渲染 -->
+                <div class="todo-list-wrap">
+                    <div id="todoList" class="todo-list">
+                        <!-- 动态渲染 -->
+                    </div>
                 </div>
                 <!-- 空状态 -->
                 <div id="todoEmpty" class="todo-empty" style="display:none;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.25;margin-bottom:12px;">
-                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                    </svg>
-                    <p>还没有待办事项</p>
-                    <span>在上方输入框中添加吧</span>
+                    <div class="todo-empty-icon">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                    </div>
+                    <p class="todo-empty-title">清清爽爽</p>
+                    <span class="todo-empty-hint">点击右下角 + 添加新待办</span>
                 </div>
             </div>
         </div>
     </main>
+    <!-- 浮动添加按钮 + 内联输入面板（fixed 定位，放在 main 外部避免 view 入场动画影响） -->
+    <button class="todo-fab" id="todoFab" title="添加待办">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+    </button>
+    <div class="todo-fab-panel" id="todoFabPanel">
+        <textarea id="todoInput" class="todo-input" placeholder="添加待办事项，Enter 提交&#10;Ctrl+Enter 换行" rows="1" autocomplete="off"></textarea>
+    </div>
 
     <!-- 浮动操作按钮 -->
     <div id="fabGroup" class="fab-group">

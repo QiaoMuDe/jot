@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Todo 待办清单样式 — 温暖手写感
+   Todo 待办清单样式 v2 — 精密工装感
    ========================================================================== */
 
 /* 标题居中 */
@@ -13,38 +13,100 @@
     justify-self: start;
 }
 
+/* ==================== 主容器 ==================== */
 .todo-container {
-    max-width: 560px;
+    max-width: 720px;
     margin: 0 auto;
     width: 100%;
-    padding: 0 16px;
+    padding: 0 var(--space-5);
     flex: 1;
-}
-
-/* 输入区 + 筛选行 — 一体化卡片 */
-.todo-input-wrap {
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    margin-bottom: 20px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    overflow: hidden;
 }
 
-.todo-input-wrap:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-lighter);
+/* ==================== 浮动添加按钮 (FAB) ==================== */
+.todo-fab {
+    position: fixed;
+    bottom: 40px;
+    right: calc(50vw - 360px - 22px);
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-md);
+    transition: opacity 0.25s ease, transform 0.2s ease,
+                box-shadow 0.2s ease, background 0.2s ease,
+                visibility 0.25s ease;
+    z-index: 10;
+    pointer-events: auto;
 }
 
-.todo-input {
-    padding: 12px 16px;
+.todo-fab.fab-hidden {
+    opacity: 0;
+    transform: scale(0.8);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.todo-fab:hover {
+    transform: scale(1.08) translateY(-1px);
+    box-shadow: var(--shadow-elevated);
+}
+
+.todo-fab:active {
+    transform: scale(0.95);
+}
+
+.todo-fab.open svg {
+    transform: rotate(45deg);
+}
+
+/* 内联输入面板 */
+.todo-fab-panel {
+    position: fixed;
+    bottom: 92px;
+    right: calc(50vw - 360px - 22px);
+    width: 300px;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+    padding: var(--space-2);
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.25s var(--anim-easing-out), visibility 0.2s ease;
+    z-index: 9;
+}
+
+.todo-fab-panel.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.todo-fab-panel.fab-hidden {
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.todo-fab-panel .todo-input {
+    min-height: 56px;
+    font-size: 0.9rem;
+    padding: var(--space-1) var(--space-3);
+    margin: 0;
     border: none;
     background: transparent;
     color: var(--text-primary);
-    font-size: 0.9rem;
     font-family: inherit;
     line-height: 1.6;
     outline: none;
@@ -52,51 +114,39 @@
     resize: none;
     overflow: hidden;
     width: 100%;
-    min-height: 44px;
-    max-height: 200px;
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
 }
 
-.todo-input::-webkit-scrollbar {
-    width: 3px;
-}
-
-.todo-input::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 2px;
-}
-
-.todo-input:hover::-webkit-scrollbar-thumb,
-.todo-input:focus::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-}
-
-.todo-input::placeholder {
-    color: var(--text-muted);
-}
-
-/* 筛选栏 — 输入区下方水平条 */
+/* ==================== 筛选 + 操作栏 ==================== */
 .todo-filter-bar {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 16px;
-    border-top: 1px solid var(--border);
+    justify-content: space-between;
+    padding: var(--space-2) 0;
+    margin-bottom: var(--space-2);
     width: 100%;
     box-sizing: border-box;
+}
+
+.todo-filter-group {
+    display: flex;
+    gap: 2px;
+    background: var(--input-bg);
+    padding: 2px;
+    border-radius: var(--radius-md);
 }
 
 .todo-filter-btn {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 6px 12px;
+    padding: 5px 11px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
@@ -105,116 +155,158 @@
 }
 
 .todo-filter-btn svg {
-    opacity: 0.6;
+    opacity: 0.55;
     transition: opacity 0.15s ease;
 }
 
 .todo-filter-btn:hover {
-    background: var(--hover-bg);
     color: var(--text-primary);
 }
 
 .todo-filter-btn:hover svg {
-    opacity: 0.8;
+    opacity: 0.75;
 }
 
 .todo-filter-btn.active {
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-elevated);
 }
 
 .todo-filter-btn.active svg {
     opacity: 1;
+    color: var(--accent);
 }
 
-/* 列表区 */
+/* 清空按钮 */
+.todo-clear-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.todo-clear-btn:hover {
+    color: var(--danger);
+    background: var(--danger-bg);
+}
+
+.todo-clear-btn svg {
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.todo-clear-btn:hover svg {
+    opacity: 1;
+}
+
+/* ==================== 列表容器 ==================== */
+.todo-list-wrap {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    padding-right: var(--space-1);
+}
+
+.todo-list-wrap:hover {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.todo-list-wrap::-webkit-scrollbar {
+    width: 5px;
+}
+
+.todo-list-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* 闲置时滚动条透明隐藏 */
+.todo-list-wrap::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+}
+
+/* 悬停列表区域时显示滚动条 */
+.todo-list-wrap:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+}
+
+.todo-list-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 列表 */
 .todo-list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-2);
     min-height: 60px;
+    padding-bottom: var(--space-3);
 }
 
-/* 待办项 — 温暖卡片 */
+/* ==================== 待办项 ==================== */
 .todo-item {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-lg);
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    box-shadow: var(--shadow-sm);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+    border-left: 4px solid var(--accent);
+    box-shadow: var(--shadow-elevated);
     transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    will-change: transform;
 }
 
 .todo-item.todo-enter {
-    animation: todoEnter 0.2s ease-out forwards;
+    animation: todoStaggerEnter 0.35s var(--anim-easing-spring) both;
 }
 
 .todo-item:hover {
-    border-color: transparent;
     border-left-color: var(--accent);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-dropdown);
     transform: translateY(-1px);
-    background: var(--card-bg);
 }
 
-.todo-item.todo-exit {
-    animation: todoExit 0.2s ease-in both;
-}
-
-/* 已完成条目 — 柔和归档 */
+/* 已完成条目 */
 .todo-item.completed {
     background: var(--hover-bg);
     border-color: transparent;
     border-left-color: var(--accent);
-    box-shadow: none;
-    opacity: 0.8;
 }
 
 .todo-item.completed:hover {
-    box-shadow: var(--shadow-sm);
-    border-color: transparent;
-    border-left-color: var(--accent);
+    box-shadow: var(--shadow-elevated);
     transform: none;
 }
 
-/* 编辑态：输入框填满条目高度 */
+/* 编辑态 */
 .todo-item.editing {
     align-items: stretch;
     gap: 0;
+    padding: var(--space-2);
 }
 
-.todo-item.editing .todo-checkbox {
-    opacity: 0;
-    transform: scale(0.5);
-    width: 0;
-    min-width: 0;
-    padding: 0;
-    margin: 0;
-    border: none;
-    overflow: hidden;
-    pointer-events: none;
-}
-
+.todo-item.editing .todo-checkbox,
 .todo-item.editing .todo-delete-btn {
-    opacity: 0;
-    transform: scale(0.5);
-    width: 0;
-    min-width: 0;
-    padding: 0;
-    margin: 0;
-    border: none;
-    overflow: hidden;
-    pointer-events: none;
+    display: none;
 }
 
-/* 自定义复选框 */
+/* ==================== 复选框 ==================== */
 .todo-checkbox {
     width: 22px;
     height: 22px;
@@ -233,6 +325,7 @@
 .todo-checkbox:hover {
     border-color: var(--accent);
     transform: scale(1.12);
+    box-shadow: 0 0 0 3px var(--accent-lighter);
 }
 
 .todo-checkbox.checked {
@@ -252,25 +345,24 @@
     transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* 待办文本 — 支持多行展示，最多显示 3 行 */
+/* ==================== 待办文本 ==================== */
 .todo-text {
     flex: 1;
     font-size: 0.9rem;
     color: var(--text-primary);
-    line-height: 1.5;
+    line-height: 1.55;
     cursor: pointer;
-    padding: 4px 6px;
+    padding: 3px 6px;
     border-radius: var(--radius-sm);
-    transition: color 0.2s ease;
     border: 1px solid transparent;
     outline: none;
-    /* 多行展示：保留换行 + 最多 3 行截断 */
     white-space: pre-wrap;
     word-break: break-word;
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    transition: color 0.2s ease;
 }
 
 .todo-text.done {
@@ -285,10 +377,10 @@
     background: var(--card-bg);
 }
 
-/* 删除按钮 */
+/* ==================== 删除按钮 ==================== */
 .todo-delete-btn {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -305,7 +397,7 @@
 }
 
 .todo-item:hover .todo-delete-btn {
-    opacity: 0.5;
+    opacity: 0.45;
     transform: translateX(0) scale(1);
 }
 
@@ -313,130 +405,115 @@
     opacity: 1 !important;
     background: var(--danger-bg);
     color: var(--danger);
-    transform: scale(1.15) !important;
+    transform: scale(1.12) !important;
 }
 
-/* 空状态 */
+/* ==================== 空状态 ==================== */
 .todo-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 48px 24px;
+    padding: var(--space-12) var(--space-6);
     text-align: center;
+    flex: 1;
 }
 
-.todo-empty p {
-    font-size: 0.9rem;
+.todo-empty-icon {
+    opacity: 0.18;
     color: var(--text-secondary);
-    margin: 0 0 4px;
+    margin-bottom: var(--space-4);
 }
 
-.todo-empty span {
+.todo-empty-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 0 var(--space-2);
+}
+
+.todo-empty-hint {
     font-size: 0.8rem;
     color: var(--text-muted);
 }
 
-/* 动画 */
-@keyframes todoEnter {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
+/* ==================== 动画库 ==================== */
 
-@keyframes todoExit {
-    from {
+/* 条目交错入场：弹性伸缩 */
+@keyframes todoStaggerEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(18px) scale(0.97);
+        border-radius: var(--radius-lg);
+    }
+    60% {
+        opacity: 1;
+        transform: translateY(-2px) scale(1.005);
+        border-radius: var(--radius-lg);
+    }
+    100% {
         opacity: 1;
         transform: translateY(0) scale(1);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(-8px) scale(0.95);
+        border-radius: var(--radius-lg);
     }
 }
 
-/* 标记完成：向左淡出 */
+/* 完成：向左淡出缩放 */
 @keyframes todoComplete {
-    0%   { opacity: 1; border-radius: var(--radius-lg); }
-    100% { opacity: 0; transform: scale(0.92) translateX(-14px); border-radius: var(--radius-lg); }
+    0%   { opacity: 1; transform: scale(1) translateX(0); border-radius: var(--radius-lg); }
+    100% { opacity: 0; transform: scale(0.92) translateX(-16px); border-radius: var(--radius-lg); }
 }
 
-/* 取消完成：向右淡出 */
+/* 取消完成：向右淡出缩放 */
 @keyframes todoActivate {
     0%   { opacity: 1; transform: scale(1) translateX(0); border-radius: var(--radius-lg); }
-    100% { opacity: 0; transform: scale(0.92) translateX(14px); border-radius: var(--radius-lg); }
+    100% { opacity: 0; transform: scale(0.92) translateX(16px); border-radius: var(--radius-lg); }
 }
 
-/* 删除：向右淡出 */
+/* 删除：向右滑出 */
 @keyframes todoDelete {
-    0%   { opacity: 1; border-radius: var(--radius-lg); }
-    100% { opacity: 0; transform: scale(0.88) translateX(20px); border-radius: var(--radius-lg); }
+    0%   { opacity: 1; transform: scale(1) translateX(0); border-radius: var(--radius-lg); }
+    100% { opacity: 0; transform: scale(0.88) translateX(24px); border-radius: var(--radius-lg); }
 }
 
-.todo-item.todo-completing { animation: todoComplete 0.3s ease-out both; border-radius: var(--radius-lg); }
-.todo-item.todo-activating { animation: todoActivate 0.25s ease-out both; border-radius: var(--radius-lg); }
-.todo-item.todo-deleting   { animation: todoDelete 0.3s ease-out both; border-radius: var(--radius-lg); }
+.todo-item.todo-completing { animation: todoComplete 0.3s ease-out both; }
+.todo-item.todo-activating { animation: todoActivate 0.25s ease-out both; }
+.todo-item.todo-deleting   { animation: todoDelete 0.3s ease-out both; }
 
-/* 新增条目入场：优雅滑入 */
-@keyframes todoNew {
-    0%   { opacity: 0; transform: translateY(-18px) scale(0.97); border-radius: var(--radius-lg); }
-    100% { opacity: 1; transform: translateY(0) scale(1); border-radius: var(--radius-lg); }
-}
-.todo-item.todo-new { animation: todoNew 0.35s ease-out both; border-radius: var(--radius-lg); }
-
-/* 新增待办 — 已有条目整体下移（直接位移） */
-.todo-item.todo-shift {
-    transform: translateY(var(--shift-y, 0px));
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 新增待办 — 新条目入场：从上方优雅滑入 */
+/* 新增条目入场：从上方优雅滑入 */
 @keyframes todoItemEnter {
-    0%   { opacity: 0; transform: translateY(-30px) scale(0.96); border-radius: var(--radius-lg); }
+    0%   { opacity: 0; transform: translateY(-24px) scale(0.96); border-radius: var(--radius-lg); }
+    60%  { opacity: 1; transform: translateY(2px) scale(1.005); border-radius: var(--radius-lg); }
     100% { opacity: 1; transform: translateY(0) scale(1); border-radius: var(--radius-lg); }
 }
+
 .todo-item.todo-item-enter {
-    animation: todoItemEnter 0.35s ease-out both;
-    border-radius: var(--radius-lg);
+    animation: todoItemEnter 0.35s var(--anim-easing-spring) both;
 }
 
 /* 保存成功：涟漪确认动画 */
 @keyframes todoSaveSuccess {
-    0% {
-        transform: scale(1);
-    }
-    30% {
-        transform: scale(1.008);
-    }
-    60% {
-        transform: scale(1.006);
-    }
-    100% {
-        transform: scale(1);
-    }
+    0%   { transform: scale(1); box-shadow: var(--shadow-elevated); }
+    30%  { transform: scale(1.008); box-shadow: 0 0 0 3px var(--accent-lighter); }
+    60%  { transform: scale(1.006); }
+    100% { transform: scale(1); box-shadow: var(--shadow-elevated); }
 }
 
 .todo-item.todo-saved {
-    animation: todoSaveSuccess 2s ease-out both;
-    border-radius: var(--radius-lg);
+    animation: todoSaveSuccess 1.2s ease-out both;
 }
 
 /* ==================== 悬浮预览 Tooltip ==================== */
 .todo-tooltip {
     position: fixed;
     z-index: 1200;
-    max-width: 360px;
-    padding: 12px 16px;
+    max-width: 380px;
+    padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-lg);
     background: var(--card-bg);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg), var(--shadow-xl);
-    font-size: 0.875rem;
+    box-shadow: var(--shadow-modal), var(--shadow-dropdown);
+    font-size: 0.85rem;
     line-height: 1.6;
     color: var(--text-primary);
     word-break: break-word;
@@ -444,11 +521,23 @@
     pointer-events: none;
     opacity: 0;
     transform: scale(0.95);
-    transition: opacity 0.12s ease-in, transform 0.15s ease-out;
+    transition: opacity 0.1s ease-in, transform 0.12s ease-out;
     border-left: 3px solid var(--accent);
 }
 
 .todo-tooltip.visible {
     opacity: 1;
     transform: scale(1);
+}
+
+/* ==================== 下移动画（新增条目时已有条目位移） ==================== */
+.todo-item.todo-shift {
+    transform: translateY(var(--shift-y, 0px));
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 待办视图下，#mainContent 无需滚动，由 .todo-list-wrap 内部滚动 */
+#mainContent:has(#viewTodo.active) {
+    scrollbar-gutter: auto;
+    overflow-y: hidden;
 }

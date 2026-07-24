@@ -570,18 +570,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：基础 System Prompt 重构为三层结构 + 技能激活时始终注入规范边界层
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对 AI 基础 system prompt 进行两轮重构：① 将单句硬编码 prompt 拆分为三层结构（身份层 + 规范层 + 边界层），提取为包级常量消除两处重复；② 修复技能激活时完全跳过基础 prompt 的问题，改为始终注入规范层+边界层，仅身份层在技能激活时跳过（由技能 prompt 的角色定义替代）。 |
-| **Step 1: 常量拆分** | [app.go](app.go) 中定义 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范+边界层）、`baseSystemPrompt = baseIdentity + baseNormsBoundaries`（完整三层），替换 `CallAIStream` 和 `CallAIStreamRegenerate` 中两处重复硬编码。 |
-| **Step 2: 注入逻辑修复** | 原 `if len(skillIds) == 0` 跳过全部基础 prompt；改为 `if` 分支注入完整三层，`else` 分支注入 `baseNormsBoundaries`。规范层内容：结构化优先/适度追问/深度适配/保持简洁；边界层内容：不编造/不危险操作/保持客观。 |
-| **涉及文件** | [app.go](app.go)（常量定义 + 两处注入逻辑） |
-
----
-
-## 记忆点 2：联网搜索结果按引用截断数截断
+## 记忆点 1：联网搜索结果按引用截断数截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 消息删除从截断改为单条删除
+## 记忆点 2：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记日历视图（笔记日历）
+## 记忆点 3：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 4：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 5：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 6：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 7：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 8：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +663,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 9：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -686,6 +676,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **ESC 关闭搜索弹窗** | [main.js](frontend/src/main.js) 全局 ESC 处理器新增搜索弹窗可见性检查：可见则关闭弹窗并 return。移除了 `handleSearchModalKeydown` 中的 Escape 处理（避免 capture/bubble 双处理器冲突）。 |
 | **笔记列表重设计** | [calendar.css](frontend/src/css/components/calendar.css)：条目去掉方框改为 `border-bottom` 底部分割线、hover 从 `translateX(4px)` 改为 `background: var(--hover-bg)`。笔记本标签新增彩色 pill 样式、时间文字 `opacity: 0.6` 弱化。笔记列表日期标题 `font-size: 1rem→1.25rem`。 |
 | **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 10：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对待办清单模块进行全面的 UI/UX 重构：① 固定输入栏改为右下角浮动 FAB 按钮 + 朝左侧弹出输入面板（`.todo-fab` + `.todo-fab-panel`），`fab-hidden`/`open` class 控制显隐动画；② FAB 按钮和笔记首页 fab-group 添加过渡动画（opacity + scale + visibility），`0.25s ease` 缓出 + `cubic-bezier(0.34,1.56,0.64,1)` 弹性入场；③ 页面滚动改为待办列表内部滚动（`.todo-list-wrap`），`.todo-container` 加 `min-height: 0` 修复 flex 收缩，`#mainContent:has(#viewTodo.active)` 禁用外层滚动；④ 列表滚动条闲置时透明隐藏，hover 时显示 `var(--scrollbar-thumb)`，`scrollbar-gutter: stable` 消除宽度闪变；⑤ 清空按钮后分类数字不更新——暴露 `loadTodos` 到 `window`，清空后正确刷新；⑥ 输入框 placeholder 用 `&#10;` 换行显示"添加待办事项，Enter 提交 / Ctrl+Enter 换行"，`min-height: 36px→56px` 容纳两行；⑦ FAB 视图联动——`switchView` 中根据当前视图控制显隐，初始化时默认隐藏；⑧ 输入框支持 Ctrl+Enter 手动插入换行 + `autoResizeTodoInput` 自动高度。 |
+| **FAB 按钮定位** | [todo.css](frontend/src/css/components/todo.css)：`.todo-fab` 固定定位 `bottom:40px; right:calc(50vw - 360px - 22px)` 与列表右侧对齐；`44×44px` 圆角 50%，`%shadow-md` 悬浮感，hover 缩放 `1.08` + `translateY(-1px)` + `box-shadow` 增强；`.open` 态 SVG 旋转 45° 形成关闭叉号。输入面板 `.todo-fab-panel` 从 FAB 上方弹出（`bottom:92px`），`300px` 宽，`translateY(16px)→0` 过渡。 |
+| **内部滚动 + 滚动条隐藏** | [todo.css](frontend/src/css/components/todo.css)：`.todo-list-wrap` 使用 `overflow-y: auto; min-height: 0; scrollbar-gutter: stable`；默认 `scrollbar-color: transparent transparent`，`.todo-list-wrap:hover` 时 `scrollbar-color: var(--scrollbar-thumb) transparent`；WebKit 滚动条默认 `background: transparent`，hover 时 `var(--scrollbar-thumb)`。 |
+| **清空数字修复** | [main.js](frontend/src/main.js)：`clearCompletedTodos()` 调用后执行 `window.loadTodos()` 确保分类数字更新。 |
+| **输入框提示换行** | [index.html](frontend/index.html)：`placeholder="添加待办事项，Enter 提交&#10;Ctrl+Enter 换行"`；[todo.css](frontend/src/css/components/todo.css)：输入框 `min-height: 56px` 容纳两行提示。 |
+| **FAB 视图联动** | [main.js](frontend/src/main.js)：`switchView()` 中 `els.todoFab.classList.toggle('fab-hidden', view !== 'todo')`；`fab-group` 同理；初始化时 `.addClass('fab-hidden')` 默认隐藏。 |
+| **涉及文件** | [frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css) |
 
 ## 十二、AGENTS.md 维护规范
 
