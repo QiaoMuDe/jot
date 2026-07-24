@@ -886,13 +886,16 @@ func (a *AIService) ReplaceAISessionMessages(sessionID uint, messages []Message)
 	return nil
 }
 
-// ClearAISessionMessages 清空指定会话的所有消息（不删除会话本身）
+// ClearAISessionMessages 清空指定会话的所有消息（不删除会话本身），并重置 context_tokens 缓存
 func (a *AIService) ClearAISessionMessages(sessionID uint) error {
 	err := a.db.Where("session_id = ?", sessionID).Delete(&models.AIMessage{}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.ClearAISessionMessages 失败", fastlog.Error(err))
+		return err
 	}
-	return err
+	// 重置会话的 context_tokens 缓存为 0
+	_ = a.UpdateSessionContextTokens(sessionID, 0)
+	return nil
 }
 
 // UpdateAIMessageContent 更新指定 AI 消息的 content 字段
@@ -918,13 +921,33 @@ func (a *AIService) UpdateLastUserMessageTokens(sessionID uint, tokens int) erro
 	return err
 }
 
-// DeleteAIMessage 按 ID 删除单条 AI 消息
+// DeleteAIMessage 按 ID 删除单条 AI 消息，并更新所属会话的 context_tokens 缓存
 func (a *AIService) DeleteAIMessage(id uint) error {
-	err := a.db.Delete(&models.AIMessage{}, id).Error
-	if err != nil {
-		a.logger.Errorw("AIService.DeleteAIMessage 失败", fastlog.Error(err))
+	// 先查消息的 session_id
+	var msg models.AIMessage
+	if err := a.db.Select("session_id").First(&msg, id).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAIMessage 查消息失败", fastlog.Error(err))
+		return err
 	}
-	return err
+	sessionID := msg.SessionID
+
+	// 删除消息
+	if err := a.db.Delete(&models.AIMessage{}, id).Error; err != nil {
+		a.logger.Errorw("AIService.DeleteAIMessage 删除失败", fastlog.Error(err))
+		return err
+	}
+
+	// 重新计算并更新会话的 context_tokens 缓存
+	if sessionID > 0 {
+		accumulated, err := a.SumSessionTokens(sessionID)
+		if err != nil {
+			a.logger.Errorw("AIService.DeleteAIMessage SumSessionTokens 失败", fastlog.Error(err))
+		} else {
+			_ = a.UpdateSessionContextTokens(sessionID, accumulated)
+		}
+	}
+
+	return nil
 }
 
 // DeleteAIMessagesAfter 删除指定会话中在指定消息之后的所有消息（按 created_at 比较）

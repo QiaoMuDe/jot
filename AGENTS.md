@@ -569,21 +569,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-
-
-## 记忆点 1：联网搜索结果按引用截断数截断
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对三个联网搜索来源（Tavily/知乎搜索/知乎全网搜索）的每条搜索结果记录，按 `ai_ref_max_chars`（引用截断字数，默认 10000）配置截断其 `Content`，避免过长内容消耗过多 token。 |
-| **SearchWeb 截断** | [search_service.go](internal/services/search_service.go) 签名新增 `maxChars int` 参数；遍历结果时对 `r.Content` 用 `[]rune` 处理中文，超过 `maxChars` 时截取前 N 字符并追加 `...(内容已截断)`。 |
-| **知乎搜索截断** | [zhihu_search_service.go](internal/services/zhihu_search_service.go) 中 `SearchZhihuContent` 和 `SearchGlobalContent` 签名各新增 `maxChars int` 参数，截断逻辑同 `SearchWeb`。 |
-| **调用方传参** | [app.go](app.go) 中两处搜索调用（首次对话 + 再生）各在 goroutine 前读取 `a.GetAIRefMaxChars()` 传入三个搜索函数；`TestTavilyConnection`/`TestZhihuConnection` 传 `0` 表示不截断。 |
-| **涉及文件** | [internal/services/search_service.go](internal/services/search_service.go)（签名变更 + 截断逻辑）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（签名变更 + 截断逻辑）、[app.go](app.go)（4 处调用传参） |
-
----
-
-## 记忆点 2：AI 消息删除从截断改为单条删除
+## 记忆点 1：AI 消息删除从截断改为单条删除
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记日历视图（笔记日历）
+## 记忆点 2：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 3：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 4：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 5：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 6：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 7：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 8：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 9：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,6 +676,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **输入框提示换行** | [index.html](frontend/index.html)：`placeholder="添加待办事项，Enter 提交&#10;Ctrl+Enter 换行"`；[todo.css](frontend/src/css/components/todo.css)：输入框 `min-height: 56px` 容纳两行提示。 |
 | **FAB 视图联动** | [main.js](frontend/src/main.js)：`switchView()` 中 `els.todoFab.classList.toggle('fab-hidden', view !== 'todo')`；`fab-group` 同理；初始化时 `.addClass('fab-hidden')` 默认隐藏。 |
 | **涉及文件** | [frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css) |
+
+---
+
+## 记忆点 10：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复了 AI 消息操作后会话 token 缓存未同步的多个问题：① 编辑消息后流式出错时 `CallAIStreamRegenerate` 未传递 `userTokens` 给前端，导致 token 显示消失；② 删除单条消息后后端未更新 `context_tokens` 缓存、前端未刷新显示；③ 清空会话后后端未重置 `context_tokens` 为 0。 |
+| **编辑重发 token 修复** | [app.go](app.go) `CallAIStreamRegenerate` 错误处理中将 `userTokens` 声明提前到 emit 作用域，在 `runtime.EventsEmit("ai:stream-error", ...)` 中追加 `userTokens` 参数，使前端能正确恢复被隐藏的 token 显示。 |
+| **删除消息 token 修复** | [ai_service.go](internal/services/ai_service.go) `DeleteAIMessage` 先查消息 `session_id`，删除后调用 `SumSessionTokens` + `UpdateSessionContextTokens` 更新缓存；[ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg` 末尾添加 `updateContextSize()` 刷新页面显示。 |
+| **清空会话 token 修复** | [ai_service.go](internal/services/ai_service.go) `ClearAISessionMessages` 清空消息后调用 `UpdateSessionContextTokens(sessionID, 0)` 将 `context_tokens` 缓存重置为 0。 |
+| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 错误处理）、[internal/services/ai_service.go](internal/services/ai_service.go)（DeleteAIMessage + ClearAISessionMessages）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（handleDeleteMsg 末尾 updateContextSize） |
 
 ## 十二、AGENTS.md 维护规范
 

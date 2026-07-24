@@ -2402,14 +2402,15 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				)
 
 				// 出错时也更新用户消息 token 和会话 token
+				var userTokens int
 				if lastUserMsgID > 0 {
-					userTokens := estimateUserTokens(messages)
+					userTokens = estimateUserTokens(messages)
 					_ = a.aiService.UpdateAIMessageTokens(lastUserMsgID, userTokens)
 				}
 				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
 				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
 
-				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err)
+				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err, userTokens)
 			},
 		)
 		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡

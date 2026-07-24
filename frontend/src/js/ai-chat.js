@@ -3536,6 +3536,8 @@ async function handleDeleteMsg(msgEl) {
         showWelcome();
     }
 
+    // 刷新会话 token 总数显示
+    updateContextSize();
     scrollToBottom();
 }
 
