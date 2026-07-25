@@ -570,20 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：AI 流式回复期间禁用拖拽上传文件
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在 AI 流式回复期间（`isStreaming === true`），禁用 AI 聊天区的拖拽文件上传功能。涉及两条防御路径：① AI 聊天区自身的拖拽事件（`dragenter`/`dragleave`/`drop`）全部跳过遮罩操作；② Wails 全局 `OnFileDrop` 回调中的 `handleAiChatFileDrop` 函数弹"AI 正在回复中，请稍后再试"通知并返回。同步方式：`window.__aiStreaming` 与 `isStreaming` 在 5 个赋值点同步，供 `main.js` 全局拖拽系统读取，避免全局 `#dropOverlay` 在光标进入 AI 区前闪烁。 |
-| **AI 遮罩守卫** | [ai-chat.js](frontend/src/js/ai-chat.js) `initAiChatFileDrop()` 中 `dragenter`/`dragleave`/`drop` 三事件首部各加 `if (isStreaming) return;`，流式回复期间遮罩不显示、状态不操作。 |
-| **功能层阻断** | [ai-chat.js](frontend/src/js/ai-chat.js) `handleAiChatFileDrop()` 首部加 `if (isStreaming)` 检查，弹 `showNotification('AI 正在回复中，请稍后再试', 'warning')` 后 return。 |
-| **全局遮罩抑制** | [main.js](frontend/src/main.js) `initFileDrop()` 的 `dragenter`/`dragleave`/`drop` 三事件首部各加 `if (window.__aiStreaming) return;`，防止光标从非 AI 区进入时全局 `#dropOverlay` 闪烁。 |
-| **同步机制** | [ai-chat.js](frontend/src/js/ai-chat.js) 声明 `window.__aiStreaming = false` 并在 5 个 `isStreaming` 赋值点同步（`startStreaming` 的 true、`stream-done`/`stream-error`/`catch`/`stopBtn` 的 false）。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（drag 三事件守卫 + handleAiChatFileDrop 守卫 + __aiStreaming 同步）、[frontend/src/main.js](frontend/src/main.js)（全局 drag 三事件守卫） |
-
----
-
-## 记忆点 2：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 1：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 2：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 3：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 4：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 5：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +631,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 6：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 7：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：移除引用截断逻辑 + 设置项重构
+## 记忆点 8：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 9：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,6 +677,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端改动** | [index.html](frontend/index.html)（新增 `nav.settings-nav` 侧边栏 + `.settings-panels` 容器 + 标签管理面板 HTML 重写）、[settings-panel.css](frontend/src/css/components/settings-panel.css)（侧边栏样式/面板切换显隐/面板动画 keyframes/标签卡片 CSS Grid/预设色块选择器样式/删除旧的 `.font-setting-row`/`.settings-item` 类）、[main.js](frontend/src/main.js)（新增 `switchSettingsTab()`/`initSettingsSidebarNav()`/`repositionProviderIndicator()`/`createTagElementHtml()`/`showTagEmptyState()`，改造 `createTag()`/`deleteTag()` 增量 DOM 操作） |
 | **关键修复** | ① 服务商指示器在面板 `display:none` 时 `offsetWidth` 为 0 → 提取 `repositionProviderIndicator()` 在面板显示后立即重算；② 原生 `<input type="color">` 的 picker 首次点击出现在左上角 → 改用 input 叠加在按钮内部（非 `position:fixed` 移动 + `.click()`），`pointer-events: none` 导致选色器不关闭 → 去掉 `pointer-events: none`；③ `animationend` 在 `prefers-reduced-motion` 下不触发 → 添加 300ms 超时 fallback。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 10：更多菜单"展开侧栏"增加跳转首页前置逻辑
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 优化更多菜单"展开侧栏"功能的交互逻辑：当点击该功能时，如果当前处于非笔记首页的其他页面（如设置、回收站、日历、AI助手等），先调用 `switchView('grid')` 跳转到笔记首页，再将已折叠的笔记本侧栏展开。如果已在笔记首页，则保持原有切换行为不变。 |
+| **跳转首页+展开** | [main.js](frontend/src/main.js) `moreMenu` 的 `sidebar-toggle` 点击处理中新增判断 `state.currentView !== 'grid'` 分支：先执行 `switchView('grid')` + `resetPagination()` + `loadNotes()` 切换到笔记首页，再检查侧栏是否折叠，若折叠则移除 `collapsed` class、更新 `localStorage` 和菜单/按钮 UI。已在首页时保持原有 `toggleSidebar()` 行为。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（sidebar-toggle 点击处理逻辑重写） |
+
+---
 
 ## 十二、AGENTS.md 维护规范
 

@@ -5447,7 +5447,22 @@ function initEventListeners() {
                 resetPagination();
                 loadNotes();
             } else if (item.dataset.action === 'sidebar-toggle') {
-                toggleSidebar();
+                if (state.currentView !== 'grid') {
+                    // 先跳转到笔记首页，再展开侧栏
+                    state.searchKeyword = '';
+                    switchView('grid');
+                    resetPagination();
+                    loadNotes();
+                    // 非网格视图已将侧栏折叠，返回首页后将其展开
+                    if (els.notebookSidebar?.classList.contains('collapsed')) {
+                        els.notebookSidebar.classList.remove('collapsed');
+                        localStorage.setItem('jot_sidebar_collapsed', 'false');
+                        updateSidebarMenuItem();
+                        updateNotebookSidebarToggleBtn();
+                    }
+                } else {
+                    toggleSidebar();
+                }
             } else if (item.dataset.action === 'batch-mode') {
                 switchView('grid');
                 toggleBatchMode();
