@@ -576,18 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：日历笔记原地打开编辑器查看模式 + 竞态修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 优化日历笔记的打开行为：① `openNoteFromCalendar()` 不再切换到网格视图，改为在日历视图内直接调用 `openEditor(note.id, true)` 打开编辑器浮层查看模式；② 修复新增路径下的竞态条件——`closeEditor()` 的 200ms 清理定时器与后续 `openEditor()` 冲突，添加 `await new Promise(r => setTimeout(r, 200))` 等待清理完成后再打开新编辑器。 |
-| **原地打开** | [calendar.js](frontend/src/js/calendar.js) 中 `openNoteFromCalendar()` 删除 `switchView('grid')`、笔记本切换（`activeNotebookId`/`updateSidebarMenuItem`）和 `await loadNotes()` 三行，直接调用 `window.openEditor(note.id, true)`。 |
-| **竞态修复** | 原代码中 `closeEditorSafe()` 调用 `closeEditor()` 后立即返回，不等待其内部 200ms `setTimeout` 清理定时器。之前有 `loadNotes()` 等操作垫时间，删除后 `openEditor` 立即执行，200ms 后定时器触发撤销 `openEditor` 的设置。在 `closeEditorSafe()` 后添加 200ms 延迟等待清理完成。仅编辑器已打开时生效（`if` 块内），首次点击无延迟。 |
-| **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)（openNoteFromCalendar 重写 + 200ms 延迟） |
-
----
-
-## 记忆点 2：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 1：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 2：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 3：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 4：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：移除引用截断逻辑 + 设置项重构
+## 记忆点 5：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 6：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 7：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -675,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 8：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,7 +676,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 9：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -698,6 +687,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **搜索过滤** | 输入实时 substring 匹配 `data-label`，隐藏不匹配项，自动高亮第一个可见项。无匹配时显示空结果提示。 |
 | **涉及的样式约定** | 与普通浮层不同，launcher 用 `display: flex/none` + `pointer-events` 控制交互，而非 `visibility`。`.visible` class 触发入场动画，`.closing` class 触发离场。z-index: 2100（高于 search-modal 的 2000）。 |
 | **涉及文件** | [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)、[index.html](frontend/index.html)（DOM）、[main.js](frontend/src/main.js)（导入初始化 + Ctrl+P/ESC 处理 + window 函数暴露） |
+
+---
+
+## 记忆点 10：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 多轮 UI/交互优化：① 日历视图左侧 sidebar 去掉 card 背景块 + 添加 `border-right` 分割线区分左右面板；② 日历笔记列表 hover 选中样式从直角改为 `border-radius: 8px`；③ 保存确认弹窗"不保存"和"确定"按钮改为跟随 `var(--accent)` 主题色（确定实心、不保存线框）；④ 修复不保存弹窗关闭时 3 按钮→2 按钮闪烁问题——移除 `showSaveConfirmDialog` cleanup 中立即隐藏第三按钮的代码。 |
+| **日历 sidebar 美化** | [calendar.css](frontend/src/css/components/calendar.css)：`.calendar-sidebar` 删除 `background: var(--card-bg)` 和 `border-radius: 12px`，改为 `border-right: 1px solid var(--border)` 让左右面板共享统一背景。 |
+| **笔记列表圆角** | [calendar.css](frontend/src/css/components/calendar.css)：`.calendar-note-item` 添加 `border-radius: 8px`、`padding: 14px 8px` 增加呼吸空间。 |
+| **确认弹窗按钮主题色** | [modals.css](frontend/src/css/components/modals.css)：`confirm-ok` 从 `var(--danger)` 改为 `var(--accent)` 实心；`confirm-third` 从 `var(--warning)` 改为 `var(--accent)` 线框（透明背景 + accent 色边框/文字），hover 叠加 10% accent 底色。 |
+| **关闭动画闪烁修复** | [main.js](frontend/src/main.js)：`showSaveConfirmDialog` 的 `cleanup` 中移除 `els.confirmThirdBtn.style.display = 'none'` 一行，让淡出 150ms 期间三个按钮保持完整可见。 |
+| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
 
 ---
 

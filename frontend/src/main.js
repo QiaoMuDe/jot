@@ -1176,8 +1176,6 @@ function showSaveConfirmDialog(msg) {
 
         const cleanup = (result) => {
             els.confirmDialog.classList.remove('visible');
-            // 恢复第三方按钮为隐藏状态,防止 showSaveConfirmDialog 残留的显式空值污染后续弹窗
-            if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
             resolve(result);
         };
 

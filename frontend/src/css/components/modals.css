@@ -587,22 +587,22 @@
   border-color: var(--text-muted);
 }
 .confirm-ok {
-  background: var(--danger, #ef4444);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--danger, #ef4444);
+  border-color: var(--accent);
 }
 .confirm-ok:hover {
-  background: var(--danger-hover, #dc2626);
-  border-color: var(--danger-hover, #dc2626);
+  opacity: 0.9;
+  border-color: var(--accent);
 }
 .confirm-third {
-  background: var(--warning, #f59e0b);
-  color: #fff;
-  border-color: var(--warning, #f59e0b);
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .confirm-third:hover {
-  background: var(--warning-hover, #d97706);
-  border-color: var(--warning-hover, #d97706);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: var(--accent);
 }
 
 /* ==========================================================================
