@@ -30,6 +30,8 @@ import { loadTrashNotes } from './js/trash-page.js';
 // AI 对话页面模块
 import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
+// 启动器网格模块
+import { initLauncher } from './js/launcher.js';
 
 // 暴露到 window，供 data-management.js 等模块在重置/还原后预加载 AI 聊天页面
 window.onAIChatViewActivated = onAIChatViewActivated;
@@ -6001,6 +6003,18 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl+P: 打开/关闭启动器网格
+    if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        const launcher = document.getElementById('launcher');
+        if (launcher && launcher.classList.contains('visible')) {
+            if (typeof window.closeLauncher === 'function') window.closeLauncher();
+        } else {
+            if (typeof window.openLauncher === 'function') window.openLauncher();
+        }
+        return;
+    }
+
     // F11: 切换窗口 OS 全屏（全局可用，与编辑器全屏独立）
     if (e.key === 'F11') {
         e.preventDefault();
@@ -6027,6 +6041,12 @@ async function handleKeyboardNavigation(e) {
         // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）
         const refModal = document.getElementById('aiNoteRefModal');
         if (refModal && refModal.style.display !== 'none') {
+            return;
+        }
+        // 启动器打开时关闭它
+        const launcherEl = document.getElementById('launcher');
+        if (launcherEl && launcherEl.classList.contains('visible')) {
+            if (typeof window.closeLauncher === 'function') window.closeLauncher();
             return;
         }
         // 搜索弹窗打开时关闭它（不继续执行导航逻辑）
@@ -6360,6 +6380,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + F', desc: '编辑器内查找 / 打开搜索弹窗' },
         { key: 'Ctrl + H', desc: '编辑器内查找替换' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
+        { key: 'Ctrl + P', desc: '打开启动器菜单' },
         { key: 'Ctrl + E', desc: '编辑器内切换全屏' },
         { key: 'F11', desc: '切换窗口全屏' },
         { key: 'Ctrl + Q', desc: '退出程序' },
@@ -7718,6 +7739,8 @@ async function init() {
     initAIChat();
     // 初始化日历视图
     initCalendarView();
+    // 初始化启动器网格
+    initLauncher();
     // --- 锁屏密码检查 ---
     await checkScreenLock();
 }
@@ -9323,6 +9346,13 @@ window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;
 window.switchSettingsTab = switchSettingsTab;
 window.closeEditorSafe = closeEditorSafe;
+window.openShortcuts = openShortcuts;
+window.showAbout = showAbout;
+window.toggleSidebar = toggleSidebar;
+window.toggleBatchMode = toggleBatchMode;
+window.resetPagination = resetPagination;
+window.loadTrashNotes = loadTrashNotes;
+window.updateNotebookSidebarToggleBtn = updateNotebookSidebarToggleBtn;
 
 // 应用启动
 document.addEventListener('DOMContentLoaded', init);

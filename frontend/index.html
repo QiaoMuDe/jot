@@ -2046,6 +2046,23 @@ console.log(greet("Jot"));
             </div>
         </div>
         </div>
+
+        <!-- 启动器网格（Ctrl+P 触发） -->
+        <div id="launcher" class="launcher">
+            <div class="launcher-mask"></div>
+            <div class="launcher-panel">
+                <div class="launcher-header">
+                    <svg class="launcher-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input id="launcherInput" class="launcher-input" type="text" placeholder="搜索菜单项..." autocomplete="off" spellcheck="false" />
+                    <span class="launcher-hint">ESC</span>
+                </div>
+                <div class="launcher-grid" id="launcherGrid"></div>
+                <div class="launcher-empty" id="launcherEmpty">
+                    <span>没有匹配的菜单项</span>
+                </div>
+            </div>
+        </div>
+
 <script src="./src/main.js" type="module"></script>
 
 <!-- 锁屏遮罩层 -->

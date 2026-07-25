@@ -142,7 +142,7 @@ jot/                                    # 项目根目录
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
-| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
+| **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / Ctrl+P 启动器菜单 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
 | **打开外链** | 调用 runtime.BrowserOpenURL 在默认浏览器打开链接 | `app.go:OpenProjectURL()` | URL 字符串 | — |
 | **打开数据目录** | 在文件管理器中打开 `~/.jot/data/` | `app.go:OpenDataDir()` | — | explorer 文件管理器 |
@@ -517,6 +517,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **更多技能菜单离场动画**（反向交错消失 + 容器缩小淡出 0.18s，`setTimeout` 360ms 清理 class）
 - [x] **AI 优化按钮取消 + 发送按钮禁用**（优化中可取消，显示停止按钮，恢复原文；发送按钮优化期间禁用）
 - [x] **右键菜单复制通知**（AI/用户消息右键复制成功后通过 `showNotification('已复制')` 反馈）
+- [x] **启动器网格**（Ctrl+P 触发全屏浮层，4 列网格 13 项功能 + 搜索过滤 + 方向键导航 + Enter 执行 + ESC 关闭 + 入场/离场动画 + stagger 卡片动画）
+- [x] **快捷键说明页新增 Ctrl+P**（在 Ctrl+L/E 之间插入启动器快捷键条目）
 
 ---
 
@@ -566,25 +568,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 22. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层）。修复 `CallAIStream`/`CallAIStreamRegenerate` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
+23. **启动器网格（Launcher Grid）全屏浮层实现**：新增 `Ctrl+P` 触发的全屏启动器网格，与"更多"菜单并存互不干扰。核心设计要点：① ES module 中函数不会自动挂到 `window` 上，launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露；② `executeAction` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，不能用 `setTimeout` 硬等——离场动画涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发；③ 方向键首次导航 `_selectedIndex === -1` 时直接跳第一项；④ 动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发入场），离场用 `closing` class 触发反方向过渡 + `transitionend` 监听 + 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
 
 
 
 
 
 
-## 记忆点 1：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 笔记日历视图（记忆点 4）中笔记列表的滚动条定位优化及布局调整：① 滚动条从面板右侧边框移至窗口（#mainContent）右侧边缘；② 日历侧边栏宽度从 280px 增至 340px，使笔记列表更窄、日历更宽敞；③ 日历视图标题增加右侧缩进，避免贴边。 |
-| **滚动条移至窗口右侧** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar.view` 的右侧 padding 设为 0，面板延伸到窗口右边缘。同时添加 `#mainContent:has(#viewCalendar.active) { scrollbar-gutter: auto; overflow-y: hidden; }`，去掉 `#mainContent` 的 scrollbar-gutter 预留空间，使笔记列表滚动条出现在窗口右侧而非面板右侧边框。 |
-| **日历侧边栏加宽** | [calendar.css](frontend/src/css/components/calendar.css) 中 `.calendar-sidebar { width: 340px; }`（原 280px），笔记面板 `flex: 1` 自动缩小。 |
-| **标题右侧缩进** | [calendar.css](frontend/src/css/components/calendar.css) 中 `#viewCalendar .view-header { padding-right: 32px; }`，匹配默认 `.view` 的右侧 padding，避免面板延伸到窗口右侧后标题贴边。 |
-| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)（#viewCalendar.view padding + #mainContent:has() + .view-header padding-right + .calendar-sidebar width） |
-
----
-
-## 记忆点 2：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 1：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 2：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -607,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 3：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 4：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 5：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +641,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：移除引用截断逻辑 + 设置项重构
+## 记忆点 6：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 7：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 8：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,7 +675,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 9：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -692,6 +684,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **后端改动** | [internal/services/ai_service.go](internal/services/ai_service.go)：`CallAI` 签名增加 `ctx context.Context` 参数，移除内部 `context.WithTimeout` 创建，改用传入 context；错误处理使用 `ClassifyError` 返回结构化错误。 |
 | **后端改动 2** | [app.go](app.go)：`CallAI` 绑定方法创建带 60s 超时的 context 并存入 `a.aiStreamCancel`，供 `CancelAIStream` 中途取消。`RefineSearchQuery` 调用处传递 `ctx`。 |
 | **后端改动 3** | [internal/services/query_refiner.go](internal/services/query_refiner.go)：`RefineSearchQuery` 增加 `ctx context.Context` 参数，透传给 `CallAI`。 |
+
+---
+
+## 记忆点 10：启动器网格（Launcher Grid）全屏浮层实现
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增 Ctrl+P 触发的全屏启动器网格（Launcher Grid），与"更多"菜单并存互不干扰。面板包含顶部搜索框 + 4 列 13 项功能网格卡片，支持搜索过滤、方向键导航、Enter 执行、ESC 关闭。入场动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发），离场用 `closing` class 触发反方向过渡 + `transitionend` + 300ms timeout 保底。 |
+| **ES Module 函数暴露** | `main.js` 以 `type="module"` 加载，函数不会自动挂到 `window`。launcher 调用的 `toggleSidebar`/`toggleBatchMode`/`resetPagination`/`openShortcuts`/`showAbout`/`loadTrashNotes`/`updateNotebookSidebarToggleBtn` 需手动 `window.xxx = xxx` 暴露。 |
+| **关闭→执行时序** | `executeAction()` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，代替不可靠的 `setTimeout` 硬等。离场时 mask 和 panel 共 4 条过渡属性 → `transitionend` 冒泡 4 次 → `_closed` 守卫防重复。 |
+| **方向键导航** | 4 列 grid 循环导航。`_selectedIndex === -1`（初始无选中）时方向键自动选中首项。 |
+| **搜索过滤** | 输入实时 substring 匹配 `data-label`，隐藏不匹配项，自动高亮第一个可见项。无匹配时显示空结果提示。 |
+| **涉及的样式约定** | 与普通浮层不同，launcher 用 `display: flex/none` + `pointer-events` 控制交互，而非 `visibility`。`.visible` class 触发入场动画，`.closing` class 触发离场。z-index: 2100（高于 search-modal 的 2000）。 |
+| **涉及文件** | [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)、[index.html](frontend/index.html)（DOM）、[main.js](frontend/src/main.js)（导入初始化 + Ctrl+P/ESC 处理 + window 函数暴露） |
 
 ---
 

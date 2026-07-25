@@ -1,0 +1,313 @@
+/* ==========================================================================
+   启动器网格（Ctrl+P 触发）
+   ========================================================================== */
+
+/* === 容器（全屏遮罩） === */
+.launcher {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2100;              /* 高于 search-modal 的 2000 */
+    display: none;              /* 默认隐藏 */
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 14vh;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.launcher.visible {
+    pointer-events: auto;
+}
+
+/* === 遮罩背景 === */
+.launcher-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--overlay-bg);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease-out, backdrop-filter 0.2s ease-out;
+}
+
+.launcher.visible .launcher-mask {
+    opacity: 1;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* === 面板 === */
+.launcher-panel {
+    position: relative;
+    width: min(520px, calc(100vw - 48px));
+    max-height: 70vh;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-xl), 0 0 0 1px var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(0.92) translateY(-8px);
+    opacity: 0;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.2s ease-out;
+    transition-delay: 0.05s;
+}
+
+.launcher.visible .launcher-panel {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    transition-delay: 0.05s;
+}
+
+/* === 搜索头部 === */
+.launcher-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.launcher-search-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.launcher-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    padding: 4px 0;
+    font-family: inherit;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.25s ease-out;
+}
+
+.launcher-input:focus {
+    border-bottom-color: var(--accent);
+}
+
+.launcher-input::placeholder {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.launcher-hint {
+    font-size: 0.688rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    user-select: none;
+    padding: 2px 6px;
+    background: var(--input-bg);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    line-height: 1.4;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* === 网格容器 === */
+.launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 16px 18px 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* === 网格卡片 === */
+.launcher-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 8px;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    user-select: none;
+    background: transparent;
+    border: 1px solid transparent;
+    transition: background 0.18s ease-out,
+                transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.18s ease-out;
+    animation: launcherItemIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    /* 每个 item stagger，通过 nth-child 设置 animation-delay */
+}
+
+@keyframes launcherItemIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Stagger 延迟 */
+.launcher-item:nth-child(1)  { animation-delay: 0.00s; }
+.launcher-item:nth-child(2)  { animation-delay: 0.02s; }
+.launcher-item:nth-child(3)  { animation-delay: 0.04s; }
+.launcher-item:nth-child(4)  { animation-delay: 0.06s; }
+.launcher-item:nth-child(5)  { animation-delay: 0.08s; }
+.launcher-item:nth-child(6)  { animation-delay: 0.10s; }
+.launcher-item:nth-child(7)  { animation-delay: 0.12s; }
+.launcher-item:nth-child(8)  { animation-delay: 0.14s; }
+.launcher-item:nth-child(9)  { animation-delay: 0.16s; }
+.launcher-item:nth-child(10) { animation-delay: 0.18s; }
+.launcher-item:nth-child(11) { animation-delay: 0.20s; }
+.launcher-item:nth-child(12) { animation-delay: 0.22s; }
+.launcher-item:nth-child(13) { animation-delay: 0.24s; }
+
+/* 一般 hover */
+.launcher-item:hover {
+    background: var(--hover-bg);
+    transform: translateY(-2px);
+    border-color: var(--border);
+}
+
+/* 键盘选中的卡片（强化高亮） */
+.launcher-item.selected {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent-dark);
+    transform: translateY(-2px);
+}
+
+.launcher-item.selected .launcher-item-label {
+    font-weight: 600;
+    color: var(--accent-dark);
+}
+
+/* 搜索结果隐藏 */
+.launcher-item.hidden {
+    display: none;
+}
+
+/* === 卡片图标 === */
+.launcher-item-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-light);
+    border-radius: 10px;
+    color: var(--accent);
+    flex-shrink: 0;
+    transition: background 0.18s ease-out, color 0.18s ease-out;
+}
+
+.launcher-item:hover .launcher-item-icon,
+.launcher-item.selected .launcher-item-icon {
+    background: var(--accent);
+    color: white;
+}
+
+.launcher-item-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* === 卡片标签 === */
+.launcher-item-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.3;
+    transition: color 0.18s ease-out;
+}
+
+/* === 空结果 === */
+.launcher-empty {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 36px 20px;
+    color: var(--text-muted);
+    font-size: 0.813rem;
+}
+
+.launcher-empty.visible {
+    display: flex;
+}
+
+/* === 离场动画 === */
+.launcher.closing .launcher-mask {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    transition: opacity 0.15s ease-in, backdrop-filter 0.15s ease-in;
+}
+
+.launcher.closing .launcher-panel {
+    opacity: 0;
+    transform: scale(0.92) translateY(-8px);
+    transition: transform 0.15s ease-in, opacity 0.15s ease-in;
+    transition-delay: 0s;
+}
+
+.launcher.closing .launcher-item {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.1s ease-in, transform 0.1s ease-in;
+}
+
+/* 可选的行内帮助提示 */
+.launcher-footer {
+    display: none;
+}
+
+/* ==========================================================================
+   减动效偏好降级
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .launcher,
+    .launcher-mask,
+    .launcher-panel,
+    .launcher-item,
+    .launcher-input {
+        transition: none !important;
+        animation: none !important;
+        transition-delay: 0s !important;
+    }
+    .launcher {
+        opacity: 1 !important;
+    }
+    .launcher-mask {
+        opacity: 1 !important;
+        backdrop-filter: blur(6px) !important;
+        -webkit-backdrop-filter: blur(6px) !important;
+    }
+    .launcher-panel {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+    .launcher-item {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}
