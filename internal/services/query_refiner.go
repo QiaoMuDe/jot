@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"strings"
 )
 
@@ -30,7 +31,8 @@ const searchQueryRefinePrompt = `你是一个搜索查询优化专家。你的�
 // RefineSearchQuery 调用 AI 模型将用户输入精炼为搜索引擎友好的关键词。
 // 返回精炼后的 query 字符串。如果精炼失败（空输入、空结果或模型调用错误），
 // 返回 error，由调用方决定是否终止流程。
-func RefineSearchQuery(query string, aiService *AIService) (string, error) {
+// ctx 用于控制调用超时或取消，推荐传递带取消的 context。
+func RefineSearchQuery(ctx context.Context, query string, aiService *AIService) (string, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return "", nil
@@ -41,7 +43,7 @@ func RefineSearchQuery(query string, aiService *AIService) (string, error) {
 		{Role: "user", Content: trimmed},
 	}
 
-	result, err := aiService.CallAI(messages)
+	result, err := aiService.CallAI(ctx, messages)
 	if err != nil {
 		return "", err
 	}

@@ -148,11 +148,9 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 }
 
 // CallAI 调用 AI 接口（非流式）
-func (a *AIService) CallAI(messages []Message) (string, error) {
+// ctx 由调用方传入，可从中途取消，推荐使用 WithTimeout 包装
+func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, error) {
 	cfg := a.GetConfig()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 
 	client := aicli.NewClient(aicli.Config{
 		Provider: cfg.Provider,
@@ -170,7 +168,12 @@ func (a *AIService) CallAI(messages []Message) (string, error) {
 	content, _, err := client.Chat(ctx, aicliMsgs, false)
 	if err != nil {
 		a.logger.Errorw("AIService.CallAI 失败", fastlog.Error(err))
-		return "", fmt.Errorf("AI 调用失败: %w", err)
+		// 使用 ClassifyError 分类错误，返回带 user_msg 的结构化错误
+		if classified := aicli.ClassifyError(err); classified != nil {
+			return "", &aicli.AIErrorWrapper{Err: classified}
+		}
+		// ClassifyError 返回 nil（用户主动取消），原样返回
+		return "", err
 	}
 
 	return content, nil

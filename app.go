@@ -1570,9 +1570,17 @@ func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 	return results
 }
 
-// CallAI 调用 AI 对话接口
+// CallAI 调用 AI 对话接口（非流式）
+// 创建可取消的 context 并存入 aiStreamCancel，供 CancelAIStream 中途取消
 func (a *App) CallAI(messages []services.Message) (string, error) {
-	return a.aiService.CallAI(messages)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	a.aiStreamCancel = cancel
+	defer func() {
+		cancel()
+		a.aiStreamCancel = nil
+	}()
+
+	return a.aiService.CallAI(ctx, messages)
 }
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
@@ -1689,7 +1697,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 
 			if query != "" {
 				// 精炼 query
-				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
+				refinedQuery, err := services.RefineSearchQuery(ctx, query, a.aiService)
 				if err != nil {
 					if ctx.Err() != nil {
 						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
@@ -2102,7 +2110,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			}
 
 			if query != "" {
-				refinedQuery, err := services.RefineSearchQuery(query, a.aiService)
+				refinedQuery, err := services.RefineSearchQuery(ctx, query, a.aiService)
 				if err != nil {
 					if ctx.Err() != nil {
 						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)

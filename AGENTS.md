@@ -515,6 +515,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **翻译技能扁平化**（从子菜单改为普通菜单项，chip 显示源语言→目标语言方向组件 + 点击语言标签弹出浮层选择 6 种常用语言）
 - [x] **技能菜单选中指示 + 点击切换**（已激活技能显示✓+accent 色高亮，打开菜单自动刷新；点击已激活技能取消引用，toggle 互斥模式）
 - [x] **更多技能菜单离场动画**（反向交错消失 + 容器缩小淡出 0.18s，`setTimeout` 360ms 清理 class）
+- [x] **AI 优化按钮取消 + 发送按钮禁用**（优化中可取消，显示停止按钮，恢复原文；发送按钮优化期间禁用）
+- [x] **右键菜单复制通知**（AI/用户消息右键复制成功后通过 `showNotification('已复制')` 反馈）
 
 ---
 
@@ -570,17 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：重置出厂设置遗漏清理 note_tags 多对多关联表
-
-| 记忆点 | 内容 |
-|--------|------|
-| **问题** | `App.ResetDatabase()` 使用 `Migrator().DropTable` 删除 10 张 model 表，但漏掉了自动化多对多关联表 `note_tags`（由 `Note` ↔ `Tag` 的 `many2many:note_tags` 注解自动创建，无对应 model struct）。重置后重建 `notes` 和 `tags` 表时 ID 从 1 重新开始，旧 `note_tags` 数据中的 `note_id` 命中新笔记，导致 `Preload("Tags")` 误报出旧标签。 |
-| **修复** | 在 DropTable 循环后追加 `a.db.Exec("DROP TABLE IF EXISTS note_tags")`，确保关联表也一并清除。`AutoMigrate` 在关联表不存在时会自动重建。 |
-| **涉及文件** | [app.go](app.go)（DropTable 后追加 note_tags 显式 DROP） |
-
----
-
-## 记忆点 2：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 1：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 2：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 3：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +607,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 4：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 5：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 6：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：移除引用截断逻辑 + 设置项重构
+## 记忆点 7：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 8：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +672,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 9：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +680,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **跳转首页+展开** | [main.js](frontend/src/main.js) `moreMenu` 的 `sidebar-toggle` 点击处理中新增判断 `state.currentView !== 'grid'` 分支：先执行 `switchView('grid')` + `resetPagination()` + `loadNotes()` 切换到笔记首页，再检查侧栏是否折叠，若折叠则移除 `collapsed` class、更新 `localStorage` 和菜单/按钮 UI。已在首页时保持原有 `toggleSidebar()` 行为。 |
 | **AI 聊天布局修正** | 展开侧栏功能暴露了 AI 聊天模块的布局问题：① `#mainContent` 的 `scrollbar-gutter: stable` 导致 AI 聊天内部滚动条与窗口右侧出现间隙，添加 `#mainContent:has(#viewAiChat.active) { scrollbar-gutter: auto; overflow-y: hidden; }` 消除；② `.ai-chat-messages-inner` 右侧内边距调整为 `padding: 16px 15px 72px 18px`，使用户消息更靠右。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（sidebar-toggle 点击处理逻辑重写）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 聊天布局修正） |
+
+---
+
+## 记忆点 10：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 优化 AI 输入框优化（polish）按钮交互：① 点击优化后禁用发送按钮并显示停止按钮，支持中途取消优化；② 停止按钮在优化中可恢复原文并重置按钮状态；③ `AIService.CallAI` 增加 `ctx` 参数，通过 `aiStreamCancel` 复用流式取消机制；④ 优化失败时使用 `ClassifyError` 返回结构化中文错误消息（替代原始 JSON 报错）；⑤ 右键菜单「复制」操作成功后通过通知提示反馈。 |
+| **前端改动** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)：新增 `isPolishOptimizing` 变量；优化按钮点击时禁用发送按钮、切换按钮显示；停止按钮增加优化取消分支（恢复原文+取消请求+重置状态）；catch 块区分取消与错误；优化按钮防重复点击。右键复制成功后 `showNotification('已复制', 'success')`。 |
+| **后端改动** | [internal/services/ai_service.go](internal/services/ai_service.go)：`CallAI` 签名增加 `ctx context.Context` 参数，移除内部 `context.WithTimeout` 创建，改用传入 context；错误处理使用 `ClassifyError` 返回结构化错误。 |
+| **后端改动 2** | [app.go](app.go)：`CallAI` 绑定方法创建带 60s 超时的 context 并存入 `a.aiStreamCancel`，供 `CancelAIStream` 中途取消。`RefineSearchQuery` 调用处传递 `ctx`。 |
+| **后端改动 3** | [internal/services/query_refiner.go](internal/services/query_refiner.go)：`RefineSearchQuery` 增加 `ctx context.Context` 参数，透传给 `CallAI`。 |
 
 ---
 

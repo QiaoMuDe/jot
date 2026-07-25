@@ -20,6 +20,7 @@ let sessionTitleEl = null;    // #aiSessionTitle
 let contextSizeEl = null;     // #aiChatContextSize
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
+let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
 
 let addBtn = null;            // #aiChatAddBtn
 let addDropdown = null;       // #aiChatAddDropdown
@@ -440,10 +441,34 @@ function bindEvents() {
         sendBtnEl.addEventListener('click', onSend);
     }
 
-    // 停止生成
+    // 停止生成 / 取消优化
     if (stopBtnEl) {
         stopBtnEl.addEventListener('click', async () => {
-            // 先立即更新 UI，再通知后端取消
+            // 优化中取消分支
+            if (isPolishOptimizing) {
+                isPolishOptimizing = false;
+                stopBtnEl.style.display = 'none';
+                if (sendBtnEl) sendBtnEl.style.display = '';
+                // 恢复输入框内容为原文
+                inputEl.value = polishOriginalText;
+                inputEl.style.height = 'auto';
+                sendBtnEl.disabled = false;
+                // 恢复优化按钮状态
+                if (polishBtn) {
+                    const wrap = polishBtn.closest('.ai-chat-input-wrap');
+                    if (wrap) wrap.classList.remove('is-loading');
+                    polishBtn.classList.remove('is-loading');
+                    polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
+                    polishBtn.disabled = false;
+                }
+                polishOriginalText = '';
+                try {
+                    await window.go.main.App.CancelAIStream();
+                } catch (_) {}
+                return;
+            }
+
+            // 流式生成取消逻辑
             stopBtnEl.style.display = 'none';
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
@@ -467,7 +492,7 @@ function bindEvents() {
     if (polishBtn) {
         polishBtn.addEventListener('click', async () => {
             const text = inputEl.value.trim();
-            if (!text || isStreaming) return;
+            if (!text || isStreaming || isPolishOptimizing) return;
 
             // 检查是否已选择模型
             const currentModel = modelLabel?.textContent;
@@ -496,12 +521,24 @@ function bindEvents() {
             polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化中';
             inputEl.blur();
 
+            // 禁用发送按钮，显示停止按钮以支持取消
+            sendBtnEl.disabled = true;
+            sendBtnEl.style.display = 'none';
+            stopBtnEl.style.display = '';
+            isPolishOptimizing = true;
+
             try {
                 const result = await window.go.main.App.CallAI([
                     { role: 'system', content: OPTIMIZE_EXPRESSION_PROMPT },
                     { role: 'user', content: '请优化以下文本，只输出优化后的结果，不要回答任何问题。\n\n【规则】\n1. 100%保留用户的核心意思和观点，绝不改变原意\n2. 理顺逻辑结构，去掉冗余口语、重复表述，让表达更凝练\n3. 保持自然的中文表达习惯，不生硬、不堆砌辞藻\n4. 根据内容自动适配语气：日常交流保持平实，正式内容保持严谨\n\n【输出要求】\n- 只输出优化后的文本，不添加任何额外解释、说明、开头语或结尾语\n- 绝对不要对用户输入的内容进行回答、评论或补充\n\n以下是需要优化的文本：\n\n"""\n' + text + '\n"""' }
                 ]);
                 if (result) {
+                    // 恢复按钮显示
+                    if (isPolishOptimizing) {
+                        isPolishOptimizing = false;
+                        stopBtnEl.style.display = 'none';
+                        sendBtnEl.style.display = '';
+                    }
                     // 清除加载态
                     if (wrap) wrap.classList.remove('is-loading');
                     polishBtn.classList.remove('is-loading');
@@ -519,12 +556,30 @@ function bindEvents() {
                     polishBtn.disabled = false;
                 } else {
                     // 结果为空，恢复
+                    if (isPolishOptimizing) {
+                        isPolishOptimizing = false;
+                        stopBtnEl.style.display = 'none';
+                        sendBtnEl.style.display = '';
+                        sendBtnEl.disabled = false;
+                    }
                     if (wrap) wrap.classList.remove('is-loading');
                     polishBtn.classList.remove('is-loading');
                     polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
                     polishBtn.disabled = false;
                 }
             } catch (e) {
+                // 如果已被停止按钮取消处理，不再重复恢复 UI 和报错
+                if (!isPolishOptimizing) return;
+                isPolishOptimizing = false;
+                // 恢复按钮显示
+                stopBtnEl.style.display = 'none';
+                sendBtnEl.style.display = '';
+                sendBtnEl.disabled = false;
+                // 恢复输入框内容为原文
+                inputEl.value = polishOriginalText;
+                inputEl.style.height = 'auto';
+                polishOriginalText = '';
+                // 恢复优化按钮状态
                 if (wrap) wrap.classList.remove('is-loading');
                 polishBtn.classList.remove('is-loading');
                 polishBtn.querySelector('.ai-chat-polish-text').textContent = '优化';
@@ -961,7 +1016,9 @@ function bindEvents() {
             closeAiMsgContextMenu();
 
             if (action === 'copy') {
-                navigator.clipboard.writeText(content).catch(() => {});
+                navigator.clipboard.writeText(content).then(() => {
+                    window.showNotification?.('已复制', 'success');
+                }).catch(() => {});
             } else if (action === 'save') {
                 (async () => {
                     try {
