@@ -686,7 +686,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 |--------|------|
 | **变更概览** | 优化更多菜单"展开侧栏"功能的交互逻辑：当点击该功能时，如果当前处于非笔记首页的其他页面（如设置、回收站、日历、AI助手等），先调用 `switchView('grid')` 跳转到笔记首页，再将已折叠的笔记本侧栏展开。如果已在笔记首页，则保持原有切换行为不变。 |
 | **跳转首页+展开** | [main.js](frontend/src/main.js) `moreMenu` 的 `sidebar-toggle` 点击处理中新增判断 `state.currentView !== 'grid'` 分支：先执行 `switchView('grid')` + `resetPagination()` + `loadNotes()` 切换到笔记首页，再检查侧栏是否折叠，若折叠则移除 `collapsed` class、更新 `localStorage` 和菜单/按钮 UI。已在首页时保持原有 `toggleSidebar()` 行为。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（sidebar-toggle 点击处理逻辑重写） |
+| **AI 聊天布局修正** | 展开侧栏功能暴露了 AI 聊天模块的布局问题：① `#mainContent` 的 `scrollbar-gutter: stable` 导致 AI 聊天内部滚动条与窗口右侧出现间隙，添加 `#mainContent:has(#viewAiChat.active) { scrollbar-gutter: auto; overflow-y: hidden; }` 消除；② `.ai-chat-messages-inner` 右侧内边距调整为 `padding: 16px 15px 72px 18px`，使用户消息更靠右。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（sidebar-toggle 点击处理逻辑重写）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 聊天布局修正） |
 
 ---
 

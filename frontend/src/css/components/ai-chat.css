@@ -25,7 +25,7 @@
 .ai-chat-messages-inner {
     max-width: clamp(800px, min(92vw, 100%), 1600px);
     margin: 0 auto;
-    padding: 16px 36px 72px;
+    padding: 16px 15px 72px 18px;
     display: flex;
     flex-direction: column;
     gap: 40px;
@@ -1890,6 +1890,13 @@
 /* ── AI 会话侧栏 ── */
 #viewAiChat.view {
     padding: 0;
+}
+
+/* AI 对话视图下，#mainContent 无需滚动，去掉 scrollbar-gutter 预留空间，
+   使 AI 对话内部滚动条贴在窗口右侧，消除间隙 */
+#mainContent:has(#viewAiChat.active) {
+    scrollbar-gutter: auto;
+    overflow-y: hidden;
 }
 
 #viewAiChat .view-header {
