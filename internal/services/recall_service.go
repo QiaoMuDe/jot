@@ -106,52 +106,9 @@ func splitWords(text string) []string {
 	return words
 }
 
-// extractContext 在笔记内容中定位第一个匹配的关键词，截取上下文片段。
-// contextChars 控制截取关键词前后各多少字符。
-// 如果找不到任何关键词，返回空串。
-func extractContext(content string, keywords []string, contextChars int) string {
-	runes := []rune(content)
-	contentLen := len(runes)
-	if contentLen == 0 || len(keywords) == 0 {
-		return ""
-	}
-
-	for _, kw := range keywords {
-		byteIdx := strings.Index(content, kw)
-		if byteIdx < 0 {
-			continue
-		}
-		// 将字节偏移转为字符偏移
-		pos := len([]rune(content[:byteIdx]))
-		kwLen := len([]rune(kw))
-
-		start := pos - contextChars
-		if start < 0 {
-			start = 0
-		}
-		end := pos + kwLen + contextChars
-		if end > contentLen {
-			end = contentLen
-		}
-
-		var b strings.Builder
-		if start > 0 {
-			b.WriteString("...(内容已截断)")
-		}
-		b.WriteString(string(runes[start:end]))
-		if end < contentLen {
-			b.WriteString("...(内容已截断)")
-		}
-		return b.String()
-	}
-
-	return ""
-}
-
 // CardRecallSearch 执行卡片召回
 // 对 query 做 2-gram 分词 → 多关键词 OR 搜索笔记 → 格式化上下文 + 返回结构化卡片数据
-// maxChars 控制单条笔记最大字符数（字节），超过时截取关键词上下文；<=0 表示不截断
-func CardRecallSearch(ctx context.Context, query string, limit int, maxChars int, noteService *NoteService) *CardRecallResult {
+func CardRecallSearch(ctx context.Context, query string, limit int, noteService *NoteService) *CardRecallResult {
 	if query == "" || limit <= 0 {
 		return nil
 	}
@@ -171,23 +128,10 @@ func CardRecallSearch(ctx context.Context, query string, limit int, maxChars int
 	var b strings.Builder
 	b.WriteString("以下是用户笔记库中与问题相关的笔记，请参考这些笔记内容回答用户的问题：\n\n")
 
-	const contextChars = 200
 	cards := make([]RecallCard, 0, len(notes))
 	for _, note := range notes {
 		content := note.Content
 		truncated := false
-
-		if maxChars > 0 && len(content) > maxChars {
-			snippet := extractContext(content, keywords, contextChars)
-			if snippet != "" {
-				content = snippet
-				truncated = true
-			} else {
-				// 回退：从头截取 maxChars 字节
-				content = content[:maxChars] + "\n...(内容已截断)"
-				truncated = true
-			}
-		}
 
 		fmt.Fprintf(&b, "--- 📄 《%s》 ---\n%s\n\n", note.Title, content)
 		cards = append(cards, RecallCard{

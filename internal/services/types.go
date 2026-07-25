@@ -57,67 +57,69 @@ type NoteRefContext struct {
 
 // SettingsConfig 设置页全部配置项的统一结构体
 type SettingsConfig struct {
-	Theme                     string `json:"theme"`
-	FontFamily                string `json:"font_family"`
-	FontSize                  int    `json:"font_size"`
-	CodeHighlightTheme        string `json:"code_highlight_theme"`
-	NoteOpenFullscreen        bool   `json:"note_open_fullscreen"`
-	SortOrder                 string `json:"sort_order"`
-	PageSize                  int    `json:"page_size"`
-	CMSyntaxHighlight         bool   `json:"cm_syntax_highlight"`
-	AIProvider                string `json:"ai_provider"`
-	AIBaseURL                 string `json:"ai_base_url"`
-	AIAPIKey                  string `json:"ai_api_key"`
-	AIModel                   string `json:"ai_model"`
-	TavilyAPIKey              string `json:"tavily_api_key"`
-	AIThinkingEnabled         bool   `json:"ai_thinking_enabled"`
-	ZhihuAccessSecret         string `json:"zhihu_access_secret"`
-	ZhihuSearchEnabled        bool   `json:"zhihu_search_enabled"`
-	ZhihuGlobalSearchEnabled  bool   `json:"zhihu_global_search_enabled"`
-	TavilySearchEnabled       bool   `json:"tavily_search_enabled"`
-	AICardRecallEnabled       bool   `json:"ai_card_recall_enabled"`
-	AICardRecallLimit         int    `json:"ai_card_recall_limit"`
-	AIRefMaxChars             int    `json:"ai_ref_max_chars"`
-	MaxFileSize               int    `json:"max_file_size"`
-	AISearchResultLimit       int    `json:"ai_search_result_limit"`
-	TrashCleanupRetentionDays int    `json:"trash_cleanup_retention_days"`
-	LogLevel                  int    `json:"log_level"`
-	ScreenLockEnabled         bool   `json:"screen_lock_enabled"`
-	ScreenLockPassword        string `json:"screen_lock_password"`
-	EditorWordWrap            bool   `json:"editor_word_wrap"`
+	Theme                       string `json:"theme"`
+	FontFamily                  string `json:"font_family"`
+	FontSize                    int    `json:"font_size"`
+	CodeHighlightTheme          string `json:"code_highlight_theme"`
+	NoteOpenFullscreen          bool   `json:"note_open_fullscreen"`
+	SortOrder                   string `json:"sort_order"`
+	PageSize                    int    `json:"page_size"`
+	CMSyntaxHighlight           bool   `json:"cm_syntax_highlight"`
+	AIProvider                  string `json:"ai_provider"`
+	AIBaseURL                   string `json:"ai_base_url"`
+	AIAPIKey                    string `json:"ai_api_key"`
+	AIModel                     string `json:"ai_model"`
+	TavilyAPIKey                string `json:"tavily_api_key"`
+	AIThinkingEnabled           bool   `json:"ai_thinking_enabled"`
+	ZhihuAccessSecret           string `json:"zhihu_access_secret"`
+	ZhihuSearchEnabled          bool   `json:"zhihu_search_enabled"`
+	ZhihuGlobalSearchEnabled    bool   `json:"zhihu_global_search_enabled"`
+	TavilySearchEnabled         bool   `json:"tavily_search_enabled"`
+	AICardRecallEnabled         bool   `json:"ai_card_recall_enabled"`
+	AICardRecallLimit           int    `json:"ai_card_recall_limit"`
+	MaxFileSize                 int    `json:"max_file_size"`
+	AIWebSearchMaxChars         int    `json:"ai_web_search_max_chars"`
+	AILargeFilePreviewThreshold int    `json:"ai_large_file_preview_threshold"`
+	AISearchResultLimit         int    `json:"ai_search_result_limit"`
+	TrashCleanupRetentionDays   int    `json:"trash_cleanup_retention_days"`
+	LogLevel                    int    `json:"log_level"`
+	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
+	ScreenLockPassword          string `json:"screen_lock_password"`
+	EditorWordWrap              bool   `json:"editor_word_wrap"`
 }
 
 // GetAllSettings 从 SettingService 读取全部设置项
 func (s *SettingService) GetAllSettings() SettingsConfig {
 	cfg := SettingsConfig{
-		Theme:                     s.Get("theme"),
-		FontFamily:                s.Get("font_family"),
-		FontSize:                  parseIntSetting(s.Get("font_size"), 16),
-		CodeHighlightTheme:        s.Get("code_highlight_theme"),
-		NoteOpenFullscreen:        parseBoolSetting(s.Get("note_open_fullscreen")),
-		SortOrder:                 s.Get("sort_order"),
-		PageSize:                  parseIntSetting(s.Get("page_size"), 20),
-		CMSyntaxHighlight:         parseBoolSetting(s.Get("cm_syntax_highlight")),
-		AIProvider:                s.Get("ai_provider"),
-		AIBaseURL:                 s.Get("ai_base_url"),
-		AIAPIKey:                  s.Get("ai_api_key"),
-		AIModel:                   s.Get("ai_model"),
-		TavilyAPIKey:              s.Get("tavily_api_key"),
-		AIThinkingEnabled:         parseBoolSetting(s.Get("ai_thinking_enabled")),
-		ZhihuAccessSecret:         s.Get("zhihu_access_secret"),
-		ZhihuSearchEnabled:        parseBoolSetting(s.Get("zhihu_search_enabled")),
-		ZhihuGlobalSearchEnabled:  parseBoolSetting(s.Get("zhihu_global_search_enabled")),
-		TavilySearchEnabled:       parseBoolSetting(s.Get("tavily_search_enabled")),
-		AICardRecallEnabled:       parseBoolSetting(s.Get("ai_card_recall_enabled")),
-		AICardRecallLimit:         parseIntSetting(s.Get("ai_card_recall_limit"), 5),
-		AIRefMaxChars:             parseIntSetting(s.Get("ai_ref_max_chars"), 10000),
-		MaxFileSize:               parseIntSetting(s.Get("max_file_size"), 1),
-		AISearchResultLimit:       parseIntSetting(s.Get("ai_search_result_limit"), 5),
-		TrashCleanupRetentionDays: parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
-		LogLevel:                  parseIntSetting(s.Get("log_level"), 1),
-		ScreenLockEnabled:         parseBoolSetting(s.Get("screen_lock_enabled")),
-		ScreenLockPassword:        s.Get("screen_lock_password"),
-		EditorWordWrap:            parseBoolSetting(s.Get("editor_word_wrap")),
+		Theme:                       s.Get("theme"),
+		FontFamily:                  s.Get("font_family"),
+		FontSize:                    parseIntSetting(s.Get("font_size"), 16),
+		CodeHighlightTheme:          s.Get("code_highlight_theme"),
+		NoteOpenFullscreen:          parseBoolSetting(s.Get("note_open_fullscreen")),
+		SortOrder:                   s.Get("sort_order"),
+		PageSize:                    parseIntSetting(s.Get("page_size"), 20),
+		CMSyntaxHighlight:           parseBoolSetting(s.Get("cm_syntax_highlight")),
+		AIProvider:                  s.Get("ai_provider"),
+		AIBaseURL:                   s.Get("ai_base_url"),
+		AIAPIKey:                    s.Get("ai_api_key"),
+		AIModel:                     s.Get("ai_model"),
+		TavilyAPIKey:                s.Get("tavily_api_key"),
+		AIThinkingEnabled:           parseBoolSetting(s.Get("ai_thinking_enabled")),
+		ZhihuAccessSecret:           s.Get("zhihu_access_secret"),
+		ZhihuSearchEnabled:          parseBoolSetting(s.Get("zhihu_search_enabled")),
+		ZhihuGlobalSearchEnabled:    parseBoolSetting(s.Get("zhihu_global_search_enabled")),
+		TavilySearchEnabled:         parseBoolSetting(s.Get("tavily_search_enabled")),
+		AICardRecallEnabled:         parseBoolSetting(s.Get("ai_card_recall_enabled")),
+		AICardRecallLimit:           parseIntSetting(s.Get("ai_card_recall_limit"), 5),
+		MaxFileSize:                 parseIntSetting(s.Get("max_file_size"), 1),
+		AIWebSearchMaxChars:         parseIntSetting(s.Get("ai_web_search_max_chars"), 5000),
+		AILargeFilePreviewThreshold: parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
+		AISearchResultLimit:         parseIntSetting(s.Get("ai_search_result_limit"), 5),
+		TrashCleanupRetentionDays:   parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
+		LogLevel:                    parseIntSetting(s.Get("log_level"), 1),
+		ScreenLockEnabled:           parseBoolSetting(s.Get("screen_lock_enabled")),
+		ScreenLockPassword:          s.Get("screen_lock_password"),
+		EditorWordWrap:              parseBoolSetting(s.Get("editor_word_wrap")),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
@@ -142,10 +144,15 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.AICardRecallLimit > 30 {
 		cfg.AICardRecallLimit = 30
 	}
-	if cfg.AIRefMaxChars < 1 {
-		cfg.AIRefMaxChars = 10000
-	} else if cfg.AIRefMaxChars > 100000 {
-		cfg.AIRefMaxChars = 100000
+	if cfg.AIWebSearchMaxChars < 1 {
+		cfg.AIWebSearchMaxChars = 5000
+	} else if cfg.AIWebSearchMaxChars > 50000 {
+		cfg.AIWebSearchMaxChars = 50000
+	}
+	if cfg.AILargeFilePreviewThreshold < 1 {
+		cfg.AILargeFilePreviewThreshold = 10000
+	} else if cfg.AILargeFilePreviewThreshold > 100000 {
+		cfg.AILargeFilePreviewThreshold = 100000
 	}
 	if cfg.MaxFileSize < 1 {
 		cfg.MaxFileSize = 1
@@ -185,34 +192,35 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	}
 
 	sets := map[string]string{
-		"theme":                        cfg.Theme,
-		"font_family":                  cfg.FontFamily,
-		"font_size":                    strconv.Itoa(cfg.FontSize),
-		"code_highlight_theme":         cfg.CodeHighlightTheme,
-		"note_open_fullscreen":         strconv.FormatBool(cfg.NoteOpenFullscreen),
-		"sort_order":                   cfg.SortOrder,
-		"page_size":                    strconv.Itoa(cfg.PageSize),
-		"cm_syntax_highlight":          strconv.FormatBool(cfg.CMSyntaxHighlight),
-		"ai_provider":                  cfg.AIProvider,
-		"ai_base_url":                  cfg.AIBaseURL,
-		"ai_api_key":                   cfg.AIAPIKey,
-		"ai_model":                     cfg.AIModel,
-		"tavily_api_key":               cfg.TavilyAPIKey,
-		"ai_thinking_enabled":          strconv.FormatBool(cfg.AIThinkingEnabled),
-		"zhihu_access_secret":          cfg.ZhihuAccessSecret,
-		"zhihu_search_enabled":         strconv.FormatBool(cfg.ZhihuSearchEnabled),
-		"zhihu_global_search_enabled":  strconv.FormatBool(cfg.ZhihuGlobalSearchEnabled),
-		"tavily_search_enabled":        strconv.FormatBool(cfg.TavilySearchEnabled),
-		"ai_card_recall_enabled":       strconv.FormatBool(cfg.AICardRecallEnabled),
-		"ai_card_recall_limit":         strconv.Itoa(cfg.AICardRecallLimit),
-		"ai_ref_max_chars":             strconv.Itoa(cfg.AIRefMaxChars),
-		"max_file_size":                strconv.Itoa(cfg.MaxFileSize),
-		"ai_search_result_limit":       strconv.Itoa(cfg.AISearchResultLimit),
-		"trash_cleanup_retention_days": strconv.Itoa(cfg.TrashCleanupRetentionDays),
-		"log_level":                    strconv.Itoa(cfg.LogLevel),
-		"screen_lock_enabled":          strconv.FormatBool(cfg.ScreenLockEnabled),
-		"screen_lock_password":         cfg.ScreenLockPassword,
-		"editor_word_wrap":             strconv.FormatBool(cfg.EditorWordWrap),
+		"theme":                           cfg.Theme,
+		"font_family":                     cfg.FontFamily,
+		"font_size":                       strconv.Itoa(cfg.FontSize),
+		"code_highlight_theme":            cfg.CodeHighlightTheme,
+		"note_open_fullscreen":            strconv.FormatBool(cfg.NoteOpenFullscreen),
+		"sort_order":                      cfg.SortOrder,
+		"page_size":                       strconv.Itoa(cfg.PageSize),
+		"cm_syntax_highlight":             strconv.FormatBool(cfg.CMSyntaxHighlight),
+		"ai_provider":                     cfg.AIProvider,
+		"ai_base_url":                     cfg.AIBaseURL,
+		"ai_api_key":                      cfg.AIAPIKey,
+		"ai_model":                        cfg.AIModel,
+		"tavily_api_key":                  cfg.TavilyAPIKey,
+		"ai_thinking_enabled":             strconv.FormatBool(cfg.AIThinkingEnabled),
+		"zhihu_access_secret":             cfg.ZhihuAccessSecret,
+		"zhihu_search_enabled":            strconv.FormatBool(cfg.ZhihuSearchEnabled),
+		"zhihu_global_search_enabled":     strconv.FormatBool(cfg.ZhihuGlobalSearchEnabled),
+		"tavily_search_enabled":           strconv.FormatBool(cfg.TavilySearchEnabled),
+		"ai_card_recall_enabled":          strconv.FormatBool(cfg.AICardRecallEnabled),
+		"ai_card_recall_limit":            strconv.Itoa(cfg.AICardRecallLimit),
+		"max_file_size":                   strconv.Itoa(cfg.MaxFileSize),
+		"ai_web_search_max_chars":         strconv.Itoa(cfg.AIWebSearchMaxChars),
+		"ai_large_file_preview_threshold": strconv.Itoa(cfg.AILargeFilePreviewThreshold),
+		"ai_search_result_limit":          strconv.Itoa(cfg.AISearchResultLimit),
+		"trash_cleanup_retention_days":    strconv.Itoa(cfg.TrashCleanupRetentionDays),
+		"log_level":                       strconv.Itoa(cfg.LogLevel),
+		"screen_lock_enabled":             strconv.FormatBool(cfg.ScreenLockEnabled),
+		"screen_lock_password":            cfg.ScreenLockPassword,
+		"editor_word_wrap":                strconv.FormatBool(cfg.EditorWordWrap),
 	}
 
 	for k, v := range sets {

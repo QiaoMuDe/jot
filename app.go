@@ -1253,41 +1253,6 @@ func (a *App) SetScreenLockPassword(oldPwd, newPwd string) error {
 	return a.settingService.Set("screen_lock_password", hex.EncodeToString(newHash[:]))
 }
 
-// GetAIRefMaxChars 获取 AI 引用笔记截断字数，空值时返回默认 10000
-func (a *App) GetAIRefMaxChars() int {
-	a.LogSvc.Logger.Debugw("GetAIRefMaxChars")
-	val := a.settingService.Get("ai_ref_max_chars")
-	n, err := strconv.Atoi(val)
-	if err != nil || n <= 0 {
-		return 10000
-	}
-	if n > 100000 {
-		return 100000
-	}
-	return n
-}
-
-// SetAIRefMaxChars 设置 AI 引用笔记截断字数，含范围校验（1-100000）
-func (a *App) SetAIRefMaxChars(chars int) error {
-	a.LogSvc.Logger.Debugw("SetAIRefMaxChars", fastlog.Int("chars", chars))
-	if chars <= 0 {
-		err := fmt.Errorf("截断字数必须大于 0")
-		a.LogSvc.Logger.Errorw("SetAIRefMaxChars 失败", fastlog.Error(err))
-		return err
-	}
-	if chars > 100000 {
-		err := fmt.Errorf("截断字数不能超过 100000")
-		a.LogSvc.Logger.Errorw("SetAIRefMaxChars 失败", fastlog.Error(err))
-		return err
-	}
-	if err := a.settingService.Set("ai_ref_max_chars", strconv.Itoa(chars)); err != nil {
-		a.LogSvc.Logger.Errorw("SetAIRefMaxChars 失败", fastlog.Error(err))
-		return err
-	}
-	a.LogSvc.Logger.Infow("SetAIRefMaxChars 成功")
-	return nil
-}
-
 // GetMaxFileSize 获取最大文件限制大小（字节），空值时返回默认 1MB
 func (a *App) GetMaxFileSize() int64 {
 	a.LogSvc.Logger.Debugw("GetMaxFileSize")
@@ -1598,14 +1563,6 @@ func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 		}
 		contentStr := string(content)
 
-		// 调用 GetAIRefMaxChars() 获取截断阈值（每次实时从 DB 读取）
-		maxChars := a.GetAIRefMaxChars()
-		if len(contentStr) > maxChars {
-			truncMsg := fmt.Sprintf("\n\n...(内容已截断，完整文件共 %d 字)", len(contentStr))
-			contentStr = contentStr[:maxChars] + truncMsg
-			result.Truncated = true
-		}
-
 		result.Content = contentStr
 		results = append(results, result)
 	}
@@ -1766,7 +1723,14 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				}
 
 				searchResultLimit := a.GetAISearchResultLimit()
-				searchMaxChars := a.GetAIRefMaxChars()
+				searchMaxChars := 5000
+				if a.settingService != nil {
+					if val := a.settingService.Get("ai_web_search_max_chars"); val != "" {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 50000 {
+							searchMaxChars = n
+						}
+					}
+				}
 				type searchResult struct {
 					source string
 					result *services.SearchWebResult
@@ -1880,16 +1844,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 						}
 					}
 				}
-				// 读取引用截断阈值（默认 10000）
-				maxChars := 10000
-				if a.settingService != nil {
-					if val := a.settingService.Get("ai_ref_max_chars"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 100000 {
-							maxChars = n
-						}
-					}
-				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, maxChars, a.noteService)
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
 				if recallResult != nil {
 					// 注入格式化文本到 system role
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
@@ -2179,7 +2134,14 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 				}
 
 				searchResultLimit := a.GetAISearchResultLimit()
-				searchMaxChars := a.GetAIRefMaxChars()
+				searchMaxChars := 5000
+				if a.settingService != nil {
+					if val := a.settingService.Get("ai_web_search_max_chars"); val != "" {
+						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 50000 {
+							searchMaxChars = n
+						}
+					}
+				}
 				type searchResult struct {
 					source string
 					result *services.SearchWebResult
@@ -2283,15 +2245,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 						}
 					}
 				}
-				maxChars := 10000
-				if a.settingService != nil {
-					if val := a.settingService.Get("ai_ref_max_chars"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 100000 {
-							maxChars = n
-						}
-					}
-				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, maxChars, a.noteService)
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
 				if recallResult != nil {
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 					if len(recallResult.Cards) > 0 {

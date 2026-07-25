@@ -82,8 +82,6 @@ export function GetAICardRecallLimit():Promise<number>;
 
 export function GetAIConfig():Promise<services.AIConfig>;
 
-export function GetAIRefMaxChars():Promise<number>;
-
 export function GetAISearchResultLimit():Promise<number>;
 
 export function GetAISessions():Promise<Array<services.AISessionSummary>>;
@@ -209,8 +207,6 @@ export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5
 export function SelectAIChatFiles():Promise<Array<main.AIChatFileResult>>;
 
 export function SetAICardRecallLimit(arg1:number):Promise<void>;
-
-export function SetAIRefMaxChars(arg1:number):Promise<void>;
 
 export function SetAISearchResultLimit(arg1:number):Promise<void>;
 

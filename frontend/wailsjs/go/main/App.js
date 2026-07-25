@@ -158,10 +158,6 @@ export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
 
-export function GetAIRefMaxChars() {
-  return window['go']['main']['App']['GetAIRefMaxChars']();
-}
-
 export function GetAISearchResultLimit() {
   return window['go']['main']['App']['GetAISearchResultLimit']();
 }
@@ -412,10 +408,6 @@ export function SelectAIChatFiles() {
 
 export function SetAICardRecallLimit(arg1) {
   return window['go']['main']['App']['SetAICardRecallLimit'](arg1);
-}
-
-export function SetAIRefMaxChars(arg1) {
-  return window['go']['main']['App']['SetAIRefMaxChars'](arg1);
 }
 
 export function SetAISearchResultLimit(arg1) {

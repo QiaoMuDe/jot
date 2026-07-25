@@ -3,12 +3,12 @@ package services
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"jot/internal/models"
 
 	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
-	"jot/internal/models"
 )
 
 // NoteService 封装笔记相关的业务逻辑操作
@@ -138,57 +138,17 @@ func (s *NoteService) BuildNoteRefContext(ids []uint) (*NoteRefContext, error) {
 		return nil, fmt.Errorf("query note ref rows: %w", err)
 	}
 
-	// 从设置动态读取单条笔记截断字数，默认 10000
-	maxPerNote := 10000
-	if s.settingService != nil {
-		val := s.settingService.Get("ai_ref_max_chars")
-		if n, err := strconv.Atoi(val); err == nil && n > 0 {
-			maxPerNote = n
-		}
-	}
-	// 从设置动态读取最大文件限制数（转换为字节），默认 1MB
-	maxTotalChars := 1 * 1024 * 1024
-	if s.settingService != nil {
-		if val := s.settingService.Get("max_file_size"); val != "" {
-			if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 100 {
-				maxTotalChars = n * 1024 * 1024
-			}
-		}
-	}
-
 	notes := make([]NoteRefInfo, 0, len(rows))
 	var parts []string
-	totalLen := 0
 
 	for _, row := range rows {
-		// 截断单条笔记内容
-		noteText := row.Content
-		truncated := len(noteText) > maxPerNote
-		if truncated {
-			noteText = noteText[:maxPerNote] + "\n...(内容已截断)"
-		}
-
-		block := fmt.Sprintf("--- 📄 《%s》 ---\n%s", row.Title, noteText)
-
-		// 总长度截断
-		if totalLen+len(block) > maxTotalChars {
-			parts = append(parts, fmt.Sprintf("--- 📄 《%s》 ---\n...(内容已截断，超出上下文长度限制)", row.Title))
-			notes = append(notes, NoteRefInfo{
-				ID:           row.ID,
-				Title:        row.Title,
-				Truncated:    true,
-				NotebookName: row.NotebookName,
-			})
-			// 剩余笔记不再处理
-			break
-		}
+		block := fmt.Sprintf("--- 📄 《%s》 ---\n%s", row.Title, row.Content)
 
 		parts = append(parts, block)
-		totalLen += len(block)
 		notes = append(notes, NoteRefInfo{
 			ID:           row.ID,
 			Title:        row.Title,
-			Truncated:    truncated,
+			Truncated:    false,
 			NotebookName: row.NotebookName,
 		})
 	}

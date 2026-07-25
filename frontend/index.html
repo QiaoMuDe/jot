@@ -389,6 +389,12 @@
                         </div>
 
                         <div class="font-setting-row">
+                            <label class="font-setting-label">大文件预览阈值</label>
+                            <span class="font-setting-desc">超过此字符数的 .md 笔记自动切换为纯文本模式（字符）</span>
+                            <input type="number" id="aiLargeFilePreviewThreshold" class="settings-input" value="10000" min="1" max="100000" style="width:100px;margin-left:auto;" />
+                        </div>
+
+                        <div class="font-setting-row">
                             <label class="font-setting-label">代码高亮主题</label>
                             <span class="font-setting-desc">选择笔记编辑器的语法高亮配色方案</span>
                             <div class="theme-select" id="codeHighlightThemeControl">
@@ -503,12 +509,12 @@
                             </div>
                         </div>
                     </div>
-                    <!-- 引用截断字数 -->
+                    <!-- 联网搜索结果截断 -->
                     <div class="ai-setting-item">
-                        <span class="ai-setting-label">引用截断</span>
-                        <span class="font-setting-desc">限制 AI 引用笔记内容的最大字符数（字符）</span>
+                        <span class="ai-setting-label">搜索结果截断</span>
+                        <span class="font-setting-desc">限制联网搜索单条结果的最大字符数（字符）</span>
                         <div class="ai-setting-control" style="flex:none;margin-left:auto;">
-                            <input type="number" id="aiRefMaxChars" class="settings-input" value="10000" min="1" max="100000" style="width:100px;" />
+                            <input type="number" id="aiWebSearchMaxChars" class="settings-input" value="5000" min="1" max="50000" style="width:100px;" />
                         </div>
                     </div>
                     <!-- 最大文件限制数 -->

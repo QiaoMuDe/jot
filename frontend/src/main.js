@@ -1,10 +1,10 @@
 import hljs from 'highlight.js';
-import mermaid from 'mermaid';
 import { marked } from 'marked';
+import mermaid from 'mermaid';
 import { EventsOn, Quit, WindowFullscreen, WindowIsFullscreen, WindowIsMaximised, WindowMinimise, WindowToggleMaximise, WindowUnfullscreen } from '../wailsjs/runtime/runtime.js';
 import './css/index.css';
 import { applyAIHighlightTheme } from './js/hljs-themes.js';
-import { themeLabels, codeHighlightThemePairing, isDarkTheme } from './js/theme-config.js';
+import { codeHighlightThemePairing, isDarkTheme, themeLabels } from './js/theme-config.js';
 
 // CodeMirror 6 导入
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
@@ -2501,26 +2501,6 @@ async function initAISettings() {
         });
     }
 
-    // ── 引用截断字数自动保存 ──
-    const refMaxChars = document.getElementById('aiRefMaxChars');
-    if (refMaxChars) {
-        refMaxChars.addEventListener('change', async () => {
-            const val = parseInt(refMaxChars.value);
-            if (isNaN(val) || val < 1) {
-                refMaxChars.value = 10000;
-                nm.show('截断字数必须大于 0，已重置为 10000', 'warning');
-                return;
-            }
-            if (val > 100000) {
-                refMaxChars.value = 100000;
-                nm.show('截断字数不能超过 100000，已重置为 100000', 'warning');
-                return;
-            }
-            await saveSettings();
-            nm.show('引用截断字数已保存', 'success');
-        });
-    }
-
     // ── 最大上传文件大小自动保存 ──
     const maxFileSize = document.getElementById('maxFileSize');
     if (maxFileSize) {
@@ -2538,6 +2518,46 @@ async function initAISettings() {
             }
             await saveSettings();
             nm.show('最大上传文件大小已保存（' + val + ' MB）', 'success');
+        });
+    }
+
+    // ── 联网搜索结果截断自动保存 ──
+    const webSearchMaxChars = document.getElementById('aiWebSearchMaxChars');
+    if (webSearchMaxChars) {
+        webSearchMaxChars.addEventListener('change', async () => {
+            const val = parseInt(webSearchMaxChars.value);
+            if (isNaN(val) || val < 1) {
+                webSearchMaxChars.value = 5000;
+                nm.show('搜索结果截断字数必须大于 0，已重置为 5000', 'warning');
+                return;
+            }
+            if (val > 50000) {
+                webSearchMaxChars.value = 50000;
+                nm.show('搜索结果截断字数不能超过 50000，已重置为 50000', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('搜索结果截断字数已保存', 'success');
+        });
+    }
+
+    // ── 大文件预览阈值自动保存 ──
+    const largeFileThreshold = document.getElementById('aiLargeFilePreviewThreshold');
+    if (largeFileThreshold) {
+        largeFileThreshold.addEventListener('change', async () => {
+            const val = parseInt(largeFileThreshold.value);
+            if (isNaN(val) || val < 1) {
+                largeFileThreshold.value = 10000;
+                nm.show('大文件预览阈值必须大于 0，已重置为 10000', 'warning');
+                return;
+            }
+            if (val > 100000) {
+                largeFileThreshold.value = 100000;
+                nm.show('大文件预览阈值不能超过 100000，已重置为 100000', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('大文件预览阈值已保存', 'success');
         });
     }
 
@@ -3615,15 +3635,15 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     }
 
     // 查看模式：Markdown 预览（CM6 就绪后刷新）
-    // 大文件自动切换纯文本模式：内容长度超过引用截断字数（ai_ref_max_chars）时跳过预览
+    // 大文件自动切换纯文本模式：内容长度超过大文件预览阈值（ai_large_file_preview_threshold）时跳过预览
     if (isReadOnly && isMd && els.editorOverlay.dataset.mode === 'preview') {
-        const refMaxChars = parseInt(document.getElementById('aiRefMaxChars')?.value) || 10000;
-        if (editorContent.length > refMaxChars) {
+        const largeFileThreshold = parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000;
+        if (editorContent.length > largeFileThreshold) {
             // 内容过长，自动切换为纯文本模式
             switchEditorMode('edit');
             _setPreviewLayout(false);
             _closeToc();
-            window.showNotification?.('笔记内容超过引用截断字数，已自动切换为纯文本模式', 'info');
+            window.showNotification?.('笔记内容超过纯文本预览阈值，已自动切换为纯文本模式', 'info');
         } else {
             updatePreview();
         }
@@ -8353,8 +8373,11 @@ async function loadSettings() {
         const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
         if (cardRecallLimit) cardRecallLimit.value = cfg.ai_card_recall_limit;
 
-        const refMaxChars = document.getElementById('aiRefMaxChars');
-        if (refMaxChars) refMaxChars.value = cfg.ai_ref_max_chars;
+        const webSearchMaxChars = document.getElementById('aiWebSearchMaxChars');
+        if (webSearchMaxChars) webSearchMaxChars.value = cfg.ai_web_search_max_chars;
+
+        const largeFilePreviewThreshold = document.getElementById('aiLargeFilePreviewThreshold');
+        if (largeFilePreviewThreshold) largeFilePreviewThreshold.value = cfg.ai_large_file_preview_threshold;
 
         const maxFileSize = document.getElementById('maxFileSize');
         if (maxFileSize) maxFileSize.value = cfg.max_file_size;
@@ -8451,7 +8474,8 @@ async function saveSettings() {
             ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
             ai_card_recall_enabled: document.getElementById('aiSettingCardRecallToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
-            ai_ref_max_chars: parseInt(document.getElementById('aiRefMaxChars')?.value) || 1000,
+            ai_web_search_max_chars: parseInt(document.getElementById('aiWebSearchMaxChars')?.value) || 5000,
+            ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,

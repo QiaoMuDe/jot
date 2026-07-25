@@ -47,7 +47,7 @@ jot/                                    # 项目根目录
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
-│   ├── index.html                      # 入口 HTML，8 个视图
+│   ├── index.html                      # 入口 HTML，9 个视图 + 关于浮层
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
@@ -65,7 +65,7 @@ jot/                                    # 项目根目录
 │   │       ├── variables.css           # 14 主题 CSS 变量：`--bg`/`--accent`/`--text-primary` 等
 │   │       ├── reset.css               # 全局 reset（box-sizing/body 边距/overscroll-behavior）
 │   │       ├── scrollbar.css           # 统一滚动条 6px 细条 + 自动隐藏 + 透明轨道 + 主题变量联动（含主内容区/搜索/AI 对话消息列表）
-│   │       ├── animations.css          # 13 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
+│   │       ├── animations.css          # 28 个 keyframes + 通用工具类 `.anim-*` + stagger 延迟
 │   │       └── components/
 │   │           ├── topbar.css          # 顶栏（品牌/搜索框/窗口控制按钮/更多菜单含图标）
 │   │           ├── main-content.css    # 主内容区布局（卡片网格/视图容器/滚动）
@@ -159,7 +159,7 @@ jot/                                    # 项目根目录
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend                          │
 │  (main.js / css/index.css / index.html)               │
-│   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站/AI)     │
+│   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站/AI/MD 语法/日历/待办)     │
 │   ├─ 交互逻辑 (事件绑定/状态管理)                      │
 │   └─ Wails Bridge (window.go.main.App.*)              │
 └────────────────────────┬────────────────────────────┘
@@ -434,7 +434,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
-7. **过度动画与交互反馈**：13 个 keyframes、stagger 延迟、hover 分层反馈、spring 弹性缓动、骨架屏 shimmer、分段滑块弹簧曲线（`cubic-bezier(0.34, 1.2, 0.64, 1)`）、字体滑条实时预览
+7. **过度动画与交互反馈**：28 个 keyframes、stagger 延迟、hover 分层反馈、spring 弹性缓动、骨架屏 shimmer、分段滑块弹簧曲线（`cubic-bezier(0.34, 1.2, 0.64, 1)`）、字体滑条实时预览
 
 8. **无 UI 框架依赖**：无 Vue/React/Svelte，纯手写 DOM 操作，极致轻量
 
@@ -447,16 +447,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - **阴影**：4 层 Token — `elevated`(卡片) / `dropdown`(下拉菜单) / `modal`(模态框) / `toast`(通知)
 - **语义色**：`--success`(绿) / `--warning`(黄) / `--error`(红) / `--info`(蓝)
 - **字体**：全局统一 `var(--font-family)`，编辑器和代码块跟随系统设置
-- **滚动条**：6px 细条，`--scrollbar-thumb` / `--scrollbar-thumb-hover` 联动 12 主题
+- **滚动条**：6px 细条，`--scrollbar-thumb` / `--scrollbar-thumb-hover` 联动 14 主题
 - **圆角一致性**：所有交互元素（按钮/卡片/输入框/下拉菜单/模态框）均使用 `var(--radius-sm)` 或 `var(--radius-md)`，无硬编码
 
 ---
 
 ## 八、待优化点
-
-### 中期优化
-
-- **虚拟列表支持**：AI 对话消息较多时，使用 IntersectionObserver 虚拟化
 
 ### 架构层面
 
@@ -569,17 +565,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：AI 消息删除从截断改为单条删除
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将 AI 对话中右键删除消息的行为从"截断删除（删除本条及后续所有消息）"改为"仅删除本条消息"。仅修改前端 1 个函数，后端无需改动。 |
-| **前端改动** | [ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg()` 函数三处变更：① DOM 移除从遍历所有 `.ai-msg` 兄弟节点改为仅 `msgEl.remove()`；② 后端 API 从 `TruncateAISessionAtMessage` 改为 `DeleteAIMessage`；③ `chatHistory` 缓冲区操作从 `slice(0, idx)` 截断改为 `filter(m => m.id !== msgId)` 过滤移除单条。详见实现计划 [.trae/documents/AI消息删除改为单条删除实现计划.md](.trae/documents/AI消息删除改为单条删除实现计划.md)。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleDeleteMsg` 函数） |
 
----
-
-## 记忆点 2：笔记日历视图（笔记日历）
+## 记忆点 1：笔记日历视图（笔记日历）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 2：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 3：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 4：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 5：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 6：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 7：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 8：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +667,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 9：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +676,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **删除消息 token 修复** | [ai_service.go](internal/services/ai_service.go) `DeleteAIMessage` 先查消息 `session_id`，删除后调用 `SumSessionTokens` + `UpdateSessionContextTokens` 更新缓存；[ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg` 末尾添加 `updateContextSize()` 刷新页面显示。 |
 | **清空会话 token 修复** | [ai_service.go](internal/services/ai_service.go) `ClearAISessionMessages` 清空消息后调用 `UpdateSessionContextTokens(sessionID, 0)` 将 `context_tokens` 缓存重置为 0。 |
 | **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 错误处理）、[internal/services/ai_service.go](internal/services/ai_service.go)（DeleteAIMessage + ClearAISessionMessages）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（handleDeleteMsg 末尾 updateContextSize） |
+
+---
+
+## 记忆点 10：移除引用截断逻辑 + 设置项重构
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 移除 `ai_ref_max_chars`（引用字符截断数）设置项及相关截断逻辑，改为全量注入。新增两个专用设置项：`ai_web_search_max_chars`（联网搜索结果截断）和 `ai_large_file_preview_threshold`（大文件预览阈值）。同时移除 `BuildNoteRefContext` 中基于 `max_file_size` 的总字符数限制逻辑，笔记引用不再有任何截断。 |
+| **移除的截断场景** | 笔记引用（`BuildNoteRefContext`）、AI 文件上传（`readAIChatFiles`）、卡片召回（`CardRecallSearch`）——这三处不再截断，全量注入。文件上传保留 10MB 大小限制。 |
+| **新增设置项** | ① `ai_web_search_max_chars`（默认 5000，范围 1-50000）：控制 Tavily/知乎搜索单条结果截断；② `ai_large_file_preview_threshold`（默认 10000，范围 1-100000）：控制 `.md` 笔记超过阈值时自动切纯文本模式，该设置项移至「编辑器」设置区域。 |
+| **移除的总字符限制** | `note_service.go` `BuildNoteRefContext` 中移除 `max_file_size` 总字符数限制逻辑，所有引用笔记全量注入。 |
+| **涉及文件** | [app.go](app.go)（移除 `GetAIRefMaxChars`/`SetAIRefMaxChars` + `readAIChatFiles` 截断 + `CardRecallSearch` 调用处）、[internal/services/types.go](internal/services/types.go)（移除/新增字段）、[internal/services/note_service.go](internal/services/note_service.go)（移除截断 + 总字符限制）、[internal/services/recall_service.go](internal/services/recall_service.go)（移除截断参数）、[internal/database/db.go](internal/database/db.go)（默认值变更）、[frontend/index.html](frontend/index.html)（设置项 UI 移动/新增/移除）、[frontend/src/main.js](frontend/src/main.js)（设置项加载/保存/自动保存事件） |
 
 ## 十二、AGENTS.md 维护规范
 

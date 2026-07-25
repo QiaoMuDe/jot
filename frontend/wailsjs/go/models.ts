@@ -576,8 +576,9 @@ export namespace services {
 	    tavily_search_enabled: boolean;
 	    ai_card_recall_enabled: boolean;
 	    ai_card_recall_limit: number;
-	    ai_ref_max_chars: number;
 	    max_file_size: number;
+	    ai_web_search_max_chars: number;
+	    ai_large_file_preview_threshold: number;
 	    ai_search_result_limit: number;
 	    trash_cleanup_retention_days: number;
 	    log_level: number;
@@ -611,8 +612,9 @@ export namespace services {
 	        this.tavily_search_enabled = source["tavily_search_enabled"];
 	        this.ai_card_recall_enabled = source["ai_card_recall_enabled"];
 	        this.ai_card_recall_limit = source["ai_card_recall_limit"];
-	        this.ai_ref_max_chars = source["ai_ref_max_chars"];
 	        this.max_file_size = source["max_file_size"];
+	        this.ai_web_search_max_chars = source["ai_web_search_max_chars"];
+	        this.ai_large_file_preview_threshold = source["ai_large_file_preview_threshold"];
 	        this.ai_search_result_limit = source["ai_search_result_limit"];
 	        this.trash_cleanup_retention_days = source["trash_cleanup_retention_days"];
 	        this.log_level = source["log_level"];
