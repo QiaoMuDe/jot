@@ -271,8 +271,66 @@
                 <div class="view-controls"></div>
             </div>
             <div class="settings-content">
+                <nav class="settings-nav">
+                    <button class="settings-nav-item active" data-panel="appearance">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/>
+                        </svg>
+                        外观
+                    </button>
+                    <button class="settings-nav-item" data-panel="editor">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        编辑器
+                    </button>
+                    <button class="settings-nav-item" data-panel="api-connection">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
+                        </svg>
+                        API 连接
+                    </button>
+                    <button class="settings-nav-item" data-panel="dialog-search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z"/><path d="M9 18h6"/><path d="M10 22h4"/>
+                        </svg>
+                        对话与搜索
+                    </button>
+                    <button class="settings-nav-item" data-panel="tag-management">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+                        </svg>
+                        标签管理
+                    </button>
+                    <button class="settings-nav-item" data-panel="note-list">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                        </svg>
+                        笔记列表
+                    </button>
+                    <button class="settings-nav-item" data-panel="log-settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        日志设置
+                    </button>
+                    <button class="settings-nav-item" data-panel="screen-lock">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                        </svg>
+                        锁屏密码
+                    </button>
+                    <button class="settings-nav-item" data-panel="trash-clean">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        回收站清理
+                    </button>
+                </nav>
+                <div class="settings-panels">
+
                 <!-- 外观 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel active" data-panel="appearance">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/>
@@ -280,8 +338,8 @@
                         <span class="ai-group-title">外观</span>
                     </div>
                     <div class="font-settings">
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">字体</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">字体</label>
                             <span class="font-setting-desc">设置笔记编辑和界面显示字体</span>
                             <div class="font-family-select" id="fontFamilySelect">
                                 <div class="font-family-trigger" id="fontFamilyTrigger">
@@ -293,8 +351,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">大小</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">大小</label>
                             <span class="font-setting-desc">调整笔记编辑和显示的字体大小</span>
                             <div class="font-size-slider-wrap">
                                 <input type="range" id="fontSizeSlider" class="font-size-slider" min="10" max="32" value="16" step="1" />
@@ -306,8 +364,8 @@
                                 The quick brown fox jumps over the lazy dog
                             </div>
                         </div>
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">主题</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">主题</label>
                             <span class="font-setting-desc">切换应用的整体配色与视觉风格</span>
                             <div class="theme-select" id="themeControl">
                                 <div class="theme-select-trigger" id="themeTrigger">
@@ -347,7 +405,7 @@
                 </div>
 
                 <!-- 纯文本 MD 高亮 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="editor">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -355,8 +413,8 @@
                         <span class="ai-group-title">编辑器</span>
                     </div>
                     <div class="font-settings">
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">语法高亮</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">语法高亮</label>
                             <span class="font-setting-desc">启用 CM6 引擎的代码语法高亮功能，关闭后笔记代码块无高亮</span>
                             <div class="toggle-switch">
                                 <input type="checkbox" id="mdHighlightToggle">
@@ -366,8 +424,8 @@
                             </div>
                         </div>
 
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">全屏打开</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">全屏打开</label>
                             <span class="font-setting-desc">默认在全屏模式下打开笔记</span>
                             <div class="toggle-switch">
                                 <input type="checkbox" id="noteOpenFullscreenToggle">
@@ -377,8 +435,8 @@
                             </div>
                         </div>
 
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">自动换行</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">自动换行</label>
                             <span class="font-setting-desc">启用后编辑器内容超出宽度时自动换行显示</span>
                             <div class="toggle-switch">
                                 <input type="checkbox" id="editorWordWrapToggle">
@@ -388,14 +446,14 @@
                             </div>
                         </div>
 
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">大文件预览阈值</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">大文件预览阈值</label>
                             <span class="font-setting-desc">超过此字符数的 .md 笔记自动切换为纯文本模式（字符）</span>
                             <input type="number" id="aiLargeFilePreviewThreshold" class="settings-input" value="10000" min="1" max="100000" style="width:100px;margin-left:auto;" />
                         </div>
 
-                        <div class="font-setting-row">
-                            <label class="font-setting-label">代码高亮主题</label>
+                        <div class="ai-setting-item">
+                            <label class="ai-setting-label">代码高亮主题</label>
                             <span class="font-setting-desc">选择笔记编辑器的语法高亮配色方案</span>
                             <div class="theme-select" id="codeHighlightThemeControl">
                                 <div class="theme-select-trigger" id="codeHighlightThemeTrigger">
@@ -410,7 +468,7 @@
                     </div>
                 </div>
                 <!-- AI 助手 - API 连接 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="api-connection">
                         <div class="ai-group-header">
                             <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
@@ -491,7 +549,7 @@
                 </div>
 
                 <!-- AI 助手 - 对话增强 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="dialog-search">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z"/>
@@ -624,7 +682,7 @@
                 </div>
 
                 <!-- 标签管理 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="tag-management">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
@@ -632,18 +690,34 @@
                         <span class="ai-group-title">标签管理</span>
                     </div>
                     <div class="tag-management" id="tagManagement">
-                        <div class="tag-list" id="tagList">
-                            <!-- 标签列表由 JS 动态渲染 -->
-                        </div>
                         <div class="tag-add-form">
                             <input type="text" id="newTagName" class="settings-input" placeholder="新标签名称" />
-                            <input type="color" id="newTagColor" class="settings-color-input" value="#6366f1" />
-                            <button class="btn btn-save btn-sm" id="addTagBtn">添加</button>
+                            <div class="tag-add-footer">
+                                <div class="color-presets" id="colorPresets">
+                                    <button class="color-preset" data-color="#ef4444" title="红色" style="--swatch:#ef4444"></button>
+                                    <button class="color-preset" data-color="#f59e0b" title="琥珀" style="--swatch:#f59e0b"></button>
+                                    <button class="color-preset" data-color="#10b981" title="绿色" style="--swatch:#10b981"></button>
+                                    <button class="color-preset" data-color="#06b6d4" title="青色" style="--swatch:#06b6d4"></button>
+                                    <button class="color-preset" data-color="#3b82f6" title="蓝色" style="--swatch:#3b82f6"></button>
+                                    <button class="color-preset" data-color="#8b5cf6" title="紫色" style="--swatch:#8b5cf6"></button>
+                                    <button class="color-preset" data-color="#ec4899" title="粉色" style="--swatch:#ec4899"></button>
+                                    <button class="color-preset" data-color="#6366f1" title="靛蓝" style="--swatch:#6366f1"></button>
+                                    <button class="color-preset color-preset-custom" title="自定义颜色">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                                        <input type="color" id="newTagColor" class="color-native-trigger" value="#6366f1" />
+                                    </button>
+                                </div>
+                                <button class="btn btn-save btn-sm" id="addTagBtn">添加</button>
+                            </div>
+                        </div>
+                        <hr class="tag-divider">
+                        <div class="tag-list" id="tagList">
+                            <!-- 标签列表由 JS 动态渲染 -->
                         </div>
                     </div>
                 </div>
                 <!-- 笔记列表 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="note-list">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
@@ -674,16 +748,16 @@
                     </div>
                 </div>
                 <!-- 日志设置 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="log-settings">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
                         </svg>
                         <span>日志设置</span>
                     </div>
-                    <div class="settings-item">
-                        <span class="settings-label-title">日志级别</span>
-                        <span class="settings-label-desc">控制日志记录的详细程度</span>
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">日志级别</span>
+                        <span class="font-setting-desc">控制日志记录的详细程度</span>
                         <div class="segmented-control log-level-segmented" id="logLevelControl">
                             <div class="segmented-indicator" id="logLevelIndicator"></div>
                             <button class="segmented-btn" data-value="0">DEBUG</button>
@@ -692,9 +766,9 @@
                             <button class="segmented-btn" data-value="3">ERROR</button>
                         </div>
                     </div>
-                    <div class="settings-item" style="margin-top:8px;">
-                        <span class="settings-label-title">日志目录</span>
-                        <span class="settings-label-desc">查看日志文件</span>
+                    <div class="ai-setting-item" style="margin-top:8px;">
+                        <span class="ai-setting-label">日志目录</span>
+                        <span class="font-setting-desc">查看日志文件</span>
                         <button class="btn btn-sm btn-save" id="openLogDirBtn" style="white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                             打开日志目录
@@ -702,7 +776,7 @@
                     </div>
                 </div>
                 <!-- 锁屏密码 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="screen-lock">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
@@ -727,7 +801,7 @@
                     </div>
                 </div>
                 <!-- 回收站清理 -->
-                <div class="settings-section">
+                <div class="settings-section settings-panel" data-panel="trash-clean">
                     <div class="ai-group-header">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -741,6 +815,7 @@
                             <input type="number" id="trashCleanupRetentionDays" class="settings-input" value="30" min="1" max="365" style="width:100px;" />
                         </div>
                     </div>
+                </div>
                 </div>
         </div>
     </div>

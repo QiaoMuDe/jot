@@ -500,7 +500,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **服务商切换改为分段控件**（下拉菜单 → segmented-control + 弹簧曲线动画）
 - [x] **字体大小滑条**（按钮组 → range slider 10-32px + 实时预览区）
 - [x] **分段滑块指示器精度修复**（`(cw-8)/n` 公式消除溢出）
-- [x] **标签管理卡片重设计**（pill 形状标签芯片 + stagger 入场动画 + hover 上浮 + 删除动画 + 预设色圈选择器 + 虚线边框空状态 + 圆角输入框/按钮）
+- [x] **设置页面侧边栏导航重构**（左侧 176px 侧边栏 + 9 个带 SVG 图标导航项 + 右侧面板切换替代纵向卡片列表布局 + 150ms 淡出左移 + 200ms spring 弹性滑入动画 + 服务商分段控件指示器重定位 + 布局体系统一 `.ai-setting-item`）
+- [x] **标签管理卡片重设计（第二次迭代）**（输入框两行布局 + 预设8色色块选择器 + 自定义颜色入口`<input type="color">`叠加在按钮内部 + 标签列表CSS Grid卡片布局 + 增量DOM操作替代全量`loadTags()`重渲染 + spring弹性入场动画 + 收缩淡出删除动画 + 300ms超时fallback适配prefers-reduced-motion）
 - [x] **AI 消息懒加载 + 后端上下文自取**（CallAIStream 从 DB 加载历史、LoadAISessionMessagesPaginated 分页、TruncateAISessionAtMessage/AfterMessage 截断、CallAIStreamRegenerate 后端读取末条用户消息再生、SumSessionTokens 后端统计 Token）
 - [x] **锁屏密码 UI 精简**（移除独立状态标签，按钮文本自述状态，模态框根据状态动态显示旧密码输入框）
 - [x] **Mermaid 图表支持**（代码块按需渲染 + 源码/视图切换 + 主题联动 isDarkTheme + 双按钮 SVG 图标 + 复制/渲染按钮防碰撞动画）
@@ -567,19 +568,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 
 
-## 记忆点 1：笔记日历视图（笔记日历）
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增笔记日历视图（`frontend/src/js/calendar.js` + `frontend/src/css/components/calendar.css`），提供按创建日期回顾笔记的日历导航。包括日历网格渲染、三档墨水圆点统计（1条/2-5条/6+条）、月份切换、点击日期加载当日笔记列表、点击笔记原地打开编辑器查看模式。 |
-| **后端改动** | [note_service.go](internal/services/note_service.go) 新增 `GetByDate(date)` 和 `GetMonthCounts(year, month)` 方法；[app.go](app.go) 新增 `GetNotesByDate` 和 `GetMonthNoteCounts` 绑定接口。Note 模型新增 `Notebook *Notebook` 关联字段以正确展示笔记本名称。 |
-| **前端改动** | [calendar.js](frontend/src/js/calendar.js) (~280 行)：日历渲染/日期圆点/笔记列表/点击跳转；[calendar.css](frontend/src/css/components/calendar.css) (~280 行)：双栏布局/日历网格/墨水圆点/入场动画；[index.html](frontend/index.html) 新增 viewCalendar 容器 + 更多菜单项；[main.js](frontend/src/main.js) switchView 注册 + import。 |
-| **耗时修复** | 修复两个竞态：① `closeEditor` 的 200ms 清理定时器在 `openEditor` 后关闭编辑器（添加 `viewEditor.active` 守卫）；② `loadNotes` 的 `renderCardGrid` 与 `openEditor` 时序冲突（`await loadNotes()`）。 |
-| **涉及文件** | [frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[internal/services/note_service.go](internal/services/note_service.go)、[app.go](app.go)、[internal/models/note.go](internal/models/note.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
 
----
-
-## 记忆点 2：AI 流式回复期间禁用拖拽上传文件
+## 记忆点 1：AI 流式回复期间禁用拖拽上传文件
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：重置出厂设置遗漏清理 note_tags 多对多关联表
+## 记忆点 2：重置出厂设置遗漏清理 note_tags 多对多关联表
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记日历滚动条定位到窗口右侧 + 布局比例调整
+## 记忆点 3：笔记日历滚动条定位到窗口右侧 + 布局比例调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：日历笔记原地打开编辑器查看模式 + 竞态修复
+## 记忆点 4：日历笔记原地打开编辑器查看模式 + 竞态修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 会话侧栏统一菜单（右击/更多按钮合并）
+## 记忆点 5：AI 会话侧栏统一菜单（右击/更多按钮合并）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 6：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 7：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 8：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +670,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：移除引用截断逻辑 + 设置项重构
+## 记忆点 9：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +679,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **新增设置项** | ① `ai_web_search_max_chars`（默认 5000，范围 1-50000）：控制 Tavily/知乎搜索单条结果截断；② `ai_large_file_preview_threshold`（默认 10000，范围 1-100000）：控制 `.md` 笔记超过阈值时自动切纯文本模式，该设置项移至「编辑器」设置区域。 |
 | **移除的总字符限制** | `note_service.go` `BuildNoteRefContext` 中移除 `max_file_size` 总字符数限制逻辑，所有引用笔记全量注入。 |
 | **涉及文件** | [app.go](app.go)（移除 `GetAIRefMaxChars`/`SetAIRefMaxChars` + `readAIChatFiles` 截断 + `CardRecallSearch` 调用处）、[internal/services/types.go](internal/services/types.go)（移除/新增字段）、[internal/services/note_service.go](internal/services/note_service.go)（移除截断 + 总字符限制）、[internal/services/recall_service.go](internal/services/recall_service.go)（移除截断参数）、[internal/database/db.go](internal/database/db.go)（默认值变更）、[frontend/index.html](frontend/index.html)（设置项 UI 移动/新增/移除）、[frontend/src/main.js](frontend/src/main.js)（设置项加载/保存/自动保存事件） |
+
+---
+
+## 记忆点 10：设置页面侧边栏导航重构 + 标签管理卡片重设计
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 对设置页面进行全面重构：① 左侧 176px 侧边栏（9 个带 SVG 图标的导航项）+ 右侧面板切换，替代原有的纵向卡片列表布局；② 面板切换带 150ms 淡出左移 + 200ms 弹性滑入动画（`cubic-bezier(0.16, 1, 0.3, 1)` spring easing），`prefers-reduced-motion` 跳过动画直接切换；③ 修复服务商分段控件在面板切换时的指示器定位问题（`display:none` 时 `offsetWidth` 为 0，改为面板切换完成后重定位）；④ 标签管理卡片重设计：添加表单上移、预设色块选择器（8 色 + 自定义入口，原生 `<input type="color">` 叠加在按钮内部）、标签列表从 flex-wrap 改为 CSS Grid 卡片布局；⑤ 标签添加/删除改为增量 DOM 操作（不再全量 `loadTags()` 重渲染），添加时 spring 弹性入场，删除时收缩淡出，300ms 超时避免 `prefers-reduced-motion` 下 promise 挂起；⑥ 布局体系统一（`.font-setting-row`/`.settings-item` → `.ai-setting-item`）。 |
+| **前端改动** | [index.html](frontend/index.html)（新增 `nav.settings-nav` 侧边栏 + `.settings-panels` 容器 + 标签管理面板 HTML 重写）、[settings-panel.css](frontend/src/css/components/settings-panel.css)（侧边栏样式/面板切换显隐/面板动画 keyframes/标签卡片 CSS Grid/预设色块选择器样式/删除旧的 `.font-setting-row`/`.settings-item` 类）、[main.js](frontend/src/main.js)（新增 `switchSettingsTab()`/`initSettingsSidebarNav()`/`repositionProviderIndicator()`/`createTagElementHtml()`/`showTagEmptyState()`，改造 `createTag()`/`deleteTag()` 增量 DOM 操作） |
+| **关键修复** | ① 服务商指示器在面板 `display:none` 时 `offsetWidth` 为 0 → 提取 `repositionProviderIndicator()` 在面板显示后立即重算；② 原生 `<input type="color">` 的 picker 首次点击出现在左上角 → 改用 input 叠加在按钮内部（非 `position:fixed` 移动 + `.click()`），`pointer-events: none` 导致选色器不关闭 → 去掉 `pointer-events: none`；③ `animationend` 在 `prefers-reduced-motion` 下不触发 → 添加 300ms 超时 fallback。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
 
 ## 十二、AGENTS.md 维护规范
 

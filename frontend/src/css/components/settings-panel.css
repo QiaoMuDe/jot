@@ -111,19 +111,14 @@
    ========================================================================== */
 
 .settings-content {
+  display: flex;
   flex: 1;
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .settings-section {
-  background: var(--card-bg);
-  border-radius: var(--radius-xl);
   padding: 20px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
 }
 
 .settings-section-title {
@@ -134,27 +129,7 @@
   font-family: var(--font-family);
 }
 
-/* 字体设置 */
-.font-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.font-setting-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.font-setting-label {
-  font-size: 0.813rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  min-width: 48px;
-  flex-shrink: 0;
-}
-
+/* 全局设置项描述文本（用在所有设置面板中） */
 .font-setting-desc {
   flex: 1;
   font-size: 0.75rem;
@@ -164,6 +139,136 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Settings Sidebar
+   ========================================================================== */
+
+.settings-nav {
+  width: 176px;
+  min-width: 176px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 1px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--anim-duration-fast) ease-out,
+              color var(--anim-duration-fast) ease-out,
+              box-shadow var(--anim-duration-fast) ease-out;
+  user-select: none;
+  position: relative;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  width: calc(100% - 16px);
+  box-sizing: border-box;
+}
+
+.settings-nav-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+  background: var(--accent-lighter);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.settings-nav-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.7;
+}
+
+.settings-nav-item.active svg {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Settings Panels
+   ========================================================================== */
+
+.settings-panels {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.settings-panel {
+  display: none;
+  padding: 20px 24px;
+}
+
+.settings-panel.active {
+  display: block;
+}
+
+/* ==========================================================================
+   Panel Switch Animation
+   ========================================================================== */
+
+/* 退出动画 - 旧面板 */
+.settings-panel.panel-exit {
+  display: block;
+  animation: panelExit 150ms var(--anim-easing-out) forwards;
+}
+
+@keyframes panelExit {
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+/* 进入动画 - 新面板 */
+.settings-panel.panel-enter {
+  display: block;
+  animation: panelEnter 200ms var(--anim-easing-spring) forwards;
+}
+
+@keyframes panelEnter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel.panel-exit,
+  .settings-panel.panel-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .font-family-option {
@@ -189,59 +294,260 @@
   background: var(--hover-bg);
 }
 
+/* ==========================================================================
+   Section L: Tag Management (Settings)
+   ========================================================================== */
+
 .tag-management {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
+/* ── Add Form（两行：输入框 / 色块+按钮） ── */
+
+/* 自定义色块按钮 → 内部叠加原生 color input，点击即弹出选色器 */
+.color-preset-custom {
+    position: relative;
+    overflow: hidden;
+}
+.color-preset-custom .color-native-trigger {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    display: block;
+}
+.tag-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tag-add-form .settings-input {
+    width: 100%;
+}
+
+.tag-add-footer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Color Presets ── */
+.color-presets {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.color-preset {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: var(--swatch);
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+}
+
+.color-preset:hover {
+    transform: scale(1.2);
+    z-index: 1;
+}
+
+.color-preset.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* 选中态：白色内圆点 */
+.color-preset.active::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* 自定义色块：虚线边框 + 调色盘图标 */
+.color-preset-custom {
+    border-style: dashed;
+    border-color: var(--border);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.color-preset-custom:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--hover-bg);
+}
+
+.color-preset-custom.active {
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--accent-lighter);
+    color: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* ── Divider ── */
+.tag-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+}
+
+/* ── Tag Grid ── */
 .tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
+    min-height: 36px;
 }
 
+/* ── Tag Item ── */
 .tag-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
-  font-size: 0.813rem;
-  color: #fff;
-  font-weight: 500;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--tag-color);
+    font-size: 0.813rem;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
 }
 
+.tag-item:hover {
+    box-shadow: var(--shadow-sm);
+}
+
+/* 增量添加时的新标签入场动画 */
+.tag-item.tag-just-added {
+    animation: tagFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 删除淡出 */
+.tag-item.tag-deleting {
+    animation: tagFadeOut 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+    pointer-events: none;
+}
+
+/* 颜色圆点 */
+.tag-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--tag-color);
+    flex-shrink: 0;
+}
+
+/* 标签名称 */
+.tag-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* 标签使用计数 */
+.tag-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+/* 删除按钮 */
 .tag-delete-btn {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: var(--tag-delete-bg);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-  font-family: inherit;
-  padding: 0;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.tag-item:hover .tag-delete-btn {
+    opacity: 1;
 }
 
 .tag-delete-btn svg {
-  width: 10px;
-  height: 10px;
+    width: 12px;
+    height: 12px;
 }
 
 .tag-delete-btn:hover {
-  background: var(--tag-delete-hover-bg);
-  transform: scale(1.15);
+    background: var(--danger-bg);
+    color: var(--danger);
 }
 
-.tag-add-form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+/* ── Empty State ── */
+.tag-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    grid-column: 1 / -1;
+}
+
+.tag-empty svg {
+    width: 36px;
+    height: 36px;
+    opacity: 0.35;
+}
+
+.tag-empty-text {
+    font-size: 0.875rem;
+}
+
+.tag-empty-hint {
+    font-size: 0.75rem;
+    opacity: 0.65;
+}
+
+/* ── Animations ── */
+@keyframes tagFadeIn {
+    0%   { opacity: 0; transform: scale(0.85) translateY(-6px); }
+    60%  { opacity: 1; transform: scale(1.02) translateY(0); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes tagFadeOut {
+    0%   { opacity: 1; transform: scale(1); max-height: 46px; }
+    60%  { opacity: 0.4; transform: scale(0.92); max-height: 46px; }
+    100% { opacity: 0; transform: scale(0.85); max-height: 0; padding: 0 10px; margin: 0; border-left-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tag-item.tag-just-added { animation: none; }
+    .tag-item.tag-deleting { animation: none; display: none; }
 }
 
 .settings-input {
@@ -284,49 +590,6 @@
 .setting-select:focus {
   border-color: var(--accent);
   background: var(--card-bg);
-}
-
-.settings-color-input {
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 2px;
-  cursor: pointer;
-  background: none;
-}
-
-/* ==========================================================================
-   Section L: Settings Item Row (label + control horizontal layout)
-   ========================================================================== */
-
-.settings-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 40px;
-}
-
-.settings-label-title {
-    font-size: 0.813rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    flex-shrink: 0;
-    min-width: 72px;
-}
-
-.settings-label-desc {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.settings-item > :last-child {
-    flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -597,7 +860,7 @@
 .ai-status {
     font-size: 0.8rem;
     padding: 4px 0 0 0;
-    margin-left: 60px; /* 对齐 font-setting-label 后的输入区 */
+    margin-left: 0;
     transition: opacity 0.15s;
 }
 
@@ -626,20 +889,6 @@
 .ai-setting-search-desc {
     font-size: 0.8rem;
     color: var(--text-muted);
-}
-
-/* 设置页 toggle switch 覆盖样式（已有 .ai-chat-toggle-switch） */
-.font-setting-row .ai-chat-toggle-switch {
-    cursor: pointer;
-    margin-left: auto;
-}
-
-.font-setting-row .ai-chat-toggle-switch.active {
-    background: var(--accent);
-}
-
-.font-setting-row .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
-    left: 14px;
 }
 
 /* ==========================================================================

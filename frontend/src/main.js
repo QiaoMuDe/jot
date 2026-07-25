@@ -435,6 +435,9 @@ const els = {
     openLogDirBtn: $('openLogDirBtn'),
     logLevelControl: $('logLevelControl'),
     logLevelIndicator: $('logLevelIndicator'),
+    // 设置页侧边栏
+    settingsNav: document.querySelector('.settings-nav'),
+    settingsPanels: document.querySelector('.settings-panels'),
     clearAISessionsBtn: $('clearAISessionsBtn'),
     clearCompletedTodosBtn: $('clearCompletedTodosBtn'),
     cleanupOrphanImagesBtn: $('cleanupOrphanImagesBtn'),
@@ -616,6 +619,7 @@ function switchView(view) {
                 buildCodeHighlightThemeDropdown();
                 initCodeHighlightThemeSettings();
                 initCodePreview();
+                initSettingsSidebarNav();
                 loadTags();
                 // 每次进入设置页 Key 输入框默认隐藏
                 els.aiAPIKey.type = 'password';
@@ -623,6 +627,8 @@ function switchView(view) {
                 const initEyeOff = els.aiAPIKeyToggle.querySelector('.toggle-eye-off');
                 if (initEye) initEye.style.display = '';
                 if (initEyeOff) initEyeOff.style.display = 'none';
+                // 每次进入设置页默认回到"外观"面板
+                switchSettingsTab('appearance');
                 break;
             case 'data':
                 loadDataStats();
@@ -1225,12 +1231,72 @@ async function loadTags() {
     renderTagSelector();
 }
 
+/* 当前选中的标签颜色（null = 未选中，创建时随机生成） */
+let selectedTagColor = null;
+
 /**
- * 创建标签
+ * 初始化预设色块选择器的交互（可点击切换选中/取消）
+ */
+function initColorPresets() {
+    const presets = document.querySelectorAll('.color-preset:not(.color-preset-custom)');
+    const customBtn = document.querySelector('.color-preset-custom');
+    const colorInput = els.newTagColor;
+    if (!presets.length || !customBtn) return;
+
+    // 预设色块点击 → 切换选中/取消
+    presets.forEach(p => {
+        p.addEventListener('click', () => {
+            if (p.classList.contains('active')) {
+                // 再次点击 → 取消选中
+                p.classList.remove('active');
+                selectedTagColor = null;
+            } else {
+                // 点击其他色块 → 选中
+                presets.forEach(sp => sp.classList.remove('active'));
+                p.classList.add('active');
+                selectedTagColor = p.dataset.color;
+                colorInput.value = selectedTagColor;
+            }
+        });
+    });
+
+    // 自定义按钮（内置 input[type=color]） → 点击即打开原生选色器
+    // capture phase 拦截：已选中时阻止事件到达内部 input，实现再次点击取消
+    customBtn.addEventListener('click', (e) => {
+        if (customBtn.classList.contains('active')) {
+            // 已选中 → 阻止事件传到内部 input（防止 picker 打开），取消选中
+            e.stopPropagation();
+            customBtn.classList.remove('active');
+            selectedTagColor = null;
+        } else {
+            // 未选中 → 取消其它色块的选中，让事件自然到达 input 打开选色器
+            presets.forEach(p => p.classList.remove('active'));
+        }
+    }, true); // capture phase
+
+    // 原生选色器选择 → 更新选中色，给自定义按钮也加上选中态
+    colorInput.addEventListener('input', () => {
+        selectedTagColor = colorInput.value;
+        presets.forEach(p => p.classList.remove('active'));
+        customBtn.classList.add('active');
+    });
+}
+
+/**
+ * 生成一个随机标签颜色（HSL，保证鲜艳度适中）
+ */
+function getRandomTagColor() {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsl(${hue}, 60%, 55%)`;
+}
+
+/**
+ * 创建标签（颜色取自当前选中的色块，未选中则随机生成）
+ * 增量追加到 DOM，不再全量重渲染
  */
 async function createTag() {
     const name = els.newTagName.value.trim();
-    const color = els.newTagColor.value;
+    const color = selectedTagColor || getRandomTagColor();
     if (!name) {
         nm.show('请输入标签名称', 'warning');
         return;
@@ -1243,18 +1309,48 @@ async function createTag() {
         return;
     }
 
+    let createdTag;
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateTag) {
-            await window.go.main.App.CreateTag(name, color);
+            createdTag = await window.go.main.App.CreateTag(name, color);
         } else {
             console.warn('CreateTag 未绑定');
         }
     } catch (err) {
         console.error('创建标签失败:', err);
         nm.show('创建标签失败', 'error');
+        return;
     }
+
+    if (!createdTag) {
+        nm.show('创建标签失败', 'error');
+        return;
+    }
+
     els.newTagName.value = '';
-    await loadTags();
+
+    // 增量追加到 state.tags
+    state.tags.push(createdTag);
+
+    // 增量追加 DOM 元素（移除空状态 → 追加新标签）
+    if (state.tags.length === 1) {
+        // 首个标签：全量渲染（从空状态切到标签列表）
+        renderTagList();
+    } else {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = createTagElementHtml(createdTag);
+        const el = wrapper.firstElementChild;
+        // 移除动画类（不重复播放已有标签的入场动画）
+        el.style.animation = 'none';
+        els.tagList.appendChild(el);
+        // 下一帧添加动画类以触发入场
+        requestAnimationFrame(() => {
+            el.style.animation = '';
+            el.classList.add('tag-just-added');
+        });
+    }
+
+    renderTagSelector();
     nm.show('标签已创建', 'success');
 }
 
@@ -1767,18 +1863,29 @@ function setActiveProvider(value) {
     seg.querySelectorAll('.segmented-btn').forEach(btn => btn.classList.remove('active'));
     const target = seg.querySelector(`[data-provider-value="${value}"]`);
     if (target) target.classList.add('active');
-    // 移动指示器
+    // 移动指示器（面板隐藏时 offsetWidth=0，定位会在面板显示后补充执行）
+    repositionProviderIndicator();
+}
+
+/**
+ * 重新定位服务商分段控件的指示器（面板从隐藏变为可见后调用）
+ */
+function repositionProviderIndicator() {
     const indicator = els.aiProviderIndicator;
-    if (indicator && target) {
-        const btns = Array.from(seg.querySelectorAll('.segmented-btn'));
-        const index = btns.indexOf(target);
-        if (index >= 0) {
-            const cw = seg.offsetWidth;
-            const segW = (cw - 8) / btns.length;
-            indicator.style.transform = `translateX(${2 + index * segW}px)`;
-            indicator.style.width = `${segW}px`;
-        }
-    }
+    const seg = els.aiProviderSegmented;
+    if (!indicator || !seg) return;
+    const target = seg.querySelector('.segmented-btn.active');
+    if (!target) return;
+    const btns = Array.from(seg.querySelectorAll('.segmented-btn'));
+    if (btns.length === 0) return;
+    const cw = seg.offsetWidth;
+    // 面板仍未显示时跳过（如 loadSettings 执行时 API 面板处于 display:none 状态）
+    if (cw === 0) return;
+    const index = btns.indexOf(target);
+    if (index < 0) return;
+    const segW = (cw - 8) / btns.length;
+    indicator.style.transform = `translateX(${2 + index * segW}px)`;
+    indicator.style.width = `${segW}px`;
 }
 
 function updateProviderUI() {
@@ -3032,9 +3139,25 @@ function setAIStatus(elId, msg, type) {
 
 
 /**
- * 删除标签
+ * 删除标签（含删除动画）
  */
 async function deleteTag(id) {
+    // 播放淡出动画
+    const el = document.querySelector(`.tag-item[data-tag-id="${id}"]`);
+    if (el) {
+        el.classList.add('tag-deleting');
+        // 等待动画结束（设 300ms 超时，防止无动画时 promise 挂起）
+        await new Promise((resolve) => {
+            const timer = setTimeout(resolve, 300);
+            el.addEventListener('animationend', () => {
+                clearTimeout(timer);
+                resolve();
+            }, { once: true });
+        });
+        // 动画结束后从 DOM 移除
+        el.remove();
+    }
+
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteTag) {
             await window.go.main.App.DeleteTag(id);
@@ -3044,7 +3167,16 @@ async function deleteTag(id) {
     } catch (err) {
         console.error('删除标签失败:', err);
     }
-    await loadTags();
+
+    // 从 state.tags 移除
+    state.tags = state.tags.filter(t => t.id !== id);
+
+    // 若列表为空则显示空状态
+    if (state.tags.length === 0) {
+        showTagEmptyState();
+    }
+
+    renderTagSelector();
     await loadNotes();
     nm.show('标签已删除', 'success');
 }
@@ -3163,22 +3295,44 @@ function renderCardGrid(animateMode, prevCount) {
 /**
  * 渲染标签管理列表
  */
+/**
+ * 生成单个标签卡片的 HTML 字符串
+ * @param {object} tag - { id, name, color, notes? }
+ * @returns {string}
+ */
+function createTagElementHtml(tag) {
+    const color = tag.color || '#6366f1';
+    const count = tag.notes ? tag.notes.length : '';
+    return `<div class="tag-item" data-tag-id="${tag.id}" style="--tag-color: ${color}">
+        <span class="tag-color-dot"></span>
+        <span class="tag-name">${escapeHtml(tag.name)}</span>
+        ${count ? `<span class="tag-count">${count}</span>` : ''}
+        <button class="tag-delete-btn" onclick="window.deleteTag(${tag.id})">${SVGS.windowClose}</button>
+    </div>`;
+}
+
+/** 显示标签列表空状态 */
+function showTagEmptyState() {
+    els.tagList.innerHTML = `
+    <div class="tag-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+        </svg>
+        <span class="tag-empty-text">暂无标签</span>
+        <span class="tag-empty-hint">在上方输入标签名称开始创建</span>
+    </div>`;
+}
+
+/**
+ * 全量渲染标签列表
+ */
 function renderTagList() {
     if (state.tags.length === 0) {
-        els.tagList.innerHTML = '<div style="color: #94a3b8; font-size: 13px;">暂无标签</div>';
+        showTagEmptyState();
         return;
     }
-
-    els.tagList.innerHTML = state.tags
-        .map(
-            (tag) => `
-        <div class="tag-item" style="background-color: ${tag.color || '#6366f1'}">
-            ${escapeHtml(tag.name)}
-            <button class="tag-delete-btn" onclick="window.deleteTag(${tag.id})">${SVGS.windowClose}</button>
-        </div>
-        `
-        )
-        .join('');
+    els.tagList.innerHTML = state.tags.map(tag => createTagElementHtml(tag)).join('');
 }
 
 /**
@@ -5417,6 +5571,7 @@ function initEventListeners() {
     els.newTagName.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') createTag();
     });
+    initColorPresets();
 
     // 回收站按钮
     els.trashBackBtn.addEventListener('click', () => {
@@ -8099,6 +8254,25 @@ function applyCodeHighlightTheme(themeName) {
 }
 
 let _codeHighlightThemeInited = false;
+let _settingsSidebarInited = false;
+
+/**
+ * 初始化设置页侧边栏导航事件绑定
+ */
+function initSettingsSidebarNav() {
+    if (_settingsSidebarInited) return;
+    _settingsSidebarInited = true;
+
+    const nav = els.settingsNav;
+    if (!nav) return;
+
+    nav.querySelectorAll('.settings-nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const panelName = item.dataset.panel;
+            if (panelName) switchSettingsTab(panelName);
+        });
+    });
+}
 
 /**
  * 初始化代码高亮主题设置（只处理触发按钮和外部点击关闭）
@@ -8487,6 +8661,64 @@ async function saveSettings() {
     } catch (e) {
         console.error('保存设置失败:', e);
     }
+}
+
+/**
+ * 切换设置页侧边栏导航面板
+ * @param {string} panelName - data-panel 属性值，如 'appearance', 'editor' 等
+ */
+function switchSettingsTab(panelName) {
+    const nav = els.settingsNav;
+    const panelsContainer = els.settingsPanels;
+    if (!nav || !panelsContainer) return;
+
+    // 查找目标导航项和目标面板
+    const targetItem = nav.querySelector(`.settings-nav-item[data-panel="${panelName}"]`);
+    const targetPanel = panelsContainer.querySelector(`.settings-panel[data-panel="${panelName}"]`);
+    if (!targetItem || !targetPanel) return;
+
+    // 如果已经是激活状态，不做任何事
+    if (targetPanel.classList.contains('active') && targetItem.classList.contains('active')) return;
+
+    // 更新侧边栏导航激活态
+    nav.querySelectorAll('.settings-nav-item').forEach(item => item.classList.remove('active'));
+    targetItem.classList.add('active');
+
+    // 获取当前显示的面板
+    const currentPanel = panelsContainer.querySelector('.settings-panel.active');
+
+    // 检测是否应跳过动画（prefers-reduced-motion）
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!currentPanel || prefersReducedMotion) {
+        // 无当前面板或用户偏好减少动效 → 直接切换
+        if (currentPanel) currentPanel.classList.remove('active');
+        targetPanel.classList.add('active');
+        // 面板从 hidden→visible，重算可能受 display:none 影响的分段控件指示器
+        repositionProviderIndicator();
+        return;
+    }
+
+    // --- 播放切换动画 ---
+    // 阶段1: 旧面板退出动画
+    currentPanel.classList.remove('active');
+    currentPanel.classList.add('panel-exit');
+
+    currentPanel.addEventListener('animationend', function onExitEnd() {
+        currentPanel.removeEventListener('animationend', onExitEnd);
+        currentPanel.classList.remove('panel-exit');
+
+        // 阶段2: 新面板进入动画
+        targetPanel.classList.add('panel-enter');
+        // 面板已具备 display:block，立即重算分段控件指示器（不需要等动画播完）
+        repositionProviderIndicator();
+
+        targetPanel.addEventListener('animationend', function onEnterEnd() {
+            targetPanel.removeEventListener('animationend', onEnterEnd);
+            targetPanel.classList.remove('panel-enter');
+            targetPanel.classList.add('active');
+        });
+    });
 }
 
 /* ===== 待办清单模块 ===== */
@@ -9074,6 +9306,7 @@ window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
 window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;
+window.switchSettingsTab = switchSettingsTab;
 window.closeEditorSafe = closeEditorSafe;
 
 // 应用启动

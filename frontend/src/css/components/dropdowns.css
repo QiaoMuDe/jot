@@ -170,6 +170,7 @@
 /* ===== 字体预览区 ===== */
 .font-preview-row {
   margin-top: 6px;
+  margin-bottom: 12px;
 }
 
 .font-preview-text {
