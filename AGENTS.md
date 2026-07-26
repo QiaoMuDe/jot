@@ -55,7 +55,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时隐藏更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 本月摘要统计 / 按日笔记列表 / 回到今天 / 点击笔记跳转 / 切月自动重置今天）
@@ -572,23 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对笔记日历视图进行多轮视觉和交互优化：① 日历 UI 全面美化（面板间距取消硬分割线、导航箭头放大、选中日期外圈高亮、日期格子 36px→40px）；② 新增"本月统计"区域（三张统计卡：总笔记/记天数/最长连续 + 活跃度进度条）；③ 仅在非今天日期显示"回到今天"按钮；④ 切月自动重置到当前年月的今天；⑤ 全局 ESC 按下时先关闭搜索弹窗，再执行导航逻辑。 |
-| **面板布局** | [calendar.css](frontend/src/css/components/calendar.css)：`gap: 0 → 12px`、删除 `.calendar-sidebar` 的 `border-right` 改为圆角卡片背景、`.calendar-notes-panel` 去掉左内边距。 |
-| **日历网格 UI** | [calendar.css](frontend/src/css/components/calendar.css)：日期格子 `36px→40px`、选中态新增 `box-shadow` 外圈光晕、`margin-top: 6px→12px` 使底部墨水圆点不贴边。 |
-| **本月统计** | [calendar.js](frontend/src/js/calendar.js) 新增 `computeMonthStats()`（总笔记数/记天数/最长连续天数计算）和 `renderMonthStats()` 渲染 HTML；[calendar.css](frontend/src/css/components/calendar.css) 新增统计卡片样式（flex:1 三栏 + 数据值 `1.375rem` + gap 16px + 活跃度进度条渐变 + 弹性动画）。 |
-| **回到今天按钮** | [index.html](frontend/index.html) 在 `#calendarTodayBtn` 新增按钮；[calendar.js](frontend/src/js/calendar.js) 新增 `updateTodayBtnVisibility()` 判断非今天才显示；点击按钮回到今月今月并选中今天。 |
-| **切月自动重置今天** | [calendar.js](frontend/src/js/calendar.js) `refreshCalendarView()` 每次调用将 `calendarYear`/`calendarMonth` 重置为今天，使每次切到日历视图都回到当前月份。 |
-| **ESC 关闭搜索弹窗** | [main.js](frontend/src/main.js) 全局 ESC 处理器新增搜索弹窗可见性检查：可见则关闭弹窗并 return。移除了 `handleSearchModalKeydown` 中的 Escape 处理（避免 capture/bubble 双处理器冲突）。 |
-| **笔记列表重设计** | [calendar.css](frontend/src/css/components/calendar.css)：条目去掉方框改为 `border-bottom` 底部分割线、hover 从 `translateX(4px)` 改为 `background: var(--hover-bg)`。笔记本标签新增彩色 pill 样式、时间文字 `opacity: 0.6` 弱化。笔记列表日期标题 `font-size: 1rem→1.25rem`。 |
-| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/js/calendar.js](frontend/src/js/calendar.js)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 1：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +586,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 2：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：移除引用截断逻辑 + 设置项重构
+## 记忆点 3：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 4：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 5：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 6：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 7：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -674,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 8：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,7 +671,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 9：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,6 +679,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **空状态精简** | [index.html](frontend/index.html)：删除 `<p class="todo-empty-title">清清爽爽</p>` 一行，空状态仅显示勾选图标和 "点击右下角 + 添加新待办" 提示。 |
 | **编辑器内屏蔽 Ctrl+P** | [main.js](frontend/src/main.js#L6007-L6008)：在 Ctrl+P 处理器顶部新增 `if (els.viewEditor.classList.contains('active')) return;` 守卫条件，当编辑器/查看器/新建页面打开时直接跳过启动器响应。项目已有同类模式——Ctrl+数字快捷键在第 6138-6143 行已使用相同的 `els.viewEditor.classList.contains('active')` 判断。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（空状态标题删除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+P 守卫） |
+
+---
+
+## 记忆点 10：「更多技能」按钮隐藏改为禁用态
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 选中 AI 助手的「更多技能」菜单项后，右侧技能按钮不再隐藏，改为禁用态（半透明、不可点击）；取消技能后按钮恢复正常可用。 |
+| **renderSkillChips 改造** | [ai-chat.js](frontend/src/js/ai-chat.js)：有激活技能时 `skillsBtn.style.display = 'none'` → `skillsBtn.disabled = true` + `classList.add('is-disabled')`；无激活技能时恢复 `disabled = false` 并移除 class。 |
+| **切换会话恢复** | [ai-chat.js](frontend/src/js/ai-chat.js)：`clearSkillsState()` 新增 `skillsBtn` 禁用状态恢复逻辑。 |
+| **禁用态样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：新增 `#aiChatMoreSkillsBtn:disabled` / `.is-disabled` 样式（opacity 0.45、cursor not-allowed、pointer-events none）。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
 
 ---
 

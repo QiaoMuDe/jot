@@ -1655,11 +1655,17 @@ function renderSkillChips() {
     const keys = Object.keys(activeSkills);
     if (keys.length === 0) {
         skillBar.style.display = 'none';
-        if (skillsBtn) skillsBtn.style.display = '';
+        if (skillsBtn) {
+            skillsBtn.disabled = false;
+            skillsBtn.classList.remove('is-disabled');
+        }
         return;
     }
     skillBar.style.display = '';
-    if (skillsBtn) skillsBtn.style.display = 'none';
+    if (skillsBtn) {
+        skillsBtn.disabled = true;
+        skillsBtn.classList.add('is-disabled');
+    }
     skillChips.innerHTML = keys.map(skillId => {
         const config = activeSkills[skillId];
         if (skillId === 'translate') {
@@ -4738,6 +4744,10 @@ function clearSkillsState() {
     activeSkills = {};
     if (skillBar) skillBar.style.display = 'none';
     if (skillChips) skillChips.innerHTML = '';
+    if (skillsBtn) {
+        skillsBtn.disabled = false;
+        skillsBtn.classList.remove('is-disabled');
+    }
     closeLangPicker();
 }
 

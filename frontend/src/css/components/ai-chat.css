@@ -2341,6 +2341,14 @@
     color: var(--accent);
 }
 
+/* 更多技能按钮禁用态 */
+#aiChatMoreSkillsBtn.is-disabled,
+#aiChatMoreSkillsBtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* ── 追问引用栏 ── */
 .ai-chat-followup-bar {
     display: flex;
