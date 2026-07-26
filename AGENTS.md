@@ -570,25 +570,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 23. **启动器网格（Launcher Grid）全屏浮层实现**：新增 `Ctrl+P` 触发的全屏启动器网格，与"更多"菜单并存互不干扰。核心设计要点：① ES module 中函数不会自动挂到 `window` 上，launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露；② `executeAction` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，不能用 `setTimeout` 硬等——离场动画涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发；③ 方向键首次导航 `_selectedIndex === -1` 时直接跳第一项；④ 动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发入场），离场用 `closing` class 触发反方向过渡 + `transitionend` 监听 + 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
 
-
-
-
-
-
-
-## 记忆点 1：AI 会话侧栏统一菜单（右击/更多按钮合并）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将 AI 会话侧栏中的右击菜单（重命名 + 导出）和更多按钮菜单（置顶 + 重命名 + 删除会话）合并为一个统一菜单。右击和更多按钮点击弹出完全相同的菜单，包含置顶/取消置顶、重命名、导出、删除会话四项。 |
-| **移除旧右键菜单** | [index.html](frontend/index.html) 删除 `#aiSessionContextMenu` 元素；[ai-chat.css](frontend/src/css/components/ai-chat.css) 删除 `.ai-session-context-menu` 全部样式（~50 行）；[ai-chat.js](frontend/src/js/ai-chat.js) 删除 `sessionContextMenu`、`_contextSessionId`、`_contextTitleEl` 变量和 `closeSessionContextMenu()`/`showSessionContextMenu()` 函数。 |
-| **提取共享函数** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `showSessionMenu(s, item, left, top)` 函数，统一构建菜单：置顶/取消置顶 → 重命名 → 导出 → 分隔线 → 删除会话。更多按钮点击和右击都调用此函数，仅位置参数不同（按钮用 `getBoundingClientRect()`，右击用 `e.clientX/e.clientY`）。 |
-| **更多按钮切换关闭** | 更多按钮点击时若菜单已打开且是同一会话条目，则直接关闭菜单而非重新打开。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（删除旧菜单 DOM）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除旧菜单样式）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（删除旧变量/函数 + 新增 showSessionMenu + 修改右击/更多按钮事件绑定）
-
 ---
 
-## 记忆点 2：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
+## 记忆点 1：日历 UI 美化 + 本月统计 + 回到今天 + 切月自动重置今天 + ESC 关闭搜索弹窗
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
+## 记忆点 2：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 3：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：移除引用截断逻辑 + 设置项重构
+## 记忆点 4：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 5：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 6：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +648,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 7：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -676,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 8：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +674,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 9：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -700,6 +684,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **确认弹窗按钮主题色** | [modals.css](frontend/src/css/components/modals.css)：`confirm-ok` 从 `var(--danger)` 改为 `var(--accent)` 实心；`confirm-third` 从 `var(--warning)` 改为 `var(--accent)` 线框（透明背景 + accent 色边框/文字），hover 叠加 10% accent 底色。 |
 | **关闭动画闪烁修复** | [main.js](frontend/src/main.js)：`showSaveConfirmDialog` 的 `cleanup` 中移除 `els.confirmThirdBtn.style.display = 'none'` 一行，让淡出 150ms 期间三个按钮保持完整可见。 |
 | **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 10：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两个小改进：① 待办清单无条目时移除"清清爽爽"标题文字，仅保留图标和提示文案；② 笔记编辑器/查看器/新建页面打开时屏蔽 Ctrl+P 快捷键，防止编辑笔记过程中意外弹出启动器干扰操作。 |
+| **空状态精简** | [index.html](frontend/index.html)：删除 `<p class="todo-empty-title">清清爽爽</p>` 一行，空状态仅显示勾选图标和 "点击右下角 + 添加新待办" 提示。 |
+| **编辑器内屏蔽 Ctrl+P** | [main.js](frontend/src/main.js#L6007-L6008)：在 Ctrl+P 处理器顶部新增 `if (els.viewEditor.classList.contains('active')) return;` 守卫条件，当编辑器/查看器/新建页面打开时直接跳过启动器响应。项目已有同类模式——Ctrl+数字快捷键在第 6138-6143 行已使用相同的 `els.viewEditor.classList.contains('active')` 判断。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（空状态标题删除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+P 守卫） |
 
 ---
 

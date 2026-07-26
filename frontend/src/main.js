@@ -6004,6 +6004,8 @@ async function handleKeyboardNavigation(e) {
     // Ctrl+P: 打开/关闭启动器网格
     if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
+        // 编辑器/查看器/新建页面打开时屏蔽启动器
+        if (els.viewEditor.classList.contains('active')) return;
         const launcher = document.getElementById('launcher');
         if (launcher && launcher.classList.contains('visible')) {
             if (typeof window.closeLauncher === 'function') window.closeLauncher();
