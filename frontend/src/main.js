@@ -1888,6 +1888,27 @@ function repositionProviderIndicator() {
     indicator.style.width = `${segW}px`;
 }
 
+/**
+ * 重新定位日志级别分段控件指示器（面板从 hidden→visible 时调用）
+ */
+function repositionLogLevelIndicator() {
+    const indicator = els.logLevelIndicator;
+    const seg = els.logLevelControl;
+    if (!indicator || !seg) return;
+    const target = seg.querySelector('.segmented-btn.active');
+    if (!target) return;
+    const btns = Array.from(seg.querySelectorAll('.segmented-btn'));
+    if (btns.length === 0) return;
+    const cw = seg.offsetWidth;
+    // 面板仍未显示时跳过（如 loadSettings 执行时日志设置面板处于 display:none 状态）
+    if (cw === 0) return;
+    const index = btns.indexOf(target);
+    if (index < 0) return;
+    const segW = (cw - 8) / btns.length;
+    indicator.style.transform = `translateX(${2 + index * segW}px)`;
+    indicator.style.width = `${segW}px`;
+}
+
 function updateProviderUI() {
     // 以下默认 URL 仅用于 UI 初始提示，实际默认值由后端 DB 管理
     const provider = getActiveProvider();
@@ -8607,16 +8628,9 @@ async function loadSettings() {
             segBtns.forEach(btn => {
                 btn.classList.toggle('active', parseInt(btn.dataset.value) === logLevel);
             });
-            // 移动指示器
-            const activeBtn = els.logLevelControl.querySelector('.segmented-btn.active');
-            if (activeBtn && els.logLevelIndicator) {
-                const btns = Array.from(segBtns);
-                const index = btns.indexOf(activeBtn);
-                if (index >= 0) {
-                    const cw = els.logLevelControl.offsetWidth;
-                    const segW = (cw - 8) / btns.length;
-                    els.logLevelIndicator.style.transform = `translateX(${2 + index * segW}px)`;
-                }
+            // 移动指示器（面板隐藏时 offsetWidth=0，定位会在面板显示后补充执行）
+            if (els.logLevelIndicator) {
+                repositionLogLevelIndicator();
             }
         }
 
@@ -8734,6 +8748,7 @@ function switchSettingsTab(panelName) {
         targetPanel.classList.add('active');
         // 面板从 hidden→visible，重算可能受 display:none 影响的分段控件指示器
         repositionProviderIndicator();
+        repositionLogLevelIndicator();
         return;
     }
 
@@ -8750,6 +8765,7 @@ function switchSettingsTab(panelName) {
         targetPanel.classList.add('panel-enter');
         // 面板已具备 display:block，立即重算分段控件指示器（不需要等动画播完）
         repositionProviderIndicator();
+        repositionLogLevelIndicator();
 
         targetPanel.addEventListener('animationend', function onEnterEnd() {
             targetPanel.removeEventListener('animationend', onEnterEnd);

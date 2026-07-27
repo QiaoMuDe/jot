@@ -305,6 +305,19 @@ function openLauncher() {
     }
     // 重置过滤（显示全部）
     filterItems('');
+
+    // 根据侧栏当前状态更新 sidebar-toggle 项的标签和图标
+    const sidebarToggleEl = _launcherGrid?.querySelector('[data-action="sidebar-toggle"]');
+    if (sidebarToggleEl) {
+        const isCollapsed = window.els?.notebookSidebar?.classList.contains('collapsed');
+        const label = isCollapsed ? '展开侧栏' : '折叠侧栏';
+        const expandSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>';
+        const collapseSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>';
+        sidebarToggleEl.querySelector('.launcher-item-label').textContent = label;
+        sidebarToggleEl.querySelector('.launcher-item-icon').innerHTML = isCollapsed ? expandSvg : collapseSvg;
+        sidebarToggleEl.dataset.label = label;
+    }
+
     // 通过 requestAnimationFrame 确保 display 生效后再触发动画
     requestAnimationFrame(() => {
         _launcherEl.classList.add('visible');

@@ -572,21 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：待办清单模块全面重构（FAB 按钮 + 内部滚动 + 动画体系）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对待办清单模块进行全面的 UI/UX 重构：① 固定输入栏改为右下角浮动 FAB 按钮 + 朝左侧弹出输入面板（`.todo-fab` + `.todo-fab-panel`），`fab-hidden`/`open` class 控制显隐动画；② FAB 按钮和笔记首页 fab-group 添加过渡动画（opacity + scale + visibility），`0.25s ease` 缓出 + `cubic-bezier(0.34,1.56,0.64,1)` 弹性入场；③ 页面滚动改为待办列表内部滚动（`.todo-list-wrap`），`.todo-container` 加 `min-height: 0` 修复 flex 收缩，`#mainContent:has(#viewTodo.active)` 禁用外层滚动；④ 列表滚动条闲置时透明隐藏，hover 时显示 `var(--scrollbar-thumb)`，`scrollbar-gutter: stable` 消除宽度闪变；⑤ 清空按钮后分类数字不更新——暴露 `loadTodos` 到 `window`，清空后正确刷新；⑥ 输入框 placeholder 用 `&#10;` 换行显示"添加待办事项，Enter 提交 / Ctrl+Enter 换行"，`min-height: 36px→56px` 容纳两行；⑦ FAB 视图联动——`switchView` 中根据当前视图控制显隐，初始化时默认隐藏；⑧ 输入框支持 Ctrl+Enter 手动插入换行 + `autoResizeTodoInput` 自动高度。 |
-| **FAB 按钮定位** | [todo.css](frontend/src/css/components/todo.css)：`.todo-fab` 固定定位 `bottom:40px; right:calc(50vw - 360px - 22px)` 与列表右侧对齐；`44×44px` 圆角 50%，`%shadow-md` 悬浮感，hover 缩放 `1.08` + `translateY(-1px)` + `box-shadow` 增强；`.open` 态 SVG 旋转 45° 形成关闭叉号。输入面板 `.todo-fab-panel` 从 FAB 上方弹出（`bottom:92px`），`300px` 宽，`translateY(16px)→0` 过渡。 |
-| **内部滚动 + 滚动条隐藏** | [todo.css](frontend/src/css/components/todo.css)：`.todo-list-wrap` 使用 `overflow-y: auto; min-height: 0; scrollbar-gutter: stable`；默认 `scrollbar-color: transparent transparent`，`.todo-list-wrap:hover` 时 `scrollbar-color: var(--scrollbar-thumb) transparent`；WebKit 滚动条默认 `background: transparent`，hover 时 `var(--scrollbar-thumb)`。 |
-| **清空数字修复** | [main.js](frontend/src/main.js)：`clearCompletedTodos()` 调用后执行 `window.loadTodos()` 确保分类数字更新。 |
-| **输入框提示换行** | [index.html](frontend/index.html)：`placeholder="添加待办事项，Enter 提交&#10;Ctrl+Enter 换行"`；[todo.css](frontend/src/css/components/todo.css)：输入框 `min-height: 56px` 容纳两行提示。 |
-| **FAB 视图联动** | [main.js](frontend/src/main.js)：`switchView()` 中 `els.todoFab.classList.toggle('fab-hidden', view !== 'todo')`；`fab-group` 同理；初始化时 `.addClass('fab-hidden')` 默认隐藏。 |
-| **涉及文件** | [frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css) |
-
----
-
-## 记忆点 2：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
+## 记忆点 1：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：移除引用截断逻辑 + 设置项重构
+## 记忆点 2：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +596,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 3：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +607,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 4：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 5：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 6：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 7：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 8：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：「更多技能」按钮隐藏改为禁用态
+## 记忆点 9：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -691,6 +677,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **切换会话恢复** | [ai-chat.js](frontend/src/js/ai-chat.js)：`clearSkillsState()` 新增 `skillsBtn` 禁用状态恢复逻辑。 |
 | **禁用态样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：新增 `#aiChatMoreSkillsBtn:disabled` / `.is-disabled` 样式（opacity 0.45、cursor not-allowed、pointer-events none）。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
+
+---
+
+## 记忆点 10：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两个 UI 修复：① 启动器网格（Ctrl+P）的「展开侧栏」项标签和图标固定显示，不会随侧栏状态变化——在 `openLauncher()` 中根据当前侧栏折叠状态动态更新该项的 DOM（标签文字、SVG 图标、`data-label`）；② 日志级别分段控件指示器在进入设置页时面板 `display:none` 导致 `offsetWidth=0`，指示器定位错误——在 `loadSettings()` 中添加 `offsetWidth===0` 防护，并创建 `repositionLogLevelIndicator()` 在面板切换可见时重新定位。 |
+| **启动器侧栏标签修复** | [launcher.js](frontend/src/js/launcher.js)：`openLauncher()` 中 `filterItems('')` 后查询 `[data-action="sidebar-toggle"]` DOM 元素，通过 `window.els.notebookSidebar.classList.contains('collapsed')` 判断侧栏状态，同步更新标签文本、SVG 图标（`x1="9"↔"15"`）、`data-label` 属性。 |
+| **日志级别指示器修复** | [main.js](frontend/src/main.js)：① `loadSettings()` 中日志级别定位改为调用 `repositionLogLevelIndicator()` 统一函数（含 `offsetWidth===0` 防护）；② 新增 `repositionLogLevelIndicator()` 函数，与 `repositionProviderIndicator()` 结构一致；③ `switchSettingsTab()` 中直接切换路径和动画路径两处添加 `repositionLogLevelIndicator()` 调用，确保日志设置面板可见时指示器正确重算。 |
+| **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)、[frontend/src/main.js](frontend/src/main.js) |
 
 ---
 
