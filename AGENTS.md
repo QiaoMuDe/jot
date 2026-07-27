@@ -572,19 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 消息删除/清空后会话 token 缓存更新 + 编辑重发错误 token 显示修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复了 AI 消息操作后会话 token 缓存未同步的多个问题：① 编辑消息后流式出错时 `CallAIStreamRegenerate` 未传递 `userTokens` 给前端，导致 token 显示消失；② 删除单条消息后后端未更新 `context_tokens` 缓存、前端未刷新显示；③ 清空会话后后端未重置 `context_tokens` 为 0。 |
-| **编辑重发 token 修复** | [app.go](app.go) `CallAIStreamRegenerate` 错误处理中将 `userTokens` 声明提前到 emit 作用域，在 `runtime.EventsEmit("ai:stream-error", ...)` 中追加 `userTokens` 参数，使前端能正确恢复被隐藏的 token 显示。 |
-| **删除消息 token 修复** | [ai_service.go](internal/services/ai_service.go) `DeleteAIMessage` 先查消息 `session_id`，删除后调用 `SumSessionTokens` + `UpdateSessionContextTokens` 更新缓存；[ai-chat.js](frontend/src/js/ai-chat.js) `handleDeleteMsg` 末尾添加 `updateContextSize()` 刷新页面显示。 |
-| **清空会话 token 修复** | [ai_service.go](internal/services/ai_service.go) `ClearAISessionMessages` 清空消息后调用 `UpdateSessionContextTokens(sessionID, 0)` 将 `context_tokens` 缓存重置为 0。 |
-| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 错误处理）、[internal/services/ai_service.go](internal/services/ai_service.go)（DeleteAIMessage + ClearAISessionMessages）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（handleDeleteMsg 末尾 updateContextSize） |
-
----
-
-## 记忆点 2：移除引用截断逻辑 + 设置项重构
+## 记忆点 1：移除引用截断逻辑 + 设置项重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -596,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 2：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -607,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 3：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 4：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 5：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 6：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 7：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：「更多技能」按钮隐藏改为禁用态
+## 记忆点 8：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 9：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +676,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **启动器侧栏标签修复** | [launcher.js](frontend/src/js/launcher.js)：`openLauncher()` 中 `filterItems('')` 后查询 `[data-action="sidebar-toggle"]` DOM 元素，通过 `window.els.notebookSidebar.classList.contains('collapsed')` 判断侧栏状态，同步更新标签文本、SVG 图标（`x1="9"↔"15"`）、`data-label` 属性。 |
 | **日志级别指示器修复** | [main.js](frontend/src/main.js)：① `loadSettings()` 中日志级别定位改为调用 `repositionLogLevelIndicator()` 统一函数（含 `offsetWidth===0` 防护）；② 新增 `repositionLogLevelIndicator()` 函数，与 `repositionProviderIndicator()` 结构一致；③ `switchSettingsTab()` 中直接切换路径和动画路径两处添加 `repositionLogLevelIndicator()` 调用，确保日志设置面板可见时指示器正确重算。 |
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 10：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 批量栏按钮视觉统一 + 交互优化：① `.batch-cancel` 和 `.batch-select-all-btn` 统一样式（与 `.batch-btn` 一致的 `var(--hover-bg)` 背景、相同边框/圆角/padding/hover）；② 批量删除按钮移除禁用态（不再 `opacity:0.5`/`cursor:not-allowed`/背景透明），改为始终显示 `var(--danger-bg)` 危险主题外观；③ 无选中笔记时点击批量按钮不再静默无反应，改为 `nm.show('请先选择笔记', 'warning')` 通知提示用户。 |
+| **按钮风格统一** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-cancel` 从透明无边框改为 `var(--hover-bg)` 背景 + `1px solid var(--border)` 边框 + `var(--radius-md)` 圆角 + 统一 6px 14px padding；`.batch-select-all-btn` 从透明背景+`accent` 文字+`radius-sm` 圆角改为与 `.batch-btn` 一致的外观（`var(--hover-bg)`/`var(--text-primary)`/`var(--radius-md)`/统一 padding 和 hover 效果）；`.batch-btn.btn-danger` 禁用态选择器全部删除，只保留始终显示危险主题的样式。 |
+| **删除按钮禁用态移除** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 直接使用 `var(--danger-bg)` 背景 + `var(--danger)` 文字 → hover 实色红底白字 → active 缩小压暗，不再依赖 `.has-selection` class 区分状态。[main.js](frontend/src/main.js)：`updateBatchBar()` 中移除 `.has-selection` class 切换逻辑。 |
+| **无选中通知** | [main.js](frontend/src/main.js)：`batchDeleteSelected()` 和 `batchPinSelected()` 的 `if (ids.length === 0) return` 前添加 `nm.show('请先选择笔记', 'warning')`；`batchMoveBtn` 点击处理器的 `if (state.selectedNoteIds.size === 0) return` 前同样添加通知。`openBatchTagPicker()` 已有通知不变。 |
+| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（按钮样式统一 + 删除按钮禁用态移除）、[frontend/src/main.js](frontend/src/main.js)（移除 `.has-selection` 切换 + 3 处添加无选中通知） |
 
 ---
 

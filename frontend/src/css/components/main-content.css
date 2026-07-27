@@ -450,25 +450,50 @@
   background: var(--border);
 }
 
+/* ── 批量删除按钮：始终显示危险主题（无选中时弹通知而非禁用） ── */
 .batch-btn.btn-danger {
   background: var(--danger-bg);
   color: var(--danger);
-  border-color: var(--danger-border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
+  outline: none;
 }
 
 .batch-btn.btn-danger:hover {
-  background: var(--danger-bg);
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+
+.batch-btn.btn-danger:active {
+  transform: scale(0.96);
+  filter: brightness(0.85);
+  box-shadow: none;
 }
 
 .batch-cancel {
-  background: transparent;
-  color: var(--text-muted);
-  border-color: transparent;
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition);
 }
 
 .batch-cancel:hover {
-  color: var(--text-secondary);
-  background: var(--hover-bg);
+  color: var(--text-primary);
+  background: var(--border);
 }
 
 /* 全选按钮 */
@@ -479,12 +504,13 @@
 }
 
 .batch-select-all-btn {
-  background: transparent;
+  background: var(--hover-bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 3px 10px;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
   font-size: 0.75rem;
-  color: var(--accent);
+  font-weight: 500;
+  color: var(--text-primary);
   cursor: pointer;
   font-family: inherit;
   transition: var(--transition);
@@ -492,8 +518,7 @@
 }
 
 .batch-select-all-btn:hover {
-  background: var(--accent-lighter);
-  border-color: var(--accent);
+  background: var(--border);
 }
 
 /* ==========================================================================

@@ -5080,7 +5080,10 @@ function clearSelection() {
  */
 async function batchDeleteSelected() {
     const ids = Array.from(state.selectedNoteIds);
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+        nm.show('请先选择笔记', 'warning');
+        return;
+    }
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.BatchDeleteNotes) {
             await window.go.main.App.BatchDeleteNotes(ids);
@@ -5104,7 +5107,10 @@ async function batchDeleteSelected() {
  */
 async function batchPinSelected() {
     const ids = Array.from(state.selectedNoteIds);
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+        nm.show('请先选择笔记', 'warning');
+        return;
+    }
 
     const pin = els.batchPinBtn.textContent === '置顶';
 
@@ -5726,7 +5732,10 @@ function initEventListeners() {
 
     // 移动到目标笔记本
     els.batchMoveBtn.addEventListener('click', () => {
-        if (state.selectedNoteIds.size === 0) return;
+        if (state.selectedNoteIds.size === 0) {
+            nm.show('请先选择笔记', 'warning');
+            return;
+        }
         openMoveDialog([...state.selectedNoteIds]);
     });
     els.moveNotebookClose.addEventListener('click', closeMoveDialog);
