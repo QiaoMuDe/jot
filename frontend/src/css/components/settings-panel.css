@@ -213,10 +213,11 @@
 .settings-panels {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0;
   min-width: 0;
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
 }
 
 .settings-panel {

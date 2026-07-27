@@ -572,19 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：移除引用截断逻辑 + 设置项重构
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 移除 `ai_ref_max_chars`（引用字符截断数）设置项及相关截断逻辑，改为全量注入。新增两个专用设置项：`ai_web_search_max_chars`（联网搜索结果截断）和 `ai_large_file_preview_threshold`（大文件预览阈值）。同时移除 `BuildNoteRefContext` 中基于 `max_file_size` 的总字符数限制逻辑，笔记引用不再有任何截断。 |
-| **移除的截断场景** | 笔记引用（`BuildNoteRefContext`）、AI 文件上传（`readAIChatFiles`）、卡片召回（`CardRecallSearch`）——这三处不再截断，全量注入。文件上传保留 10MB 大小限制。 |
-| **新增设置项** | ① `ai_web_search_max_chars`（默认 5000，范围 1-50000）：控制 Tavily/知乎搜索单条结果截断；② `ai_large_file_preview_threshold`（默认 10000，范围 1-100000）：控制 `.md` 笔记超过阈值时自动切纯文本模式，该设置项移至「编辑器」设置区域。 |
-| **移除的总字符限制** | `note_service.go` `BuildNoteRefContext` 中移除 `max_file_size` 总字符数限制逻辑，所有引用笔记全量注入。 |
-| **涉及文件** | [app.go](app.go)（移除 `GetAIRefMaxChars`/`SetAIRefMaxChars` + `readAIChatFiles` 截断 + `CardRecallSearch` 调用处）、[internal/services/types.go](internal/services/types.go)（移除/新增字段）、[internal/services/note_service.go](internal/services/note_service.go)（移除截断 + 总字符限制）、[internal/services/recall_service.go](internal/services/recall_service.go)（移除截断参数）、[internal/database/db.go](internal/database/db.go)（默认值变更）、[frontend/index.html](frontend/index.html)（设置项 UI 移动/新增/移除）、[frontend/src/main.js](frontend/src/main.js)（设置项加载/保存/自动保存事件） |
-
----
-
-## 记忆点 2：设置页面侧边栏导航重构 + 标签管理卡片重设计
+## 记忆点 1：设置页面侧边栏导航重构 + 标签管理卡片重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 2：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 3：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 4：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 5：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 6：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：「更多技能」按钮隐藏改为禁用态
+## 记忆点 7：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 8：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +667,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 9：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +676,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **删除按钮禁用态移除** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 直接使用 `var(--danger-bg)` 背景 + `var(--danger)` 文字 → hover 实色红底白字 → active 缩小压暗，不再依赖 `.has-selection` class 区分状态。[main.js](frontend/src/main.js)：`updateBatchBar()` 中移除 `.has-selection` class 切换逻辑。 |
 | **无选中通知** | [main.js](frontend/src/main.js)：`batchDeleteSelected()` 和 `batchPinSelected()` 的 `if (ids.length === 0) return` 前添加 `nm.show('请先选择笔记', 'warning')`；`batchMoveBtn` 点击处理器的 `if (state.selectedNoteIds.size === 0) return` 前同样添加通知。`openBatchTagPicker()` 已有通知不变。 |
 | **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（按钮样式统一 + 删除按钮禁用态移除）、[frontend/src/main.js](frontend/src/main.js)（移除 `.has-selection` 切换 + 3 处添加无选中通知） |
+
+---
+
+## 记忆点 10：设置页滚动条位移修复 + 滚动条自动隐藏
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两个修复：① 设置页 `.settings-panels` 内容过长出现滚动条时，6px 滚动条挤占内容宽度导致卡片左右位移——添加 `scrollbar-gutter: stable` 预留滚动条空间；② 给 `.settings-panels` 加入自动隐藏滚动条机制（滚动时显示，静止 1 秒淡出），与 `#mainContent` 行为一致。 |
+| **滚动条位移修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 添加 `scrollbar-gutter: stable`。根因：设置页实际滚动容器是 `.settings-panels`（`overflow-y: auto`），而非外层 `#mainContent`，而 `.settings-panels` 没有 `scrollbar-gutter: stable`，滚动条出现时挤占 6px 水平空间。 |
+| **滚动条自动隐藏** | [scrollbar.css](frontend/src/css/scrollbar.css)：`.settings-panels` 加入所有自动隐藏选择器列表（WebKit 滑块透明/滚动显示/hover 加深/track/Firefox 隐藏/显示）。[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 的 Firefox `scrollbar-color` 从 `var(--scrollbar-thumb) transparent` 改为 `transparent transparent`。[main.js](frontend/src/main.js)：`initScrollbarAutoHide()` 的滚动检测列表添加 `.settings-panels`。 |
+| **涉及文件** | [frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（添加 scrollbar-gutter: stable + Firefox 颜色改为透明）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（加入自动隐藏选择器列表）、[frontend/src/main.js](frontend/src/main.js)（initScrollbarAutoHide 添加 settings-panels） |
 
 ---
 
