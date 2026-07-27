@@ -572,18 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：设置页面侧边栏导航重构 + 标签管理卡片重设计
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 对设置页面进行全面重构：① 左侧 176px 侧边栏（9 个带 SVG 图标的导航项）+ 右侧面板切换，替代原有的纵向卡片列表布局；② 面板切换带 150ms 淡出左移 + 200ms 弹性滑入动画（`cubic-bezier(0.16, 1, 0.3, 1)` spring easing），`prefers-reduced-motion` 跳过动画直接切换；③ 修复服务商分段控件在面板切换时的指示器定位问题（`display:none` 时 `offsetWidth` 为 0，改为面板切换完成后重定位）；④ 标签管理卡片重设计：添加表单上移、预设色块选择器（8 色 + 自定义入口，原生 `<input type="color">` 叠加在按钮内部）、标签列表从 flex-wrap 改为 CSS Grid 卡片布局；⑤ 标签添加/删除改为增量 DOM 操作（不再全量 `loadTags()` 重渲染），添加时 spring 弹性入场，删除时收缩淡出，300ms 超时避免 `prefers-reduced-motion` 下 promise 挂起；⑥ 布局体系统一（`.font-setting-row`/`.settings-item` → `.ai-setting-item`）。 |
-| **前端改动** | [index.html](frontend/index.html)（新增 `nav.settings-nav` 侧边栏 + `.settings-panels` 容器 + 标签管理面板 HTML 重写）、[settings-panel.css](frontend/src/css/components/settings-panel.css)（侧边栏样式/面板切换显隐/面板动画 keyframes/标签卡片 CSS Grid/预设色块选择器样式/删除旧的 `.font-setting-row`/`.settings-item` 类）、[main.js](frontend/src/main.js)（新增 `switchSettingsTab()`/`initSettingsSidebarNav()`/`repositionProviderIndicator()`/`createTagElementHtml()`/`showTagEmptyState()`，改造 `createTag()`/`deleteTag()` 增量 DOM 操作） |
-| **关键修复** | ① 服务商指示器在面板 `display:none` 时 `offsetWidth` 为 0 → 提取 `repositionProviderIndicator()` 在面板显示后立即重算；② 原生 `<input type="color">` 的 picker 首次点击出现在左上角 → 改用 input 叠加在按钮内部（非 `position:fixed` 移动 + `.click()`），`pointer-events: none` 导致选色器不关闭 → 去掉 `pointer-events: none`；③ `animationend` 在 `prefers-reduced-motion` 下不触发 → 添加 300ms 超时 fallback。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：更多菜单"展开侧栏"增加跳转首页前置逻辑
+## 记忆点 1：更多菜单"展开侧栏"增加跳转首页前置逻辑
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 2：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 3：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 4：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +622,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 5：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：「更多技能」按钮隐藏改为禁用态
+## 记忆点 6：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 7：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,7 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 8：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 9：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,6 +676,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **滚动条位移修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 添加 `scrollbar-gutter: stable`。根因：设置页实际滚动容器是 `.settings-panels`（`overflow-y: auto`），而非外层 `#mainContent`，而 `.settings-panels` 没有 `scrollbar-gutter: stable`，滚动条出现时挤占 6px 水平空间。 |
 | **滚动条自动隐藏** | [scrollbar.css](frontend/src/css/scrollbar.css)：`.settings-panels` 加入所有自动隐藏选择器列表（WebKit 滑块透明/滚动显示/hover 加深/track/Firefox 隐藏/显示）。[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 的 Firefox `scrollbar-color` 从 `var(--scrollbar-thumb) transparent` 改为 `transparent transparent`。[main.js](frontend/src/main.js)：`initScrollbarAutoHide()` 的滚动检测列表添加 `.settings-panels`。 |
 | **涉及文件** | [frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（添加 scrollbar-gutter: stable + Firefox 颜色改为透明）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（加入自动隐藏选择器列表）、[frontend/src/main.js](frontend/src/main.js)（initScrollbarAutoHide 添加 settings-panels） |
+
+---
+
+## 记忆点 10：设置页面板切换动画重入守卫
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复设置页侧边栏快速切换面板时的面板重叠 bug。根因：`switchSettingsTab()` 的入场动画阶段（`panel-enter`，约 200ms）没有任何面板拥有 `active` class，若用户在此期间点击另一个导航项，`querySelector('.settings-panel.active')` 返回 null，代码走入直接切换分支，导致旧面板（仍带 `panel-enter` 保持 `display:block`）和新面板（`active` → `display:block`）同时可见。修复方案：添加 `_settingsAnimating` 开关守卫，动画开始置 true，入场动画 `animationend` 完成后置 false，动画期间忽略所有切换请求。 |
+| **修复细节** | [main.js](frontend/src/main.js)：在 `switchSettingsTab()` 前声明 `let _settingsAnimating = false`；函数顶部添加 `if (_settingsAnimating) return;` 守卫；动画开始时 `_settingsAnimating = true`；入场动画 `animationend` 回调末尾 `_settingsAnimating = false`。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（新增 `_settingsAnimating` 守卫） |
 
 ---
 

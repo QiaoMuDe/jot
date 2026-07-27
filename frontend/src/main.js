@@ -8724,11 +8724,17 @@ async function saveSettings() {
     }
 }
 
+/** 切换动画进行中标记，防止快速连续点击导致面板重叠 */
+let _settingsAnimating = false;
+
 /**
  * 切换设置页侧边栏导航面板
  * @param {string} panelName - data-panel 属性值，如 'appearance', 'editor' 等
  */
 function switchSettingsTab(panelName) {
+    // 动画进行中 → 忽略本次切换，避免面板重叠
+    if (_settingsAnimating) return;
+
     const nav = els.settingsNav;
     const panelsContainer = els.settingsPanels;
     if (!nav || !panelsContainer) return;
@@ -8762,6 +8768,8 @@ function switchSettingsTab(panelName) {
     }
 
     // --- 播放切换动画 ---
+    _settingsAnimating = true;
+
     // 阶段1: 旧面板退出动画
     currentPanel.classList.remove('active');
     currentPanel.classList.add('panel-exit');
@@ -8780,6 +8788,7 @@ function switchSettingsTab(panelName) {
             targetPanel.removeEventListener('animationend', onEnterEnd);
             targetPanel.classList.remove('panel-enter');
             targetPanel.classList.add('active');
+            _settingsAnimating = false;
         });
     });
 }
