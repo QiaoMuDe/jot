@@ -822,6 +822,29 @@
   }
 }
 
+/* ===== 进度通知 ===== */
+.notification.progress {
+  pointer-events: none;
+  gap: 10px;
+  min-width: 200px;
+}
+.notification.progress .notification-msg {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notification.progress .notification-close {
+  display: none;
+}
+.notification.progress .notification-icon {
+  color: var(--accent, #6366f1);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ==========================================================================
    Section L: Lock Screen (雾散之门)
    ========================================================================== */

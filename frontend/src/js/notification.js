@@ -127,6 +127,28 @@ export class NotificationManager {
     }
 
     /**
+     * 显示持久进度通知（无关闭按钮，不自动消失）
+     * @param {string} prefix - 前缀文字，如 "正在导入" 或 "正在上传"
+     * @param {number} total - 文件总数
+     * @returns {HTMLElement} 通知元素（后续更新用）
+     */
+    showProgress(prefix, total) {
+        const el = document.createElement('div');
+        el.className = 'notification progress';
+
+        // 旋转 SVG 图标
+        const spinner = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="7" stroke-dasharray="30 40" stroke-linecap="round"/></svg>';
+
+        el.innerHTML = `
+            <span class="notification-icon">${spinner}</span>
+            <span class="notification-msg">${this._esc(prefix)} 0/${total}</span>
+        `;
+
+        this.container.appendChild(el);
+        return el;
+    }
+
+    /**
      * 手动销毁通知
      */
     _dismiss(el) {

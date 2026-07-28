@@ -4503,26 +4503,77 @@ window.handleAiChatFileDrop = async function(paths) {
 
     if (!paths || paths.length === 0) return;
 
+    let progressCtrl = null;
+    let done = false;
+    const startTime = Date.now();
+
+    // 注册上传进度事件监听
+    const nm = window.nm;
+    const unsub = window.runtime.EventsOn('import:ai-progress', (type, total) => {
+        if (type === 'start') {
+            progressCtrl = nm.showProgress('正在上传', total);
+        } else if (type === 'complete') {
+            done = true;
+            if (!progressCtrl) return;
+
+            // 最小展示 500ms，避免闪一下就消失
+            const elapsed = Date.now() - startTime;
+            setTimeout(() => {
+                nm._dismiss(progressCtrl);
+            }, Math.max(0, 500 - elapsed));
+        }
+    });
+
     try {
         const results = await window.go.main.App.ReadAIChatFiles(paths);
         if (!results || results.length === 0) return;
 
-        for (const r of results) {
-            if (r.error) {
-                window.showNotification?.(r.error, 'error');
-            } else {
-                uploadedFiles.push({
-                    name: r.name,
-                    content: r.content,
-                    size: r.size,
-                    truncated: r.truncated,
-                });
-            }
+        if (done) {
+            // 等保底延迟完成后再展示通知和渲染文件列表
+            const elapsed = Date.now() - startTime;
+            setTimeout(() => {
+                showAIChatResults(results);
+            }, Math.max(0, 500 - elapsed));
+            return;
         }
-        renderFileChips();
+
+        // 兜底：事件未收到时
+        showAIChatResults(results);
     } catch (e) {
         window.showNotification?.('拖拽文件失败: ' + (e.message || e), 'error');
+    } finally {
+        unsub();
     }
+};
+
+// 展示 AI 文件上传结果通知（成功/失败详情），并渲染文件列表
+function showAIChatResults(results) {
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const r of results) {
+        if (r.error) {
+            failCount++;
+            window.showNotification?.(r.error, 'error');
+        } else {
+            successCount++;
+            uploadedFiles.push({
+                name: r.name,
+                content: r.content,
+                size: r.size,
+                truncated: r.truncated,
+            });
+        }
+    }
+
+    if (successCount > 0) {
+        const msg = failCount > 0
+            ? `${successCount} 个文件上传成功，${failCount} 个失败`
+            : `${successCount} 个文件上传成功`;
+        window.nm?.show(msg, 'success');
+    }
+
+    renderFileChips();
 };
 
 /**

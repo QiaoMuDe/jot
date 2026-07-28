@@ -17,6 +17,8 @@ jot/                                    # 项目根目录
 ├── AGENTS.md                           # 本报告文件
 │
 ├── internal/                           # 【内部包】Go 子包统一目录
+│   ├── converter/
+│   │   └── converter.go               # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
 │   ├── database/
 │   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
 │   ├── fontutil/
@@ -116,6 +118,7 @@ jot/                                    # 项目根目录
 | **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
 | **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
 | **路径工具** | 数据库默认路径 `~/.jot/data/jot.db` | `database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
+| **办公文件转换器** | 封装 markitdown 库，将 .docx/.pdf/.xlsx 等 7 种办公文件转为 Markdown 文本，带 60s 超时保护 | `internal/converter/converter.go` | github.com/conductor-oss/markitdown
 
 ### 2.2 业务核心模块
 
@@ -231,6 +234,7 @@ graph TD
         B --> TD[services/todo_service.go]
         B --> F[services/types.go]
         B --> AI[services/ai_service.go]
+        B --> CV[internal/converter/converter.go]
         C --> G[models/note.go]
         C --> H[models/tag.go]
         C --> TD2[models/todo.go]
@@ -393,6 +397,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **AI API 调用失败** | HTTP 状态码封装为 11 种分类中文提示（auth_error/rate_limit/server_error 等），通过 `ai:stream-error` 事件以 JSON 格式（`{category, user_msg, raw}`）传递到前端，解析后通过 `showNotification()` 右上角通知展示，不再插入对话流中 |
 | **联网搜索失败** | 每个搜索来源独立发射错误事件 `ai:search-error`，不影响其他来源继续搜索；前端通过 `showNotification()` 提示用户 |
 | **数据库损坏** | 备份还原机制 |
+| **办公文件转换失败** | 60s 超时保护 + `Warnw` 日志记录大文件/损坏文件，`Errorw` 记录转换异常；前端通过 `showImportResults()` 逐个显示文件错误详情 |
 | **流式连接中断** | 前端监听 `ai:stream-error` 事件，显示错误提示 |
 | **会话/消息查询失败** | 返回空列表 + 控制台错误日志，不阻断 UI |
 
@@ -519,6 +524,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **右键菜单复制通知**（AI/用户消息右键复制成功后通过 `showNotification('已复制')` 反馈）
 - [x] **启动器网格**（Ctrl+P 触发全屏浮层，4 列网格 13 项功能 + 搜索过滤 + 方向键导航 + Enter 执行 + ESC 关闭 + 入场/离场动画 + stagger 卡片动画）
 - [x] **快捷键说明页新增 Ctrl+P**（在 Ctrl+L/E 之间插入启动器快捷键条目）
+- [x] **办公文件导入支持**（markitdown 库集成，支持 .docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip 共 7 种办公文件格式，60s 超时保护 + goroutine 并发处理 + Wails Events 进度事件 + 前端批量进度通知 + 500ms 最小展示保底）
 
 ---
 
@@ -572,19 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 优化 AI 输入框优化（polish）按钮交互：① 点击优化后禁用发送按钮并显示停止按钮，支持中途取消优化；② 停止按钮在优化中可恢复原文并重置按钮状态；③ `AIService.CallAI` 增加 `ctx` 参数，通过 `aiStreamCancel` 复用流式取消机制；④ 优化失败时使用 `ClassifyError` 返回结构化中文错误消息（替代原始 JSON 报错）；⑤ 右键菜单「复制」操作成功后通过通知提示反馈。 |
-| **前端改动** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)：新增 `isPolishOptimizing` 变量；优化按钮点击时禁用发送按钮、切换按钮显示；停止按钮增加优化取消分支（恢复原文+取消请求+重置状态）；catch 块区分取消与错误；优化按钮防重复点击。右键复制成功后 `showNotification('已复制', 'success')`。 |
-| **后端改动** | [internal/services/ai_service.go](internal/services/ai_service.go)：`CallAI` 签名增加 `ctx context.Context` 参数，移除内部 `context.WithTimeout` 创建，改用传入 context；错误处理使用 `ClassifyError` 返回结构化错误。 |
-| **后端改动 2** | [app.go](app.go)：`CallAI` 绑定方法创建带 60s 超时的 context 并存入 `a.aiStreamCancel`，供 `CancelAIStream` 中途取消。`RefineSearchQuery` 调用处传递 `ctx`。 |
-| **后端改动 3** | [internal/services/query_refiner.go](internal/services/query_refiner.go)：`RefineSearchQuery` 增加 `ctx context.Context` 参数，透传给 `CallAI`。 |
-
----
-
-## 记忆点 2：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 1：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 2：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 3：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：「更多技能」按钮隐藏改为禁用态
+## 记忆点 4：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -634,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 5：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 6：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 7：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：设置页面板切换动画重入守卫
+## 记忆点 8：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +672,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 9：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,6 +681,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **流式发射截断** | [app.go](app.go)：`CallAIStream` 和 `CallAIStreamRegenerate` 中，发射 `ai:recall-cards`/`ai:search-sources` 事件前对数据副本截断后发射，`recallCardsJSON`/`searchSourcesJSON`（用于 DB 存储）保持全量不变。 |
 | **切换会话截断** | [ai_service.go](internal/services/ai_service.go)：`LoadAISessionMessagesPaginated` 返回前对每条消息的 `RecallCards`/`SearchSources` JSON 做解析→截断→重序列化；`LoadAISessionMessages`（AI 内部调用）不受影响，保持全量。 |
 | **涉及文件** | [app.go](app.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/ai_service.go](internal/services/ai_service.go) |
+
+---
+
+## 记忆点 10：办公文件导入支持 + 批量进度通知
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 集成 markitdown 库支持导入常见办公文件（.docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip），替代原来的 `fs.IsBinaryPath()` 二元拒绝逻辑。三段式判定：办公文件→markitdown 转换 Markdown；二进制文件→拒绝；纯文本→保持 `os.ReadFile` 直读。并发 `sync.WaitGroup` 处理多个文件，单文件 60s 超时保护。批量导入/上传通过 Wails Events 发射进度事件（`import:progress`/`import:ai-progress`），前端 `requestAnimationFrame` 防抖 + 500ms 最小展示保底，失败文件逐个显示错误详情。 |
+| **后端转换层** | [internal/converter/converter.go](internal/converter/converter.go)：`IsOfficeFile()` 扩展名判定 + `ConvertToMarkdown()` goroutine+select 超时封装。 |
+| **导入函数改造** | [app.go](app.go)：`ImportFiles` 和 `readAIChatFiles` 改为 goroutine 并发 + `runtime.EventsEmit` 发射 `start`/`complete` 事件；`processImportFile`/`processAIChatFile` 三段式判定（office→md / binary→reject / text→readfile），并添加全分支日志（Debugw/Warnw/Errorw/Infow）。 |
+| **进度通知前端** | [main.js](frontend/src/main.js#L8139-L8221)：`showImportResults()` 提取为独立函数；`handleFileDropPaths` 注册 `import:progress` 事件监听 + 500ms 保底。 |
+| **AI 上传进度通知** | [ai-chat.js](frontend/src/js/ai-chat.js#L4549-L4577)：`showAIChatResults()` 提取为独立函数；`handleAiChatFileDrop` 注册 `import:ai-progress` 独立事件名防冲突。 |
+| **通知管理器扩展** | [notification.js](frontend/src/js/notification.js#L135-L149)：`showProgress()` 方法创建无关闭按钮、不自动消失的持久进度通知（旋转 SVG + `total` 计数）。 |
+| **进度通知样式** | [modals.css](frontend/src/css/components/modals.css#L826-L846)：`.notification.progress` 样式（`pointer-events: none`、`spin` keyframes、`display: none` 关闭按钮）。 |
 
 ---
 

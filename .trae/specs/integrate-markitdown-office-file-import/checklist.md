@@ -1,0 +1,21 @@
+# Checklist
+
+- [x] markitdown 依赖通过 `go.mod` 引入并 `go mod tidy` 编译通过
+- [x] `internal/converter/converter.go` 封装层实现完整
+  - [x] `IsPlainText` 对 `.txt`/`.md`/`.json` 返回 true
+  - [x] `IsPlainText` 对 `.docx`/`.pdf` 返回 false
+  - [x] `ConvertToMarkdown` 对 `.docx`/`.pdf` 返回 Markdown 字符串
+  - [x] `ConvertToMarkdown` 对不支持的格式返回 `ErrUnsupportedFormat`
+  - [x] 转换有 60 秒超时保护
+- [x] `ImportFiles` 改造完成
+  - [x] 使用 goroutine 并发处理文件
+  - [x] `.txt`/`.md` 直接读取创建笔记
+  - [x] `.docx`/`.pdf` 等转换后创建笔记
+  - [x] 不支持的文件返回错误但不影响其他文件
+  - [x] 保留路径/目录/大小校验
+- [x] `readAIChatFiles` 改造完成
+  - [x] 使用 goroutine 并发处理文件
+  - [x] 办公文件转换后作为 AI 上下文内容
+  - [x] 不支持的文件返回错误
+- [x] 编译验证通过 (`go build` 无错误, `go vet` 无警告)
+- [x] `ImportFiles` 和 `readAIChatFiles` 中不再调用 `fs.IsBinaryPath`（`ReadTextFile` 保持不变）

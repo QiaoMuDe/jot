@@ -23,8 +23,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
+
+	"jot/internal/converter"
 
 	"gitee.com/MM-Q/fastlog"
 	"gitee.com/MM-Q/go-kit/fs"
@@ -1513,61 +1516,115 @@ func (a *App) ReadAIChatFiles(paths []string) []AIChatFileResult {
 	return a.readAIChatFiles(paths)
 }
 
-// readAIChatFiles 内部方法：校验、读取、截断一组文件（按钮上传和拖拽上传共用）
+// readAIChatFiles 内部方法：校验、读取一组文件（按钮上传和拖拽上传共用），支持并发处理。
+// 纯文本文件直接读取内容；办公文件通过 markitdown 转换为 Markdown 文本返回。
+// 上传过程中通过 Wails Events 发射进度事件（import:ai-progress）。
 func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 	a.LogSvc.Logger.Debugw("readAIChatFiles", fastlog.Int("file_count", len(paths)))
 	maxSize := a.GetMaxFileSize()
 
-	var results []AIChatFileResult
+	results := make([]AIChatFileResult, len(paths))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-	for _, p := range paths {
-		result := AIChatFileResult{Path: p, Name: filepath.Base(p)}
+	// 发射上传开始事件
+	runtime.EventsEmit(a.ctx, "import:ai-progress", "start", len(paths))
 
-		// 检查路径
-		info, err := os.Stat(p)
-		if err != nil {
-			result.Error = "无法访问文件: " + err.Error()
-			results = append(results, result)
-			continue
-		}
-
-		// 拒绝目录
-		if info.IsDir() {
-			result.Error = "不支持上传目录，请选择文件"
-			results = append(results, result)
-			continue
-		}
-
-		// 文件大小限制
-		if info.Size() > maxSize {
-			maxSizeMB := maxSize / (1024 * 1024)
-			result.Error = fmt.Sprintf("文件过大（超过 %dMB），请选择小于 %dMB 的文件", maxSizeMB, maxSizeMB)
-			results = append(results, result)
-			continue
-		}
-		result.Size = info.Size()
-
-		// 二进制文件检测
-		if fs.IsBinaryPath(p) {
-			result.Error = "不支持二进制文件，请选择文本文件"
-			results = append(results, result)
-			continue
-		}
-
-		// 读取文件内容
-		content, err := os.ReadFile(p)
-		if err != nil {
-			result.Error = "读取文件失败: " + err.Error()
-			results = append(results, result)
-			continue
-		}
-		contentStr := string(content)
-
-		result.Content = contentStr
-		results = append(results, result)
+	for i, p := range paths {
+		wg.Add(1)
+		go func(idx int, path string) {
+			defer wg.Done()
+			result := a.processAIChatFile(path, maxSize)
+			mu.Lock()
+			results[idx] = result
+			mu.Unlock()
+		}(i, p)
 	}
 
+	wg.Wait()
+
+	// 统计结果并发射完成事件
+	successCount := 0
+	failCount := 0
+	for _, r := range results {
+		if r.Error == "" {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+	runtime.EventsEmit(a.ctx, "import:ai-progress", "complete", len(paths), successCount, failCount)
+
 	return results
+}
+
+// processAIChatFile 处理单个 AI 聊天文件的上传逻辑。
+func (a *App) processAIChatFile(path string, maxSize int64) AIChatFileResult {
+	result := AIChatFileResult{Path: path, Name: filepath.Base(path)}
+
+	// 1. 检查路径
+	info, err := os.Stat(path)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("processAIChatFile: 无法访问文件", fastlog.String("path", path), fastlog.Error(err))
+		result.Error = "无法访问文件: " + err.Error()
+		return result
+	}
+
+	// 2. 拒绝目录
+	if info.IsDir() {
+		a.LogSvc.Logger.Debugw("processAIChatFile: 拒绝目录", fastlog.String("path", path))
+		result.Error = "不支持上传目录，请选择文件"
+		return result
+	}
+
+	// 3. 文件大小限制（放在最前面）
+	if info.Size() > maxSize {
+		maxSizeMB := maxSize / (1024 * 1024)
+		a.LogSvc.Logger.Debugw("processAIChatFile: 文件过大", fastlog.String("path", path), fastlog.Int64("size", info.Size()), fastlog.Int64("maxSize", maxSize))
+		result.Error = fmt.Sprintf("文件过大（超过 %dMB），请选择小于 %dMB 的文件", maxSizeMB, maxSizeMB)
+		return result
+	}
+	result.Size = info.Size()
+
+	// 4. 文件类型判定与内容读取
+	if converter.IsOfficeFile(path) {
+		// 办公文件 → markitdown 转换
+		a.LogSvc.Logger.Debugw("processAIChatFile: 转换办公文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+		mdText, err := converter.ConvertToMarkdown(path)
+		if err != nil {
+			switch {
+			case errors.Is(err, converter.ErrUnsupportedFormat):
+				a.LogSvc.Logger.Debugw("processAIChatFile: 不支持的办公文件格式", fastlog.String("path", path))
+				result.Error = "不支持的文件格式"
+			case errors.Is(err, converter.ErrConversionTimeout):
+				a.LogSvc.Logger.Warnw("processAIChatFile: 办公文件转换超时", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+				result.Error = "文件转换超时（超过60秒）"
+			default:
+				a.LogSvc.Logger.Errorw("processAIChatFile: 办公文件转换失败", fastlog.String("path", path), fastlog.Error(err))
+				result.Error = fmt.Sprintf("文件转换失败: %s", err.Error())
+			}
+			return result
+		}
+		result.Content = mdText
+		a.LogSvc.Logger.Infow("processAIChatFile: 办公文件转换成功", fastlog.String("path", path), fastlog.Int("content_len", len(mdText)))
+	} else if fs.IsBinaryPath(path) {
+		// 二进制文件（非办公文件）→ 拒绝
+		a.LogSvc.Logger.Debugw("processAIChatFile: 拒绝二进制文件", fastlog.String("path", path))
+		result.Error = "不支持此类文件，请选择文本文件或办公文档后重试"
+		return result
+	} else {
+		// 纯文本文件 → 直接读取
+		a.LogSvc.Logger.Debugw("processAIChatFile: 直接读取文本文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+		content, err := os.ReadFile(path)
+		if err != nil {
+			a.LogSvc.Logger.Errorw("processAIChatFile: 读取文本文件失败", fastlog.String("path", path), fastlog.Error(err))
+			result.Error = "读取文件失败: " + err.Error()
+			return result
+		}
+		result.Content = string(content)
+	}
+
+	return result
 }
 
 // CallAI 调用 AI 对话接口（非流式）
@@ -3319,7 +3376,10 @@ type AIChatFileResult struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// ImportFiles 批量导入拖拽文件为笔记（归入指定笔记本）
+// ImportFiles 批量导入拖拽文件为笔记（归入指定笔记本），支持并发处理。
+// 纯文本文件（.txt/.md/.json 等）直接读取；办公文件（.docx/.pdf/.xlsx 等）通过
+// markitdown 转换为 Markdown 后创建笔记；不支持的格式返回错误。
+// 导入过程中通过 Wails Events 发射进度事件（import:progress）。
 func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	a.LogSvc.Logger.Debugw("ImportFiles", fastlog.Int("file_count", len(paths)), fastlog.Uint("notebookID", notebookID))
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
@@ -3331,78 +3391,136 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	}
 
 	maxSize := a.GetMaxFileSize()
-	var results []FileImportResult
+	results := make([]FileImportResult, len(paths))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-	for _, p := range paths {
-		result := FileImportResult{Path: p}
+	// 发射导入开始事件
+	runtime.EventsEmit(a.ctx, "import:progress", "start", len(paths))
 
-		// 检查路径
-		info, err := os.Stat(p)
-		if err != nil {
-			result.Error = "无法访问文件: " + err.Error()
-			results = append(results, result)
-			continue
-		}
-
-		// 拒绝目录
-		if info.IsDir() {
-			result.Error = "不支持导入目录，请选择文件"
-			results = append(results, result)
-			continue
-		}
-
-		// 文件大小限制
-		if info.Size() > maxSize {
-			maxSizeMB := maxSize / (1024 * 1024)
-			result.Error = fmt.Sprintf("文件过大（超过 %dMB），无法导入", maxSizeMB)
-			results = append(results, result)
-			continue
-		}
-
-		// 二进制文件检测（go-kit/fs 读取前 8000 字节检查是否包含空字符）
-		if fs.IsBinaryPath(p) {
-			result.Error = "不支持导入二进制文件，请选择文本文件后重试"
-			results = append(results, result)
-			continue
-		}
-
-		// 读取文件内容
-		content, err := os.ReadFile(p)
-		if err != nil {
-			result.Error = "读取文件失败: " + err.Error()
-			results = append(results, result)
-			continue
-		}
-
-		// 提取文件名（去后缀）作标题
-		name := filepath.Base(p)
-		ext := filepath.Ext(name)
-		title := strings.TrimSuffix(name, ext)
-		if title == "" {
-			title = "untitled"
-		}
-
-		// 确定文件后缀：.md 文件保持 .md，其他文件按原始后缀处理
-		fileExt := ext
-		if fileExt == "" {
-			fileExt = ".txt"
-		}
-
-		// 创建笔记（归入指定笔记本）
-		note, err := a.noteService.CreateWithNotebook(title, string(content), fileExt, notebookID)
-		if err != nil {
-			result.Error = "创建笔记失败: " + err.Error()
-			results = append(results, result)
-			continue
-		}
-
-		result.Title = title
-		result.NoteID = note.ID
-		result.Success = true
-		results = append(results, result)
+	for i, p := range paths {
+		wg.Add(1)
+		go func(idx int, path string) {
+			defer wg.Done()
+			result := a.processImportFile(path, maxSize, notebookID)
+			mu.Lock()
+			results[idx] = result
+			mu.Unlock()
+		}(i, p)
 	}
 
+	wg.Wait()
+
+	// 统计结果并发射完成事件
+	successCount := 0
+	failCount := 0
+	for _, r := range results {
+		if r.Success {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+	runtime.EventsEmit(a.ctx, "import:progress", "complete", len(paths), successCount, failCount)
+
 	return results
+}
+
+// processImportFile 处理单个文件的导入逻辑。
+func (a *App) processImportFile(path string, maxSize int64, notebookID uint) FileImportResult {
+	result := FileImportResult{Path: path}
+
+	// 1. 检查路径
+	info, err := os.Stat(path)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("processImportFile: 无法访问文件", fastlog.String("path", path), fastlog.Error(err))
+		result.Error = "无法访问文件: " + err.Error()
+		return result
+	}
+
+	// 2. 拒绝目录
+	if info.IsDir() {
+		a.LogSvc.Logger.Debugw("processImportFile: 拒绝目录", fastlog.String("path", path))
+		result.Error = "不支持导入目录，请选择文件"
+		return result
+	}
+
+	// 3. 文件大小限制（放在最前面）
+	if info.Size() > maxSize {
+		maxSizeMB := maxSize / (1024 * 1024)
+		a.LogSvc.Logger.Debugw("processImportFile: 文件过大", fastlog.String("path", path), fastlog.Int64("size", info.Size()), fastlog.Int64("maxSize", maxSize))
+		result.Error = fmt.Sprintf("文件过大（超过 %dMB），无法导入", maxSizeMB)
+		return result
+	}
+
+	// 提取文件名（去后缀）作标题
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	title := strings.TrimSuffix(name, ext)
+	if title == "" {
+		title = "untitled"
+	}
+
+	// 确定文件后缀
+	fileExt := ext
+	if fileExt == "" {
+		fileExt = ".txt"
+	}
+
+	// 4. 文件类型判定与内容读取
+	var content string
+
+	if converter.IsOfficeFile(path) {
+		// 办公文件 → markitdown 转换
+		a.LogSvc.Logger.Debugw("processImportFile: 转换办公文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+		mdText, err := converter.ConvertToMarkdown(path)
+		if err != nil {
+			switch {
+			case errors.Is(err, converter.ErrUnsupportedFormat):
+				a.LogSvc.Logger.Debugw("processImportFile: 不支持的办公文件格式", fastlog.String("path", path))
+				result.Error = "不支持的文件格式"
+			case errors.Is(err, converter.ErrConversionTimeout):
+				a.LogSvc.Logger.Warnw("processImportFile: 办公文件转换超时", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+				result.Error = "文件转换超时（超过60秒）"
+			default:
+				a.LogSvc.Logger.Errorw("processImportFile: 办公文件转换失败", fastlog.String("path", path), fastlog.Error(err))
+				result.Error = fmt.Sprintf("文件转换失败: %s", err.Error())
+			}
+			return result
+		}
+		content = mdText
+		a.LogSvc.Logger.Infow("processImportFile: 办公文件转换成功", fastlog.String("path", path), fastlog.Int("content_len", len(mdText)))
+	} else if fs.IsBinaryPath(path) {
+		// 二进制文件（非办公文件）→ 拒绝
+		a.LogSvc.Logger.Debugw("processImportFile: 拒绝二进制文件", fastlog.String("path", path))
+		result.Error = "不支持导入此类文件，请选择文本文件或办公文档后重试"
+		return result
+	} else {
+		// 纯文本文件 → 直接读取
+		a.LogSvc.Logger.Debugw("processImportFile: 直接读取文本文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			a.LogSvc.Logger.Errorw("processImportFile: 读取文本文件失败", fastlog.String("path", path), fastlog.Error(err))
+			result.Error = "读取文件失败: " + err.Error()
+			return result
+		}
+		content = string(data)
+	}
+
+	// 5. 创建笔记（归入指定笔记本）
+	note, err := a.noteService.CreateWithNotebook(title, content, fileExt, notebookID)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("processImportFile: 创建笔记失败", fastlog.String("path", path), fastlog.String("title", title), fastlog.Error(err))
+		result.Error = "创建笔记失败: " + err.Error()
+		return result
+	}
+
+	a.LogSvc.Logger.Infow("processImportFile: 导入成功", fastlog.String("path", path), fastlog.String("title", title), fastlog.Uint("noteID", note.ID))
+
+	result.Title = title
+	result.NoteID = note.ID
+	result.Success = true
+	return result
 }
 
 // ResetDatabase 清空所有数据，恢复出厂状态（删表重建）

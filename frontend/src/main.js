@@ -8136,6 +8136,39 @@ function flashNoteCards(noteIds) {
     });
 }
 
+// 展示导入结果通知（成功/失败详情），并刷新 UI
+function showImportResults(results) {
+    let successCount = 0;
+    let failCount = 0;
+    const importedNoteIds = [];
+
+    for (const result of results) {
+        const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
+        if (result.error && result.error.includes('文件夹')) {
+            failCount++;
+            nm.show(`${label} ${result.error}`, 'warning');
+        } else if (result.success) {
+            successCount++;
+            importedNoteIds.push(result.note_id);
+        } else {
+            failCount++;
+            nm.show(`"${label}" ${result.error || '导入失败'}`, 'warning');
+        }
+    }
+
+    if (successCount > 0) {
+        const msg = failCount > 0
+            ? `${successCount} 个文件导入成功，${failCount} 个失败`
+            : `${successCount} 个文件导入成功`;
+        nm.show(msg, 'success');
+
+        loadNotes().then(() => {
+            loadNotebooks();
+            flashNoteCards(importedNoteIds);
+        });
+    }
+}
+
 async function handleFileDropPaths(paths, notebookId) {
     if (!paths || paths.length === 0) return;
 
@@ -8144,43 +8177,46 @@ async function handleFileDropPaths(paths, notebookId) {
         return;
     }
 
+    let progressCtrl = null;
+    let done = false;
+    const startTime = Date.now();
+
+    // 注册进度事件监听（在调用 RPC 前注册）
+    const unsub = window.runtime.EventsOn('import:progress', (type, total) => {
+        if (type === 'start') {
+            progressCtrl = nm.showProgress('正在导入', total);
+        } else if (type === 'complete') {
+            done = true;
+            if (!progressCtrl) return;
+
+            // 最小展示 500ms，避免闪一下就消失
+            const elapsed = Date.now() - startTime;
+            setTimeout(() => {
+                nm._dismiss(progressCtrl);
+            }, Math.max(0, 500 - elapsed));
+        }
+    });
+
     try {
         const results = await window.go.main.App.ImportFiles(paths, notebookId);
         if (!results || results.length === 0) return;
 
-        let successCount = 0;
-        let failCount = 0;
-        const importedNoteIds = [];
-
-        for (const result of results) {
-            const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
-            if (result.error && result.error.includes('文件夹')) {
-                // 后端 stat 检测到目录
-                failCount++;
-                nm.show(`${label} ${result.error}`, 'warning');
-            } else if (result.success) {
-                successCount++;
-                importedNoteIds.push(result.note_id);
-            } else {
-                failCount++;
-                nm.show(`"${label}" ${result.error || '导入失败'}`, 'warning');
-            }
+        if (done) {
+            // 等保底延迟完成后再展示通知和刷新 UI
+            const elapsed = Date.now() - startTime;
+            setTimeout(() => {
+                showImportResults(results);
+            }, Math.max(0, 500 - elapsed));
+            return;
         }
 
-        if (successCount > 0) {
-            const msg = failCount > 0
-                ? `${successCount} 个文件导入成功，${failCount} 个失败`
-                : `${successCount} 个文件导入成功`;
-            nm.show(msg, 'success');
-        }
-
-        await loadNotes();
-        await loadNotebooks();
-        // 不再打开编辑器，改为红色边框闪烁标记导入的笔记
-        flashNoteCards(importedNoteIds);
+        // 兜底：事件未收到时，直接处理结果
+        showImportResults(results);
     } catch (err) {
         console.error('批量导入失败:', err);
         nm.show('文件导入失败：' + (err.message || '未知错误'), 'error');
+    } finally {
+        unsub();
     }
 }
 
