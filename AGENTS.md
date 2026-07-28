@@ -43,7 +43,7 @@ jot/                                    # 项目根目录
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
 │       ├── search_service.go           # 通用网页搜索（Tavily API）
 │       ├── zhihu_search_service.go     # 知乎搜索 + 全网搜索
-│       ├── recall_service.go           # 卡片召回（AI 引用笔记）
+│       ├── recall_service.go           # 卡片召回（2-gram 分词 + 停用词过滤 + 相关度打分）
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
 │       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig 等）
@@ -525,6 +525,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **启动器网格**（Ctrl+P 触发全屏浮层，4 列网格 13 项功能 + 搜索过滤 + 方向键导航 + Enter 执行 + ESC 关闭 + 入场/离场动画 + stagger 卡片动画）
 - [x] **快捷键说明页新增 Ctrl+P**（在 Ctrl+L/E 之间插入启动器快捷键条目）
 - [x] **办公文件导入支持**（markitdown 库集成，支持 .docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip 共 7 种办公文件格式，60s 超时保护 + goroutine 并发处理 + Wails Events 进度事件 + 前端批量进度通知 + 500ms 最小展示保底）
+- [x] **卡片召回优化**（2-gram 分词增加停用词过滤，过滤高频无意义碎片；SearchFull 改为 Go 侧相关度打分排序，标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励）
 
 ---
 
@@ -578,21 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：启动器网格（Launcher Grid）全屏浮层实现
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增 Ctrl+P 触发的全屏启动器网格（Launcher Grid），与"更多"菜单并存互不干扰。面板包含顶部搜索框 + 4 列 13 项功能网格卡片，支持搜索过滤、方向键导航、Enter 执行、ESC 关闭。入场动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发），离场用 `closing` class 触发反方向过渡 + `transitionend` + 300ms timeout 保底。 |
-| **ES Module 函数暴露** | `main.js` 以 `type="module"` 加载，函数不会自动挂到 `window`。launcher 调用的 `toggleSidebar`/`toggleBatchMode`/`resetPagination`/`openShortcuts`/`showAbout`/`loadTrashNotes`/`updateNotebookSidebarToggleBtn` 需手动 `window.xxx = xxx` 暴露。 |
-| **关闭→执行时序** | `executeAction()` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，代替不可靠的 `setTimeout` 硬等。离场时 mask 和 panel 共 4 条过渡属性 → `transitionend` 冒泡 4 次 → `_closed` 守卫防重复。 |
-| **方向键导航** | 4 列 grid 循环导航。`_selectedIndex === -1`（初始无选中）时方向键自动选中首项。 |
-| **搜索过滤** | 输入实时 substring 匹配 `data-label`，隐藏不匹配项，自动高亮第一个可见项。无匹配时显示空结果提示。 |
-| **涉及的样式约定** | 与普通浮层不同，launcher 用 `display: flex/none` + `pointer-events` 控制交互，而非 `visibility`。`.visible` class 触发入场动画，`.closing` class 触发离场。z-index: 2100（高于 search-modal 的 2000）。 |
-| **涉及文件** | [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)、[index.html](frontend/index.html)（DOM）、[main.js](frontend/src/main.js)（导入初始化 + Ctrl+P/ESC 处理 + window 函数暴露） |
-
----
-
-## 记忆点 2：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 1：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 2：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：「更多技能」按钮隐藏改为禁用态
+## 记忆点 3：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 4：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 5：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 6：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：设置页面板切换动画重入守卫
+## 记忆点 7：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +659,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 8：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +671,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：办公文件导入支持 + 批量进度通知
+## 记忆点 9：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,6 +682,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **AI 上传进度通知** | [ai-chat.js](frontend/src/js/ai-chat.js#L4549-L4577)：`showAIChatResults()` 提取为独立函数；`handleAiChatFileDrop` 注册 `import:ai-progress` 独立事件名防冲突。 |
 | **通知管理器扩展** | [notification.js](frontend/src/js/notification.js#L135-L149)：`showProgress()` 方法创建无关闭按钮、不自动消失的持久进度通知（旋转 SVG + `total` 计数）。 |
 | **进度通知样式** | [modals.css](frontend/src/css/components/modals.css#L826-L846)：`.notification.progress` 样式（`pointer-events: none`、`spin` keyframes、`display: none` 关闭按钮）。 |
+
+---
+
+## 记忆点 10：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 卡片召回功能两阶段优化：① 2-gram 分词增加停用词过滤（约 130 个高频单字停用词），过滤"有什"、"什么"等无意义碎片；② `SearchFull` 将 `ORDER BY updated_at DESC` 改为 Go 侧相关度打分排序（标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励），结果更精准。 |
+| **停用词表** | [recall_service.go](frontend/internal/services/recall_service.go)：新增 `var stopWords map[rune]struct{}` 约 130 个高频单字（的、了、是、在、有、我、你、之、于、其、着、过……），`isStopWord(r rune) bool` 查表函数。`tokenize2Gram()` 中 2-gram 若任一字符是停用词则跳过，单中文 token 若是停用词也跳过。 |
+| **打分排序** | [note_service.go](internal/services/note_service.go)：`SearchFull` 中移除 `ORDER BY updated_at DESC`，放宽 LIMIT 到 50 提供候选集，`scoreNote()` 计算每条笔记相关度分数，`sort.Slice` 按分数降序排列，同分按 `updated_at` 降序。 |
+| **分词日志** | [recall_service.go](internal/services/recall_service.go)：`CardRecallSearch` 中 `noteService.logger.Infow` 记录 `"CardRecallSearch 分词结果"`，含 `query`、`keywords` 字段，便于调试分词效果。 |
+| **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（停用词表 + tokenize2Gram 过滤 + 日志）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull 打分排序 + scoreNote） |
 
 ---
 

@@ -5,7 +5,36 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"gitee.com/MM-Q/fastlog"
 )
+
+// 停用词表，过滤 2-gram 中的高频无意义碎片
+var stopWords = map[rune]struct{}{
+	// 高频单字停用词
+	'的': {}, '了': {}, '是': {}, '在': {}, '有': {}, '我': {}, '他': {}, '她': {},
+	'它': {}, '们': {}, '这': {}, '那': {}, '什': {}, '么': {}, '怎': {}, '哪': {},
+	'你': {}, '之': {}, '于': {}, '其': {}, '着': {}, '过': {},
+	'里': {}, '为': {}, '因': {}, '所': {}, '以': {}, '但': {}, '如': {}, '果': {},
+	'虽': {}, '然': {}, '而': {}, '且': {}, '或': {}, '与': {}, '和': {}, '同': {},
+	'及': {}, '又': {}, '也': {}, '对': {}, '就': {}, '被': {}, '把': {}, '让': {},
+	'向': {}, '往': {}, '从': {}, '到': {}, '去': {}, '能': {}, '会': {}, '要': {},
+	'可': {}, '没': {}, '不': {}, '很': {}, '太': {}, '更': {}, '最': {}, '都': {},
+	'只': {}, '还': {}, '再': {}, '才': {}, '刚': {}, '已': {}, '正': {}, '将': {},
+	'该': {}, '应': {}, '需': {}, '必': {}, '须': {}, '够': {}, '出': {}, '入': {},
+	'上': {}, '下': {}, '大': {}, '小': {}, '多': {}, '少': {}, '来': {}, '做': {},
+	'用': {}, '问': {}, '说': {}, '看': {}, '想': {}, '知': {}, '道': {}, '给': {},
+	'跟': {}, '比': {}, '次': {}, '个': {}, '种': {}, '些': {}, '点': {}, '等': {},
+	'第': {}, '每': {}, '各': {}, '几': {}, '两': {}, '百': {}, '千': {}, '万': {},
+	'亿': {}, '哦': {}, '啊': {}, '嗯': {}, '呢': {}, '吧': {}, '吗': {}, '呀': {},
+	'嘛': {}, '哈': {}, '哇': {}, '呵': {}, '嘿': {}, '喔': {},
+}
+
+// isStopWord 判断 rune 是否为停用词
+func isStopWord(r rune) bool {
+	_, ok := stopWords[r]
+	return ok
+}
 
 // RecallCard 单条召回卡片，用于前端展示
 type RecallCard struct {
@@ -23,7 +52,7 @@ type CardRecallResult struct {
 }
 
 // tokenize2Gram 对输入文本做 2-gram 分词
-// - 中文（CJK 字符）：每两个连续字符作为一个 gram
+// - 中文（CJK 字符）：每两个连续字符作为一个 gram，过滤包含停用词的无效 gram
 // - 英文/数字：按空格和标点切分成单词
 // - 去重
 func tokenize2Gram(text string) []string {
@@ -40,17 +69,21 @@ func tokenize2Gram(text string) []string {
 			for j < len(runes) && isCJK(runes[j]) {
 				j++
 			}
-			// 生成中文 2-gram
+			// 生成中文 2-gram，过滤包含停用词的噪音
 			chunk := runes[i:j]
 			for k := 0; k < len(chunk)-1; k++ {
+				// 如果 gram 中任意字符是停用词则跳过（如"有什"、"什么"、"么新"）
+				if isStopWord(chunk[k]) || isStopWord(chunk[k+1]) {
+					continue
+				}
 				gram := string(chunk[k]) + string(chunk[k+1])
 				if _, ok := seen[gram]; !ok {
 					seen[gram] = struct{}{}
 					grams = append(grams, gram)
 				}
 			}
-			// 如果只有一个中文字，也作为关键词
-			if len(chunk) == 1 {
+			// 如果只有一个中文字且不是停用词，也作为关键词
+			if len(chunk) == 1 && !isStopWord(chunk[0]) {
 				gram := string(chunk[0])
 				if _, ok := seen[gram]; !ok {
 					seen[gram] = struct{}{}
@@ -151,6 +184,12 @@ func CardRecallSearch(ctx context.Context, query string, limit int, noteService 
 	if len(keywords) == 0 {
 		return nil
 	}
+
+	// 日志记录分词结果
+	noteService.logger.Infow("CardRecallSearch 分词结果",
+		fastlog.String("query", query),
+		fastlog.Any("keywords", keywords),
+	)
 
 	// 搜索笔记（全量内容）
 	notes, err := noteService.SearchFull(keywords, limit)
