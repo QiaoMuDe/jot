@@ -1821,9 +1821,15 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			}
 		}
 
-		// 发射最终的 search-sources 事件
+		// 发射最终的 search-sources 事件（截断 Content 为前 200 字用于前端预览，DB 存储保持全量）
 		if searchSourcesJSON != "" {
-			runtime.EventsEmit(a.ctx, "ai:search-sources", searchSourcesJSON)
+			var srcs []services.SearchSource
+			if err := json.Unmarshal([]byte(searchSourcesJSON), &srcs); err == nil {
+				truncated := services.TruncateSearchSourcesPreview(srcs, 200)
+				if displayJSON, err := json.Marshal(truncated); err == nil {
+					runtime.EventsEmit(a.ctx, "ai:search-sources", string(displayJSON))
+				}
+			}
 			a.LogSvc.Logger.Debugw("AI 搜索结果汇总", fastlog.Int("sources_count", len(searchSources)))
 		}
 
@@ -1857,11 +1863,15 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					// 注入格式化文本到 system role
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 
-					// 发射结构化卡片数据给前端，并缓存用于持久化
+					// 发射结构化卡片数据给前端（截断 Content 为前 200 字），并缓存全量用于持久化
 					if len(recallResult.Cards) > 0 {
 						cardsJSON, _ := json.Marshal(recallResult.Cards)
-						recallCardsJSON = string(cardsJSON)
-						runtime.EventsEmit(a.ctx, "ai:recall-cards", string(cardsJSON))
+						recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
+
+						truncatedCards := services.TruncateRecallCardsPreview(recallResult.Cards, 200)
+						if displayJSON, err := json.Marshal(truncatedCards); err == nil {
+							runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
+						}
 						a.LogSvc.Logger.Debugw("AI 卡片召回结果", fastlog.Int("cards_count", len(recallResult.Cards)))
 					} else {
 						a.LogSvc.Logger.Debugw("AI 卡片召回无结果")
@@ -2226,7 +2236,13 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		}
 
 		if searchSourcesJSON != "" {
-			runtime.EventsEmit(a.ctx, "ai:search-sources", searchSourcesJSON)
+			var srcs []services.SearchSource
+			if err := json.Unmarshal([]byte(searchSourcesJSON), &srcs); err == nil {
+				truncated := services.TruncateSearchSourcesPreview(srcs, 200)
+				if displayJSON, err := json.Marshal(truncated); err == nil {
+					runtime.EventsEmit(a.ctx, "ai:search-sources", string(displayJSON))
+				}
+			}
 			a.LogSvc.Logger.Debugw("AI 搜索结果汇总（再生）", fastlog.Int("sources_count", len(searchSources)))
 		}
 
@@ -2258,8 +2274,12 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 					if len(recallResult.Cards) > 0 {
 						cardsJSON, _ := json.Marshal(recallResult.Cards)
-						recallCardsJSON = string(cardsJSON)
-						runtime.EventsEmit(a.ctx, "ai:recall-cards", string(cardsJSON))
+						recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
+
+						truncatedCards := services.TruncateRecallCardsPreview(recallResult.Cards, 200)
+						if displayJSON, err := json.Marshal(truncatedCards); err == nil {
+							runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
+						}
 						a.LogSvc.Logger.Debugw("AI 卡片召回结果（再生）", fastlog.Int("cards_count", len(recallResult.Cards)))
 					}
 				}

@@ -639,6 +639,29 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 	for i, m := range msgs {
 		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
 	}
+
+	// 截断 RecallCards 和 SearchSources 的 Content 字段，减小 Wails 桥传输量
+	for i := range result {
+		if result[i].RecallCards != "" {
+			var cards []RecallCard
+			if err := json.Unmarshal([]byte(result[i].RecallCards), &cards); err == nil {
+				cards = TruncateRecallCardsPreview(cards, 200)
+				if b, err := json.Marshal(cards); err == nil {
+					result[i].RecallCards = string(b)
+				}
+			}
+		}
+		if result[i].SearchSources != "" {
+			var sources []SearchSource
+			if err := json.Unmarshal([]byte(result[i].SearchSources), &sources); err == nil {
+				sources = TruncateSearchSourcesPreview(sources, 200)
+				if b, err := json.Marshal(sources); err == nil {
+					result[i].SearchSources = string(b)
+				}
+			}
+		}
+	}
+
 	return result
 }
 

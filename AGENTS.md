@@ -149,7 +149,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -382,7 +382,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端渲染** | 卡片网格渲染 | ✅ 性能良好 |
 | **AI 流式输出** | 基于 Wails Events 逐块推送，不阻塞 UI | ✅ 体验优秀 |
 | **CM6 编辑器** | 仅初始化当前编辑的笔记 | ✅ 性能良好 |
-| **多会话切换** | 切换时从后端加载对应会话的消息，采用一次性同步渲染（无 yield）+ 同步滚动（`scroll-behavior: auto` 临时禁用），浏览器只绘制一次最终状态，彻底消除视觉跳跃 | ✅ 切换瞬间完成，无任何中间状态闪烁 |
+| **多会话切换** | 切换时从后端加载对应会话的消息，采用一次性同步渲染（无 yield）+ 同步滚动（`scroll-behavior: auto` 临时禁用），浏览器只绘制一次最终状态，彻底消除视觉跳跃。后端 `LoadAISessionMessagesPaginated` 在返回前端前已截断 `RecallCards`/`SearchSources` 的 Content 为 200 字，减小 Wails 桥传输量和 DOM 渲染开销 | ✅ 切换瞬间完成，无任何中间状态闪烁 |
 | **操作按钮折叠测量** | `collapseActionsIfNeeded()` 支持 `sync` 同步模式，在 `switchSession()` 中使用同步测量避免布局抖动 | ✅ 消除消息"跳跃"问题 |
 
 ### 6.3 异常处理分析
@@ -572,18 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：更多菜单"展开侧栏"增加跳转首页前置逻辑
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 优化更多菜单"展开侧栏"功能的交互逻辑：当点击该功能时，如果当前处于非笔记首页的其他页面（如设置、回收站、日历、AI助手等），先调用 `switchView('grid')` 跳转到笔记首页，再将已折叠的笔记本侧栏展开。如果已在笔记首页，则保持原有切换行为不变。 |
-| **跳转首页+展开** | [main.js](frontend/src/main.js) `moreMenu` 的 `sidebar-toggle` 点击处理中新增判断 `state.currentView !== 'grid'` 分支：先执行 `switchView('grid')` + `resetPagination()` + `loadNotes()` 切换到笔记首页，再检查侧栏是否折叠，若折叠则移除 `collapsed` class、更新 `localStorage` 和菜单/按钮 UI。已在首页时保持原有 `toggleSidebar()` 行为。 |
-| **AI 聊天布局修正** | 展开侧栏功能暴露了 AI 聊天模块的布局问题：① `#mainContent` 的 `scrollbar-gutter: stable` 导致 AI 聊天内部滚动条与窗口右侧出现间隙，添加 `#mainContent:has(#viewAiChat.active) { scrollbar-gutter: auto; overflow-y: hidden; }` 消除；② `.ai-chat-messages-inner` 右侧内边距调整为 `padding: 16px 15px 72px 18px`，使用户消息更靠右。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（sidebar-toggle 点击处理逻辑重写）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 聊天布局修正） |
-
----
-
-## 记忆点 2：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
+## 记忆点 1：AI 优化按钮取消支持 + 发送按钮禁用 + 错误信息优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：启动器网格（Launcher Grid）全屏浮层实现
+## 记忆点 2：启动器网格（Launcher Grid）全屏浮层实现
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
+## 记忆点 3：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 4：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +622,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：「更多技能」按钮隐藏改为禁用态
+## 记忆点 5：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +634,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 6：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 7：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 8：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,13 +668,25 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：设置页面板切换动画重入守卫
+## 记忆点 9：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 修复设置页侧边栏快速切换面板时的面板重叠 bug。根因：`switchSettingsTab()` 的入场动画阶段（`panel-enter`，约 200ms）没有任何面板拥有 `active` class，若用户在此期间点击另一个导航项，`querySelector('.settings-panel.active')` 返回 null，代码走入直接切换分支，导致旧面板（仍带 `panel-enter` 保持 `display:block`）和新面板（`active` → `display:block`）同时可见。修复方案：添加 `_settingsAnimating` 开关守卫，动画开始置 true，入场动画 `animationend` 完成后置 false，动画期间忽略所有切换请求。 |
 | **修复细节** | [main.js](frontend/src/main.js)：在 `switchSettingsTab()` 前声明 `let _settingsAnimating = false`；函数顶部添加 `if (_settingsAnimating) return;` 守卫；动画开始时 `_settingsAnimating = true`；入场动画 `animationend` 回调末尾 `_settingsAnimating = false`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（新增 `_settingsAnimating` 守卫） |
+
+---
+
+## 记忆点 10：AI 搜索来源与召回卡片前端预览截断
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 切换 AI 会话时，历史消息中的召回卡片携带笔记全文、联网搜索来源携带搜索结果全文（默认 5000 字/条），通过 Wails 桥全量传输到前端导致卡顿数秒。修复方案：在数据离开 Go 后端进入前端的两条路径上对 `Content` 截断到 200 字预览——DB 存储保持全量，AI 上下文注入保持全量，仅前端展示用截断版。 |
+| **后端截断函数** | [recall_service.go](internal/services/recall_service.go)：新增 `TruncateRecallCardsPreview` 和 `TruncateSearchSourcesPreview` 两个函数，rune 安全截断，返回新切片不影响原数据。 |
+| **流式发射截断** | [app.go](app.go)：`CallAIStream` 和 `CallAIStreamRegenerate` 中，发射 `ai:recall-cards`/`ai:search-sources` 事件前对数据副本截断后发射，`recallCardsJSON`/`searchSourcesJSON`（用于 DB 存储）保持全量不变。 |
+| **切换会话截断** | [ai_service.go](internal/services/ai_service.go)：`LoadAISessionMessagesPaginated` 返回前对每条消息的 `RecallCards`/`SearchSources` JSON 做解析→截断→重序列化；`LoadAISessionMessages`（AI 内部调用）不受影响，保持全量。 |
+| **涉及文件** | [app.go](app.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/ai_service.go](internal/services/ai_service.go) |
 
 ---
 
