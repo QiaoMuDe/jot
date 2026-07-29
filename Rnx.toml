@@ -96,7 +96,7 @@ internal = false
 desc = '发布程序'
 # 命令列表
 cmds = [
-    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean -nsis',
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -upxflags="-2" -clean -nsis',
     'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
     'fck rm -f {{exe_path}}',
     'fck mv -f {{output_dir}}/jot-amd64-installer.exe {{output_dir}}/jot_windows_amd64_installer_{{git_version}}.exe'
