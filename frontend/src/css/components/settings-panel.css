@@ -1120,11 +1120,13 @@
     opacity: 0;
     visibility: hidden;
     transition: opacity 200ms ease-out, visibility 200ms ease-out;
+    pointer-events: none;
 }
 
 .preset-modal-overlay.visible {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 }
 
 .preset-modal {
@@ -1267,6 +1269,36 @@
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
+    }
+}
+
+/* 新增预设行插入动画：先展开空间，再滑入内容 */
+.preset-row-insert {
+    animation: presetRowInsert 350ms ease-out both;
+    overflow: hidden;
+}
+
+@keyframes presetRowInsert {
+    0% {
+        max-height: 0;
+        opacity: 0;
+        transform: translateX(-30px);
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    30% {
+        max-height: 80px;   /* 空间展开完毕 */
+        opacity: 0;
+        transform: translateX(-30px);
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+    100% {
+        max-height: 80px;
+        opacity: 1;
+        transform: translateX(0);
+        padding-top: 6px;
+        padding-bottom: 6px;
     }
 }
 

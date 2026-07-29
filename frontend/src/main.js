@@ -2831,12 +2831,26 @@ async function loadProfiles() {
         const dropdown = document.getElementById('presetDropdown');
         const label = document.getElementById('presetLabel');
         if (!dropdown) return;
-        dropdown.innerHTML = '';
+
+        // 若无预设直接返回
         if (profiles.length === 0) {
+            dropdown.innerHTML = '';
             label.textContent = '无预设配置';
             return;
         }
-        // 判断当前使用的配置匹配哪个预设
+
+        // 检查是否有激活的预设
+        const hasActive = profiles.some(p => p.is_active);
+
+        // 无激活预设时，自动切换默认预设（优先）或第一个预设
+        if (!hasActive) {
+            const target = profiles.find(p => p.is_default) || profiles[0];
+            await switchProfile(target.id, true);
+            return; // switchProfile 内部会再次调用 loadProfiles 更新 UI
+        }
+
+        // 正常渲染预设下拉
+        dropdown.innerHTML = '';
         let activeId = null;
         for (let p of profiles) {
             const item = document.createElement('div');
@@ -2859,9 +2873,7 @@ async function loadProfiles() {
             item.addEventListener('click', () => switchProfile(p.id));
             dropdown.appendChild(item);
         }
-        label.textContent = activeId
-            ? (profiles.find(p => p.id === activeId)?.name || '选择预设')
-            : '选择预设';
+        label.textContent = profiles.find(p => p.id === activeId)?.name || '选择预设';
     } catch (e) {
         console.warn('加载预设失败:', e);
     }
@@ -2965,6 +2977,13 @@ async function savePresetModal() {
     const apiKey = document.getElementById('presetModalKey').value.trim();
     if (!name) { nm.show('请输入名称', 'error'); return; }
     if (!baseURL) { nm.show('请输入 API 地址', 'error'); return; }
+    // 检查名称是否已存在（编辑时排除自身）
+    const existingProfiles = await window.go.main.App.GetProfiles();
+    const nameExists = existingProfiles.some(p => p.name === name && p.id !== editingProfileId);
+    if (nameExists) {
+        nm.show(`名称「${name}」已被使用，请换一个`, 'error');
+        return;
+    }
     if (baseURL.endsWith('/')) {
         const urlInput = document.getElementById('presetModalURL');
         urlInput.classList.add('input-error');
@@ -2972,18 +2991,43 @@ async function savePresetModal() {
         return;
     }
     try {
+        let profile = null;
         if (editingProfileId) {
             await window.go.main.App.UpdateProfile(editingProfileId, name, provider, baseURL, apiKey);
             nm.show('配置已更新', 'success');
         } else {
-            const profile = await window.go.main.App.CreateProfile(name, provider, baseURL, apiKey);
+            profile = await window.go.main.App.CreateProfile(name, provider, baseURL, apiKey);
             nm.show('配置已新增', 'success');
         }
         closePresetModal();
         await loadProfiles();
-        // 如果管理列表展开，同步刷新
-        if (presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
-            renderPresetMgrList();
+        // 新增时向管理列表插入新行（两阶段动画：先展开空间，再滑入内容）
+        if (!editingProfileId && profile && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
+            const row = createPresetRowElement(profile);
+            // 初始态：零高度、透明、左侧偏移
+            row.style.maxHeight = '0';
+            row.style.overflow = 'hidden';
+            row.style.opacity = '0';
+            row.style.transform = 'translateX(-30px)';
+            row.style.paddingTop = '0';
+            row.style.paddingBottom = '0';
+            // 插入到标题栏之后（此时行不占可见空间）
+            const header = presetMgrContainer.firstElementChild;
+            if (header) {
+                header.after(row);
+            } else {
+                presetMgrContainer.appendChild(row);
+            }
+            // 下一帧触发动画
+            requestAnimationFrame(() => {
+                row.classList.remove('preset-row-enter');
+                row.classList.add('preset-row-insert');
+            });
+            // 动画结束后清理 inline 覆盖
+            row.addEventListener('animationend', () => {
+                row.style.maxHeight = '';
+                row.style.overflow = '';
+            }, { once: true });
         }
     } catch (e) {
         nm.show('保存失败: ' + e, 'error');
@@ -2996,7 +3040,7 @@ async function deleteProfile(id, name, rowEl) {
     if (!confirmed) return;
     // 先播放删除动画
     if (rowEl) {
-        rowEl.classList.remove('preset-row-enter');
+        rowEl.classList.remove('preset-row-enter', 'preset-row-insert');
         rowEl.classList.add('preset-delete-out');
         await new Promise(resolve => {
             rowEl.addEventListener('animationend', resolve, { once: true });
@@ -3006,9 +3050,9 @@ async function deleteProfile(id, name, rowEl) {
         await window.go.main.App.DeleteProfile(id);
         nm.show('配置已删除', 'success');
         await loadProfiles();
-        // 如果管理列表已展开，刷新它
-        if (presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
-            renderPresetMgrList();
+        // 仅移除已播放删除动画的行，避免全量重渲染的闪烁
+        if (rowEl && rowEl.parentNode) {
+            rowEl.remove();
         }
     } catch (e) {
         nm.show('删除失败: ' + e, 'error');
@@ -3066,60 +3110,65 @@ function renderPresetMgrList() {
             return;
         }
         profiles.forEach((p, index) => {
-            const row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--radius-sm);gap:8px;';
-            row.style.borderBottom = '1px solid var(--border)';
-            // 添加入场动画（错开延迟避免同时弹出）
-            row.classList.add('preset-row-enter');
+            const row = createPresetRowElement(p);
             row.style.animationDelay = `${index * 50}ms`;
-            // 信息区
-            const info = document.createElement('div');
-            info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
-            const nameRow = document.createElement('div');
-            nameRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
-            const badge = document.createElement('span');
-            badge.className = 'preset-provider-badge';
-            badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
-            const nameSpan = document.createElement('strong');
-            nameSpan.style.cssText = 'font-size:0.85rem;color:var(--text-primary);';
-            nameSpan.textContent = p.name;
-            nameRow.appendChild(badge);
-            nameRow.appendChild(nameSpan);
-            const detail = document.createElement('div');
-            detail.style.cssText = 'font-size:0.75rem;color:var(--text-muted);';
-            detail.textContent = p.base_url;
-            info.appendChild(nameRow);
-            info.appendChild(detail);
-            // 操作区
-            const actions = document.createElement('div');
-            actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn btn-sm btn-save';
-            editBtn.textContent = '编辑';
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openEditProfileModal(p.id, p.name, p.provider, p.base_url, p.api_key);
-            });
-            const delBtn = document.createElement('button');
-            delBtn.className = 'btn btn-sm btn-danger';
-            delBtn.textContent = '删除';
-            if (p.is_default) {
-                delBtn.style.display = 'none';
-            } else {
-                delBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteProfile(p.id, p.name, row);
-                });
-            }
-            actions.appendChild(editBtn);
-            actions.appendChild(delBtn);
-            row.appendChild(info);
-            row.appendChild(actions);
             presetMgrContainer.appendChild(row);
         });
     }).catch(e => {
         nm.show('加载失败: ' + e, 'error');
     });
+}
+
+// 创建单行预设列表条目 DOM 元素（带编辑/删除事件绑定）
+function createPresetRowElement(p) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--radius-sm);gap:8px;';
+    row.style.borderBottom = '1px solid var(--border)';
+    row.classList.add('preset-row-enter');
+    // 信息区
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+    const badge = document.createElement('span');
+    badge.className = 'preset-provider-badge';
+    badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
+    const nameSpan = document.createElement('strong');
+    nameSpan.style.cssText = 'font-size:0.85rem;color:var(--text-primary);';
+    nameSpan.textContent = p.name;
+    nameRow.appendChild(badge);
+    nameRow.appendChild(nameSpan);
+    const detail = document.createElement('div');
+    detail.style.cssText = 'font-size:0.75rem;color:var(--text-muted);';
+    detail.textContent = p.base_url;
+    info.appendChild(nameRow);
+    info.appendChild(detail);
+    // 操作区
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm btn-save';
+    editBtn.textContent = '编辑';
+    editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditProfileModal(p.id, p.name, p.provider, p.base_url, p.api_key);
+    });
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm btn-danger';
+    delBtn.textContent = '删除';
+    if (p.is_default) {
+        delBtn.style.display = 'none';
+    } else {
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteProfile(p.id, p.name, row);
+        });
+    }
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    row.appendChild(info);
+    row.appendChild(actions);
+    return row;
 }
 
 // 关闭管理列表

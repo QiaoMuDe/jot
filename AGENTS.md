@@ -21,7 +21,8 @@ jot/                                    # 项目根目录
 │   │   └── converter.go               # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
 │   ├── markitdown/                     # 从 Go module cache 克隆的 markitdown 库本地副本（含 PDFium Stdout/Stderr Discard 修复）
 │   ├── database/
-│   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
+│   │   ├── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
+│   │   └── builtin_profiles.go         # 内置 API 预设服务商定义（DeepSeek/智谱 GLM/Ollama 等 9 个），InitDB 时按 Name 去重增量插入
 │   ├── fontutil/
 │   │   └── fonts_windows.go           # EnumFontFamiliesW API 封装
 │   ├── models/
@@ -527,6 +528,10 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **快捷键说明页新增 Ctrl+P**（在 Ctrl+L/E 之间插入启动器快捷键条目）
 - [x] **办公文件导入支持**（markitdown 库集成，支持 .docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip 共 7 种办公文件格式，60s 超时保护 + goroutine 并发处理 + Wails Events 进度事件 + 前端批量进度通知 + 500ms 最小展示保底）
 - [x] **卡片召回优化**（gse 分词替换 2-gram，复合词识别更好；SearchFull 改为 Go 侧相关度打分排序，标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励）
+- [x] **内置 API 预设服务商**（builtin_profiles.go 预配 DeepSeek/智谱 GLM/Ollama 等 9 个常用服务商，启动时按 Name 去重增量插入，Key 留空用户自行配置）
+- [x] **预设管理增删动画**（两阶段插入动画：先 max-height 展开空间再滑入内容；删除动画 CSS 覆盖 Bug 修复：preset-row-insert 类定义在后导致 preset-delete-out 动画被覆盖，animationend 永远不触发）
+- [x] **预设弹窗遮罩点击穿透修复**（pointer-events: none 防止淡出期间拦截删除按钮点击；确认弹窗 z-index 从 1000 提升至 100000 避免被遮罩挡住）
+- [x] **预设名称唯一性校验**（savePresetModal 提交前检查名称是否已存在，编辑时排除自身）
 
 ---
 
@@ -582,33 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 搜索来源与召回卡片前端预览截断
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 切换 AI 会话时，历史消息中的召回卡片携带笔记全文、联网搜索来源携带搜索结果全文（默认 5000 字/条），通过 Wails 桥全量传输到前端导致卡顿数秒。修复方案：在数据离开 Go 后端进入前端的两条路径上对 `Content` 截断到 200 字预览——DB 存储保持全量，AI 上下文注入保持全量，仅前端展示用截断版。 |
-| **后端截断函数** | [recall_service.go](internal/services/recall_service.go)：新增 `TruncateRecallCardsPreview` 和 `TruncateSearchSourcesPreview` 两个函数，rune 安全截断，返回新切片不影响原数据。 |
-| **流式发射截断** | [app.go](app.go)：`CallAIStream` 和 `CallAIStreamRegenerate` 中，发射 `ai:recall-cards`/`ai:search-sources` 事件前对数据副本截断后发射，`recallCardsJSON`/`searchSourcesJSON`（用于 DB 存储）保持全量不变。 |
-| **切换会话截断** | [ai_service.go](internal/services/ai_service.go)：`LoadAISessionMessagesPaginated` 返回前对每条消息的 `RecallCards`/`SearchSources` JSON 做解析→截断→重序列化；`LoadAISessionMessages`（AI 内部调用）不受影响，保持全量。 |
-| **涉及文件** | [app.go](app.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/ai_service.go](internal/services/ai_service.go) |
-
----
-
-## 记忆点 2：办公文件导入支持 + 批量进度通知
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 集成 markitdown 库支持导入常见办公文件（.docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip），替代原来的 `fs.IsBinaryPath()` 二元拒绝逻辑。三段式判定：办公文件→markitdown 转换 Markdown；二进制文件→拒绝；纯文本→保持 `os.ReadFile` 直读。并发 `sync.WaitGroup` 处理多个文件，单文件 60s 超时保护。批量导入/上传通过 Wails Events 发射进度事件（`import:progress`/`import:ai-progress`），前端 `requestAnimationFrame` 防抖 + 500ms 最小展示保底，失败文件逐个显示错误详情。 |
-| **后端转换层** | [internal/converter/converter.go](internal/converter/converter.go)：`IsOfficeFile()` 扩展名判定 + `ConvertToMarkdown()` goroutine+select 超时封装。 |
-| **导入函数改造** | [app.go](app.go)：`ImportFiles` 和 `readAIChatFiles` 改为 goroutine 并发 + `runtime.EventsEmit` 发射 `start`/`complete` 事件；`processImportFile`/`processAIChatFile` 三段式判定（office→md / binary→reject / text→readfile），并添加全分支日志（Debugw/Warnw/Errorw/Infow）。 |
-| **进度通知前端** | [main.js](frontend/src/main.js#L8139-L8221)：`showImportResults()` 提取为独立函数；`handleFileDropPaths` 注册 `import:progress` 事件监听 + 500ms 保底。 |
-| **AI 上传进度通知** | [ai-chat.js](frontend/src/js/ai-chat.js#L4549-L4577)：`showAIChatResults()` 提取为独立函数；`handleAiChatFileDrop` 注册 `import:ai-progress` 独立事件名防冲突。 |
-| **通知管理器扩展** | [notification.js](frontend/src/js/notification.js#L135-L149)：`showProgress()` 方法创建无关闭按钮、不自动消失的持久进度通知（旋转 SVG + `total` 计数）。 |
-| **进度通知样式** | [modals.css](frontend/src/css/components/modals.css#L826-L846)：`.notification.progress` 样式（`pointer-events: none`、`spin` keyframes、`display: none` 关闭按钮）。 |
-
----
-
-## 记忆点 3：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 1：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 2：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 3：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 4：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,7 +635,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 5：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 6：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 7：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 8：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -699,6 +678,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **消息间距调整** | [ai-chat.css](frontend/src/css/components/ai-chat.css#L28)：`.ai-chat-messages-inner` 的 `padding-bottom` 从 `72px` 增至 `120px`，增大最后一条消息与底部输入框的间距。 |
 | **样式精简** | 删除旧孤儿 CSS（`.ai-search-indicator-bar`、`.ai-search-indicator-arrow`、`@keyframes ai-dropdown-in`、`.ai-search-dropdown-loading` 等约 109 行）；`bar.innerHTML` 中移除关键词数量徽标显示，仅保留"联网搜索中"文字，用户点击下拉菜单查看具体关键词。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增 createSearchIndicator、替换 startStreaming 调用点、EventsOff 补充 `ai:refined-keywords`、closeHandler 自清理、删除 totalSearchSources）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（替换旧搜索指示器样式、调整 messages-inner padding-bottom） |
+
+---
+
+## 记忆点 9：内置 API 预设服务商 + 预设管理动画与交互优化
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 实现两大部分：① 新增 [builtin_profiles.go](internal/database/builtin_profiles.go) 定义 9 个内置 API 预设服务商（DeepSeek/智谱 GLM/Ollama/通义千问/Kimi/腾讯混元/百度千帆/SiliconFlow/Mistral AI），启动时 `InitBuiltinProfiles` 按名称去重增量插入，Key 留空用户自行配置；② 预设管理增删动画与交互修复：两阶段插入动画（先 max-height 展开空间再滑入内容）、删除滑出动画、CSS 类覆盖导致 animationend 不触发的 Bug 修复、遮罩层 pointer-events 点击穿透修复、确认弹窗 z-index 提升至 100000、名称唯一性校验。 |
+| **后端初始化** | [internal/database/builtin_profiles.go](internal/database/builtin_profiles.go)：`InitBuiltinProfiles()` 查询已有名称构建去重 map，过滤后增量插入 9 个预设。 |
+| **动画实现** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：新增 `preset-row-insert` 两阶段动画（30% 前展开空间、30% 后滑入内容）；[main.js](frontend/src/main.js)：`deleteProfile()` 中移除 `preset-row-insert` 类避免动画覆盖。 |
+| **交互修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：为 `.preset-modal-overlay` 添加 `pointer-events: none`，`.visible` 时设为 `auto`；[modals.css](frontend/src/css/components/modals.css)：确认弹窗 `z-index` 从 1000 提升至 100000。 |
+| **名称校验** | [main.js](frontend/src/main.js)：`savePresetModal()` 提交前遍历现有预设检查名称是否已存在，编辑时排除自身。 |
+| **涉及文件** | [internal/database/builtin_profiles.go](internal/database/builtin_profiles.go)、[internal/services/profile_service.go](internal/services/profile_service.go)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
 
 ---
 

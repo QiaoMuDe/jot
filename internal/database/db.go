@@ -73,6 +73,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("初始化默认设置失败: %w", err)
 	}
 
+	// 初始化内置 API 服务商预设（仅插入不存在的）
+	if err := InitBuiltinProfiles(db); err != nil {
+		return nil, fmt.Errorf("初始化内置 API 预设失败: %w", err)
+	}
+
 	return db, nil
 }
 
