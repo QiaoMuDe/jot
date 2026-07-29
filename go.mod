@@ -97,4 +97,4 @@ require (
 )
 
 // replace github.com/wailsapp/wails/v2 v2.12.0 => D:\AppData\gopath\pkg\mod
-// replace github.com/conductor-oss/markitdown v0.0.1 => ./tmp/markitdown-0.0.1
+replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown

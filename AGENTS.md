@@ -19,6 +19,7 @@ jot/                                    # 项目根目录
 ├── internal/                           # 【内部包】Go 子包统一目录
 │   ├── converter/
 │   │   └── converter.go               # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
+│   ├── markitdown/                     # 从 Go module cache 克隆的 markitdown 库本地副本（含 PDFium Stdout/Stderr Discard 修复）
 │   ├── database/
 │   │   └── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
 │   ├── fontutil/
@@ -577,21 +578,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 23. **启动器网格（Launcher Grid）全屏浮层实现**：新增 `Ctrl+P` 触发的全屏启动器网格，与"更多"菜单并存互不干扰。核心设计要点：① ES module 中函数不会自动挂到 `window` 上，launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露；② `executeAction` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，不能用 `setTimeout` 硬等——离场动画涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发；③ 方向键首次导航 `_selectedIndex === -1` 时直接跳第一项；④ 动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发入场），离场用 `closing` class 触发反方向过渡 + `transitionend` 监听 + 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
 
----
-
-## 记忆点 1：「更多技能」按钮隐藏改为禁用态
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 选中 AI 助手的「更多技能」菜单项后，右侧技能按钮不再隐藏，改为禁用态（半透明、不可点击）；取消技能后按钮恢复正常可用。 |
-| **renderSkillChips 改造** | [ai-chat.js](frontend/src/js/ai-chat.js)：有激活技能时 `skillsBtn.style.display = 'none'` → `skillsBtn.disabled = true` + `classList.add('is-disabled')`；无激活技能时恢复 `disabled = false` 并移除 class。 |
-| **切换会话恢复** | [ai-chat.js](frontend/src/js/ai-chat.js)：`clearSkillsState()` 新增 `skillsBtn` 禁用状态恢复逻辑。 |
-| **禁用态样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：新增 `#aiChatMoreSkillsBtn:disabled` / `.is-disabled` 样式（opacity 0.45、cursor not-allowed、pointer-events none）。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
+24. **markitdown 库本地克隆 + Wails 构建 PDF 转换修复**：将 `github.com/conductor-oss/markitdown` 从 Go module cache 克隆到 `internal/markitdown` 进行本地维护，通过 `go.mod` replace 指令引用。修复 `wails build` 后 PDF 转换失败问题——根因是 Wails GUI 构建缺少有效控制台句柄，wazero 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。修复方案：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效句柄调用 `GetFileType`。详见 [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)、[go.mod](go.mod)
 
 ---
 
-## 记忆点 2：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 1：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 2：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 3：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：设置页面板切换动画重入守卫
+## 记忆点 4：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 5：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -647,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：办公文件导入支持 + 批量进度通知
+## 记忆点 6：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +652,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 7：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 8：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,7 +676,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 9：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,6 +686,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **内嵌词典修复** | [recall_service.go](internal/services/recall_service.go)：`initGseSegmenter()` 改为 `LoadDictEmbed()` 替代 `LoadDict()`，解决编译后二进制找不到外部词典文件的问题。 |
 | **依赖管理** | [go.mod](go.mod)：新增 `github.com/go-ego/gse v1.0.2` + `vcaesar/cedar` 本地 replace。 |
 | **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（分词器替换 + 上限 + 内嵌词典）、[go.mod](go.mod)（新增依赖） |
+
+---
+
+## 记忆点 10：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将 `github.com/conductor-oss/markitdown` 库从 Go module cache 克隆到项目 `internal/markitdown` 目录下进行本地维护；修复 `wails build` 后 PDF 办公文件转换失败的问题——根因是 Wails GUI 构建缺少有效控制台句柄，`wazero` 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。 |
+| **修复细节** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效 GUI 句柄调用 `GetFileType`。 |
+| **依赖管理** | [go.mod](go.mod)：新增 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 替换指令，使编译时使用本地克隆版本而非 module cache 中的原始版本。 |
+| **涉及文件** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)（添加 Stdout/Stderr Discard）、[go.mod](go.mod)（replace 指令） |
 
 ---
 

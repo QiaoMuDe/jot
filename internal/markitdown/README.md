@@ -1,0 +1,137 @@
+# markitdown
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/conductor-oss/markitdown.svg)](https://pkg.go.dev/github.com/conductor-oss/markitdown)
+[![Go Report Card](https://goreportcard.com/badge/github.com/conductor-oss/markitdown)](https://goreportcard.com/report/github.com/conductor-oss/markitdown)
+[![Release](https://img.shields.io/github/v/release/conductor-oss/markitdown)](https://github.com/conductor-oss/markitdown/releases)
+
+A pure-Go library and CLI that converts documents to Markdown. Go port of the Python [markitdown](https://github.com/microsoft/markitdown) library.
+
+## Features
+- Pure Go, no CGO, no external runtime dependencies
+- 12 format converters: PDF, DOCX, PPTX, XLSX, XLS, HTML, RSS/Atom, CSV, EPUB, Jupyter, plain text, ZIP
+- Deterministic output with golden test suite
+- PDF extraction via PDFium (WebAssembly, no CGO) with heading/bold/italic detection
+
+## Supported formats
+
+| Format | Extensions | Notes |
+|--------|------------|-------|
+| PDF | `.pdf` | Text extraction via PDFium (WebAssembly, no CGO) |
+| Word | `.docx` | Headings, tables, lists, hyperlinks, comments, math (OMML to LaTeX) |
+| PowerPoint | `.pptx` | Slides, tables, notes, image alt text |
+| Excel | `.xlsx` | Multi-sheet markdown tables |
+| Excel (legacy) | `.xls` | Multi-sheet markdown tables |
+| HTML | `.html`, `.htm` | Full HTML-to-Markdown conversion |
+| RSS/Atom | `.xml`, `.rss`, `.atom` | Feed items with titles, dates, content |
+| CSV | `.csv` | Markdown table with auto charset detection |
+| EPUB | `.epub` | Metadata, table of contents, chapter content |
+| Jupyter | `.ipynb` | Markdown + fenced code cells with output |
+| Plain text | `.txt`, `.md`, `.json`, `.jsonl` | Charset detection and UTF-8 conversion |
+| ZIP | `.zip` | Recursively converts supported files inside |
+
+## Install
+
+```bash
+go get github.com/conductor-oss/markitdown
+```
+
+## Library quick start
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	markitdown "github.com/conductor-oss/markitdown"
+)
+
+func main() {
+	m := markitdown.New()
+
+	// Convert a local file
+	result, err := m.ConvertFile("report.pdf")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(result.Markdown)
+}
+```
+
+### More examples
+
+```go
+// Convert a URL
+result, err := m.ConvertURL("https://example.com/page.html")
+
+// Convert with auto-detection (file path or URL)
+result, err := m.Convert("report.pdf")
+result, err := m.Convert("https://example.com/page.html")
+
+// Convert from a reader with metadata hints
+f, _ := os.Open("data.csv")
+result, err := m.ConvertReader(f, markitdown.StreamInfo{
+	Extension: ".csv",
+	MIMEType:  "text/csv",
+	Charset:   "shift_jis",
+})
+
+// Options
+m := markitdown.New(
+	markitdown.WithKeepDataURIs(true), // preserve base64 data URIs in output
+)
+```
+
+## CLI quick start
+
+Build:
+```bash
+go build -o markitdown ./cmd/markitdown
+```
+
+Convert a file to stdout:
+```bash
+./markitdown report.pdf
+```
+
+Convert and write to a file:
+```bash
+./markitdown -o output.md report.docx
+```
+
+Convert from stdin with format hint:
+```bash
+cat data.csv | ./markitdown -x csv
+```
+
+Convert a URL:
+```bash
+./markitdown https://example.com/page.html
+```
+
+### CLI flags
+
+```
+Usage: markitdown [flags] [source]
+
+Arguments:
+  source    File path or URL to convert (reads stdin if omitted)
+
+Flags:
+  -o, --output string       Output file (default: stdout)
+  -x, --extension string    File extension hint for stdin input (e.g. "pdf", ".csv")
+  -m, --mime-type string    MIME type hint
+  -c, --charset string      Charset hint (e.g. "shift_jis", "utf-8")
+  -v, --version             Show version
+      --keep-data-uris      Keep full base64-encoded data URIs in output
+```
+
+## Notes
+- PDF extraction is text-based; image-only PDFs produce no output without OCR.
+- DOCX math equations (OMML) are converted to LaTeX notation.
+- CJK charset detection works without hints but is most reliable when `Charset` is provided in `StreamInfo`.
+
+## Acknowledgements
+
+This project is a Go port of Microsoft's [markitdown](https://github.com/microsoft/markitdown) Python library. The original project provides the reference implementation, test fixtures, and design that this port is based on.
