@@ -903,15 +903,19 @@ function bindEvents() {
             // 点击文字/图标/箭头区域：打开/关闭下拉菜单
             const dropdown = cardRecallDropdown;
             if (!dropdown) return;
-            const isOpen = dropdown.classList.toggle('open');
-            if (isOpen) {
+            const isCurrentlyOpen = dropdown.classList.contains('open');
+            if (isCurrentlyOpen) {
+                // 关闭菜单
+                dropdown.classList.remove('open');
+            } else {
+                // 打开菜单：先构建子项（隐藏态），再添加 .open 触发入场动画
                 await loadRecallNotebookMenu();
-            }
-            // 点击外部关闭菜单
-            if (isOpen) {
+                dropdown.classList.add('open');
+                dropdown.scrollTop = 0;
+                // 点击外部关闭菜单
                 const closeHandler = (ev) => {
                     if (!recallWrap || recallWrap.contains(ev.target)) return;
-                    if (dropdown) dropdown.classList.remove('open');
+                    dropdown.classList.remove('open');
                     document.removeEventListener('click', closeHandler);
                 };
                 setTimeout(() => document.addEventListener('click', closeHandler), 10);
@@ -4837,6 +4841,8 @@ async function loadRecallNotebookMenu() {
             });
             cardRecallDropdown.appendChild(item);
         });
+        // 每次打开菜单时，将滚动条重置到顶部
+        cardRecallDropdown.scrollTop = 0;
     } catch (_) {}
 }
 

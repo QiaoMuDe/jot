@@ -1003,9 +1003,11 @@
     box-shadow: var(--shadow-lg);
     z-index: 100;
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(8px) scale(0.96);
     pointer-events: none;
-    transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+    transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 4px 0;
     display: flex;
     flex-direction: column;
@@ -1032,9 +1034,37 @@
 
 .ai-chat-recall-dropdown.open {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     pointer-events: auto;
 }
+
+/* 菜单项入场动画：展开时逐个滑入 */
+.ai-chat-recall-dropdown .ai-chat-recall-item {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out, background 0.1s, color 0.1s;
+}
+
+.ai-chat-recall-dropdown.open .ai-chat-recall-item {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(1) { transition-delay: 0.02s, 0.02s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(2) { transition-delay: 0.04s, 0.04s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(3) { transition-delay: 0.06s, 0.06s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(4) { transition-delay: 0.08s, 0.08s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(5) { transition-delay: 0.10s, 0.10s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(6) { transition-delay: 0.12s, 0.12s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(7) { transition-delay: 0.14s, 0.14s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(8) { transition-delay: 0.16s, 0.16s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(9) { transition-delay: 0.18s, 0.18s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(10) { transition-delay: 0.20s, 0.20s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(11) { transition-delay: 0.22s, 0.22s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(12) { transition-delay: 0.24s, 0.24s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(13) { transition-delay: 0.26s, 0.26s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(14) { transition-delay: 0.28s, 0.28s, 0s; }
+.ai-chat-recall-dropdown.open .ai-chat-recall-item:nth-child(15) { transition-delay: 0.30s, 0.30s, 0s; }
 
 .ai-chat-recall-item {
     display: flex;

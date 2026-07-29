@@ -582,19 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 批量栏按钮视觉统一 + 交互优化：① `.batch-cancel` 和 `.batch-select-all-btn` 统一样式（与 `.batch-btn` 一致的 `var(--hover-bg)` 背景、相同边框/圆角/padding/hover）；② 批量删除按钮移除禁用态（不再 `opacity:0.5`/`cursor:not-allowed`/背景透明），改为始终显示 `var(--danger-bg)` 危险主题外观；③ 无选中笔记时点击批量按钮不再静默无反应，改为 `nm.show('请先选择笔记', 'warning')` 通知提示用户。 |
-| **按钮风格统一** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-cancel` 从透明无边框改为 `var(--hover-bg)` 背景 + `1px solid var(--border)` 边框 + `var(--radius-md)` 圆角 + 统一 6px 14px padding；`.batch-select-all-btn` 从透明背景+`accent` 文字+`radius-sm` 圆角改为与 `.batch-btn` 一致的外观（`var(--hover-bg)`/`var(--text-primary)`/`var(--radius-md)`/统一 padding 和 hover 效果）；`.batch-btn.btn-danger` 禁用态选择器全部删除，只保留始终显示危险主题的样式。 |
-| **删除按钮禁用态移除** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 直接使用 `var(--danger-bg)` 背景 + `var(--danger)` 文字 → hover 实色红底白字 → active 缩小压暗，不再依赖 `.has-selection` class 区分状态。[main.js](frontend/src/main.js)：`updateBatchBar()` 中移除 `.has-selection` class 切换逻辑。 |
-| **无选中通知** | [main.js](frontend/src/main.js)：`batchDeleteSelected()` 和 `batchPinSelected()` 的 `if (ids.length === 0) return` 前添加 `nm.show('请先选择笔记', 'warning')`；`batchMoveBtn` 点击处理器的 `if (state.selectedNoteIds.size === 0) return` 前同样添加通知。`openBatchTagPicker()` 已有通知不变。 |
-| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（按钮样式统一 + 删除按钮禁用态移除）、[frontend/src/main.js](frontend/src/main.js)（移除 `.has-selection` 切换 + 3 处添加无选中通知） |
-
----
-
-## 记忆点 2：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 1：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：设置页面板切换动画重入守卫
+## 记忆点 2：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 3：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：办公文件导入支持 + 批量进度通知
+## 记忆点 4：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 5：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +641,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 6：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 7：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 8：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 9：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -697,6 +685,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **批量删除按钮样式重构** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 日常态从 `var(--danger-bg)`/`var(--danger)` 改为 `var(--accent-lighter)`/`var(--accent-dark)`，hover 态从 `var(--danger)` 改为统一 `#DC2626`。[variables.css](frontend/src/css/variables.css)：catppuccin-latte/gruvbox-light/dracula 三个主题各新增 `--danger: <对应--error>` 定义。 |
 | **暖笺图标底框修复** | [variables.css](frontend/src/css/variables.css)：ysgrifennwr 主题 `--accent-light` 从 `#FAF0E0` 调深为 `#F4DCD4`（温暖浅玫瑰色），与 `--card-bg: #F8F0DB` 形成清晰对比，启动器 (Ctrl+P) 中图标容器 `.launcher-item-icon` 背景不再"消失"。 |
 | **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（4 个主题变量新增/修改）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（批量删除按钮样式重构） |
+
+---
+
+## 记忆点 10：召回卡片菜单入场动画修复（子项 stagger 时序）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复召回卡片菜单打开时子项缺少逐项滑入（stagger）入场动画的问题。根因：菜单子项是动态创建的（`loadRecallNotebookMenu` 中 `innerHTML=''` + `appendChild`），而打开时序是先 `classList.add('open')`、后构建子项，导致子项添加到 DOM 时容器已有 `.open` 类，CSS transition 从初始态到最终态的过渡永远无法触发（子项直接以最终态显现）。修复方案：调整打开时序为先构建子项（隐藏态）、后添加 `.open` 触发 transition。 |
+| **时序调整** | [ai-chat.js](frontend/src/js/ai-chat.js#L903-L922)：打开菜单时先 `await loadRecallNotebookMenu()` 在隐藏态构建子项 DOM，再 `classList.add('open')` 触发入场动画；关闭时直接 `classList.remove('open')`。CSS 层已有的 `.ai-chat-recall-item` 的 `translateX(-8px)` stagger 动画（0.02s 递增至 0.30s，nth-child 1~15）和容器 `scale(0.96)` 弹簧曲线不变。 |
+| **参考对比** | 联网搜索菜单和更多技能菜单的子项为静态 HTML，在 `.open` 切换时 DOM 已存在，故 transition 能正常触发——召回卡片的根因是相同的 CSS 因动态 DOM 时序失效。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（打开时序改为先构建后开启动画） |
 
 ---
 
