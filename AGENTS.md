@@ -582,17 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：设置页面板切换动画重入守卫
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复设置页侧边栏快速切换面板时的面板重叠 bug。根因：`switchSettingsTab()` 的入场动画阶段（`panel-enter`，约 200ms）没有任何面板拥有 `active` class，若用户在此期间点击另一个导航项，`querySelector('.settings-panel.active')` 返回 null，代码走入直接切换分支，导致旧面板（仍带 `panel-enter` 保持 `display:block`）和新面板（`active` → `display:block`）同时可见。修复方案：添加 `_settingsAnimating` 开关守卫，动画开始置 true，入场动画 `animationend` 完成后置 false，动画期间忽略所有切换请求。 |
-| **修复细节** | [main.js](frontend/src/main.js)：在 `switchSettingsTab()` 前声明 `let _settingsAnimating = false`；函数顶部添加 `if (_settingsAnimating) return;` 守卫；动画开始时 `_settingsAnimating = true`；入场动画 `animationend` 回调末尾 `_settingsAnimating = false`。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（新增 `_settingsAnimating` 守卫） |
-
----
-
-## 记忆点 2：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 1：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：办公文件导入支持 + 批量进度通知
+## 记忆点 2：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -618,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 3：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 4：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 5：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 6：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 7：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +667,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 8：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,7 +678,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 9：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -696,6 +686,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **推理框架** | [app.go](app.go#L45-L72)：新增 `reasoningFramework` 包级常量，包含 4 步隐式推理流程（不输出给用户），拼接在 `baseNormsBoundaries` 末尾。无技能时 system prompt 为 `baseIdentity + baseNormsBoundaries`（含框架），有技能时技能覆盖身份层但框架保留。 |
 | **来源标注（后端）** | 6 处注入入口全部添加来源标签：[search_service.go](internal/services/search_service.go)（Tavily → "来源：Tavily 联网搜索"）、[zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 → "来源：知乎站内搜索"，知乎全网搜 → "来源：知乎全网搜索"）、[recall_service.go](internal/services/recall_service.go)（卡片召回 → "来源：本地笔记，优先级最高"）、[app.go](app.go)（角色扮演笔记 → "来源：角色设定笔记"，手动引用笔记 → "来源：手动引用笔记"，上传文件 → "来源：上传文件"） |
 | **涉及文件** | [app.go](app.go)（推理框架 + 3 处来源标注）、[internal/services/search_service.go](internal/services/search_service.go)（Tavily 来源标签）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 + 全网搜来源标签）、[internal/services/recall_service.go](internal/services/recall_service.go)（卡片召回来源标签） |
+
+---
+
+## 记忆点 10：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 重新设计 AI 助手联网搜索时的动画指示器。原 `createSimpleSearchIndicator` 仅显示旋转地球+纯文字，不可点击。新 `createSearchIndicator` 使用卡片式设计（微透明主题色背景圆角条），refining 阶段显示"正在优化搜索词…"（不可点击），searching 阶段显示"联网搜索中"并可点击展开下拉菜单查看精炼后的关键词标签（有交错弹入动画 `@keyframes ai-tag-in`，每 40ms 一个）。无关键词时显示"暂无精炼关键词"。同时修复 3 个潜在问题：① `document click` 外部关闭监听器添加 `el.isConnected` 自清理防止内存泄漏；② EventsOff 列表补充 `ai:refined-keywords` 防止监听器累积；③ 删除死代码 `totalSearchSources`。 |
+| **新指示器函数** | [ai-chat.js](frontend/src/js/ai-chat.js#L2742-L2829)：`createSearchIndicator(status, keywords)` — 构建 `.ai-search-indicator` 容器 → `.ai-search-bar` 点击条（地球 SVG + 文字 + 下拉箭头）→ `.ai-search-dropdown` 绝对定位下拉菜单（关键词标签或空状态）。refining 阶段无下拉不可点击，searching 阶段可点击切换 `data-open` 属性控制下拉显隐。 |
+| **CSS 全新样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css#L295-L454)：`.ai-search-indicator` 入场动画（`ai-search-indicator-in`，0.25s spring）、`.ai-search-bar` 圆角背景微透明主题色 + hover 加深、`.ai-search-arrow` 弹簧曲线 180° 旋转、`.ai-search-dropdown` 卡片阴影 + `scale(0.95)→scale(1)` 展开/收起过渡、`.ai-search-keyword-tag` 交错弹入 `@keyframes ai-tag-in`、`.ai-search-empty-keywords` 空状态。 |
+| **消息间距调整** | [ai-chat.css](frontend/src/css/components/ai-chat.css#L28)：`.ai-chat-messages-inner` 的 `padding-bottom` 从 `72px` 增至 `120px`，增大最后一条消息与底部输入框的间距。 |
+| **样式精简** | 删除旧孤儿 CSS（`.ai-search-indicator-bar`、`.ai-search-indicator-arrow`、`@keyframes ai-dropdown-in`、`.ai-search-dropdown-loading` 等约 109 行）；`bar.innerHTML` 中移除关键词数量徽标显示，仅保留"联网搜索中"文字，用户点击下拉菜单查看具体关键词。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增 createSearchIndicator、替换 startStreaming 调用点、EventsOff 补充 `ai:refined-keywords`、closeHandler 自清理、删除 totalSearchSources）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（替换旧搜索指示器样式、调整 messages-inner padding-bottom） |
 
 ---
 

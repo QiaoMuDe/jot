@@ -2138,7 +2138,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:refined-keywords'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2152,7 +2152,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     let hasReceivedChunk = false;
     let streamSearchSources = null;
     let searchSourceStates = {};
-    let totalSearchSources = [];
     let recallCards = null;
     let refinedKeywords = '';
 
@@ -2220,16 +2219,15 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // 多源搜索状态管理
     searchSourceStates = {};
-    totalSearchSources = [];
 
     // 多源搜索状态：精炼阶段 → 搜索阶段 → 完成
     const unsubSearch = window.runtime.EventsOn('ai:search-status', (status) => {
         if (status === 'refining') {
             contentDiv.innerHTML = '';
-            contentDiv.appendChild(createSimpleSearchIndicator('正在优化搜索词...'));
+            contentDiv.appendChild(createSearchIndicator('refining'));
         } else if (status === 'searching') {
             contentDiv.innerHTML = '';
-            contentDiv.appendChild(createSimpleSearchIndicator('正在联网搜索...'));
+            contentDiv.appendChild(createSearchIndicator('searching', refinedKeywords));
         } else if (status === 'done') {
             // 仅在尚未收到 stream chunk 时替换为打字点
             if (!hasReceivedChunk) {
@@ -2731,6 +2729,93 @@ function createSimpleSearchIndicator(text) {
     const el = document.createElement('span');
     el.className = 'ai-simple-search-indicator';
     el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="ai-search-indicator-text">' + text + '</span>';
+    return el;
+}
+
+/**
+ * 创建联网搜索状态指示器（带关键词下拉菜单）
+ * @param {'refining'|'searching'} status - 搜索阶段
+ * @param {string} [keywords=''] - 精炼后的搜索关键词
+ * @returns {HTMLDivElement}
+ */
+function createSearchIndicator(status, keywords) {
+    // 地球 SVG（与简易版一致）
+    var earthSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+
+    // 下拉箭头 SVG
+    var arrowSvg = '<svg class="ai-search-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+    var el = document.createElement('div');
+    el.className = 'ai-search-indicator';
+    el.dataset.status = status;
+
+    if (status === 'refining') {
+        // 精炼阶段：简洁展示，不可点击，无下拉
+        var bar = document.createElement('div');
+        bar.className = 'ai-search-bar';
+        bar.innerHTML = earthSvg + '<span class="ai-search-text">正在优化搜索词...</span>';
+        el.appendChild(bar);
+        return el;
+    }
+
+    // 搜索阶段：可点击 bar + 下拉菜单
+    el.dataset.open = 'false';
+
+    var bar = document.createElement('div');
+    bar.className = 'ai-search-bar';
+
+    bar.innerHTML = earthSvg + '<span class="ai-search-text">联网搜索中</span>' + arrowSvg;
+    el.appendChild(bar);
+
+    // 下拉菜单
+    var dropdown = document.createElement('div');
+    dropdown.className = 'ai-search-dropdown';
+
+    if (keywords) {
+        var kwList = keywords.split(/\s+/).filter(Boolean);
+        if (kwList.length > 0) {
+            var label = document.createElement('div');
+            label.className = 'ai-search-dropdown-label';
+            label.textContent = '精炼搜索词';
+            dropdown.appendChild(label);
+
+            var kwContainer = document.createElement('div');
+            kwContainer.className = 'ai-search-keywords';
+            kwList.forEach(function (kw) {
+                var tag = document.createElement('span');
+                tag.className = 'ai-search-keyword-tag';
+                tag.textContent = kw;
+                kwContainer.appendChild(tag);
+            });
+            dropdown.appendChild(kwContainer);
+        } else {
+            dropdown.innerHTML = '<div class="ai-search-empty-keywords">暂无精炼关键词</div>';
+        }
+    } else {
+        dropdown.innerHTML = '<div class="ai-search-empty-keywords">暂无精炼关键词</div>';
+    }
+
+    el.appendChild(dropdown);
+
+    // 点击 bar 切换展开/收起
+    bar.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isOpen = el.dataset.open === 'true';
+        el.dataset.open = isOpen ? 'false' : 'true';
+    });
+
+    // 点击外部收起（自清理：元素脱离 DOM 后自动移除监听器）
+    var closeHandler = function (e) {
+        if (!el.isConnected) {
+            document.removeEventListener('click', closeHandler);
+            return;
+        }
+        if (!el.contains(e.target)) {
+            el.dataset.open = 'false';
+        }
+    };
+    document.addEventListener('click', closeHandler);
+
     return el;
 }
 

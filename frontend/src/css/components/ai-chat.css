@@ -25,7 +25,7 @@
 .ai-chat-messages-inner {
     max-width: clamp(800px, min(92vw, 100%), 1600px);
     margin: 0 auto;
-    padding: 16px 15px 72px 18px;
+    padding: 16px 15px 120px 18px;
     display: flex;
     flex-direction: column;
     gap: 40px;
@@ -278,7 +278,6 @@
 }
 
 /* ── 搜索指示器 ── */
-.ai-search-indicator,
 .ai-simple-search-indicator {
     display: inline-flex;
     align-items: center;
@@ -293,40 +292,19 @@
     flex-shrink: 0;
 }
 
-.ai-search-indicator[data-status="searching"] {
-    position: relative;
+/* ── 全新联网搜索动画指示器 ── */
+.ai-search-indicator {
+    display: flex;
     flex-direction: column;
-    cursor: pointer;
-    user-select: none;
+    align-items: flex-start;
+    gap: 0;
+    position: relative;
+    animation: ai-search-indicator-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ai-search-indicator svg {
-    animation: ai-search-spin 0.8s linear infinite;
-    flex-shrink: 0;
-}
-
-.ai-search-indicator-bar {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    color: var(--accent);
-    font-size: 0.85rem;
-    transition: background 0.15s;
-}
-
-.ai-search-indicator-bar:hover {
-    background: var(--hover-bg, rgba(128, 128, 128, 0.08));
-}
-
-.ai-search-indicator-arrow {
-    transition: transform 0.2s;
-    color: var(--text-muted);
-}
-
-.ai-search-indicator[data-open="true"] .ai-search-indicator-arrow {
-    transform: rotate(180deg);
+@keyframes ai-search-indicator-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes ai-search-spin {
@@ -334,39 +312,109 @@
     to { transform: rotate(360deg); }
 }
 
+/* ── 搜索栏（点击区域） ── */
+.ai-search-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    color: var(--accent);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+    position: relative;
+}
+
+.ai-search-bar:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* refining 状态不可点击 */
+.ai-search-indicator[data-status="refining"] .ai-search-bar {
+    cursor: default;
+}
+.ai-search-indicator[data-status="refining"] .ai-search-bar:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* 地球旋转 SVG */
+.ai-search-bar > svg:first-child {
+    animation: ai-search-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+/* 文字 */
+.ai-search-text {
+    white-space: nowrap;
+}
+
+/* 关键词数量徽标 */
+.ai-search-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* 下拉箭头 */
+.ai-search-arrow {
+    width: 14px;
+    height: 14px;
+    color: color-mix(in srgb, var(--accent) 50%, transparent);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+}
+
+.ai-search-indicator[data-open="true"] .ai-search-arrow {
+    transform: rotate(180deg);
+}
+
 /* ── 搜索关键词下拉菜单 ── */
 .ai-search-dropdown {
     position: absolute;
-    top: calc(100% + 4px);
+    top: calc(100% + 6px);
     left: 0;
     min-width: 200px;
     max-width: 320px;
-    background: var(--bg-secondary);
+    background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-    padding: 10px 12px;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    padding: 10px 14px;
     z-index: 100;
-    animation: ai-dropdown-in 0.15s ease-out;
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+    pointer-events: none;
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes ai-dropdown-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+.ai-search-indicator[data-open="true"] .ai-search-dropdown {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
 }
 
-.ai-search-dropdown-loading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.82rem;
+/* 下拉菜单标题 */
+.ai-search-dropdown-label {
+    font-size: 0.72rem;
     color: var(--text-muted);
-}
-
-.ai-search-dropdown-loading svg {
-    animation: ai-search-spin 0.8s linear infinite;
-    width: 14px;
-    height: 14px;
+    margin-bottom: 6px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 /* ── 搜索关键词标签 ── */
@@ -378,13 +426,34 @@
 
 .ai-search-keyword-tag {
     display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
+    padding: 4px 10px;
+    border-radius: 14px;
     font-size: 0.78rem;
     background: var(--accent);
     color: #fff;
     font-weight: 500;
-    line-height: 1.5;
+    line-height: 1.4;
+    animation: ai-tag-in 0.25s ease-out backwards;
+}
+
+.ai-search-keyword-tag:nth-child(1) { animation-delay: 0ms; }
+.ai-search-keyword-tag:nth-child(2) { animation-delay: 40ms; }
+.ai-search-keyword-tag:nth-child(3) { animation-delay: 80ms; }
+.ai-search-keyword-tag:nth-child(4) { animation-delay: 120ms; }
+.ai-search-keyword-tag:nth-child(5) { animation-delay: 160ms; }
+.ai-search-keyword-tag:nth-child(6) { animation-delay: 200ms; }
+.ai-search-keyword-tag:nth-child(7) { animation-delay: 240ms; }
+
+@keyframes ai-tag-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── 无关键词时的空状态 ── */
+.ai-search-empty-keywords {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    opacity: 0.8;
 }
 
 /* ── 多源搜索指示器 ── */
