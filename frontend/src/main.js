@@ -5914,7 +5914,7 @@ function initEventListeners() {
     // 全局拦截所有链接→系统默认浏览器打开（Wails WebView2 内避免应用内导航）
     document.addEventListener('click', function (e) {
         const link = e.target.closest('a');
-        if (link && link.href && !link.href.startsWith('#') && !link.href.startsWith('javascript:')) {
+        if (link && link.href && !link.getAttribute('href').startsWith('#') && !link.href.startsWith('javascript:')) {
             e.preventDefault();
             window.runtime.BrowserOpenURL(link.href);
         }
