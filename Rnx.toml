@@ -38,7 +38,7 @@ release_name = '{{app_name}}_windows_amd64_{{git_version}}.zip'
 desc = '构建程序'
 # 命令列表
 cmds = [
-    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -clean'
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -clean'
 ]
 # 任务工作目录
 work_dir = ''

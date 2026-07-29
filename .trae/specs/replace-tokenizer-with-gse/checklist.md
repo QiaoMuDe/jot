@@ -1,0 +1,10 @@
+- [x] `go.mod` 中包含 `github.com/go-ego/gse` 依赖
+- [x] `go mod tidy` 成功运行，`go.sum` 已更新
+- [x] `go build ./...` 编译通过
+- [x] `tokenize2Gram()`、`isCJK()`、`splitWords()` 三个函数已删除
+- [x] `stopWords` map 和 `isStopWord()` 函数保留
+- [x] 新增的 `tokenize()` 函数使用 gse.Cut + 停用词过滤 + 去重
+- [x] gse Segmenter 使用 `sync.Once` 懒初始化，首次调用加载词典
+- [x] `CardRecallSearch` 中的调用点已更新为 `tokenize(query)`
+- [x] 注释已同步更新
+- [x] 运行 `go build -o /dev/null ./...` 无编译错误

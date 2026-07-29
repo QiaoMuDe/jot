@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode"
+	"sync"
+
+	"github.com/go-ego/gse"
 
 	"gitee.com/MM-Q/fastlog"
 )
 
-// 停用词表，过滤 2-gram 中的高频无意义碎片
+// 停用词表，过滤分词结果中的高频无意义单字
 var stopWords = map[rune]struct{}{
 	// 高频单字停用词
 	'的': {}, '了': {}, '是': {}, '在': {}, '有': {}, '我': {}, '他': {}, '她': {},
@@ -51,96 +53,49 @@ type CardRecallResult struct {
 	Cards         []RecallCard // 结构化卡片列表，用于前端展示
 }
 
-// tokenize2Gram 对输入文本做 2-gram 分词
-// - 中文（CJK 字符）：每两个连续字符作为一个 gram，过滤包含停用词的无效 gram
-// - 英文/数字：按空格和标点切分成单词
+// gse 分词器（懒初始化）
+var (
+	gseSeg     gse.Segmenter
+	gseOnce    sync.Once
+	gseInitErr error
+)
+
+// initGseSegmenter 初始化 gse 分词器，载入内置词典
+func initGseSegmenter() {
+	gseSeg = gse.Segmenter{}
+	gseInitErr = gseSeg.LoadDictEmbed()
+}
+
+// tokenize 使用 gse 对输入文本做分词
+// - 调用 gse.Cut 精确模式+HMM
+// - 过滤停用词
 // - 去重
-func tokenize2Gram(text string) []string {
-	runes := []rune(text)
+func tokenize(text string) []string {
+	gseOnce.Do(initGseSegmenter)
+	if gseInitErr != nil {
+		return nil
+	}
+	words := gseSeg.Cut(text, true)
 	seen := make(map[string]struct{})
-	var grams []string
-
-	// 按连续的类型（中文/非中文）分段处理
-	i := 0
-	for i < len(runes) {
-		if isCJK(runes[i]) {
-			// 中文 2-gram
-			j := i
-			for j < len(runes) && isCJK(runes[j]) {
-				j++
+	var result []string
+	for _, w := range words {
+		if _, ok := seen[w]; !ok {
+			// 过滤停用词（仅对单字词做停用词检查）
+			runes := []rune(w)
+			if len(runes) == 1 && isStopWord(runes[0]) {
+				continue
 			}
-			// 生成中文 2-gram，过滤包含停用词的噪音
-			chunk := runes[i:j]
-			for k := 0; k < len(chunk)-1; k++ {
-				// 如果 gram 中任意字符是停用词则跳过（如"有什"、"什么"、"么新"）
-				if isStopWord(chunk[k]) || isStopWord(chunk[k+1]) {
-					continue
-				}
-				gram := string(chunk[k]) + string(chunk[k+1])
-				if _, ok := seen[gram]; !ok {
-					seen[gram] = struct{}{}
-					grams = append(grams, gram)
-				}
-			}
-			// 如果只有一个中文字且不是停用词，也作为关键词
-			if len(chunk) == 1 && !isStopWord(chunk[0]) {
-				gram := string(chunk[0])
-				if _, ok := seen[gram]; !ok {
-					seen[gram] = struct{}{}
-					grams = append(grams, gram)
-				}
-			}
-			i = j
-		} else {
-			// 非中文：按空格和标点切分成单词
-			j := i
-			for j < len(runes) && !isCJK(runes[j]) {
-				j++
-			}
-			words := splitWords(string(runes[i:j]))
-			for _, w := range words {
-				if w == "" {
-					continue
-				}
-				if _, ok := seen[w]; !ok {
-					seen[w] = struct{}{}
-					grams = append(grams, w)
-				}
-			}
-			i = j
+			seen[w] = struct{}{}
+			result = append(result, w)
 		}
 	}
-
-	return grams
+	return result
 }
 
-// isCJK 判断是否为中日韩文字
-func isCJK(r rune) bool {
-	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hangul, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r)
-}
-
-// splitWords 按非字母数字字符切分英文/数字
-func splitWords(text string) []string {
-	var words []string
-	var current []rune
-	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			current = append(current, r)
-		} else {
-			if len(current) > 0 {
-				words = append(words, string(current))
-				current = nil
-			}
-		}
-	}
-	if len(current) > 0 {
-		words = append(words, string(current))
-	}
-	return words
-}
+// maxRecallKeywords 卡片召回最大关键词数，防止超长 query 导致性能问题
+const maxRecallKeywords = 20
 
 // TruncateRecallCardsPreview 截断召回卡片列表的 Content 字段用于前端预览
-// 对每条 card 的 Content 按 maxLen 截断（rune 安全），不修改原切片，返回新切片
 func TruncateRecallCardsPreview(cards []RecallCard, maxLen int) []RecallCard {
 	if maxLen <= 0 {
 		return cards
@@ -174,20 +129,30 @@ func TruncateSearchSourcesPreview(sources []SearchSource, maxLen int) []SearchSo
 }
 
 // CardRecallSearch 执行卡片召回
-// 对 query 做 2-gram 分词 → 多关键词 OR 搜索笔记 → 格式化上下文 + 返回结构化卡片数据
+// 对 query 使用 gse 分词 → 多关键词 OR 搜索笔记 → 格式化上下文 + 返回结构化卡片数据
 func CardRecallSearch(ctx context.Context, query string, limit int, noteService *NoteService, notebookIDs ...uint) *CardRecallResult {
 	if query == "" || limit <= 0 {
 		return nil
 	}
 
-	keywords := tokenize2Gram(query)
+	keywords := tokenize(query)
 	if len(keywords) == 0 {
+		noteService.logger.Warnw("CardRecallSearch 分词结果为空",
+			fastlog.String("query", query),
+			fastlog.Any("gseInitErr", gseInitErr),
+		)
 		return nil
+	}
+
+	// 限制关键词数量，防止超长 LIKE 查询
+	if len(keywords) > maxRecallKeywords {
+		keywords = keywords[:maxRecallKeywords]
 	}
 
 	// 日志记录分词结果
 	noteService.logger.Infow("CardRecallSearch 分词结果",
 		fastlog.String("query", query),
+		fastlog.Int("count", len(keywords)),
 		fastlog.Any("keywords", keywords),
 	)
 

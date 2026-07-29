@@ -43,7 +43,7 @@ jot/                                    # 项目根目录
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
 │       ├── search_service.go           # 通用网页搜索（Tavily API）
 │       ├── zhihu_search_service.go     # 知乎搜索 + 全网搜索
-│   │       ├── recall_service.go           # 卡片召回（2-gram 分词 + 停用词过滤 + 相关度打分 + 按笔记本筛选）
+│   │       ├── recall_service.go           # 卡片召回（gse 分词 + 停用词过滤 + 相关度打分 + 按笔记本筛选）
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
 │   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
@@ -525,7 +525,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **启动器网格**（Ctrl+P 触发全屏浮层，4 列网格 13 项功能 + 搜索过滤 + 方向键导航 + Enter 执行 + ESC 关闭 + 入场/离场动画 + stagger 卡片动画）
 - [x] **快捷键说明页新增 Ctrl+P**（在 Ctrl+L/E 之间插入启动器快捷键条目）
 - [x] **办公文件导入支持**（markitdown 库集成，支持 .docx/.pdf/.xlsx/.xls/.pptx/.epub/.zip 共 7 种办公文件格式，60s 超时保护 + goroutine 并发处理 + Wails Events 进度事件 + 前端批量进度通知 + 500ms 最小展示保底）
-- [x] **卡片召回优化**（2-gram 分词增加停用词过滤，过滤高频无意义碎片；SearchFull 改为 Go 侧相关度打分排序，标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励）
+- [x] **卡片召回优化**（gse 分词替换 2-gram，复合词识别更好；SearchFull 改为 Go 侧相关度打分排序，标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励）
 
 ---
 
@@ -579,18 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两个小改进：① 待办清单无条目时移除"清清爽爽"标题文字，仅保留图标和提示文案；② 笔记编辑器/查看器/新建页面打开时屏蔽 Ctrl+P 快捷键，防止编辑笔记过程中意外弹出启动器干扰操作。 |
-| **空状态精简** | [index.html](frontend/index.html)：删除 `<p class="todo-empty-title">清清爽爽</p>` 一行，空状态仅显示勾选图标和 "点击右下角 + 添加新待办" 提示。 |
-| **编辑器内屏蔽 Ctrl+P** | [main.js](frontend/src/main.js#L6007-L6008)：在 Ctrl+P 处理器顶部新增 `if (els.viewEditor.classList.contains('active')) return;` 守卫条件，当编辑器/查看器/新建页面打开时直接跳过启动器响应。项目已有同类模式——Ctrl+数字快捷键在第 6138-6143 行已使用相同的 `els.viewEditor.classList.contains('active')` 判断。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（空状态标题删除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+P 守卫） |
-
----
-
-## 记忆点 2：「更多技能」按钮隐藏改为禁用态
+## 记忆点 1：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 2：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -613,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 3：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 4：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：设置页面板切换动画重入守卫
+## 记忆点 5：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,7 +635,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 6：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +647,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：办公文件导入支持 + 批量进度通知
+## 记忆点 7：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 8：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +673,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 9：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -693,6 +682,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **联网搜索主开关** | HTML 在搜索按钮 `<span>` 和 chevron 之间插入 toggle knob [index.html](frontend/index.html#L1075)；JS 点击 knob 切所有搜索源全开/全关，点击文字/图标切换下拉菜单 [ai-chat.js](frontend/src/js/ai-chat.js#L786-L820)。 |
 | **CSS 样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：召回菜单 `.ai-chat-recall-dropdown` / `.ai-chat-recall-item` 样式，含自定义滚动条（统一 6px 细条）。 |
 | **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)（新增字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（SessionConfig CRUD 同步）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull notebookIDs 过滤）、[internal/services/recall_service.go](internal/services/recall_service.go)（透传 notebookIDs）、[app.go](app.go)（CallAIStream/CallAIStreamRegenerate 新增参数）、[frontend/index.html](frontend/index.html#L1095-L1105)（召回菜单 HTML）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js#L786-L924)（菜单交互 + 配置保存/加载）、[frontend/src/main.js](frontend/src/main.js)（设置页同步联动）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（召回菜单 + 滚动条样式） |
+
+---
+
+## 记忆点 10：卡片召回分词器替换为 gse + 关键词上限
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 卡片召回分词器从自实现 2-gram 替换为 `github.com/go-ego/gse`（基于词典的分词），复合词识别更好（如"产品产量"、"数据包"不再碎成两个字）；同时新增 `maxRecallKeywords=20` 关键词上限防止超长查询的性能问题；修复编译后二进制词典加载路径错误，改用 `LoadDictEmbed()` 内嵌词典。 |
+| **gse 分词器替换** | [recall_service.go](internal/services/recall_service.go)：删除 `tokenize2Gram()`（~60 行）、`isCJK()`、`splitWords()`；保留 `stopWords` map + `isStopWord()`；新增 `var gseSeg gse.Segmenter`、`sync.Once` 懒初始化、`tokenize()` 函数（~38 行）调用 `gseSeg.Cut(text, true)`；`CardRecallSearch` 调用点更新。 |
+| **关键词上限** | [recall_service.go](internal/services/recall_service.go)：新增 `const maxRecallKeywords = 20`，`tokenize()` 结果超过 20 个词时截断，防止超长 LIKE 查询。 |
+| **内嵌词典修复** | [recall_service.go](internal/services/recall_service.go)：`initGseSegmenter()` 改为 `LoadDictEmbed()` 替代 `LoadDict()`，解决编译后二进制找不到外部词典文件的问题。 |
+| **依赖管理** | [go.mod](go.mod)：新增 `github.com/go-ego/gse v1.0.2` + `vcaesar/cedar` 本地 replace。 |
+| **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（分词器替换 + 上限 + 内嵌词典）、[go.mod](go.mod)（新增依赖） |
 
 ---
 
