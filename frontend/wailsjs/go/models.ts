@@ -537,6 +537,7 @@ export namespace services {
 	    referenced_notes: string;
 	    enabled_skills: string;
 	    roleplay_notes: string;
+	    recall_notebook_ids: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -553,6 +554,7 @@ export namespace services {
 	        this.referenced_notes = source["referenced_notes"];
 	        this.enabled_skills = source["enabled_skills"];
 	        this.roleplay_notes = source["roleplay_notes"];
+	        this.recall_notebook_ids = source["recall_notebook_ids"];
 	    }
 	}
 	export class SettingsConfig {

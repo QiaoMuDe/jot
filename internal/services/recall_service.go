@@ -175,7 +175,7 @@ func TruncateSearchSourcesPreview(sources []SearchSource, maxLen int) []SearchSo
 
 // CardRecallSearch 执行卡片召回
 // 对 query 做 2-gram 分词 → 多关键词 OR 搜索笔记 → 格式化上下文 + 返回结构化卡片数据
-func CardRecallSearch(ctx context.Context, query string, limit int, noteService *NoteService) *CardRecallResult {
+func CardRecallSearch(ctx context.Context, query string, limit int, noteService *NoteService, notebookIDs ...uint) *CardRecallResult {
 	if query == "" || limit <= 0 {
 		return nil
 	}
@@ -192,7 +192,7 @@ func CardRecallSearch(ctx context.Context, query string, limit int, noteService 
 	)
 
 	// 搜索笔记（全量内容）
-	notes, err := noteService.SearchFull(keywords, limit)
+	notes, err := noteService.SearchFull(keywords, limit, notebookIDs...)
 	if err != nil || len(notes) == 0 {
 		return nil
 	}

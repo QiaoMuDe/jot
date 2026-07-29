@@ -1,0 +1,17 @@
+- [x] AISessionConfig 模型新增了 `RecallNotebookIDs` 字段
+- [x] SessionConfig 结构体同步新增 `RecallNotebookIDs` 字段
+- [x] SaveSessionConfig 读写新字段
+- [x] LoadSessionConfig 读写新字段
+- [x] CreateDefaultSessionConfig 初始化新字段（空字符串）
+- [x] SearchFull 接受 `notebookIDs ...uint` 参数并正确过滤
+- [x] CardRecallSearch 接受 `notebookIDs ...uint` 参数并传递给 SearchFull
+- [x] CallAIStream 新增 `recallNotebookIDs []uint` 参数并从配置获取传入
+- [x] 前端 HTML 添加了笔记本选择菜单（含各笔记本复选框 + 切换开关 + 下拉箭头）
+- [x] 前端 CSS 菜单样式正确（参考联网搜索菜单，向上弹出）
+- [x] 点击 toggle 开→全选笔记本；关→全部取消
+- [x] 菜单内单独勾选/取消笔记本同步保存配置
+- [x] 设置页卡片召回开关联动菜单全选/全取消
+- [x] 新建会话从全局配置读取默认笔记本选择状态
+- [x] 保存配置时 `recall_notebook_ids` 以 JSON 数组字符串持久化
+- [x] 加载配置时正确恢复菜单勾选状态
+- [x] 空/旧数据向下兼容（全部笔记本召回）

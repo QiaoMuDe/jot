@@ -28,7 +28,7 @@ jot/                                    # 项目根目录
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
 │   │   ├── ai_session.go              # AI 会话实体（标题/置顶/时间戳）
-│   │   ├── ai_session_config.go      # AI 会话操作栏配置实体（模型/深度思考/搜索源/卡片召回/笔记引用/技能，与 AISession 一对一关联）
+│   │   │   ├── ai_session_config.go      # AI 会话操作栏配置实体（模型/深度思考/搜索源/卡片召回（含指定笔记本）/笔记引用/技能，与 AISession 一对一关联）
 │   │   ├── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
 │   │   ├── api_profile.go             # API 配置预设实体（名称/服务商/URL/Key）
 │   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
@@ -43,10 +43,10 @@ jot/                                    # 项目根目录
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
 │       ├── search_service.go           # 通用网页搜索（Tavily API）
 │       ├── zhihu_search_service.go     # 知乎搜索 + 全网搜索
-│       ├── recall_service.go           # 卡片召回（2-gram 分词 + 停用词过滤 + 相关度打分）
+│   │       ├── recall_service.go           # 卡片召回（2-gram 分词 + 停用词过滤 + 相关度打分 + 按笔记本筛选）
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
-│       └── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig 等）
+│   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
 │   ├── index.html                      # 入口 HTML，9 个视图 + 关于浮层
@@ -57,7 +57,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
-│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回 + 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
+│   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回（含笔记本选择菜单）+ 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 本月摘要统计 / 按日笔记列表 / 回到今天 / 点击笔记跳转 / 切月自动重置今天）
@@ -79,7 +79,7 @@ jot/                                    # 项目根目录
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
 │   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
-│   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局）
+│   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局/联网搜索 toggle 开关+召回笔记本菜单）
 │   │           ├── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
 │   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/统计卡片/笔记列表/入场动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
@@ -435,7 +435,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
-5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计 + **后端统一上下文注入**。Provider 通过前端设置页下拉切换，配置自动持久化。
+5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索，含全选/全取消开关）+ 卡片召回（含笔记本选择菜单）+ 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计 + **后端统一上下文注入**。Provider 通过前端设置页下拉切换，配置自动持久化。
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
@@ -579,20 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：日历 UI 美化迭代 + 确认弹窗按钮主题色 + 关闭动画修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 多轮 UI/交互优化：① 日历视图左侧 sidebar 去掉 card 背景块 + 添加 `border-right` 分割线区分左右面板；② 日历笔记列表 hover 选中样式从直角改为 `border-radius: 8px`；③ 保存确认弹窗"不保存"和"确定"按钮改为跟随 `var(--accent)` 主题色（确定实心、不保存线框）；④ 修复不保存弹窗关闭时 3 按钮→2 按钮闪烁问题——移除 `showSaveConfirmDialog` cleanup 中立即隐藏第三按钮的代码。 |
-| **日历 sidebar 美化** | [calendar.css](frontend/src/css/components/calendar.css)：`.calendar-sidebar` 删除 `background: var(--card-bg)` 和 `border-radius: 12px`，改为 `border-right: 1px solid var(--border)` 让左右面板共享统一背景。 |
-| **笔记列表圆角** | [calendar.css](frontend/src/css/components/calendar.css)：`.calendar-note-item` 添加 `border-radius: 8px`、`padding: 14px 8px` 增加呼吸空间。 |
-| **确认弹窗按钮主题色** | [modals.css](frontend/src/css/components/modals.css)：`confirm-ok` 从 `var(--danger)` 改为 `var(--accent)` 实心；`confirm-third` 从 `var(--warning)` 改为 `var(--accent)` 线框（透明背景 + accent 色边框/文字），hover 叠加 10% accent 底色。 |
-| **关闭动画闪烁修复** | [main.js](frontend/src/main.js)：`showSaveConfirmDialog` 的 `cleanup` 中移除 `els.confirmThirdBtn.style.display = 'none'` 一行，让淡出 150ms 期间三个按钮保持完整可见。 |
-| **涉及文件** | [frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
+## 记忆点 1：待办清单空状态精简 + 编辑器内屏蔽 Ctrl+P 启动器
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：「更多技能」按钮隐藏改为禁用态
+## 记忆点 2：「更多技能」按钮隐藏改为禁用态
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
+## 记忆点 3：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 4：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 5：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：设置页面板切换动画重入守卫
+## 记忆点 6：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -659,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 7：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：办公文件导入支持 + 批量进度通知
+## 记忆点 8：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,7 +672,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 9：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +681,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **打分排序** | [note_service.go](internal/services/note_service.go)：`SearchFull` 中移除 `ORDER BY updated_at DESC`，放宽 LIMIT 到 50 提供候选集，`scoreNote()` 计算每条笔记相关度分数，`sort.Slice` 按分数降序排列，同分按 `updated_at` 降序。 |
 | **分词日志** | [recall_service.go](internal/services/recall_service.go)：`CardRecallSearch` 中 `noteService.logger.Infow` 记录 `"CardRecallSearch 分词结果"`，含 `query`、`keywords` 字段，便于调试分词效果。 |
 | **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（停用词表 + tokenize2Gram 过滤 + 日志）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull 打分排序 + scoreNote） |
+
+---
+
+## 记忆点 10：卡片召回笔记本选择菜单 + 联网搜索主开关
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手工具栏两个增强：① 卡片召回开关改为带下拉菜单的形态，支持指定笔记本列表（原为全库搜索）；② 联网搜索按钮新增 toggle 开关 knob，支持批量全选/全取消所有搜索源。 |
+| **卡片召回笔记本筛选** | 后端：[AISessionConfig](internal/models/ai_session_config.go) 新增 `RecallNotebookIDs` 字段（JSON 数组）；[NoteService.SearchFull](internal/services/note_service.go) 支持 `notebookIDs ...uint` 过滤参数；[CardRecallSearch](internal/services/recall_service.go) 透传 notebookIDs。前端：HTML 在 `.ai-chat-recall-wrap` 中添加 toggle knob + 下拉菜单容器 [index.html](frontend/index.html#L1095-L1105)；JS 卡片召回 toggle 增加 knob 点击全选/全取消逻辑，菜单 checkbox 独立选择，每次打开菜单实时获取最新笔记本列表 [ai-chat.js](frontend/src/js/ai-chat.js#L871-L924)；设置页 toggle 通过 `__syncRecallNotebooks` 同步菜单全选/全取消 [main.js](frontend/src/main.js#L2460-L2463)。 |
+| **联网搜索主开关** | HTML 在搜索按钮 `<span>` 和 chevron 之间插入 toggle knob [index.html](frontend/index.html#L1075)；JS 点击 knob 切所有搜索源全开/全关，点击文字/图标切换下拉菜单 [ai-chat.js](frontend/src/js/ai-chat.js#L786-L820)。 |
+| **CSS 样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：召回菜单 `.ai-chat-recall-dropdown` / `.ai-chat-recall-item` 样式，含自定义滚动条（统一 6px 细条）。 |
+| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)（新增字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（SessionConfig CRUD 同步）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull notebookIDs 过滤）、[internal/services/recall_service.go](internal/services/recall_service.go)（透传 notebookIDs）、[app.go](app.go)（CallAIStream/CallAIStreamRegenerate 新增参数）、[frontend/index.html](frontend/index.html#L1095-L1105)（召回菜单 HTML）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js#L786-L924)（菜单交互 + 配置保存/加载）、[frontend/src/main.js](frontend/src/main.js)（设置页同步联动）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（召回菜单 + 滚动条样式） |
 
 ---
 

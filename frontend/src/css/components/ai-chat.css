@@ -982,6 +982,85 @@
     cursor: not-allowed;
 }
 
+/* ── 卡片召回笔记本选择菜单 ── */
+.ai-chat-recall-wrap {
+    position: relative;
+}
+
+.ai-chat-recall-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    min-width: 180px;
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+    padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.ai-chat-recall-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-chat-recall-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-chat-recall-dropdown::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+
+.ai-chat-recall-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+.ai-chat-recall-dropdown.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.ai-chat-recall-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 14px;
+    font-size: 0.813rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+}
+
+.ai-chat-recall-item:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+}
+
+.ai-chat-recall-item input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+}
+
 /* ── 更多技能 ── */
 .ai-chat-skills-wrap {
     position: relative;

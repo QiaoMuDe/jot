@@ -124,6 +124,10 @@ let _notebooksCache = null;     // 笔记本下拉选项缓存
 let _refTagIds = new Set();     // 已选标签 ID 集合
 let _tagsCache = null;          // 标签列表缓存
 
+// 卡片召回笔记本选择状态
+let recallNotebookIds = new Set();  // 选中的笔记本 ID 集合
+let cardRecallDropdown = null;     // #aiChatRecallDropdown
+let recallWrap = null;             // .ai-chat-recall-wrap
 // 更多技能状态
 let activeSkills = {};           // 当前激活的技能 { skillId: { config } }
 let skillsBtn = null;            // #aiChatMoreSkillsBtn
@@ -244,6 +248,9 @@ export async function initAIChat() {
     // 卡片召回
     cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
     enableCardRecall = cardRecallToggle?.classList.contains('active') || false;
+    cardRecallDropdown = document.getElementById('aiChatRecallDropdown');
+    recallWrap = document.querySelector('.ai-chat-recall-wrap');
+    recallNotebookIds = new Set();
 
     // 笔记引用
     refBar = document.getElementById('aiChatRefBar');
@@ -774,9 +781,38 @@ function bindEvents() {
         });
     }
 
-    // ── 多源搜索按钮点击切换下拉菜单 ──
+    // ── 多源搜索按钮：开关切换 + 下拉菜单 ──
+    const sourceItemIds = ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'];
     if (searchSourcesBtn && searchSourcesDropdown) {
-        searchSourcesBtn.addEventListener('click', (e) => {
+        searchSourcesBtn.addEventListener('click', async (e) => {
+            // 点击 knob 区域：开关全选/全取消
+            const knob = e.target.closest('.ai-chat-toggle-switch, .ai-chat-toggle-knob');
+            if (knob) {
+                const allChecked = sourceItemIds.every(id => {
+                    const cb = document.getElementById(id);
+                    return cb && cb.checked;
+                });
+                const newState = !allChecked;
+                sourceItemIds.forEach(id => {
+                    const cb = document.getElementById(id);
+                    if (cb && !cb.disabled) {
+                        cb.checked = newState;
+                        const source = cb.dataset.source;
+                        if (newState) {
+                            searchSources.add(source);
+                        } else {
+                            searchSources.delete(source);
+                        }
+                    }
+                });
+                if (searchSourcesBtn) {
+                    searchSourcesBtn.classList.toggle('active', newState);
+                }
+                e.stopPropagation();
+                await saveCurrentSessionConfig();
+                return;
+            }
+            // 点击文字/图标/箭头：切换下拉菜单
             e.stopPropagation();
             searchSourcesDropdown.classList.toggle('open');
         });
@@ -797,7 +833,6 @@ function bindEvents() {
     
     // ── 搜索源菜单项点击切换 ──
     // 点击整个菜单项区域（不限于复选框）都能切换选中状态
-    const sourceItemIds = ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'];
     const sourceItems = searchSourcesDropdown?.querySelectorAll('.ai-chat-search-source-item');
     if (sourceItems) {
         sourceItems.forEach(item => {
@@ -834,9 +869,53 @@ function bindEvents() {
     // ── 卡片召回切换 ──
     if (cardRecallToggle) {
         if (enableCardRecall) cardRecallToggle.classList.add('active');
-        cardRecallToggle.addEventListener('click', async () => {
-            enableCardRecall = cardRecallToggle.classList.toggle('active');
-            await saveCurrentSessionConfig();
+        cardRecallToggle.addEventListener('click', async (e) => {
+            // 点击切换开关 knob 区域：开关卡片召回，全选/全取消笔记本
+            const knob = e.target.closest('.ai-chat-toggle-switch, .ai-chat-toggle-knob');
+            if (knob) {
+                enableCardRecall = cardRecallToggle.classList.toggle('active');
+                if (enableCardRecall) {
+                    // 开→全选所有笔记本（加载菜单后勾选全部）
+                    try {
+                        const notebooks = await window.go.main.App.GetAllNotebooks();
+                        if (notebooks) {
+                            notebooks.forEach(nb => recallNotebookIds.add(nb.id));
+                        }
+                    } catch (_) {}
+                    // 更新菜单复选框状态
+                    if (cardRecallDropdown) {
+                        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
+                            cb.checked = true;
+                        });
+                    }
+                } else {
+                    // 关→全取消
+                    recallNotebookIds.clear();
+                    if (cardRecallDropdown) {
+                        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
+                            cb.checked = false;
+                        });
+                    }
+                }
+                await saveCurrentSessionConfig();
+                return;
+            }
+            // 点击文字/图标/箭头区域：打开/关闭下拉菜单
+            const dropdown = cardRecallDropdown;
+            if (!dropdown) return;
+            const isOpen = dropdown.classList.toggle('open');
+            if (isOpen) {
+                await loadRecallNotebookMenu();
+            }
+            // 点击外部关闭菜单
+            if (isOpen) {
+                const closeHandler = (ev) => {
+                    if (!recallWrap || recallWrap.contains(ev.target)) return;
+                    if (dropdown) dropdown.classList.remove('open');
+                    document.removeEventListener('click', closeHandler);
+                };
+                setTimeout(() => document.addEventListener('click', closeHandler), 10);
+            }
         });
     }
 
@@ -1383,6 +1462,22 @@ async function switchSession(id) {
                 }
                 enableCardRecall = !!config.enable_card_recall;
                 if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
+                // 加载卡片召回笔记本选择
+                recallNotebookIds = new Set();
+                const savedIds = JSON.parse(config.recall_notebook_ids || '[]');
+                if (savedIds.length > 0) {
+                    savedIds.forEach(id => recallNotebookIds.add(id));
+                } else if (enableCardRecall) {
+                    // 旧数据/默认：卡片召回开启时默认全选
+                    try {
+                        const notebooks = await window.go.main.App.GetAllNotebooks();
+                        if (notebooks) {
+                            notebooks.forEach(nb => recallNotebookIds.add(nb.id));
+                        }
+                    } catch (_) {}
+                }
+                // 重置菜单内容，下次打开时重新加载
+                if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
                 referencedNotes = JSON.parse(config.referenced_notes || '[]');
                 cachedRefContext = '';
                 updateRefChips();
@@ -1566,6 +1661,22 @@ async function createSession() {
             }
             enableCardRecall = !!defaultCfg.enable_card_recall;
             if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
+            // 加载卡片召回笔记本选择
+            recallNotebookIds = new Set();
+            const savedIds = JSON.parse(defaultCfg.recall_notebook_ids || '[]');
+            if (savedIds.length > 0) {
+                savedIds.forEach(id => recallNotebookIds.add(id));
+            } else if (enableCardRecall) {
+                // 旧数据/默认：卡片召回开启时默认全选
+                try {
+                    const notebooks = await window.go.main.App.GetAllNotebooks();
+                    if (notebooks) {
+                        notebooks.forEach(nb => recallNotebookIds.add(nb.id));
+                    }
+                } catch (_) {}
+            }
+            // 重置菜单内容，下次打开时重新加载
+            if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
             referencedNotes = JSON.parse(defaultCfg.referenced_notes || '[]');
             cachedRefContext = '';
             updateRefChips();
@@ -2340,9 +2451,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         const refNoteIDs = referencedNotes.map(n => n.id);
         const roleNoteIDs = roleplayNotes.map(n => n.id);
         if (isRegenerate) {
-            window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
+            window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
         } else {
-            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
+            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
         }
     } catch (e) {
         unsubs.forEach(fn => fn());
@@ -4675,9 +4786,86 @@ async function saveCurrentSessionConfig() {
             referenced_notes: JSON.stringify(referencedNotes),
             roleplay_notes: JSON.stringify(roleplayNotes),
             enabled_skills: JSON.stringify(activeSkills),
+            recall_notebook_ids: JSON.stringify(Array.from(recallNotebookIds)),
         });
     } catch (_) {}
 }
+
+/**
+ * 每次打开菜单时重新获取最新笔记本列表
+ */
+async function loadRecallNotebookMenu() {
+    if (!cardRecallDropdown) return;
+    try {
+        const notebooks = await window.go.main.App.GetAllNotebooks();
+        if (!notebooks || notebooks.length === 0) return;
+        cardRecallDropdown.innerHTML = '';
+        notebooks.forEach(nb => {
+            const item = document.createElement('div');
+            item.className = 'ai-chat-recall-item';
+            item.dataset.id = nb.id;
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.id = 'aiRecallNb_' + nb.id;
+            cb.checked = recallNotebookIds.has(nb.id);
+            const label = document.createElement('span');
+            label.textContent = nb.name;
+            item.appendChild(cb);
+            item.appendChild(label);
+            // 点击整个 item 切换 checkbox
+            item.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                cb.checked = !cb.checked;
+                cb.dispatchEvent(new Event('change'));
+            });
+            // checkbox change 事件
+            cb.addEventListener('change', async () => {
+                if (cb.checked) {
+                    recallNotebookIds.add(nb.id);
+                } else {
+                    recallNotebookIds.delete(nb.id);
+                }
+                // 如果全不选，卡片召回设为关闭；如果全选或有选，设为开启
+                if (recallNotebookIds.size === 0) {
+                    enableCardRecall = false;
+                    if (cardRecallToggle) cardRecallToggle.classList.remove('active');
+                } else {
+                    enableCardRecall = true;
+                    if (cardRecallToggle) cardRecallToggle.classList.add('active');
+                }
+                await saveCurrentSessionConfig();
+            });
+            cardRecallDropdown.appendChild(item);
+        });
+    } catch (_) {}
+}
+
+/**
+ * 暴露给 main.js 设置页用的全局同步方法：开→全选，关→全取消
+ */
+window.__syncRecallNotebooks = async function (isActive) {
+    recallNotebookIds.clear();
+    if (isActive) {
+        try {
+            const notebooks = await window.go.main.App.GetAllNotebooks();
+            if (notebooks) {
+                notebooks.forEach(nb => recallNotebookIds.add(nb.id));
+            }
+        } catch (_) {}
+    }
+    // 更新菜单复选框状态
+    if (cardRecallDropdown) {
+        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
+            cb.checked = isActive;
+        });
+    }
+    // 同步工具栏 toggle
+    if (cardRecallToggle) {
+        cardRecallToggle.classList.toggle('active', isActive);
+    }
+    enableCardRecall = isActive;
+    await saveCurrentSessionConfig();
+};
 
 /**
  * 语言选择浮层实例

@@ -740,7 +740,7 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 //   - 内容命中一个关键词 = 1 分
 //   - 覆盖率奖励：命中 m/n 个关键词，奖励 m-1 分（命中全部关键词时奖励最大）
 //   - 同分时按 updated_at 降序排列
-func (s *NoteService) SearchFull(keywords []string, limit int) ([]models.Note, error) {
+func (s *NoteService) SearchFull(keywords []string, limit int, notebookIDs ...uint) ([]models.Note, error) {
 	if len(keywords) == 0 {
 		return nil, nil
 	}
@@ -762,8 +762,11 @@ func (s *NoteService) SearchFull(keywords []string, limit int) ([]models.Note, e
 	}
 
 	query := s.db.Model(&models.Note{}).
-		Where("deleted_at IS NULL").
-		Where(strings.Join(conditions, " OR "), args...).
+		Where("deleted_at IS NULL")
+	if len(notebookIDs) > 0 {
+		query = query.Where("notebook_id IN ?", notebookIDs)
+	}
+	query = query.Where(strings.Join(conditions, " OR "), args...).
 		Limit(candidateLimit)
 
 	if err := query.Find(&notes).Error; err != nil {

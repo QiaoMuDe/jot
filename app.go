@@ -1642,7 +1642,7 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 
 // CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
 // 前端已先调用 SaveAIMessage 保存用户消息并拿到 userMsgID，此处直接使用
-func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, userMsgID uint) {
+func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, recallNotebookIDs []uint, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, userMsgID uint) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -1915,7 +1915,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 						}
 					}
 				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService, recallNotebookIDs...)
 				if recallResult != nil {
 					// 注入格式化文本到 system role
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
@@ -2054,7 +2054,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 }
 
 // CallAIStreamRegenerate 重新生成 AI 回复（不新增用户消息，复用会话中最后一条用户消息）
-func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
+func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, recallNotebookIDs []uint, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
@@ -2326,7 +2326,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 						}
 					}
 				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService)
+				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService, recallNotebookIDs...)
 				if recallResult != nil {
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 					if len(recallResult.Cards) > 0 {

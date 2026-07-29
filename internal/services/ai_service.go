@@ -50,6 +50,7 @@ type SessionConfig struct {
 	ReferencedNotes          string `json:"referenced_notes"`
 	EnabledSkills            string `json:"enabled_skills"`
 	RoleplayNotes            string `json:"roleplay_notes"`
+	RecallNotebookIDs        string `json:"recall_notebook_ids"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -472,6 +473,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		ReferencedNotes:          "[]",
 		EnabledSkills:            "{}",
 		RoleplayNotes:            "[]",
+		RecallNotebookIDs:        "[]",
 	}
 	record := models.AISessionConfig{
 		SessionID:                sessionID,
@@ -484,6 +486,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		ReferencedNotes:          cfg.ReferencedNotes,
 		EnabledSkills:            cfg.EnabledSkills,
 		RoleplayNotes:            cfg.RoleplayNotes,
+		RecallNotebookIDs:        cfg.RecallNotebookIDs,
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -504,6 +507,7 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"referenced_notes":            cfg.ReferencedNotes,
 		"enabled_skills":              cfg.EnabledSkills,
 		"roleplay_notes":              cfg.RoleplayNotes,
+		"recall_notebook_ids":         cfg.RecallNotebookIDs,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
@@ -522,9 +526,10 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		if err := a.db.Where("session_id = ?", sessionID).First(&record).Error; err != nil {
 			// 极端情况仍失败时返回空默认值
 			return SessionConfig{
-				ReferencedNotes: "[]",
-				EnabledSkills:   "{}",
-				RoleplayNotes:   "[]",
+				ReferencedNotes:   "[]",
+				EnabledSkills:     "{}",
+				RoleplayNotes:     "[]",
+				RecallNotebookIDs: "[]",
 			}
 		}
 	}
@@ -538,6 +543,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		ReferencedNotes:          record.ReferencedNotes,
 		EnabledSkills:            record.EnabledSkills,
 		RoleplayNotes:            record.RoleplayNotes,
+		RecallNotebookIDs:        record.RecallNotebookIDs,
 	}
 }
 

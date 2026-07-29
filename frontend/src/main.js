@@ -2457,6 +2457,10 @@ async function initAISettings() {
             if (toolbarToggle) {
                 toolbarToggle.classList.toggle('active', isActive);
             }
+            // 同步笔记本选择菜单：开→全选，关→全取消
+            if (window.__syncRecallNotebooks) {
+                window.__syncRecallNotebooks(isActive);
+            }
         });
     }
 
