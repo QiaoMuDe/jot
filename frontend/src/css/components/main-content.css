@@ -450,10 +450,10 @@
   background: var(--border);
 }
 
-/* ── 批量删除按钮：始终显示危险主题（无选中时弹通知而非禁用） ── */
+/* ── 批量删除按钮：日常态使用主题 accent 配色，hover 统一大红 ── */
 .batch-btn.btn-danger {
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: var(--accent-lighter);
+  color: var(--accent-dark);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 6px 14px;
@@ -466,9 +466,9 @@
 }
 
 .batch-btn.btn-danger:hover {
-  background: var(--danger);
+  background: #DC2626;
   color: #fff;
-  border-color: var(--danger);
+  border-color: #DC2626;
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
 }
 

@@ -425,6 +425,7 @@
     --overlay-bg: rgba(80, 76, 96, 0.35);
   --toast-bg: #504C60;
   --toast-text: #F8F2EF;
+  --danger: #D20F39;
   --danger-bg: #FEF2F2;
   --danger-border: #FECACA;
   --success-bg: #F0FDF4;
@@ -477,6 +478,7 @@
     --overlay-bg: rgba(60, 56, 54, 0.35);
   --toast-bg: #3C3836;
   --toast-text: #FBF1C7;
+  --danger: #CC241D;
   --danger-bg: #FEF2F2;
   --danger-border: #FECACA;
   --success-bg: #F0FDF4;
@@ -529,6 +531,7 @@
     --overlay-bg: rgba(0, 0, 0, 0.7);
   --toast-bg: #21222C;
   --toast-text: #F8F8F2;
+  --danger: #FF5555;
   --danger-bg: rgba(255, 85, 85, 0.2);
   --danger-border: rgba(255, 85, 85, 0.25);
   --success-bg: rgba(80, 250, 123, 0.1);
@@ -674,7 +677,7 @@
   --text-muted: #C0B09E;
   --accent: #C7474B;
   --accent-rgb: 199, 71, 75;
-  --accent-light: #FAF0E0;
+  --accent-light: #F4DCD4;
   --accent-lighter: #FCF5E8;
   --selection-bg: rgba(var(--accent-rgb), 0.20);
   --accent-dark: #A53639;

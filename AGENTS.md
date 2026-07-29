@@ -582,18 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：启动器侧栏标签动态更新 + 日志级别分段控件指示器定位修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两个 UI 修复：① 启动器网格（Ctrl+P）的「展开侧栏」项标签和图标固定显示，不会随侧栏状态变化——在 `openLauncher()` 中根据当前侧栏折叠状态动态更新该项的 DOM（标签文字、SVG 图标、`data-label`）；② 日志级别分段控件指示器在进入设置页时面板 `display:none` 导致 `offsetWidth=0`，指示器定位错误——在 `loadSettings()` 中添加 `offsetWidth===0` 防护，并创建 `repositionLogLevelIndicator()` 在面板切换可见时重新定位。 |
-| **启动器侧栏标签修复** | [launcher.js](frontend/src/js/launcher.js)：`openLauncher()` 中 `filterItems('')` 后查询 `[data-action="sidebar-toggle"]` DOM 元素，通过 `window.els.notebookSidebar.classList.contains('collapsed')` 判断侧栏状态，同步更新标签文本、SVG 图标（`x1="9"↔"15"`）、`data-label` 属性。 |
-| **日志级别指示器修复** | [main.js](frontend/src/main.js)：① `loadSettings()` 中日志级别定位改为调用 `repositionLogLevelIndicator()` 统一函数（含 `offsetWidth===0` 防护）；② 新增 `repositionLogLevelIndicator()` 函数，与 `repositionProviderIndicator()` 结构一致；③ `switchSettingsTab()` 中直接切换路径和动画路径两处添加 `repositionLogLevelIndicator()` 调用，确保日志设置面板可见时指示器正确重算。 |
-| **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
+## 记忆点 1：批量栏按钮风格统一 + 删除按钮禁用态移除 + 无选中通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -605,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：设置页滚动条位移修复 + 滚动条自动隐藏
+## 记忆点 2：设置页滚动条位移修复 + 滚动条自动隐藏
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +605,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：设置页面板切换动画重入守卫
+## 记忆点 3：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 4：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：办公文件导入支持 + 批量进度通知
+## 记忆点 5：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +641,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 6：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 7：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -676,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 8：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +678,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 9：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -697,6 +686,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复细节** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效 GUI 句柄调用 `GetFileType`。 |
 | **依赖管理** | [go.mod](go.mod)：新增 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 替换指令，使编译时使用本地克隆版本而非 module cache 中的原始版本。 |
 | **涉及文件** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)（添加 Stdout/Stderr Discard）、[go.mod](go.mod)（replace 指令） |
+
+---
+
+## 记忆点 10：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两个 UI 修复：① 批量删除按钮日常态改用 `var(--accent-lighter)`/`var(--accent-dark)` 匹配各主题 accent 色系，hover 态统一 `#DC2626` 大红，同时修复 catppuccin-latte（暖咖）/gruvbox-light（旧纸）/dracula（德古拉）三个主题缺失 `--danger` 变量导致 hover 态不可见的问题；② 修复 ysgrifennwr（暖笺）主题 `--accent-light: #FAF0E0` 与 `--card-bg: #F8F0DB` 对比度过低，导致启动器图标底框不可见的问题，调深为 `#F4DCD4`。 |
+| **批量删除按钮样式重构** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 日常态从 `var(--danger-bg)`/`var(--danger)` 改为 `var(--accent-lighter)`/`var(--accent-dark)`，hover 态从 `var(--danger)` 改为统一 `#DC2626`。[variables.css](frontend/src/css/variables.css)：catppuccin-latte/gruvbox-light/dracula 三个主题各新增 `--danger: <对应--error>` 定义。 |
+| **暖笺图标底框修复** | [variables.css](frontend/src/css/variables.css)：ysgrifennwr 主题 `--accent-light` 从 `#FAF0E0` 调深为 `#F4DCD4`（温暖浅玫瑰色），与 `--card-bg: #F8F0DB` 形成清晰对比，启动器 (Ctrl+P) 中图标容器 `.launcher-item-icon` 背景不再"消失"。 |
+| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（4 个主题变量新增/修改）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（批量删除按钮样式重构） |
 
 ---
 
