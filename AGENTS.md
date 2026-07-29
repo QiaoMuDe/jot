@@ -582,18 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：设置页滚动条位移修复 + 滚动条自动隐藏
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两个修复：① 设置页 `.settings-panels` 内容过长出现滚动条时，6px 滚动条挤占内容宽度导致卡片左右位移——添加 `scrollbar-gutter: stable` 预留滚动条空间；② 给 `.settings-panels` 加入自动隐藏滚动条机制（滚动时显示，静止 1 秒淡出），与 `#mainContent` 行为一致。 |
-| **滚动条位移修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 添加 `scrollbar-gutter: stable`。根因：设置页实际滚动容器是 `.settings-panels`（`overflow-y: auto`），而非外层 `#mainContent`，而 `.settings-panels` 没有 `scrollbar-gutter: stable`，滚动条出现时挤占 6px 水平空间。 |
-| **滚动条自动隐藏** | [scrollbar.css](frontend/src/css/scrollbar.css)：`.settings-panels` 加入所有自动隐藏选择器列表（WebKit 滑块透明/滚动显示/hover 加深/track/Firefox 隐藏/显示）。[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.settings-panels` 的 Firefox `scrollbar-color` 从 `var(--scrollbar-thumb) transparent` 改为 `transparent transparent`。[main.js](frontend/src/main.js)：`initScrollbarAutoHide()` 的滚动检测列表添加 `.settings-panels`。 |
-| **涉及文件** | [frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（添加 scrollbar-gutter: stable + Firefox 颜色改为透明）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（加入自动隐藏选择器列表）、[frontend/src/main.js](frontend/src/main.js)（initScrollbarAutoHide 添加 settings-panels） |
-
----
-
-## 记忆点 2：设置页面板切换动画重入守卫
+## 记忆点 1：设置页面板切换动画重入守卫
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 搜索来源与召回卡片前端预览截断
+## 记忆点 2：AI 搜索来源与召回卡片前端预览截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：办公文件导入支持 + 批量进度通知
+## 记忆点 3：办公文件导入支持 + 批量进度通知
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +618,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
+## 记忆点 4：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 5：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 6：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +655,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 7：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 8：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 9：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -696,6 +685,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **时序调整** | [ai-chat.js](frontend/src/js/ai-chat.js#L903-L922)：打开菜单时先 `await loadRecallNotebookMenu()` 在隐藏态构建子项 DOM，再 `classList.add('open')` 触发入场动画；关闭时直接 `classList.remove('open')`。CSS 层已有的 `.ai-chat-recall-item` 的 `translateX(-8px)` stagger 动画（0.02s 递增至 0.30s，nth-child 1~15）和容器 `scale(0.96)` 弹簧曲线不变。 |
 | **参考对比** | 联网搜索菜单和更多技能菜单的子项为静态 HTML，在 `.open` 切换时 DOM 已存在，故 transition 能正常触发——召回卡片的根因是相同的 CSS 因动态 DOM 时序失效。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（打开时序改为先构建后开启动画） |
+
+---
+
+## 记忆点 10：System Prompt 增强——思考框架 + 来源标注
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在 system prompt 中新增一个 4 步内部推理框架（问题分析→信息整合→结构规划→回答生成），引导 AI 在生成回答前组织逻辑、区分信息优先级。同时给所有注入内容添加来源标签（本地笔记/搜索结果/角色设定/手动引用/上传文件），配合框架的信息优先级规则（本地笔记 > 联网搜索结果 > 模型自身知识），提升回答质量。 |
+| **推理框架** | [app.go](app.go#L45-L72)：新增 `reasoningFramework` 包级常量，包含 4 步隐式推理流程（不输出给用户），拼接在 `baseNormsBoundaries` 末尾。无技能时 system prompt 为 `baseIdentity + baseNormsBoundaries`（含框架），有技能时技能覆盖身份层但框架保留。 |
+| **来源标注（后端）** | 6 处注入入口全部添加来源标签：[search_service.go](internal/services/search_service.go)（Tavily → "来源：Tavily 联网搜索"）、[zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 → "来源：知乎站内搜索"，知乎全网搜 → "来源：知乎全网搜索"）、[recall_service.go](internal/services/recall_service.go)（卡片召回 → "来源：本地笔记，优先级最高"）、[app.go](app.go)（角色扮演笔记 → "来源：角色设定笔记"，手动引用笔记 → "来源：手动引用笔记"，上传文件 → "来源：上传文件"） |
+| **涉及文件** | [app.go](app.go)（推理框架 + 3 处来源标注）、[internal/services/search_service.go](internal/services/search_service.go)（Tavily 来源标签）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 + 全网搜来源标签）、[internal/services/recall_service.go](internal/services/recall_service.go)（卡片召回来源标签） |
 
 ---
 

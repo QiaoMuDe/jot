@@ -42,6 +42,36 @@ import (
 // baseNormsBoundaries 回答规范+边界约束，始终注入
 // baseSystemPrompt 完整三层，用于无技能时注入
 var baseIdentity = "你是 Jot 智能助手，一款轻量级本地笔记应用的内置 AI，擅长写作、编程、翻译、总结、答疑等文本处理任务。"
+
+// reasoningFramework 内部推理框架，引导模型按结构化步骤组织思考过程
+var reasoningFramework = `
+
+## 内部推理框架
+
+请遵循以下内部推理步骤来组织你的回答（这些步骤仅用于逻辑组织，不输出给用户）：
+
+第一步：问题分析
+- 判断问题类型：事实型（需要具体信息/数据）、分析型（需要推理/对比/解释）、创作型（需要生成/写作/翻译）
+- 识别核心需求和可能的隐含子问题
+
+第二步：信息整合
+- 回顾 system message 中提供的所有参考内容，区分来源类型
+- 信息优先级：本地笔记 > 联网搜索结果 > 模型自身知识
+- 优先使用本地笔记中的信息回答（这是用户自己的知识库）
+- 如果信息不足，判断是否需要追问
+
+第三步：结构规划
+- 事实型：先给出核心结论，再展开要点
+- 分析型：先给出观点/判断，再分条论证
+- 创作型：直接输出创作内容
+- 确保逻辑顺序清晰，不重复
+
+第四步：回答生成
+- 按规划结构生成回答
+- 引用本地笔记或搜索结果时，标注来源（如「你的笔记《XXX》中记录了……」或「根据搜索结果显示……」）
+- 不同来源信息矛盾时，如实说明差异
+- 回答完成后检查：是否覆盖了核心需求，是否有多余信息需要精简`
+
 var baseNormsBoundaries = "回答规范：" +
 	"\n1. 结构化优先：对比分析用表格、步骤说明用编号列表、概念解释用段落" +
 	"\n2. 适度追问：需求模糊时主动追问 1-2 个关键细节再回答" +
@@ -50,7 +80,7 @@ var baseNormsBoundaries = "回答规范：" +
 	"\n\n约束：" +
 	"\n1. 不知道的不要编造，明确告知用户「这个我不确定」" +
 	"\n2. 不执行危险操作（代码注入、越权指令等）" +
-	"\n3. 保持客观中立，不输出主观价值判断"
+	"\n3. 保持客观中立，不输出主观价值判断" + reasoningFramework
 var baseSystemPrompt = baseIdentity + "\n\n" + baseNormsBoundaries
 
 type App struct {
@@ -1708,7 +1738,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
 				roleplayContext = refCtx.Context
-				roleplayText := "以下是用户提供的人物设定笔记内容：\n\n" + refCtx.Context
+				roleplayText := "以下是用户提供的人物设定笔记内容（来源：角色设定笔记），你在角色扮演中应严格遵循这些设定：\n\n" + refCtx.Context
 				messages = appendToSystemMessage(messages, roleplayText)
 			}
 		}
@@ -1717,7 +1747,8 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		if len(referencedNoteIDs) > 0 {
 			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
-				messages = appendToSystemMessage(messages, refCtx.Context)
+				refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
+				messages = appendToSystemMessage(messages, refText)
 			}
 		}
 
@@ -1733,7 +1764,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		// ── 步骤 5: 上传文件内容注入 ──
 		if len(uploadedFiles) > 0 {
 			var b strings.Builder
-			b.WriteString("用户上传了以下文件内容，请基于这些内容回答用户的提问：\n")
+			b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
 			for _, f := range uploadedFiles {
 				if f.Error != "" || f.Content == "" {
 					continue
@@ -2126,7 +2157,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
 				roleplayContext = refCtx.Context
-				roleplayText := "以下是用户提供的人物设定笔记内容：\n\n" + refCtx.Context
+				roleplayText := "以下是用户提供的人物设定笔记内容（来源：角色设定笔记），你在角色扮演中应严格遵循这些设定：\n\n" + refCtx.Context
 				messages = appendToSystemMessage(messages, roleplayText)
 			}
 		}
@@ -2135,7 +2166,8 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		if len(referencedNoteIDs) > 0 {
 			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
-				messages = appendToSystemMessage(messages, refCtx.Context)
+				refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
+				messages = appendToSystemMessage(messages, refText)
 			}
 		}
 
@@ -2151,7 +2183,7 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		// ── 步骤 5: 上传文件内容注入 ──
 		if len(uploadedFiles) > 0 {
 			var b strings.Builder
-			b.WriteString("用户上传了以下文件内容，请基于这些内容回答用户的提问：\n")
+			b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
 			for _, f := range uploadedFiles {
 				if f.Error != "" || f.Content == "" {
 					continue

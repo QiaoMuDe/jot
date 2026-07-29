@@ -164,7 +164,7 @@ func CardRecallSearch(ctx context.Context, query string, limit int, noteService 
 
 	// 构建格式化上下文文本
 	var b strings.Builder
-	b.WriteString("以下是用户笔记库中与问题相关的笔记，请参考这些笔记内容回答用户的问题：\n\n")
+	b.WriteString("以下是用户笔记库中与问题相关的笔记（来源：本地笔记，优先级最高），请优先参考这些笔记内容回答用户的问题：\n\n")
 
 	cards := make([]RecallCard, 0, len(notes))
 	for _, note := range notes {

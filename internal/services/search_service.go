@@ -53,7 +53,7 @@ func SearchWeb(ctx context.Context, query string, apiKey string, maxResults int,
 	}
 
 	var b strings.Builder
-	b.WriteString("以下是从互联网搜索到的相关信息（请基于这些信息回答用户的问题，并在回答时标注引用来源）：\n\n")
+	b.WriteString("以下是通过 Tavily 搜索到的相关内容（来源：Tavily 联网搜索）：\n\n")
 
 	sources := make([]SearchSource, 0, len(answer.Results))
 
