@@ -438,6 +438,10 @@ export function TestAIBaseURL(arg1, arg2) {
   return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
 }
 
+export function TestAIConnection(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestAIConnection'](arg1, arg2, arg3);
+}
+
 export function TestTavilyConnection(arg1) {
   return window['go']['main']['App']['TestTavilyConnection'](arg1);
 }

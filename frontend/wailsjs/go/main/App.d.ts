@@ -222,6 +222,8 @@ export function SwitchProfile(arg1:number):Promise<void>;
 
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
+export function TestAIConnection(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
 export function TestZhihuConnection(arg1:string):Promise<boolean>;

@@ -1459,6 +1459,19 @@ func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
 	return result, nil
 }
 
+// TestAIConnection 测试指定 AI 配置的连通性（预设使用）
+func (a *App) TestAIConnection(provider, baseURL, apiKey string) (bool, error) {
+	a.LogSvc.Logger.Debugw("TestAIConnection", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
+	result, err := a.aiService.TestConnection(cfg)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("TestAIConnection 失败", fastlog.Error(err))
+		return false, err
+	}
+	a.LogSvc.Logger.Infow("TestAIConnection 成功")
+	return result, nil
+}
+
 // TestTavilyConnection 测试 Tavily API Key 是否有效
 func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	a.LogSvc.Logger.Debugw("TestTavilyConnection", fastlog.String("key", "***"))

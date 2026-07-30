@@ -495,7 +495,7 @@
                             <span class="ai-setting-label">API 地址</span>
                             <div class="ai-setting-control" style="max-width:none;">
                                 <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
-                                <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">测试 URL</button>
+                                <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                             </div>
                         </div>
                         <!-- 服务商 -->
@@ -543,7 +543,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;">获取列表</button>
+                                <button id="aiFetchModelsBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">获取</button>
                             </div>
                         </div>
                 </div>
@@ -617,7 +617,7 @@
                                         <line x1="1" y1="1" x2="23" y2="23"/>
                                     </svg>
                                 </button>
-                                <button id="aiTestZhihuBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                                <button id="aiTestZhihuBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                             </div>
                             <span class="ai-setting-hint" style="width:100%;padding-left:80px;">前往 <span class="ai-link zhihu-link">developer.zhihu.com</span> 注册获取 Access Secret，用于知乎搜索能力</span>
                         </div>
@@ -637,7 +637,7 @@
                                         <line x1="1" y1="1" x2="23" y2="23"/>
                                     </svg>
                                 </button>
-                                <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">测试连接</button>
+                                <button id="aiTestTavilyBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                             </div>
                             <span class="ai-setting-hint" style="width:100%;padding-left:80px;">前往 <span class="ai-link tavily-link">tavily.com</span> 注册获取 API Key，用于 Tavily 联网搜索</span>
                         </div>
@@ -2026,7 +2026,10 @@ console.log(greet("Jot"));
                     </div>
                     <div class="preset-modal-field">
                         <label>API 地址</label>
-                        <input type="text" id="presetModalURL" class="settings-input" placeholder="https://api.openai.com/v1" />
+                        <div class="ai-setting-control" style="max-width:none;">
+                            <input type="text" id="presetModalURL" class="settings-input" placeholder="https://api.openai.com/v1" />
+                            <button id="presetModalTestBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
+                        </div>
                     </div>
                     <div class="preset-modal-field">
                         <label>API Key</label>

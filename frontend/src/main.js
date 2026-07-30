@@ -540,6 +540,7 @@ const els = {
     aiTestURLBtn: $('aiTestURLBtn'),
     aiAPIKeyToggle: $('aiAPIKeyToggle'),
     aiFetchModelsBtn: $('aiFetchModelsBtn'),
+    presetModalTestBtn: $('presetModalTestBtn'),
 };
 
 /**
@@ -2064,23 +2065,27 @@ async function initAISettings() {
     function setBtnLoading(btn, loading, label) {
         if (loading) {
             btn.dataset.origText = btn.textContent;
+            btn.textContent = '';
             btn.classList.add('btn-loading');
             btn.disabled = true;
-            // 注入 spinner SVG
-            const spinner = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            spinner.setAttribute('class', 'btn-spinner');
-            spinner.setAttribute('viewBox', '0 0 24 24');
-            spinner.setAttribute('fill', 'none');
-            spinner.innerHTML = '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" opacity="0.3"/>' +
-                '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="-10" opacity="0.85"/>';
-            btn.prepend(spinner);
-            btn.childNodes[1].textContent = label || '处理中…';
+            if (!btn.querySelector('.btn-spinner')) {
+                const spinner = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                spinner.setAttribute('class', 'btn-spinner');
+                spinner.setAttribute('viewBox', '0 0 24 24');
+                spinner.setAttribute('fill', 'none');
+                spinner.setAttribute('aria-hidden', 'true');
+                spinner.innerHTML = '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" opacity="0.3"/>' +
+                    '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="-10" opacity="0.85"/>';
+                btn.appendChild(spinner);
+            }
         } else {
             btn.classList.remove('btn-loading');
             btn.disabled = false;
             const spinner = btn.querySelector('.btn-spinner');
             if (spinner) spinner.remove();
-            if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+            if (btn.dataset.origText) {
+                btn.textContent = btn.dataset.origText;
+            }
             delete btn.dataset.origText;
         }
     }
@@ -2766,6 +2771,7 @@ async function initAISettings() {
     document.getElementById('presetModalClose')?.addEventListener('click', closePresetModal);
     document.getElementById('presetModalCancel')?.addEventListener('click', closePresetModal);
     document.getElementById('presetModalSave')?.addEventListener('click', savePresetModal);
+    document.getElementById('presetModalTestBtn')?.addEventListener('click', testPresetConnection);
     // 点击遮罩关闭弹窗
     document.getElementById('presetModalOverlay')?.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closePresetModal();
@@ -2813,6 +2819,36 @@ async function initAISettings() {
             this.classList.remove('input-error');
         }
     });
+
+    // 测试预设连接
+    async function testPresetConnection() {
+        const providerEl = document.querySelector('#presetModalProviderDropdown .theme-select-item.active');
+        const provider = providerEl ? providerEl.dataset.presetProvider : 'openai';
+        const baseURL = document.getElementById('presetModalURL').value.trim();
+        const apiKey = document.getElementById('presetModalKey').value.trim();
+        if (!baseURL) {
+            nm.show('请先填写 API 地址', 'warning');
+            return;
+        }
+        if (provider === 'openai' && !apiKey) {
+            nm.show('请先填写 API Key', 'warning');
+            return;
+        }
+        setBtnLoading(els.presetModalTestBtn, true, '测试中…');
+        try {
+            const ok = await window.go.main.App.TestAIConnection(provider, baseURL, apiKey);
+            if (ok) {
+                const presetName = document.getElementById('presetModalName').value.trim();
+                nm.show(presetName ? `「${presetName}」连接成功` : '连接成功', 'success');
+            } else {
+                nm.show('连接失败，请检查地址和 Key 是否正确', 'warning');
+            }
+        } catch (e) {
+            nm.show('连接失败: ' + (e.message || e), 'error');
+        } finally {
+            setBtnLoading(els.presetModalTestBtn, false);
+        }
+    }
 }
 
 // ── API 配置预设管理 ──

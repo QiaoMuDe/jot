@@ -587,19 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：卡片召回 2-gram 分词停用词过滤 + 相关度打分排序
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 卡片召回功能两阶段优化：① 2-gram 分词增加停用词过滤（约 130 个高频单字停用词），过滤"有什"、"什么"等无意义碎片；② `SearchFull` 将 `ORDER BY updated_at DESC` 改为 Go 侧相关度打分排序（标题命中 3 分/关键词、内容命中 1 分/关键词、覆盖率奖励），结果更精准。 |
-| **停用词表** | [recall_service.go](frontend/internal/services/recall_service.go)：新增 `var stopWords map[rune]struct{}` 约 130 个高频单字（的、了、是、在、有、我、你、之、于、其、着、过……），`isStopWord(r rune) bool` 查表函数。`tokenize2Gram()` 中 2-gram 若任一字符是停用词则跳过，单中文 token 若是停用词也跳过。 |
-| **打分排序** | [note_service.go](internal/services/note_service.go)：`SearchFull` 中移除 `ORDER BY updated_at DESC`，放宽 LIMIT 到 50 提供候选集，`scoreNote()` 计算每条笔记相关度分数，`sort.Slice` 按分数降序排列，同分按 `updated_at` 降序。 |
-| **分词日志** | [recall_service.go](internal/services/recall_service.go)：`CardRecallSearch` 中 `noteService.logger.Infow` 记录 `"CardRecallSearch 分词结果"`，含 `query`、`keywords` 字段，便于调试分词效果。 |
-| **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（停用词表 + tokenize2Gram 过滤 + 日志）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull 打分排序 + scoreNote） |
-
----
-
-## 记忆点 2：卡片召回笔记本选择菜单 + 联网搜索主开关
+## 记忆点 1：卡片召回笔记本选择菜单 + 联网搜索主开关
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 2：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -624,7 +612,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 3：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 4：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,7 +634,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 5：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 6：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +656,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 7：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 8：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -691,6 +679,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **交互修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：为 `.preset-modal-overlay` 添加 `pointer-events: none`，`.visible` 时设为 `auto`；[modals.css](frontend/src/css/components/modals.css)：确认弹窗 `z-index` 从 1000 提升至 100000。 |
 | **名称校验** | [main.js](frontend/src/main.js)：`savePresetModal()` 提交前遍历现有预设检查名称是否已存在，编辑时排除自身。 |
 | **涉及文件** | [internal/database/builtin_profiles.go](internal/database/builtin_profiles.go)、[internal/services/profile_service.go](internal/services/profile_service.go)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 9：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三个互相关联的 UI 优化：① 设置页所有操作按钮（测试 × 4 + 获取模型）统一文字为「测试」/「获取」，固定宽度 `52px`，消除加载态宽度抖动；② 按钮加载状态改为仅旋转 spinner（保留原有文字不显示），`setBtnLoading` 不再改文字，确保加载前后宽度一致；③ 预设编辑/新增弹窗增加「测试连接」功能——后端 `TestAIConnection` 直接验证输入值，URI 输入框右侧 inline 按钮，空值 warning 提示，成功时展示预设名称。 |
+| **按钮宽度统一** | [index.html](frontend/index.html#L498)：API 连接页「测试 URL」→「测试」+ `width:52px`；[index.html](frontend/index.html#L620-L640)：Tavily/知乎「测试连接」→「测试」+ `width:52px`；[index.html](frontend/index.html#L2031)：预设弹窗「测试」按钮；[index.html](frontend/index.html#L528)：「获取列表」→「获取」+ `width:52px`。 |
+| **加载动画改进** | [main.js](frontend/src/main.js)：`setBtnLoading` 加载态清空文字追加 spinner（不改原文）、恢复态移除 spinner 还原文字；[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.btn-loading` 加 `justify-content: center` 保证居中。 |
+| **预设连接测试** | [app.go](app.go#L1462-L1473)：新增 `TestAIConnection(provider, baseURL, apiKey string) (bool, error)`；[main.js](frontend/src/main.js#L2770-L2842)：`testPresetConnection` 取表单值 → 校验 → `setBtnLoading` → 调后端 → 通知结果（成功含预设名、空值 warning）。 |
+| **涉及文件** | [app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
 
 ---
 
