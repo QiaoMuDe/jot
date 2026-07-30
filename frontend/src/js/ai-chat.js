@@ -2723,7 +2723,7 @@ const sourceLabels = {
  */
 /**
  * 简易搜索指示器：地球图标 + 文字（无下拉多源详情）
- * @param {string} text - 显示文字，如 "正在优化搜索词..."、"正在联网搜索..."
+ * @param {string} text - 显示文字，如 "正在优化输入..."、"正在联网搜索..."
  */
 function createSimpleSearchIndicator(text) {
     const el = document.createElement('span');
@@ -2753,7 +2753,7 @@ function createSearchIndicator(status, keywords) {
         // 精炼阶段：简洁展示，不可点击，无下拉
         var bar = document.createElement('div');
         bar.className = 'ai-search-bar';
-        bar.innerHTML = earthSvg + '<span class="ai-search-text">正在优化搜索词...</span>';
+        bar.innerHTML = earthSvg + '<span class="ai-search-text">正在优化输入...</span>';
         el.appendChild(bar);
         return el;
     }

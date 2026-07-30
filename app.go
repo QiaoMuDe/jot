@@ -1696,10 +1696,12 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 
 	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
 	var searching bool
-	if len(searchSources) > 0 {
+	if len(searchSources) > 0 || cardRecallEnabled {
 		searching = true
 		runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
-		a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
+		if len(searchSources) > 0 {
+			a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
+		}
 	}
 
 	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
@@ -1790,36 +1792,45 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			}
 		}
 
+		// ── 步骤 6: 搜索词精炼（联网搜索或卡片召回启用时执行）──
+		var refinedQuery string
+		if (len(searchSources) > 0 || cardRecallEnabled) && userText != "" {
+			refined, err := services.RefineSearchQuery(ctx, userText, a.aiService)
+			if err != nil {
+				if ctx.Err() != nil {
+					runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+					return
+				}
+				var aiErr *aicli.AIErrorWrapper
+				if errors.As(err, &aiErr) {
+					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
+				} else {
+					ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
+					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
+				}
+				return
+			}
+			if refined != "" {
+				refinedQuery = refined
+			}
+			runtime.EventsEmit(a.ctx, "ai:refined-keywords", refinedQuery)
+
+			// 仅联网搜索启用时切换到搜索阶段
+			if len(searchSources) > 0 {
+				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+			}
+		}
+
 		// 搜索源并行执行
 		if len(searchSources) > 0 {
 			cfg := a.aiService.GetConfig()
 
 			query := userText
+			if refinedQuery != "" {
+				query = refinedQuery
+			}
 
 			if query != "" {
-				// 精炼 query
-				refinedQuery, err := services.RefineSearchQuery(ctx, query, a.aiService)
-				if err != nil {
-					if ctx.Err() != nil {
-						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
-						return
-					}
-					var aiErr *aicli.AIErrorWrapper
-					if errors.As(err, &aiErr) {
-						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
-					} else {
-						ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
-						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
-					}
-					return
-				}
-				if refinedQuery != "" {
-					query = refinedQuery
-				}
-				runtime.EventsEmit(a.ctx, "ai:refined-keywords", query)
-
-				// 发射 searching 状态，前端切换显示为"正在联网搜索..."
-				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
 
 				// 为每个搜索源发射 searching 状态
 				for _, source := range searchSources {
@@ -1959,7 +1970,12 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 						}
 					}
 				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService, recallNotebookIDs...)
+				// 结合精炼后的关键词一起检索
+				combinedQuery := query
+				if refinedQuery != "" {
+					combinedQuery = query + " " + refinedQuery
+				}
+				recallResult := services.CardRecallSearch(ctx, combinedQuery, recallLimit, a.noteService, recallNotebookIDs...)
 				if recallResult != nil {
 					// 注入格式化文本到 system role
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
@@ -2106,10 +2122,12 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 	var searchSourcesJSON, recallCardsJSON string
 
 	var searching bool
-	if len(searchSources) > 0 {
+	if len(searchSources) > 0 || cardRecallEnabled {
 		searching = true
 		runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
-		a.LogSvc.Logger.Infow("AI 联网搜索启动（再生）", fastlog.Int("source_count", len(searchSources)))
+		if len(searchSources) > 0 {
+			a.LogSvc.Logger.Infow("AI 联网搜索启动（再生）", fastlog.Int("source_count", len(searchSources)))
+		}
 	}
 
 	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
@@ -2209,40 +2227,54 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 			}
 		}
 
+		// ── 步骤 6: 搜索词精炼（联网搜索或卡片召回启用时执行）──
+		var refinedQuery string
+		var userText string
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				userText = messages[i].Content
+				break
+			}
+		}
+		if (len(searchSources) > 0 || cardRecallEnabled) && userText != "" {
+			refined, err := services.RefineSearchQuery(ctx, userText, a.aiService)
+			if err != nil {
+				if ctx.Err() != nil {
+					runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+					return
+				}
+				var aiErr *aicli.AIErrorWrapper
+				if errors.As(err, &aiErr) {
+					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
+				} else {
+					ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
+					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
+				}
+				return
+			}
+			if refined != "" {
+				refinedQuery = refined
+			}
+			runtime.EventsEmit(a.ctx, "ai:refined-keywords", refinedQuery)
+
+			// 仅联网搜索启用时切换到搜索阶段
+			if len(searchSources) > 0 {
+				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
+			}
+		}
+
 		// 搜索源并行执行
 		if len(searchSources) > 0 {
 			cfg := a.aiService.GetConfig()
 
 			var query string
-			for i := len(messages) - 1; i >= 0; i-- {
-				if messages[i].Role == "user" {
-					query = messages[i].Content
-					break
-				}
+			if refinedQuery != "" {
+				query = refinedQuery
+			} else if userText != "" {
+				query = userText
 			}
 
 			if query != "" {
-				refinedQuery, err := services.RefineSearchQuery(ctx, query, a.aiService)
-				if err != nil {
-					if ctx.Err() != nil {
-						runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
-						return
-					}
-					var aiErr *aicli.AIErrorWrapper
-					if errors.As(err, &aiErr) {
-						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
-					} else {
-						ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
-						runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
-					}
-					return
-				}
-				if refinedQuery != "" {
-					query = refinedQuery
-				}
-				runtime.EventsEmit(a.ctx, "ai:refined-keywords", query)
-
-				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
 
 				for _, source := range searchSources {
 					sourceStatus := map[string]interface{}{
@@ -2371,7 +2403,12 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 						}
 					}
 				}
-				recallResult := services.CardRecallSearch(ctx, query, recallLimit, a.noteService, recallNotebookIDs...)
+				// 结合精炼后的关键词一起检索
+				combinedQuery := query
+				if refinedQuery != "" {
+					combinedQuery = query + " " + refinedQuery
+				}
+				recallResult := services.CardRecallSearch(ctx, combinedQuery, recallLimit, a.noteService, recallNotebookIDs...)
 				if recallResult != nil {
 					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 					if len(recallResult.Cards) > 0 {

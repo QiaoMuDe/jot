@@ -154,7 +154,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索与卡片召回通用 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -587,20 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：卡片召回分词器替换为 gse + 关键词上限
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 卡片召回分词器从自实现 2-gram 替换为 `github.com/go-ego/gse`（基于词典的分词），复合词识别更好（如"产品产量"、"数据包"不再碎成两个字）；同时新增 `maxRecallKeywords=20` 关键词上限防止超长查询的性能问题；修复编译后二进制词典加载路径错误，改用 `LoadDictEmbed()` 内嵌词典。 |
-| **gse 分词器替换** | [recall_service.go](internal/services/recall_service.go)：删除 `tokenize2Gram()`（~60 行）、`isCJK()`、`splitWords()`；保留 `stopWords` map + `isStopWord()`；新增 `var gseSeg gse.Segmenter`、`sync.Once` 懒初始化、`tokenize()` 函数（~38 行）调用 `gseSeg.Cut(text, true)`；`CardRecallSearch` 调用点更新。 |
-| **关键词上限** | [recall_service.go](internal/services/recall_service.go)：新增 `const maxRecallKeywords = 20`，`tokenize()` 结果超过 20 个词时截断，防止超长 LIKE 查询。 |
-| **内嵌词典修复** | [recall_service.go](internal/services/recall_service.go)：`initGseSegmenter()` 改为 `LoadDictEmbed()` 替代 `LoadDict()`，解决编译后二进制找不到外部词典文件的问题。 |
-| **依赖管理** | [go.mod](go.mod)：新增 `github.com/go-ego/gse v1.0.2` + `vcaesar/cedar` 本地 replace。 |
-| **涉及文件** | [internal/services/recall_service.go](internal/services/recall_service.go)（分词器替换 + 上限 + 内嵌词典）、[go.mod](go.mod)（新增依赖） |
-
----
-
-## 记忆点 2：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 1：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 2：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 3：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 4：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +631,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 5：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 6：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 7：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,7 +670,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 8：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,7 +682,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 滑动窗口消息截断
+## 记忆点 9：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -707,6 +694,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **调用入口** | [app.go](app.go#L1705-L1706)：`CallAIStream` 中 `a.truncateAIMessages(sessionID, "AI 滑动窗口截断")`；[app.go](app.go#L2115-L2116)：`CallAIStreamRegenerate` 中同名调用。 |
 | **调试日志** | debug 级别输出 `window_size`、`non_system_before`、`non_system_after`、`total_after`，便于观察截断效果。 |
 | **涉及文件** | [internal/database/db.go](internal/database/db.go)（默认值初始化）、[internal/services/ai_service.go](internal/services/ai_service.go)（GetContextWindowSize + TruncateMessagesForLLM）、[app.go](app.go)（truncateAIMessages + 两处调用） |
+
+---
+
+## 记忆点 10：搜索词精炼扩展至卡片召回
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 搜索词精炼触发条件从仅联网搜索扩展为联网搜索或卡片召回任一启用时都触发。精炼后的关键词同时供给两者使用：联网搜索直接使用 `refinedQuery` 作为搜索 query；卡片召回使用 `combinedQuery = rawUserText + " " + refinedQuery` 拼接后由 gse 统一分词去重检索。前端状态文字从「正在优化搜索词…」改为「正在优化输入…」。 |
+| **精炼触发条件扩展** | [app.go](app.go#L1698-L1704)：`searching` 标志从 `len(searchSources) > 0` 改为 `len(searchSources) > 0 \|\| cardRecallEnabled`。日志仅在联网搜索时打印。 |
+| **精炼步骤独立提前** | [app.go](app.go)：两个流方法（`CallAIStream`/`CallAIStreamRegenerate`）的精炼步骤从搜索块内部提取到搜索/召回块之前，作为独立步骤执行，只执行一次。精炼失败时发射 `ai:stream-error` 终止流程。 |
+| **联网搜索使用** | [app.go](app.go)：搜索块直接取用外部 `refinedQuery`，去除原搜索块内部的重复精炼调用和错误处理代码。 |
+| **卡片召回使用** | [app.go](app.go)：`CardRecallSearch` 调用改为 `combinedQuery`（原始 query + refinedQuery 拼接），`refinedQuery` 为空时回退为原始 query。`CallAIStreamRegenerate` 从最后一条 user message 提取 `userText`。 |
+| **前端文字更新** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)：精炼阶段显示文字从「正在优化搜索词…」改为「正在优化输入…」。 |
+| **涉及文件** | [app.go](app.go)（两函数各 4 处改动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（前端文字 2 处） |
 
 ---
 
