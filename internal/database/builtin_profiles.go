@@ -73,6 +73,11 @@ func InitBuiltinProfiles(db *gorm.DB) error {
 			Provider: "openai",
 			BaseURL:  "https://api.stepfun.com/step_plan/v1",
 		},
+		{
+			Name:     "Agnes",
+			Provider: "openai",
+			BaseURL:  "https://api.agnes-ai.cn/v1",
+		},
 		// ↓ 用户可在下面继续添加更多内置服务商 ↓
 		// {Name: "XX", Provider: "openai", BaseURL: "https://api.xxx.com"},
 	}
