@@ -76,6 +76,11 @@
   display: none;
 }
 
+/* 全屏模式下去除顶栏底部分割线，视觉上融为一体 */
+.main-content-area:has(.editor-panel.fullscreen) #topbar {
+  border-bottom-color: transparent;
+}
+
 #topbar.editor-fullscreen .topbar-dropdown {
   opacity: 0;
   transform: scale(0.8);
