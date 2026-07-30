@@ -1071,16 +1071,18 @@
     min-width: 0;
 }
 
-/* 预设管理列表 */
+/* 预设管理列表 — 入场/离场动画通过独立 class 触发，避免 CSS animation 切换不重启的浏览器缺陷 */
 .preset-mgr-list {
     margin-bottom: 16px;
     max-height: 500px;
     overflow-y: auto;
+}
+.preset-mgr-list.open {
     animation: mgrSlideDown 250ms ease-out both;
 }
-
 .preset-mgr-list.closing {
-    animation: mgrSlideUp 200ms ease-in both;
+    animation: mgrSlideUp 280ms ease-in-out both;
+    transform-origin: top center;
 }
 
 @keyframes mgrSlideDown {
@@ -1099,13 +1101,19 @@
 @keyframes mgrSlideUp {
     from {
         opacity: 1;
-        transform: translateY(0);
+        transform: scaleY(1);
+        filter: blur(0);
         max-height: 500px;
+        padding-top: 12px;
+        padding-bottom: 12px;
     }
     to {
         opacity: 0;
-        transform: translateY(-8px);
+        transform: scaleY(0.95);
+        filter: blur(2px);
         max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
     }
 }
 

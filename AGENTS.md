@@ -587,19 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：卡片召回笔记本选择菜单 + 联网搜索主开关
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手工具栏两个增强：① 卡片召回开关改为带下拉菜单的形态，支持指定笔记本列表（原为全库搜索）；② 联网搜索按钮新增 toggle 开关 knob，支持批量全选/全取消所有搜索源。 |
-| **卡片召回笔记本筛选** | 后端：[AISessionConfig](internal/models/ai_session_config.go) 新增 `RecallNotebookIDs` 字段（JSON 数组）；[NoteService.SearchFull](internal/services/note_service.go) 支持 `notebookIDs ...uint` 过滤参数；[CardRecallSearch](internal/services/recall_service.go) 透传 notebookIDs。前端：HTML 在 `.ai-chat-recall-wrap` 中添加 toggle knob + 下拉菜单容器 [index.html](frontend/index.html#L1095-L1105)；JS 卡片召回 toggle 增加 knob 点击全选/全取消逻辑，菜单 checkbox 独立选择，每次打开菜单实时获取最新笔记本列表 [ai-chat.js](frontend/src/js/ai-chat.js#L871-L924)；设置页 toggle 通过 `__syncRecallNotebooks` 同步菜单全选/全取消 [main.js](frontend/src/main.js#L2460-L2463)。 |
-| **联网搜索主开关** | HTML 在搜索按钮 `<span>` 和 chevron 之间插入 toggle knob [index.html](frontend/index.html#L1075)；JS 点击 knob 切所有搜索源全开/全关，点击文字/图标切换下拉菜单 [ai-chat.js](frontend/src/js/ai-chat.js#L786-L820)。 |
-| **CSS 样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：召回菜单 `.ai-chat-recall-dropdown` / `.ai-chat-recall-item` 样式，含自定义滚动条（统一 6px 细条）。 |
-| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)（新增字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（SessionConfig CRUD 同步）、[internal/services/note_service.go](internal/services/note_service.go)（SearchFull notebookIDs 过滤）、[internal/services/recall_service.go](internal/services/recall_service.go)（透传 notebookIDs）、[app.go](app.go)（CallAIStream/CallAIStreamRegenerate 新增参数）、[frontend/index.html](frontend/index.html#L1095-L1105)（召回菜单 HTML）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js#L786-L924)（菜单交互 + 配置保存/加载）、[frontend/src/main.js](frontend/src/main.js)（设置页同步联动）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（召回菜单 + 滚动条样式） |
-
----
-
-## 记忆点 2：卡片召回分词器替换为 gse + 关键词上限
+## 记忆点 1：卡片召回分词器替换为 gse + 关键词上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -612,7 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
+## 记忆点 2：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 3：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -634,7 +622,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 4：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 5：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 6：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 7：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +670,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 8：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -692,6 +680,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **预设连接测试** | [app.go](app.go#L1462-L1473)：新增 `TestAIConnection(provider, baseURL, apiKey string) (bool, error)`；[main.js](frontend/src/main.js#L2770-L2842)：`testPresetConnection` 取表单值 → 校验 → `setBtnLoading` → 调后端 → 通知结果（成功含预设名、空值 warning）。 |
 | **编辑行精准替换** | [main.js](frontend/src/main.js#L3041-L3049)：编辑预设保存后，通过 `data-profile-id` 定位旧行，`replaceWith` 替换为新行，避免全量重渲染闪烁。 |
 | **涉及文件** | [app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+
+---
+
+## 记忆点 9：预设管理列表收起动画修复与重设计（Web Animations API）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 管理列表关闭动画从未正常播放（根因：CSS base class 自带 animation，切换 `.closing` 时浏览器不会可靠重启新动画）。修复方案：动画从 base class 剥离，入场通过 `.open` class 触发；离场改用 Web Animations API（`element.animate()`）直接驱动，彻底绕过 CSS state 问题；关闭效果重新设计为"挤压 + 散景模糊 + 淡出"（`scaleY(1)→0.95`、`filter: blur(0)→2px`、`opacity: 1→0`）。同时添加逻辑：展开预设下拉时，若管理列表开着则先等关闭动画完成再展开下拉。 |
+| **CSS 剥离** | [settings-panel.css](frontend/src/css/components/settings-panel.css#L1074-L1118)：从 `.preset-mgr-list` 移除 `animation`；新增 `.preset-mgr-list.open` 触发 `mgrSlideDown` 入场动画；`@keyframes mgrSlideUp` 重设计为 `scaleY` + `filter: blur` + `opacity` 组合。 |
+| **Web Animations API** | [main.js](frontend/src/main.js#L3227-L3249)：`closePresetMgrList` 中 `container.animate()` 调用替代 CSS class 切换，`anim.onfinish` 回调替代 `animationend` 事件，始终可靠播放。 |
+| **下拉联动** | [main.js](frontend/src/main.js#L2751-L2752)：展开预设下拉时 `await closePresetMgrList()`，等关闭动画完成后再开下拉菜单。 |
+| **涉及文件** | [frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
 
 ---
 

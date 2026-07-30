@@ -2748,6 +2748,8 @@ async function initAISettings() {
             e.stopPropagation();
             const profiles = await window.go.main.App.GetProfiles();
             if (profiles.length === 0) return;
+            // 展开下拉时，如果管理列表已展开则先等关闭动画完成
+            if (presetMgrExpanded) await closePresetMgrList();
             presetTrigger.classList.toggle('open');
             presetDropdown.classList.toggle('open');
         });
@@ -3128,6 +3130,10 @@ function renderPresetMgrList() {
             const settingsSection = document.querySelector('.ai-setting-item.preset-select-row');
             if (settingsSection) settingsSection.after(presetMgrContainer);
         }
+        // 下一帧触发入场动画
+        requestAnimationFrame(() => {
+            presetMgrContainer.classList.add('open');
+        });
     }
     presetMgrContainer.innerHTML = '';
     presetMgrExpanded = true;
@@ -3217,17 +3223,29 @@ function createPresetRowElement(p) {
     return row;
 }
 
-// 关闭管理列表
+// 关闭管理列表（返回 Promise，动画结束后 resolve）
 function closePresetMgrList() {
     presetMgrExpanded = false;
-    if (!presetMgrContainer) return;
-    presetMgrContainer.classList.add('closing');
-    presetMgrContainer.addEventListener('animationend', () => {
-        if (presetMgrContainer && presetMgrContainer.parentNode) {
-            presetMgrContainer.parentNode.removeChild(presetMgrContainer);
-            presetMgrContainer = null;
-        }
-    }, { once: true });
+    if (!presetMgrContainer) return Promise.resolve();
+    const container = presetMgrContainer;
+    container.classList.remove('open');
+    container.classList.remove('closing');
+    // 使用 Web Animations API 直接驱动关闭动画，彻底绕过 CSS animation 切换不重启的问题
+    const anim = container.animate([
+        { opacity: 1, transform: 'scaleY(1)', filter: 'blur(0)', maxHeight: '500px', paddingTop: '12px', paddingBottom: '12px' },
+        { opacity: 0, transform: 'scaleY(0.95)', filter: 'blur(2px)', maxHeight: '0', paddingTop: '0', paddingBottom: '0' }
+    ], { duration: 280, easing: 'ease-in-out', fill: 'both', transformOrigin: 'top center' });
+    return new Promise(resolve => {
+        anim.onfinish = () => {
+            if (container.parentNode) {
+                container.parentNode.removeChild(container);
+                if (presetMgrContainer === container) {
+                    presetMgrContainer = null;
+                }
+            }
+            resolve();
+        };
+    });
 }
 
 /**
