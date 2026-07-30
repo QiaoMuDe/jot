@@ -2048,6 +2048,13 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				// 在后端统一计算 tokens
 				userTokens := estimateUserTokens(messages)
 				assistantTokens := estimateTokens(content)
+				// 如果开启了深度思考且存在思维链内容，也纳入 token 统计
+				if thinkingEnabled {
+					thinkingContent := fullThinking.String()
+					if thinkingContent != "" {
+						assistantTokens += estimateTokens(thinkingContent)
+					}
+				}
 				totalTokens := userTokens + assistantTokens
 
 				// 由后端保存 assistant 消息到数据库

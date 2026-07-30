@@ -705,9 +705,9 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 |--------|------|
 | **变更概览** | `CallAIStreamRegenerate` 与 `CallAIStream` 的 goroutine 内部代码几乎逐行相同，差异仅在函数签名（Regenerate 缺少 `userText` 和 `userMsgID` 参数）。将 `CallAIStreamRegenerate` 缩减为约 20 行的薄包装层：加载消息提取末条用户消息的 `userText` + `userMsgID`，然后委托给 `CallAIStream`。消除约 400 行完全重复的上下文注入/搜索/召回/流式调用代码。 |
 | **委托实现** | [app.go](app.go#L2116-L2134)：`CallAIStreamRegenerate` 函数体简化为三步骤——① `truncateAIMessages` 加载消息；② 从末尾 user message 提取 `userText` 和 `userMsgID`；③ 调用 `a.CallAIStream(...)` 委托完整流程。原有 goroutine 内的步骤 1-8（身份注入/角色扮演/笔记引用/追问/文件/精炼/搜索/召回/技能）全部由 `CallAIStream` 复用。 |
-| **收益** | 消除 400 行重复代码；未来新增上下文注入步骤只需修改 `CallAIStream` 一处，消除遗漏风险。 |
+| **收益** | 消除 400 行重复代码；未来新增上下文注入/统计步骤只需修改 `CallAIStream` 一处，消除遗漏风险。例如思维链 token 统计修正（[app.go#L2050-L2057](app.go#L2050-L2057)）只需改 `CallAIStream` 的 `OnDone` 回调，Regenerate 路径自动受益。 |
 | **影响** | Regenerate 场景的日志不再带 `（再生）` 后缀（通过 `streamGen` 和 calling context 已能区分）；多一次 `truncateAIMessages` DB 查询（开销可忽略）。 |
-| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 函数体从 426 行缩至 19 行） |
+| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 函数体从 426 行缩至 19 行；`CallAIStream.OnDone` 中新增思维链 token 统计） |
 
 ---
 
