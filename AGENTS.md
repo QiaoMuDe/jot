@@ -690,6 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **按钮宽度统一** | [index.html](frontend/index.html#L498)：API 连接页「测试 URL」→「测试」+ `width:52px`；[index.html](frontend/index.html#L620-L640)：Tavily/知乎「测试连接」→「测试」+ `width:52px`；[index.html](frontend/index.html#L2031)：预设弹窗「测试」按钮；[index.html](frontend/index.html#L528)：「获取列表」→「获取」+ `width:52px`。 |
 | **加载动画改进** | [main.js](frontend/src/main.js)：`setBtnLoading` 加载态清空文字追加 spinner（不改原文）、恢复态移除 spinner 还原文字；[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.btn-loading` 加 `justify-content: center` 保证居中。 |
 | **预设连接测试** | [app.go](app.go#L1462-L1473)：新增 `TestAIConnection(provider, baseURL, apiKey string) (bool, error)`；[main.js](frontend/src/main.js#L2770-L2842)：`testPresetConnection` 取表单值 → 校验 → `setBtnLoading` → 调后端 → 通知结果（成功含预设名、空值 warning）。 |
+| **编辑行精准替换** | [main.js](frontend/src/main.js#L3041-L3049)：编辑预设保存后，通过 `data-profile-id` 定位旧行，`replaceWith` 替换为新行，避免全量重渲染闪烁。 |
 | **涉及文件** | [app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
 
 ---

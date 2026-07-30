@@ -3035,10 +3035,19 @@ async function savePresetModal() {
             profile = await window.go.main.App.CreateProfile(name, provider, baseURL, apiKey);
             nm.show('配置已新增', 'success');
         }
+        const wasEditingId = editingProfileId; // 保存编辑状态，closePresetModal 会清空
         closePresetModal();
         await loadProfiles();
-        // 新增时向管理列表插入新行（两阶段动画：先展开空间，再滑入内容）
-        if (!editingProfileId && profile && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
+        if (wasEditingId && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
+            // 编辑模式：精准替换对应行，避免全量重渲染，无需入场动画
+            const updatedProfile = { id: wasEditingId, name, provider, base_url: baseURL, api_key: apiKey };
+            const oldRow = presetMgrContainer.querySelector(`[data-profile-id="${wasEditingId}"]`);
+            if (oldRow) {
+                const newRow = createPresetRowElement(updatedProfile);
+                newRow.classList.remove('preset-row-enter'); // 编辑模式无需入场动画
+                oldRow.replaceWith(newRow);
+            }
+        } else if (!wasEditingId && profile && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
             const row = createPresetRowElement(profile);
             // 初始态：零高度、透明、左侧偏移
             row.style.maxHeight = '0';
@@ -3161,6 +3170,7 @@ function createPresetRowElement(p) {
     row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--radius-sm);gap:8px;';
     row.style.borderBottom = '1px solid var(--border)';
     row.classList.add('preset-row-enter');
+    row.dataset.profileId = p.id;
     // 信息区
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
