@@ -587,18 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：克隆 markitdown 库到本地 + 修复 Wails 构建 PDF 转换错误
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将 `github.com/conductor-oss/markitdown` 库从 Go module cache 克隆到项目 `internal/markitdown` 目录下进行本地维护；修复 `wails build` 后 PDF 办公文件转换失败的问题——根因是 Wails GUI 构建缺少有效控制台句柄，`wazero` 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。 |
-| **修复细节** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效 GUI 句柄调用 `GetFileType`。 |
-| **依赖管理** | [go.mod](go.mod)：新增 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 替换指令，使编译时使用本地克隆版本而非 module cache 中的原始版本。 |
-| **涉及文件** | [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)（添加 Stdout/Stderr Discard）、[go.mod](go.mod)（replace 指令） |
-
----
-
-## 记忆点 2：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
+## 记忆点 1：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 2：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 3：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,7 +620,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 4：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 5：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 6：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,7 +659,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 7：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +671,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 滑动窗口消息截断
+## 记忆点 8：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -697,17 +686,28 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：搜索词精炼扩展至卡片召回
+## 记忆点 9：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 搜索词精炼触发条件从仅联网搜索扩展为联网搜索或卡片召回任一启用时都触发。精炼后的关键词同时供给两者使用：联网搜索直接使用 `refinedQuery` 作为搜索 query；卡片召回使用 `combinedQuery = rawUserText + " " + refinedQuery` 拼接后由 gse 统一分词去重检索。前端状态文字从「正在优化搜索词…」改为「正在优化输入…」。 |
 | **精炼触发条件扩展** | [app.go](app.go#L1698-L1704)：`searching` 标志从 `len(searchSources) > 0` 改为 `len(searchSources) > 0 \|\| cardRecallEnabled`。日志仅在联网搜索时打印。 |
-| **精炼步骤独立提前** | [app.go](app.go)：两个流方法（`CallAIStream`/`CallAIStreamRegenerate`）的精炼步骤从搜索块内部提取到搜索/召回块之前，作为独立步骤执行，只执行一次。精炼失败时发射 `ai:stream-error` 终止流程。 |
 | **联网搜索使用** | [app.go](app.go)：搜索块直接取用外部 `refinedQuery`，去除原搜索块内部的重复精炼调用和错误处理代码。 |
-| **卡片召回使用** | [app.go](app.go)：`CardRecallSearch` 调用改为 `combinedQuery`（原始 query + refinedQuery 拼接），`refinedQuery` 为空时回退为原始 query。`CallAIStreamRegenerate` 从最后一条 user message 提取 `userText`。 |
+| **卡片召回使用** | [app.go](app.go)：`CardRecallSearch` 调用改为 `combinedQuery`（原始 query + refinedQuery 拼接），`refinedQuery` 为空时回退为原始 query。 |
 | **前端文字更新** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)：精炼阶段显示文字从「正在优化搜索词…」改为「正在优化输入…」。 |
-| **涉及文件** | [app.go](app.go)（两函数各 4 处改动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（前端文字 2 处） |
+| **涉及文件** | [app.go](app.go)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) |
+
+---
+
+## 记忆点 10：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | `CallAIStreamRegenerate` 与 `CallAIStream` 的 goroutine 内部代码几乎逐行相同，差异仅在函数签名（Regenerate 缺少 `userText` 和 `userMsgID` 参数）。将 `CallAIStreamRegenerate` 缩减为约 20 行的薄包装层：加载消息提取末条用户消息的 `userText` + `userMsgID`，然后委托给 `CallAIStream`。消除约 400 行完全重复的上下文注入/搜索/召回/流式调用代码。 |
+| **委托实现** | [app.go](app.go#L2116-L2134)：`CallAIStreamRegenerate` 函数体简化为三步骤——① `truncateAIMessages` 加载消息；② 从末尾 user message 提取 `userText` 和 `userMsgID`；③ 调用 `a.CallAIStream(...)` 委托完整流程。原有 goroutine 内的步骤 1-8（身份注入/角色扮演/笔记引用/追问/文件/精炼/搜索/召回/技能）全部由 `CallAIStream` 复用。 |
+| **收益** | 消除 400 行重复代码；未来新增上下文注入步骤只需修改 `CallAIStream` 一处，消除遗漏风险。 |
+| **影响** | Regenerate 场景的日志不再带 `（再生）` 后缀（通过 `streamGen` 和 calling context 已能区分）；多一次 `truncateAIMessages` DB 查询（开销可忽略）。 |
+| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 函数体从 426 行缩至 19 行） |
 
 ---
 
