@@ -548,6 +548,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "screen_lock_enabled", Value: "false"},
 		{Key: "screen_lock_password", Value: ""},
 		{Key: "editor_word_wrap", Value: "false"},
+		{Key: "ai_context_window_size", Value: "20"},
 	}
 
 	var toInsert []models.Setting

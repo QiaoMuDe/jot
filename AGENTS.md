@@ -695,6 +695,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
+## 记忆点 10：AI 滑动窗口消息截断
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在 `CallAIStream` 和 `CallAIStreamRegenerate` 中增加滑动窗口截断：加载全量消息后、注入所有 context 前，丢弃较早的 user/assistant 消息，只保留最后 N 条（默认 20 条 = 10 轮对话）发送给 LLM，大幅降低长对话场景下的 token 消耗和响应延迟。system 消息（含注入的搜索/召回/技能等 context）不受窗口影响。前端 `chatHistory` 渲染缓冲区保持不变。 |
+| **设置项** | [db.go](internal/database/db.go#L551)：`InitDefaultSettings` 新增 `ai_context_window_size: "20"`。 |
+| **窗口读取** | [ai_service.go](internal/services/ai_service.go#L121-L134)：`GetContextWindowSize()` 读取设置项，不存在或非法时返回默认值 20，上限 200。 |
+| **截断函数** | [ai_service.go](internal/services/ai_service.go#L136-L169)：`TruncateMessagesForLLM(messages, n)` — 保留所有 system 消息 + 最后 n 条 user/assistant 消息，短对话不做截断。 |
+| **统一方法** | [app.go](app.go#L2600-L2624)：`truncateAIMessages(sessionID, logLabel)` 封装加载 + 截断 + 统计 + debug 日志，两处调用点各只一行。 |
+| **调用入口** | [app.go](app.go#L1705-L1706)：`CallAIStream` 中 `a.truncateAIMessages(sessionID, "AI 滑动窗口截断")`；[app.go](app.go#L2115-L2116)：`CallAIStreamRegenerate` 中同名调用。 |
+| **调试日志** | debug 级别输出 `window_size`、`non_system_before`、`non_system_after`、`total_after`，便于观察截断效果。 |
+| **涉及文件** | [internal/database/db.go](internal/database/db.go)（默认值初始化）、[internal/services/ai_service.go](internal/services/ai_service.go)（GetContextWindowSize + TruncateMessagesForLLM）、[app.go](app.go)（truncateAIMessages + 两处调用） |
+
+---
+
 ## 十二、AGENTS.md 维护规范
 
 1. **第 1-12 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）

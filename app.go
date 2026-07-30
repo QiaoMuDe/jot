@@ -1702,8 +1702,8 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
 	}
 
-	// 从数据库加载会话所有消息（包含刚保存的用户消息）
-	messages := a.aiService.LoadAISessionMessages(sessionID)
+	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+	messages := a.truncateAIMessages(sessionID, "AI 滑动窗口截断")
 
 	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
 	go func() {
@@ -2112,8 +2112,8 @@ func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnab
 		a.LogSvc.Logger.Infow("AI 联网搜索启动（再生）", fastlog.Int("source_count", len(searchSources)))
 	}
 
-	// 从数据库加载会话所有消息（最后一条 user 消息已存在）
-	messages := a.aiService.LoadAISessionMessages(sessionID)
+	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+	messages := a.truncateAIMessages(sessionID, "AI 滑动窗口截断（再生）")
 
 	// 查找会话中最后一条用户消息的 ID，用于后续更新 token
 	var lastUserMsgID uint
@@ -2555,6 +2555,35 @@ func appendToSystemMessage(msgs []services.Message, content string) []services.M
 		}
 	}
 	return append([]services.Message{{Role: "system", Content: content}}, msgs...)
+}
+
+// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+// 同时记录 debug 日志便于调试观察截断效果
+func (a *App) truncateAIMessages(sessionID uint, logLabel string) []services.Message {
+	// 加载会话消息
+	messages := a.aiService.LoadAISessionMessages(sessionID)
+	nonSystemBefore := 0
+	for _, m := range messages {
+		if m.Role != "system" {
+			nonSystemBefore++
+		}
+	}
+
+	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
+	windowSize := a.aiService.GetContextWindowSize()
+	messages = services.TruncateMessagesForLLM(messages, windowSize)
+	nonSystemAfter := 0
+	for _, m := range messages {
+		if m.Role != "system" {
+			nonSystemAfter++
+		}
+	}
+	a.LogSvc.Logger.Debugw(logLabel,
+		fastlog.Int("window_size", windowSize),
+		fastlog.Int("non_system_before", nonSystemBefore),
+		fastlog.Int("non_system_after", nonSystemAfter),
+		fastlog.Int("total_after", len(messages)))
+	return messages
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用

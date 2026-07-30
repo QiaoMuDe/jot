@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,6 +117,56 @@ func (a *AIService) GetConfig() AIConfig {
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
 	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
 	return cfg
+}
+
+// GetContextWindowSize 获取 AI 上下文窗口大小（保留的 user/assistant 消息条数）
+// 从 setting 表读取 ai_context_window_size，不存在或非法时返回默认值 20
+func (a *AIService) GetContextWindowSize() int {
+	svc := NewSettingService(a.db)
+	val := svc.Get("ai_context_window_size")
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 2 {
+		return 20
+	}
+	if n > 200 {
+		return 200
+	}
+	return n
+}
+
+// TruncateMessagesForLLM 截断消息列表，只保留 system 消息 + 最后 n 条 user/assistant 消息
+// 短对话（不超过 n 条 user/assistant 消息）不做截断，原样返回
+func TruncateMessagesForLLM(messages []Message, n int) []Message {
+	// 统计非 system 消息数量
+	nonSystemCount := 0
+	for _, msg := range messages {
+		if msg.Role != "system" {
+			nonSystemCount++
+		}
+	}
+	// 不超过窗口大小，不做截断
+	if nonSystemCount <= n {
+		return messages
+	}
+	// 需截断：保留所有 system 消息 + 最后 n 条 user/assistant 消息
+	systemMsgs := make([]Message, 0)
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			systemMsgs = append(systemMsgs, msg)
+		}
+	}
+	// 从后往前收集最后 n 条非 system 消息
+	tailMsgs := make([]Message, 0, n)
+	for i := len(messages) - 1; i >= 0 && len(tailMsgs) < n; i-- {
+		if messages[i].Role != "system" {
+			tailMsgs = append(tailMsgs, messages[i])
+		}
+	}
+	// 反转 tailMsgs（因为是从后往前收集的）
+	for i, j := 0, len(tailMsgs)-1; i < j; i, j = i+1, j-1 {
+		tailMsgs[i], tailMsgs[j] = tailMsgs[j], tailMsgs[i]
+	}
+	return append(systemMsgs, tailMsgs...)
 }
 
 // SaveConfig 保存 AI 配置到 SettingService
