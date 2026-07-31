@@ -148,9 +148,9 @@
 .editor-actions-menu.dropdown-menu {
   position: absolute;
   top: calc(100% + 4px) !important;
-  left: auto !important;
-  right: calc(100% + 4px) !important;
-  transform-origin: top right !important;
+  left: 0 !important;
+  right: auto !important;
+  transform-origin: top left !important;
   background: var(--card-bg);
   border-radius: var(--radius-lg);
   box-shadow: 0 12px 48px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
@@ -199,14 +199,15 @@
   transition: transform 0.15s ease;
 }
 
-.editor-actions-menu .has-submenu.open .submenu-arrow {
+.editor-actions-menu .has-submenu.open > .submenu-arrow {
   transform: rotate(90deg);
 }
 
 /* 子菜单容器 */
 .editor-actions-menu .submenu {
   position: absolute;
-  left: calc(100% + 4px);
+  right: calc(100% + 4px);
+  left: auto;
   top: -4px;
   background: var(--card-bg);
   border-radius: var(--radius-lg);
@@ -216,12 +217,12 @@
   z-index: 2001;
   opacity: 0;
   transform: scale(0.85);
-  transform-origin: top left;
+  transform-origin: top right;
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.editor-actions-menu .has-submenu.open .submenu {
+.editor-actions-menu .has-submenu.open > .submenu {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;

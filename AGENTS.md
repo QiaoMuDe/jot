@@ -147,7 +147,7 @@ jot/                                    # 项目根目录
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
-| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（格式化/编码解码/AI 分组规划），当前含「格式化」分组 JSON 格式化/压缩，选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 + 预览模式隐藏 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | JSON 格式化/压缩结果 |
+| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（EDITOR_ACTIONS 数组），当前含 4 个分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩）、文本转换（大写/小写/首字母大写/驼峰式/蛇形式/行反转/字符反转）、文本清理（去除多余空格/去除空行/行尾空格清理/Tab↔空格）、编码解码（Base64/URL/HTML 各含编码+解码）。支持选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 + 预览模式隐藏。无 subGroup 的项直接铺平在分组下，有 subGroup 的渲染为嵌套子菜单。 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | 格式化/转换/清理/编码解码结果 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
 | **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / Ctrl+P 启动器菜单 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
@@ -534,7 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **预设管理增删动画**（两阶段插入动画：先 max-height 展开空间再滑入内容；删除动画 CSS 覆盖 Bug 修复：preset-row-insert 类定义在后导致 preset-delete-out 动画被覆盖，animationend 永远不触发）
 - [x] **预设弹窗遮罩点击穿透修复**（pointer-events: none 防止淡出期间拦截删除按钮点击；确认弹窗 z-index 从 1000 提升至 100000 避免被遮罩挡住）
 - [x] **预设名称唯一性校验**（savePresetModal 提交前检查名称是否已存在，编辑时排除自身）
-- [x] **编辑器操作菜单**（顶栏「操作」按钮 + 配置驱动下拉菜单，格式化分组 JSON 格式化/压缩，选中或全文 + 撤销）
+- [x] **编辑器操作菜单**（顶栏「操作」按钮 + 配置驱动下拉菜单，4 分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 格式化+压缩）、文本转换（7 项）、文本清理（5 项）、编码解码（6 项），选中或全文 + 撤销）
 
 ---
 
@@ -592,18 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：召回卡片菜单入场动画修复（子项 stagger 时序）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复召回卡片菜单打开时子项缺少逐项滑入（stagger）入场动画的问题。根因：菜单子项是动态创建的（`loadRecallNotebookMenu` 中 `innerHTML=''` + `appendChild`），而打开时序是先 `classList.add('open')`、后构建子项，导致子项添加到 DOM 时容器已有 `.open` 类，CSS transition 从初始态到最终态的过渡永远无法触发（子项直接以最终态显现）。修复方案：调整打开时序为先构建子项（隐藏态）、后添加 `.open` 触发 transition。 |
-| **时序调整** | [ai-chat.js](frontend/src/js/ai-chat.js#L903-L922)：打开菜单时先 `await loadRecallNotebookMenu()` 在隐藏态构建子项 DOM，再 `classList.add('open')` 触发入场动画；关闭时直接 `classList.remove('open')`。CSS 层已有的 `.ai-chat-recall-item` 的 `translateX(-8px)` stagger 动画（0.02s 递增至 0.30s，nth-child 1~15）和容器 `scale(0.96)` 弹簧曲线不变。 |
-| **参考对比** | 联网搜索菜单和更多技能菜单的子项为静态 HTML，在 `.open` 切换时 DOM 已存在，故 transition 能正常触发——召回卡片的根因是相同的 CSS 因动态 DOM 时序失效。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（打开时序改为先构建后开启动画） |
-
----
-
-## 记忆点 2：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 1：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 2：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 3：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 4：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 5：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +654,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 滑动窗口消息截断
+## 记忆点 6：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：搜索词精炼扩展至卡片召回
+## 记忆点 7：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -693,7 +682,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 8：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -705,7 +694,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 9：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -713,6 +702,23 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **菜单锚定关键方案** | 编辑器下拉菜单必须锚定**按钮本身**，不能锚定整个操作栏容器 `.editor-header-actions`（该 flex 容器含目录/M-T/编辑/查看/全屏/关闭等多个按钮、宽约 248px，`justify-content: flex-end` 右对齐）。正确做法：按钮+菜单外包 `<div class="editor-actions-wrap">`（`position: relative; display: inline-flex`，宽度=按钮宽度），根菜单 `right: calc(100% + 4px)` 出现在按钮左侧、子菜单 `left: calc(100% + 4px)` 向右弹出，全部落在 560px 编辑器面板内。定位属性（`left/right/top/transform-origin`）加 `!important` 抵御 `.dropdown-menu` 基类（[topbar.css](frontend/src/css/components/topbar.css) 中 `left: 8px`/`transform-origin: top right`）。**教训**：此前多轮把菜单锚定在整个操作栏容器上并设 `left: 0`，导致根菜单主体全部位于按钮右侧、子菜单继续向右溢出面板被裁剪，表现为"菜单太靠右/子菜单弹不出来"。 |
 | **Wails 构建流程教训** | **前端改动后只 `npm run build` 不生效**——生产模式经 `go:embed all:frontend/dist`（[main.go](main.go)）在 **`wails build` 编译期**嵌入 dist，必须重新 `wails build`（`rnx --run run` 或 `rnx --run build`）才能生效，直接运行旧 exe 加载的仍是旧界面。排查手段：对比 `build/bin/jot.exe` 与 `frontend/dist` 下资源的修改时间，exe 必须晚于 dist 才包含最新前端。`Rnx.toml` 的 `frontend` 任务有 `if [ ! -d "dist" ]` 守卫（dist 存在时不自动重建）。另已为 [main.go](main.go) 的 `assetserver.Options` 添加 `Middleware`，给 `/` 与 `/index.html` 设置 `Cache-Control: no-cache, no-store, must-revalidate`，根治 WebView2 缓存旧入口页引用旧哈希资源。`frontend/vite.config.js` 固定 dev 端口 5174。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（操作按钮 + `.editor-actions-wrap` 包装器 + `#editorActionsMenu`）、[frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表 + 菜单渲染/交互/执行 + executeAction 调用 switchEditorMode）、[frontend/src/main.js](frontend/src/main.js)（import 模块、`els` 注册、`openEditor()` 只读隐藏、`switchEditorMode()` 预览隐藏、`window.cmEditor` 全局暴露且 5 处 CM6 重建点同步置空）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.editor-actions-wrap` + 菜单/子菜单定位 + `[data-mode="preview"]` 按钮隐藏兜底，`min-width: 130px`）、[main.go](main.go)（AssetServer Middleware no-cache） |
+
+---
+
+## 记忆点 10：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 扩展编辑器操作菜单至 4 个分组 29 个操作项（原仅 JSON 格式化/压缩）：① 新增「格式化」分组 9 个子分组（XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩，外加 JSON 已有的 2 项），XML/HTML 基于 DOMParser 零依赖实现、CSV 列对齐、SQL/YAML/TOML 需安装依赖；② 新增「文本转换」分组 7 项（大写/小写/首字母大写/驼峰式/蛇形式/行反转/字符反转），全部零依赖；③ 新增「文本清理」分组 5 项（去除多余空格/去除空行/行尾空格清理/Tab↔空格），全部零依赖；④ 新增「编码解码」分组 3 子分组 6 项（Base64/URL/HTML 各含编码+解码），全部零依赖。**渲染修复**：无 subGroup 的项（文本转换、文本清理）会产生额外 `undefined` 子菜单层级，修复为检查 `hasSubGroups` 标志，无 subGroup 时直接渲染操作项。**鼠标事件修复**：`mouseover` 事件使用 `e.target.closest('.has-submenu')` 导致 CSV 格式化等非子菜单项无法触发 `else if` 分支，修复为以 `e.target.closest('.dropdown-item')` 为准、判断 item 自身是否含 `has-submenu` 类。**vite.config.js 修复**：`smol-toml` 依赖使用 BigInt 字面量，dev server 的 esbuild 预构建需额外配置 `optimizeDeps.esbuildOptions.target: 'es2021'`（`build.target` 仅对生产构建生效）。 |
+| **菜单结构** | [editor-actions.js](frontend/src/js/editor-actions.js#L22-L345)：EDITOR_ACTIONS 数组从 2 项扩展至 29 项，结构为 `{ group, subGroup?, label, errorLabel, handler }`。渲染逻辑：先按 group 分组（外层子菜单），再按 subGroup 分组（内层嵌套子菜单）；无 subGroup 时直接渲染操作项。 |
+| **格式化操作** | [editor-actions.js](frontend/src/js/editor-actions.js#L25-L180)：JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各 2 项（格式化+压缩），CSV 仅格式化（无压缩）。依赖：`js-yaml`（YAML 解析/序列化）、`smol-toml`（TOML 解析/序列化）、`sql-formatter`（SQL 格式化）、`js-beautify`（CSS/JS 格式化）。零依赖：XML（DOMParser 递归遍历）、HTML（DOMParser 片段模式）、CSV（列对齐，padEnd 填充）。 |
+| **文本转换** | [editor-actions.js](frontend/src/js/editor-actions.js#L294-L290)：7 项零依赖——大写 `toUpperCase()`、小写 `toLowerCase()`、首字母大写 `/\b\w/g`、驼峰式 `split→map→join`、蛇形式 `驼峰分界→_join`、行反转 `lines.reverse()`、字符反转 `str.reverse()`。 |
+| **文本清理** | [editor-actions.js](frontend/src/js/editor-actions.js#L290-L292)：5 项零依赖——去除多余空格 `\s+→空格`、去除空行 `filter(trim)`、行尾空格清理 `trimEnd()`、Tab→空格 `\t→2空格`、空格→Tab `2空格→\t`。 |
+| **编码解码** | [editor-actions.js](frontend/src/js/editor-actions.js#L292-L345)：3 子分组 6 项——Base64（`btoa`/`atob`）、URL（`encodeURIComponent`/`decodeURIComponent`）、HTML（`&<>"'` 实体替换/DOMParser 解码），全部零依赖。 |
+| **渲染逻辑修复** | [editor-actions.js](frontend/src/js/editor-actions.js#L333-L360)：新增 `hasSubGroups` 标志（`subGroups.size > 1 \|\| subGroups.size === 1 && keys[0] !== undefined`），无 subGroup 时跳过嵌套子菜单、直接渲染操作项，消除 `undefined` 子菜单层级。 |
+| **鼠标事件修复** | [editor-actions.js](frontend/src/js/editor-actions.js#L366-L385)：旧代码用 `e.target.closest('.has-submenu')` 查找子菜单触发项，但该选择器沿 DOM 向上查找，CSV 格式化等非子菜单项因位于「格式化」has-submenu 容器内而被误判为子菜单触发项，`else if` 分支永不执行。修复为以 `e.target.closest('.dropdown-item')` 为准，判断 item 自身是否含 `has-submenu` 类，非子菜单项正确关闭同级展开子菜单。 |
+| **vite 配置修复** | [vite.config.js](frontend/src/vite.config.js)：`build.target: 'es2021'` 仅对生产构建生效；dev server 的 esbuild 预构建需额外配置 `optimizeDeps.esbuildOptions.target: 'es2021'`（Vite 3 的 DepOptimizationConfig 接口要求 `esbuildOptions` 而非 `esbuild`）。 |
+| **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表扩展 + 渲染/交互/执行引擎）、[frontend/src/js/formatters/xml-formatter.js](frontend/src/js/formatters/xml-formatter.js)（新增 XML 格式化/压缩）、[frontend/src/js/formatters/html-formatter.js](frontend/src/js/formatters/html-formatter.js)（新增 HTML 格式化/压缩）、[frontend/src/js/formatters/csv-formatter.js](frontend/src/js/formatters/csv-formatter.js)（新增 CSV 格式化）、[frontend/vite.config.js](frontend/vite.config.js)（optimizeDeps.esbuildOptions） |
 
 ---
 
