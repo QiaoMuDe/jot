@@ -77,24 +77,27 @@ function initEditorActionsMenu() {
         const cmEditor = window.cmEditor;
         if (!cmEditor) return;
 
-        // 预览模式自动切回编辑模式
+        // 预览模式自动切回编辑模式（调用全局 switchEditorMode 同步按钮显隐等状态）
         const overlay = document.getElementById('editorOverlay');
         if (overlay && overlay.dataset.mode === 'preview') {
-            // 调用全局 switchEditorMode 切回编辑模式
-            const modeBtns = document.querySelectorAll('.mode-btn');
-            modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'edit'));
-            overlay.dataset.mode = 'edit';
-            // 切换后关闭预览相关布局
-            const tocSidebar = document.getElementById('tocSidebar');
-            if (tocSidebar) {
-                const tocBody = document.getElementById('tocBody');
-                if (tocBody) tocBody.innerHTML = '';
-                tocSidebar.classList.remove('visible');
+            if (typeof switchEditorMode === 'function') {
+                switchEditorMode('edit');
+            } else {
+                // 降级：手动切换
+                const modeBtns = document.querySelectorAll('.mode-btn');
+                modeBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === 'edit'));
+                overlay.dataset.mode = 'edit';
+                const tocSidebar = document.getElementById('tocSidebar');
+                if (tocSidebar) {
+                    const tocBody = document.getElementById('tocBody');
+                    if (tocBody) tocBody.innerHTML = '';
+                    tocSidebar.classList.remove('visible');
+                }
+                const previewEl = document.getElementById('mdRendered');
+                if (previewEl) previewEl.style.display = 'none';
+                const textarea = document.getElementById('editorNoteContent');
+                if (textarea) textarea.style.display = 'flex';
             }
-            const previewEl = document.getElementById('mdRendered');
-            if (previewEl) previewEl.style.display = 'none';
-            const textarea = document.getElementById('editorNoteContent');
-            if (textarea) textarea.style.display = 'flex';
             cmEditor.focus();
         }
 

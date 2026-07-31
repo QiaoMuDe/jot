@@ -147,7 +147,7 @@ jot/                                    # 项目根目录
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
-| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（格式化/编码解码/AI 分组规划），当前含「格式化」分组 JSON 格式化/压缩，选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | JSON 格式化/压缩结果 |
+| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（格式化/编码解码/AI 分组规划），当前含「格式化」分组 JSON 格式化/压缩，选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 + 预览模式隐藏 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | JSON 格式化/压缩结果 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
 | **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / Ctrl+P 启动器菜单 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
@@ -705,14 +705,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：编辑器操作菜单 + Wails 前端资源构建流程教训
+## 记忆点 10：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增编辑器顶栏「操作」按钮 + 配置驱动下拉菜单（[editor-actions.js](frontend/src/js/editor-actions.js) 定义操作注册表 `EDITOR_ACTIONS` 并通过 `window.initEditorActionsMenu` 全局注册，[main.js](frontend/src/main.js) 顶部 `import './js/editor-actions.js'`）。当前含「格式化」分组（JSON 格式化/JSON 压缩），支持选中文本或全文处理、CM6 `dispatch` 写回（Ctrl+Z 可撤销）、非法 JSON 用 `nm.show()` 提示、查看模式按钮隐藏、预览模式自动切回编辑模式。操作注册表为数组配置（group/label/handler），新增操作只需追加条目，空分组不渲染。菜单交互参照 `themeDropdown` 模式（点击切 `.open` + 外部点击关闭 + 子菜单 hover 切换）。 |
+| **变更概览** | 新增编辑器顶栏「操作」按钮 + 配置驱动下拉菜单（[editor-actions.js](frontend/src/js/editor-actions.js) 定义操作注册表 `EDITOR_ACTIONS` 并通过 `window.initEditorActionsMenu` 全局注册，[main.js](frontend/src/main.js) 顶部 `import './js/editor-actions.js'`）。当前含「格式化」分组（JSON 格式化/JSON 压缩），支持选中文本或全文处理、CM6 `dispatch` 写回（Ctrl+Z 可撤销）、非法 JSON 用 `nm.show()` 提示、查看模式按钮隐藏。**后续新增**：预览模式（编辑/新建内的 Markdown 预览）下操作按钮隐藏——`switchEditorMode` 函数中根据模式切换 `editorActionsBtn` 显隐，CSS 添加 `[data-mode="preview"] #editorActionsBtn { display: none !important }` 兜底。同时 `executeAction` 函数的预览→编辑切换从手动 DOM 操作重构为调用 `switchEditorMode('edit')`，确保按钮显隐与模式同步。操作注册表为数组配置（group/label/handler），新增操作只需追加条目，空分组不渲染。菜单交互参照 `themeDropdown` 模式（点击切 `.open` + 外部点击关闭 + 子菜单 hover 切换）。 |
 | **菜单锚定关键方案** | 编辑器下拉菜单必须锚定**按钮本身**，不能锚定整个操作栏容器 `.editor-header-actions`（该 flex 容器含目录/M-T/编辑/查看/全屏/关闭等多个按钮、宽约 248px，`justify-content: flex-end` 右对齐）。正确做法：按钮+菜单外包 `<div class="editor-actions-wrap">`（`position: relative; display: inline-flex`，宽度=按钮宽度），根菜单 `right: calc(100% + 4px)` 出现在按钮左侧、子菜单 `left: calc(100% + 4px)` 向右弹出，全部落在 560px 编辑器面板内。定位属性（`left/right/top/transform-origin`）加 `!important` 抵御 `.dropdown-menu` 基类（[topbar.css](frontend/src/css/components/topbar.css) 中 `left: 8px`/`transform-origin: top right`）。**教训**：此前多轮把菜单锚定在整个操作栏容器上并设 `left: 0`，导致根菜单主体全部位于按钮右侧、子菜单继续向右溢出面板被裁剪，表现为"菜单太靠右/子菜单弹不出来"。 |
 | **Wails 构建流程教训** | **前端改动后只 `npm run build` 不生效**——生产模式经 `go:embed all:frontend/dist`（[main.go](main.go)）在 **`wails build` 编译期**嵌入 dist，必须重新 `wails build`（`rnx --run run` 或 `rnx --run build`）才能生效，直接运行旧 exe 加载的仍是旧界面。排查手段：对比 `build/bin/jot.exe` 与 `frontend/dist` 下资源的修改时间，exe 必须晚于 dist 才包含最新前端。`Rnx.toml` 的 `frontend` 任务有 `if [ ! -d "dist" ]` 守卫（dist 存在时不自动重建）。另已为 [main.go](main.go) 的 `assetserver.Options` 添加 `Middleware`，给 `/` 与 `/index.html` 设置 `Cache-Control: no-cache, no-store, must-revalidate`，根治 WebView2 缓存旧入口页引用旧哈希资源。`frontend/vite.config.js` 固定 dev 端口 5174。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（操作按钮 + `.editor-actions-wrap` 包装器 + `#editorActionsMenu`）、[frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表 + 菜单渲染/交互/执行）、[frontend/src/main.js](frontend/src/main.js)（import 模块、`els` 注册、`openEditor()` 只读隐藏、`window.cmEditor` 全局暴露且 5 处 CM6 重建点同步置空）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.editor-actions-wrap` + 菜单/子菜单定位，`min-width: 130px`）、[main.go](main.go)（AssetServer Middleware no-cache） |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（操作按钮 + `.editor-actions-wrap` 包装器 + `#editorActionsMenu`）、[frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表 + 菜单渲染/交互/执行 + executeAction 调用 switchEditorMode）、[frontend/src/main.js](frontend/src/main.js)（import 模块、`els` 注册、`openEditor()` 只读隐藏、`switchEditorMode()` 预览隐藏、`window.cmEditor` 全局暴露且 5 处 CM6 重建点同步置空）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.editor-actions-wrap` + 菜单/子菜单定位 + `[data-mode="preview"]` 按钮隐藏兜底，`min-width: 130px`）、[main.go](main.go)（AssetServer Middleware no-cache） |
 
 ---
 

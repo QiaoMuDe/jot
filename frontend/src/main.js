@@ -4636,6 +4636,10 @@ function switchEditorMode(mode) {
     });
     // 更新 overlay 的 data-mode
     els.editorOverlay.dataset.mode = mode;
+    // 预览模式下隐藏操作按钮，编辑模式下显示
+    if (els.editorActionsBtn) {
+        els.editorActionsBtn.style.display = mode === 'preview' ? 'none' : '';
+    }
     // 预览模式下立即渲染（CM6 未就绪时跳过，等 initCodeMirror 完成后自动刷新）
     if (mode === 'preview' && cmEditor) {
         updatePreview();

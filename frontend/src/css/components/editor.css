@@ -274,6 +274,11 @@
   padding-top: 0.1em;
 }
 
+/* 预览模式下隐藏编辑器操作按钮 */
+.editor-overlay[data-mode="preview"] #editorActionsBtn {
+  display: none !important;
+}
+
 /* 纯文本模式（默认，预览区隐藏） */
 .editor-overlay[data-mode="edit"] .editor-textarea {
   display: flex;
