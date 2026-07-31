@@ -32,6 +32,8 @@ import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';
+// 编辑器操作菜单模块（通过 window 暴露 initEditorActionsMenu）
+import './js/editor-actions.js';
 
 // 暴露到 window，供 data-management.js 等模块在重置/还原后预加载 AI 聊天页面
 window.onAIChatViewActivated = onAIChatViewActivated;
@@ -115,11 +117,13 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
     if (cmEditor) {
         cmEditor.destroy();
     }
+    window.cmEditor = null;
 
     cmEditor = new EditorView({
         state,
         parent: container,
     });
+    window.cmEditor = cmEditor;
 
     // 粘贴图片上传（仅 .md 编辑模式）
     cmEditor.dom.addEventListener('paste', handlePaste);
@@ -213,6 +217,9 @@ function switchEditorReadOnly(readOnly) {
     if (els.editorTypeToggle) {
         els.editorTypeToggle.style.display = readOnly ? 'none' : '';
     }
+    if (els.editorActionsBtn) {
+        els.editorActionsBtn.style.display = readOnly ? 'none' : '';
+    }
     els.editorEditBtn.style.display = readOnly ? '' : 'none';
     els.editorViewBtn.style.display = (!readOnly && state.enteredFromViewMode) ? '' : 'none';
     els.editorFileExt.classList.toggle('file-ext-readonly', readOnly);
@@ -259,6 +266,7 @@ function destroyCodeMirror() {
     if (cmEditor) {
         cmEditor.destroy();
         cmEditor = null;
+        window.cmEditor = null;
     }
 }
 
@@ -380,6 +388,8 @@ const els = {
     editorCloseBtn: $('editorCloseBtn'),
     editorEditBtn: $('editorEditBtn'),
     editorViewBtn: $('editorViewBtn'),
+    editorActionsBtn: $('editorActionsBtn'),
+    editorActionsMenu: $('editorActionsMenu'),
     editorFullscreenBtn: $('editorFullscreenBtn'),
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
@@ -3635,13 +3645,14 @@ async function saveFileExt() {
     // 重新初始化 CM6 刷新语法高亮
     if (cmEditor) {
         const container = els.editorNoteContent;
-        const content = cmEditor.state.doc.toString();
-        const isReadOnly = els.editorSaveBtn.style.display === 'none';
-        cmEditor.destroy();
-        cmEditor = null;
-        const useSyntaxHighlight = els.mdHighlightToggle.checked;
-        const enableWordWrap = els.editorWordWrapToggle?.checked || false;
-        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme, enableWordWrap);
+		const content = cmEditor.state.doc.toString();
+		const isReadOnly = els.editorSaveBtn.style.display === 'none';
+		cmEditor.destroy();
+		cmEditor = null;
+		window.cmEditor = null;
+		const useSyntaxHighlight = els.mdHighlightToggle.checked;
+		const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+		initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme, enableWordWrap);
     }
 }
 
@@ -3677,10 +3688,11 @@ async function toggleFileExt() {
         const content = cmEditor.state.doc.toString();
         const isReadOnly = els.editorSaveBtn.style.display === 'none';
         cmEditor.destroy();
-        cmEditor = null;
-        const useSyntaxHighlight = els.mdHighlightToggle.checked;
-        const enableWordWrap = els.editorWordWrapToggle?.checked || false;
-        initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, newExt, codeHighlightTheme, enableWordWrap);
+		cmEditor = null;
+		window.cmEditor = null;
+		const useSyntaxHighlight = els.mdHighlightToggle.checked;
+		const enableWordWrap = els.editorWordWrapToggle?.checked || false;
+		initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, newExt, codeHighlightTheme, enableWordWrap);
     }
 }
 
@@ -3723,6 +3735,8 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
     if (els.editorTypeToggle)
         els.editorTypeToggle.style.display = isReadOnly ? 'none' : '';
+    if (els.editorActionsBtn)
+        els.editorActionsBtn.style.display = isReadOnly ? 'none' : '';
     els.editorEditBtn.style.display = (isReadOnly && !hideEditBtn) ? '' : 'none';
     els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
     els.editorFileExt.classList.toggle('file-ext-readonly', !!isReadOnly);
@@ -7836,6 +7850,7 @@ async function init() {
     if (els.todoFabPanel) els.todoFabPanel.classList.add('fab-hidden');
     initEventListeners();
     initLockScreenEvents();
+    initEditorActionsMenu();
     initFontSettings();
     buildThemeDropdown();
     initThemeSettings();
@@ -8459,9 +8474,10 @@ function applyCodeHighlightTheme(themeName) {
         const content = cmEditor.state.doc.toString();
         const isReadOnly = !(els.notePlaceholder && els.notePlaceholder.textContent === '');
         cmEditor.destroy();
-        cmEditor = null;
-        // 从设置中获取当前的 useSyntaxHighlight
-        const useSyntaxHighlight = els.mdHighlightToggle.checked;
+		cmEditor = null;
+		window.cmEditor = null;
+		// 从设置中获取当前的 useSyntaxHighlight
+		const useSyntaxHighlight = els.mdHighlightToggle.checked;
         const enableWordWrap = els.editorWordWrapToggle?.checked || false;
         initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, els.editorFileExt.textContent, themeName, enableWordWrap);
     }

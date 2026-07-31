@@ -57,6 +57,7 @@ jot/                                    # 项目根目录
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
+│   │   │   ├── editor-actions.js      # 编辑器操作菜单模块（配置驱动操作注册表 EDITOR_ACTIONS + 菜单渲染/交互/执行引擎，main.js import 引入）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回（含笔记本选择菜单）+ 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
@@ -146,6 +147,7 @@ jot/                                    # 项目根目录
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
+| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（格式化/编码解码/AI 分组规划），当前含「格式化」分组 JSON 格式化/压缩，选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | JSON 格式化/压缩结果 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
 | **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / Ctrl+P 启动器菜单 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
@@ -532,6 +534,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **预设管理增删动画**（两阶段插入动画：先 max-height 展开空间再滑入内容；删除动画 CSS 覆盖 Bug 修复：preset-row-insert 类定义在后导致 preset-delete-out 动画被覆盖，animationend 永远不触发）
 - [x] **预设弹窗遮罩点击穿透修复**（pointer-events: none 防止淡出期间拦截删除按钮点击；确认弹窗 z-index 从 1000 提升至 100000 避免被遮罩挡住）
 - [x] **预设名称唯一性校验**（savePresetModal 提交前检查名称是否已存在，编辑时排除自身）
+- [x] **编辑器操作菜单**（顶栏「操作」按钮 + 配置驱动下拉菜单，格式化分组 JSON 格式化/压缩，选中或全文 + 撤销）
 
 ---
 
@@ -589,18 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：批量删除按钮主题配色统一 + 暖笺 accent-light 对比度修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两个 UI 修复：① 批量删除按钮日常态改用 `var(--accent-lighter)`/`var(--accent-dark)` 匹配各主题 accent 色系，hover 态统一 `#DC2626` 大红，同时修复 catppuccin-latte（暖咖）/gruvbox-light（旧纸）/dracula（德古拉）三个主题缺失 `--danger` 变量导致 hover 态不可见的问题；② 修复 ysgrifennwr（暖笺）主题 `--accent-light: #FAF0E0` 与 `--card-bg: #F8F0DB` 对比度过低，导致启动器图标底框不可见的问题，调深为 `#F4DCD4`。 |
-| **批量删除按钮样式重构** | [main-content.css](frontend/src/css/components/main-content.css)：`.batch-btn.btn-danger` 日常态从 `var(--danger-bg)`/`var(--danger)` 改为 `var(--accent-lighter)`/`var(--accent-dark)`，hover 态从 `var(--danger)` 改为统一 `#DC2626`。[variables.css](frontend/src/css/variables.css)：catppuccin-latte/gruvbox-light/dracula 三个主题各新增 `--danger: <对应--error>` 定义。 |
-| **暖笺图标底框修复** | [variables.css](frontend/src/css/variables.css)：ysgrifennwr 主题 `--accent-light` 从 `#FAF0E0` 调深为 `#F4DCD4`（温暖浅玫瑰色），与 `--card-bg: #F8F0DB` 形成清晰对比，启动器 (Ctrl+P) 中图标容器 `.launcher-item-icon` 背景不再"消失"。 |
-| **涉及文件** | [frontend/src/css/variables.css](frontend/src/css/variables.css)（4 个主题变量新增/修改）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（批量删除按钮样式重构） |
-
----
-
-## 记忆点 2：召回卡片菜单入场动画修复（子项 stagger 时序）
+## 记忆点 1：召回卡片菜单入场动画修复（子项 stagger 时序）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：System Prompt 增强——思考框架 + 来源标注
+## 记忆点 2：System Prompt 增强——思考框架 + 来源标注
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 3：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -635,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 4：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 5：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 6：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 滑动窗口消息截断
+## 记忆点 7：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,7 +680,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：搜索词精炼扩展至卡片召回
+## 记忆点 8：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -701,7 +693,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 9：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -710,6 +702,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **收益** | 消除 400 行重复代码；未来新增上下文注入/统计步骤只需修改 `CallAIStream` 一处，消除遗漏风险。例如思维链 token 统计修正（[app.go#L2050-L2057](app.go#L2050-L2057)）只需改 `CallAIStream` 的 `OnDone` 回调，Regenerate 路径自动受益。 |
 | **影响** | Regenerate 场景的日志不再带 `（再生）` 后缀（通过 `streamGen` 和 calling context 已能区分）；多一次 `truncateAIMessages` DB 查询（开销可忽略）。 |
 | **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 函数体从 426 行缩至 19 行；`CallAIStream.OnDone` 中新增思维链 token 统计） |
+
+---
+
+## 记忆点 10：编辑器操作菜单 + Wails 前端资源构建流程教训
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增编辑器顶栏「操作」按钮 + 配置驱动下拉菜单（[editor-actions.js](frontend/src/js/editor-actions.js) 定义操作注册表 `EDITOR_ACTIONS` 并通过 `window.initEditorActionsMenu` 全局注册，[main.js](frontend/src/main.js) 顶部 `import './js/editor-actions.js'`）。当前含「格式化」分组（JSON 格式化/JSON 压缩），支持选中文本或全文处理、CM6 `dispatch` 写回（Ctrl+Z 可撤销）、非法 JSON 用 `nm.show()` 提示、查看模式按钮隐藏、预览模式自动切回编辑模式。操作注册表为数组配置（group/label/handler），新增操作只需追加条目，空分组不渲染。菜单交互参照 `themeDropdown` 模式（点击切 `.open` + 外部点击关闭 + 子菜单 hover 切换）。 |
+| **菜单锚定关键方案** | 编辑器下拉菜单必须锚定**按钮本身**，不能锚定整个操作栏容器 `.editor-header-actions`（该 flex 容器含目录/M-T/编辑/查看/全屏/关闭等多个按钮、宽约 248px，`justify-content: flex-end` 右对齐）。正确做法：按钮+菜单外包 `<div class="editor-actions-wrap">`（`position: relative; display: inline-flex`，宽度=按钮宽度），根菜单 `right: calc(100% + 4px)` 出现在按钮左侧、子菜单 `left: calc(100% + 4px)` 向右弹出，全部落在 560px 编辑器面板内。定位属性（`left/right/top/transform-origin`）加 `!important` 抵御 `.dropdown-menu` 基类（[topbar.css](frontend/src/css/components/topbar.css) 中 `left: 8px`/`transform-origin: top right`）。**教训**：此前多轮把菜单锚定在整个操作栏容器上并设 `left: 0`，导致根菜单主体全部位于按钮右侧、子菜单继续向右溢出面板被裁剪，表现为"菜单太靠右/子菜单弹不出来"。 |
+| **Wails 构建流程教训** | **前端改动后只 `npm run build` 不生效**——生产模式经 `go:embed all:frontend/dist`（[main.go](main.go)）在 **`wails build` 编译期**嵌入 dist，必须重新 `wails build`（`rnx --run run` 或 `rnx --run build`）才能生效，直接运行旧 exe 加载的仍是旧界面。排查手段：对比 `build/bin/jot.exe` 与 `frontend/dist` 下资源的修改时间，exe 必须晚于 dist 才包含最新前端。`Rnx.toml` 的 `frontend` 任务有 `if [ ! -d "dist" ]` 守卫（dist 存在时不自动重建）。另已为 [main.go](main.go) 的 `assetserver.Options` 添加 `Middleware`，给 `/` 与 `/index.html` 设置 `Cache-Control: no-cache, no-store, must-revalidate`，根治 WebView2 缓存旧入口页引用旧哈希资源。`frontend/vite.config.js` 固定 dev 端口 5174。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（操作按钮 + `.editor-actions-wrap` 包装器 + `#editorActionsMenu`）、[frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表 + 菜单渲染/交互/执行）、[frontend/src/main.js](frontend/src/main.js)（import 模块、`els` 注册、`openEditor()` 只读隐藏、`window.cmEditor` 全局暴露且 5 处 CM6 重建点同步置空）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.editor-actions-wrap` + 菜单/子菜单定位，`min-width: 130px`）、[main.go](main.go)（AssetServer Middleware no-cache） |
 
 ---
 

@@ -67,6 +67,15 @@ func main() {
 		BackgroundColour: &options.RGBA{R: r, G: g, B: b, A: 255},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// 入口页禁用缓存，避免 WebView2 缓存旧资源引用导致前端修改不生效
+					if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+						w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+					}
+					next.ServeHTTP(w, r)
+				})
+			},
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasPrefix(r.URL.Path, "/images/") {
 					http.StripPrefix("/images/", http.FileServer(http.Dir(imageDir))).ServeHTTP(w, r)
