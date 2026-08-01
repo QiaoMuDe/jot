@@ -56,7 +56,7 @@ jot/                                    # 项目根目录
 │   ├── src/
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
-│   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
+│   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射 + 围栏代码块嵌套解析 mdCodeLanguages + 行内代码标记插件 markdownInlineCodePlugin）
 │   │   │   ├── editor-actions/        # 编辑器操作菜单分组模块目录
 │   │   │   │   ├── format.js          # 格式化操作项（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩 + SQL 辅助函数 compactSQL/convertSQLCase）
 │   │   │   │   ├── text-transform.js  # 文本转换操作项（7 项）
@@ -600,20 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：联网搜索指示器重设计——动画+下拉关键词菜单+修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 重新设计 AI 助手联网搜索时的动画指示器。原 `createSimpleSearchIndicator` 仅显示旋转地球+纯文字，不可点击。新 `createSearchIndicator` 使用卡片式设计（微透明主题色背景圆角条），refining 阶段显示"正在优化搜索词…"（不可点击），searching 阶段显示"联网搜索中"并可点击展开下拉菜单查看精炼后的关键词标签（有交错弹入动画 `@keyframes ai-tag-in`，每 40ms 一个）。无关键词时显示"暂无精炼关键词"。同时修复 3 个潜在问题：① `document click` 外部关闭监听器添加 `el.isConnected` 自清理防止内存泄漏；② EventsOff 列表补充 `ai:refined-keywords` 防止监听器累积；③ 删除死代码 `totalSearchSources`。 |
-| **新指示器函数** | [ai-chat.js](frontend/src/js/ai-chat.js#L2742-L2829)：`createSearchIndicator(status, keywords)` — 构建 `.ai-search-indicator` 容器 → `.ai-search-bar` 点击条（地球 SVG + 文字 + 下拉箭头）→ `.ai-search-dropdown` 绝对定位下拉菜单（关键词标签或空状态）。refining 阶段无下拉不可点击，searching 阶段可点击切换 `data-open` 属性控制下拉显隐。 |
-| **CSS 全新样式** | [ai-chat.css](frontend/src/css/components/ai-chat.css#L295-L454)：`.ai-search-indicator` 入场动画（`ai-search-indicator-in`，0.25s spring）、`.ai-search-bar` 圆角背景微透明主题色 + hover 加深、`.ai-search-arrow` 弹簧曲线 180° 旋转、`.ai-search-dropdown` 卡片阴影 + `scale(0.95)→scale(1)` 展开/收起过渡、`.ai-search-keyword-tag` 交错弹入 `@keyframes ai-tag-in`、`.ai-search-empty-keywords` 空状态。 |
-| **消息间距调整** | [ai-chat.css](frontend/src/css/components/ai-chat.css#L28)：`.ai-chat-messages-inner` 的 `padding-bottom` 从 `72px` 增至 `120px`，增大最后一条消息与底部输入框的间距。 |
-| **样式精简** | 删除旧孤儿 CSS（`.ai-search-indicator-bar`、`.ai-search-indicator-arrow`、`@keyframes ai-dropdown-in`、`.ai-search-dropdown-loading` 等约 109 行）；`bar.innerHTML` 中移除关键词数量徽标显示，仅保留"联网搜索中"文字，用户点击下拉菜单查看具体关键词。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增 createSearchIndicator、替换 startStreaming 调用点、EventsOff 补充 `ai:refined-keywords`、closeHandler 自清理、删除 totalSearchSources）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（替换旧搜索指示器样式、调整 messages-inner padding-bottom） |
-
----
-
-## 记忆点 2：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 1：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 2：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 3：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 滑动窗口消息截断
+## 记忆点 4：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：搜索词精炼扩展至卡片召回
+## 记忆点 5：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 6：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -691,7 +678,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 7：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -702,7 +689,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 8：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -719,7 +706,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 9：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,6 +715,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **MD 语法操作项** | [md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)：22 项覆盖 7 个子分组——行内样式（粗体/斜体/删除线/行内代码）、标题（H1~H6）、列表（无序/有序/任务）、块元素（代码块/引用/分割线/折叠详情）、链接/媒体（链接/图片）、表格、数学公式（行内/块级）。handler 接收选中文本参数，空值返回样板文本。 |
 | **模块化拆分要点** | [format.js](frontend/src/js/editor-actions/format.js) 内 formatters 引用路径从 `./formatters/...` 调整为 `../formatters/...`（因文件移入 editor-actions/ 子目录）。`compactSQL`/`convertSQLCase` 原样迁移至 format.js，无外部引用，迁移安全。主文件渲染/执行引擎零改动，菜单分组渲染顺序不变（格式化 → 文本转换 → 文本清理 → 编码解码 → MD 语法）。 |
 | **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（聚合导入 + 执行引擎 actionType 支持）、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)（新增）、[frontend/src/js/editor-actions/format.js](frontend/src/js/editor-actions/format.js)（新增）、[frontend/src/js/editor-actions/text-transform.js](frontend/src/js/editor-actions/text-transform.js)（新增）、[frontend/src/js/editor-actions/text-clean.js](frontend/src/js/editor-actions/text-clean.js)（新增）、[frontend/src/js/editor-actions/encode-decode.js](frontend/src/js/editor-actions/encode-decode.js)（新增） |
+
+---
+
+## 记忆点 10：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 解决 CM6 代码块选中层不可见问题：方向从"加背景再清除"转为"压根不加背景"。核心改动：① 移除所有 14 处 monospace 规则的 `background: var(--hover-bg)`，代码块（命中语言/未命中语言）均无底色，命中语言由嵌套解析（`markdown({ codeLanguages })`）产生语法高亮，未命中语言保持纯文本；② 删除 `markdownFallbackCodePlugin`（约 70 行 ViewPlugin 类），该插件用 `Decoration.line` 做行标记，导致 CM6 内部 `text.skip()` 跳过整行文本 → 代码块内容消失；③ 新增 `markdownInlineCodePlugin`（`Decoration.mark` 模式），给 InlineCode 节点添加 `.cm-inline-code` 类，配合 CSS 用 `color: var(--accent) !important; font-weight: 700 !important;` 替代背景色，避免影响选中高亮。 |
+| **根因分析** | `Decoration.line` 必须使用空 range（`builder.add(line.from, line.from, deco)`，与 `highlightActiveLine` 用法一致）。若 range 覆盖整行（`line.from` 到 `line.to`），CM6 渲染器在 `emit()` 中调用 `this.text.skip(to - from)` 将该段文本跳过，导致整行内容从视图中消失且不报错。 |
+| **方向决策** | 用户指出背景块影响选中高亮，提议改用字体颜色/粗细区分。行内代码与未命中语言代码块在语法树中命中同一个 `tags.monospace`，无法仅靠 HighlightStyle 区分两者，因此保留 `markdownInlineCodePlugin` 做标记、CSS 控制样式。 |
+| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（删除 `markdownFallbackCodePlugin` + `NodeProp`/`ViewPlugin`/`Decoration`/`RangeSetBuilder`/`syntaxTree` 等导入；新增 `markdownInlineCodePlugin` + 对应导入恢复；移除 14 处 monospace 的 `background`；`getHighlightExtension` .md 分支替换插件引用）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（删除 `.cm-fallback-code` 规则；新增 `span.cm-inline-code` 规则用 `color: var(--accent) + font-weight: 700` 替代背景色）；[project_memory.md](project_memory.md)（更新过时约定 + 新增 `Decoration.line` 空 range 教训） |
 
 ---
 

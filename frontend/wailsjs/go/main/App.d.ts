@@ -4,6 +4,8 @@ import {services} from '../models';
 import {main} from '../models';
 import {models} from '../models';
 
+export function AITextOperation(arg1:string,arg2:string):Promise<string>;
+
 export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
 export function BackupToDir():Promise<string>;

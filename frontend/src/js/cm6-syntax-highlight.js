@@ -18,8 +18,9 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { python } from '@codemirror/lang-python';
-import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
-import { EditorView } from '@codemirror/view';
+import { HighlightStyle, StreamLanguage, syntaxHighlighting, syntaxTree } from '@codemirror/language';
+import { RangeSetBuilder } from '@codemirror/state';
+import { Decoration, EditorView, ViewPlugin } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 
 // @codemirror/legacy-modes 兜底语言
@@ -87,6 +88,7 @@ export const jotTheme = EditorView.theme({
         borderLeftWidth: '2px',
     },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-selectionMatch': {
+        // 选中背景由 CM6 原生选中层渲染，不再使用浏览器 ::selection 替代
         backgroundColor: 'var(--selection-bg, var(--accent-light)) !important',
     },
     '.cm-activeLine': {
@@ -141,7 +143,7 @@ const mdHighlightStyle = HighlightStyle.define([
     { tag: tags.link, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer' },
     { tag: tags.url, color: 'var(--text-muted)', fontStyle: 'italic' },
     { tag: tags.quote, color: 'var(--text-secondary)', fontStyle: 'italic' },
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
     { tag: tags.comment, color: 'var(--text-muted)', fontStyle: 'italic' },
     { tag: tags.list, color: 'var(--accent)', fontWeight: '500' },
     { tag: tags.contentSeparator, color: 'var(--text-muted)' },
@@ -231,7 +233,7 @@ const codeHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#E6DB74' },
 
     // ── 行内代码 ──────────────────────────────────────────────
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ────────────────────────────────────────────────
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -307,7 +309,7 @@ const vscodeDarkPlusHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#CE9178' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -383,7 +385,7 @@ const vscodeLightPlusHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#A31515' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -459,7 +461,7 @@ const oneDarkProHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#98C379' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -535,7 +537,7 @@ const githubDarkHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#79C0FF' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -611,7 +613,7 @@ const catppuccinMochaHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#A6E3A1' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -687,7 +689,7 @@ const gruvboxDarkHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#B8BB26' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -763,7 +765,7 @@ const draculaHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#F1FA8C' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -839,7 +841,7 @@ const ayuMirageHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#BAE67E' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -915,7 +917,7 @@ const materialPalenightHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#C3E88D' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -991,7 +993,7 @@ const githubLightHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#032F62' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -1068,7 +1070,7 @@ const oneLightHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#50A14F' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -1145,7 +1147,7 @@ const catppuccinLatteHighlightStyle = HighlightStyle.define([
     { tag: tags.character, color: '#40A02B' },
 
     // ── 行内代码 ──
-    { tag: tags.monospace, background: 'var(--hover-bg)', borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
+    { tag: tags.monospace, borderRadius: '3px', padding: '1px 4px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '0.85em' },
 
     // ── 删除线 ──
     { tag: tags.strikethrough, textDecoration: 'line-through' },
@@ -1163,7 +1165,7 @@ const catppuccinLatteHighlightStyle = HighlightStyle.define([
  */
 const langMap = {
     // —— 原生解析器（@codemirror/lang-*） ——
-    '.md':      () => markdown(),
+    '.md':      () => markdown({ codeLanguages: mdCodeLanguages }),
     '.js':      () => javascript(),
     '.mjs':     () => javascript(),
     '.cjs':     () => javascript(),
@@ -1320,6 +1322,142 @@ const langMap = {
 };
 
 /* ======================================================================== */
+/* Markdown 围栏代码块嵌套解析语言表                                        */
+/* ======================================================================== */
+
+/**
+ * 构造 markdown 围栏代码块语言条目
+ *
+ * matchLanguageName 只比对 alias 字段，因此构造时自动把 name 并入 alias。
+ *
+ * @param {string} name - 语言标识符（如 'javascript'）
+ * @param {string[]} alias - 常见别名（如 ['js', 'mjs', 'cjs']）
+ * @param {Parser} parser - 该语言的 lezer 解析器
+ * @returns {{name: string, alias: string[], parser: Parser}}
+ */
+const mdCodeLang = (name, alias, parser) => ({ name, alias: [name, ...alias], parser });
+
+/**
+ * Markdown 围栏代码块 → 语言解析器映射表
+ *
+ * 配合 markdown({ codeLanguages }) 使用：当代码块标识符（如 ```js）命中时，
+ * 内容会被对应语言解析器嵌套解析（parseMixed），产生 keyword/string/number
+ * 等真正的语法节点，从而渲染出与独立语言文件一致的语法高亮；未命中语言的
+ * 代码块保持纯文本（monospace 规则无底色，仅保留等宽字体）。
+ */
+const mdCodeLanguages = [
+    // —— 原生 Lezer 解析器（@codemirror/lang-*） ——
+    mdCodeLang('javascript', ['js', 'mjs', 'cjs'], javascript().language.parser),
+    mdCodeLang('jsx', [], javascript({ jsx: true }).language.parser),
+    mdCodeLang('typescript', ['ts', 'tsx'], javascript({ typescript: true, jsx: true }).language.parser),
+    mdCodeLang('css', ['scss', 'less'], css().language.parser),
+    mdCodeLang('html', ['htm'], html().language.parser),
+    mdCodeLang('json', ['jsonc'], json().language.parser),
+    mdCodeLang('python', ['py'], python().language.parser),
+
+    // —— StreamLanguage 兜底解析器（@codemirror/legacy-modes） ——
+    mdCodeLang('sql', [], StreamLanguage.define(standardSQL).parser),
+    mdCodeLang('yaml', ['yml'], StreamLanguage.define(yaml).parser),
+    mdCodeLang('toml', [], StreamLanguage.define(toml).parser),
+    mdCodeLang('go', [], StreamLanguage.define(go).parser),
+    mdCodeLang('rust', ['rs'], StreamLanguage.define(rust).parser),
+    mdCodeLang('java', [], StreamLanguage.define(java).parser),
+    mdCodeLang('c', ['cpp', 'cxx', 'h', 'hpp', 'c++', 'c#'], StreamLanguage.define(cpp).parser),
+    mdCodeLang('csharp', ['cs'], StreamLanguage.define(csharp).parser),
+    mdCodeLang('shell', ['sh', 'bash', 'zsh', 'console'], StreamLanguage.define(shell).parser),
+    mdCodeLang('powershell', ['ps1'], StreamLanguage.define(powerShell).parser),
+    mdCodeLang('ruby', ['rb'], StreamLanguage.define(ruby).parser),
+    mdCodeLang('kotlin', ['kt', 'kts'], StreamLanguage.define(kotlin).parser),
+    mdCodeLang('swift', [], StreamLanguage.define(swift).parser),
+    mdCodeLang('lua', [], StreamLanguage.define(lua).parser),
+    mdCodeLang('perl', ['pl', 'pm'], StreamLanguage.define(perl).parser),
+    mdCodeLang('dart', [], StreamLanguage.define(dart).parser),
+    mdCodeLang('xml', ['svg', 'xhtml'], StreamLanguage.define(xml).parser),
+    mdCodeLang('diff', ['patch'], StreamLanguage.define(diff).parser),
+    mdCodeLang('dockerfile', ['docker'], StreamLanguage.define(dockerFile).parser),
+    mdCodeLang('haskell', ['hs'], StreamLanguage.define(haskell).parser),
+    mdCodeLang('scala', [], StreamLanguage.define(scala).parser),
+    mdCodeLang('r', [], StreamLanguage.define(r).parser),
+    mdCodeLang('groovy', ['gvy'], StreamLanguage.define(groovy).parser),
+    mdCodeLang('clojure', ['clj', 'cljs', 'cljc'], StreamLanguage.define(clojure).parser),
+    mdCodeLang('erlang', ['erl', 'hrl'], StreamLanguage.define(erlang).parser),
+];
+
+/**
+ * MD 编辑器内代码块等宽字体专用样式
+ *
+ * 代码块被嵌套解析后内容不再命中 monospace tag，原 monospace 规则里的
+ * fontFamily 随之失效；这里仅补充 fontFamily，保证代码块内文字保持等宽，
+ * 颜色等其他属性仍由 md 样式与代码主题共同决定。
+ */
+const mdCodeFontStyle = HighlightStyle.define([
+    {
+        tag: [
+            tags.keyword, tags.typeName, tags.className, tags.variableName,
+            tags.definition(tags.variableName), tags.propertyName, tags.number,
+            tags.string, tags.regexp, tags.atom, tags.comment, tags.operator,
+            tags.punctuation, tags.bracket, tags.tagName, tags.attributeName,
+            tags.attributeValue, tags.meta, tags.escape, tags.character,
+            tags.labelName, tags.namespace, tags.processingInstruction,
+        ],
+        fontFamily: 'Consolas, Monaco, monospace',
+    },
+]);
+
+/**
+ * 行内代码浅色背景标记
+ *
+ * 行内代码（InlineCode）与未命中语言的围栏代码块在语法树中都命中
+ * tags.monospace，无法仅靠高亮样式区分两者。本插件给 InlineCode 节点
+ * （范围含两端反引号）添加 .cm-inline-code 类，配合 editor.css 恢复其
+ * 浅色背景；围栏代码块不受影响，保持纯文本无底色。
+ */
+const inlineCodeMark = Decoration.mark({ class: 'cm-inline-code' });
+
+const markdownInlineCodePlugin = ViewPlugin.fromClass(class {
+    /**
+     * 构建当前视口内所有行内代码节点的标记集合
+     * @param {EditorView} view - CM6 编辑器实例
+     * @returns {DecorationSet}
+     */
+    buildDecorations(view) {
+        const { state } = view;
+        const builder = new RangeSetBuilder();
+        for (const { from, to } of view.visibleRanges) {
+            syntaxTree(state).iterate({
+                from,
+                to,
+                enter(node) {
+                    if (node.name !== 'InlineCode') return;
+                    builder.add(node.from, node.to, inlineCodeMark);
+                },
+            });
+        }
+        return builder.finish();
+    }
+
+    /**
+     * 插件构造器
+     * @param {EditorView} view - CM6 编辑器实例
+     */
+    constructor(view) {
+        this.decorations = this.buildDecorations(view);
+    }
+
+    /**
+     * 文档变化或视口滚动时重建标记集合
+     * @param {import('@codemirror/view').ViewUpdate} update - 更新信息
+     */
+    update(update) {
+        if (update.docChanged || update.viewportChanged) {
+            this.decorations = this.buildDecorations(update.view);
+        }
+    }
+}, {
+    decorations: v => v.decorations,
+});
+
+/* ======================================================================== */
 /* 代码高亮主题系统                                                        */
 /* ======================================================================== */
 
@@ -1403,12 +1541,21 @@ export function getHighlightExtension(fileExt, themeName = 'monokai-dimmed') {
     // 选择代码高亮主题，未知名称回退到默认
     const highlightStyle = codeHighlightThemes[themeName] || codeHighlightThemes['monokai-dimmed'];
 
-    // .md 使用 MD 专属配色，其他使用代码主题配色
+    // .md 使用 MD 专属配色渲染正文；围栏代码块通过 codeLanguages 嵌套解析后，
+    // 语法节点由跟随 themeName 的代码主题样式渲染（置于 md 样式之后，共享 tag
+    // 冲突时代码配色优先），并叠加代码块等宽字体专用样式与行内代码背景标记
     if (fileExt === '.md') {
-        return [langFn(), syntaxHighlighting(mdHighlightStyle)];
+        return [
+            langFn(),
+            syntaxHighlighting(mdHighlightStyle),
+            syntaxHighlighting(highlightStyle),
+            syntaxHighlighting(mdCodeFontStyle),
+            markdownInlineCodePlugin,
+        ];
     }
 
     return [langFn(), syntaxHighlighting(highlightStyle)];
 }
 
-export { codeHighlightStyle, codeHighlightThemeNames, codeHighlightThemeLabels };
+export { codeHighlightStyle, codeHighlightThemeLabels, codeHighlightThemeNames };
+

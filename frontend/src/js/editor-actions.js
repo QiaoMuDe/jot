@@ -5,6 +5,7 @@ import FORMAT_ACTIONS from './editor-actions/format.js';
 import TEXT_TRANSFORM_ACTIONS from './editor-actions/text-transform.js';
 import TEXT_CLEAN_ACTIONS from './editor-actions/text-clean.js';
 import ENCODE_DECODE_ACTIONS from './editor-actions/encode-decode.js';
+import AI_WRITING_ACTIONS from './editor-actions/ai-writing.js';
 
 /**
  * 操作注册表，配置驱动，分组管理。
@@ -34,6 +35,9 @@ const EDITOR_ACTIONS = [
 
     // MD 语法
     ...MD_SYNTAX_ACTIONS,
+
+    // AI 写作
+    ...AI_WRITING_ACTIONS,
 ];
 
 /**
@@ -108,10 +112,81 @@ function initEditorActionsMenu() {
     }
     menu.innerHTML = html;
 
+    // AI 操作取消标志，防止取消后 catch 块弹出错误提示
+    let _aiOperationCancelled = false;
+    // 记录 AI 处理前编辑器的只读状态，处理完成后恢复
+    let _aiEditorWasReadOnly = false;
+
+    /**
+     * 锁定/解锁编辑器输入（CM6 编辑器 + 标题输入框）
+     * 只禁止用户输入，不影响程序化的 dispatch 写回
+     * @param {boolean} lock - true=锁定输入
+     */
+    function setAIEditorLock(lock) {
+        // CM6 编辑器（readOnly 仅阻止用户编辑，dispatch 写回不受影响）
+        if (typeof window.setCMReadOnly === 'function') {
+            window.setCMReadOnly(lock);
+        }
+        // 标题输入框
+        const titleInput = document.getElementById('editorNoteTitle');
+        if (titleInput) {
+            titleInput.readOnly = lock;
+            titleInput.classList.toggle('editor-input-readonly', lock);
+        }
+        // 遮罩视觉反馈：覆盖编辑器内容区，提示当前处于锁定状态
+        const body = document.querySelector('.editor-body');
+        let mask = document.getElementById('aiStatusMask');
+        if (lock) {
+            if (!mask && body) {
+                mask = document.createElement('div');
+                mask.id = 'aiStatusMask';
+                body.appendChild(mask);
+            }
+        } else if (mask) {
+            mask.remove();
+        }
+    }
+
+    /**
+     * 创建 AI 处理指示器
+     * 在编辑器头部行的右侧显示一个脉冲动画圆球，点击可取消
+     * @returns {HTMLElement} 圆球元素
+     */
+    function createAIStatusIndicator() {
+        const body = document.querySelector('.editor-body');
+        if (!body) return null;
+
+        // 如果已存在则复用
+        let ball = document.getElementById('aiStatusBall');
+        if (ball) return ball;
+
+        ball = document.createElement('div');
+        ball.id = 'aiStatusBall';
+        ball.className = 'ai-status-ball';
+        ball.title = 'AI 处理中，点击取消';
+        ball.addEventListener('click', () => {
+            _aiOperationCancelled = true;
+            if (window.go && window.go.main && window.go.main.App) {
+                window.go.main.App.CancelAIStream();
+            }
+            removeAIStatusIndicator();
+        });
+        body.appendChild(ball);
+        return ball;
+    }
+
+    /**
+     * 移除 AI 处理指示器
+     */
+    function removeAIStatusIndicator() {
+        const ball = document.getElementById('aiStatusBall');
+        if (ball) ball.remove();
+    }
+
     /**
      * 执行操作：读取选中文本或全文 → 交给 handler → 写回
      */
-    function executeAction(handler, errorLabel, actionType = 'transform') {
+    async function executeAction(handler, errorLabel, actionType = 'transform') {
         const cmEditor = window.cmEditor;
         if (!cmEditor) return;
 
@@ -141,12 +216,40 @@ function initEditorActionsMenu() {
 
         const sel = cmEditor.state.selection.main;
         const hasSelection = !sel.empty;
+
+        // AI 操作必须有选中文本，否则提示并返回
+        if (actionType === 'ai' && !hasSelection) {
+            const nm = window.nm;
+            if (nm && nm.show) {
+                nm.show('请先选择要处理的文本', 'warning');
+            }
+            return;
+        }
+
         const from = hasSelection ? sel.from : (actionType === 'insert' ? sel.from : 0);
         const to = hasSelection ? sel.to : (actionType === 'insert' ? sel.from : cmEditor.state.doc.length);
         const sourceText = cmEditor.state.sliceDoc(from, to);
 
+        const btn = document.getElementById('editorActionsBtn');
+
         try {
-            const result = handler(sourceText);
+            // AI 操作：显示指示器 + 禁用按钮 + 锁定输入
+            if (actionType === 'ai') {
+                createAIStatusIndicator();
+                if (btn) btn.disabled = true;
+                _aiEditorWasReadOnly = cmEditor.state.readOnly;
+                setAIEditorLock(true);
+            }
+
+            const result = await handler(sourceText);
+
+            // AI 操作：移除指示器 + 恢复按钮 + 解锁输入
+            if (actionType === 'ai') {
+                removeAIStatusIndicator();
+                if (btn) btn.disabled = false;
+                setAIEditorLock(_aiEditorWasReadOnly);
+            }
+
             cmEditor.dispatch({
                 changes: { from, to, insert: result },
                 // 保持选中范围（若无选中则光标移至末尾）
@@ -156,10 +259,25 @@ function initEditorActionsMenu() {
             });
             cmEditor.focus();
         } catch (e) {
-            // 统一错误提示：使用 errorLabel 保证格式一致
             const nm = window.nm;
-            if (nm && nm.show) {
-                nm.show(`不是合法的 ${errorLabel || '内容'}`, 'warning');
+            // AI 操作：无论成功失败都移除指示器 + 恢复按钮 + 解锁输入
+            if (actionType === 'ai') {
+                removeAIStatusIndicator();
+                if (btn) btn.disabled = false;
+                setAIEditorLock(_aiEditorWasReadOnly);
+                // 用户主动取消时不提示
+                if (_aiOperationCancelled) {
+                    _aiOperationCancelled = false;
+                    return;
+                }
+                const errMsg = e?.message || String(e) || '未知错误';
+                if (nm && nm.show) {
+                    nm.show(`AI 处理失败: ${errMsg}`, 'error');
+                }
+            } else {
+                if (nm && nm.show) {
+                    nm.show(`不是合法的 ${errorLabel || '内容'}`, 'warning');
+                }
             }
         }
     }

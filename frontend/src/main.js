@@ -201,6 +201,8 @@ function setCMReadOnly(readOnly) {
         });
     }
 }
+// 暴露给其他模块（editor-actions.js 的 AI 写作锁定输入使用）
+window.setCMReadOnly = setCMReadOnly;
 
 /**
  * 内联切换编辑器查看/编辑模式，不重建 CM6 实例，避免闪烁
@@ -4652,6 +4654,8 @@ function switchEditorMode(mode) {
         cmEditor.focus();
     }
 }
+// 暴露给其他模块（editor-actions.js 操作菜单的预览模式切换使用）
+window.switchEditorMode = switchEditorMode;
 
 /**
  * 编辑器输入事件处理：更新字数 + 预览渲染

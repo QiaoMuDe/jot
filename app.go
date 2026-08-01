@@ -2231,6 +2231,58 @@ func (a *App) CancelAIStream() {
 	}
 }
 
+// AITextOperation 通过 AI 对选中文本进行写作操作（润色/续写/扩写/缩写/校对/改写/翻译等）
+// 返回处理后的文本，前端直接替换到编辑器
+func (a *App) AITextOperation(text string, operation string) (string, error) {
+	a.LogSvc.Logger.Debugw("AITextOperation", fastlog.String("operation", operation), fastlog.Int("text_len", len(text)))
+
+	// 1. 检查 AI 配置
+	cfg := a.aiService.GetConfig()
+	if cfg.BaseURL == "" || cfg.APIKey == "" {
+		return "", fmt.Errorf("请先配置 AI 服务")
+	}
+
+	// 2. 根据 operation 构造 system prompt
+	var systemPrompt string
+	switch operation {
+	case "polish":
+		systemPrompt = "你是一位专业的写作助手。请润色以下文本，改进其语法、表达和风格，使其更加流畅和专业。只返回润色后的结果，不要添加任何解释或额外内容。"
+	case "continue":
+		systemPrompt = "你是一位专业的写作助手。请根据以下文本的内容和风格，自然地续写下去。只返回续写的内容，不要重复原文。"
+	case "expand":
+		systemPrompt = "你是一位专业的写作助手。请扩写以下文本，增加更多细节、例子和说明，使内容更加丰富完整。只返回扩写后的结果，不要添加任何解释。"
+	case "condense":
+		systemPrompt = "你是一位专业的写作助手。请缩写以下文本，保留所有关键信息和核心观点，删除冗余内容。只返回缩写后的结果，不要添加任何解释。"
+	case "proofread":
+		systemPrompt = "你是一位专业的校对编辑。请校对以下文本，修正所有语法错误、拼写错误和标点符号问题。只返回校对后的结果，不要添加任何解释。"
+	case "rewrite":
+		systemPrompt = "你是一位专业的写作助手。请改写以下文本，保持原意不变，但使用不同的表达方式和句式结构。只返回改写后的结果，不要添加任何解释。"
+	case "translate":
+		systemPrompt = "你是一位专业的翻译。请将以下文本翻译成中文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。"
+	case "translate-en":
+		systemPrompt = "你是一位专业的翻译。请将以下文本翻译成英文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。"
+	default:
+		return "", fmt.Errorf("不支持的操作: %s", operation)
+	}
+
+	// 3. 构造 messages
+	messages := []services.Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: text},
+	}
+
+	// 4. 调用 AI（复用可取消的 context）
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	a.aiStreamCancel = cancel
+	defer func() {
+		cancel()
+		a.aiStreamCancel = nil
+	}()
+
+	// 5. 返回结果
+	return a.aiService.CallAI(ctx, messages)
+}
+
 // GetAISessions 获取 AI 会话列表
 func (a *App) GetAISessions() []services.AISessionSummary {
 	a.LogSvc.Logger.Debugw("GetAISessions")
