@@ -1,5 +1,6 @@
 import hljs from 'highlight.js';
 import { marked } from 'marked';
+import alert from 'marked-alert';
 import mermaid from 'mermaid';
 import { EventsOn, Quit, WindowFullscreen, WindowIsFullscreen, WindowIsMaximised, WindowMinimise, WindowToggleMaximise, WindowUnfullscreen } from '../wailsjs/runtime/runtime.js';
 import './css/index.css';
@@ -43,6 +44,7 @@ marked.setOptions({
     breaks: true,
     gfm: true,
 });
+marked.use(alert());
 
 
 

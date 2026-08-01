@@ -600,20 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：内置 API 预设服务商 + 预设管理动画与交互优化
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 实现两大部分：① 新增 [builtin_profiles.go](internal/database/builtin_profiles.go) 定义 9 个内置 API 预设服务商（DeepSeek/智谱 GLM/Ollama/通义千问/Kimi/腾讯混元/百度千帆/SiliconFlow/Mistral AI），启动时 `InitBuiltinProfiles` 按名称去重增量插入，Key 留空用户自行配置；② 预设管理增删动画与交互修复：两阶段插入动画（先 max-height 展开空间再滑入内容）、删除滑出动画、CSS 类覆盖导致 animationend 不触发的 Bug 修复、遮罩层 pointer-events 点击穿透修复、确认弹窗 z-index 提升至 100000、名称唯一性校验。 |
-| **后端初始化** | [internal/database/builtin_profiles.go](internal/database/builtin_profiles.go)：`InitBuiltinProfiles()` 查询已有名称构建去重 map，过滤后增量插入 9 个预设。 |
-| **动画实现** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：新增 `preset-row-insert` 两阶段动画（30% 前展开空间、30% 后滑入内容）；[main.js](frontend/src/main.js)：`deleteProfile()` 中移除 `preset-row-insert` 类避免动画覆盖。 |
-| **交互修复** | [settings-panel.css](frontend/src/css/components/settings-panel.css)：为 `.preset-modal-overlay` 添加 `pointer-events: none`，`.visible` 时设为 `auto`；[modals.css](frontend/src/css/components/modals.css)：确认弹窗 `z-index` 从 1000 提升至 100000。 |
-| **名称校验** | [main.js](frontend/src/main.js)：`savePresetModal()` 提交前遍历现有预设检查名称是否已存在，编辑时排除自身。 |
-| **涉及文件** | [internal/database/builtin_profiles.go](internal/database/builtin_profiles.go)、[internal/services/profile_service.go](internal/services/profile_service.go)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 1：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 2：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 滑动窗口消息截断
+## 记忆点 3：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：搜索词精炼扩展至卡片召回
+## 记忆点 4：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 5：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 6：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +676,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 7：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -706,7 +693,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 8：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -718,7 +705,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 9：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -726,6 +713,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **根因分析** | `Decoration.line` 必须使用空 range（`builder.add(line.from, line.from, deco)`，与 `highlightActiveLine` 用法一致）。若 range 覆盖整行（`line.from` 到 `line.to`），CM6 渲染器在 `emit()` 中调用 `this.text.skip(to - from)` 将该段文本跳过，导致整行内容从视图中消失且不报错。 |
 | **方向决策** | 用户指出背景块影响选中高亮，提议改用字体颜色/粗细区分。行内代码与未命中语言代码块在语法树中命中同一个 `tags.monospace`，无法仅靠 HighlightStyle 区分两者，因此保留 `markdownInlineCodePlugin` 做标记、CSS 控制样式。 |
 | **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（删除 `markdownFallbackCodePlugin` + `NodeProp`/`ViewPlugin`/`Decoration`/`RangeSetBuilder`/`syntaxTree` 等导入；新增 `markdownInlineCodePlugin` + 对应导入恢复；移除 14 处 monospace 的 `background`；`getHighlightExtension` .md 分支替换插件引用）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（删除 `.cm-fallback-code` 规则；新增 `span.cm-inline-code` 规则用 `color: var(--accent) + font-weight: 700` 替代背景色）；[project_memory.md](project_memory.md)（更新过时约定 + 新增 `Decoration.line` 空 range 教训） |
+
+---
+
+## 记忆点 10：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 五个独立改动：① 预览模式支持 GitHub 风格 Alert 引用块 — 安装 `marked-alert` 包，在 [main.js](frontend/src/main.js) 和 [preview-worker.js](frontend/src/js/preview-worker.js) 中注册扩展，支持 `NOTE/TIP/IMPORTANT/WARNING/CAUTION` 五种类型，预览渲染为带主题语义色边框的卡片。CM6 编辑器不做特殊高亮，以默认引用块样式显示；② MD 语法菜单新增 5 个 Alert 引用块插入操作项 — 在 `md-syntax.js` 的「块元素」子菜单中新增 `NOTE/TIP/IMPORTANT/WARNING/CAUTION` 操作项，无选中时插入样板、有选中时包裹文本；③ 操作按钮查看模式显隐修复 — 在 [editor.css](frontend/src/css/components/editor.css) 新增 `.editor-view-mode #editorActionsBtn` 规则，`!important` 确保查看模式下无论 CM6 编辑器处于纯文本还是预览模式均隐藏按钮；④ 确认弹窗按钮居中修复 — [modals.css](frontend/src/css/components/modals.css) 中 `.confirm-actions` 的 `justify-content` 从 `flex-end` 改为 `center`；⑤ 锁屏密码弹窗取消按钮样式修复 — [index.html](frontend/index.html#L2173) 中 `#pwdModalCancelBtn` 补全 `btn-cancel` 类，消除无边框/无背景色的显示问题。 |
+| **marked-alert 集成** | [package.json](frontend/package.json) 新增 `marked-alert` 依赖；[main.js](frontend/src/main.js) 和 [preview-worker.js](frontend/src/js/preview-worker.js) 均导入 `alert()` 并 `marked.use(alert({ variants: [...] }))`；[editor.css](frontend/src/css/components/editor.css)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[md-reference.css](frontend/src/css/components/md-reference.css) 三处同步新增 `.markdown-alert` 系列样式。 |
+| **Alert 插入操作** | [md-syntax.js](frontend/src/js/editor-actions/md-syntax.js) 在 `块元素` 子菜单「引用」之后新增 5 项 Alert 操作，handler 判断 `text` 有值时每行加 `> ` 前缀包裹，无值时返回 `> [!TYPE]\n> 提示内容` 样板。 |
+| **操作按钮显隐修复** | [editor.css](frontend/src/css/components/editor.css#L287-L290) 新增 `.editor-view-mode #editorActionsBtn { display: none !important }`，利用 `editor-view-mode` 类（进入查看模式时添加）的 `!important` 优先级高于 `switchEditorMode` 的内联 `display` 设置。 |
+| **弹窗修复** | [modals.css](frontend/src/css/components/modals.css#L535) 将 `.confirm-actions` 从 `justify-content: flex-end` 改为 `center` 使按钮居中；[index.html](frontend/index.html#L2173) 将 `#pwdModalCancelBtn` 从 `class="btn btn-sm"` 补全为 `class="btn btn-sm btn-cancel"`。 |
+| **涉及文件** | [frontend/package.json](frontend/package.json)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/src/css/components/md-reference.css](frontend/src/css/components/md-reference.css)、[frontend/index.html](frontend/index.html) |
 
 ---
 

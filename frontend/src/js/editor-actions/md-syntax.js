@@ -220,6 +220,78 @@ const MD_SYNTAX_ACTIONS = [
             return text.split('\n').map(l => `> ${l}`).join('\n');
         }
     },
+
+    // ── Alert 引用块 ──
+    /**
+     * 引用块: NOTE：无选中时插入 > [!NOTE] 模板，有选中时包裹选中内容
+     */
+    {
+        type: 'insert',
+        group: 'MD 语法',
+        subGroup: '块元素',
+        label: 'NOTE',
+        errorLabel: 'MD 语法',
+        handler(text) {
+            if (!text) return '> [!NOTE]\n> 提示信息';
+            return '> [!NOTE]\n> ' + text.split('\n').join('\n> ');
+        }
+    },
+    /**
+     * 引用块: TIP：无选中时插入 > [!TIP] 模板，有选中时包裹选中内容
+     */
+    {
+        type: 'insert',
+        group: 'MD 语法',
+        subGroup: '块元素',
+        label: 'TIP',
+        errorLabel: 'MD 语法',
+        handler(text) {
+            if (!text) return '> [!TIP]\n> 小技巧';
+            return '> [!TIP]\n> ' + text.split('\n').join('\n> ');
+        }
+    },
+    /**
+     * 引用块: IMPORTANT：无选中时插入 > [!IMPORTANT] 模板，有选中时包裹选中内容
+     */
+    {
+        type: 'insert',
+        group: 'MD 语法',
+        subGroup: '块元素',
+        label: 'IMPORTANT',
+        errorLabel: 'MD 语法',
+        handler(text) {
+            if (!text) return '> [!IMPORTANT]\n> 重要提醒';
+            return '> [!IMPORTANT]\n> ' + text.split('\n').join('\n> ');
+        }
+    },
+    /**
+     * 引用块: WARNING：无选中时插入 > [!WARNING] 模板，有选中时包裹选中内容
+     */
+    {
+        type: 'insert',
+        group: 'MD 语法',
+        subGroup: '块元素',
+        label: 'WARNING',
+        errorLabel: 'MD 语法',
+        handler(text) {
+            if (!text) return '> [!WARNING]\n> 警告内容';
+            return '> [!WARNING]\n> ' + text.split('\n').join('\n> ');
+        }
+    },
+    /**
+     * 引用块: CAUTION：无选中时插入 > [!CAUTION] 模板，有选中时包裹选中内容
+     */
+    {
+        type: 'insert',
+        group: 'MD 语法',
+        subGroup: '块元素',
+        label: 'CAUTION',
+        errorLabel: 'MD 语法',
+        handler(text) {
+            if (!text) return '> [!CAUTION]\n> 小心操作';
+            return '> [!CAUTION]\n> ' + text.split('\n').join('\n> ');
+        }
+    },
     /**
      * 分割线：无选中时插入 ---，有选中时忽略选中内容直接插入
      */

@@ -284,6 +284,11 @@
   display: none !important;
 }
 
+/* 查看模式下隐藏编辑器操作按钮 */
+.editor-view-mode #editorActionsBtn {
+  display: none !important;
+}
+
 /* 纯文本模式（默认，预览区隐藏） */
 .editor-overlay[data-mode="edit"] .editor-textarea {
   display: flex;
@@ -1257,6 +1262,70 @@
   background: var(--bg-secondary);
   border-radius: 0 4px 4px 0;
   color: var(--text-secondary);
+}
+
+/* ===== Alert 引用块（GitHub 风格） ===== */
+.md-rendered .markdown-alert {
+  margin: 0.8em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-secondary);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-primary);
+}
+.md-rendered .markdown-alert :last-child {
+  margin-bottom: 0;
+}
+.md-rendered .markdown-alert p {
+  margin: 0.3em 0;
+}
+.md-rendered .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin: 0 0 0.3em 0;
+  color: inherit;
+}
+.md-rendered .markdown-alert-title svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.md-rendered .markdown-alert-note {
+  border-color: var(--info);
+  background: var(--info-bg);
+}
+.md-rendered .markdown-alert-note .markdown-alert-title {
+  color: var(--info);
+}
+.md-rendered .markdown-alert-tip {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+.md-rendered .markdown-alert-tip .markdown-alert-title {
+  color: var(--success);
+}
+.md-rendered .markdown-alert-important {
+  border-color: var(--accent);
+  background: var(--accent-lighter);
+}
+.md-rendered .markdown-alert-important .markdown-alert-title {
+  color: var(--accent);
+}
+.md-rendered .markdown-alert-warning {
+  border-color: var(--warning);
+  background: var(--warning-bg);
+}
+.md-rendered .markdown-alert-warning .markdown-alert-title {
+  color: var(--warning-text);
+}
+.md-rendered .markdown-alert-caution {
+  border-color: var(--error);
+  background: var(--error-bg);
+}
+.md-rendered .markdown-alert-caution .markdown-alert-title {
+  color: var(--error-text);
 }
 
 :is(.md-rendered, .ai-msg-assistant) code {

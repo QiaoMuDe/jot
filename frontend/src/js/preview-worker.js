@@ -4,12 +4,14 @@
  * 同时提取 Markdown 标题用于 TOC 侧栏
  */
 import { marked } from 'marked';
+import alert from 'marked-alert';
 
 // 与主线程一致的 marked 选项
 marked.setOptions({
     breaks: true,
     gfm: true,
 });
+marked.use(alert());
 
 /**
  * 从 Markdown 内容中提取标题

@@ -144,6 +144,70 @@
     color: var(--text-secondary);
 }
 
+/* Alert 引用块 */
+.ai-msg-assistant .markdown-alert {
+    margin: 0.5em 0;
+    padding: 6px 12px;
+    border-left: 3px solid var(--accent);
+    background: var(--hover-bg);
+    border-radius: 0 6px 6px 0;
+    color: var(--text-primary);
+}
+.ai-msg-assistant .markdown-alert :last-child {
+    margin-bottom: 0;
+}
+.ai-msg-assistant .markdown-alert p {
+    margin: 0.2em 0;
+}
+.ai-msg-assistant .markdown-alert-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    margin: 0 0 0.2em 0;
+    color: inherit;
+}
+.ai-msg-assistant .markdown-alert-title svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+.ai-msg-assistant .markdown-alert-note {
+    border-color: var(--info);
+    background: var(--info-bg);
+}
+.ai-msg-assistant .markdown-alert-note .markdown-alert-title {
+    color: var(--info);
+}
+.ai-msg-assistant .markdown-alert-tip {
+    border-color: var(--success);
+    background: var(--success-bg);
+}
+.ai-msg-assistant .markdown-alert-tip .markdown-alert-title {
+    color: var(--success);
+}
+.ai-msg-assistant .markdown-alert-important {
+    border-color: var(--accent);
+    background: var(--accent-lighter);
+}
+.ai-msg-assistant .markdown-alert-important .markdown-alert-title {
+    color: var(--accent);
+}
+.ai-msg-assistant .markdown-alert-warning {
+    border-color: var(--warning);
+    background: var(--warning-bg);
+}
+.ai-msg-assistant .markdown-alert-warning .markdown-alert-title {
+    color: var(--warning-text);
+}
+.ai-msg-assistant .markdown-alert-caution {
+    border-color: var(--error);
+    background: var(--error-bg);
+}
+.ai-msg-assistant .markdown-alert-caution .markdown-alert-title {
+    color: var(--error-text);
+}
+
 /* 列表 */
 .ai-msg-assistant ul,
 .ai-msg-assistant ol {
