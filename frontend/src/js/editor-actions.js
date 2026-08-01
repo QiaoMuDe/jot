@@ -1,12 +1,10 @@
 /* ===== 编辑器操作注册表与执行引擎 ===== */
 
-import { format as xmlFormat, minify as xmlMinify } from './formatters/xml-formatter.js';
-import { format as htmlFormat, minify as htmlMinify } from './formatters/html-formatter.js';
-import { format as csvFormat } from './formatters/csv-formatter.js';
-import * as yaml from 'js-yaml';
-import * as smolToml from 'smol-toml';
-import { format as sqlFormat } from 'sql-formatter';
-import * as beautify from 'js-beautify';
+import MD_SYNTAX_ACTIONS from './editor-actions/md-syntax.js';
+import FORMAT_ACTIONS from './editor-actions/format.js';
+import TEXT_TRANSFORM_ACTIONS from './editor-actions/text-transform.js';
+import TEXT_CLEAN_ACTIONS from './editor-actions/text-clean.js';
+import ENCODE_DECODE_ACTIONS from './editor-actions/encode-decode.js';
 
 /**
  * 操作注册表，配置驱动，分组管理。
@@ -15,333 +13,27 @@ import * as beautify from 'js-beautify';
  * - label: 操作项显示文本
  * - errorLabel: 错误提示中的格式名称（如 'XML'、'YAML'）
  * - handler: 接收源文本，返回处理后的文本；若无法处理则抛出 Error
+ * - type: 可选，'insert' 表示插入/包裹模式（如 MD 语法），默认 'transform' 变换模式
  *
- * 后续新增操作只需在此数组追加条目，无需修改渲染/执行逻辑。
+ * 操作项按分组拆分到 editor-actions/ 目录下各模块文件，此处通过展开导入聚合。
+ * 后续新增操作只需在对应模块追加条目，无需修改渲染/执行逻辑。
  * 空分组（无任何条目）不渲染。
  */
 const EDITOR_ACTIONS = [
-    // ── JSON ──
-    {
-        group: '格式化',
-        subGroup: 'JSON',
-        label: 'JSON 格式化',
-        errorLabel: 'JSON',
-        handler(text) {
-            const parsed = JSON.parse(text);
-            return JSON.stringify(parsed, null, 2);
-        }
-    },
-    {
-        group: '格式化',
-        subGroup: 'JSON',
-        label: 'JSON 压缩',
-        errorLabel: 'JSON',
-        handler(text) {
-            const parsed = JSON.parse(text);
-            return JSON.stringify(parsed);
-        }
-    },
+    // 格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML）
+    ...FORMAT_ACTIONS,
 
-    // ── XML ──
-    {
-        group: '格式化',
-        subGroup: 'XML',
-        label: 'XML 格式化',
-        errorLabel: 'XML',
-        handler(text) { return xmlFormat(text); }
-    },
-    {
-        group: '格式化',
-        subGroup: 'XML',
-        label: 'XML 压缩',
-        errorLabel: 'XML',
-        handler(text) { return xmlMinify(text); }
-    },
+    // 文本转换
+    ...TEXT_TRANSFORM_ACTIONS,
 
-    // ── HTML ──
-    {
-        group: '格式化',
-        subGroup: 'HTML',
-        label: 'HTML 格式化',
-        errorLabel: 'HTML',
-        handler(text) { return htmlFormat(text); }
-    },
-    {
-        group: '格式化',
-        subGroup: 'HTML',
-        label: 'HTML 压缩',
-        errorLabel: 'HTML',
-        handler(text) { return htmlMinify(text); }
-    },
+    // 文本清理
+    ...TEXT_CLEAN_ACTIONS,
 
-    // ── CSS ──
-    {
-        group: '格式化',
-        subGroup: 'CSS',
-        label: 'CSS 格式化',
-        errorLabel: 'CSS',
-        handler(text) { return beautify.css_beautify(text, { indent_size: 2 }); }
-    },
-    {
-        group: '格式化',
-        subGroup: 'CSS',
-        label: 'CSS 压缩',
-        errorLabel: 'CSS',
-        handler(text) { return beautify.css_beautify(text, { indent_size: 0, preserve_newlines: false }); }
-    },
+    // 编码解码（Base64/URL/HTML）
+    ...ENCODE_DECODE_ACTIONS,
 
-    // ── JavaScript ──
-    {
-        group: '格式化',
-        subGroup: 'JavaScript',
-        label: 'JS 格式化',
-        errorLabel: 'JavaScript',
-        handler(text) { return beautify.js_beautify(text, { indent_size: 2 }); }
-    },
-    {
-        group: '格式化',
-        subGroup: 'JavaScript',
-        label: 'JS 压缩',
-        errorLabel: 'JavaScript',
-        handler(text) { return beautify.js_beautify(text, { indent_size: 0, preserve_newlines: false }); }
-    },
-
-    // ── SQL ──
-    {
-        group: '格式化',
-        subGroup: 'SQL',
-        label: 'SQL 格式化',
-        errorLabel: 'SQL',
-        handler(text) { return sqlFormat(text, { indent: '  ' }); }
-    },
-    {
-        group: '格式化',
-        subGroup: 'SQL',
-        label: 'SQL 压缩',
-        errorLabel: 'SQL',
-        handler(text) {
-            const formatted = sqlFormat(text, { indent: '  ' });
-            // 压缩：去掉多余换行
-            return formatted.replace(/\n{3,}/g, '\n\n');
-        }
-    },
-
-    // ── CSV ──
-    {
-        group: '格式化',
-        subGroup: 'CSV',
-        label: 'CSV 格式化',
-        errorLabel: 'CSV',
-        handler(text) { return csvFormat(text); }
-    },
-
-    // ── YAML ──
-    {
-        group: '格式化',
-        subGroup: 'YAML',
-        label: 'YAML 格式化',
-        errorLabel: 'YAML',
-        handler(text) {
-            const parsed = yaml.load(text);
-            return yaml.dump(parsed, { indent: 2, lineWidth: 120, noRefs: true });
-        }
-    },
-    {
-        group: '格式化',
-        subGroup: 'YAML',
-        label: 'YAML 压缩',
-        errorLabel: 'YAML',
-        handler(text) {
-            const parsed = yaml.load(text);
-            return yaml.dump(parsed, { indent: 2, lineWidth: -1, flowLevel: 0, noRefs: true });
-        }
-    },
-
-    // ── TOML ──
-    {
-        group: '格式化',
-        subGroup: 'TOML',
-        label: 'TOML 格式化',
-        errorLabel: 'TOML',
-        handler(text) {
-            const parsed = smolToml.parse(text);
-            return smolToml.stringify(parsed);
-        }
-    },
-    {
-        group: '格式化',
-        subGroup: 'TOML',
-        label: 'TOML 压缩',
-        errorLabel: 'TOML',
-        handler(text) {
-            const parsed = smolToml.parse(text);
-            return smolToml.stringify(parsed);
-        }
-    },
-
-    // ── 文本转换 ──
-    {
-        group: '文本转换',
-        label: '大写',
-        errorLabel: '文本',
-        handler(text) { return text.toUpperCase(); }
-    },
-    {
-        group: '文本转换',
-        label: '小写',
-        errorLabel: '文本',
-        handler(text) { return text.toLowerCase(); }
-    },
-    {
-        group: '文本转换',
-        label: '首字母大写',
-        errorLabel: '文本',
-        handler(text) {
-            return text.replace(/\b\w/g, ch => ch.toUpperCase());
-        }
-    },
-    {
-        group: '文本转换',
-        label: '驼峰式',
-        errorLabel: '文本',
-        handler(text) {
-            return text
-                .replace(/[^a-zA-Z0-9]+/g, ' ')
-                .trim()
-                .split(/\s+/)
-                .map((word, i) => {
-                    if (i === 0) return word.toLowerCase();
-                    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-                })
-                .join('');
-        }
-    },
-    {
-        group: '文本转换',
-        label: '蛇形式',
-        errorLabel: '文本',
-        handler(text) {
-            return text
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/[^a-zA-Z0-9]+/g, ' ')
-                .trim()
-                .toLowerCase()
-                .split(/\s+/)
-                .join('_');
-        }
-    },
-    {
-        group: '文本转换',
-        label: '行反转',
-        errorLabel: '文本',
-        handler(text) {
-            return text.split('\n').reverse().join('\n');
-        }
-    },
-    {
-        group: '文本转换',
-        label: '字符反转',
-        errorLabel: '文本',
-        handler(text) {
-            return text.split('').reverse().join('');
-        }
-    },
-
-    // ── 文本清理 ──
-    {
-        group: '文本清理',
-        label: '去除多余空格',
-        errorLabel: '文本',
-        handler(text) {
-            return text.replace(/\s+/g, ' ').trim();
-        }
-    },
-    {
-        group: '文本清理',
-        label: '去除空行',
-        errorLabel: '文本',
-        handler(text) {
-            return text.split('\n').filter(l => l.trim()).join('\n');
-        }
-    },
-    {
-        group: '文本清理',
-        label: '行尾空格清理',
-        errorLabel: '文本',
-        handler(text) {
-            return text.split('\n').map(l => l.trimEnd()).join('\n');
-        }
-    },
-    {
-        group: '文本清理',
-        label: 'Tab 转空格',
-        errorLabel: '文本',
-        handler(text) {
-            return text.replace(/\t/g, '  ');
-        }
-    },
-    {
-        group: '文本清理',
-        label: '空格转 Tab',
-        errorLabel: '文本',
-        handler(text) {
-            return text.replace(/  /g, '\t');
-        }
-    },
-
-    // ── 编码解码 ──
-    {
-        group: '编码解码',
-        subGroup: 'Base64',
-        label: 'Base64 编码',
-        errorLabel: 'Base64',
-        handler(text) { return btoa(text); }
-    },
-    {
-        group: '编码解码',
-        subGroup: 'Base64',
-        label: 'Base64 解码',
-        errorLabel: 'Base64',
-        handler(text) { return atob(text); }
-    },
-    {
-        group: '编码解码',
-        subGroup: 'URL',
-        label: 'URL 编码',
-        errorLabel: 'URL 编码',
-        handler(text) { return encodeURIComponent(text); }
-    },
-    {
-        group: '编码解码',
-        subGroup: 'URL',
-        label: 'URL 解码',
-        errorLabel: 'URL 编码',
-        handler(text) { return decodeURIComponent(text); }
-    },
-    {
-        group: '编码解码',
-        subGroup: 'HTML',
-        label: 'HTML 编码',
-        errorLabel: 'HTML',
-        handler(text) {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-    },
-    {
-        group: '编码解码',
-        subGroup: 'HTML',
-        label: 'HTML 解码',
-        errorLabel: 'HTML',
-        handler(text) {
-            const doc = new DOMParser().parseFromString(text, 'text/html');
-            return doc.body.textContent || '';
-        }
-    },
+    // MD 语法
+    ...MD_SYNTAX_ACTIONS,
 ];
 
 /**
@@ -419,7 +111,7 @@ function initEditorActionsMenu() {
     /**
      * 执行操作：读取选中文本或全文 → 交给 handler → 写回
      */
-    function executeAction(handler, errorLabel) {
+    function executeAction(handler, errorLabel, actionType = 'transform') {
         const cmEditor = window.cmEditor;
         if (!cmEditor) return;
 
@@ -449,8 +141,8 @@ function initEditorActionsMenu() {
 
         const sel = cmEditor.state.selection.main;
         const hasSelection = !sel.empty;
-        const from = hasSelection ? sel.from : 0;
-        const to = hasSelection ? sel.to : cmEditor.state.doc.length;
+        const from = hasSelection ? sel.from : (actionType === 'insert' ? sel.from : 0);
+        const to = hasSelection ? sel.to : (actionType === 'insert' ? sel.from : cmEditor.state.doc.length);
         const sourceText = cmEditor.state.sliceDoc(from, to);
 
         try {
@@ -509,7 +201,7 @@ function initEditorActionsMenu() {
         const label = item.dataset.action;
         const action = EDITOR_ACTIONS.find(a => a.label === label);
         if (action) {
-            executeAction(action.handler, action.errorLabel);
+            executeAction(action.handler, action.errorLabel, action.type);
             closeMenu();
         }
     });

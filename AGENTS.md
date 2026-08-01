@@ -57,7 +57,13 @@ jot/                                    # 项目根目录
 │   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射）
-│   │   │   ├── editor-actions.js      # 编辑器操作菜单模块（配置驱动操作注册表 EDITOR_ACTIONS + 菜单渲染/交互/执行引擎，main.js import 引入）
+│   │   │   ├── editor-actions/        # 编辑器操作菜单分组模块目录
+│   │   │   │   ├── format.js          # 格式化操作项（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩 + SQL 辅助函数 compactSQL/convertSQLCase）
+│   │   │   │   ├── text-transform.js  # 文本转换操作项（7 项）
+│   │   │   │   ├── text-clean.js      # 文本清理操作项（5 项）
+│   │   │   │   ├── encode-decode.js   # 编码解码操作项（6 项）
+│   │   │   │   └── md-syntax.js       # MD 语法插入操作项（22 项，type: 'insert' 模式）
+│   │   │   ├── editor-actions.js      # 编辑器操作菜单模块（聚合导入各分组模块 + 菜单渲染/交互/执行引擎，main.js import 引入）
 │   │   │   ├── data-management.js      # 数据管理页面模块（10 个函数 + reloadSettings，从 main.js 提取）
 │   │   │   ├── trash-page.js           # 回收站页面模块（6 个函数，从 main.js 提取）
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回（含笔记本选择菜单）+ 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
@@ -147,7 +153,7 @@ jot/                                    # 项目根目录
 | **前端导航切换** | 网格/搜索/设置/数据管理/回收站/AI 助手视图切换 | `frontend/src/main.js:switchView()` | 视图名称 | 视图 DOM 切换 |
 | **前端右键菜单** | 右键弹出菜单（查看/编辑/置顶/删除） | `frontend/src/main.js` | 鼠标事件+笔记ID | 菜单显示/操作 |
 | **前端只读查看** | 左击笔记打开只读查看器 | `frontend/src/main.js:openEditor()` | 笔记 ID | 只读查看模态框 |
-| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（EDITOR_ACTIONS 数组），当前含 4 个分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩）、文本转换（大写/小写/首字母大写/驼峰式/蛇形式/行反转/字符反转）、文本清理（去除多余空格/去除空行/行尾空格清理/Tab↔空格）、编码解码（Base64/URL/HTML 各含编码+解码）。支持选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 + 预览模式隐藏。无 subGroup 的项直接铺平在分组下，有 subGroup 的渲染为嵌套子菜单。 | `frontend/src/js/editor-actions.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | 格式化/转换/清理/编码解码结果 |
+| **编辑器操作菜单** | 顶栏「操作」按钮下拉菜单，配置驱动操作注册表（EDITOR_ACTIONS 数组按分组拆分到 `frontend/src/js/editor-actions/` 模块，主文件聚合导入），当前含 5 个分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩，SQL 另有关键字大小写共 18 项）、文本转换（大写/小写/首字母大写/驼峰式/蛇形式/行反转/字符反转 7 项）、文本清理（去除多余空格/去除空行/行尾空格清理/Tab↔空格 5 项）、编码解码（Base64/URL/HTML 各含编码+解码 6 项）、MD 语法（22 项，`type: 'insert'` 插入模式：有选中包裹选中文本、无选中在光标处插入样板）。支持选中文本或全文处理 + Ctrl+Z 撤销 + 查看模式隐藏 + 预览模式隐藏。无 subGroup 的项直接铺平在分组下，有 subGroup 的渲染为嵌套子菜单。 | `frontend/src/js/editor-actions.js` + `frontend/src/js/editor-actions/*.js` + `frontend/src/main.js`（import + els 注册 + window.cmEditor 暴露） | 选中文本或全文 | 格式化/转换/清理/编码解码/MD 样板结果 |
 | **标签搜索** | 点击标签 chip 打开搜索弹窗并预选该标签筛选器 | `frontend/src/main.js:searchByTag()` | 标签 ID | 搜索弹窗结果列表 |
 | **键盘快捷键** | Ctrl+F 编辑器搜索 / Ctrl+H 编辑器查找替换 / Ctrl+N 新建 / Ctrl+L 编辑器切换模式 / Ctrl+P 启动器菜单 / PgUp/PgDn 滚动 / Ctrl+Home/End / Ctrl+0 锁屏 | `frontend/src/main.js:handleKeyboardNavigation()` | 键盘事件 | 对应操作 |
 | **版本号信息** | 返回 verman.V.GitVersion 纯版本号 | `app.go:GetVersion()` | — | 版本字符串 |
@@ -535,6 +541,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **预设弹窗遮罩点击穿透修复**（pointer-events: none 防止淡出期间拦截删除按钮点击；确认弹窗 z-index 从 1000 提升至 100000 避免被遮罩挡住）
 - [x] **预设名称唯一性校验**（savePresetModal 提交前检查名称是否已存在，编辑时排除自身）
 - [x] **编辑器操作菜单**（顶栏「操作」按钮 + 配置驱动下拉菜单，4 分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 格式化+压缩）、文本转换（7 项）、文本清理（5 项）、编码解码（6 项），选中或全文 + 撤销）
+- [x] **MD 语法插入操作**（MD 语法分组 22 项，type: 'insert' 模式：行内样式/标题/列表/块元素/链接媒体/表格/数学公式，有选中包裹选中文本、无选中在光标处插入样板）
+- [x] **编辑器操作菜单模块化拆分**（操作项按分组拆分至 `frontend/src/js/editor-actions/` 目录：format.js/text-transform.js/text-clean.js/encode-decode.js/md-syntax.js，主文件仅保留聚合导入 + 渲染/交互/执行引擎）
 
 ---
 
@@ -592,18 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：System Prompt 增强——思考框架 + 来源标注
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在 system prompt 中新增一个 4 步内部推理框架（问题分析→信息整合→结构规划→回答生成），引导 AI 在生成回答前组织逻辑、区分信息优先级。同时给所有注入内容添加来源标签（本地笔记/搜索结果/角色设定/手动引用/上传文件），配合框架的信息优先级规则（本地笔记 > 联网搜索结果 > 模型自身知识），提升回答质量。 |
-| **推理框架** | [app.go](app.go#L45-L72)：新增 `reasoningFramework` 包级常量，包含 4 步隐式推理流程（不输出给用户），拼接在 `baseNormsBoundaries` 末尾。无技能时 system prompt 为 `baseIdentity + baseNormsBoundaries`（含框架），有技能时技能覆盖身份层但框架保留。 |
-| **来源标注（后端）** | 6 处注入入口全部添加来源标签：[search_service.go](internal/services/search_service.go)（Tavily → "来源：Tavily 联网搜索"）、[zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 → "来源：知乎站内搜索"，知乎全网搜 → "来源：知乎全网搜索"）、[recall_service.go](internal/services/recall_service.go)（卡片召回 → "来源：本地笔记，优先级最高"）、[app.go](app.go)（角色扮演笔记 → "来源：角色设定笔记"，手动引用笔记 → "来源：手动引用笔记"，上传文件 → "来源：上传文件"） |
-| **涉及文件** | [app.go](app.go)（推理框架 + 3 处来源标注）、[internal/services/search_service.go](internal/services/search_service.go)（Tavily 来源标签）、[internal/services/zhihu_search_service.go](internal/services/zhihu_search_service.go)（知乎站内搜 + 全网搜来源标签）、[internal/services/recall_service.go](internal/services/recall_service.go)（卡片召回来源标签） |
-
----
-
-## 记忆点 2：联网搜索指示器重设计——动画+下拉关键词菜单+修复
+## 记忆点 1：联网搜索指示器重设计——动画+下拉关键词菜单+修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：内置 API 预设服务商 + 预设管理动画与交互优化
+## 记忆点 2：内置 API 预设服务商 + 预设管理动画与交互优化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
+## 记忆点 3：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：预设管理列表收起动画修复与重设计（Web Animations API）
+## 记忆点 4：预设管理列表收起动画修复与重设计（Web Animations API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 滑动窗口消息截断
+## 记忆点 5：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：搜索词精炼扩展至卡片召回
+## 记忆点 6：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +679,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 7：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,7 +691,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 8：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -705,7 +702,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 9：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -719,6 +716,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **鼠标事件修复** | [editor-actions.js](frontend/src/js/editor-actions.js#L366-L385)：旧代码用 `e.target.closest('.has-submenu')` 查找子菜单触发项，但该选择器沿 DOM 向上查找，CSV 格式化等非子菜单项因位于「格式化」has-submenu 容器内而被误判为子菜单触发项，`else if` 分支永不执行。修复为以 `e.target.closest('.dropdown-item')` 为准，判断 item 自身是否含 `has-submenu` 类，非子菜单项正确关闭同级展开子菜单。 |
 | **vite 配置修复** | [vite.config.js](frontend/src/vite.config.js)：`build.target: 'es2021'` 仅对生产构建生效；dev server 的 esbuild 预构建需额外配置 `optimizeDeps.esbuildOptions.target: 'es2021'`（Vite 3 的 DepOptimizationConfig 接口要求 `esbuildOptions` 而非 `esbuild`）。 |
 | **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表扩展 + 渲染/交互/执行引擎）、[frontend/src/js/formatters/xml-formatter.js](frontend/src/js/formatters/xml-formatter.js)（新增 XML 格式化/压缩）、[frontend/src/js/formatters/html-formatter.js](frontend/src/js/formatters/html-formatter.js)（新增 HTML 格式化/压缩）、[frontend/src/js/formatters/csv-formatter.js](frontend/src/js/formatters/csv-formatter.js)（新增 CSV 格式化）、[frontend/vite.config.js](frontend/vite.config.js)（optimizeDeps.esbuildOptions） |
+
+---
+
+## 记忆点 10：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两项改动：① 新增「MD 语法」分组，22 个插入类操作项，通过 `type: 'insert'` 标记与既有变换类操作区分——有选中文本时包裹选中内容（如 `**文本**`、`[文本](url)`），无选中文本时在光标处插入语法样板（如 `**粗体文本**`、表格模板）；② 模块化拆分——操作项定义从 [editor-actions.js](frontend/src/js/editor-actions.js) 按分组拆分为 4 个独立模块（[format.js](frontend/src/js/editor-actions/format.js) 含 18 项格式化 + SQL 辅助函数 compactSQL/convertSQLCase、[text-transform.js](frontend/src/js/editor-actions/text-transform.js) 7 项、[text-clean.js](frontend/src/js/editor-actions/text-clean.js) 5 项、[encode-decode.js](frontend/src/js/editor-actions/encode-decode.js) 6 项），主文件仅保留聚合导入 + 菜单渲染/交互/执行引擎，`EDITOR_ACTIONS` 通过 `...展开` 合并各模块导出。 |
+| **插入模式执行逻辑** | [editor-actions.js](frontend/src/js/editor-actions.js) 的 `executeAction` 新增 `actionType` 参数（默认 `'transform'`）。`'insert'` 模式且无选中文本时，插入点从「替换全文」改为「光标处插入」——changes 的 `from/to` 使用 `cmEditor.state.selection.main.head` 定位，未选中时 from/to 相等即为纯插入；有选中文本时按 handler 包裹逻辑写回。点击事件通过 `action.type` 透传。 |
+| **MD 语法操作项** | [md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)：22 项覆盖 7 个子分组——行内样式（粗体/斜体/删除线/行内代码）、标题（H1~H6）、列表（无序/有序/任务）、块元素（代码块/引用/分割线/折叠详情）、链接/媒体（链接/图片）、表格、数学公式（行内/块级）。handler 接收选中文本参数，空值返回样板文本。 |
+| **模块化拆分要点** | [format.js](frontend/src/js/editor-actions/format.js) 内 formatters 引用路径从 `./formatters/...` 调整为 `../formatters/...`（因文件移入 editor-actions/ 子目录）。`compactSQL`/`convertSQLCase` 原样迁移至 format.js，无外部引用，迁移安全。主文件渲染/执行引擎零改动，菜单分组渲染顺序不变（格式化 → 文本转换 → 文本清理 → 编码解码 → MD 语法）。 |
+| **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（聚合导入 + 执行引擎 actionType 支持）、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)（新增）、[frontend/src/js/editor-actions/format.js](frontend/src/js/editor-actions/format.js)（新增）、[frontend/src/js/editor-actions/text-transform.js](frontend/src/js/editor-actions/text-transform.js)（新增）、[frontend/src/js/editor-actions/text-clean.js](frontend/src/js/editor-actions/text-clean.js)（新增）、[frontend/src/js/editor-actions/encode-decode.js](frontend/src/js/editor-actions/encode-decode.js)（新增） |
 
 ---
 
