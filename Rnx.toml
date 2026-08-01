@@ -78,7 +78,8 @@ internal = false
 desc = '构建前端资源'
 # 命令列表
 cmds = [
-    'cd frontend && fck rm -f -r dist && npm install && npm run build'
+    'if [ -d "frontend/dist" ]; then fck rm -f -r frontend/dist; fi',
+    'cd frontend && npm install && npm run build'
 ]
 # 任务工作目录
 work_dir = ''
