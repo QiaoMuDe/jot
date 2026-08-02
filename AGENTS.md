@@ -600,32 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：设置页按钮统一为固定宽度 + spinner 纯动画加载 + 预设连接测试
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三个互相关联的 UI 优化：① 设置页所有操作按钮（测试 × 4 + 获取模型）统一文字为「测试」/「获取」，固定宽度 `52px`，消除加载态宽度抖动；② 按钮加载状态改为仅旋转 spinner（保留原有文字不显示），`setBtnLoading` 不再改文字，确保加载前后宽度一致；③ 预设编辑/新增弹窗增加「测试连接」功能——后端 `TestAIConnection` 直接验证输入值，URI 输入框右侧 inline 按钮，空值 warning 提示，成功时展示预设名称。 |
-| **按钮宽度统一** | [index.html](frontend/index.html#L498)：API 连接页「测试 URL」→「测试」+ `width:52px`；[index.html](frontend/index.html#L620-L640)：Tavily/知乎「测试连接」→「测试」+ `width:52px`；[index.html](frontend/index.html#L2031)：预设弹窗「测试」按钮；[index.html](frontend/index.html#L528)：「获取列表」→「获取」+ `width:52px`。 |
-| **加载动画改进** | [main.js](frontend/src/main.js)：`setBtnLoading` 加载态清空文字追加 spinner（不改原文）、恢复态移除 spinner 还原文字；[settings-panel.css](frontend/src/css/components/settings-panel.css)：`.btn-loading` 加 `justify-content: center` 保证居中。 |
-| **预设连接测试** | [app.go](app.go#L1462-L1473)：新增 `TestAIConnection(provider, baseURL, apiKey string) (bool, error)`；[main.js](frontend/src/main.js#L2770-L2842)：`testPresetConnection` 取表单值 → 校验 → `setBtnLoading` → 调后端 → 通知结果（成功含预设名、空值 warning）。 |
-| **编辑行精准替换** | [main.js](frontend/src/main.js#L3041-L3049)：编辑预设保存后，通过 `data-profile-id` 定位旧行，`replaceWith` 替换为新行，避免全量重渲染闪烁。 |
-| **涉及文件** | [app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
-
----
-
-## 记忆点 2：预设管理列表收起动画修复与重设计（Web Animations API）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 管理列表关闭动画从未正常播放（根因：CSS base class 自带 animation，切换 `.closing` 时浏览器不会可靠重启新动画）。修复方案：动画从 base class 剥离，入场通过 `.open` class 触发；离场改用 Web Animations API（`element.animate()`）直接驱动，彻底绕过 CSS state 问题；关闭效果重新设计为"挤压 + 散景模糊 + 淡出"（`scaleY(1)→0.95`、`filter: blur(0)→2px`、`opacity: 1→0`）。同时添加逻辑：展开预设下拉时，若管理列表开着则先等关闭动画完成再展开下拉。 |
-| **CSS 剥离** | [settings-panel.css](frontend/src/css/components/settings-panel.css#L1074-L1118)：从 `.preset-mgr-list` 移除 `animation`；新增 `.preset-mgr-list.open` 触发 `mgrSlideDown` 入场动画；`@keyframes mgrSlideUp` 重设计为 `scaleY` + `filter: blur` + `opacity` 组合。 |
-| **Web Animations API** | [main.js](frontend/src/main.js#L3227-L3249)：`closePresetMgrList` 中 `container.animate()` 调用替代 CSS class 切换，`anim.onfinish` 回调替代 `animationend` 事件，始终可靠播放。 |
-| **下拉联动** | [main.js](frontend/src/main.js#L2751-L2752)：展开预设下拉时 `await closePresetMgrList()`，等关闭动画完成后再开下拉菜单。 |
-| **涉及文件** | [frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 3：AI 滑动窗口消息截断
+## 记忆点 1：AI 滑动窗口消息截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：搜索词精炼扩展至卡片召回
+## 记忆点 2：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 3：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 4：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -676,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 5：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -693,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 6：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -705,7 +680,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 7：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -716,7 +691,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 8：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -726,6 +701,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **操作按钮显隐修复** | [editor.css](frontend/src/css/components/editor.css#L287-L290) 新增 `.editor-view-mode #editorActionsBtn { display: none !important }`，利用 `editor-view-mode` 类（进入查看模式时添加）的 `!important` 优先级高于 `switchEditorMode` 的内联 `display` 设置。 |
 | **弹窗修复** | [modals.css](frontend/src/css/components/modals.css#L535) 将 `.confirm-actions` 从 `justify-content: flex-end` 改为 `center` 使按钮居中；[index.html](frontend/index.html#L2173) 将 `#pwdModalCancelBtn` 从 `class="btn btn-sm"` 补全为 `class="btn btn-sm btn-cancel"`。 |
 | **涉及文件** | [frontend/package.json](frontend/package.json)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/src/css/components/md-reference.css](frontend/src/css/components/md-reference.css)、[frontend/index.html](frontend/index.html) |
+
+---
+
+## 记忆点 9：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 四项改动：① 笔记首页卡片按方案 G「内容优先」重构 — 标题加大加粗（1rem/700w）、极浅阴影（0 1px 2px rgba(45,42,36,0.06)）、圆角缩小（10px）、幽灵风格标签恢复紧凑纯色背景样式、置顶按钮恢复为图标（空心/实心 SVG）+ 旋转动画（`rotateIn`），置顶状态左侧 3px 彩色边框；② 卡片入场动画最终方案 — `backwards` 填充模式 + `cubic-bezier(0.16,1,0.3,1)` 轻微 overshoot 缓动曲线 + 30ms 交错间隔，移除 `opacity: 0` 默认态使得 `:hover` 不再被 `forwards` 阻塞，回收站列表去掉 `.anim-fadeUp` 类避免入场动画冲突；③ 回收站入场动画彻底移除 + 修复 `transition: all` 干扰 `backwards` 动画导致闪烁的问题（改为 `transition: box-shadow, border-color`）+ 进入回收站时自动滚动到顶（`els.mainContent.scrollTop = 0`）；④ 限制每篇笔记最多选 3 个标签（编辑器标签选择 + 批量标签弹窗 `selectedTags.length >= 3` 时拒绝并通知）。 |
+| **卡片样式** | [main-content.css](frontend/src/css/components/main-content.css)：`.note-card` 圆角 `10px`、阴影 `0 1px 2px`、hover 时 `translateY(-2px) scale(1.01)` + `box-shadow: var(--shadow-md)`；`.card-title` 字号 `1rem` 字重 `700`；`.card-tag` 紧凑风格 `padding: 2px 8px` 字号 `0.688rem` 白色文字；`.pin-btn` 默认 `opacity: 0.2` hover 显现，置顶态 `opacity: 1` + `color: var(--accent)`。 |
+| **入场动画** | [animations.css](frontend/src/css/animations.css)：`@keyframes cardFadeUp` 变换为 `backwards` 填充模式；`animation: cardFadeUp 0.35s cubic-bezier(0.16,1,0.3,1) backwards`，`stagger-*` 类控制 30ms 交错延迟。 |
+| **回收站修复** | [trash-page.js](frontend/src/js/trash-page.js)：`loadTrashNotes()` 顶部 `els.mainContent.scrollTop = 0` 确保滚动到顶；移除 `anim-fadeUp` 入场动画 class；[main-content.css](frontend/src/css/components/main-content.css) 中 `transition: all` 改为 `transition: transform, box-shadow, border-color` 消除闪烁。 |
+| **标签限制** | [main.js](frontend/src/main.js)：标签选择回调中 `selectedTags.length >= 3` 时 `nm.show('最多选择 3 个标签', 'warning')` 并拒绝；批量标签弹窗同样受控。 |
+| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)、[frontend/src/css/animations.css](frontend/src/css/animations.css)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/src/main.js](frontend/src/main.js) |
 
 ---
 

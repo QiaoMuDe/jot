@@ -10,6 +10,8 @@ let trashNotebooks = [];
  */
 export async function loadTrashNotes() {
     const { els, nm } = window;
+    // 每次进入回收站页面，将主内容区滚动到顶部
+    if (els.mainContent) els.mainContent.scrollTop = 0;
     try {
         // 并行加载笔记和笔记本
         const [noteResult, notebookResult] = await Promise.all([
@@ -318,13 +320,6 @@ function renderTrashList() {
             }
         )
         .join('');
-
-    // 交错入场动画（弹性弹入）
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    items.forEach((item, index) => {
-        item.style.animation = `trashEnter 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards`;
-        item.style.animationDelay = `${index * 40}ms`;
-    });
 
     // 按钮点击脉冲反馈（事件委托，仅绑定一次）
     if (!els.trashListInner._pulseInited) {

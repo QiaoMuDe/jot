@@ -686,12 +686,17 @@ function switchView(view) {
 
         // 使用 requestAnimationFrame 确保 class 切换在下一渲染帧生效
         requestAnimationFrame(() => {
-            targetView.classList.add('view-enter');
-            targetView.addEventListener('animationend', function onEnterEnd() {
-                targetView.removeEventListener('animationend', onEnterEnd);
-                targetView.classList.remove('view-enter');
+            // 回收站视图跳过 view-enter 淡入，避免与异步数据加载产生闪烁
+            if (view !== 'trash') {
+                targetView.classList.add('view-enter');
+                targetView.addEventListener('animationend', function onEnterEnd() {
+                    targetView.removeEventListener('animationend', onEnterEnd);
+                    targetView.classList.remove('view-enter');
+                    _viewAnimating = false;
+                }, { once: true });
+            } else {
                 _viewAnimating = false;
-            }, { once: true });
+            }
         });
     };
 
@@ -3407,28 +3412,30 @@ function renderCardGrid(animateMode, prevCount) {
         )
         .join('');
 
-    // 卡片入场动画
+    // 卡片入场动画：交错淡入 + 微上移，使用 backwards 避免阻塞 :hover
     const cards = els.cardGrid.querySelectorAll('.note-card');
     if (animateMode === 'none') {
-        // 无动画模式（批量操作），直接设为可见
+        // 批量操作，无动画
         cards.forEach(card => { card.style.opacity = '1'; });
     } else if (animateMode === 'append' && typeof prevCount === 'number') {
-        // 追加模式：已有卡片不重播动画，新卡片带交错入场
+        // 追加模式：已有卡片可见，新卡片带交错动画
         cards.forEach((card, index) => {
             if (index < prevCount) {
                 card.style.opacity = '1';
                 card.style.animation = 'none';
             } else {
-                const delay = Math.min((index - prevCount) * 40, 480);
-                card.style.animation = `cardEnter 0.25s ease-out forwards`;
+                const delay = Math.min((index - prevCount) * 30, 360);
+                card.style.willChange = 'transform, opacity';
+                card.style.animation = `cardEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards`;
                 card.style.animationDelay = `${delay}ms`;
             }
         });
     } else {
-        // 全量刷新模式：所有卡片带交错入场动画
+        // 全量刷新：所有卡片带交错动画（backwards 无需清理）
         cards.forEach((card, index) => {
-            const delay = Math.min(index * 40, 480);
-            card.style.animation = `cardEnter 0.25s ease-out forwards`;
+            const delay = Math.min(index * 30, 360);
+            card.style.willChange = 'transform, opacity';
+            card.style.animation = `cardEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards`;
             card.style.animationDelay = `${delay}ms`;
         });
     }
@@ -5051,14 +5058,20 @@ window.deleteNote = async function (id) {
 };
 
 /**
- * 切换编辑器中选择的标签
+ * 切换编辑器中选择的标签（最多 3 个）
  */
 window.toggleEditorTag = function (tagId, el) {
     const idx = state.selectedTags.indexOf(tagId);
     if (idx > -1) {
+        // 取消选中：无限制
         state.selectedTags.splice(idx, 1);
         el.classList.remove('active');
     } else {
+        // 新增选中：检查是否已达上限 3
+        if (state.selectedTags.length >= 3) {
+            window.showNotification('一篇笔记最多选择 3 个标签', 'warning');
+            return;
+        }
         state.selectedTags.push(tagId);
         el.classList.add('active');
     }
@@ -5366,11 +5379,20 @@ function renderBatchTagList() {
 }
 
 /**
- * 点击标签：切换选中态，更新确认按钮计数
+ * 点击批量标签芯片：切换选中态，更新确认按钮计数
+ * 追加模式下最多选择 3 个标签
  */
 function onBatchTagClick(el) {
-    el.classList.toggle('selected');
     const isAdd = batchTagAction === 'add';
+    // 追加模式下，如果芯片当前未选中且已选 ≥ 3，拒绝
+    if (isAdd && !el.classList.contains('selected')) {
+        const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
+        if (count >= 3) {
+            window.showNotification('一篇笔记最多选择 3 个标签', 'warning');
+            return;
+        }
+    }
+    el.classList.toggle('selected');
     const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
     const label = isAdd ? '确定添加' : '确定移除';
     els.batchTagConfirmBtn.textContent = count > 0 ? `${label}（${count}）` : label;

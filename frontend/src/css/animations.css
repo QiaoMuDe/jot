@@ -50,12 +50,16 @@
     to   { opacity: 0; transform: translateY(-8px); }
 }
 
-/* Card entrance: staggered — 弹性弹入效果 */
+/* Card entrance: staggered fade-in + slight rise — 使用 backwards 避免阻塞 :hover */
 @keyframes cardEnter {
-    0%   { opacity: 0; transform: translateY(24px) scale(0.96); }
-    60%  { opacity: 1; transform: translateY(-2px) scale(1.005); }
-    80%  { transform: translateY(1px) scale(0.998); }
+    0%   { opacity: 0; transform: translateY(12px) scale(0.95); }
     100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Card grid container fade-in — 卡片组整体淡入，平滑过渡 */
+@keyframes gridFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 /* Modal open: scale + fade */
@@ -140,14 +144,6 @@
     50%  { transform: translateX(-2px); background-color: transparent; opacity: 1; }
     75%  { transform: translateX(0) scale(0.9); opacity: 0.5; }
     100% { transform: translateX(0) scale(0.7); opacity: 0; }
-}
-
-/* Trash item entrance — 弹性弹入（带 overshoot） */
-@keyframes trashEnter {
-    0%   { opacity: 0; transform: translateY(16px) scale(0.95); }
-    60%  { opacity: 1; transform: translateY(-3px) scale(1.01); }
-    80%  { transform: translateY(1px) scale(0.998); }
-    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Pulse dot (for auto-save indicator) */
