@@ -88,3 +88,56 @@ document.querySelectorAll('.contact-btn').forEach(function(btn) {
     e.preventDefault();
   });
 });
+
+/* ========== 截图动态渲染 ========== */
+fetch('media.json')
+  .then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  })
+  .then(function(data) {
+    var grid = document.getElementById('screenshots-grid');
+    data.screenshots.forEach(function(item) {
+      var card = document.createElement('div');
+      card.className = 'screenshot-card';
+
+      var img = document.createElement('img');
+      img.src = item.src;
+      img.alt = item.alt;
+      img.loading = 'lazy';
+
+      var caption = document.createElement('div');
+      caption.className = 'screenshot-caption';
+      caption.innerHTML = '<strong>' + item.alt + '</strong><span>' + item.caption + '</span>';
+
+      card.appendChild(img);
+      card.appendChild(caption);
+
+      // 点击放大
+      card.addEventListener('click', function() {
+        document.getElementById('lightbox-img').src = item.src;
+        document.getElementById('lightbox-caption').textContent = item.alt;
+        document.getElementById('lightbox').classList.add('active');
+      });
+
+      grid.appendChild(card);
+    });
+  })
+  .catch(function(err) {
+    console.error('截图加载失败:', err);
+    document.getElementById('screenshots-grid').innerHTML =
+      '<p style="text-align:center;color:var(--text-light);padding:40px 0;">截图加载失败，请刷新重试</p>';
+  });
+
+/* ========== Lightbox 控制 ========== */
+var lightbox = document.getElementById('lightbox');
+lightbox.addEventListener('click', function(e) {
+  if (e.target === this || e.target.classList.contains('lightbox-close')) {
+    this.classList.remove('active');
+  }
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    lightbox.classList.remove('active');
+  }
+});
