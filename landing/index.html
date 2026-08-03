@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Jot — 卡片式笔记桌面应用，基于 Wails 构建的轻量级本地笔记工具">
+  <title>Jot — 卡片式笔记桌面应用</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ========== Navigation ========== -->
+  <nav id="navbar">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+          <line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/>
+          <line x1="8" y1="16" x2="12" y2="16"/>
+        </svg>
+        Jot
+      </a>
+      <div class="nav-links">
+        <a href="#features">特性</a>
+        <a href="#tech-stack">技术栈</a>
+        <a href="#stats">数据</a>
+        <a href="#cta" class="nav-cta">联系作者</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========== Hero ========== -->
+  <section class="hero" id="hero">
+    <div class="hero-grid"></div>
+    <div class="hero-glow hero-glow-1"></div>
+    <div class="hero-glow hero-glow-2"></div>
+    <div class="hero-glow hero-glow-3"></div>
+
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        基于 Wails v2 · 纯原生 Web 技术栈
+      </div>
+      <h1>卡片式笔记<br><span>桌面应用</span></h1>
+      <p class="hero-sub">
+        Jot 是一款轻量级的卡片式笔记桌面应用，采用 Go + 原生 Web 技术栈构建，
+        界面清爽、交互流畅、数据完全本地存储。
+      </p>
+      <div class="hero-actions">
+        <a href="#features" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+          </svg>
+          探索特性
+        </a>
+        <a href="#cta" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          联系作者
+        </a>
+      </div>
+    </div>
+
+    <div class="scroll-indicator">
+      <div class="scroll-mouse"></div>
+      <span>向下滚动</span>
+    </div>
+  </section>
+
+  <!-- ========== Features ========== -->
+  <section id="features">
+    <div class="section-header reveal">
+      <span class="section-label">Core Features</span>
+      <h2 class="section-title">核心特性</h2>
+      <p class="section-desc">从笔记管理到 AI 助手，Jot 提供全方位的卡片式笔记体验</p>
+    </div>
+
+    <div class="features-grid">
+
+      <div class="feature-card reveal" style="transition-delay: 0.05s;">
+        <div class="feature-card-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+          </svg>
+        </div>
+        <h3>卡片式笔记网格</h3>
+        <p>笔记本 → 笔记卡片 → 编辑器的三步交互范式，直观的文件夹-文件-编辑结构，让笔记管理一目了然。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.1s;">
+        <div class="feature-card-icon orange">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+            <path d="M18 18v-2a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="6" r="1"/><circle cx="12" cy="18" r="1"/>
+          </svg>
+        </div>
+        <h3>AI 智能助手</h3>
+        <p>支持 OpenAI 兼容（DeepSeek、通义千问等）与 Ollama 本地模型，流式输出 + 深度思考 + 12 项技能一键切换。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.15s;">
+        <div class="feature-card-icon green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <h3>Markdown 编辑器</h3>
+        <p>基于 CodeMirror 6 的专业编辑体验，支持行号、语法高亮、查找替换、全屏编辑，以及 TOC 目录侧栏自动生成。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.2s;">
+        <div class="feature-card-icon purple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
+            <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/>
+            <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/>
+            <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>
+          </svg>
+        </div>
+        <h3>14 套系统主题</h3>
+        <p>从深色到浅色，从 Tokyo Night 到 Catppuccin，全局 CSS 变量联动，所有组件自动适配，代码高亮主题独立配置。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.25s;">
+        <div class="feature-card-icon pink">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+            <line x1="7" y1="7" x2="7.01" y2="7"/>
+          </svg>
+        </div>
+        <h3>标签系统</h3>
+        <p>自定义标签（名称 + 颜色），按标签筛选笔记，无限滚动标签选择器，支持批量添加/移除标签，灵活分类。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.3s;">
+        <div class="feature-card-icon teal">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+        </div>
+        <h3>联网搜索</h3>
+        <p>支持 Tavily 通用搜索、知乎搜索、全网搜索三个独立来源，可同时开启，AI 自动精化搜索词，获取最新信息。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.35s;">
+        <div class="feature-card-icon cyan">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+        </div>
+        <h3>数据管理</h3>
+        <p>一键备份/还原完整数据（含图片）、数据库瘦身 VACUUM、回收站软删除、恢复出厂设置、8 项数据统计面板。</p>
+      </div>
+
+      <div class="feature-card reveal" style="transition-delay: 0.4s;">
+        <div class="feature-card-icon red">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <h3>本地存储 · 安全无忧</h3>
+        <p>所有数据存储在本地 SQLite 数据库中，无网络依赖。锁屏密码（SHA-256 哈希）、图片本地化管理，数据完全由你掌控。</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== Tech Stack ========== -->
+  <section id="tech-stack">
+    <div class="tech-wrapper">
+      <div class="section-header reveal">
+        <span class="section-label">Technology Stack</span>
+        <h2 class="section-title">技术栈</h2>
+        <p class="section-desc">纯原生 Web 技术栈，无 UI 框架依赖，极致轻量</p>
+      </div>
+
+      <div class="tech-grid reveal">
+        <span class="tech-badge">Go 1.26+</span>
+        <span class="tech-badge">Wails v2</span>
+        <span class="tech-badge">SQLite</span>
+        <span class="tech-badge">GORM</span>
+        <span class="tech-badge">CodeMirror 6</span>
+        <span class="tech-badge">Marked</span>
+        <span class="tech-badge">highlight.js</span>
+        <span class="tech-badge">Mermaid</span>
+        <span class="tech-badge">Vite</span>
+        <span class="tech-badge">原生 HTML/CSS/JS</span>
+        <span class="tech-badge">go-ego/gse</span>
+        <span class="tech-badge">go-openai</span>
+        <span class="tech-badge">Ollama</span>
+        <span class="tech-badge">Tavily</span>
+        <span class="tech-badge">fastlog</span>
+        <span class="tech-badge">verman</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Stats ========== -->
+  <section id="stats">
+    <div class="stats-wrapper">
+      <div class="section-header reveal">
+        <span class="section-label" style="color: rgba(255,255,255,0.4);">Highlights</span>
+        <h2 class="section-title" style="color: #fff;">项目亮点</h2>
+        <p class="section-desc" style="color: rgba(255,255,255,0.4);">一组数字，了解 Jot 的丰富内涵</p>
+      </div>
+
+      <div class="stats-grid reveal">
+        <div class="stat-item">
+          <div class="stat-number"><span class="stat-counter" data-target="14">0</span></div>
+          <div class="stat-label">套系统主题</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number"><span class="stat-counter" data-target="12">0</span></div>
+          <div class="stat-label">项 AI 技能</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number"><span class="stat-counter" data-target="40">0</span><span class="stat-suffix">+</span></div>
+          <div class="stat-label">项快捷键</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number"><span class="stat-counter" data-target="100">0</span><span class="stat-suffix">%</span></div>
+          <div class="stat-label">纯手写 CSS</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CTA ========== -->
+  <section id="cta">
+    <div class="section-header reveal">
+      <span class="section-label">Contact</span>
+      <h2 class="section-title">联系作者</h2>
+      <p class="section-desc">想体验 Jot，或有任何建议与反馈，欢迎直接联系作者</p>
+    </div>
+
+    <div class="cta-card reveal">
+      <div class="cta-card-content">
+        <h3>期待与你交流</h3>
+        <p>无论是使用问题、功能建议，还是合作意向，都可以随时联系</p>
+        <a href="#" class="btn btn-primary contact-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          联系作者
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Footer ========== -->
+  <footer>
+    <p>
+      <strong>Jot</strong> &mdash; 卡片式笔记桌面应用 &middot; MIT License
+    </p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
