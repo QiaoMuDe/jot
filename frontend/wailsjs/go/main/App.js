@@ -70,6 +70,10 @@ export function ClearCompletedTodos() {
   return window['go']['main']['App']['ClearCompletedTodos']();
 }
 
+export function CountUnfinishedTodos() {
+  return window['go']['main']['App']['CountUnfinishedTodos']();
+}
+
 export function CreateAISession() {
   return window['go']['main']['App']['CreateAISession']();
 }

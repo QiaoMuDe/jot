@@ -1100,18 +1100,28 @@ async function undoDelete(noteIds) {
  * @param {string} msg - 提示信息
  * @returns {Promise<boolean>}
  */
-function showConfirmDialog(msg) {
+function showConfirmDialog(msg, okText = '确定', cancelText = '取消') {
     return new Promise((resolve) => {
         // 确保第三方按钮在普通确认框中隐藏
         if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
         
         els.confirmDialogMsg.textContent = msg;
+        // 自定义按钮文本
+        if (els.confirmOkBtn) els.confirmOkBtn.textContent = okText;
+        if (els.confirmCancelBtn) els.confirmCancelBtn.textContent = cancelText;
         els.confirmDialog.classList.add('visible');
 
         const cleanup = (result) => {
             els.confirmDialog.classList.remove('visible');
             // 保持第三方按钮隐藏（普通确认框用不到）
             if (els.confirmThirdBtn) els.confirmThirdBtn.style.display = 'none';
+            // 等关闭动画结束（最长 200ms）后再恢复默认按钮文本，避免动画期间文字瞬变
+            setTimeout(() => {
+                // 若期间已有新弹窗打开，则不恢复，避免覆盖新弹窗的按钮文本
+                if (els.confirmDialog.classList.contains('visible')) return;
+                if (els.confirmOkBtn) els.confirmOkBtn.textContent = '确定';
+                if (els.confirmCancelBtn) els.confirmCancelBtn.textContent = '取消';
+            }, 260);
             resolve(result);
         };
 
@@ -7937,6 +7947,50 @@ async function init() {
     initLauncher();
     // --- 锁屏密码检查 ---
     await checkScreenLock();
+    // --- 未完成待办启动提示 ---
+    checkUnfinishedTodosReminder();
+}
+
+/**
+ * 启动时提示未完成待办：锁屏启用时等解锁后延迟弹出，否则直接延迟弹出；每次启动仅一次
+ */
+async function checkUnfinishedTodosReminder() {
+    try {
+        // 绑定未就绪时静默跳过（与 checkScreenLock 同款 guard）
+        if (!window.go?.main?.App?.GetAllSettings) return;
+        // 读锁屏配置，判断是否启用（与 checkScreenLock 同源）
+        const cfg = await window.go.main.App.GetAllSettings();
+        const lockEnabled = cfg.screen_lock_enabled === true || cfg.screen_lock_enabled === 'true';
+
+        const show = async () => {
+            // 解锁后/无锁屏时延迟，等界面渲染稳定
+            setTimeout(async () => {
+                try {
+                    // 查询未完成待办数量
+                    const count = await window.go.main.App.CountUnfinishedTodos();
+                    if (!count || count <= 0) return;
+                    // 弹窗：去查看 → 跳转待办视图
+                    const go = await showConfirmDialog(`你有 ${count} 个未完成的待办事项，是否现在去查看？`, '去查看', '取消');
+                    if (go) switchView('todo');
+                } catch (e) {
+                    console.warn('未完成待办提示失败:', e);
+                }
+            }, lockEnabled ? 1000 : 600);
+        };
+
+        if (lockEnabled) {
+            // 等解锁成功后延迟弹出；用一次性监听，避免重复注册
+            const onUnlocked = () => {
+                document.removeEventListener('app-unlocked', onUnlocked);
+                show();
+            };
+            document.addEventListener('app-unlocked', onUnlocked);
+        } else {
+            show();
+        }
+    } catch (e) {
+        console.warn('未完成待办提示检查失败:', e);
+    }
 }
 
 /**
@@ -8014,6 +8068,8 @@ async function unlockApp() {
                 lockScreen.style.display = 'none';
                 lockScreen.classList.remove('exit');
                 if (unlockBtn) unlockBtn.disabled = false;
+                // 通知启动期延迟任务（如未完成待办提示）可以弹出了
+                document.dispatchEvent(new CustomEvent('app-unlocked'));
             }, 500);
         } else {
             // 解锁失败 - 抖动动画 + 提示

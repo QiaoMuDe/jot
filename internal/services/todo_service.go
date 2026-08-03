@@ -87,6 +87,16 @@ func (s *TodoService) CountCompleted() (int64, error) {
 	return count, nil
 }
 
+// CountUnfinished 统计未完成待办数量
+func (s *TodoService) CountUnfinished() (int64, error) {
+	var count int64
+	if err := s.db.Model(&models.Todo{}).Where("done = ?", false).Count(&count).Error; err != nil {
+		s.logger.Errorw("TodoService.CountUnfinished 失败", fastlog.Error(err))
+		return 0, err
+	}
+	return count, nil
+}
+
 func (s *TodoService) DeleteCompleted() (int64, error) {
 	result := s.db.Where("done = ?", true).Delete(&models.Todo{})
 	if result.Error != nil {

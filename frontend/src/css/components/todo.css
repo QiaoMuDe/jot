@@ -15,10 +15,7 @@
 
 /* ==================== 主容器 ==================== */
 .todo-container {
-    max-width: 720px;
-    margin: 0 auto;
     width: 100%;
-    padding: 0 var(--space-5);
     flex: 1;
     min-height: 0;
     display: flex;
@@ -123,8 +120,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    max-width: calc(720px - 2 * var(--space-5));
+    margin: 0 auto var(--space-2);
     padding: var(--space-2) 0;
-    margin-bottom: var(--space-2);
     width: 100%;
     box-sizing: border-box;
 }
@@ -215,10 +213,12 @@
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
-    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
-    padding-right: var(--space-1);
+    /* 右缘延伸到窗口（抵消 .view 的 padding-right），使滚动条贴窗口 */
+    margin-right: -32px;
+    /* 32px 与左侧 padding 对称，滚动条只占窗口最右缘 5px，不遮内容 */
+    padding-right: 32px;
 }
 
 .todo-list-wrap:hover {
@@ -255,6 +255,9 @@
     gap: var(--space-2);
     min-height: 60px;
     padding-bottom: var(--space-3);
+    /* 内容保持原宽度居中，滚动条独立贴在窗口右缘 */
+    max-width: calc(720px - 2 * var(--space-5));
+    margin: 0 auto;
 }
 
 /* ==================== 待办项 ==================== */
@@ -417,6 +420,9 @@
     padding: var(--space-12) var(--space-6);
     text-align: center;
     flex: 1;
+    /* 空状态同样保持原宽度居中 */
+    max-width: calc(720px - 2 * var(--space-5));
+    margin: 0 auto;
 }
 
 .todo-empty-icon {

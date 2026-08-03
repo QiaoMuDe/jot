@@ -600,22 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 滑动窗口消息截断
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在 `CallAIStream` 和 `CallAIStreamRegenerate` 中增加滑动窗口截断：加载全量消息后、注入所有 context 前，丢弃较早的 user/assistant 消息，只保留最后 N 条（默认 20 条 = 10 轮对话）发送给 LLM，大幅降低长对话场景下的 token 消耗和响应延迟。system 消息（含注入的搜索/召回/技能等 context）不受窗口影响。前端 `chatHistory` 渲染缓冲区保持不变。 |
-| **设置项** | [db.go](internal/database/db.go#L551)：`InitDefaultSettings` 新增 `ai_context_window_size: "20"`。 |
-| **窗口读取** | [ai_service.go](internal/services/ai_service.go#L121-L134)：`GetContextWindowSize()` 读取设置项，不存在或非法时返回默认值 20，上限 200。 |
-| **截断函数** | [ai_service.go](internal/services/ai_service.go#L136-L169)：`TruncateMessagesForLLM(messages, n)` — 保留所有 system 消息 + 最后 n 条 user/assistant 消息，短对话不做截断。 |
-| **统一方法** | [app.go](app.go#L2600-L2624)：`truncateAIMessages(sessionID, logLabel)` 封装加载 + 截断 + 统计 + debug 日志，两处调用点各只一行。 |
-| **调用入口** | [app.go](app.go#L1705-L1706)：`CallAIStream` 中 `a.truncateAIMessages(sessionID, "AI 滑动窗口截断")`；[app.go](app.go#L2115-L2116)：`CallAIStreamRegenerate` 中同名调用。 |
-| **调试日志** | debug 级别输出 `window_size`、`non_system_before`、`non_system_after`、`total_after`，便于观察截断效果。 |
-| **涉及文件** | [internal/database/db.go](internal/database/db.go)（默认值初始化）、[internal/services/ai_service.go](internal/services/ai_service.go)（GetContextWindowSize + TruncateMessagesForLLM）、[app.go](app.go)（truncateAIMessages + 两处调用） |
-
----
-
-## 记忆点 2：搜索词精炼扩展至卡片召回
+## 记忆点 1：搜索词精炼扩展至卡片召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 2：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 3：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 4：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 5：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 6：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -691,7 +676,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 7：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -704,7 +689,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 8：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -714,6 +699,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **回收站修复** | [trash-page.js](frontend/src/js/trash-page.js)：`loadTrashNotes()` 顶部 `els.mainContent.scrollTop = 0` 确保滚动到顶；移除 `anim-fadeUp` 入场动画 class；[main-content.css](frontend/src/css/components/main-content.css) 中 `transition: all` 改为 `transition: transform, box-shadow, border-color` 消除闪烁。 |
 | **标签限制** | [main.js](frontend/src/main.js)：标签选择回调中 `selectedTags.length >= 3` 时 `nm.show('最多选择 3 个标签', 'warning')` 并拒绝；批量标签弹窗同样受控。 |
 | **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)、[frontend/src/css/animations.css](frontend/src/css/animations.css)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/src/main.js](frontend/src/main.js) |
+
+---
+
+## 记忆点 9：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三项独立改动：① 笔记卡片 hover 去掉边框变色——[main-content.css](frontend/src/css/components/main-content.css) 中 `.note-card:hover` 从「阴影+上浮+边框染 accent」三重反馈精简为「阴影+上浮」两重，同步删除 `.note-card.pinned:hover` 特判（其唯一用途是防止 hover 边框覆盖置顶左边框）。理由：accent 色是"选中态"语义，hover 染 accent 与选中态视觉语言冲突；② 待办清单滚动条移至窗口（#mainContent）右缘——[todo.css](frontend/src/css/components/todo.css) 中 `.todo-container` 放弃 `max-width: 720px + margin: 0 auto` 居中改为撑满，滚动容器 `.todo-list-wrap` 用 `margin-right: -32px` 抵消 `.view` 的 `padding-right` 贴到窗口右缘 + `padding-right: 32px` 保住内容位置，`.todo-filter-bar`/`.todo-list`/`.todo-empty` 各自 `max-width: calc(720px - 2*var(--space-5)); margin: 0 auto` 重新居中，滚动归属不变（仅列表滚动、头部固定）；③ 未完成待办启动提示——新增后端 `CountUnfinished()`（`WHERE done = false`）+ [app.go](app.go) `CountUnfinishedTodos()` 绑定，前端 `checkUnfinishedTodosReminder()` 在 init 中 `checkScreenLock()` 之后调用，未完成数 > 0 才弹 `showConfirmDialog`（"你有 N 个未完成的待办事项，是否现在去查看？"，按钮"去查看/取消"），点去查看 `switchView('todo')`，每次启动仅提示一次。 |
+| **滚动条贴窗数学** | `width: auto` + 负 margin 时元素宽 = 父 content 宽 - margin-left - margin-right，`.todo-list-wrap` 宽自动 + 32px（-32px margin），右缘恰好 = `#mainContent` 右缘，无水平溢出；content box = `[32, Wmc-32]`，居中参照与筛选栏一致（左侧 32px padding = 右侧 32px content 余量，对称）。必须移除 `scrollbar-gutter: stable`，否则 5px 轨道与 padding 叠加导致内容位移。基于 `#mainContent` 定位，sidebar 折叠/展开均稳定。 |
+| **弹窗按钮文本延迟恢复** | `showConfirmDialog` 新增 `okText`/`cancelText` 可选参数（默认"确定/取消"）。设置自定义文本后，cleanup 恢复默认文本必须延迟到关闭动画结束（最长 200ms，取 260ms），否则动画期间按钮文字瞬变；延迟恢复前检查 `els.confirmDialog.classList.contains('visible')`，若期间已有新弹窗打开则不恢复，避免覆盖新弹窗文本。恢复是必须的——`showSaveConfirmDialog`/`showDeleteNotebookDialog` 打开时**不设置**按钮文本，依赖共享 DOM 的默认值，不恢复会泄漏"去查看/取消"。 |
+| **锁屏联动** | `unlockApp()` 解锁成功后 `dispatchEvent(new CustomEvent('app-unlocked'))`；`checkUnfinishedTodosReminder` 一次性监听该事件，解锁后约 1s 再弹，未启用锁屏则延迟 600ms 直接弹。函数带 `window.go?.main?.App?.GetAllSettings` guard（与 `checkScreenLock` 同款）。`#mainContent:has(#viewTodo.active)` 的 `overflow-y: hidden` 规则保持不变（外层不滚动）。 |
+| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（hover 去边框 + 删 pinned:hover）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（滚动条贴窗布局）、[internal/services/todo_service.go](internal/services/todo_service.go)（CountUnfinished）、[app.go](app.go)（CountUnfinishedTodos 绑定）、[frontend/src/main.js](frontend/src/main.js)（checkUnfinishedTodosReminder + showConfirmDialog 扩展 + unlockApp 派发事件） |
 
 ---
 

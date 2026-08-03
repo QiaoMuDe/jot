@@ -3451,6 +3451,12 @@ func (a *App) ClearCompletedTodos() (string, error) {
 	return fmt.Sprintf("已清空 %d 个已完成待办事项", count), nil
 }
 
+// CountUnfinishedTodos 返回未完成待办数量（启动弹窗提示用）
+func (a *App) CountUnfinishedTodos() (int64, error) {
+	a.LogSvc.Logger.Debugw("CountUnfinishedTodos")
+	return a.todoService.CountUnfinished()
+}
+
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）
 func (a *App) reconnectDB(dbPath string) error {
 	a.LogSvc.Logger.Debugw("reconnectDB", fastlog.String("dbPath", dbPath))

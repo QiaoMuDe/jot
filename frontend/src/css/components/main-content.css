@@ -192,7 +192,6 @@
 .note-card:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-2px) scale(1.01);
-  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 /* 卡片点击反馈 */
@@ -203,11 +202,6 @@
 /* 置顶状态：左侧 3px 彩色边框 */
 .note-card.pinned {
   border-left: 3px solid var(--accent);
-}
-
-/* 置顶卡片 hover 时保持左侧彩色边框，避免被 border-color 覆盖 */
-.note-card.pinned:hover {
-  border-left-color: var(--accent);
 }
 
 /* ---- Card Body ---- */
