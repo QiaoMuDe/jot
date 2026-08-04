@@ -1036,14 +1036,23 @@ async function deleteNote(id) {
 }
 
 /**
- * 复制笔记内容到剪贴板
+ * 复制笔记正文到剪贴板
+ * 列表查询仅返回截断的前 200 字符，需按 id 获取完整正文再复制（仅复制正文，不含标题）
  */
 async function copyNote(id) {
     const note = state.notes.find((n) => n.id === id);
     if (!note) return;
-    const text = (note.title ? note.title + '\n\n' : '') + (note.content || '');
+    let content = note.content || '';
     try {
-        await navigator.clipboard.writeText(text);
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetNoteContent) {
+            const fullContent = await window.go.main.App.GetNoteContent(id);
+            if (fullContent != null) content = fullContent;
+        }
+    } catch (err) {
+        console.error('获取完整笔记内容失败，降级使用列表截断内容:', err);
+    }
+    try {
+        await navigator.clipboard.writeText(content);
         nm.show('已复制到剪贴板', 'success');
     } catch (err) {
         console.error('复制失败:', err);
