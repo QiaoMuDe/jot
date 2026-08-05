@@ -15,8 +15,11 @@ landing/
 │   └── style.css       # 全部样式（按区块注释组织）
 ├── js/
 │   └── main.js         # 全部交互逻辑（按功能模块组织）
-├── media.json          # 截图数据配置（增删图只需改此文件）
-├── serve.py            # 本地预览服务器
+├── media.json          # 截图 + 视频数据配置（增删媒体只需改此文件）
+├── images/             # 图片资源目录（截图、视频封面）
+├── videos/             # 视频资源目录
+├── serve.go            # 本地预览/部署服务器（Go 标准库，推荐）
+├── serve.py            # 旧版 Python 预览服务器（备选）
 └── LANDING_README.md   # 本文件
 ```
 
@@ -28,12 +31,24 @@ landing/
 
 ```bash
 cd landing
-python serve.py                 # 默认端口 8123，自动打开浏览器
-python serve.py --port 9000     # 指定端口
-python serve.py --no-open       # 不自动打开浏览器
+go run serve.go                 # 默认端口 8123，自动打开浏览器（推荐，仅需 Go 环境）
+go run serve.go -port 9000      # 指定端口
+go run serve.go -no-open        # 不自动打开浏览器
+go run serve.go -host 0.0.0.0   # 局域网/公网可访问
 ```
 
-服务器基于 Python 标准库 `http.server`，无需安装额外依赖。
+Go 版仅使用标准库，无需 `go.mod`。
+
+### 服务器部署
+
+```bash
+go build -o serve serve.go      # 编译单文件二进制（仅标准库，无需 go.mod）
+./serve                         # 二进制与静态文件放在同一目录下运行
+```
+
+编译出的二进制跨平台可用（Windows 为 `serve.exe`），服务器无需安装任何运行时。
+
+> 旧版 Python 服务器 `serve.py` 仍保留可用：`python serve.py [--port 9000] [--no-open]`
 
 ### 文件结构规范
 
@@ -51,6 +66,7 @@ python serve.py --no-open       # 不自动打开浏览器
 | Hero | `#hero` | 深色全屏首屏，背景网格 + 光晕粒子动画 |
 | 特性 | `#features` | 8 张毛玻璃卡片，hover 浮起，滚动入场动画 |
 | 截图 | `#screenshots` | 从 `media.json` 动态渲染，点击弹出 Lightbox |
+| 视频 | `#videos` | 从 `media.json` 动态渲染，点击卡片弹出播放器 |
 | 技术栈 | `#tech-stack` | 16 个技术徽章，hover 弹跳缩放 |
 | 统计数据 | `#stats` | 4 项数字，滚动触发递增动画（easeOutExpo） |
 | CTA 联系 | `#cta` | 深色渐变卡片，引导联系作者 |
@@ -95,7 +111,7 @@ python serve.py --no-open       # 不自动打开浏览器
 
 ### 响应式断点
 
-- **768px**：导航栏隐藏非 CTA 链接，特性网格降单列，截图网格降单列，统计网格 2 列，Lightbox 内边距缩小
+- **768px**：导航栏隐藏非 CTA 链接，特性网格降单列，截图网格降单列，视频网格降单列，统计网格 2 列，Lightbox / 视频弹窗内边距缩小
 - **480px**：Hero 标题缩小，统计数字缩小
 - **769px ~ 1024px**：特性网格 2 列
 
@@ -133,6 +149,33 @@ python serve.py --no-open       # 不自动打开浏览器
 1. 将真实截图放入 `landing/images/` 目录
 2. 修改 `media.json` 中对应条目的 `src` 为 `"images/真实文件名.png"`
 3. 建议尺寸：宽 800px × 高 500px（16:9 比例）
+
+### 视频管理
+
+视频数据同样通过 `media.json` 配置，格式如下：
+
+```json
+{
+  "videos": [
+    {
+      "id": "唯一标识",
+      "src": "视频路径或 URL",
+      "poster": "封面图路径（可选）",
+      "title": "视频标题",
+      "caption": "视频说明文字"
+    }
+  ]
+}
+```
+
+**增删改操作**：
+- **增加视频**：将视频文件放入 `landing/videos/` 目录，在 `videos` 数组中新增一个对象，`src` 写相对路径 `videos/xxx.mp4`
+- **删除视频**：删除数组中对应对象，再删除对应视频文件
+- **修改视频**：改对应对象的字段即可，`src` 可指向本地路径或外部 URL
+- **封面图**：`poster` 可选，不填时卡片显示深色渐变 + 播放按钮兜底样式
+- **格式建议**：mp4（H.264 编码）兼容性最好；建议控制单个视频体积在几十 MB 以内
+
+播放逻辑说明：点击视频卡片弹出居中播放器（仅播放时才加载视频），关闭弹窗后自动暂停并释放资源。
 
 ---
 
