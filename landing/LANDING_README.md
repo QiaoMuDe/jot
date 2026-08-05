@@ -18,8 +18,8 @@ landing/
 ├── media.json          # 截图 + 视频数据配置（增删媒体只需改此文件）
 ├── images/             # 图片资源目录（截图、视频封面）
 ├── videos/             # 视频资源目录
-├── serve.go            # 本地预览/部署服务器（Go 标准库，推荐）
-├── serve.py            # 旧版 Python 预览服务器（备选）
+├── serve.go            # 单文件服务器（静态资源已 go:embed 嵌入二进制）
+├── serve.py            # 旧版 Python 预览服务器（备选，读磁盘文件）
 └── LANDING_README.md   # 本文件
 ```
 
@@ -42,13 +42,15 @@ Go 版仅使用标准库，无需 `go.mod`。
 ### 服务器部署
 
 ```bash
-go build -o serve serve.go      # 编译单文件二进制（仅标准库，无需 go.mod）
-./serve                         # 二进制与静态文件放在同一目录下运行
+go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
+./jot-landing                      # 任意目录均可运行，无需携带任何静态文件
 ```
 
-编译出的二进制跨平台可用（Windows 为 `serve.exe`），服务器无需安装任何运行时。
+所有静态资源（HTML/CSS/JS/图片/视频/JSON）在编译时已通过 `go:embed` 打包进二进制，部署只需拷贝**一个文件**。
 
-> 旧版 Python 服务器 `serve.py` 仍保留可用：`python serve.py [--port 9000] [--no-open]`
+**重要**：素材已内嵌，更新页面代码或素材（如替换 `videos/` 下的视频、`media.json` 文案）后，需要**重新编译**才能生效。
+
+> 旧版 Python 服务器 `serve.py` 仍保留可用（读磁盘文件，改素材即时生效，适合边改边看）：`python serve.py [--port 9000] [--no-open]`
 
 ### 文件结构规范
 
