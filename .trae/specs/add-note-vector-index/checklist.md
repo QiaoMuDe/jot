@@ -1,0 +1,25 @@
+# Checklist
+
+- [x] `NoteVector` 模型存在且字段符合 spec，AutoMigrate 注册 `note_vectors` 表
+- [x] settings 新增 4 键 `ai_embed_*`，默认值符合 spec（ollama / localhost:11434 / 空 / 空）
+- [x] `SwitchProfile(target, id)` 双目标：chat 写入 `ai_*` 并清 AISessionConfig；embed 写入 `ai_embed_*`；前端调用点全部更新
+- [x] 切块函数通过单测（2000+ 字 → ≥4 块且每块 ≤500 rune，rune 安全）
+- [x] float32 BLOB 序列化工具正确（RoundTrip 无损）
+- [x] aicli.Embed 双 Provider 实现：openai（CreateEmbeddings）/ ollama（api.Embed），空输入返回空切片，错误映射正确
+- [x] VectorService.IndexNotes 幂等（重复量化无重复数据）、软删除笔记跳过、单条失败不终止整体
+- [x] VectorService.GetIndexStatus 返回去重笔记数/片段总数/占用字节数
+- [x] VectorService.DeleteAllVectors 清空向量表
+- [x] app.go 绑定方法齐全：IndexNotesByAll / ByNotebooks / ByIDs、GetVectorIndexStatus、DeleteAllVectors、GetEmbedConfig
+- [x] 量化任务异步执行不阻塞主线程，`sync.Mutex` 防重入（进行中拒绝新任务）
+- [x] 量化事件推送完整：`vector:index-progress` / `vector:index-done` / `vector:index-error`
+- [x] 未配置 `ai_embed_model` 时量化被拒绝并提示先配置
+- [x] 设置页 API 连接面板拆为「对话连接」「量化连接」两个模块，各自完整表单
+- [x] 量化连接模块读写 `ai_embed_*` 四键，预设下拉共享 APIProfile 表，切换调用 `SwitchProfile("embed", id)`
+- [x] 预设下拉选中态按当前模块 settings 键值匹配（不依赖 is_active）
+- [x] 数据管理页「AI 量化索引」分组存在：量化入口 + 删除量化内容
+- [x] 量化弹窗支持三种范围（全部/笔记本/笔记），列表多选+全选+搜索
+- [x] 进度视图实时更新（整体进度 + 当前笔记标题 + 子阶段），完成摘要展示成功/失败/片段数
+- [x] 删除量化内容有二次确认，弹窗「不保存」按钮可见性按类型控制
+- [x] 信笺统计展示向量索引状态（X 篇 / Y 片段 / Z MB，未量化显示「未量化」）
+- [x] 后端 `go build ./...` + `go vet ./...` 通过
+- [ ] 端到端手测通过：配置量化连接 → 量化 → 进度 → 统计 → 删除 → 统计归零；对话预设切换不影响量化配置（需用户本机 Ollama + wails dev 实测，沙箱环境无法运行 GUI/Ollama）

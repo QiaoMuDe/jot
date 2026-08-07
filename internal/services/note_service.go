@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"jot/internal/models"
@@ -732,111 +731,6 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 		return nil, err
 	}
 	return &note, nil
-}
-
-// SearchFull 多关键词 OR 搜索笔记标题和内容，返回完整内容（非 200 字截断）
-// 用于卡片召回功能。对匹配结果按相关度打分排序后取 Top N：
-//   - 标题命中一个关键词 = 3 分
-//   - 内容命中一个关键词 = 1 分
-//   - 覆盖率奖励：命中 m/n 个关键词，奖励 m-1 分（命中全部关键词时奖励最大）
-//   - 同分时按 updated_at 降序排列
-func (s *NoteService) SearchFull(keywords []string, limit int, notebookIDs ...uint) ([]models.Note, error) {
-	if len(keywords) == 0 {
-		return nil, nil
-	}
-
-	// 构建多关键词 OR 条件
-	var conditions []string
-	var args []interface{}
-	for _, kw := range keywords {
-		likePattern := "%" + kw + "%"
-		conditions = append(conditions, "title LIKE ? OR content LIKE ?")
-		args = append(args, likePattern, likePattern)
-	}
-
-	var notes []models.Note
-	// 放宽 limit 以提供足够的候选集用于重排序，同时避免全表扫描
-	candidateLimit := limit * 10
-	if candidateLimit < 50 {
-		candidateLimit = 50
-	}
-
-	query := s.db.Model(&models.Note{}).
-		Where("deleted_at IS NULL")
-	if len(notebookIDs) > 0 {
-		query = query.Where("notebook_id IN ?", notebookIDs)
-	}
-	query = query.Where(strings.Join(conditions, " OR "), args...).
-		Limit(candidateLimit)
-
-	if err := query.Find(&notes).Error; err != nil {
-		s.logger.Errorw("NoteService.SearchFull 失败", fastlog.Error(err))
-		return nil, err
-	}
-
-	// 打分排序：按相关度降序，同分按 updated_at 降序
-	type scoredNote struct {
-		note  models.Note
-		score int
-	}
-	scored := make([]scoredNote, 0, len(notes))
-
-	for _, note := range notes {
-		score := scoreNote(note, keywords)
-		if score > 0 {
-			scored = append(scored, scoredNote{note: note, score: score})
-		}
-	}
-
-	sort.Slice(scored, func(i, j int) bool {
-		if scored[i].score != scored[j].score {
-			return scored[i].score > scored[j].score
-		}
-		return scored[i].note.UpdatedAt.After(scored[j].note.UpdatedAt)
-	})
-
-	// 取 Top N
-	result := make([]models.Note, 0, limit)
-	for i := 0; i < len(scored) && i < limit; i++ {
-		result = append(result, scored[i].note)
-	}
-
-	return result, nil
-}
-
-// scoreNote 计算单条笔记与关键词列表的相关度分数
-//   - 标题命中一个关键词 = 3 分
-//   - 内容命中一个关键词 = 1 分
-//   - 覆盖率奖励：命中 m/n 个关键词，奖励 m-1 分
-func scoreNote(note models.Note, keywords []string) int {
-	titleStr := strings.ToLower(note.Title)
-	contentStr := strings.ToLower(note.Content)
-
-	titleHits := 0
-	contentHits := 0
-	coveredKeywords := 0
-
-	for _, kw := range keywords {
-		kwLower := strings.ToLower(kw)
-		inTitle := strings.Contains(titleStr, kwLower)
-		inContent := strings.Contains(contentStr, kwLower)
-
-		if inTitle {
-			titleHits++
-		}
-		if inContent {
-			contentHits++
-		}
-		if inTitle || inContent {
-			coveredKeywords++
-		}
-	}
-
-	score := titleHits*3 + contentHits*1
-	if coveredKeywords > 1 {
-		score += coveredKeywords - 1
-	}
-	return score
 }
 
 // GetByDate 按创建日期查询非删除笔记，使用 noteThinSelect 避免加载大文本内容

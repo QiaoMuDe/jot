@@ -1,0 +1,47 @@
+# Tasks
+
+- [ ] Task 1: 后端移除关键词召回链路
+  - [ ] 1.1 `internal/services/recall_service.go`：删除 gse 分词全套（import/`stopWords`/`isStopWord`/`gseSeg`/`gseOnce`/`gseInitErr`/`initGseSegmenter`/`tokenize`）、`maxRecallKeywords`、`CardRecallSearch`；保留 `RecallCard`/`CardRecallResult`/`MergeRecallCards`/`TruncateRecallCardsPreview`/`TruncateSearchSourcesPreview`
+  - [ ] 1.2 `internal/services/note_service.go`：删除 `SearchFull`
+  - [ ] 1.3 `app.go`：删除关键词召回块（`CardRecallSearch` 调用、`combinedQuery` 拼接），`refinedQuery` 保留
+  - [ ] 1.4 `go.mod`：移除 `github.com/go-ego/gse`
+  - [ ] 1.5 编译验证：`go build ./...` 通过
+- [ ] Task 2: 向量召回受卡片召回开关门控
+  - [ ] 2.1 `app.go`：向量召回块包进 `cardRecallEnabled` 判断（开关开才执行 `VectorRecall`）
+  - [ ] 2.2 开关关闭时跳过召回（不注入、不发射 `ai:recall-cards`）
+  - [ ] 2.3 确认 `recallNotebookIDs` 继续传入 `VectorRecall` 限定笔记本范围，条数沿用 `ai_card_recall_limit`
+  - [ ] 2.4 编译验证
+- [ ] Task 3: 后端 VectorService 新增按模型计数方法
+  - [ ] 3.1 `CountAllVectors() (int64, error)`：统计 `note_vectors` 总记录数
+  - [ ] 3.2 `CountVectorsByModel(model string) (int64, error)`：按 `model = ?` 统计记录数
+- [ ] Task 4: 后端 App 新增 ValidateCardRecall 绑定方法
+  - [ ] 4.1 定义返回结构 `CardRecallCheckResult{ OK bool, Message string }`
+  - [ ] 4.2 实现 `ValidateCardRecall()`：复用 `GetEmbedConfig()` 读取四键
+  - [ ] 4.3 基础判断：provider/base_url/model 任一为空 → 拒绝"请先在设置中配置量化连接与量化模型"
+  - [ ] 4.4 类型判断：provider == "openai" 且 apiKey 为空 → 拒绝"请先填写量化 API Key"；"ollama" 跳过 Key 检查
+  - [ ] 4.5 量化表判断：`CountAllVectors() == 0` → 拒绝"量化表为空，请先在数据管理中量化笔记"
+  - [ ] 4.6 模型记录判断：`CountVectorsByModel(model) == 0` → 拒绝"当前量化模型「X」暂无量化数据，请先使用该模型量化笔记"
+  - [ ] 4.7 全部通过返回 `OK=true`
+  - [ ] 4.8 编译验证：`go build ./...` 通过
+- [ ] Task 5: 前端设置页开关接入校验
+  - [ ] 5.1 `frontend/src/main.js` 设置页开关 handler：点击且即将开启时先调 `window.go.main.App.ValidateCardRecall()`
+  - [ ] 5.2 `ok=false`：回滚 `active` 状态、不执行 saveSettings、`nm.show(message, 'warning')`
+  - [ ] 5.3 `ok=true`：维持现有开启流程（同步工具栏 + 全选笔记本）
+- [ ] Task 6: 前端对话内开关接入校验
+  - [ ] 6.1 `frontend/src/js/ai-chat.js` 开关 knob handler：点击且即将开启时先调 `ValidateCardRecall()`
+  - [ ] 6.2 `ok=false`：回滚 `active` 状态与 `enableCardRecall`、不执行全选、不 `saveCurrentSessionConfig`、通知提示
+  - [ ] 6.3 `ok=true`：维持现有开启流程
+- [ ] Task 7: 前端笔记本下拉勾选自动开启校验
+  - [ ] 7.1 `ai-chat.js` 下拉 checkbox change handler：`recallNotebookIds.size` 从 0 变 > 0（召回从关到开）时先调 `ValidateCardRecall()`
+  - [ ] 7.2 `ok=false`：回滚该 checkbox 勾选、恢复开关关闭态与 `enableCardRecall=false`、不持久化、通知提示
+  - [ ] 7.3 `ok=true`：维持现有逻辑
+- [ ] Task 8: 整体验证
+  - [ ] 8.1 `go build ./...` 通过，无残留关键词召回引用
+  - [ ] 8.2 手工验证：关键词召回已移除（无 gse 依赖）；开关关不召回；开关开按选中笔记本向量召回；校验四个拒绝场景 + 全通过场景
+
+# Task Dependencies
+- Task 2 依赖 Task 1（删除关键词召回后门控向量召回）
+- Task 4 依赖 Task 3（ValidateCardRecall 需用 VectorService 计数方法）
+- Task 5、6、7 依赖 Task 4（前端调用 ValidateCardRecall 绑定方法）
+- Task 5、6、7 互不依赖，可并行
+- Task 8 依赖全部

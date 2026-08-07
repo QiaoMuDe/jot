@@ -158,7 +158,7 @@ async function openModelDropdown() {
         try {
             const cfg = await window.go.main.App.GetAIConfig();
             if (cfg.base_url && cfg.api_key) {
-                modelList = await window.go.main.App.FetchAIModels(cfg.base_url, cfg.api_key);
+                modelList = await window.go.main.App.FetchAIModels(cfg.provider, cfg.base_url, cfg.api_key);
             }
         } catch (_) {}
     }
@@ -875,6 +875,22 @@ function bindEvents() {
             if (knob) {
                 enableCardRecall = cardRecallToggle.classList.toggle('active');
                 if (enableCardRecall) {
+                    // 开启前校验量化配置与量化表
+                    try {
+                        const check = await window.go.main.App.ValidateCardRecall();
+                        if (!check.ok) {
+                            // 校验失败：回滚开关状态
+                            enableCardRecall = false;
+                            cardRecallToggle.classList.toggle('active');
+                            nm.show(check.message || '卡片召回校验未通过', 'warning');
+                            return;
+                        }
+                    } catch (e) {
+                        enableCardRecall = false;
+                        cardRecallToggle.classList.toggle('active');
+                        nm.show('卡片召回校验失败: ' + e, 'error');
+                        return;
+                    }
                     // 开→全选所有笔记本（加载菜单后勾选全部）
                     try {
                         const notebooks = await window.go.main.App.GetAllNotebooks();
@@ -4909,10 +4925,34 @@ async function loadRecallNotebookMenu() {
             });
             // checkbox change 事件
             cb.addEventListener('change', async () => {
+                const wasEnabled = enableCardRecall;         // 操作前召回开关状态
+                const wasEmpty = recallNotebookIds.size === 0; // 操作前是否未选任何笔记本
                 if (cb.checked) {
                     recallNotebookIds.add(nb.id);
                 } else {
                     recallNotebookIds.delete(nb.id);
+                }
+                // 勾选导致召回从关闭变为开启：先校验量化配置与量化表
+                if (cb.checked && wasEmpty && !wasEnabled) {
+                    try {
+                        const check = await window.go.main.App.ValidateCardRecall();
+                        if (!check.ok) {
+                            // 校验失败：回滚复选框与开关状态
+                            cb.checked = false;
+                            recallNotebookIds.delete(nb.id);
+                            enableCardRecall = false;
+                            if (cardRecallToggle) cardRecallToggle.classList.remove('active');
+                            nm.show(check.message || '卡片召回校验未通过', 'warning');
+                            return;
+                        }
+                    } catch (e) {
+                        cb.checked = false;
+                        recallNotebookIds.delete(nb.id);
+                        enableCardRecall = false;
+                        if (cardRecallToggle) cardRecallToggle.classList.remove('active');
+                        nm.show('卡片召回校验失败: ' + e, 'error');
+                        return;
+                    }
                 }
                 // 如果全不选，卡片召回设为关闭；如果全选或有选，设为开启
                 if (recallNotebookIds.size === 0) {

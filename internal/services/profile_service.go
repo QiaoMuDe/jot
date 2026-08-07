@@ -86,9 +86,17 @@ func (p *ProfileService) DeleteProfile(id uint) error {
 }
 
 // SwitchProfile 切换预设：将指定预设的值写入当前配置（settings 表），并标记为激活
-func (p *ProfileService) SwitchProfile(id uint) error {
+// target 决定写入的键组："chat" 写入 ai_provider/ai_base_url/ai_api_key 并清空 ai_model 与所有会话模型；
+// "embed" 写入 ai_embed_provider/ai_embed_base_url/ai_embed_api_key 并清空 ai_embed_model（不影响会话配置）
+func (p *ProfileService) SwitchProfile(target string, id uint) error {
 	var profile models.APIProfile
 	if err := p.db.First(&profile, id).Error; err != nil {
+		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
+		return err
+	}
+	// 校验切换目标
+	if target != "chat" && target != "embed" {
+		err := errors.New("未知的预设切换目标: " + target)
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
@@ -96,26 +104,32 @@ func (p *ProfileService) SwitchProfile(id uint) error {
 	p.db.Model(&models.APIProfile{}).Where("1 = 1").Update("is_active", false)
 	// 标记当前预设为激活
 	p.db.Model(&models.APIProfile{}).Where("id = ?", id).Update("is_active", true)
-	// 写入 settings 表
+	// 写入 settings 表（按 target 决定键前缀）
 	svc := NewSettingService(p.db)
-	if err := svc.Set("ai_provider", profile.Provider); err != nil {
+	prefix := "ai_"
+	if target == "embed" {
+		prefix = "ai_embed_"
+	}
+	if err := svc.Set(prefix+"provider", profile.Provider); err != nil {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
-	if err := svc.Set("ai_base_url", profile.BaseURL); err != nil {
+	if err := svc.Set(prefix+"base_url", profile.BaseURL); err != nil {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
-	if err := svc.Set("ai_api_key", profile.APIKey); err != nil {
+	if err := svc.Set(prefix+"api_key", profile.APIKey); err != nil {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
 	// 清除模型，由用户在切换后重新选择
-	if err := svc.Set("ai_model", ""); err != nil {
+	if err := svc.Set(prefix+"model", ""); err != nil {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
-	// 清除所有会话配置中的模型（切换预设后旧模型不可用）
-	p.db.Model(&models.AISessionConfig{}).Where("1 = 1").Update("model_name", "")
+	// 对话目标：清除所有会话配置中的模型（切换预设后旧模型不可用）；量化目标不触碰会话配置
+	if target == "chat" {
+		p.db.Model(&models.AISessionConfig{}).Where("1 = 1").Update("model_name", "")
+	}
 	return nil
 }

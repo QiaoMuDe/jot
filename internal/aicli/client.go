@@ -98,3 +98,55 @@ func (c *Client) Chat(ctx context.Context, messages []Message, thinkingEnabled b
 		return c.openaiChat(ctx, messages)
 	}
 }
+
+// Embed 批量生成文本向量，按 Provider 分发到 openai/ollama 实现
+// texts 为空时返回空切片且不调用外部 API；返回与 texts 一一对应的向量列表
+func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	if len(texts) == 0 {
+		return [][]float32{}, nil
+	}
+	switch c.Provider {
+	case "ollama":
+		return c.ollamaEmbed(ctx, texts)
+	default:
+		return c.openaiEmbed(ctx, texts)
+	}
+}
+
+// EmbedWithProgress 按批次批量生成文本向量：每完成一批回调一次块级进度
+// batchSize 为每批文本数（<=0 时整批一次调用）；cb(done, total) 中 total 为总文本数
+// 返回与 texts 一一对应的向量列表；任一批失败即返回错误
+func (c *Client) EmbedWithProgress(ctx context.Context, texts []string, batchSize int, cb func(done, total int)) ([][]float32, error) {
+	if len(texts) == 0 {
+		return [][]float32{}, nil
+	}
+	if batchSize <= 0 {
+		batchSize = len(texts)
+	}
+
+	result := make([][]float32, 0, len(texts))
+	for start := 0; start < len(texts); start += batchSize {
+		end := start + batchSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+
+		var batchVec [][]float32
+		var err error
+		switch c.Provider {
+		case "ollama":
+			batchVec, err = c.ollamaEmbed(ctx, texts[start:end])
+		default:
+			batchVec, err = c.openaiEmbed(ctx, texts[start:end])
+		}
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, batchVec...)
+
+		if cb != nil {
+			cb(end, len(texts))
+		}
+	}
+	return result, nil
+}

@@ -69,6 +69,10 @@ type SettingsConfig struct {
 	AIBaseURL                   string `json:"ai_base_url"`
 	AIAPIKey                    string `json:"ai_api_key"`
 	AIModel                     string `json:"ai_model"`
+	AIEmbedProvider             string `json:"ai_embed_provider"`
+	AIEmbedBaseURL              string `json:"ai_embed_base_url"`
+	AIEmbedAPIKey               string `json:"ai_embed_api_key"`
+	AIEmbedModel                string `json:"ai_embed_model"`
 	TavilyAPIKey                string `json:"tavily_api_key"`
 	AIThinkingEnabled           bool   `json:"ai_thinking_enabled"`
 	ZhihuAccessSecret           string `json:"zhihu_access_secret"`
@@ -103,6 +107,10 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AIBaseURL:                   s.Get("ai_base_url"),
 		AIAPIKey:                    s.Get("ai_api_key"),
 		AIModel:                     s.Get("ai_model"),
+		AIEmbedProvider:             s.Get("ai_embed_provider"),
+		AIEmbedBaseURL:              s.Get("ai_embed_base_url"),
+		AIEmbedAPIKey:               s.Get("ai_embed_api_key"),
+		AIEmbedModel:                s.Get("ai_embed_model"),
 		TavilyAPIKey:                s.Get("tavily_api_key"),
 		AIThinkingEnabled:           parseBoolSetting(s.Get("ai_thinking_enabled")),
 		ZhihuAccessSecret:           s.Get("zhihu_access_secret"),
@@ -122,6 +130,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		EditorWordWrap:              parseBoolSetting(s.Get("editor_word_wrap")),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
+	cfg.AIEmbedAPIKey = DecodeB64(cfg.AIEmbedAPIKey)
 	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
 	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
 	return cfg
@@ -176,6 +185,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	}
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
+	cfg.AIEmbedAPIKey = EncodeB64(cfg.AIEmbedAPIKey)
 	cfg.TavilyAPIKey = EncodeB64(cfg.TavilyAPIKey)
 	cfg.ZhihuAccessSecret = EncodeB64(cfg.ZhihuAccessSecret)
 
@@ -204,6 +214,10 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_base_url":                     cfg.AIBaseURL,
 		"ai_api_key":                      cfg.AIAPIKey,
 		"ai_model":                        cfg.AIModel,
+		"ai_embed_provider":               cfg.AIEmbedProvider,
+		"ai_embed_base_url":               cfg.AIEmbedBaseURL,
+		"ai_embed_api_key":                cfg.AIEmbedAPIKey,
+		"ai_embed_model":                  cfg.AIEmbedModel,
 		"tavily_api_key":                  cfg.TavilyAPIKey,
 		"ai_thinking_enabled":             strconv.FormatBool(cfg.AIThinkingEnabled),
 		"zhihu_access_secret":             cfg.ZhihuAccessSecret,

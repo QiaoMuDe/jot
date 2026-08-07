@@ -110,6 +110,10 @@ export function DeleteAISession(arg1) {
   return window['go']['main']['App']['DeleteAISession'](arg1);
 }
 
+export function DeleteAllVectors() {
+  return window['go']['main']['App']['DeleteAllVectors']();
+}
+
 export function DeleteNote(arg1) {
   return window['go']['main']['App']['DeleteNote'](arg1);
 }
@@ -154,8 +158,8 @@ export function ExportNoteAsMarkdown(arg1) {
   return window['go']['main']['App']['ExportNoteAsMarkdown'](arg1);
 }
 
-export function FetchAIModels(arg1, arg2) {
-  return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
+export function FetchAIModels(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FetchAIModels'](arg1, arg2, arg3);
 }
 
 export function GetAICardRecallLimit() {
@@ -196,6 +200,10 @@ export function GetBackupInfo() {
 
 export function GetDataStats() {
   return window['go']['main']['App']['GetDataStats']();
+}
+
+export function GetEmbedConfig() {
+  return window['go']['main']['App']['GetEmbedConfig']();
 }
 
 export function GetMaxFileSize() {
@@ -270,6 +278,10 @@ export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
 
+export function GetVectorIndexStatus() {
+  return window['go']['main']['App']['GetVectorIndexStatus']();
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
@@ -280,6 +292,18 @@ export function ImportDatabaseWithDialog() {
 
 export function ImportFiles(arg1, arg2) {
   return window['go']['main']['App']['ImportFiles'](arg1, arg2);
+}
+
+export function IndexNotesByAll() {
+  return window['go']['main']['App']['IndexNotesByAll']();
+}
+
+export function IndexNotesByIDs(arg1) {
+  return window['go']['main']['App']['IndexNotesByIDs'](arg1);
+}
+
+export function IndexNotesByNotebooks(arg1) {
+  return window['go']['main']['App']['IndexNotesByNotebooks'](arg1);
 }
 
 export function ListTodos() {
@@ -438,12 +462,12 @@ export function SetSortOrder(arg1) {
   return window['go']['main']['App']['SetSortOrder'](arg1);
 }
 
-export function SwitchProfile(arg1) {
-  return window['go']['main']['App']['SwitchProfile'](arg1);
+export function SwitchProfile(arg1, arg2) {
+  return window['go']['main']['App']['SwitchProfile'](arg1, arg2);
 }
 
-export function TestAIBaseURL(arg1, arg2) {
-  return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
+export function TestAIBaseURL(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2, arg3);
 }
 
 export function TestAIConnection(arg1, arg2, arg3) {
@@ -512,6 +536,10 @@ export function UpdateTodo(arg1, arg2) {
 
 export function VacuumDatabase() {
   return window['go']['main']['App']['VacuumDatabase']();
+}
+
+export function ValidateCardRecall() {
+  return window['go']['main']['App']['ValidateCardRecall']();
 }
 
 export function VerifyScreenLockPassword(arg1) {

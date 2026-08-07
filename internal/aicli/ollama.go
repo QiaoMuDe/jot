@@ -95,6 +95,32 @@ func (c *Client) ollamaChat(ctx context.Context, messages []Message, thinkingEna
 	return fullContent, fullThinking, nil
 }
 
+// ollamaEmbed 调用 Ollama 原生 API 的 embedding 接口 (/api/embed) 批量生成文本向量
+// 返回与 texts 一一对应的向量列表
+func (c *Client) ollamaEmbed(ctx context.Context, texts []string) ([][]float32, error) {
+	ollamaClient, err := c.newOllamaClient()
+	if err != nil {
+		return nil, err
+	}
+
+	req := &api.EmbedRequest{
+		Model: c.Model,
+		Input: texts,
+	}
+	resp, err := ollamaClient.Embed(ctx, req)
+	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return nil, &AIErrorWrapper{Err: ae}
+		}
+		return nil, fmt.Errorf("ollama embedding 调用失败: %w", err)
+	}
+
+	if len(resp.Embeddings) != len(texts) {
+		return nil, fmt.Errorf("ollama embedding 返回数量不匹配: 期望 %d 实际 %d", len(texts), len(resp.Embeddings))
+	}
+	return resp.Embeddings, nil
+}
+
 // newOllamaClient 创建 Ollama 客户端
 func (c *Client) newOllamaClient() (*api.Client, error) {
 	baseURL := c.BaseURL

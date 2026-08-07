@@ -58,6 +58,8 @@ export function DeleteAIMessagesAfter(arg1:number,arg2:number):Promise<number>;
 
 export function DeleteAISession(arg1:number):Promise<void>;
 
+export function DeleteAllVectors():Promise<void>;
+
 export function DeleteNote(arg1:number):Promise<void>;
 
 export function DeleteNotebook(arg1:number):Promise<void>;
@@ -80,7 +82,7 @@ export function ExportDataWithDialog():Promise<string>;
 
 export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
-export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
+export function FetchAIModels(arg1:string,arg2:string,arg3:string):Promise<Array<string>>;
 
 export function GetAICardRecallLimit():Promise<number>;
 
@@ -101,6 +103,8 @@ export function GetAllTags():Promise<Array<models.Tag>>;
 export function GetBackupInfo():Promise<Record<string, string>>;
 
 export function GetDataStats():Promise<services.DataStats>;
+
+export function GetEmbedConfig():Promise<string>;
 
 export function GetMaxFileSize():Promise<number>;
 
@@ -138,11 +142,19 @@ export function GetTrashNotebooks(arg1:number,arg2:number):Promise<services.Pagi
 
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
+export function GetVectorIndexStatus():Promise<number>;
+
 export function GetVersion():Promise<string>;
 
 export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
 export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
+
+export function IndexNotesByAll():Promise<void>;
+
+export function IndexNotesByIDs(arg1:Array<number>):Promise<void>;
+
+export function IndexNotesByNotebooks(arg1:Array<number>):Promise<void>;
 
 export function ListTodos():Promise<Array<models.Todo>>;
 
@@ -222,9 +234,9 @@ export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
 export function SetSortOrder(arg1:string):Promise<void>;
 
-export function SwitchProfile(arg1:number):Promise<void>;
+export function SwitchProfile(arg1:string,arg2:number):Promise<void>;
 
-export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
+export function TestAIBaseURL(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function TestAIConnection(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
@@ -259,5 +271,7 @@ export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Ta
 export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
 
 export function VacuumDatabase():Promise<string>;
+
+export function ValidateCardRecall():Promise<main.CardRecallCheckResult>;
 
 export function VerifyScreenLockPassword(arg1:string):Promise<boolean>;

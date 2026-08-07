@@ -21,7 +21,7 @@ jot/                                    # 项目根目录
 │   │   └── converter.go               # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
 │   ├── markitdown/                     # 从 Go module cache 克隆的 markitdown 库本地副本（含 PDFium Stdout/Stderr Discard 修复）
 │   ├── database/
-│   │   ├── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数
+│   │   ├── db.go                       # SQLite 初始化（glebarez/sqlite 纯 Go 驱动）+ WAL 模式 + 优化 PRAGMA + DefaultDBPath() 路径函数 + blank import 注册 sqlite-vec 扩展
 │   │   └── builtin_profiles.go         # 内置 API 预设服务商定义（DeepSeek/智谱 GLM/Ollama/Agnes 等 12 个），InitDB 时按 Name 去重增量插入
 │   ├── fontutil/
 │   │   └── fonts_windows.go           # EnumFontFamiliesW API 封装
@@ -33,8 +33,9 @@ jot/                                    # 项目根目录
 │   │   │   ├── ai_session_config.go      # AI 会话操作栏配置实体（模型/深度思考/搜索源/卡片召回（含指定笔记本）/笔记引用/技能，与 AISession 一对一关联）
 │   │   ├── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
 │   │   ├── api_profile.go             # API 配置预设实体（名称/服务商/URL/Key）
-│   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
-│   │   └── todo.go                    # Todo 实体（待办/文本/完成状态/时间戳）
+│   │   │   ├── ai_prompt.go               # AI 提示词实体（技能提示词数据库存储）
+│   │   │   ├── todo.go                    # Todo 实体（待办/文本/完成状态/时间戳）
+│   │   │   └── note_vector.go             # NoteVector 实体（笔记切块向量索引：块文本/向量BLOB/维度/模型，按 note_id+chunk_index 索引）
 │   └── services/
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
@@ -45,9 +46,11 @@ jot/                                    # 项目根目录
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
 │       ├── search_service.go           # 通用网页搜索（Tavily API）
 │       ├── zhihu_search_service.go     # 知乎搜索 + 全网搜索
-│   │       ├── recall_service.go           # 卡片召回（gse 分词 + 停用词过滤 + 相关度打分 + 按笔记本筛选）
+│   │   │   ├── recall_service.go           # 召回结果类型与合并/截断工具（RecallCard/CardRecallResult/MergeRecallCards/Truncate*Preview；关键词召回已移除）
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
+│       ├── vector_service.go           # 笔记向量索引（IndexNotes 切块量化/GetIndexStatus/Count*/DeleteAllVectors）+ sqlite-vec 函数式向量召回 VectorRecall（SQL 内余弦距离 + 笔记本过滤 + 相邻块补充）
+│       ├── chunk.go                    # 文档切块（500 rune 上限 + 标题优先/空行分段/超长硬切 + 标题链拼接）
 │   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -118,8 +121,8 @@ jot/                                    # 项目根目录
 
 | 模块名称 | 核心功能 | 对应文件 | 核心依赖 |
 |----------|----------|----------|----------|
-| **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate | `database/db.go` | glebarez/sqlite, GORM |
-| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go` | GORM |
+| **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate、blank import 注册 sqlite-vec 扩展 | `database/db.go` | glebarez/sqlite, GORM, modernc.org/sqlite/vec |
+| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo/NoteVector 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go`, `models/note_vector.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，95+ 个绑定方法，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
@@ -163,6 +166,7 @@ jot/                                    # 项目根目录
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
 | **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索与卡片召回通用 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **向量召回** | 笔记切块向量化（`chunk.go` 标题链拼接 + `IndexNotes` 先删后插幂等量化）后由 sqlite-vec 函数式检索——`vec_distance_cosine` SQL 内余弦距离 + `vec_f32` 解析 query 向量 JSON，`dist < 1.0` 过滤 + 距离升序 TopN；支持指定笔记本（JOIN notes 过滤）或全部笔记；命中块补充前后各 1 相邻块并按笔记合并卡片（单卡 1200 rune 截断）；embedClient/模型未配置或当前模型无向量数据时静默跳过 | `services/vector_service.go:VectorRecall` + `services/chunk.go` + `models/note_vector.go` | 用户问题 query + 可选笔记本 ID 列表 | CardRecallResult（FormattedText 注入 system message + Cards 前端展示） |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -348,6 +352,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **后端语言** | Go | go1.22+ | 后端业务逻辑 |
 | **数据库** | SQLite | — | 本地数据存储 |
 | **数据库驱动** | glebarez/sqlite | v1.11 | 纯 Go SQLite 驱动（无 CGO） |
+| **向量检索** | sqlite-vec（modernc.org/sqlite/vec） | v0.1.9 | SQL 内余弦距离 vec_distance_cosine / vec_f32，函数式用法（非 vec0 虚拟表），blank import 自动注册 |
 | **ORM** | GORM | v1.25 | 对象关系映射 |
 | **前端构建** | Vite | v3.2.11 | 前端打包工具 |
 | **前端技术** | 原生 HTML/CSS/JS | — | UI 渲染 |
@@ -543,6 +548,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **编辑器操作菜单**（顶栏「操作」按钮 + 配置驱动下拉菜单，4 分组：格式化（JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 格式化+压缩）、文本转换（7 项）、文本清理（5 项）、编码解码（6 项），选中或全文 + 撤销）
 - [x] **MD 语法插入操作**（MD 语法分组 22 项，type: 'insert' 模式：行内样式/标题/列表/块元素/链接媒体/表格/数学公式，有选中包裹选中文本、无选中在光标处插入样板）
 - [x] **编辑器操作菜单模块化拆分**（操作项按分组拆分至 `frontend/src/js/editor-actions/` 目录：format.js/text-transform.js/text-clean.js/encode-decode.js/md-syntax.js，主文件仅保留聚合导入 + 渲染/交互/执行引擎）
+- [x] **卡片召回重构为 sqlite-vec 向量召回**（关键词召回 gse 彻底移除；`vec_distance_cosine` SQL 内余弦距离检索 + 笔记本 JOIN 过滤 + 相邻块补充 + 按笔记合并卡片；`modernc.org/sqlite` 升级 v1.51.0 含 vec 子包；[chunk.go](internal/services/chunk.go) 标题链拼接）
 
 ---
 
@@ -597,6 +603,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 24. **markitdown 库本地克隆 + Wails 构建 PDF 转换修复**：将 `github.com/conductor-oss/markitdown` 从 Go module cache 克隆到 `internal/markitdown` 进行本地维护，通过 `go.mod` replace 指令引用。修复 `wails build` 后 PDF 转换失败问题——根因是 Wails GUI 构建缺少有效控制台句柄，wazero 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。修复方案：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效句柄调用 `GetFileType`。详见 [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)、[go.mod](go.mod)
 
 25. **全屏模式顶栏分割线隐藏**：编辑器进入全屏模式（`.editor-panel.fullscreen`）时，通过纯 CSS `:has()` 选择器（`.main-content-area:has(.editor-panel.fullscreen) #topbar`）将顶栏底部 `border-bottom-color` 设为 `transparent`，使顶栏与编辑器面板在视觉上融为一体，无分割线更加宽阔沉浸。利用 topbar 已有的 `transition: border-color 0.3s ease-out` 实现平滑淡出/恢复。零 JS 改动，纯 CSS 实现。详见 [editor.css](frontend/src/css/components/editor.css)
+
+26. **sqlite-vec 函数式向量召回**：卡片召回已从 gse 关键词召回彻底切换为 sqlite-vec 函数式向量召回。`modernc.org/sqlite` 升级 v1.51.0（含 vec 子包 v0.1.9），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册扩展（sqlite3_auto_extension 自动生效，测试包需自行 import）。[vector_service.go](internal/services/vector_service.go) `VectorRecall`：query 向量 `json.Marshal` 为 JSON 数组字符串，`vec_f32(?)` SQL 内解析；`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` 过滤（dist<1.0 等价 score>0）+ 距离升序 LIMIT TopN；笔记本过滤 `JOIN notes`（列必须加 `note_vectors.` 前缀防 id 歧义，**JOIN 必须紧跟 FROM、位于 WHERE 之前**，否则运行时报 `near "JOIN": syntax error`）；命中后二次查询该笔记全部块补相邻块（前后各 1）并按笔记合并卡片（单卡 1200 rune 截断）。`recall_service.go` 仅剩类型与合并/截断工具，`cosineSimilarity`（Go 全表扫描）已删，`Float32ToBlob`/`BlobToFloat32` 保留。embedClient/Model 为空或当前模型无向量数据时静默跳过（Debugw 日志）。测试教训：SQL 拼接测试必须完整复刻真实代码顺序，否则测试过但运行时炸。
 
 ---
 
@@ -711,6 +719,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **弹窗按钮文本延迟恢复** | `showConfirmDialog` 新增 `okText`/`cancelText` 可选参数（默认"确定/取消"）。设置自定义文本后，cleanup 恢复默认文本必须延迟到关闭动画结束（最长 200ms，取 260ms），否则动画期间按钮文字瞬变；延迟恢复前检查 `els.confirmDialog.classList.contains('visible')`，若期间已有新弹窗打开则不恢复，避免覆盖新弹窗文本。恢复是必须的——`showSaveConfirmDialog`/`showDeleteNotebookDialog` 打开时**不设置**按钮文本，依赖共享 DOM 的默认值，不恢复会泄漏"去查看/取消"。 |
 | **锁屏联动** | `unlockApp()` 解锁成功后 `dispatchEvent(new CustomEvent('app-unlocked'))`；`checkUnfinishedTodosReminder` 一次性监听该事件，解锁后约 1s 再弹，未启用锁屏则延迟 600ms 直接弹。函数带 `window.go?.main?.App?.GetAllSettings` guard（与 `checkScreenLock` 同款）。`#mainContent:has(#viewTodo.active)` 的 `overflow-y: hidden` 规则保持不变（外层不滚动）。 |
 | **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（hover 去边框 + 删 pinned:hover）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（滚动条贴窗布局）、[internal/services/todo_service.go](internal/services/todo_service.go)（CountUnfinished）、[app.go](app.go)（CountUnfinishedTodos 绑定）、[frontend/src/main.js](frontend/src/main.js)（checkUnfinishedTodosReminder + showConfirmDialog 扩展 + unlockApp 派发事件） |
+
+---
+
+## 记忆点 10：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 卡片召回彻底从「关键词召回（gse 分词）」切换为「向量召回（sqlite-vec 函数式）」：① [recall_service.go](internal/services/recall_service.go) 删除全部 gse 分词/停用词过滤/相关度打分逻辑，仅保留 `RecallCard`/`CardRecallResult` 类型与 `MergeRecallCards`/`TruncateRecallCardsPreview`/`TruncateSearchSourcesPreview` 工具；② `modernc.org/sqlite` v1.23.1 → v1.51.0（含 sqlite-vec v0.1.9 子包），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册（sqlite3_auto_extension 自动生效）；③ [vector_service.go](internal/services/vector_service.go) `VectorRecall` 从「全量加载向量到 Go 内存 + 自写 `cosineSimilarity` 遍历」改为 **SQL 内计算**：`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` + 距离升序 LIMIT TopN；④ 保留相邻块补充（命中块前后各 1 块，二次查询该笔记全部块）+ 按笔记合并卡片 + `maxCardRunes` 1200 rune 截断。 |
+| **sqlite-vec 函数式核心** | query 向量化后 `json.Marshal` 生成 JSON 数组字符串，`vec_f32(?JSON)` 在 SQL 内解析（免自写 BLOB 编码）；`dist < 1.0` 等价旧逻辑 `score > 0` 过滤（余弦距离 = 1 − 余弦相似度）；笔记本过滤用 `JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL AND notes.notebook_id IN ?`。 |
+| **JOIN 位置教训（重要）** | **JOIN 必须紧跟 FROM、位于 WHERE 之前**。此前把 JOIN 拼在 WHERE 子句之后，运行时报 `near "JOIN": syntax error (1)`；而手工写的测试 SQL 顺序正确但未复刻真实拼接逻辑 → 测试通过、wails dev 运行时才炸。修复后测试改为完整复刻 vector_service.go 拼接顺序（FROM → JOIN 分支 → WHERE）。另：JOIN notes 后 SELECT 列必须加 `note_vectors.` 前缀防 `ambiguous column name: id`。 |
+| **已删除/保留** | `cosineSimilarity`（Go 侧全表扫描）删除；`Float32ToBlob`（IndexNotes 写入）/`BlobToFloat32`（测试解码）保留；`vec-poc/` 探针回归（TestProbeVecLoads）确认扩展在 glebarez 驱动可加载。 |
+| **前置静默跳过** | `VectorRecall` 在 embedClient 为空 / Model 为空 / 当前模型无向量数据（`CountVectorsByModel`=0）/ query 向量化失败 / 无命中时返回 nil 静默跳过，不注入不发射；前置检查用 `WHERE model = ?` 按当前 embedding 模型隔离（model 字段 = 向量血统证明）。 |
+| **量化与切块** | `IndexNotes`：`ChunkContent` 切块（单块 500 rune 上限，标题优先/空行分段/超长硬切，[chunk.go](internal/services/chunk.go) `chain` 标题链拼接——块首非标题时补链、硬切非首段补链）→ 分批 EmbedWithProgress（每批 16 块）→ 事务内先删该 note 旧块再插新块（幂等）。软删除笔记查询阶段跳过。 |
+| **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/chunk.go](internal/services/chunk.go)、[internal/models/note_vector.go](internal/models/note_vector.go)、[internal/database/db.go](internal/database/db.go)、[go.mod](go.mod)/[go.sum](go.sum) |
 
 ---
 

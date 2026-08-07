@@ -359,3 +359,357 @@
     margin-left: 44px;
   }
 }
+
+/* ======== AI 量化索引弹窗 ======== */
+.vector-index-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vector-index-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.vector-index-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+  width: 460px;
+  max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalEnter 0.2s var(--anim-easing-spring) forwards;
+}
+
+.vector-index-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+.vector-index-title {
+  margin: 0;
+  font-size: 0.938rem;
+  font-weight: 600;
+}
+
+.vector-index-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.vector-index-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+/* 视图容器 */
+.vector-index-view {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 范围切换（分段样式） */
+.vector-index-scope {
+  display: flex;
+  background: var(--bg-secondary, var(--hover-bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.vector-index-scope-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, color 120ms ease;
+  user-select: none;
+}
+
+.vector-index-scope-btn:hover {
+  color: var(--text-primary);
+}
+
+.vector-index-scope-btn.active {
+  background: var(--card-bg);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* 选择区 */
+.vector-index-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.vector-index-picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.vector-index-search-field {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.vector-index-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.vector-index-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 30px;
+  background: var(--bg-secondary, var(--hover-bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.813rem;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.vector-index-search-input:focus {
+  border-color: var(--accent);
+}
+
+.vector-index-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.vector-index-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vector-index-select-all input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 多选列表 */
+.vector-index-list {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.vector-index-list::-webkit-scrollbar-button {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.vector-index-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.813rem;
+  color: var(--text-primary);
+  transition: background 100ms ease;
+}
+
+.vector-index-item:hover {
+  background: var(--hover-bg);
+}
+
+.vector-index-item + .vector-index-item {
+  border-top: 1px solid var(--divider);
+}
+
+.vector-index-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vector-index-item-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vector-index-item-sub {
+  flex-shrink: 0;
+  font-size: 0.688rem;
+  color: var(--text-muted);
+}
+
+.vector-index-empty {
+  padding: 28px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.813rem;
+}
+
+/* 底部操作区 */
+.vector-index-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.vector-index-count {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+}
+
+/* 进度视图 */
+.vector-index-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0 4px;
+}
+
+.vector-index-progress-bar {
+  height: 8px;
+  background: var(--hover-bg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.vector-index-progress-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff));
+  border-radius: var(--radius-md);
+  transition: width 0.25s ease;
+}
+
+.vector-index-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.813rem;
+}
+
+.vector-index-progress-percent {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.vector-index-progress-stage {
+  color: var(--text-secondary);
+}
+
+.vector-index-progress-label {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.vector-index-current {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+
+.vector-index-current::before {
+  content: '当前：';
+  color: var(--text-muted);
+}
+
+/* 完成摘要 / 错误信息 */
+.vector-index-summary {
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  font-size: 0.813rem;
+  font-weight: 500;
+  line-height: 1.6;
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid var(--success-border);
+}
+
+.vector-index-error {
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  font-size: 0.813rem;
+  font-weight: 500;
+  line-height: 1.6;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  word-break: break-word;
+}

@@ -60,6 +60,20 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class CardRecallCheckResult {
+	    ok: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CardRecallCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	    }
+	}
 	export class FileImportResult {
 	    path: string;
 	    title: string;
@@ -570,6 +584,10 @@ export namespace services {
 	    ai_base_url: string;
 	    ai_api_key: string;
 	    ai_model: string;
+	    ai_embed_provider: string;
+	    ai_embed_base_url: string;
+	    ai_embed_api_key: string;
+	    ai_embed_model: string;
 	    tavily_api_key: string;
 	    ai_thinking_enabled: boolean;
 	    zhihu_access_secret: string;
@@ -606,6 +624,10 @@ export namespace services {
 	        this.ai_base_url = source["ai_base_url"];
 	        this.ai_api_key = source["ai_api_key"];
 	        this.ai_model = source["ai_model"];
+	        this.ai_embed_provider = source["ai_embed_provider"];
+	        this.ai_embed_base_url = source["ai_embed_base_url"];
+	        this.ai_embed_api_key = source["ai_embed_api_key"];
+	        this.ai_embed_model = source["ai_embed_model"];
 	        this.tavily_api_key = source["tavily_api_key"];
 	        this.ai_thinking_enabled = source["ai_thinking_enabled"];
 	        this.zhihu_access_secret = source["zhihu_access_secret"];

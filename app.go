@@ -92,9 +92,13 @@ type App struct {
 	notebookService *services.NotebookService
 	aiService       *services.AIService
 	profileService  *services.ProfileService
+	vectorService   *services.VectorService
 	todoService     *services.TodoService
 	LogSvc          *services.LogService
 	aiStreamCancel  context.CancelFunc
+	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning 标记
+	vectorIndexMu      sync.Mutex
+	vectorIndexRunning bool
 }
 
 // NewApp creates a new App application struct
@@ -160,6 +164,7 @@ func NewApp() *App {
 		notebookService: services.NewNotebookService(db, logSvc.Logger),
 		aiService:       services.NewAIService(db, logSvc.Logger),
 		profileService:  services.NewProfileService(db, logSvc.Logger),
+		vectorService:   services.NewVectorService(db, logSvc.Logger),
 		todoService:     services.NewTodoService(db, logSvc.Logger),
 		LogSvc:          logSvc,
 	}
@@ -194,7 +199,7 @@ func (a *App) startup(ctx context.Context) {
 			}
 			profile := a.profileService.CreateProfile("默认配置", provider, baseURL, apiKey, true)
 			// 标记为激活
-			if err := a.profileService.SwitchProfile(profile.ID); err != nil {
+			if err := a.profileService.SwitchProfile("chat", profile.ID); err != nil {
 				a.LogSvc.Logger.Errorw("迁移警告：激活默认配置失败", fastlog.Error(err))
 			}
 			a.LogSvc.Logger.Infow("迁移完成：已从现有配置创建'默认配置'预设")
@@ -214,7 +219,7 @@ func (a *App) startup(ctx context.Context) {
 			if baseURL != "" {
 				for _, p := range profiles {
 					if p.BaseURL == baseURL && p.APIKey == apiKey {
-						if err := a.profileService.SwitchProfile(p.ID); err != nil {
+						if err := a.profileService.SwitchProfile("chat", p.ID); err != nil {
 							a.LogSvc.Logger.Errorw("迁移警告：标记激活预设失败", fastlog.Error(err))
 						}
 						a.LogSvc.Logger.Infow("迁移完成：已标记匹配预设为激活")
@@ -1434,22 +1439,192 @@ func (a *App) DeleteProfile(id uint) error {
 }
 
 // SwitchProfile 切换 API 配置预设
-func (a *App) SwitchProfile(id uint) error {
-	a.LogSvc.Logger.Debugw("SwitchProfile", fastlog.Uint("id", id))
-	if err := a.profileService.SwitchProfile(id); err != nil {
+// target 指定预设写入的配置组："chat" 写入对话连接键 ai_*，"embed" 写入量化连接键 ai_embed_*
+func (a *App) SwitchProfile(target string, id uint) error {
+	a.LogSvc.Logger.Debugw("SwitchProfile", fastlog.String("target", target), fastlog.Uint("id", id))
+	if err := a.profileService.SwitchProfile(target, id); err != nil {
 		a.LogSvc.Logger.Errorw("SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
-	a.LogSvc.Logger.Infow("SwitchProfile 成功", fastlog.Uint("id", id))
+	a.LogSvc.Logger.Infow("SwitchProfile 成功", fastlog.String("target", target), fastlog.Uint("id", id))
 	return nil
 }
 
-// TestAIBaseURL 测试 AI Base URL 连通性
-func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
-	a.LogSvc.Logger.Debugw("TestAIBaseURL", fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
-	cfg := a.aiService.GetConfig()
-	cfg.BaseURL = baseURL
-	cfg.APIKey = apiKey
+// ==================== 向量量化索引绑定 ====================
+
+// IndexNotesByAll 对全部未删除笔记发起异步量化索引，立即返回；进度与结果通过事件推送
+func (a *App) IndexNotesByAll() error {
+	a.LogSvc.Logger.Debugw("IndexNotesByAll")
+	ids, err := a.noteService.GetAllIDs()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("IndexNotesByAll 获取笔记列表失败", fastlog.Error(err))
+		return err
+	}
+	return a.startVectorIndex(context.Background(), ids)
+}
+
+// IndexNotesByNotebooks 对指定笔记本下的全部未删除笔记发起异步量化索引
+func (a *App) IndexNotesByNotebooks(notebookIDs []uint) error {
+	a.LogSvc.Logger.Debugw("IndexNotesByNotebooks", fastlog.Int("notebook_count", len(notebookIDs)))
+	var ids []uint
+	if err := a.db.Model(&models.Note{}).
+		Where("notebook_id IN ? AND deleted_at IS NULL", notebookIDs).
+		Pluck("id", &ids).Error; err != nil {
+		a.LogSvc.Logger.Errorw("IndexNotesByNotebooks 获取笔记列表失败", fastlog.Error(err))
+		return err
+	}
+	return a.startVectorIndex(context.Background(), ids)
+}
+
+// IndexNotesByIDs 对指定笔记 ID 列表发起异步量化索引
+func (a *App) IndexNotesByIDs(ids []uint) error {
+	a.LogSvc.Logger.Debugw("IndexNotesByIDs", fastlog.Int("note_count", len(ids)))
+	return a.startVectorIndex(context.Background(), ids)
+}
+
+// GetVectorIndexStatus 返回向量索引统计信息：已量化笔记数、片段总数、占用字节
+func (a *App) GetVectorIndexStatus() (noteCount int, chunkCount int, sizeBytes int64, err error) {
+	a.LogSvc.Logger.Debugw("GetVectorIndexStatus")
+	noteCount, chunkCount, sizeBytes, err = a.vectorService.GetIndexStatus()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetVectorIndexStatus 失败", fastlog.Error(err))
+	}
+	return noteCount, chunkCount, sizeBytes, err
+}
+
+// DeleteAllVectors 删除全部向量索引内容
+func (a *App) DeleteAllVectors() error {
+	a.LogSvc.Logger.Debugw("DeleteAllVectors")
+	if err := a.vectorService.DeleteAllVectors(); err != nil {
+		a.LogSvc.Logger.Errorw("DeleteAllVectors 失败", fastlog.Error(err))
+		return err
+	}
+	a.LogSvc.Logger.Infow("DeleteAllVectors 成功")
+	return nil
+}
+
+// GetEmbedConfig 读取量化连接配置（ai_embed_* 四键），apiKey 按现有 B64 编码方式解码
+func (a *App) GetEmbedConfig() (provider, baseURL, apiKey, model string, err error) {
+	a.LogSvc.Logger.Debugw("GetEmbedConfig")
+	provider = a.settingService.Get("ai_embed_provider")
+	baseURL = a.settingService.Get("ai_embed_base_url")
+	apiKey = services.DecodeB64(a.settingService.Get("ai_embed_api_key"))
+	model = a.settingService.Get("ai_embed_model")
+	return provider, baseURL, apiKey, model, nil
+}
+
+// CardRecallCheckResult 卡片召回开启校验结果
+type CardRecallCheckResult struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+// ValidateCardRecall 校验卡片召回是否可以开启：
+//  1. 基础判断：量化连接（provider/base_url）或量化模型未设置 → 拒绝
+//  2. 模型类型判断：openai 必须填写 API Key；ollama 跳过 Key 检查
+//  3. 量化表内容判断：表为空拒绝；当前量化模型无对应记录拒绝
+func (a *App) ValidateCardRecall() CardRecallCheckResult {
+	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	// 1. 基础判断：量化连接或量化模型未设置
+	if provider == "" || baseURL == "" || model == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+	}
+	// 2. 模型类型判断：openai 必须填写 API Key；ollama 无需 Key
+	if provider == "openai" && apiKey == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+	}
+	// 3. 量化表内容判断
+	total, err := a.vectorService.CountAllVectors()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计量化表失败", fastlog.Error(err))
+		return CardRecallCheckResult{OK: false, Message: "量化表检查失败，请查看日志"}
+	}
+	if total == 0 {
+		return CardRecallCheckResult{OK: false, Message: "量化表为空，请先在数据管理中量化笔记"}
+	}
+	modelCnt, err := a.vectorService.CountVectorsByModel(model)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计模型向量失败", fastlog.Error(err))
+		return CardRecallCheckResult{OK: false, Message: "量化表检查失败，请查看日志"}
+	}
+	if modelCnt == 0 {
+		return CardRecallCheckResult{OK: false, Message: fmt.Sprintf("当前量化模型「%s」暂无量化数据，请先使用该模型量化笔记", model)}
+	}
+	return CardRecallCheckResult{OK: true, Message: ""}
+}
+
+// startVectorIndex 量化任务公共入口：三个量化绑定方法取到笔记 ID 后统一调用
+// 校验量化模型配置与防重入，随后异步执行 IndexNotes，通过 EventsEmit 推送进度与结果
+func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
+	// 防重入：量化任务进行中时拒绝新任务
+	a.vectorIndexMu.Lock()
+	if a.vectorIndexRunning {
+		a.vectorIndexMu.Unlock()
+		return errors.New("量化任务正在进行中")
+	}
+	a.vectorIndexRunning = true
+	a.vectorIndexMu.Unlock()
+
+	// 任务结束或启动失败时复位运行标记
+	release := func() {
+		a.vectorIndexMu.Lock()
+		a.vectorIndexRunning = false
+		a.vectorIndexMu.Unlock()
+	}
+
+	// 未配置量化模型时直接返回可读错误，不发起索引
+	model := a.settingService.Get("ai_embed_model")
+	if model == "" {
+		release()
+		return errors.New("请先在设置中配置量化连接与量化模型")
+	}
+	if len(noteIDs) == 0 {
+		release()
+		return errors.New("没有找到有效的笔记")
+	}
+
+	// 构造 embedding 客户端（apiKey 为 B64 存储，解码后使用）
+	provider := a.settingService.Get("ai_embed_provider")
+	baseURL := a.settingService.Get("ai_embed_base_url")
+	apiKey := services.DecodeB64(a.settingService.Get("ai_embed_api_key"))
+	client := aicli.NewClient(aicli.Config{
+		Provider: provider,
+		BaseURL:  baseURL,
+		APIKey:   apiKey,
+		Model:    model,
+	})
+
+	// 异步执行量化，避免阻塞 Wails 事件循环（参考 CallAIStream 的 goroutine 模式）
+	go func() {
+		defer release()
+		success, failed, err := a.vectorService.IndexNotes(ctx, client, noteIDs, func(done, total int, title, stage string, chunkDone, chunkTotal int) {
+			runtime.EventsEmit(a.ctx, "vector:index-progress", map[string]interface{}{
+				"done":        done,
+				"total":       total,
+				"title":       title,
+				"stage":       stage,
+				"chunk_done":  chunkDone,
+				"chunk_total": chunkTotal,
+			})
+		})
+		if err != nil {
+			a.LogSvc.Logger.Errorw("向量量化索引失败", fastlog.Error(err))
+			runtime.EventsEmit(a.ctx, "vector:index-error", map[string]interface{}{"error": err.Error()})
+			return
+		}
+		a.LogSvc.Logger.Infow("向量量化索引完成", fastlog.Int("success", success), fastlog.Int("failed", failed))
+		runtime.EventsEmit(a.ctx, "vector:index-done", map[string]interface{}{
+			"success": success,
+			"failed":  failed,
+		})
+	}()
+	return nil
+}
+
+// TestAIBaseURL 按指定 Provider/BaseURL/APIKey 测试连通性（对话/量化连接共用）
+func (a *App) TestAIBaseURL(provider, baseURL, apiKey string) (bool, error) {
+	a.LogSvc.Logger.Debugw("TestAIBaseURL", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
 	result, err := a.aiService.TestConnection(cfg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("TestAIBaseURL 失败", fastlog.Error(err))
@@ -1521,11 +1696,10 @@ func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
 }
 
 // FetchAIModels 获取可用模型列表
-func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
-	a.LogSvc.Logger.Debugw("FetchAIModels", fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
-	cfg := a.aiService.GetConfig()
-	cfg.BaseURL = baseURL
-	cfg.APIKey = apiKey
+// FetchAIModels 按指定 Provider/BaseURL/APIKey 获取模型列表（对话/量化连接共用）
+func (a *App) FetchAIModels(provider, baseURL, apiKey string) ([]string, error) {
+	a.LogSvc.Logger.Debugw("FetchAIModels", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
 	models, err := a.aiService.FetchModels(cfg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("FetchAIModels 失败", fastlog.Error(err))
@@ -1792,9 +1966,9 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			}
 		}
 
-		// ── 步骤 6: 搜索词精炼（联网搜索或卡片召回启用时执行）──
+		// ── 步骤 6: 搜索词精炼（仅联网搜索启用时执行）──
 		var refinedQuery string
-		if (len(searchSources) > 0 || cardRecallEnabled) && userText != "" {
+		if len(searchSources) > 0 && userText != "" {
 			refined, err := services.RefineSearchQuery(ctx, userText, a.aiService)
 			if err != nil {
 				if ctx.Err() != nil {
@@ -1950,48 +2124,58 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			runtime.EventsEmit(a.ctx, "ai:search-status", "done")
 		}
 
-		// 卡片召回（在联网搜索之后执行）
+		// 卡片召回（受 cardRecallEnabled 开关门控，关闭时直接跳过，不注入 system message、不发射 ai:recall-cards 事件）
+		// 开启时执行向量召回：取末条 user 消息为查询、按 ai_card_recall_limit 限条数（默认 5，≤30）、
+		// 构建 embedding client 调用 VectorRecall，结果注入 system message 并发射 ai:recall-cards
 		if cardRecallEnabled {
-			a.LogSvc.Logger.Infow("AI 卡片召回启动")
-			var query string
+			a.LogSvc.Logger.Debugw("AI 向量召回启动")
+			var vectorQuery string
 			for i := len(messages) - 1; i >= 0; i-- {
 				if messages[i].Role == "user" {
-					query = messages[i].Content
+					vectorQuery = messages[i].Content
 					break
 				}
 			}
-			if query != "" {
-				// 从 localStorage 读取召回条数（默认 3）
-				recallLimit := 5
+			if vectorQuery != "" {
+				// 召回条数复用 ai_card_recall_limit 设置（默认 5）
+				vectorLimit := 5
 				if a.settingService != nil {
 					if val := a.settingService.Get("ai_card_recall_limit"); val != "" {
 						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 30 {
-							recallLimit = n
+							vectorLimit = n
 						}
 					}
 				}
-				// 结合精炼后的关键词一起检索
-				combinedQuery := query
-				if refinedQuery != "" {
-					combinedQuery = query + " " + refinedQuery
-				}
-				recallResult := services.CardRecallSearch(ctx, combinedQuery, recallLimit, a.noteService, recallNotebookIDs...)
-				if recallResult != nil {
-					// 注入格式化文本到 system role
-					messages = appendToSystemMessage(messages, recallResult.FormattedText)
 
-					// 发射结构化卡片数据给前端（截断 Content 为前 200 字），并缓存全量用于持久化
-					if len(recallResult.Cards) > 0 {
-						cardsJSON, _ := json.Marshal(recallResult.Cards)
+				// 构建 embedding client（ai_embed_* 四键，apiKey 为 B64 存储需解码）
+				embedProvider, embedBaseURL, embedAPIKey, embedModel, _ := a.GetEmbedConfig()
+				embedClient := aicli.NewClient(aicli.Config{
+					Provider: embedProvider,
+					BaseURL:  embedBaseURL,
+					APIKey:   embedAPIKey,
+					Model:    embedModel,
+				})
+
+				vectorResult := a.vectorService.VectorRecall(ctx, vectorQuery, vectorLimit, embedClient, recallNotebookIDs...)
+				if vectorResult != nil {
+					// 注入格式化文本到 system role
+					messages = appendToSystemMessage(messages, vectorResult.FormattedText)
+
+					// 与已有召回卡片按 note_id 合并去重后统一发射（前端 ai:recall-cards 为覆盖式事件）
+					if len(vectorResult.Cards) > 0 {
+						var kwCards []services.RecallCard
+						if recallCardsJSON != "" {
+							_ = json.Unmarshal([]byte(recallCardsJSON), &kwCards)
+						}
+						mergedCards := services.MergeRecallCards(kwCards, vectorResult.Cards)
+						cardsJSON, _ := json.Marshal(mergedCards)
 						recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
 
-						truncatedCards := services.TruncateRecallCardsPreview(recallResult.Cards, 200)
+						truncatedCards := services.TruncateRecallCardsPreview(mergedCards, 200)
 						if displayJSON, err := json.Marshal(truncatedCards); err == nil {
 							runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
 						}
-						a.LogSvc.Logger.Debugw("AI 卡片召回结果", fastlog.Int("cards_count", len(recallResult.Cards)))
-					} else {
-						a.LogSvc.Logger.Debugw("AI 卡片召回无结果")
+						a.LogSvc.Logger.Debugw("AI 向量召回结果", fastlog.Int("cards_count", len(mergedCards)))
 					}
 				}
 			}
@@ -3368,6 +3552,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.notebookService = services.NewNotebookService(db, a.LogSvc.Logger)
 	a.aiService = services.NewAIService(db, a.LogSvc.Logger)
 	a.profileService = services.NewProfileService(db, a.LogSvc.Logger)
+	a.vectorService = services.NewVectorService(db, a.LogSvc.Logger)
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
 	// 重建日志服务
 	a.LogSvc = services.NewLogService()

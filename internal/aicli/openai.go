@@ -130,6 +130,39 @@ func (c *Client) openaiChat(ctx context.Context, messages []Message) (string, st
 	return content, reasoning, nil
 }
 
+// openaiEmbed 调用 OpenAI 兼容 API 的 embeddings 接口批量生成文本向量
+// 返回与 texts 一一对应的向量列表（按响应中的 Index 回填保证顺序一致）
+func (c *Client) openaiEmbed(ctx context.Context, texts []string) ([][]float32, error) {
+	client := c.newOpenAIClient()
+
+	req := openai.EmbeddingRequest{
+		Model: openai.EmbeddingModel(c.Model),
+		Input: texts,
+	}
+	resp, err := client.CreateEmbeddings(ctx, req)
+	if err != nil {
+		if ae := ClassifyError(err); ae != nil {
+			return nil, &AIErrorWrapper{Err: ae}
+		}
+		return nil, fmt.Errorf("embedding 调用失败: %w", err)
+	}
+
+	// 按 Index 回填，保证与请求顺序一致
+	result := make([][]float32, len(texts))
+	for _, d := range resp.Data {
+		if d.Index >= 0 && d.Index < len(result) {
+			result[d.Index] = d.Embedding
+		}
+	}
+	// 校验返回数量与请求一致
+	for i, v := range result {
+		if v == nil {
+			return nil, fmt.Errorf("embedding 返回数量不完整: 期望 %d 条，缺失第 %d 条", len(texts), i)
+		}
+	}
+	return result, nil
+}
+
 // newOpenAIClient 创建 OpenAI 客户端
 func (c *Client) newOpenAIClient() *openai.Client {
 	cfg := openai.DefaultConfig(c.APIKey)

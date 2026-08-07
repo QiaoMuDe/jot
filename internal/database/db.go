@@ -8,6 +8,9 @@ import (
 	"jot/internal/models"
 	"jot/internal/services"
 
+	// blank import 注册 sqlite-vec 扩展（sqlite3_auto_extension，对新打开的连接自动生效）
+	_ "modernc.org/sqlite/vec"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
@@ -54,7 +57,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	_ = db.Exec("PRAGMA cache_size=-8000").Error
 
 	// 自动迁移数据模型
-	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}, &models.AISessionConfig{}); err != nil {
+	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}, &models.AISessionConfig{}, &models.NoteVector{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -531,6 +534,10 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_base_url", Value: ""},
 		{Key: "ai_api_key", Value: ""},
 		{Key: "ai_model", Value: ""},
+		{Key: "ai_embed_provider", Value: "ollama"},
+		{Key: "ai_embed_base_url", Value: "http://localhost:11434"},
+		{Key: "ai_embed_api_key", Value: ""},
+		{Key: "ai_embed_model", Value: ""},
 		{Key: "ai_thinking_enabled", Value: "false"},
 		{Key: "tavily_api_key", Value: ""},
 		{Key: "zhihu_access_secret", Value: ""},
