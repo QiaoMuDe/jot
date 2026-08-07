@@ -40,9 +40,9 @@ const maxCardRunes = 1200
 //
 // 单条笔记失败不终止整体，计入 failed；软删除笔记（deleted_at 非空）在查询阶段跳过
 // 返回 (success, failed int, err error)，err 仅当整体性错误（如无有效笔记或 embedding client 配置错误）
-func (s *VectorService) IndexNotes(ctx context.Context, aicli *aicli.Client, noteIDs []uint, progressCb func(done, total int, title string, stage string, chunkDone, chunkTotal int)) (success, failed int, err error) {
+func (s *VectorService) IndexNotes(ctx context.Context, embedClient *aicli.Client, noteIDs []uint, progressCb func(done, total int, title string, stage string, chunkDone, chunkTotal int, errMsg string)) (success, failed int, err error) {
 	// embedding client 配置检查：模型未配置时无法量化，直接返回整体性错误
-	if aicli == nil || aicli.Model == "" {
+	if embedClient == nil || embedClient.Model == "" {
 		return 0, 0, fmt.Errorf("embedding 模型未配置")
 	}
 
@@ -72,20 +72,25 @@ func (s *VectorService) IndexNotes(ctx context.Context, aicli *aicli.Client, not
 		// 进度回调：开始 embedding（本篇尚未完成，done 为已完成的篇数）
 		done := i
 		if progressCb != nil {
-			progressCb(done, total, note.Title, "embedding", 0, len(chunks))
+			progressCb(done, total, note.Title, "embedding", 0, len(chunks), "")
 		}
 
 		// 分批生成所有块的向量（每批 16 块，批间回调块级进度）
-		embeddings, err := aicli.EmbedWithProgress(ctx, chunks, 16, func(doneChunk, totalChunk int) {
+		embeddings, err := embedClient.EmbedWithProgress(ctx, chunks, 16, func(doneChunk, totalChunk int) {
 			if progressCb != nil {
-				progressCb(i, total, note.Title, "embedding", doneChunk, totalChunk)
+				progressCb(i, total, note.Title, "embedding", doneChunk, totalChunk, "")
 			}
 		})
 		if err != nil {
 			failed++
 			s.logger.Errorw("VectorService.IndexNotes embedding 失败", fastlog.Uint("note_id", note.ID), fastlog.Error(err))
+			// 与 AI 助手一致：错误分类为中文友好提示后随进度事件推送，前端直接展示
+			userMsg := err.Error()
+			if aiErr := aicli.ClassifyError(err); aiErr != nil && aiErr.UserMsg != "" {
+				userMsg = aiErr.UserMsg
+			}
 			if progressCb != nil {
-				progressCb(i+1, total, note.Title, "error", 0, 0)
+				progressCb(i+1, total, note.Title, "error", 0, 0, userMsg)
 			}
 			continue
 		}
@@ -103,7 +108,7 @@ func (s *VectorService) IndexNotes(ctx context.Context, aicli *aicli.Client, not
 				ChunkText:  text,
 				Embedding:  Float32ToBlob(embeddings[idx]),
 				Dim:        dim,
-				Model:      aicli.Model,
+				Model:      embedClient.Model,
 			})
 		}
 
@@ -118,14 +123,14 @@ func (s *VectorService) IndexNotes(ctx context.Context, aicli *aicli.Client, not
 			failed++
 			s.logger.Errorw("VectorService.IndexNotes 写入向量失败", fastlog.Uint("note_id", note.ID), fastlog.Error(txErr))
 			if progressCb != nil {
-				progressCb(i+1, total, note.Title, "error", 0, 0)
+				progressCb(i+1, total, note.Title, "error", 0, 0, txErr.Error())
 			}
 			continue
 		}
 
 		success++
 		if progressCb != nil {
-			progressCb(i+1, total, note.Title, "done", len(chunks), len(chunks))
+			progressCb(i+1, total, note.Title, "done", len(chunks), len(chunks), "")
 		}
 	}
 	return success, failed, nil

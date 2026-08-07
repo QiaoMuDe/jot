@@ -30,6 +30,8 @@ export function CallAIStreamRegenerate(arg1:number,arg2:number,arg3:boolean,arg4
 
 export function CancelAIStream():Promise<void>;
 
+export function CancelVectorIndex():Promise<void>;
+
 export function CleanupOrphanImages():Promise<number>;
 
 export function ClearAISessionMessages(arg1:number):Promise<void>;
@@ -142,7 +144,7 @@ export function GetTrashNotebooks(arg1:number,arg2:number):Promise<services.Pagi
 
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
-export function GetVectorIndexStatus():Promise<number>;
+export function GetVectorIndexStatus():Promise<main.VectorIndexStatus>;
 
 export function GetVersion():Promise<string>;
 
@@ -273,5 +275,7 @@ export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
 export function VacuumDatabase():Promise<string>;
 
 export function ValidateCardRecall():Promise<main.CardRecallCheckResult>;
+
+export function ValidateVectorIndexConfig():Promise<main.CardRecallCheckResult>;
 
 export function VerifyScreenLockPassword(arg1:string):Promise<boolean>;

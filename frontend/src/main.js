@@ -22,7 +22,7 @@ import { SVGS, debounce, formatTime, getSummary } from './js/constants.js';
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
 
 // 数据管理模块
-import { backupToDir, cleanupOrphanImages, clearAISessions, clearCompletedTodos, deleteAllVectors, exportData, importData, loadDataStats, openDataDir, openLogDir, openVectorIndexModal, resetDatabase, restoreFromDir, vacuumDatabase } from './js/data-management.js';
+import { backupToDir, cleanupOrphanImages, clearAISessions, clearCompletedTodos, deleteAllVectors, exportData, importData, loadDataStats, onVectorIndexCloseRequested, openDataDir, openLogDir, openVectorIndexModal, resetDatabase, restoreFromDir, vacuumDatabase } from './js/data-management.js';
 
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
@@ -6522,6 +6522,12 @@ async function handleKeyboardNavigation(e) {
     // Escape: 关闭查找条或退出当前子视图
     if (e.key === 'Escape') {
         e.preventDefault();
+        // 量化弹窗打开时：Esc 走其关闭逻辑（量化中确认停止，否则直接关闭）
+        const viModal = document.getElementById('vectorIndexModal');
+        if (viModal && viModal.style.display !== 'none') {
+            onVectorIndexCloseRequested();
+            return;
+        }
         // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）
         const refModal = document.getElementById('aiNoteRefModal');
         if (refModal && refModal.style.display !== 'none') {

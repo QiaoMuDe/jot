@@ -96,9 +96,10 @@ type App struct {
 	todoService     *services.TodoService
 	LogSvc          *services.LogService
 	aiStreamCancel  context.CancelFunc
-	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning 标记
+	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
 	vectorIndexRunning bool
+	vectorIndexCancel  context.CancelFunc // 量化任务取消源（取消在批次间/笔记间生效）
 }
 
 // NewApp creates a new App application struct
@@ -1483,13 +1484,21 @@ func (a *App) IndexNotesByIDs(ids []uint) error {
 }
 
 // GetVectorIndexStatus 返回向量索引统计信息：已量化笔记数、片段总数、占用字节
-func (a *App) GetVectorIndexStatus() (noteCount int, chunkCount int, sizeBytes int64, err error) {
-	a.LogSvc.Logger.Debugw("GetVectorIndexStatus")
-	noteCount, chunkCount, sizeBytes, err = a.vectorService.GetIndexStatus()
+// VectorIndexStatus 向量索引统计结果（Wails 绑定需单值返回，多返回值只保留第一个）
+type VectorIndexStatus struct {
+	NoteCount  int   `json:"noteCount"`
+	ChunkCount int   `json:"chunkCount"`
+	SizeBytes  int64 `json:"sizeBytes"`
+}
+
+func (a *App) GetVectorIndexStatus() (*VectorIndexStatus, error) {
+	noteCount, chunkCount, sizeBytes, err := a.vectorService.GetIndexStatus()
 	if err != nil {
 		a.LogSvc.Logger.Errorw("GetVectorIndexStatus 失败", fastlog.Error(err))
+		return nil, err
 	}
-	return noteCount, chunkCount, sizeBytes, err
+	a.LogSvc.Logger.Debugw("GetVectorIndexStatus 结果", fastlog.Int("noteCount", noteCount), fastlog.Int("chunkCount", chunkCount), fastlog.Int64("sizeBytes", sizeBytes))
+	return &VectorIndexStatus{NoteCount: noteCount, ChunkCount: chunkCount, SizeBytes: sizeBytes}, nil
 }
 
 // DeleteAllVectors 删除全部向量索引内容
@@ -1500,6 +1509,20 @@ func (a *App) DeleteAllVectors() error {
 		return err
 	}
 	a.LogSvc.Logger.Infow("DeleteAllVectors 成功")
+	return nil
+}
+
+// CancelVectorIndex 停止当前正在进行的量化任务（异步取消，任务在批次间/笔记间退出）
+// vectorIndexRunning 复位由任务 goroutine 的 release 负责，这里不直接复位，避免并发竞态
+func (a *App) CancelVectorIndex() error {
+	a.LogSvc.Logger.Debugw("CancelVectorIndex")
+	a.vectorIndexMu.Lock()
+	defer a.vectorIndexMu.Unlock()
+	if !a.vectorIndexRunning || a.vectorIndexCancel == nil {
+		return errors.New("当前没有正在进行的量化任务")
+	}
+	a.vectorIndexCancel()
+	a.LogSvc.Logger.Infow("CancelVectorIndex 已触发取消")
 	return nil
 }
 
@@ -1553,6 +1576,22 @@ func (a *App) ValidateCardRecall() CardRecallCheckResult {
 	return CardRecallCheckResult{OK: true, Message: ""}
 }
 
+// ValidateVectorIndexConfig 校验量化连接配置是否可以发起量化：
+//  1. 基础判断：量化连接（provider/base_url）或量化模型未设置 → 拒绝
+//  2. 模型类型判断：openai 必须填写 API Key；ollama 跳过 Key 检查
+//
+// （仅校验配置本身，不检查量化表内容，与卡片召回 ValidateCardRecall 的检查范围不同）
+func (a *App) ValidateVectorIndexConfig() CardRecallCheckResult {
+	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	if provider == "" || baseURL == "" || model == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+	}
+	if provider == "openai" && apiKey == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+	}
+	return CardRecallCheckResult{OK: true, Message: ""}
+}
+
 // startVectorIndex 量化任务公共入口：三个量化绑定方法取到笔记 ID 后统一调用
 // 校验量化模型配置与防重入，随后异步执行 IndexNotes，通过 EventsEmit 推送进度与结果
 func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
@@ -1565,10 +1604,20 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	a.vectorIndexRunning = true
 	a.vectorIndexMu.Unlock()
 
-	// 任务结束或启动失败时复位运行标记
+	// 创建可取消 ctx：用户可通过 CancelVectorIndex 停止量化任务
+	ctx, cancel := context.WithCancel(ctx)
+	a.vectorIndexMu.Lock()
+	a.vectorIndexCancel = cancel
+	a.vectorIndexMu.Unlock()
+
+	// 任务结束或启动失败时复位运行标记并释放取消源
 	release := func() {
 		a.vectorIndexMu.Lock()
 		a.vectorIndexRunning = false
+		if a.vectorIndexCancel != nil {
+			a.vectorIndexCancel()
+			a.vectorIndexCancel = nil
+		}
 		a.vectorIndexMu.Unlock()
 	}
 
@@ -1594,7 +1643,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	// 异步执行量化，避免阻塞 Wails 事件循环（参考 CallAIStream 的 goroutine 模式）
 	go func() {
 		defer release()
-		success, failed, err := a.vectorService.IndexNotes(ctx, client, noteIDs, func(done, total int, title, stage string, chunkDone, chunkTotal int) {
+		success, failed, err := a.vectorService.IndexNotes(ctx, client, noteIDs, func(done, total int, title, stage string, chunkDone, chunkTotal int, errMsg string) {
 			runtime.EventsEmit(a.ctx, "vector:index-progress", map[string]interface{}{
 				"done":        done,
 				"total":       total,
@@ -1602,9 +1651,15 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 				"stage":       stage,
 				"chunk_done":  chunkDone,
 				"chunk_total": chunkTotal,
+				"error":       errMsg,
 			})
 		})
 		if err != nil {
+			// 用户主动取消不报错（前端已确认停止并关闭弹窗），仅记录日志
+			if errors.Is(err, context.Canceled) {
+				a.LogSvc.Logger.Infow("向量量化索引已取消")
+				return
+			}
 			a.LogSvc.Logger.Errorw("向量量化索引失败", fastlog.Error(err))
 			runtime.EventsEmit(a.ctx, "vector:index-error", map[string]interface{}{"error": err.Error()})
 			return

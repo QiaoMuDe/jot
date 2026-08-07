@@ -108,6 +108,22 @@ export namespace main {
 	        this.tokens = source["tokens"];
 	    }
 	}
+	export class VectorIndexStatus {
+	    noteCount: number;
+	    chunkCount: number;
+	    sizeBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VectorIndexStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.noteCount = source["noteCount"];
+	        this.chunkCount = source["chunkCount"];
+	        this.sizeBytes = source["sizeBytes"];
+	    }
+	}
 
 }
 

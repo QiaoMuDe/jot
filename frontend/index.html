@@ -1953,13 +1953,17 @@ console.log(greet("Jot"));
             <div class="vector-index-overlay" id="vectorIndexOverlay"></div>
             <div class="vector-index-panel">
                 <div class="vector-index-header">
-                    <h3 class="vector-index-title">笔记量化</h3>
+                    <h3 class="vector-index-title">
+                        <svg class="vector-index-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v2"/><path d="M12 19v2"/><path d="M3 12h2"/><path d="M19 12h2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg>
+                        笔记量化
+                    </h3>
                     <button class="vector-index-close" id="vectorIndexClose" aria-label="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
 
                 <!-- 范围选择视图 -->
                 <div class="vector-index-view" id="vectorIndexSelectView">
                     <div class="vector-index-scope" id="vectorIndexScopeSeg">
+                        <div class="vector-index-scope-indicator" id="vectorIndexScopeIndicator"></div>
                         <button class="vector-index-scope-btn active" data-scope="all">全部笔记</button>
                         <button class="vector-index-scope-btn" data-scope="notebooks">指定笔记本</button>
                         <button class="vector-index-scope-btn" data-scope="notes">指定笔记</button>
@@ -2006,21 +2010,20 @@ console.log(greet("Jot"));
                             <span class="vector-index-progress-percent" id="vectorIndexProgressPercent">0%</span>
                             <span class="vector-index-progress-stage" id="vectorIndexProgressStage">准备中…</span>
                         </div>
-                        <div class="vector-index-progress-label" id="vectorIndexChunkLabel">分块进度</div>
-                        <div class="vector-index-progress-bar">
-                            <div class="vector-index-progress-fill" id="vectorIndexChunkFill"></div>
-                        </div>
-                        <div class="vector-index-progress-meta">
-                            <span class="vector-index-progress-percent" id="vectorIndexChunkPercent">0%</span>
-                            <span class="vector-index-progress-stage" id="vectorIndexChunkStage"></span>
+                        <div class="vector-index-chunk-block" id="vectorIndexChunkBlock">
+                            <div class="vector-index-progress-label" id="vectorIndexChunkLabel">分块进度</div>
+                            <div class="vector-index-progress-bar">
+                                <div class="vector-index-progress-fill" id="vectorIndexChunkFill"></div>
+                            </div>
+                            <div class="vector-index-progress-meta">
+                                <span class="vector-index-progress-percent" id="vectorIndexChunkPercent">0%</span>
+                                <span class="vector-index-progress-stage" id="vectorIndexChunkStage"></span>
+                            </div>
                         </div>
                         <div class="vector-index-current" id="vectorIndexCurrentTitle"></div>
                     </div>
                     <div class="vector-index-summary" id="vectorIndexSummary" style="display:none;"></div>
                     <div class="vector-index-error" id="vectorIndexError" style="display:none;"></div>
-                    <div class="vector-index-footer">
-                        <button class="btn btn-cancel btn-sm" id="vectorIndexDoneBtn">关闭</button>
-                    </div>
                 </div>
             </div>
         </div>

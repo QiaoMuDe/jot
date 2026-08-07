@@ -521,6 +521,8 @@ let vectorIndexNotes = [];           // 笔记列表缓存（{ id, title }）
 let vectorIndexBound = false;        // 弹窗内部事件是否已绑定（懒绑定，防止重复注册）
 let vectorIndexRunning = false;      // 量化是否进行中（进行中禁止关闭弹窗）
 let vectorIndexChunkResetTimer = null; // 块级进度延迟清零定时器（让上一篇 100% 完整显示）
+let vectorIndexLastErrorMsg = ''; // 单篇失败即时提示去重：记录上一条错误信息
+let vectorIndexLastErrorAt = 0;   // 单篇失败即时提示去重：记录上一条错误时间
 
 /**
  * HTML 转义（用于列表标题渲染）
@@ -531,6 +533,30 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text == null ? '' : String(text);
     return div.innerHTML;
+}
+
+/**
+ * 高亮匹配关键字：返回转义后的 HTML，命中片段用 <mark> 包裹（保留原文大小写）
+ * @param {string} text - 原始文本
+ * @param {string} keyword - 搜索关键词（原始、未转义）
+ * @returns {string} 安全 HTML
+ */
+function highlightKeyword(text, keyword) {
+    const escapedText = escapeHtml(text);
+    const escapedKeyword = escapeHtml(keyword || '').toLowerCase();
+    if (!escapedKeyword) return escapedText;
+    const lower = escapedText.toLowerCase();
+    let result = '';
+    let pos = 0;
+    let idx = lower.indexOf(escapedKeyword, pos);
+    while (idx !== -1) {
+        result += escapedText.slice(pos, idx);
+        result += '<mark class="vector-index-match">' + escapedText.slice(idx, idx + escapedKeyword.length) + '</mark>';
+        pos = idx + escapedKeyword.length;
+        idx = lower.indexOf(escapedKeyword, pos);
+    }
+    result += escapedText.slice(pos);
+    return result;
 }
 
 /**
@@ -552,6 +578,18 @@ function cleanupVectorIndexEvents() {
 export async function openVectorIndexModal() {
     const modal = document.getElementById('vectorIndexModal');
     if (!modal) return;
+
+    // 打开弹窗前先校验量化连接配置（provider/baseURL/model 必填，openai 需 key），
+    // 未配置时提示引导去设置，不打开弹窗；校验接口异常时放行，由开始量化时的后端校验兜底
+    if (window.go?.main?.App?.ValidateVectorIndexConfig) {
+        try {
+            const check = await window.go.main.App.ValidateVectorIndexConfig();
+            if (check && !check.ok) {
+                window.nm?.show?.(check.message || '量化连接未配置，请先在设置中完成配置', 'warning');
+                return;
+            }
+        } catch (_) { /* 忽略校验异常，放行 */ }
+    }
 
     // 懒绑定弹窗内部交互事件（只执行一次）
     bindVectorIndexModalEvents();
@@ -591,6 +629,8 @@ export async function openVectorIndexModal() {
 
     // 显示弹窗
     modal.style.display = 'flex';
+    // 弹窗布局稳定后定位分段指示条
+    repositionVectorIndexScopeIndicator();
 
     // 并行加载笔记本与笔记列表
     await Promise.all([
@@ -600,11 +640,12 @@ export async function openVectorIndexModal() {
 }
 
 /**
- * 关闭 AI 量化索引弹窗（量化进行中禁止关闭，关闭时清理进度事件监听）
+ * 关闭 AI 量化索引弹窗（量化进行中默认禁止关闭，关闭时清理进度事件监听）
+ * @param {boolean} force - true 表示用户已确认停止量化，跳过拦截直接关闭
  */
-export function closeVectorIndexModal() {
-    // 量化进行中不允许关闭，避免事件清理导致进度 UI 中断
-    if (vectorIndexRunning) {
+export function closeVectorIndexModal(force = false) {
+    // 量化进行中不允许关闭（除非已确认停止），避免事件清理导致进度 UI 中断
+    if (vectorIndexRunning && !force) {
         window.nm?.show?.('量化进行中，请等待完成', 'warning');
         return;
     }
@@ -622,14 +663,60 @@ export function closeVectorIndexModal() {
 }
 
 /**
+ * 关闭请求处理（右上角 X / Esc）：量化进行中先弹出「是否停止」确认框，
+ * 确认后调用后端 CancelVectorIndex 停止任务并强制关闭弹窗
+ */
+export async function onVectorIndexCloseRequested() {
+    if (!vectorIndexRunning) {
+        closeVectorIndexModal();
+        return;
+    }
+    const confirmed = await window.showConfirmDialog('量化进行中，确定要停止并关闭吗？', '停止', '继续');
+    if (!confirmed) return;
+    // 异步停止后端任务，随后立即关闭弹窗并清理事件（后端 goroutine 收尾期间事件已卸载）
+    try { await window.go?.main?.App?.CancelVectorIndex?.(); } catch (_) { /* 忽略停止失败 */ }
+    closeVectorIndexModal(true);
+}
+
+/**
+ * 定位分段控件滑动指示条（按当前 active 按钮计算 left/width）
+ */
+function repositionVectorIndexScopeIndicator() {
+    const seg = document.getElementById('vectorIndexScopeSeg');
+    const indicator = document.getElementById('vectorIndexScopeIndicator');
+    const active = seg?.querySelector('.vector-index-scope-btn.active');
+    if (!seg || !indicator || !active) return;
+    requestAnimationFrame(() => {
+        indicator.style.left = active.offsetLeft + 'px';
+        indicator.style.width = active.offsetWidth + 'px';
+    });
+}
+
+/**
  * 切换弹窗内部视图（选择视图 / 进度视图）
  * @param {string} view - 'select' 或 'progress'
  */
 function setVectorIndexView(view) {
     const selectView = document.getElementById('vectorIndexSelectView');
     const progressView = document.getElementById('vectorIndexProgressView');
-    if (selectView) selectView.style.display = view === 'select' ? '' : 'none';
-    if (progressView) progressView.style.display = view === 'progress' ? '' : 'none';
+    if (!selectView || !progressView) return;
+    const showEl = view === 'select' ? selectView : progressView;
+    const hideEl = view === 'select' ? progressView : selectView;
+    // 快速路径：目标视图已显示则不做动画（打开弹窗初始状态 / 重复调用）
+    if (hideEl.style.display === 'none') return;
+
+    // 旧视图退场（170ms）后切换 display 并给新视图入场动画
+    hideEl.classList.remove('view-enter');
+    hideEl.classList.add('view-leave');
+    setTimeout(() => {
+        hideEl.style.display = 'none';
+        hideEl.classList.remove('view-leave');
+        showEl.style.display = '';
+        showEl.classList.remove('view-leave');
+        showEl.classList.add('view-enter');
+        // 入场动画结束后清理 class，避免残留
+        setTimeout(() => showEl.classList.remove('view-enter'), 260);
+    }, 170);
 }
 
 /**
@@ -642,6 +729,8 @@ function switchVectorIndexScope(scope) {
     document.querySelectorAll('#vectorIndexScopeSeg .vector-index-scope-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.scope === scope);
     });
+    // 移动滑动指示条到新选中的按钮
+    repositionVectorIndexScopeIndicator();
     // 切换对应选择区显示
     const nbPicker = document.getElementById('vectorIndexNotebookPicker');
     const ntPicker = document.getElementById('vectorIndexNotePicker');
@@ -659,10 +748,9 @@ function bindVectorIndexModalEvents() {
     if (vectorIndexBound) return;
     vectorIndexBound = true;
 
-    // 关闭：右上角按钮 / 遮罩点击 / 进度视图关闭按钮
-    document.getElementById('vectorIndexClose')?.addEventListener('click', closeVectorIndexModal);
-    document.getElementById('vectorIndexOverlay')?.addEventListener('click', closeVectorIndexModal);
-    document.getElementById('vectorIndexDoneBtn')?.addEventListener('click', closeVectorIndexModal);
+    // 关闭：右上角按钮走「确认停止」流程；遮罩点击保持拦截提示
+    document.getElementById('vectorIndexClose')?.addEventListener('click', onVectorIndexCloseRequested);
+    document.getElementById('vectorIndexOverlay')?.addEventListener('click', () => closeVectorIndexModal());
 
     // 范围切换
     document.querySelectorAll('#vectorIndexScopeSeg .vector-index-scope-btn').forEach(btn => {
@@ -776,7 +864,7 @@ function renderVectorIndexNotebookList() {
     listEl.innerHTML = filtered.map(nb => `
         <label class="vector-index-item" data-id="${nb.id}">
             <input type="checkbox" ${vectorIndexSelected.has(nb.id) ? 'checked' : ''}>
-            <span class="vector-index-item-title">${escapeHtml(nb.name || '未命名笔记本')}</span>
+            <span class="vector-index-item-title">${highlightKeyword(nb.name || '未命名笔记本', keyword)}</span>
             <span class="vector-index-item-sub">${nb.noteCount || 0} 篇</span>
         </label>
     `).join('');
@@ -800,18 +888,28 @@ function renderVectorIndexNoteList() {
     listEl.innerHTML = filtered.map(n => `
         <label class="vector-index-item" data-id="${n.id}">
             <input type="checkbox" ${vectorIndexSelected.has(n.id) ? 'checked' : ''}>
-            <span class="vector-index-item-title">${escapeHtml(n.title)}</span>
+            <span class="vector-index-item-title">${highlightKeyword(n.title, keyword)}</span>
         </label>
     `).join('');
     syncVectorIndexSelectAllState('notes');
 }
 
 /**
- * 更新底部已选计数文案
+ * 更新底部已选计数文案（「全部笔记」范围不显示计数）
  */
 function updateVectorIndexCount() {
     const countEl = document.getElementById('vectorIndexCount');
     if (!countEl) return;
+    // 「全部笔记」范围：隐藏已选计数，底部按钮居中
+    if (vectorIndexScope === 'all') {
+        countEl.style.display = 'none';
+        const footer = countEl.parentElement;
+        if (footer) footer.classList.add('centered');
+        return;
+    }
+    countEl.style.display = '';
+    const footer = countEl.parentElement;
+    if (footer) footer.classList.remove('centered');
     const n = vectorIndexSelected.size;
     countEl.textContent = vectorIndexScope === 'notebooks' ? `已选 ${n} 个笔记本` : `已选 ${n} 篇`;
 }
@@ -924,7 +1022,11 @@ function resetVectorIndexProgressUI() {
     const chunkFill = document.getElementById('vectorIndexChunkFill');
     const chunkPercent = document.getElementById('vectorIndexChunkPercent');
     const chunkStage = document.getElementById('vectorIndexChunkStage');
-    if (fill) fill.style.width = '0%';
+    // 新任务开始：恢复分块进度区块与「当前处理笔记」标题显示
+    const chunkBlock = document.getElementById('vectorIndexChunkBlock');
+    if (chunkBlock) chunkBlock.style.display = '';
+    if (current) current.style.display = '';
+    if (fill) { fill.style.width = '0%'; fill.classList.remove('is-done'); }
     if (percent) percent.textContent = '0%';
     if (stage) stage.textContent = '准备中…';
     if (current) current.textContent = '';
@@ -943,7 +1045,13 @@ function updateVectorIndexProgress(payload) {
     const p = payload || {};
     const done = Number(p.done) || 0;
     const total = Number(p.total) || 0;
-    const percent = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+    const stage = p.stage;
+    // embedding 阶段当前篇按「处理到一半」计：单篇量化时进度从 50% 起步，
+    // 避免 embedding 期间长时间停在 0%；done/error 阶段按实际完成篇数计
+    const isEmbedding = stage === 'embedding';
+    const percent = total > 0
+        ? Math.min(100, Math.round((isEmbedding ? done + 0.5 : done) / total * 100))
+        : 0;
 
     const fill = document.getElementById('vectorIndexProgressFill');
     if (fill) fill.style.width = percent + '%';
@@ -956,6 +1064,16 @@ function updateVectorIndexProgress(payload) {
     if (stageEl && p.stage) stageEl.textContent = stageMap[p.stage] || p.stage;
     const currentEl = document.getElementById('vectorIndexCurrentTitle');
     if (currentEl && p.title) currentEl.textContent = p.title;
+
+    // 单篇处理失败：即时弹通知提示原因（同一错误 3 秒内去重，避免批量失败刷屏）
+    if (stage === 'error' && p.error) {
+        const now = Date.now();
+        if (p.error !== vectorIndexLastErrorMsg || now - vectorIndexLastErrorAt > 3000) {
+            window.nm?.show?.(`笔记「${p.title || '未知'}」量化失败：${p.error}`, 'error');
+        }
+        vectorIndexLastErrorMsg = p.error;
+        vectorIndexLastErrorAt = now;
+    }
 
     // 块级进度：当前笔记分块的向量化进度
     const chunkDone = Number(p.chunk_done) || 0;
@@ -1001,22 +1119,21 @@ async function showVectorIndexSummary(payload) {
     const failed = Number(p.failed) || 0;
     vectorIndexRunning = false;
 
-    // 完成后拉取一次索引统计，用于展示当前片段总数
-    let chunkCount = 0;
-    try {
-        if (window.go?.main?.App?.GetVectorIndexStatus) {
-            const st = await window.go.main.App.GetVectorIndexStatus();
-            chunkCount = st?.chunkCount || 0;
-        }
-    } catch (_) { /* 忽略统计失败 */ }
-
     const summary = document.getElementById('vectorIndexSummary');
     if (summary) {
         summary.style.display = '';
-        summary.innerHTML = `量化完成：成功 <strong>${success}</strong> 篇 / 失败 <strong>${failed}</strong> 篇 / 片段 <strong>${chunkCount}</strong> 个`;
+        summary.innerHTML = `量化完成：成功 <strong>${success}</strong> 篇 / 失败 <strong>${failed}</strong> 篇`;
     }
     const stage = document.getElementById('vectorIndexProgressStage');
     if (stage) stage.textContent = '已完成';
+    // 进度条切换为完成态（成功色 + 单次脉冲）
+    const fill = document.getElementById('vectorIndexProgressFill');
+    if (fill) fill.classList.add('is-done');
+    // 全部处理完成后：隐藏分块进度条与「当前处理笔记」标题，仅保留笔记总进度条与摘要
+    const chunkBlock = document.getElementById('vectorIndexChunkBlock');
+    if (chunkBlock) chunkBlock.style.display = 'none';
+    const currentTitle = document.getElementById('vectorIndexCurrentTitle');
+    if (currentTitle) currentTitle.style.display = 'none';
     // 完成后刷新信笺统计，保持最新
     loadDataStats();
 }

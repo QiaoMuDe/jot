@@ -613,19 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | `CallAIStreamRegenerate` 与 `CallAIStream` 的 goroutine 内部代码几乎逐行相同，差异仅在函数签名（Regenerate 缺少 `userText` 和 `userMsgID` 参数）。将 `CallAIStreamRegenerate` 缩减为约 20 行的薄包装层：加载消息提取末条用户消息的 `userText` + `userMsgID`，然后委托给 `CallAIStream`。消除约 400 行完全重复的上下文注入/搜索/召回/流式调用代码。 |
-| **委托实现** | [app.go](app.go#L2116-L2134)：`CallAIStreamRegenerate` 函数体简化为三步骤——① `truncateAIMessages` 加载消息；② 从末尾 user message 提取 `userText` 和 `userMsgID`；③ 调用 `a.CallAIStream(...)` 委托完整流程。原有 goroutine 内的步骤 1-8（身份注入/角色扮演/笔记引用/追问/文件/精炼/搜索/召回/技能）全部由 `CallAIStream` 复用。 |
-| **收益** | 消除 400 行重复代码；未来新增上下文注入/统计步骤只需修改 `CallAIStream` 一处，消除遗漏风险。例如思维链 token 统计修正（[app.go#L2050-L2057](app.go#L2050-L2057)）只需改 `CallAIStream` 的 `OnDone` 回调，Regenerate 路径自动受益。 |
-| **影响** | Regenerate 场景的日志不再带 `（再生）` 后缀（通过 `streamGen` 和 calling context 已能区分）；多一次 `truncateAIMessages` DB 查询（开销可忽略）。 |
-| **涉及文件** | [app.go](app.go)（CallAIStreamRegenerate 函数体从 426 行缩至 19 行；`CallAIStream.OnDone` 中新增思维链 token 统计） |
-
----
-
-## 记忆点 2：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 1：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 2：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +641,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 3：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 4：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -676,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 5：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 6：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -702,7 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 7：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -714,7 +702,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 8：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -729,7 +717,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 9：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -738,6 +726,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **召回状态设计** | `ai:recall-status` 事件仅服务召回；前端 `createRecallIndicator()` 复用搜索指示器布局 + 书图标语义区分；CSS 覆盖 `.ai-search-bar > svg:first-child` 的旋转动画（`[data-status="recall"]` 下改扫动）；最小展示时长与 thinking 打断通过 `recallSwapTimer`/`recallPendingStatus` 协调（[ai-chat.js](frontend/src/js/ai-chat.js) `startStreaming`）。 |
 | **Token 缓存教训** | `context_tokens` 是缓存字段，所有改动消息的操作（删除/截断/停止/取消）都必须同步重算，否则右上角显示过期值。重算必须在同一事务内用 tx 执行（连接池下 a.db 读不到未提交删除）。 |
 | **涉及文件** | [internal/database/models.go](internal/database/models.go)（新增）、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
+
+---
+
+## 记忆点 10：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 针对笔记量化弹窗（向量索引）进行完整 UI 重构及交互优化：① **UI 重构**——使用 `frontend-design` + `ui-ux-pro-max` 技能重写弹窗样式（spring 弹性入场动画、分段滑动指示条、自定义 checkbox 对勾描边动画 + 半选态、列表项左缘 accent 指示条 + 勾选 tint 背景、视图切换位移动画、进度条流光 + 完成脉冲脉冲、summary 上浮入场、错误 shake 动画、`prefers-reduced-motion` 全部关闭）；② **单篇进度 50% 起步**——`updateVectorIndexProgress` 中 embedding 阶段主进度按 "当前篇处理到一半" 计（单篇从 50% 起步），done 阶段按实际完成篇数计；③ **量化中关闭分层**——右上角 X 弹确认框"是否停止"（确认后调 `CancelVectorIndex` 后端取消 ctx），遮罩点击保持拦截提示；ESC 全局键在 `handleKeyboardNavigation` 优先托付给 `onVectorIndexCloseRequested`；底部操作按钮移除（仅保留右上角 X 和遮罩两个入口）；④ **前置校验**——`openVectorIndexModal` 前调 `ValidateVectorIndexConfig` 检查 provider/baseURL/model/apiKey，未配置时不打开弹窗并提示去设置；⑤ **错误友好化**——`IndexNotes` 中 embedding 失败时复用 `aicli.ClassifyError` 将原始错误映射为中文友好提示（如"API 密钥无效"、"请求过于频繁"等），即时弹通知而非等全部完成才显示；⑥ **分块进度条完成隐藏**——`showVectorIndexSummary` 时隐藏分块进度条和当前笔记标题，只保留总进度条 + 完成摘要（成功/失败篇数，移除片段数）；⑦ **统计修复**——`GetVectorIndexStatus` 从多返回值改为单 struct 返回修复前端一直显示"未量化"的 Bug；⑧ **选择范围 UX**——"全部笔记"范围隐藏左下角已选计数 + 按钮居中；搜索关键词高亮（`highlightKeyword` + `<mark>` 包裹）；⑨ **后端取消支持**——App struct 新增 `vectorIndexCancel context.CancelFunc`，`startVectorIndex` 用 `context.WithCancel`，`CancelVectorIndex` 绑定供前端调用。 |
+| **进度设计** | `updateVectorIndexProgress` 主进度按 `stage` 区分：`embedding` 阶段 `(doneNotes + 0.5) / total`（单篇 50% 起步），`done`/`error` 阶段 `doneNotes / total`（完成后 100%）。多篇时第 N 篇处理中 = `(N-1.5)/total`，进度平滑递增。 |
+| **关闭策略** | `closeVectorIndexModal(force)` 带 force 参数，默认 false 拦截遮罩关闭。`onVectorIndexCloseRequested` 量化中弹确认框 → 确认后 `CancelVectorIndex` 后端停止 + 关闭弹窗。后端 `CancelVectorIndex` 防重入锁校验，`context.Canceled` 不发 `vector:index-error` 事件（仅日志）。 |
+| **错误分类** | [vector_service.go](internal/services/vector_service.go#L84-L96) embedding 失败时 `aicli.ClassifyError(err)` 映射：401/403→"API 密钥无效或权限不足"、429→"请求过于频繁"/"API 额度已用尽"、404→"模型不存在或已弃用"、5xx→"AI 服务暂时不可用"、超时→"请求超时"、网络错误→"网络连接失败"、无法分类→回退原始错误。前端 3 秒去重防刷屏。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（标题图标 SVG + 分段指示条元素）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（vector-index 区块完整重写 ~640 行 CSS）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（指示条定位/视图切换动画/进度逻辑/关闭策略/前置校验/搜索高亮/错误通知）、[app.go](app.go)（ValidateVectorIndexConfig / CancelVectorIndex / GetVectorIndexStatus struct 修复）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 参数名 aicli→embedClient 修复 + ClassifyError 错误映射）、[frontend/src/main.js](frontend/src/main.js)（全局 ESC 优先托付量化弹窗） |
 
 ---
 

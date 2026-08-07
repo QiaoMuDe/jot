@@ -54,6 +54,10 @@ export function CancelAIStream() {
   return window['go']['main']['App']['CancelAIStream']();
 }
 
+export function CancelVectorIndex() {
+  return window['go']['main']['App']['CancelVectorIndex']();
+}
+
 export function CleanupOrphanImages() {
   return window['go']['main']['App']['CleanupOrphanImages']();
 }
@@ -540,6 +544,10 @@ export function VacuumDatabase() {
 
 export function ValidateCardRecall() {
   return window['go']['main']['App']['ValidateCardRecall']();
+}
+
+export function ValidateVectorIndexConfig() {
+  return window['go']['main']['App']['ValidateVectorIndexConfig']();
 }
 
 export function VerifyScreenLockPassword(arg1) {
