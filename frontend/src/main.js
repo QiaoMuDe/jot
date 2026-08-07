@@ -2249,6 +2249,9 @@ function initApiConnectionModule(m) {
                 const ok = await window.go.main.App.TestAIBaseURL(provider, url, key);
                 if (ok) {
                     nm.show(provider + ' 服务连接成功', 'success');
+                    // 测试成功即持久化当前表单值（覆盖"改值后未失焦直接点测试"场景；失败不保存避免误存错误值）
+                    await saveSettings();
+                    if (m.onSettingsSaved) m.onSettingsSaved();
                 } else {
                     nm.show(provider + ' 服务连接失败，请检查地址和 Key 是否正确', 'warning');
                 }
@@ -2302,6 +2305,9 @@ function initApiConnectionModule(m) {
                     savedModel: m.getSavedModel ? await m.getSavedModel() : null,
                     onSaved: m.onModelChange || saveModuleConfig,
                 });
+                // 同步持久化 URL/Key（覆盖"改值后未失焦直接点获取"场景；模型已由 fetchModelsAndRender 内部保存）
+                await saveSettings();
+                if (m.onSettingsSaved) m.onSettingsSaved();
             } catch (e) {
                 nm.show('获取模型列表失败: ' + e, 'error');
             } finally {
@@ -2355,14 +2361,24 @@ function initApiConnectionModule(m) {
                 nm.show('API 地址不能以斜杠结尾', 'error');
                 return;
             }
+            if (!url) {
+                nm.show('请先填写 API 地址', 'warning');
+                return;
+            }
             await saveSettings();
             nm.show('AI 配置已保存', 'success');
             if (m.onSettingsSaved) m.onSettingsSaved();
         });
-        // 用户修正后自动移除错误样式
-        m.baseURL.addEventListener('input', () => {
+        // 用户修正后自动移除错误样式；从斜杠错误态恢复时立即自动保存一次（无需再次失焦）
+        m.baseURL.addEventListener('input', async () => {
             if (!m.baseURL.value.trim().endsWith('/')) {
+                const wasError = m.baseURL.classList.contains('input-error');
                 m.baseURL.classList.remove('input-error');
+                if (wasError) {
+                    await saveSettings();
+                    nm.show('AI 配置已保存', 'success');
+                    if (m.onSettingsSaved) m.onSettingsSaved();
+                }
             }
         });
     }
@@ -2481,8 +2497,12 @@ async function initAISettings() {
         presetDropdown: els.aiEmbedPresetDropdown,
         // 读取当前服务商（测试连通性 / 获取模型时校验 Key）
         getProvider: () => getSegmentedValue(els.aiEmbedProviderSegmented),
+        // 获取模型时用于高亮当前已保存的量化模型
+        getSavedModel: async () => (await window.go.main.App.GetAllSettings()).ai_embed_model,
         // URL/Key/模型 变更保存后刷新量化预设下拉
         onSettingsSaved: () => { loadProfilesEmbed(); },
+        // 展开预设下拉前先收起管理列表（与对话模块一致）
+        onBeforeOpenPreset: async () => { if (presetMgrExpanded) await closePresetMgrList(); },
     });
 
     // 深度思考切换
@@ -3034,6 +3054,15 @@ async function initAISettings() {
             renderPresetMgrList();
         }
     });
+    // 量化连接的新增/管理按钮（预设为共享表，仅初始值来源不同；管理列表按所在行插入）
+    document.getElementById('aiEmbedPresetAddBtn')?.addEventListener('click', () => openAddProfileModal(true));
+    document.getElementById('aiEmbedPresetMgrBtn')?.addEventListener('click', (e) => {
+        if (presetMgrExpanded) {
+            closePresetMgrList();
+        } else {
+            renderPresetMgrList(e.currentTarget.closest('.preset-select-row'));
+        }
+    });
 
     // ── 预设弹窗事件 ──
     document.getElementById('presetModalClose')?.addEventListener('click', closePresetModal);
@@ -3177,6 +3206,8 @@ async function switchProfile(target, id, silent) {
         // 重置模型下拉
         els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
         els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
+        const wrap = els.aiModelDropdown.querySelector('.ai-model-search-wrap');
+        if (wrap) wrap.style.display = 'none';
         // 同步清除 AI 聊天工具栏的模型
         const chatLabel = document.getElementById('aiChatModelLabel');
         if (chatLabel) chatLabel.textContent = '--';
@@ -3217,13 +3248,14 @@ async function switchProfileEmbed(id, silent) {
 }
 
 // 打开新增预设弹窗
-function openAddProfileModal() {
+// embed 为 true 时以量化连接表单值为初始值（预设为共享表，仅初始值来源不同）
+function openAddProfileModal(embed = false) {
     editingProfileId = null;
     document.getElementById('presetModalTitle').textContent = '新增配置';
     document.getElementById('presetModalName').value = '';
-    document.getElementById('presetModalURL').value = els.aiBaseURL.value || '';
+    document.getElementById('presetModalURL').value = (embed ? els.aiEmbedBaseURL.value : els.aiBaseURL.value) || '';
     document.getElementById('presetModalURL').classList.remove('input-error');
-    document.getElementById('presetModalKey').value = els.aiAPIKey.value || '';
+    document.getElementById('presetModalKey').value = (embed ? els.aiEmbedAPIKey.value : els.aiAPIKey.value) || '';
     // 重置 Key 为隐藏状态
     var keyInput = document.getElementById('presetModalKey');
     var eye = document.querySelector('#presetModalKeyToggle .toggle-eye');
@@ -3234,7 +3266,9 @@ function openAddProfileModal() {
         eyeOff.style.display = 'none';
     }
     // 重置服务商为当前选中的
-    const currentProvider = getActiveProvider();
+    const currentProvider = embed
+        ? getSegmentedValue(els.aiEmbedProviderSegmented)
+        : getActiveProvider();
     const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
     providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === currentProvider));
     document.getElementById('presetModalProviderLabel').textContent =
@@ -3311,6 +3345,7 @@ async function savePresetModal() {
         const wasEditingId = editingProfileId; // 保存编辑状态，closePresetModal 会清空
         closePresetModal();
         await loadProfiles();
+        await loadProfilesEmbed(); // 预设共享，两个模块的下拉同步刷新
         if (wasEditingId && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
             // 编辑模式：精准替换对应行，避免全量重渲染，无需入场动画
             const updatedProfile = { id: wasEditingId, name, provider, base_url: baseURL, api_key: apiKey };
@@ -3368,6 +3403,7 @@ async function deleteProfile(id, name, rowEl) {
         await window.go.main.App.DeleteProfile(id);
         nm.show('配置已删除', 'success');
         await loadProfiles();
+        await loadProfilesEmbed(); // 预设共享，两个模块的下拉同步刷新
         // 仅移除已播放删除动画的行，避免全量重渲染的闪烁
         if (rowEl && rowEl.parentNode) {
             rowEl.remove();
@@ -3377,8 +3413,8 @@ async function deleteProfile(id, name, rowEl) {
     }
 }
 
-// 渲染管理列表（展开在设置页内）
-function renderPresetMgrList() {
+// 渲染管理列表（展开在设置页内；anchorRow 指定插入位置，默认对话连接行）
+function renderPresetMgrList(anchorRow) {
     if (!presetMgrContainer) {
         presetMgrContainer = document.createElement('div');
         presetMgrContainer.className = 'preset-mgr-list';
@@ -3393,8 +3429,8 @@ function renderPresetMgrList() {
                 presetMgrContainer.classList.remove('scrolling');
             }, 1000);
         });
-        // 插入到管理按钮所在行的下方
-        const presetRow = document.querySelector('.preset-select-row');
+        // 插入到触发按钮所在行的下方
+        const presetRow = anchorRow || document.querySelector('.preset-select-row');
         if (presetRow) {
             presetRow.after(presetMgrContainer);
         } else {

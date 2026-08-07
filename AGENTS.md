@@ -50,7 +50,7 @@ jot/                                    # 项目根目录
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
 │       ├── vector_service.go           # 笔记向量索引（IndexNotes 切块量化/GetIndexStatus/Count*/DeleteAllVectors）+ sqlite-vec 函数式向量召回 VectorRecall（SQL 内余弦距离 + 笔记本过滤 + 相邻块补充）
-│       ├── chunk.go                    # 文档切块（500 rune 上限 + 标题优先/空行分段/超长硬切 + 标题链拼接）
+│       ├── chunk.go                    # 文档切块（500 rune 上限 + 多级标题栈 1-6 级 + 标题块合并 + 空节丢弃 + 围栏代码块保护 + 块首父级链补全）
 │   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -549,6 +549,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 - [x] **MD 语法插入操作**（MD 语法分组 22 项，type: 'insert' 模式：行内样式/标题/列表/块元素/链接媒体/表格/数学公式，有选中包裹选中文本、无选中在光标处插入样板）
 - [x] **编辑器操作菜单模块化拆分**（操作项按分组拆分至 `frontend/src/js/editor-actions/` 目录：format.js/text-transform.js/text-clean.js/encode-decode.js/md-syntax.js，主文件仅保留聚合导入 + 渲染/交互/执行引擎）
 - [x] **卡片召回重构为 sqlite-vec 向量召回**（关键词召回 gse 彻底移除；`vec_distance_cosine` SQL 内余弦距离检索 + 笔记本 JOIN 过滤 + 相邻块补充 + 按笔记合并卡片；`modernc.org/sqlite` 升级 v1.51.0 含 vec 子包；[chunk.go](internal/services/chunk.go) 标题链拼接）
+- [x] **切块标题块合并重构**（[chunk.go](internal/services/chunk.go) 对齐 LangChain/LlamaIndex 语义：`headingLevel` 支持 1-6 级标题、`pushHeadingStack` 多级标题栈、标题+空行不落块与正文强制合并（杜绝孤立标题/目录索引块抢占召回名额）、空节丢弃、```/~~~ 围栏代码块内空行与伪标题不切块、`prependChain` 块首补父级标题链）
+- [x] **召回状态独立指示器**（[ai-chat.js](frontend/src/js/ai-chat.js) 召回脱离联网搜索状态机，独立 `ai:recall-status` 事件 + 放大镜扫动动画 + 最小展示时长 800ms + thinking 打断协调；[vector_service.go](internal/services/vector_service.go) `VectorRecall` 返回 error 分类预期跳过与意外错误，前端弹通知；召回笔记本空集跳过而非全库召回）
+- [x] **会话 Token 缓存一致性修复**（[ai_service.go](internal/services/ai_service.go) Truncate 系列删除消息后事务内重算 `context_tokens`；[app.go](app.go) 召回/搜索阶段与 LLM 流中取消分支补缓存重算；[ai-chat.js](frontend/src/js/ai-chat.js) `handleResend` 截断后刷新）
+- [x] **数据模型集中注册**（[internal/database/models.go](internal/database/models.go) 全局 `AllModels` 唯一注册点，InitDB 与 ResetDatabase 自动同步，重置出厂不再遗漏新表）
+- [x] **设置页量化连接补全**（量化模块 `getSavedModel` 模型高亮 + 新增/管理预设按钮 + openai 路径 `TrimRight` 三层收敛 + 测试/获取模型成功后持久化 URL/Key）
 
 ---
 
@@ -604,24 +609,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 25. **全屏模式顶栏分割线隐藏**：编辑器进入全屏模式（`.editor-panel.fullscreen`）时，通过纯 CSS `:has()` 选择器（`.main-content-area:has(.editor-panel.fullscreen) #topbar`）将顶栏底部 `border-bottom-color` 设为 `transparent`，使顶栏与编辑器面板在视觉上融为一体，无分割线更加宽阔沉浸。利用 topbar 已有的 `transition: border-color 0.3s ease-out` 实现平滑淡出/恢复。零 JS 改动，纯 CSS 实现。详见 [editor.css](frontend/src/css/components/editor.css)
 
-26. **sqlite-vec 函数式向量召回**：卡片召回已从 gse 关键词召回彻底切换为 sqlite-vec 函数式向量召回。`modernc.org/sqlite` 升级 v1.51.0（含 vec 子包 v0.1.9），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册扩展（sqlite3_auto_extension 自动生效，测试包需自行 import）。[vector_service.go](internal/services/vector_service.go) `VectorRecall`：query 向量 `json.Marshal` 为 JSON 数组字符串，`vec_f32(?)` SQL 内解析；`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` 过滤（dist<1.0 等价 score>0）+ 距离升序 LIMIT TopN；笔记本过滤 `JOIN notes`（列必须加 `note_vectors.` 前缀防 id 歧义，**JOIN 必须紧跟 FROM、位于 WHERE 之前**，否则运行时报 `near "JOIN": syntax error`）；命中后二次查询该笔记全部块补相邻块（前后各 1）并按笔记合并卡片（单卡 1200 rune 截断）。`recall_service.go` 仅剩类型与合并/截断工具，`cosineSimilarity`（Go 全表扫描）已删，`Float32ToBlob`/`BlobToFloat32` 保留。embedClient/Model 为空或当前模型无向量数据时静默跳过（Debugw 日志）。测试教训：SQL 拼接测试必须完整复刻真实代码顺序，否则测试过但运行时炸。
+26. **sqlite-vec 函数式向量召回**：卡片召回已从 gse 关键词召回彻底切换为 sqlite-vec 函数式向量召回。`modernc.org/sqlite` 升级 v1.51.0（含 vec 子包 v0.1.9），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册扩展（sqlite3_auto_extension 自动生效，测试包需自行 import）。[vector_service.go](internal/services/vector_service.go) `VectorRecall`：query 向量 `json.Marshal` 为 JSON 数组字符串，`vec_f32(?)` SQL 内解析；`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` 过滤（dist<1.0 等价 score>0）+ 距离升序 LIMIT TopN；**无条件 JOIN notes 过滤软删除笔记**（回收站笔记不参与召回，全库/指定笔记本行为统一；指定笔记本时 ON 追加 `notebook_id IN ?`；列必须加 `note_vectors.` 前缀防 id 歧义，**JOIN 必须紧跟 FROM、位于 WHERE 之前**，否则运行时报 `near "JOIN": syntax error`）；命中后二次查询该笔记全部块补相邻块（前后各 1）并按笔记合并卡片（单卡 1200 rune 截断）。`recall_service.go` 仅剩类型与合并/截断工具，`cosineSimilarity`（Go 全表扫描）已删，`Float32ToBlob`/`BlobToFloat32` 保留。embedClient/Model 为空或当前模型无向量数据时静默跳过（Debugw 日志）。**向量生命周期**：笔记永久删除（PermanentDelete / EmptyTrash / CleanExpiredTrash）时在 note_service 内联动清理 NoteVector（软删除不动向量，恢复后可直接用）。测试教训：SQL 拼接测试必须完整复刻真实代码顺序，否则测试过但运行时炸。
 
 ---
 
-## 记忆点 1：搜索词精炼扩展至卡片召回
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 搜索词精炼触发条件从仅联网搜索扩展为联网搜索或卡片召回任一启用时都触发。精炼后的关键词同时供给两者使用：联网搜索直接使用 `refinedQuery` 作为搜索 query；卡片召回使用 `combinedQuery = rawUserText + " " + refinedQuery` 拼接后由 gse 统一分词去重检索。前端状态文字从「正在优化搜索词…」改为「正在优化输入…」。 |
-| **精炼触发条件扩展** | [app.go](app.go#L1698-L1704)：`searching` 标志从 `len(searchSources) > 0` 改为 `len(searchSources) > 0 \|\| cardRecallEnabled`。日志仅在联网搜索时打印。 |
-| **联网搜索使用** | [app.go](app.go)：搜索块直接取用外部 `refinedQuery`，去除原搜索块内部的重复精炼调用和错误处理代码。 |
-| **卡片召回使用** | [app.go](app.go)：`CardRecallSearch` 调用改为 `combinedQuery`（原始 query + refinedQuery 拼接），`refinedQuery` 为空时回退为原始 query。 |
-| **前端文字更新** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)：精炼阶段显示文字从「正在优化搜索词…」改为「正在优化输入…」。 |
-| **涉及文件** | [app.go](app.go)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) |
-
----
-
-## 记忆点 2：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
+## 记忆点 1：CallAIStreamRegenerate 委托重构（消除 400 行重复代码）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
+## 记忆点 2：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 3：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 4：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 5：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +676,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 6：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -697,7 +689,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 7：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -710,7 +702,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 8：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -722,17 +714,30 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 9：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 卡片召回彻底从「关键词召回（gse 分词）」切换为「向量召回（sqlite-vec 函数式）」：① [recall_service.go](internal/services/recall_service.go) 删除全部 gse 分词/停用词过滤/相关度打分逻辑，仅保留 `RecallCard`/`CardRecallResult` 类型与 `MergeRecallCards`/`TruncateRecallCardsPreview`/`TruncateSearchSourcesPreview` 工具；② `modernc.org/sqlite` v1.23.1 → v1.51.0（含 sqlite-vec v0.1.9 子包），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册（sqlite3_auto_extension 自动生效）；③ [vector_service.go](internal/services/vector_service.go) `VectorRecall` 从「全量加载向量到 Go 内存 + 自写 `cosineSimilarity` 遍历」改为 **SQL 内计算**：`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` + 距离升序 LIMIT TopN；④ 保留相邻块补充（命中块前后各 1 块，二次查询该笔记全部块）+ 按笔记合并卡片 + `maxCardRunes` 1200 rune 截断。 |
-| **sqlite-vec 函数式核心** | query 向量化后 `json.Marshal` 生成 JSON 数组字符串，`vec_f32(?JSON)` 在 SQL 内解析（免自写 BLOB 编码）；`dist < 1.0` 等价旧逻辑 `score > 0` 过滤（余弦距离 = 1 − 余弦相似度）；笔记本过滤用 `JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL AND notes.notebook_id IN ?`。 |
+| **sqlite-vec 函数式核心** | query 向量化后 `json.Marshal` 生成 JSON 数组字符串，`vec_f32(?JSON)` 在 SQL 内解析（免自写 BLOB 编码）；`dist < 1.0` 等价旧逻辑 `score > 0` 过滤（余弦距离 = 1 − 余弦相似度）；**无条件 JOIN notes 过滤软删除**（`ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL`，全库/指定笔记本行为统一，回收站笔记不参与召回），指定笔记本时 ON 追加 `notebook_id IN ?`。 |
 | **JOIN 位置教训（重要）** | **JOIN 必须紧跟 FROM、位于 WHERE 之前**。此前把 JOIN 拼在 WHERE 子句之后，运行时报 `near "JOIN": syntax error (1)`；而手工写的测试 SQL 顺序正确但未复刻真实拼接逻辑 → 测试通过、wails dev 运行时才炸。修复后测试改为完整复刻 vector_service.go 拼接顺序（FROM → JOIN 分支 → WHERE）。另：JOIN notes 后 SELECT 列必须加 `note_vectors.` 前缀防 `ambiguous column name: id`。 |
 | **已删除/保留** | `cosineSimilarity`（Go 侧全表扫描）删除；`Float32ToBlob`（IndexNotes 写入）/`BlobToFloat32`（测试解码）保留；`vec-poc/` 探针回归（TestProbeVecLoads）确认扩展在 glebarez 驱动可加载。 |
 | **前置静默跳过** | `VectorRecall` 在 embedClient 为空 / Model 为空 / 当前模型无向量数据（`CountVectorsByModel`=0）/ query 向量化失败 / 无命中时返回 nil 静默跳过，不注入不发射；前置检查用 `WHERE model = ?` 按当前 embedding 模型隔离（model 字段 = 向量血统证明）。 |
-| **量化与切块** | `IndexNotes`：`ChunkContent` 切块（单块 500 rune 上限，标题优先/空行分段/超长硬切，[chunk.go](internal/services/chunk.go) `chain` 标题链拼接——块首非标题时补链、硬切非首段补链）→ 分批 EmbedWithProgress（每批 16 块）→ 事务内先删该 note 旧块再插新块（幂等）。软删除笔记查询阶段跳过。 |
+| **量化与切块** | `IndexNotes`：`ChunkContent` 切块（单块 500 rune 上限；[chunk.go](internal/services/chunk.go) 多级标题栈 1-6 级 + 标题块合并——标题+空行不落块、空节丢弃、```/~~~ 代码块保护、块首 `prependChain` 补父级标题链、超长硬切非首段补链）→ 分批 EmbedWithProgress（每批 16 块）→ 事务内先删该 note 旧块再插新块（幂等）。软删除笔记查询阶段跳过。**切块规则变更后必须清空重量化（旧向量基于旧分块）**。 |
+| **生命周期管理** | 向量清理在 [note_service.go](internal/services/note_service.go) 内聚处理：`PermanentDelete`（单条永久删除）、`EmptyTrash`（清空回收站，先 Pluck 软删除笔记 ID 再删向量）、`CleanExpiredTrash`（VACUUM 过期清理，同理先收集 ID）三处删除笔记后联动 `Delete NoteVector WHERE note_id IN ?`，避免孤儿向量残留；向量删除失败仅记日志不阻断笔记删除。**软删除（Delete/BatchDelete）不动向量**——回收站恢复后向量立即可用，且召回侧已被 JOIN 过滤，不会召回回收站内容。 |
 | **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/chunk.go](internal/services/chunk.go)、[internal/models/note_vector.go](internal/models/note_vector.go)、[internal/database/db.go](internal/database/db.go)、[go.mod](go.mod)/[go.sum](go.sum) |
+
+---
+
+## 记忆点 10：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 五组独立改动：① **数据模型集中注册**——新增 [internal/database/models.go](internal/database/models.go) 全局注册表 `AllModels`（11 个模型按"子表在前"排列），[db.go](internal/database/db.go) 的 `InitDB` 与 [app.go](app.go) 的 `ResetDatabase` 的 DropTable/AutoMigrate 全部复用该列表；② **设置页量化连接补全**——量化模块补传 `getSavedModel`（`GetAllSettings().ai_embed_model`）实现已保存模型高亮、新增/管理预设按钮（`openAddProfileModal(embed)` 参数化 + `renderPresetMgrList(anchorRow)` 插入触发行下方 + 预设保存/删除后双下拉刷新）；③ **斜杠与保存一致性**——[ai_service.go](internal/services/ai_service.go) `testOpenAIConnection`/`fetchOpenAIModels` 补 `strings.TrimRight(baseURL, "/")`（与 ollama 路径、`NewClient` 三层收敛）；测试连通性/获取模型成功后立即 `saveSettings()` 持久化 URL/Key（修复改值未失焦直接点按钮导致不保存）；④ **召回状态独立指示器**——召回脱离联网搜索状态机（`searching` 标志仅由 `len(searchSources) > 0` 触发），改用独立事件 `ai:recall-status`（searching/done/error），前端放大镜图标 + 左右扫动动画 + 最小展示时长 800ms（`finishRecallIndicator` 收尾），thinking 到达时打断延迟切换避免与思考动画重叠；`VectorRecall` 签名改为 `(*CardRecallResult, error)` 分类预期跳过（nil,nil）与意外错误（返回 err，发射 error 事件弹通知）；召回笔记本全部取消勾选（空集）时跳过召回而非回退全库；⑤ **Token 缓存一致性**——`TruncateAISessionAtMessage`/`TruncateAISessionAfterMessage` 删除消息后事务内 `SumSessionTokens` 重算 `context_tokens`，[app.go](app.go) 召回/搜索阶段取消与 LLM 流中取消兜底分支均补缓存重算；前端 `handleResend` 截断后 `updateContextSize()`。 |
+| **模型注册规则** | **新增/修改数据模型时必须维护 [internal/database/models.go](internal/database/models.go) 的 `AllModels`（唯一注册点）**，InitDB 建表与 ResetDatabase 重置出厂自动同步，杜绝"重置遗漏新表"。注意：多对多表（如 `note_tags`）无 model struct，需在 [app.go](app.go) `ResetDatabase` 保留显式 `DROP TABLE IF EXISTS`。 |
+| **召回状态设计** | `ai:recall-status` 事件仅服务召回；前端 `createRecallIndicator()` 复用搜索指示器布局 + 书图标语义区分；CSS 覆盖 `.ai-search-bar > svg:first-child` 的旋转动画（`[data-status="recall"]` 下改扫动）；最小展示时长与 thinking 打断通过 `recallSwapTimer`/`recallPendingStatus` 协调（[ai-chat.js](frontend/src/js/ai-chat.js) `startStreaming`）。 |
+| **Token 缓存教训** | `context_tokens` 是缓存字段，所有改动消息的操作（删除/截断/停止/取消）都必须同步重算，否则右上角显示过期值。重算必须在同一事务内用 tx 执行（连接池下 a.db 读不到未提交删除）。 |
+| **涉及文件** | [internal/database/models.go](internal/database/models.go)（新增）、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
 
 ---
 
@@ -760,3 +765,4 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
     - **[frontend/src/main.js](frontend/src/main.js)**：三至四处——④ `els` 对象中注册元素引用（`$('elementId')`）；⑤ `loadSettings()` 中读取 `cfg.xxx` 同步到 DOM；⑥ `saveSettings()` 的 `cfg` 对象中收集 DOM 值；⑦ 若需要自动保存，在事件绑定区域添加 `addEventListener('change', ...)` 调用 `saveSettings()` + 通知
     - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）
 11. **禁止维护实际文件行数**：`AGENTS.md` 中不得出现 `（~XXX 行）` 类标记，文件名后也无需标注行数，避免频繁维护。
+12. **数据模型维护规范**：**新增或修改数据模型（models 包中的 struct）时，必须同步维护 [internal/database/models.go](internal/database/models.go) 的 `AllModels` 注册表**（按"子表在前"顺序追加/调整），[db.go](internal/database/db.go) 的 `InitDB` 建表与 [app.go](app.go) 的 `ResetDatabase` 重置出厂均引用该唯一注册点，无需也不得在其他地方单独维护模型列表。若新增无 model struct 的表（如多对多关联表），需在 `ResetDatabase` 中补显式 `DROP TABLE IF EXISTS` 语句。

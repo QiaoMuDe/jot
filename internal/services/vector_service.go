@@ -178,57 +178,61 @@ func (s *VectorService) DeleteAllVectors() error {
 // VectorRecall 向量召回：将 query 向量化后，通过 sqlite-vec 扩展在 SQL 内计算余弦距离，
 // 按距离升序召回 TopN 命中块，并补充命中块前后各 1 个相邻块，按笔记合并组装卡片
 // 返回 CardRecallResult（FormattedText 注入 system message + Cards 用于前端展示）
-// 任一前置条件不满足时返回 nil（静默跳过，不注入不发射）：
-//   - embedClient 为空或其 Model 为空（未配置量化连接/模型）
-//   - note_vectors 表中没有与当前 Model 匹配的向量数据（未量化或换了模型）
-//   - query 向量化失败或召回结果为空
+// 返回分类：
+//   - (result, nil)：召回成功
+//   - (nil, nil)：预期跳过（配置未就绪/无向量数据/无命中/卡片为空），调用方可静默
+//   - (nil, err)：意外错误（embedding/SQL/查询失败），调用方应提示用户
 //
 // notebookIDs 非空时仅召回指定笔记本下的笔记（join notes 过滤）
-func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) *CardRecallResult {
+func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
 	if query == "" || limit <= 0 {
-		return nil
+		return nil, nil
 	}
 	// embedding client 配置检查：模型未配置时无法向量化 query，静默跳过
 	if embedClient == nil || embedClient.Model == "" {
 		s.logger.Debugw("VectorService.VectorRecall 跳过：embedding 模型未配置")
-		return nil
+		return nil, nil
 	}
 
 	// 前置检查：当前模型是否有向量数据，无则静默跳过
 	var cnt int64
 	if err := s.db.WithContext(ctx).Model(&models.NoteVector{}).Where("model = ?", embedClient.Model).Count(&cnt).Error; err != nil {
 		s.logger.Errorw("VectorService.VectorRecall 查询向量计数失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("查询向量计数失败: %w", err)
 	}
 	if cnt == 0 {
 		s.logger.Debugw("VectorService.VectorRecall 跳过：当前模型无向量数据",
 			fastlog.String("model", embedClient.Model))
-		return nil
+		return nil, nil
 	}
 
 	// query 向量化：取首个向量作为查询向量
 	embeddings, err := embedClient.Embed(ctx, []string{query})
-	if err != nil || len(embeddings) == 0 {
+	if err != nil {
 		s.logger.Errorw("VectorService.VectorRecall query 向量化失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("query 向量化失败: %w", err)
+	}
+	if len(embeddings) == 0 {
+		s.logger.Errorw("VectorService.VectorRecall query 向量化失败", fastlog.String("detail", "返回空向量"))
+		return nil, fmt.Errorf("query 向量化失败: 返回空向量")
 	}
 	queryVec := embeddings[0]
 	// query 向量转 JSON 数组字符串，供 sqlite-vec 的 vec_f32 解析
 	queryVecJSON, err := json.Marshal(queryVec)
 	if err != nil {
 		s.logger.Errorw("VectorService.VectorRecall query 向量序列化失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("query 向量序列化失败: %w", err)
 	}
 
 	// sqlite-vec 函数式检索：SQL 内计算余弦距离（vec_distance_cosine），按距离升序取 TopN
-	// dist < 1.0 等价原逻辑 score > 0 过滤；可选按笔记本范围过滤（join notes 跳过软删除笔记）
-	// 列名加 note_vectors 前缀，避免 JOIN notes 时 id 列歧义；JOIN 必须紧跟 FROM（位于 WHERE 之前）
+	// dist < 1.0 等价原逻辑 score > 0 过滤；无条件 JOIN notes 过滤软删除笔记（回收站笔记不参与召回），
+	// 指定笔记本时 ON 条件追加 notebook_id 过滤；JOIN 必须紧跟 FROM（位于 WHERE 之前），
+	// 列名加 note_vectors 前缀避免 JOIN notes 时 id 列歧义
 	vecSQL := "SELECT note_vectors.id, note_vectors.note_id, note_vectors.chunk_index, note_vectors.chunk_text, note_vectors.model " +
-		"FROM note_vectors"
+		"FROM note_vectors JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL"
 	args := []interface{}{}
 	if len(notebookIDs) > 0 {
-		vecSQL += " JOIN notes ON notes.id = note_vectors.note_id " +
-			"AND notes.deleted_at IS NULL AND notes.notebook_id IN ?"
+		vecSQL += " AND notes.notebook_id IN ?"
 		args = append(args, notebookIDs)
 	}
 	vecSQL += " WHERE note_vectors.model = ? " +
@@ -239,12 +243,12 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	var hits []models.NoteVector
 	if err := s.db.WithContext(ctx).Raw(vecSQL, args...).Scan(&hits).Error; err != nil {
 		s.logger.Errorw("VectorService.VectorRecall sqlite-vec 检索失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("向量检索失败: %w", err)
 	}
 	if len(hits) == 0 {
 		s.logger.Debugw("VectorService.VectorRecall 无命中",
 			fastlog.String("query", query), fastlog.String("model", embedClient.Model))
-		return nil
+		return nil, nil
 	}
 
 	// 按命中 note_id 批量查询笔记元信息（标题/文件后缀），用于组装卡片
@@ -255,7 +259,7 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	var notes []models.Note
 	if err := s.db.WithContext(ctx).Where("id IN ?", noteIDs).Find(&notes).Error; err != nil {
 		s.logger.Errorw("VectorService.VectorRecall 查询笔记失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("查询命中笔记失败: %w", err)
 	}
 	noteMeta := make(map[uint]models.Note, len(notes))
 	for _, n := range notes {
@@ -267,7 +271,7 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	if err := s.db.WithContext(ctx).Where("model = ? AND note_id IN ?", embedClient.Model, noteIDs).
 		Order("chunk_index ASC").Find(&blocks).Error; err != nil {
 		s.logger.Errorw("VectorService.VectorRecall 查询命中笔记块失败", fastlog.Error(err))
-		return nil
+		return nil, fmt.Errorf("查询命中笔记块失败: %w", err)
 	}
 	byNote := make(map[uint][]models.NoteVector)
 	for _, v := range blocks {
@@ -332,7 +336,7 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	}
 	if len(cards) == 0 {
 		s.logger.Debugw("VectorService.VectorRecall 组装卡片为空")
-		return nil
+		return nil, nil
 	}
 	b.WriteString("请基于以上笔记内容回答用户的问题。如果笔记内容不足以回答，请如实说明。")
 
@@ -344,5 +348,5 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	return &CardRecallResult{
 		FormattedText: b.String(),
 		Cards:         cards,
-	}
+	}, nil
 }

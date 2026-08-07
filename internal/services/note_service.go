@@ -72,7 +72,7 @@ func (s *NoteService) Delete(id uint) error {
 	return nil
 }
 
-// PermanentDelete 永久删除指定 ID 的笔记（从数据库中彻底移除）
+// PermanentDelete 永久删除指定 ID 的笔记（从数据库中彻底移除），并联动清理该笔记的向量索引，避免孤儿向量残留
 func (s *NoteService) PermanentDelete(id uint) error {
 	result := s.db.Unscoped().Delete(&models.Note{}, id)
 	if result.Error != nil {
@@ -81,6 +81,10 @@ func (s *NoteService) PermanentDelete(id uint) error {
 	}
 	if result.RowsAffected == 0 {
 		return errors.New("note not found")
+	}
+	// 清理向量索引：附属数据，删除失败不阻断笔记删除，仅记日志
+	if err := s.db.Where("note_id = ?", id).Delete(&models.NoteVector{}).Error; err != nil {
+		s.logger.Errorw("NoteService.PermanentDelete 清理向量失败", fastlog.Uint("note_id", id), fastlog.Error(err))
 	}
 	return nil
 }
@@ -429,19 +433,47 @@ func (s *NoteService) RestoreAll() error {
 	return nil
 }
 
-// EmptyTrash 永久删除回收站中所有已软删除的笔记
+// EmptyTrash 永久删除回收站中所有已软删除的笔记，并联动清理这些笔记的向量索引，避免孤儿向量残留
 func (s *NoteService) EmptyTrash() error {
+	// 先收集回收站笔记 ID，用于删除后清理对应向量
+	var ids []uint
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("deleted_at IS NOT NULL").Pluck("id", &ids).Error; err != nil {
+		s.logger.Errorw("NoteService.EmptyTrash 查询回收站笔记失败", fastlog.Error(err))
+		return err
+	}
+
 	result := s.db.Unscoped().Where("deleted_at IS NOT NULL").Delete(&models.Note{})
 	if result.Error != nil {
 		s.logger.Errorw("NoteService.EmptyTrash 失败", fastlog.Error(result.Error))
 		return result.Error
 	}
+
+	// 清理向量索引：附属数据，删除失败不阻断清空，仅记日志
+	if len(ids) > 0 {
+		if err := s.db.Where("note_id IN ?", ids).Delete(&models.NoteVector{}).Error; err != nil {
+			s.logger.Errorw("NoteService.EmptyTrash 清理向量失败", fastlog.Error(err))
+		}
+	}
 	return nil
 }
 
-// CleanExpiredTrash 永久删除回收站中超过指定天数的笔记
+// CleanExpiredTrash 永久删除回收站中超过指定天数的笔记，并联动清理这些笔记的向量索引
 func (s *NoteService) CleanExpiredTrash(days int) int64 {
+	// 先收集过期笔记 ID，用于删除后清理对应向量
+	var ids []uint
+	_ = s.db.Unscoped().Model(&models.Note{}).
+		Where(fmt.Sprintf("deleted_at IS NOT NULL AND deleted_at < datetime('now', '-%d days')", days)).
+		Pluck("id", &ids).Error
+
 	result := s.db.Unscoped().Where(fmt.Sprintf("deleted_at IS NOT NULL AND deleted_at < datetime('now', '-%d days')", days)).Delete(&models.Note{})
+
+	// 清理向量索引：附属数据，删除失败不影响整体，仅记日志
+	if result.Error == nil && len(ids) > 0 {
+		if err := s.db.Where("note_id IN ?", ids).Delete(&models.NoteVector{}).Error; err != nil {
+			s.logger.Errorw("NoteService.CleanExpiredTrash 清理向量失败", fastlog.Error(err))
+		}
+	}
 	return result.RowsAffected
 }
 

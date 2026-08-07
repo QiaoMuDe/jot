@@ -27,7 +27,7 @@ func TestChunkLongChinese(t *testing.T) {
 	}
 }
 
-// TestChunkHeadings 验证按 ## / ### 标题分块
+// TestChunkHeadings 验证按 ## / ### 标题分块，且子节 ### 块自动补全父级 ## 标题链
 func TestChunkHeadings(t *testing.T) {
 	content := "## 第一章 简介\n这是第一章的内容，介绍向量检索的基本概念。\n\n### 1.1 原理\n本节讲解向量化的原理。\n\n## 第二章 应用\n这里讲述向量检索在实际场景中的应用。"
 	chunks := ChunkContent(content, 500)
@@ -38,8 +38,9 @@ func TestChunkHeadings(t *testing.T) {
 	if !strings.HasPrefix(chunks[0], "## 第一章") {
 		t.Errorf("第 0 块应以 \"## 第一章\" 开头，实际: %q", chunks[0])
 	}
-	if !strings.HasPrefix(chunks[1], "### 1.1") {
-		t.Errorf("第 1 块应以 \"### 1.1\" 开头，实际: %q", chunks[1])
+	// 子节块首补全父级标题链（原为 "### 1.1"）
+	if !strings.HasPrefix(chunks[1], "## 第一章 简介\n### 1.1 原理") {
+		t.Errorf("第 1 块应补全父级链 \"## 第一章 简介\\n### 1.1 原理\"，实际: %q", chunks[1])
 	}
 	if !strings.HasPrefix(chunks[2], "## 第二章") {
 		t.Errorf("第 2 块应以 \"## 第二章\" 开头，实际: %q", chunks[2])
@@ -119,5 +120,100 @@ func TestFloat32BlobRoundTrip(t *testing.T) {
 	// 非法长度应报错
 	if _, err := BlobToFloat32([]byte{1, 2, 3}); err == nil {
 		t.Error("长度为 3 的 BLOB 应返回错误")
+	}
+}
+
+// TestChunkHeadingBlankMerge 验证标题行后跟空行时不落块，与后续正文合并为一块
+func TestChunkHeadingBlankMerge(t *testing.T) {
+	chunks := ChunkContent("## A\n\n正文", 500)
+	if len(chunks) != 1 {
+		t.Fatalf("标题+空行+正文期望合并为 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if chunks[0] != "## A\n正文" {
+		t.Errorf("期望块内容 \"## A\\n正文\"，实际: %q", chunks[0])
+	}
+}
+
+// TestChunkH1NotIsolated 验证一级标题 # 参与分块且不孤立成块，正文块带完整父级链
+func TestChunkH1NotIsolated(t *testing.T) {
+	chunks := ChunkContent("# 大标题\n\n## 子节\n正文", 500)
+	if len(chunks) != 1 {
+		t.Fatalf("一级标题场景期望 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if chunks[0] != "# 大标题\n## 子节\n正文" {
+		t.Errorf("期望块内容 \"# 大标题\\n## 子节\\n正文\"，实际: %q", chunks[0])
+	}
+}
+
+// TestChunkEmptySectionDropped 验证空节（无正文的孤立标题）被丢弃，不产生噪音块
+func TestChunkEmptySectionDropped(t *testing.T) {
+	chunks := ChunkContent("## A\n## B\n正文", 500)
+	if len(chunks) != 1 {
+		t.Fatalf("空节 A 应丢弃，期望 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if chunks[0] != "## B\n正文" {
+		t.Errorf("期望块内容 \"## B\\n正文\"，实际: %q", chunks[0])
+	}
+}
+
+// TestChunkNestedParentChain 验证嵌套子节 ### 块自动补全父级 ## 标题链
+func TestChunkNestedParentChain(t *testing.T) {
+	chunks := ChunkContent("## 第一章\n### 1.1\n正文", 500)
+	if len(chunks) != 1 {
+		t.Fatalf("嵌套子节期望 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if chunks[0] != "## 第一章\n### 1.1\n正文" {
+		t.Errorf("期望块内容 \"## 第一章\\n### 1.1\\n正文\"，实际: %q", chunks[0])
+	}
+}
+
+// TestChunkHeadingLevel4 验证四级标题 #### 同样参与分块与链栈
+func TestChunkHeadingLevel4(t *testing.T) {
+	chunks := ChunkContent("#### 小节\n正文", 500)
+	if len(chunks) != 1 {
+		t.Fatalf("四级标题期望 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if chunks[0] != "#### 小节\n正文" {
+		t.Errorf("期望块内容 \"#### 小节\\n正文\"，实际: %q", chunks[0])
+	}
+}
+
+// TestChunkCodeFenceProtected 验证围栏代码块内空行、伪标题行不触发切块，代码块完整保留
+func TestChunkCodeFenceProtected(t *testing.T) {
+	content := "## 示例\n```go\n// # 伪标题\n\nx := 1\n```\n\n### 原理\n正文"
+	chunks := ChunkContent(content, 500)
+	if len(chunks) != 2 {
+		t.Fatalf("代码块场景期望 2 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	// 块 0：代码块完整，内部空行与伪标题未触发切块
+	if !strings.Contains(chunks[0], "```go") || !strings.Contains(chunks[0], "// # 伪标题") ||
+		!strings.Contains(chunks[0], "x := 1") || !strings.Contains(chunks[0], "```") {
+		t.Errorf("第 0 块应包含完整代码块，实际: %q", chunks[0])
+	}
+	if strings.HasPrefix(chunks[0], "## 示例\n###") {
+		t.Errorf("第 0 块不应在代码块内切出标题，实际: %q", chunks[0])
+	}
+	// 块 1：子节补父级标题链
+	if chunks[1] != "## 示例\n### 原理\n正文" {
+		t.Errorf("期望块内容 \"## 示例\\n### 原理\\n正文\"，实际: %q", chunks[1])
+	}
+}
+
+// TestChunkReportedScenario 回归用户报告场景：大标题+目录+分节正文，无孤立标题块，目录带父标题
+func TestChunkReportedScenario(t *testing.T) {
+	content := "# 大标题\n\n## 目录\n- [A](#a)\n- [B](#b)\n\n## A\n正文A\n\n## B\n正文B"
+	chunks := ChunkContent(content, 500)
+	want := []string{
+		"# 大标题\n## 目录\n- [A](#a)\n- [B](#b)",
+		"# 大标题\n## A\n正文A",
+		"# 大标题\n## B\n正文B",
+	}
+	if len(chunks) != len(want) {
+		t.Fatalf("期望 %d 块，实际 %d 块: %v", len(want), len(chunks), chunks)
+	}
+	for i := range want {
+		if chunks[i] != want[i] {
+			t.Errorf("第 %d 块期望 %q，实际 %q", i, want[i], chunks[i])
+		}
 	}
 }

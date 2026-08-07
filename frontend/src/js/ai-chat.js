@@ -2154,7 +2154,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:refined-keywords'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2169,6 +2169,10 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     let streamSearchSources = null;
     let searchSourceStates = {};
     let recallCards = null;
+    let recallIndicatorStart = 0;   // 召回指示器开始展示的时间戳，用于保证最短展示时长
+    let recallSwapTimer = null;     // 召回指示器最小展示时长的延迟切换句柄（thinking 到达时立即打断）
+    let recallPendingStatus = '';   // 延迟切换等待中的收尾状态（'done'/'error'）
+    let recallPendingDetail = '';   // 延迟切换等待中的错误详情
     let refinedKeywords = '';
 
     const streamingEl = document.createElement('div');
@@ -2209,6 +2213,13 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         if (!enableThinking) return; // 深度思考关闭时跳过展示思维链
         if (!thinkingDetails) {
+            // 召回指示器若还在最小展示时长延迟中，立即完成收尾（切回打字点），
+            // 避免思考动画（thinkingDetails 插在 contentDiv 上方）与检索指示器上下重叠
+            if (recallSwapTimer) {
+                clearTimeout(recallSwapTimer);
+                recallSwapTimer = null;
+                finishRecallIndicator(recallPendingStatus, recallPendingDetail);
+            }
             _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
@@ -2253,6 +2264,44 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         }
     });
     unsubs.push(unsubSearch);
+
+    // 卡片召回状态：检索中/完成/失败（独立事件，与联网搜索 ai:search-status 解耦）
+    // 本地检索耗时可能极短，指示器保持最小展示时长避免闪烁
+    const MIN_RECALL_INDICATOR_MS = 800;
+    // 召回指示器收尾：恢复打字点（期间若已收到 chunk 则跳过），error 时弹提示
+    // 供召回 done/error 与 thinking 打断共用，保证错误通知不丢失
+    const finishRecallIndicator = (status, detail) => {
+        recallSwapTimer = null;
+        if (!hasReceivedChunk) {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(createTypingDots());
+        }
+        if (status === 'error' && nm && typeof nm.show === 'function') {
+            nm.show('卡片召回失败: ' + (detail || '未知错误'), 'warning');
+        }
+    };
+    const unsubRecallStatus = window.runtime.EventsOn('ai:recall-status', (status, detail) => {
+        if (status === 'searching') {
+            // 仅当尚未收到 stream chunk 时替换为召回指示器
+            if (!hasReceivedChunk) {
+                recallIndicatorStart = Date.now();
+                contentDiv.innerHTML = '';
+                contentDiv.appendChild(createRecallIndicator());
+            }
+        } else if (status === 'done' || status === 'error') {
+            // 保证召回指示器至少展示 MIN_RECALL_INDICATOR_MS，避免本地检索过快导致闪烁；
+            // 延迟期间记录 pending 状态，thinking 到达时可立即打断并保留错误提示
+            const elapsed = Date.now() - recallIndicatorStart;
+            if (recallIndicatorStart > 0 && elapsed < MIN_RECALL_INDICATOR_MS) {
+                recallPendingStatus = status;
+                recallPendingDetail = detail || '';
+                recallSwapTimer = setTimeout(() => finishRecallIndicator(status, detail), MIN_RECALL_INDICATOR_MS - elapsed);
+            } else {
+                finishRecallIndicator(status, detail);
+            }
+        }
+    });
+    unsubs.push(unsubRecallStatus);
 
     // 搜索源状态更新（仅记录状态，不更新 UI 动画）
     const unsubSourceStatus = window.runtime.EventsOn('ai:search-source-status', (statusJSON) => {
@@ -2731,12 +2780,23 @@ const sourceLabels = {
 };
 
 /**
- * 创建多源搜索状态指示器
- * @param {'refining'|'searching'} status - 搜索阶段
- * @param {string} [keywords=''] - 精炼后的关键词
- * @param {Object} [sourceStates={}] - 各搜索源状态
- * @returns {HTMLSpanElement}
+ * 创建卡片召回状态指示器：放大镜图标 + 文案（复用搜索指示器布局，语义=检索本地笔记/知识库）
+ * 放大镜不参与旋转动画（与联网搜索地球图标区分），见 ai-chat.css 中 data-status="recall" 覆盖规则
+ * @returns {HTMLDivElement}
  */
+function createRecallIndicator() {
+    // 放大镜 SVG（Lucide Search 风格，静止展示不旋转）
+    var searchSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+    var el = document.createElement('div');
+    el.className = 'ai-search-indicator';
+    el.dataset.status = 'recall';
+    var bar = document.createElement('div');
+    bar.className = 'ai-search-bar';
+    bar.innerHTML = searchSvg + '<span class="ai-search-text">正在检索本地笔记...</span>';
+    el.appendChild(bar);
+    return el;
+}
+
 /**
  * 简易搜索指示器：地球图标 + 文字（无下拉多源详情）
  * @param {string} text - 显示文字，如 "正在优化输入..."、"正在联网搜索..."
@@ -3899,6 +3959,8 @@ async function handleResend(msgEl) {
         try {
             await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
         } catch (_) { /* 静默 */ }
+        // 截断后后端已重算会话 token 缓存，立即刷新右上角总 token 显示
+        updateContextSize();
     }
 
     // 截断 chatHistory 缓冲区

@@ -56,8 +56,8 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// cache_size：8MB 页面缓存（负值表示 KB 单位）
 	_ = db.Exec("PRAGMA cache_size=-8000").Error
 
-	// 自动迁移数据模型
-	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{}, &models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}, &models.AISessionConfig{}, &models.NoteVector{}); err != nil {
+	// 自动迁移数据模型（模型注册见 models.go 的 AllModels）
+	if err := db.AutoMigrate(AllModels...); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 

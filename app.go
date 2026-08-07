@@ -1572,9 +1572,9 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		a.vectorIndexMu.Unlock()
 	}
 
-	// 未配置量化模型时直接返回可读错误，不发起索引
-	model := a.settingService.Get("ai_embed_model")
-	if model == "" {
+	// 未完整配置量化连接时直接返回可读错误，不发起索引（与 ValidateCardRecall 校验强度一致）
+	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	if provider == "" || baseURL == "" || model == "" {
 		release()
 		return errors.New("请先在设置中配置量化连接与量化模型")
 	}
@@ -1583,10 +1583,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		return errors.New("没有找到有效的笔记")
 	}
 
-	// 构造 embedding 客户端（apiKey 为 B64 存储，解码后使用）
-	provider := a.settingService.Get("ai_embed_provider")
-	baseURL := a.settingService.Get("ai_embed_base_url")
-	apiKey := services.DecodeB64(a.settingService.Get("ai_embed_api_key"))
+	// 构造 embedding 客户端（GetEmbedConfig 已解码 apiKey）
 	client := aicli.NewClient(aicli.Config{
 		Provider: provider,
 		BaseURL:  baseURL,
@@ -1621,30 +1618,27 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	return nil
 }
 
-// TestAIBaseURL 按指定 Provider/BaseURL/APIKey 测试连通性（对话/量化连接共用）
-func (a *App) TestAIBaseURL(provider, baseURL, apiKey string) (bool, error) {
-	a.LogSvc.Logger.Debugw("TestAIBaseURL", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+// testAIConnection 连通性测试公共实现（按 Provider 分发，Wails 绑定方法共用）
+func (a *App) testAIConnection(provider, baseURL, apiKey, logName string) (bool, error) {
+	a.LogSvc.Logger.Debugw(logName, fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
 	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
 	result, err := a.aiService.TestConnection(cfg)
 	if err != nil {
-		a.LogSvc.Logger.Errorw("TestAIBaseURL 失败", fastlog.Error(err))
+		a.LogSvc.Logger.Errorw(logName+" 失败", fastlog.Error(err))
 		return false, err
 	}
-	a.LogSvc.Logger.Infow("TestAIBaseURL 成功")
+	a.LogSvc.Logger.Infow(logName + " 成功")
 	return result, nil
+}
+
+// TestAIBaseURL 按指定 Provider/BaseURL/APIKey 测试连通性（对话/量化连接共用）
+func (a *App) TestAIBaseURL(provider, baseURL, apiKey string) (bool, error) {
+	return a.testAIConnection(provider, baseURL, apiKey, "TestAIBaseURL")
 }
 
 // TestAIConnection 测试指定 AI 配置的连通性（预设使用）
 func (a *App) TestAIConnection(provider, baseURL, apiKey string) (bool, error) {
-	a.LogSvc.Logger.Debugw("TestAIConnection", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
-	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
-	result, err := a.aiService.TestConnection(cfg)
-	if err != nil {
-		a.LogSvc.Logger.Errorw("TestAIConnection 失败", fastlog.Error(err))
-		return false, err
-	}
-	a.LogSvc.Logger.Infow("TestAIConnection 成功")
-	return result, nil
+	return a.testAIConnection(provider, baseURL, apiKey, "TestAIConnection")
 }
 
 // TestTavilyConnection 测试 Tavily API Key 是否有效
@@ -1869,13 +1863,12 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 	var searchSourcesJSON, recallCardsJSON string
 
 	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
+	// 仅联网搜索进入搜索状态机；卡片召回走独立的 ai:recall-status 事件，避免误显示搜索动画
 	var searching bool
-	if len(searchSources) > 0 || cardRecallEnabled {
+	if len(searchSources) > 0 {
 		searching = true
 		runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
-		if len(searchSources) > 0 {
-			a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
-		}
+		a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
 	}
 
 	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
@@ -2127,6 +2120,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		// 卡片召回（受 cardRecallEnabled 开关门控，关闭时直接跳过，不注入 system message、不发射 ai:recall-cards 事件）
 		// 开启时执行向量召回：取末条 user 消息为查询、按 ai_card_recall_limit 限条数（默认 5，≤30）、
 		// 构建 embedding client 调用 VectorRecall，结果注入 system message 并发射 ai:recall-cards
+		// 召回状态走独立事件 ai:recall-status（searching/done/error），与联网搜索 ai:search-status 解耦
 		if cardRecallEnabled {
 			a.LogSvc.Logger.Debugw("AI 向量召回启动")
 			var vectorQuery string
@@ -2136,7 +2130,12 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					break
 				}
 			}
-			if vectorQuery != "" {
+			// 未选择任何笔记本时跳过召回（全取消勾选即不限定范围），避免空集回退为全库召回
+			if vectorQuery == "" {
+				a.LogSvc.Logger.Debugw("AI 向量召回跳过：查询为空")
+			} else if len(recallNotebookIDs) == 0 {
+				a.LogSvc.Logger.Debugw("AI 向量召回跳过：未选择笔记本")
+			} else {
 				// 召回条数复用 ai_card_recall_limit 设置（默认 5）
 				vectorLimit := 5
 				if a.settingService != nil {
@@ -2156,26 +2155,33 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					Model:    embedModel,
 				})
 
-				vectorResult := a.vectorService.VectorRecall(ctx, vectorQuery, vectorLimit, embedClient, recallNotebookIDs...)
-				if vectorResult != nil {
-					// 注入格式化文本到 system role
-					messages = appendToSystemMessage(messages, vectorResult.FormattedText)
+				// 召回开始：独立状态事件
+				runtime.EventsEmit(a.ctx, "ai:recall-status", "searching")
+				vectorResult, err := a.vectorService.VectorRecall(ctx, vectorQuery, vectorLimit, embedClient, recallNotebookIDs...)
+				if err != nil {
+					// 用户取消导致的召回中断不提示；其余意外错误（embedding/SQL/查询失败）发射错误事件
+					if ctx.Err() == nil {
+						a.LogSvc.Logger.Errorw("AI 向量召回失败", fastlog.Error(err))
+						runtime.EventsEmit(a.ctx, "ai:recall-status", "error", err.Error())
+					}
+				} else {
+					// 召回结束（含预期跳过无结果）
+					runtime.EventsEmit(a.ctx, "ai:recall-status", "done")
+					if vectorResult != nil {
+						// 注入格式化文本到 system role
+						messages = appendToSystemMessage(messages, vectorResult.FormattedText)
 
-					// 与已有召回卡片按 note_id 合并去重后统一发射（前端 ai:recall-cards 为覆盖式事件）
-					if len(vectorResult.Cards) > 0 {
-						var kwCards []services.RecallCard
-						if recallCardsJSON != "" {
-							_ = json.Unmarshal([]byte(recallCardsJSON), &kwCards)
-						}
-						mergedCards := services.MergeRecallCards(kwCards, vectorResult.Cards)
-						cardsJSON, _ := json.Marshal(mergedCards)
-						recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
+						// 向量召回结果统一发射（前端 ai:recall-cards 为覆盖式事件）
+						if len(vectorResult.Cards) > 0 {
+							cardsJSON, _ := json.Marshal(vectorResult.Cards)
+							recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
 
-						truncatedCards := services.TruncateRecallCardsPreview(mergedCards, 200)
-						if displayJSON, err := json.Marshal(truncatedCards); err == nil {
-							runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
+							truncatedCards := services.TruncateRecallCardsPreview(vectorResult.Cards, 200)
+							if displayJSON, err := json.Marshal(truncatedCards); err == nil {
+								runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
+							}
+							a.LogSvc.Logger.Debugw("AI 向量召回结果", fastlog.Int("cards_count", len(vectorResult.Cards)))
 						}
-						a.LogSvc.Logger.Debugw("AI 向量召回结果", fastlog.Int("cards_count", len(mergedCards)))
 					}
 				}
 			}
@@ -2212,7 +2218,13 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 		}
 
 		// 如果已被用户取消（停止按钮），不再继续调用 LLM，避免白调用
+		// 取消时用户消息已入库，需重算会话 token 缓存，确保右上角显示与 DB 实际一致
 		if ctx.Err() != nil {
+			if userMsgID > 0 {
+				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
+			}
+			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
 			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 			return
 		}
@@ -2297,8 +2309,14 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err, userTokens)
 			},
 		)
-		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡
+		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡；
+		// 取消时用户消息已入库，需重算会话 token 缓存（与 OnError 分支一致），避免右上角显示过期累计值
 		if ctx.Err() != nil {
+			if userMsgID > 0 {
+				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
+			}
+			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
 			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 		}
 	}()
@@ -3472,20 +3490,8 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint) Fil
 // ResetDatabase 清空所有数据，恢复出厂状态（删表重建）
 func (a *App) ResetDatabase() error {
 	a.LogSvc.Logger.Debugw("ResetDatabase")
-	// 1. 删除所有表（自动处理外键依赖顺序）
-	tables := []interface{}{
-		&models.AIMessage{},
-		&models.AISessionConfig{},
-		&models.AISession{},
-		&models.AIPrompt{},
-		&models.APIProfile{},
-		&models.Todo{},
-		&models.Setting{},
-		&models.Note{},
-		&models.Tag{},
-		&models.Notebook{},
-	}
-	for _, table := range tables {
+	// 1. 删除所有表（子表在前顺序由 database.AllModels 保证，自动处理外键依赖）
+	for _, table := range database.AllModels {
 		if err := a.db.Migrator().DropTable(table); err != nil {
 			return err
 		}
@@ -3496,10 +3502,8 @@ func (a *App) ResetDatabase() error {
 		return err
 	}
 
-	// 2. 重新 AutoMigrate（与 InitDB 保持同步）
-	if err := a.db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.Setting{},
-		&models.Notebook{}, &models.AISession{}, &models.AIMessage{}, &models.AISessionConfig{},
-		&models.APIProfile{}, &models.AIPrompt{}, &models.Todo{}); err != nil {
+	// 2. 重新 AutoMigrate（与 InitDB 保持同步，模型注册见 database.AllModels）
+	if err := a.db.AutoMigrate(database.AllModels...); err != nil {
 		return err
 	}
 

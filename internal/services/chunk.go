@@ -8,9 +8,14 @@ import (
 )
 
 // ChunkContent 将笔记内容按 Markdown 结构切块，并为每个块补充所属标题链（结构感知切片）
-// 规则：按 ## / ### 标题分块，无标题的按空行分段，单块超过 maxRunes 时按 rune 硬切
-// 标题指引：块首不是标题行时，自动把所属标题链（如 "## A" 或 "## A\n### B"）拼到块首，
-// 使标题语义进入 embedding 向量与召回文本；硬切产生的非首段同样补链
+// 规则（对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack 语义）：
+//   - 标题级别 1-6 级（# ~ ######），标题行作为"节的开始标记"开启新块
+//   - 标题与内容强制耦合：标题行后跟空行时不落块，等待与后续正文合并，杜绝孤立标题块
+//   - 空节（无正文的孤立标题）直接丢弃，不产生噪音块；标题保留在链栈中作为后续子节父级指引
+//   - 块首补全所属标题链：块首非标题补完整链，块首已是标题仅补更高级父级
+//   - ``` / ~~~ 围栏代码块保护：块内空行、伪标题行不触发切块
+//   - 单块超过 maxRunes 时按 rune 硬切，硬切非首段同样补链
+//
 // 返回的每块长度（含标题链）不超过 maxRunes；maxRunes<=0 时使用默认值 500
 func ChunkContent(content string, maxRunes int) []string {
 	if maxRunes <= 0 {
@@ -18,22 +23,25 @@ func ChunkContent(content string, maxRunes int) []string {
 	}
 
 	var chunks []string
-	var cur []string   // 当前块的原始行
-	var chain []string // 当前所属标题链（如 ["## A", "### B"]）
+	var cur []string   // 当前块原始行
+	var stack []string // 当前所属标题链栈（多级，如 ["# 大标题", "## 目录"]）
+	inCode := false    // 是否处于围栏代码块内
 
-	// flush 将当前累积的行合并为一块写入结果；块首非标题时补标题链，超长时按 rune 硬切
+	// flush 将当前累积行合并为一块；纯标题块（空节）丢弃；超长硬切；块首补父级标题链
 	flush := func() {
 		text := strings.TrimSpace(strings.Join(cur, "\n"))
 		cur = nil
 		if text == "" {
 			return
 		}
-		// 块首不是标题行时，补上所属标题链作为指引
-		if !startsWithHeading(text) && len(chain) > 0 {
-			text = strings.Join(chain, "\n") + "\n" + text
+		// 纯标题块（空节：单行且是标题）不落块，标题已留在 stack 中作后续父级指引
+		if !strings.Contains(text, "\n") && headingLevel(text) > 0 {
+			return
 		}
+		// 补全所属标题链（父级链）
+		text = prependChain(text, stack)
 		if runeLen(text) > maxRunes {
-			chunks = append(chunks, splitWithHeading(text, maxRunes, chain)...)
+			chunks = append(chunks, splitWithHeading(text, maxRunes, stack)...)
 			return
 		}
 		chunks = append(chunks, text)
@@ -42,14 +50,26 @@ func ChunkContent(content string, maxRunes int) []string {
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
-		case isMarkdownHeading(trimmed):
-			// 标题行：结束当前块，更新标题链，并以标题作为新块的第一行
+		case inCode:
+			// 代码块内：空行/伪标题不切块，原样累积（超限留待最终 flush 硬切，保证代码块完整性）
+			cur = append(cur, line)
+			if isCodeFence(trimmed) {
+				inCode = false
+			}
+		case isCodeFence(trimmed):
+			// 围栏代码块开启：进入代码模式，开启行保留
+			inCode = true
+			cur = append(cur, line)
+		case headingLevel(trimmed) > 0:
+			// 标题行：结束当前块，更新标题链栈，以标题开启新块
 			flush()
-			chain = updateHeadingChain(chain, trimmed)
+			stack = pushHeadingStack(stack, trimmed)
 			cur = append(cur, line)
 		case trimmed == "":
-			// 空行：段落分隔
-			flush()
+			// 空行：段落分隔。当前块仅含标题行时不落块（标题+空行等待与正文合并）
+			if len(cur) != 1 || headingLevel(strings.TrimSpace(cur[0])) <= 0 {
+				flush()
+			}
 		default:
 			cur = append(cur, line)
 			// 当前块已超限则立即落块，避免单块无限膨胀
@@ -62,49 +82,80 @@ func ChunkContent(content string, maxRunes int) []string {
 	return chunks
 }
 
-// updateHeadingChain 根据标题行更新所属标题链
-// 三级标题 "### Y" 保留链中的二级标题后追加；二级标题 "## X" 重置链
-func updateHeadingChain(chain []string, heading string) []string {
-	if strings.HasPrefix(heading, "### ") {
-		var out []string
-		for _, h := range chain {
-			if !strings.HasPrefix(h, "### ") {
-				out = append(out, h)
-			}
-		}
-		return append(out, heading)
+// headingLevel 判断 Markdown ATX 标题级别（1-6），非标题返回 0
+// 规则：行首连续 1-6 个 '#' 且其后紧跟空格（"#tag"、"##"分隔线不算标题）
+func headingLevel(line string) int {
+	if line == "" {
+		return 0
 	}
-	return []string{heading}
+	n := 0
+	for n < len(line) && n < 6 && line[n] == '#' {
+		n++
+	}
+	if n == 0 || n == len(line) || line[n] != ' ' {
+		return 0
+	}
+	return n
 }
 
-// startsWithHeading 判断文本首行是否为二级/三级标题
-func startsWithHeading(text string) bool {
+// pushHeadingStack 将新标题压入标题链栈：保留所有级别 < 新标题的父级，同级/更深级被新标题取代
+// 语义对齐 LlamaIndex header_stack：
+// 例：[##A,###B] 遇 ##C → [##C]；[##A,###B] 遇 ###D → [##A,###D]；[##A,###B] 遇 #E → [#E]
+func pushHeadingStack(stack []string, heading string) []string {
+	lvl := headingLevel(heading)
+	out := make([]string, 0, len(stack)+1)
+	for _, h := range stack {
+		if headingLevel(h) < lvl {
+			out = append(out, h)
+		}
+	}
+	return append(out, heading)
+}
+
+// prependChain 为文本补充所属标题链指引：
+// 块首非标题 → 补完整标题链；块首已是标题 → 仅补更高级父级（避免重复自身）
+// 例：stack=[##A,###B]，text="正文" → "##A\n###B\n正文"；text="###B\n正文" → "##A\n###B\n正文"
+func prependChain(text string, stack []string) string {
+	if len(stack) == 0 {
+		return text
+	}
 	first := text
 	if idx := strings.IndexByte(text, '\n'); idx >= 0 {
 		first = text[:idx]
 	}
-	return isMarkdownHeading(strings.TrimSpace(first))
+	fl := headingLevel(strings.TrimSpace(first))
+	if fl == 0 {
+		return strings.Join(stack, "\n") + "\n" + text
+	}
+	// 块首已是标题：拼接更高级父级
+	var parents []string
+	for _, h := range stack {
+		if headingLevel(h) < fl {
+			parents = append(parents, h)
+		}
+	}
+	if len(parents) == 0 {
+		return text
+	}
+	return strings.Join(parents, "\n") + "\n" + text
+}
+
+// isCodeFence 判断是否为围栏代码块的开闭行（``` 或 ~~~，含语言标注如 ```go）
+func isCodeFence(line string) bool {
+	return strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~")
 }
 
 // splitWithHeading 对超长块硬切，并为非首段补充所属标题链指引
 // 首段可能已以标题开头或已由 flush 补链，无需处理
-func splitWithHeading(text string, maxRunes int, chain []string) []string {
+func splitWithHeading(text string, maxRunes int, stack []string) []string {
 	segs := hardSplit(text, maxRunes)
-	if len(segs) <= 1 || len(chain) == 0 {
+	if len(segs) <= 1 {
 		return segs
 	}
-	prefix := strings.Join(chain, "\n")
 	for i := 1; i < len(segs); i++ {
-		if !startsWithHeading(segs[i]) {
-			segs[i] = prefix + "\n" + segs[i]
-		}
+		segs[i] = prependChain(segs[i], stack)
 	}
 	return segs
-}
-
-// isMarkdownHeading 判断一行是否为 Markdown 二级/三级标题
-func isMarkdownHeading(line string) bool {
-	return strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ")
 }
 
 // runeLen 返回字符串的 rune 数量（Unicode 安全）

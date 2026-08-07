@@ -275,51 +275,53 @@ func (a *AIService) TestConnection(cfg AIConfig) (bool, error) {
 	}
 }
 
-// testOpenAIConnection 测试 OpenAI 兼容 API 的连通性
-func testOpenAIConnection(cfg AIConfig) (bool, error) {
-	url := cfg.BaseURL + "/models"
+// httpGetJSON 发起 GET 请求并读取完整响应体，统一超时与错误处理
+// 返回响应体与状态码；apiKey 非空时附加 Bearer 认证头
+func httpGetJSON(url, apiKey string, timeout time.Duration) ([]byte, int, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return false, fmt.Errorf("连接测试失败: %w", err)
+		return nil, 0, err
 	}
-
-	if cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+// testOpenAIConnection 测试 OpenAI 兼容 API 的连通性
+func testOpenAIConnection(cfg AIConfig) (bool, error) {
+	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	_, status, err := httpGetJSON(baseURL+"/models", cfg.APIKey, 5*time.Second)
 	if err != nil {
 		return false, fmt.Errorf("连接测试失败: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	if status >= 200 && status < 300 {
 		return true, nil
 	}
-	return false, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
+	return false, fmt.Errorf("服务器返回状态码 %d", status)
 }
 
 // testOllamaConnection 测试 Ollama 连通性（调用 /api/tags）
 func testOllamaConnection(cfg AIConfig) (bool, error) {
 	baseURL := strings.TrimRight(cfg.BaseURL, "/")
-	url := baseURL + "/api/tags"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	_, status, err := httpGetJSON(baseURL+"/api/tags", "", 5*time.Second)
 	if err != nil {
 		return false, fmt.Errorf("连接测试失败: %w", err)
 	}
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("连接测试失败: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+	if status >= 200 && status < 300 {
 		return true, nil
 	}
-	return false, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
+	return false, fmt.Errorf("服务器返回状态码 %d", status)
 }
 
 // testGenericConnection 通过创建 AI 客户端并执行简单调用来测试连通性
@@ -367,42 +369,22 @@ func (a *AIService) FetchModels(cfg AIConfig) ([]string, error) {
 
 // fetchOpenAIModels 从 OpenAI 兼容 API 获取模型列表
 func fetchOpenAIModels(cfg AIConfig) ([]string, error) {
-	url := cfg.BaseURL + "/models"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	baseURL := strings.TrimRight(cfg.BaseURL, "/")
+	body, status, err := httpGetJSON(baseURL+"/models", cfg.APIKey, 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
-
-	if cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("AI 调用失败: HTTP %d", status)
 	}
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("AI 调用失败: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("AI 调用失败: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("AI 调用失败: HTTP %d", resp.StatusCode)
-	}
-
 	var modelsResp modelsResponse
-	if err := json.Unmarshal(respBody, &modelsResp); err != nil {
+	if err := json.Unmarshal(body, &modelsResp); err != nil {
 		return nil, fmt.Errorf("AI 调用失败: %w", err)
 	}
-
 	models := make([]string, 0, len(modelsResp.Data))
 	for _, item := range modelsResp.Data {
 		models = append(models, item.ID)
 	}
-
 	return models, nil
 }
 
@@ -416,38 +398,21 @@ type ollamaTagResponse struct {
 // fetchOllamaModels 从 Ollama API 获取本地模型列表
 func fetchOllamaModels(cfg AIConfig) ([]string, error) {
 	baseURL := strings.TrimRight(cfg.BaseURL, "/")
-	url := baseURL + "/api/tags"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	body, status, err := httpGetJSON(baseURL+"/api/tags", "", 15*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("获取模型列表失败: %w", err)
 	}
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("获取模型列表失败: HTTP %d", status)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("获取模型列表失败: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("获取模型列表失败: HTTP %d", resp.StatusCode)
-	}
-
 	var tagResp ollamaTagResponse
-	if err := json.Unmarshal(respBody, &tagResp); err != nil {
+	if err := json.Unmarshal(body, &tagResp); err != nil {
 		return nil, fmt.Errorf("获取模型列表失败: %w", err)
 	}
-
 	models := make([]string, 0, len(tagResp.Models))
 	for _, item := range tagResp.Models {
 		models = append(models, item.Name)
 	}
-
 	return models, nil
 }
 
@@ -741,6 +706,16 @@ func (a *AIService) TruncateAISessionAtMessage(sessionID uint, msgID uint) error
 			a.logger.Errorw("AIService.TruncateAISessionAtMessage 更新会话时间失败", fastlog.Error(err))
 			return err
 		}
+		// 删除后重新计算会话累计 token 并持久化缓存（对齐 DeleteAIMessage 惯例）
+		var total int64
+		if err := tx.Model(&models.AIMessage{}).Where("session_id = ?", sessionID).Select("COALESCE(SUM(tokens), 0)").Scan(&total).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAtMessage 重算 token 失败", fastlog.Error(err))
+			return err
+		}
+		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("context_tokens", int(total)).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAtMessage 更新 token 缓存失败", fastlog.Error(err))
+			return err
+		}
 		return nil
 	})
 }
@@ -762,6 +737,16 @@ func (a *AIService) TruncateAISessionAfterMessage(sessionID uint, msgID uint) er
 		// 更新会话 updated_at
 		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("updated_at", time.Now()).Error; err != nil {
 			a.logger.Errorw("AIService.TruncateAISessionAfterMessage 更新会话时间失败", fastlog.Error(err))
+			return err
+		}
+		// 删除后重新计算会话累计 token 并持久化缓存（对齐 DeleteAIMessage 惯例）
+		var total int64
+		if err := tx.Model(&models.AIMessage{}).Where("session_id = ?", sessionID).Select("COALESCE(SUM(tokens), 0)").Scan(&total).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAfterMessage 重算 token 失败", fastlog.Error(err))
+			return err
+		}
+		if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("context_tokens", int(total)).Error; err != nil {
+			a.logger.Errorw("AIService.TruncateAISessionAfterMessage 更新 token 缓存失败", fastlog.Error(err))
 			return err
 		}
 		return nil

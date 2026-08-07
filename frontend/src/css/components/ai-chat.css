@@ -410,6 +410,16 @@
     flex-shrink: 0;
 }
 
+/* 召回指示器：放大镜左右扫动（非旋转），模拟在文档上检索/扫描，与联网搜索旋转地球区分 */
+.ai-search-indicator[data-status="recall"] .ai-search-bar > svg:first-child {
+    animation: ai-search-scan 0.9s ease-in-out infinite;
+}
+
+@keyframes ai-search-scan {
+    0%, 100% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+}
+
 /* 文字 */
 .ai-search-text {
     white-space: nowrap;
