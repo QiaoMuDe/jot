@@ -460,6 +460,8 @@ const els = {
     vectorIndexBtn: $('vectorIndexBtn'),
     deleteVectorsBtn: $('deleteVectorsBtn'),
     dataContent: $('dataContent'),
+    dataNav: document.querySelector('.data-nav'),
+    dataPanels: document.querySelector('.data-panels'),
     dataLetter: $('dataLetter'),
     letterDate: $('letterDate'),
     letterBody: $('letterBody'),
@@ -664,7 +666,10 @@ function switchView(view) {
                 switchSettingsTab('appearance');
                 break;
             case 'data':
+                initDataNav();
                 loadDataStats();
+                // 每次进入数据管理页默认回到"概览"面板
+                switchDataTab('overview');
                 break;
             case 'trash':
                 loadTrashNotes();
@@ -6749,7 +6754,7 @@ function initScrollLoading() {
  * 同时控制"回到顶部"按钮的显隐
  */
 function initScrollbarAutoHide() {
-    const containers = [els.mainContent, document.querySelector('.ai-chat-messages'), document.querySelector('.settings-panels')].filter(Boolean);
+    const containers = [els.mainContent, document.querySelector('.ai-chat-messages'), document.querySelector('.settings-panels'), document.querySelector('.data-panels')].filter(Boolean);
     containers.forEach((container) => {
         let timer = null;
         container.addEventListener('scroll', (e) => {
@@ -8867,6 +8872,7 @@ function applyCodeHighlightTheme(themeName) {
 
 let _codeHighlightThemeInited = false;
 let _settingsSidebarInited = false;
+let _dataNavInited = false;
 
 /**
  * 初始化设置页侧边栏导航事件绑定
@@ -8882,6 +8888,24 @@ function initSettingsSidebarNav() {
         item.addEventListener('click', () => {
             const panelName = item.dataset.panel;
             if (panelName) switchSettingsTab(panelName);
+        });
+    });
+}
+
+/**
+ * 初始化数据管理页侧边栏导航事件绑定
+ */
+function initDataNav() {
+    if (_dataNavInited) return;
+    _dataNavInited = true;
+
+    const nav = els.dataNav;
+    if (!nav) return;
+
+    nav.querySelectorAll('.data-nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const panelName = item.dataset.panel;
+            if (panelName) switchDataTab(panelName);
         });
     });
 }
@@ -9383,6 +9407,69 @@ function switchSettingsTab(panelName) {
             targetPanel.classList.remove('panel-enter');
             targetPanel.classList.add('active');
             _settingsAnimating = false;
+        });
+    });
+}
+
+/** 数据管理页切换动画进行中标记，防止快速连续点击导致面板重叠 */
+let _dataAnimating = false;
+
+/**
+ * 切换数据管理页侧边栏导航面板
+ * @param {string} panelName - data-panel 属性值，如 'overview', 'transfer' 等
+ */
+function switchDataTab(panelName) {
+    // 动画进行中 → 忽略本次切换，避免面板重叠
+    if (_dataAnimating) return;
+
+    const nav = els.dataNav;
+    const panelsContainer = els.dataPanels;
+    if (!nav || !panelsContainer) return;
+
+    // 查找目标导航项和目标面板
+    const targetItem = nav.querySelector(`.data-nav-item[data-panel="${panelName}"]`);
+    const targetPanel = panelsContainer.querySelector(`.data-panel[data-panel="${panelName}"]`);
+    if (!targetItem || !targetPanel) return;
+
+    // 如果已经是激活状态，不做任何事
+    if (targetPanel.classList.contains('active') && targetItem.classList.contains('active')) return;
+
+    // 更新侧边栏导航激活态
+    nav.querySelectorAll('.data-nav-item').forEach(item => item.classList.remove('active'));
+    targetItem.classList.add('active');
+
+    // 获取当前显示的面板
+    const currentPanel = panelsContainer.querySelector('.data-panel.active');
+
+    // 检测是否应跳过动画（prefers-reduced-motion）
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!currentPanel || prefersReducedMotion) {
+        // 无当前面板或用户偏好减少动效 → 直接切换
+        if (currentPanel) currentPanel.classList.remove('active');
+        targetPanel.classList.add('active');
+        return;
+    }
+
+    // --- 播放切换动画 ---
+    _dataAnimating = true;
+
+    // 阶段1: 旧面板退出动画
+    currentPanel.classList.remove('active');
+    currentPanel.classList.add('panel-exit');
+
+    currentPanel.addEventListener('animationend', function onExitEnd() {
+        currentPanel.removeEventListener('animationend', onExitEnd);
+        currentPanel.classList.remove('panel-exit');
+
+        // 阶段2: 新面板进入动画
+        targetPanel.classList.add('panel-enter');
+
+        targetPanel.addEventListener('animationend', function onEnterEnd() {
+            targetPanel.removeEventListener('animationend', onEnterEnd);
+            targetPanel.classList.remove('panel-enter');
+            targetPanel.classList.add('active');
+            _dataAnimating = false;
         });
     });
 }

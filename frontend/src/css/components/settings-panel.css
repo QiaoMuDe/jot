@@ -110,6 +110,19 @@
    Section G: Settings
    ========================================================================== */
 
+/* 覆盖默认 .view 的 padding，去掉右侧内边距，
+   使 .settings-panels 延伸到窗口右边缘，滚动条贴在窗口右侧 */
+#viewSettings.view {
+  padding: 24px 0 24px 32px;
+}
+
+/* 设置页下，#mainContent 无需滚动，去掉 scrollbar-gutter 预留空间，
+   使右侧面板真正延伸到窗口右边缘，滚动条贴在窗口右侧 */
+#mainContent:has(#viewSettings.active) {
+  scrollbar-gutter: auto;
+  overflow-y: hidden;
+}
+
 .settings-content {
   display: flex;
   flex: 1;
@@ -941,7 +954,8 @@
   font-size: 0.813rem;
   font-weight: 500;
   color: var(--text-secondary);
-  width: 80px;
+  width: 112px;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 

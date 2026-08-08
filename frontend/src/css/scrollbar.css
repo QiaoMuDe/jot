@@ -28,6 +28,7 @@
 /* 主内容区等特定容器：再强化一层防止 WebView2 绘制按钮 */
 #mainContent::-webkit-scrollbar-button,
 .settings-panels::-webkit-scrollbar-button,
+.data-panels::-webkit-scrollbar-button,
 .search-results::-webkit-scrollbar-button,
 .search-modal-results::-webkit-scrollbar-button,
 .search-modal-filter-dropdown::-webkit-scrollbar-button,
@@ -42,6 +43,7 @@
 /* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
 #mainContent::-webkit-scrollbar-thumb,
 .settings-panels::-webkit-scrollbar-thumb,
+.data-panels::-webkit-scrollbar-thumb,
 .search-results::-webkit-scrollbar-thumb,
 .ai-chat-messages::-webkit-scrollbar-thumb,
 .preset-mgr-list::-webkit-scrollbar-thumb {
@@ -51,6 +53,7 @@
 
 #mainContent.scrolling::-webkit-scrollbar-thumb,
 .settings-panels.scrolling::-webkit-scrollbar-thumb,
+.data-panels.scrolling::-webkit-scrollbar-thumb,
 .search-results.scrolling::-webkit-scrollbar-thumb,
 .ai-chat-messages.scrolling::-webkit-scrollbar-thumb,
 .preset-mgr-list.scrolling::-webkit-scrollbar-thumb {
@@ -59,6 +62,7 @@
 
 #mainContent:hover::-webkit-scrollbar-thumb,
 .settings-panels:hover::-webkit-scrollbar-thumb,
+.data-panels:hover::-webkit-scrollbar-thumb,
 .search-results:hover::-webkit-scrollbar-thumb,
 .ai-chat-messages:hover::-webkit-scrollbar-thumb,
 .preset-mgr-list:hover::-webkit-scrollbar-thumb {
@@ -77,6 +81,7 @@
 /* 给 track 加一层极淡底色，让滚动条区域有存在感 */
 #mainContent::-webkit-scrollbar-track,
 .settings-panels::-webkit-scrollbar-track,
+.data-panels::-webkit-scrollbar-track,
 .search-results::-webkit-scrollbar-track,
 .ai-chat-messages::-webkit-scrollbar-track,
 .preset-mgr-list::-webkit-scrollbar-track,
@@ -87,6 +92,7 @@
 /* Firefox */
 #mainContent,
 .settings-panels,
+.data-panels,
 .search-results,
 .ai-chat-messages,
 .preset-mgr-list {
@@ -96,6 +102,7 @@
 
 #mainContent.scrolling,
 .settings-panels.scrolling,
+.data-panels.scrolling,
 .search-results.scrolling,
 .ai-chat-messages.scrolling,
 .preset-mgr-list.scrolling {

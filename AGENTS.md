@@ -89,7 +89,7 @@ jot/                                    # 项目根目录
 │   │           ├── modals.css          # 通用模态框/确认弹窗/覆盖层/快捷键页面样式（shortcut-row flex 水平布局）
 │   │           ├── settings-panel.css  # 设置页分段控件/滑块/开关/按钮
 │   │           ├── search-modal.css    # 搜索弹窗/结果列表/高亮
-│   │           ├── data-view.css       # 数据管理信笺风格统计 + 操作卡片
+│   │           ├── data-view.css       # 数据管理页分类导航（左侧导航 + 右侧面板切换动画）+ 信笺统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局/联网搜索 toggle 开关+召回笔记本菜单）
 │   │           ├── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
@@ -613,24 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 扩展编辑器操作菜单至 4 个分组 29 个操作项（原仅 JSON 格式化/压缩）：① 新增「格式化」分组 9 个子分组（XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各含格式化+压缩，外加 JSON 已有的 2 项），XML/HTML 基于 DOMParser 零依赖实现、CSV 列对齐、SQL/YAML/TOML 需安装依赖；② 新增「文本转换」分组 7 项（大写/小写/首字母大写/驼峰式/蛇形式/行反转/字符反转），全部零依赖；③ 新增「文本清理」分组 5 项（去除多余空格/去除空行/行尾空格清理/Tab↔空格），全部零依赖；④ 新增「编码解码」分组 3 子分组 6 项（Base64/URL/HTML 各含编码+解码），全部零依赖。**渲染修复**：无 subGroup 的项（文本转换、文本清理）会产生额外 `undefined` 子菜单层级，修复为检查 `hasSubGroups` 标志，无 subGroup 时直接渲染操作项。**鼠标事件修复**：`mouseover` 事件使用 `e.target.closest('.has-submenu')` 导致 CSV 格式化等非子菜单项无法触发 `else if` 分支，修复为以 `e.target.closest('.dropdown-item')` 为准、判断 item 自身是否含 `has-submenu` 类。**vite.config.js 修复**：`smol-toml` 依赖使用 BigInt 字面量，dev server 的 esbuild 预构建需额外配置 `optimizeDeps.esbuildOptions.target: 'es2021'`（`build.target` 仅对生产构建生效）。 |
-| **菜单结构** | [editor-actions.js](frontend/src/js/editor-actions.js#L22-L345)：EDITOR_ACTIONS 数组从 2 项扩展至 29 项，结构为 `{ group, subGroup?, label, errorLabel, handler }`。渲染逻辑：先按 group 分组（外层子菜单），再按 subGroup 分组（内层嵌套子菜单）；无 subGroup 时直接渲染操作项。 |
-| **格式化操作** | [editor-actions.js](frontend/src/js/editor-actions.js#L25-L180)：JSON/XML/HTML/CSS/JS/SQL/CSV/YAML/TOML 各 2 项（格式化+压缩），CSV 仅格式化（无压缩）。依赖：`js-yaml`（YAML 解析/序列化）、`smol-toml`（TOML 解析/序列化）、`sql-formatter`（SQL 格式化）、`js-beautify`（CSS/JS 格式化）。零依赖：XML（DOMParser 递归遍历）、HTML（DOMParser 片段模式）、CSV（列对齐，padEnd 填充）。 |
-| **文本转换** | [editor-actions.js](frontend/src/js/editor-actions.js#L294-L290)：7 项零依赖——大写 `toUpperCase()`、小写 `toLowerCase()`、首字母大写 `/\b\w/g`、驼峰式 `split→map→join`、蛇形式 `驼峰分界→_join`、行反转 `lines.reverse()`、字符反转 `str.reverse()`。 |
-| **文本清理** | [editor-actions.js](frontend/src/js/editor-actions.js#L290-L292)：5 项零依赖——去除多余空格 `\s+→空格`、去除空行 `filter(trim)`、行尾空格清理 `trimEnd()`、Tab→空格 `\t→2空格`、空格→Tab `2空格→\t`。 |
-| **编码解码** | [editor-actions.js](frontend/src/js/editor-actions.js#L292-L345)：3 子分组 6 项——Base64（`btoa`/`atob`）、URL（`encodeURIComponent`/`decodeURIComponent`）、HTML（`&<>"'` 实体替换/DOMParser 解码），全部零依赖。 |
-| **渲染逻辑修复** | [editor-actions.js](frontend/src/js/editor-actions.js#L333-L360)：新增 `hasSubGroups` 标志（`subGroups.size > 1 \|\| subGroups.size === 1 && keys[0] !== undefined`），无 subGroup 时跳过嵌套子菜单、直接渲染操作项，消除 `undefined` 子菜单层级。 |
-| **鼠标事件修复** | [editor-actions.js](frontend/src/js/editor-actions.js#L366-L385)：旧代码用 `e.target.closest('.has-submenu')` 查找子菜单触发项，但该选择器沿 DOM 向上查找，CSV 格式化等非子菜单项因位于「格式化」has-submenu 容器内而被误判为子菜单触发项，`else if` 分支永不执行。修复为以 `e.target.closest('.dropdown-item')` 为准，判断 item 自身是否含 `has-submenu` 类，非子菜单项正确关闭同级展开子菜单。 |
-| **vite 配置修复** | [vite.config.js](frontend/src/vite.config.js)：`build.target: 'es2021'` 仅对生产构建生效；dev server 的 esbuild 预构建需额外配置 `optimizeDeps.esbuildOptions.target: 'es2021'`（Vite 3 的 DepOptimizationConfig 接口要求 `esbuildOptions` 而非 `esbuild`）。 |
-| **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表扩展 + 渲染/交互/执行引擎）、[frontend/src/js/formatters/xml-formatter.js](frontend/src/js/formatters/xml-formatter.js)（新增 XML 格式化/压缩）、[frontend/src/js/formatters/html-formatter.js](frontend/src/js/formatters/html-formatter.js)（新增 HTML 格式化/压缩）、[frontend/src/js/formatters/csv-formatter.js](frontend/src/js/formatters/csv-formatter.js)（新增 CSV 格式化）、[frontend/vite.config.js](frontend/vite.config.js)（optimizeDeps.esbuildOptions） |
-
----
-
-## 记忆点 2：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 1：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 2：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 3：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 4：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 5：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -691,7 +674,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 6：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -706,7 +689,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 7：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -718,7 +701,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 8：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -730,7 +713,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 9：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -740,6 +723,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **混合检索排序** | `sortHybridHits` 优先级：双命中(3) > 仅向量(1) > 仅关键词(2)。同优先级内：仅关键词块按 `kwScore` 降序（命中 token 数越多越靠前），其余保持原始顺序。使用插入排序（数据量小）。合并后 `if len(merged) > limit { merged = merged[:limit] }` 截断防膨胀 |
 | **截断去除决策** | `maxCardRunes=1200` 是早期"卡片预览"思维下定的硬编码常量（无 spec 依据），段落聚合+前缀后单篇命中 11 块拼接 4091 rune，截断丢弃 71%。去掉后总量由 `ai_card_recall_limit` 控制，爆窗口时 LLM 报错用户可感知并调小卡片数，比静默截断丢信息更透明 |
 | **涉及文件** | [internal/services/chunk.go](internal/services/chunk.go)（ChunkMeta + formatMetaPrefix + stripMetaPrefix + ChunkContent 签名加 meta + 段落聚合）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 构造 ChunkMeta + maxRunes 600 + sortHybridHits kwScore 排序 + 合并截断 + stripMetaPrefix 注入 + 删除 maxCardRunes）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新调用 + 新增 TestStripMetaPrefix/TestChunkMetaPrefix* 用例） |
+
+---
+
+## 记忆点 10：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动：① **数据管理页分类导航改造**——单页纵向滚动改为"左侧 176px 固定导航 + 右侧面板"结构（仿设置页），6 个导航项（概览/传输/维护/数据清理/备份/量化），面板切换带退场/入场动画，"恢复出厂设置"放入"数据清理"面板底部；② **滚动条贴窗修复**——数据页/设置页滚动条从容器边缘改贴窗口右缘，负 margin 方案（todo 先例）在有 `overflow: hidden` 中间裁剪层时滚动条被整体裁剪消失，改用 calendar 先例方案；③ **设置页标签布局统一**——`.ai-setting-label` 全局 `width: 112px` + `white-space: nowrap`（80px 放不下"大文件预览阈值"等 7 字标签导致换行；`width: auto` 各行宽度不一破坏对齐），替换内联覆盖；标签改名"知乎Token/Tavily Token"、"上传导入限制" |
+| **分类导航实现** | [main.js](frontend/src/main.js)：`initDataNav()` 绑定 `.data-nav-item` 点击 + `switchDataTab(panelName)`（`_dataAnimating` 标记 + `animationend` 驱动 `panel-exit`/`panel-enter` + `prefers-reduced-motion` 直接切换分支）；`switchView` 的 data case 调 `initDataNav(); loadDataStats(); switchDataTab('overview')`；`.data-panels` 并入 scrollbar 自动显隐规则；[index.html](frontend/index.html) 面板分组：overview/transfer/maintenance/cleanup/backup/vector |
+| **按压反馈设计** | 条状按钮 `.data-action-row:active` **不缩放整行**（整行 `scale()` 会让圆角变尖角、尺寸变化），改为背景加深（`--active-bg` 变量不存在时回退 hover）+ 内容元素 `.dar-icon`/`.dar-body` `translateY(1px)` 下压 + `.dar-chevron` `translateX(5px)`，保持行外框圆角尺寸不变；danger 行 active 保持红色系背景避免跳动回中性色；`transition-duration: 30ms` 制造快速按压感 |
+| **滚动条贴窗方案** | `#viewData.view { padding: 24px 0 24px 32px }` + `#mainContent:has(#viewData.active) { scrollbar-gutter: auto; overflow-y: hidden }`（settings-panel.css 对 `#viewSettings` 同步处理）。教训：todo 页负 margin 方案（`margin-right: -32px; padding-right: 32px`）依赖无中间裁剪层；数据/设置页的 `.data-content`/`.settings-content` 有 `overflow: hidden`（分类导航布局需要），负 margin 把滚动容器右缘推到父裁剪边界外，滚动条区域连带被裁剪直接消失 |
+| **标签宽度统一** | `.ai-setting-label` 从 `width: 80px` 改为 `width: 112px`（容纳最长标签"大文件预览阈值"7 汉字 ≈ 104px 并留余量）+ `white-space: nowrap`。hint 说明行对齐输入框需 `padding-left: 124px`（112px 标签 + 12px gap）。**`.settings-input` 全局 `flex: 1` 会拉伸覆盖内联 `width`（flex-basis: 0 优先于 width）**，作为 `.ai-setting-item` 直接子项时需补内联 `flex: none` 才生效（如"大文件预览阈值"输入框 64px→120px 调整） |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（数据页分类导航结构 + 设置页标签/输入框调整）、[frontend/src/main.js](frontend/src/main.js)（initDataNav/switchDataTab + 滚动条自动显隐容器）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（导航/面板/按压反馈 + 滚动条贴窗）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（label 统一宽度 + 滚动条贴窗）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（.data-panels 并入自动显隐） |
 
 ---
 

@@ -2,14 +2,136 @@
    Section H: Data Management
    ========================================================================== */
 
-.data-content {
-  flex: 1;
+/* 覆盖默认 .view 的 padding，去掉右侧内边距，
+   使 .data-panels 延伸到窗口右边缘，滚动条贴在窗口右侧 */
+#viewData.view {
+  padding: 24px 0 24px 32px;
 }
 
-.data-content-inner {
+/* 数据管理页下，#mainContent 无需滚动，去掉 scrollbar-gutter 预留空间，
+   使右侧面板真正延伸到窗口右边缘，滚动条贴在窗口右侧 */
+#mainContent:has(#viewData.active) {
+  scrollbar-gutter: auto;
+  overflow-y: hidden;
+}
+
+.data-content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ======== 左侧分类导航 ======== */
+.data-nav {
+  width: 176px;
+  min-width: 176px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.data-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 1px 8px;
+  border-radius: var(--radius-md);
+  font-size: 0.813rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--anim-duration-fast) ease-out,
+              color var(--anim-duration-fast) ease-out,
+              box-shadow var(--anim-duration-fast) ease-out;
+  user-select: none;
+  position: relative;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  width: calc(100% - 16px);
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.data-nav-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.data-nav-item.active {
+  background: var(--accent-lighter);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.data-nav-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.7;
+}
+
+.data-nav-item.active svg {
+  opacity: 1;
+}
+
+/* ======== 右侧面板区 ======== */
+.data-panels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: 20px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.data-panel {
+  display: none;
   max-width: 760px;
-  width: 100%;
   margin: 0 auto;
+}
+
+.data-panel.active {
+  display: block;
+}
+
+/* 面板切换动画（与设置页一致的退场/入场） */
+.data-panel.panel-exit {
+  display: block;
+  animation: panelExit 150ms var(--anim-easing-out) forwards;
+}
+
+.data-panel.panel-enter {
+  display: block;
+  animation: panelEnter 200ms var(--anim-easing-spring) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-panel.panel-exit,
+  .data-panel.panel-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .data-action-row,
+  .data-action-row .dar-icon,
+  .data-action-row .dar-body,
+  .data-action-row .dar-chevron {
+    transition: none;
+    transform: none;
+  }
 }
 
 /* ======== 分层区域间距 ======== */
@@ -195,7 +317,8 @@
   text-align: left;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: background 120ms ease;
+  transition: background 120ms ease,
+              transform 160ms var(--anim-easing-spring);
   position: relative;
 }
 
@@ -203,9 +326,24 @@
   background: var(--hover-bg);
 }
 
+/* 按压反馈：背景加深 + 内容轻微下压，保持行的圆角与尺寸不变 */
 .data-action-row:active {
   background: var(--active-bg, var(--hover-bg));
   transition-duration: 30ms;
+}
+
+/* 按压时图标与文本微微下压，箭头右移提示"将触发" */
+.data-action-row:active .dar-icon {
+  transform: translateY(1px);
+}
+
+.data-action-row:active .dar-body {
+  transform: translateY(1px);
+}
+
+.data-action-row:active .dar-chevron {
+  opacity: 1;
+  transform: translateX(5px);
 }
 
 .data-action-row[disabled] {
@@ -232,6 +370,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 160ms var(--anim-easing-spring);
 }
 
 .dar-icon svg {
@@ -247,6 +386,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  transition: transform 160ms var(--anim-easing-spring);
 }
 
 .dar-label {
@@ -272,11 +412,14 @@
   opacity: 0.5;
   flex-shrink: 0;
   line-height: 1;
-  transition: opacity 120ms ease;
+  transition: opacity 120ms ease,
+              transform 160ms var(--anim-easing-spring);
 }
 
+/* hover 时箭头右移 + 提亮，暗示可点击 */
 .data-action-row:hover .dar-chevron {
   opacity: 0.8;
+  transform: translateX(3px);
 }
 
 /* 分隔线（左侧缩进 icon + gap = 32px） */
@@ -300,6 +443,11 @@
 }
 
 .data-action-row-danger:hover {
+  background: var(--danger-bg, #fef2f2);
+}
+
+/* 危险行按压时保持红色系背景，避免跳动回中性 hover 色 */
+.data-action-row-danger:active {
   background: var(--danger-bg, #fef2f2);
 }
 
