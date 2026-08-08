@@ -31,6 +31,52 @@ revealElements.forEach(function(el) {
   revealObserver.observe(el);
 });
 
+/* ========== 滚动进度条 ========== */
+const progressBar = document.getElementById('scroll-progress');
+function updateProgress() {
+  const doc = document.documentElement;
+  const max = doc.scrollHeight - window.innerHeight;
+  const p = max > 0 ? (window.pageYOffset || doc.scrollTop) / max : 0;
+  progressBar.style.transform = 'scaleX(' + p + ')';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+/* ========== 导航当前章节高亮 ========== */
+const navSectionLinks = [];
+document.querySelectorAll('.nav-links a[href^="#"]:not(.nav-cta)').forEach(function(link) {
+  const target = document.querySelector(link.getAttribute('href'));
+  if (target) navSectionLinks.push({ link: link, section: target });
+});
+const navHighlightObserver = new IntersectionObserver(function(entries) {
+  entries.forEach(function(entry) {
+    navSectionLinks.forEach(function(item) {
+      if (item.section === entry.target) {
+        item.link.classList.toggle('active', entry.isIntersecting);
+      }
+    });
+  });
+}, { rootMargin: '-40% 0px -50% 0px' });
+navSectionLinks.forEach(function(item) { navHighlightObserver.observe(item.section); });
+
+/* ========== Hero 光晕滚动视差（尊重 reduced-motion） ========== */
+const heroGlowWrap = document.querySelector('.hero-glow-wrap');
+if (heroGlowWrap && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  let parallaxTicking = false;
+  function updateHeroParallax() {
+    parallaxTicking = false;
+    const y = Math.min(window.pageYOffset || document.documentElement.scrollTop, window.innerHeight);
+    heroGlowWrap.style.transform = 'translateY(' + (y * 0.35) + 'px)';
+  }
+  window.addEventListener('scroll', function() {
+    if (!parallaxTicking) {
+      parallaxTicking = true;
+      requestAnimationFrame(updateHeroParallax);
+    }
+  }, { passive: true });
+}
+
 /* ========== Smooth Anchor Scroll (fallback for older browsers) ========== */
 document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
   anchor.addEventListener('click', function(e) {

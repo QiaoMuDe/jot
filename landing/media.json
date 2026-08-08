@@ -22,11 +22,11 @@
       "feature": "编辑器"
     },
     {
-      "id": "note-calendar",
+      "id": "note-vector",
       "src": "images/4.png",
-      "alt": "笔记日历",
-      "caption": "按创建日期浏览笔记，时间线管理一目了然",
-      "feature": "笔记日历"
+      "alt": "笔记向量化",
+      "caption": "数据管理中一键向量化，混合检索让 AI 更懂你的笔记",
+      "feature": "笔记向量化"
     }
   ],
   "videos": [
@@ -43,6 +43,13 @@
       "poster": "",
       "title": "AI 助手演示",
       "caption": "深度思考（思维链折叠）+ 流式输出 + 联网搜索的实际效果"
+    },
+    {
+      "id": "video-import",
+      "src": "videos/jot-import.mp4",
+      "poster": "",
+      "title": "异构文件导入与向量化",
+      "caption": "异构办公文件清洗转换 → Markdown 入库 → 一键向量化 → 混合检索就绪"
     }
   ]
 }

@@ -12,6 +12,9 @@
 </head>
 <body>
 
+  <!-- ========== 滚动进度条 ========== -->
+  <div id="scroll-progress" aria-hidden="true"></div>
+
   <!-- ========== Navigation ========== -->
   <nav id="navbar">
     <div class="nav-inner">
@@ -24,8 +27,9 @@
         Jot
       </a>
       <div class="nav-links">
-        <a href="#features">特性</a>
-        <a href="#file-import">文件导入</a>
+        <a href="#features">核心特性</a>
+        <a href="#ai-recall">智能检索</a>
+        <a href="#file-import">异构转换</a>
         <a href="#screenshots">界面预览</a>
         <a href="#videos">视频展示</a>
         <a href="#tech-stack">技术栈</a>
@@ -37,9 +41,11 @@
   <!-- ========== Hero ========== -->
   <section class="hero" id="hero">
     <div class="hero-grid"></div>
-    <div class="hero-glow hero-glow-1"></div>
-    <div class="hero-glow hero-glow-2"></div>
-    <div class="hero-glow hero-glow-3"></div>
+    <div class="hero-glow-wrap">
+      <div class="hero-glow hero-glow-1"></div>
+      <div class="hero-glow hero-glow-2"></div>
+      <div class="hero-glow hero-glow-3"></div>
+    </div>
 
     <div class="hero-content">
       <div class="hero-badge">
@@ -122,14 +128,12 @@
       <div class="feature-card reveal" style="transition-delay: 0.2s;">
         <div class="feature-card-icon purple">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
-            <line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/>
-            <line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="14.83" y1="9.17" x2="18.36" y2="5.64"/>
-            <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>
+            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            <path d="M8.5 11l2 2 3.5-4"/>
           </svg>
         </div>
-        <h3>14 套系统主题</h3>
-        <p>从深色到浅色，从 Tokyo Night 到 Catppuccin，全局 CSS 变量联动，所有组件自动适配，代码高亮主题独立配置。</p>
+        <h3>智能检索</h3>
+        <p>向量语义 + 关键词精确双通道混合检索，笔记自动向量化，AI 回答基于你的笔记，完整片段注入、有据可依。</p>
       </div>
 
       <div class="feature-card reveal" style="transition-delay: 0.25s;">
@@ -187,6 +191,141 @@
         <p>拖入 PDF、Word、Excel、PPT 等办公文件，内置 markitdown 引擎自动清洗转换为 Markdown，一键存为笔记，或直接交给 AI 助手分析。</p>
       </div>
 
+    </div>
+  </section>
+
+  <!-- ========== AI Recall ========== -->
+  <section id="ai-recall">
+    <div class="section-header reveal">
+      <span class="section-label">Smart Recall</span>
+      <h2 class="section-title">智能检索</h2>
+      <p class="section-desc">向量语义 + 关键词精确的混合检索，让 AI 真正读懂你的笔记，回答有据可依</p>
+    </div>
+
+    <div class="workflow-card reveal">
+      <svg class="workflow-svg" viewBox="0 0 920 340" role="img" aria-label="智能检索流程：语义向量 + 关键词双通道汇合 → 混合检索 → AI 回答">
+        <defs>
+          <linearGradient id="recallGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3B82F6"/>
+            <stop offset="100%" stop-color="#8B5CF6"/>
+          </linearGradient>
+          <radialGradient id="recallGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="rgba(139, 92, 246, 0.22)"/>
+            <stop offset="100%" stop-color="rgba(139, 92, 246, 0)"/>
+          </radialGradient>
+        </defs>
+
+        <!-- 融合引擎脉冲光晕 + 虚线环 -->
+        <circle class="engine-glow" cx="460" cy="170" r="64" fill="url(#recallGlow)"/>
+        <ellipse class="engine-ring" cx="460" cy="170" rx="88" ry="72" fill="none" stroke="#8B5CF6" stroke-width="2" opacity="0.55" stroke-dasharray="6 6"/>
+
+        <!-- 连接管道：双通道 → 融合引擎 → AI 回答 -->
+        <path id="pipeSemantic" d="M 226 108 C 300 108 336 136 416 142" fill="none" stroke="#93C5FD" stroke-width="2.5" stroke-linecap="round"/>
+        <path id="pipeKeyword" d="M 226 243 C 300 243 336 228 416 198" fill="none" stroke="#D8B4FE" stroke-width="2.5" stroke-linecap="round"/>
+        <path id="pipeRecallOut" d="M 502 170 C 560 170 610 170 686 170" fill="none" stroke="#A5B4FC" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- 流动光点 -->
+        <g class="flow-dot"><circle r="5.5" fill="#3B82F6">
+          <animateMotion dur="2.6s" repeatCount="indefinite" begin="0s"><mpath href="#pipeSemantic"/></animateMotion>
+        </g>
+        <g class="flow-dot"><circle r="5.5" fill="#60A5FA">
+          <animateMotion dur="2.6s" repeatCount="indefinite" begin="1.3s"><mpath href="#pipeSemantic"/></animateMotion>
+        </g>
+        <g class="flow-dot"><circle r="5.5" fill="#A855F7">
+          <animateMotion dur="2.8s" repeatCount="indefinite" begin="0.4s"><mpath href="#pipeKeyword"/></animateMotion>
+        </g>
+        <g class="flow-dot"><circle r="5.5" fill="#C084FC">
+          <animateMotion dur="2.8s" repeatCount="indefinite" begin="1.8s"><mpath href="#pipeKeyword"/></animateMotion>
+        </g>
+        <g class="flow-dot"><circle r="5.5" fill="#F97316">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.2s"><mpath href="#pipeRecallOut"/></animateMotion>
+        </g>
+        <g class="flow-dot"><circle r="5.5" fill="#FB923C">
+          <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.4s"><mpath href="#pipeRecallOut"/></animateMotion>
+        </g>
+
+        <!-- 输入：语义向量 -->
+        <rect class="input-frame" x="24" y="60" width="192" height="96" rx="16"/>
+        <text x="120" y="44" text-anchor="middle" class="node-label">语义向量召回</text>
+        <g>
+          <rect x="44" y="74" width="152" height="66" rx="12" fill="#fff" stroke="#BFDBFE" stroke-width="1.5"/>
+          <circle cx="62" cy="90" r="4" fill="#3B82F6"/>
+          <text x="74" y="95" class="node-title" fill="#2563EB">语义理解</text>
+          <rect class="md-line" x="62" y="112" width="116" height="7" rx="3.5" fill="#BFDBFE" style="animation-delay: 0s"/>
+          <rect class="md-line" x="62" y="126" width="88" height="7" rx="3.5" fill="#DBEAFE" style="animation-delay: 0.35s"/>
+        </g>
+
+        <!-- 输入：关键词 -->
+        <rect class="input-frame" x="24" y="200" width="192" height="88" rx="16"/>
+        <text x="120" y="184" text-anchor="middle" class="node-label">关键词精确召回</text>
+        <g>
+          <rect x="44" y="214" width="152" height="58" rx="12" fill="#fff" stroke="#E9D5FF" stroke-width="1.5"/>
+          <circle cx="62" cy="230" r="4" fill="#A855F7"/>
+          <text x="74" y="235" class="node-title" fill="#9333EA">精确命中</text>
+          <rect class="kw-chip" x="62" y="250" width="44" height="18" rx="9"/>
+          <text x="84" y="263" text-anchor="middle" class="kw-text">进度</text>
+          <rect class="kw-chip" x="112" y="250" width="52" height="18" rx="9"/>
+          <text x="138" y="263" text-anchor="middle" class="kw-text">里程碑</text>
+          <rect class="kw-chip" x="170" y="250" width="18" height="18" rx="9"/>
+          <text x="179" y="263" text-anchor="middle" class="kw-text">··</text>
+        </g>
+
+        <!-- 中间：混合检索引擎 -->
+        <polygon points="460,122 501.6,146 501.6,194 460,218 418.4,194 418.4,146" fill="url(#recallGrad)" stroke="#7C3AED" stroke-width="1.5"/>
+        <text x="460" y="164" text-anchor="middle" class="engine-text">混合</text>
+        <text x="460" y="184" text-anchor="middle" class="engine-text">检索</text>
+        <text x="460" y="258" text-anchor="middle" class="node-label">向量 + 关键词融合</text>
+
+        <!-- 输出：AI 回答 -->
+        <g>
+          <rect x="700" y="132" width="210" height="106" rx="14" fill="#fff" stroke="#C7D2FE" stroke-width="1.5"/>
+          <circle cx="722" cy="156" r="4" fill="#8B5CF6"/>
+          <text x="734" y="161" class="node-title" fill="#6D28D9">AI 回答</text>
+          <circle class="ai-dot" cx="724" cy="192" r="5" fill="#8B5CF6" style="animation-delay: 0s"/>
+          <circle class="ai-dot" cx="742" cy="192" r="5" fill="#A78BFA" style="animation-delay: 0.2s"/>
+          <circle class="ai-dot" cx="760" cy="192" r="5" fill="#C4B5FD" style="animation-delay: 0.4s"/>
+          <text x="724" y="220" class="node-sub">基于你的笔记 · 引用完整片段</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="import-points">
+      <div class="import-point reveal" style="transition-delay: 0.05s;">
+        <div class="import-point-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="8" cy="18" r="2.5"/>
+            <path d="M8 6.5l8 1M7.5 8l1 8M16 10l-6 6"/>
+          </svg>
+        </div>
+        <div>
+          <h4>自动向量化 · 语义召回</h4>
+          <p>笔记保存后自动增量向量化，数据管理支持手动批量；sqlite-vec 本地向量库理解语义，模糊记得也能定位到笔记</p>
+        </div>
+      </div>
+      <div class="import-point reveal" style="transition-delay: 0.1s;">
+        <div class="import-point-icon purple">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16M4 12h10M4 18h7"/>
+            <path d="M17 15l2 2 3-3"/>
+          </svg>
+        </div>
+        <div>
+          <h4>关键词精确召回</h4>
+          <p>go-ego/gse 中文分词，代码片段、专有名词等精确术语命中即召回，零丢失</p>
+        </div>
+      </div>
+      <div class="import-point reveal" style="transition-delay: 0.15s;">
+        <div class="import-point-icon teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <path d="M12 8v4M12 15h.01"/>
+          </svg>
+        </div>
+        <div>
+          <h4>笔记优先回答</h4>
+          <p>双通道结果合并去重排序，回答基于你的笔记，召回片段完整注入、无截断</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -450,6 +589,7 @@
               <span class="tech-badge">Vite</span>
               <span class="tech-badge">原生 HTML/CSS/JS</span>
               <span class="tech-badge">go-ego/gse</span>
+              <span class="tech-badge">sqlite-vec</span>
               <span class="tech-badge">go-openai</span>
               <span class="tech-badge">Ollama</span>
               <span class="tech-badge">Tavily</span>
@@ -460,6 +600,7 @@
               <span class="tech-badge">Vite</span>
               <span class="tech-badge">原生 HTML/CSS/JS</span>
               <span class="tech-badge">go-ego/gse</span>
+              <span class="tech-badge">sqlite-vec</span>
               <span class="tech-badge">go-openai</span>
               <span class="tech-badge">Ollama</span>
               <span class="tech-badge">Tavily</span>

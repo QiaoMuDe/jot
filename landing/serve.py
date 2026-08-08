@@ -22,6 +22,14 @@ SITE_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PORT = 8123
 
 
+class NoCacheHandler(SimpleHTTPRequestHandler):
+    """静态文件处理器：禁用浏览器缓存，保证改动即时生效。"""
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+
 def build_handler(site_root):
     """构建静态文件处理器，将请求目录固定为站点根目录。
 
@@ -31,7 +39,7 @@ def build_handler(site_root):
     Returns:
         SimpleHTTPRequestHandler 子类
     """
-    handler = partial(SimpleHTTPRequestHandler, directory=site_root)
+    handler = partial(NoCacheHandler, directory=site_root)
     return handler
 
 

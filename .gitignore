@@ -9,3 +9,4 @@ tmp/
 .vscode/
 landing/images/
 landing/videos/
+__pycache__/

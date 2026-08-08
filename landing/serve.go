@@ -47,6 +47,14 @@ func openBrowser(url string) error {
 	}
 }
 
+// noCache 包装静态文件处理器，禁用浏览器缓存，保证改动后刷新即可看到最新内容。
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // listen 监听指定地址端口；端口被占用时自动顺延为系统分配的可用端口。
 func listen(host string, port int) (net.Listener, int) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
@@ -85,6 +93,6 @@ func main() {
 		}
 	}
 
-	// 提供内嵌的静态文件服务
-	log.Fatal(http.Serve(listener, http.FileServer(http.FS(staticFiles))))
+	// 提供内嵌的静态文件服务（禁用浏览器缓存）
+	log.Fatal(http.Serve(listener, noCache(http.FileServer(http.FS(staticFiles)))))
 }
