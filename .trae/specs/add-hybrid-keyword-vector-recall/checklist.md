@@ -1,0 +1,17 @@
+- [ ] GSE 依赖已加入 go.mod，`go build ./...` 通过
+- [ ] 使用 EMBED 嵌入式词典（`import _ "github.com/go-ego/gse/pkg/embed"`），词典编译进二进制
+- [ ] GSE 分词器通过 sync.Once 懒加载，首次调用约 100-200ms，后续直接复用
+- [ ] 分词结果过滤了停用词和过短 token（< 2 rune）
+- [ ] KeywordRecall 在 note_vectors.chunk_text 上执行 LIKE 匹配，支持 notebookIDs 过滤
+- [ ] KeywordRecall 无有效 token 时返回空列表，不报错
+- [ ] HybridRecall 按 (note_id, chunk_index) 去重合并向量与关键词结果
+- [ ] 排序优先级：双命中 > 仅向量 > 仅关键词
+- [ ] embedClient 为 nil 或模型无数据时，HybridRecall 仍可仅走关键词检索路
+- [ ] 向量无命中但关键词有命中时，正常返回关键词结果
+- [ ] 双路均无命中时返回 (nil, nil) 静默跳过
+- [ ] 相邻块扩展 + 卡片组装逻辑复用现有 hitIndexes / byNote / hitOrder
+- [ ] FormattedText 标注来源为"混合检索"
+- [ ] VectorRecall 对外签名不变，app.go 绑定层零改动
+- [ ] 前端零改动（ai:recall-status 事件 + 卡片展示逻辑完全复用）
+- [ ] golangci-lint run ./... 0 issues
+- [ ] npm run build 通过

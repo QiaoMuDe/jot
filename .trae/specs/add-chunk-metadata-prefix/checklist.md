@@ -1,0 +1,15 @@
+- [x] ChunkMeta 结构体定义包含 Title / Tags / CreatedAt 三个字段
+- [x] formatMetaPrefix 按模板输出：笔记标题 + 分类标签（无标签时省略）+ 创建时间（2006-01-02 格式）+ 笔记核心内容：
+- [x] 标签用中文顿号「、」分隔
+- [x] ChunkContent 签名改为 (content, maxRunes, meta ChunkMeta) []string
+- [x] 每个分块前面都拼接了元数据前缀
+- [x] 硬切的非首段也拼接元数据前缀
+- [x] maxRunes 计算包含元数据前缀长度
+- [x] IndexNotes 查询加了 Preload("Tags")
+- [x] IndexNotes 从 note.Tags 提取标签名称构造 ChunkMeta
+- [x] IndexNotes 调用 ChunkContent 时 maxRunes 传 600
+- [x] chunk_test.go 所有调用同步更新 ChunkMeta 参数
+- [x] 新增测试用例验证有标签/无标签的前缀格式
+- [x] go build ./... 通过
+- [x] go test ./internal/services/... 通过
+- [x] golangci-lint run ./... 0 issues

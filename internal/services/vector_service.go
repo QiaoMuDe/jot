@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"unicode"
 
 	"jot/internal/aicli"
 	"jot/internal/models"
 
 	"gitee.com/MM-Q/fastlog"
+	"github.com/go-ego/gse"
 	"gorm.io/gorm"
 )
 
@@ -28,9 +31,92 @@ func NewVectorService(db *gorm.DB, logger *fastlog.Logger) *VectorService {
 // 轻量父块上下文：命中小块后顺带返回其相邻块，近似"子块检索 + 父块上下文"效果
 const adjacentBlocks = 1
 
-// maxCardRunes 合并后单张召回卡片的内容长度上限（rune）
-// 防止相邻块补充导致注入 token 膨胀
-const maxCardRunes = 1200
+// ===== GSE 中文分词器（懒加载，EMBED 嵌入式词典） =====
+
+// 停用词表，过滤分词结果中的高频无意义单字
+var stopWords = map[rune]struct{}{
+	// 高频单字停用词
+	'的': {}, '了': {}, '是': {}, '在': {}, '有': {}, '我': {}, '他': {}, '她': {},
+	'它': {}, '们': {}, '这': {}, '那': {}, '什': {}, '么': {}, '怎': {}, '哪': {},
+	'你': {}, '之': {}, '于': {}, '其': {}, '着': {}, '过': {},
+	'里': {}, '为': {}, '因': {}, '所': {}, '以': {}, '但': {}, '如': {}, '果': {},
+	'虽': {}, '然': {}, '而': {}, '且': {}, '或': {}, '与': {}, '和': {}, '同': {},
+	'及': {}, '又': {}, '也': {}, '对': {}, '就': {}, '被': {}, '把': {}, '让': {},
+	'向': {}, '往': {}, '从': {}, '到': {}, '去': {}, '能': {}, '会': {}, '要': {},
+	'可': {}, '没': {}, '不': {}, '很': {}, '太': {}, '更': {}, '最': {}, '都': {},
+	'只': {}, '还': {}, '再': {}, '才': {}, '刚': {}, '已': {}, '正': {}, '将': {},
+	'该': {}, '应': {}, '需': {}, '必': {}, '须': {}, '够': {}, '出': {}, '入': {},
+	'上': {}, '下': {}, '大': {}, '小': {}, '多': {}, '少': {}, '来': {}, '做': {},
+	'用': {}, '问': {}, '说': {}, '看': {}, '想': {}, '知': {}, '道': {}, '给': {},
+	'跟': {}, '比': {}, '次': {}, '个': {}, '种': {}, '些': {}, '点': {}, '等': {},
+	'第': {}, '每': {}, '各': {}, '几': {}, '两': {}, '百': {}, '千': {}, '万': {},
+	'亿': {}, '哦': {}, '啊': {}, '嗯': {}, '呢': {}, '吧': {}, '吗': {}, '呀': {},
+	'嘛': {}, '哈': {}, '哇': {}, '呵': {}, '嘿': {}, '喔': {},
+}
+
+// isStopWord 判断 rune 是否为停用词
+func isStopWord(r rune) bool {
+	_, ok := stopWords[r]
+	return ok
+}
+
+// maxRecallKeywords 卡片召回最大关键词数，防止超长 query 导致 LIKE 查询性能问题
+const maxRecallKeywords = 20
+
+var (
+	gseSeg     gse.Segmenter
+	gseOnce    sync.Once
+	gseInitErr error
+)
+
+// initGseSegmenter 初始化 gse 分词器，载入 EMBED 内置词典
+func initGseSegmenter() {
+	gseSeg = gse.Segmenter{}
+	gseInitErr = gseSeg.LoadDictEmbed()
+}
+
+// tokenize 使用 gse 对输入文本做分词
+// - 调用 gse.Cut 精确模式+HMM
+// - 过滤停用词（仅对单字词做停用词检查）
+// - 过滤纯标点/符号
+// - 去重
+func tokenize(text string) []string {
+	gseOnce.Do(initGseSegmenter)
+	if gseInitErr != nil {
+		return nil
+	}
+	words := gseSeg.Cut(text, true)
+	seen := make(map[string]bool)
+	var result []string
+	for _, w := range words {
+		w = strings.TrimSpace(w)
+		if w == "" || seen[w] {
+			continue
+		}
+		// 过滤纯标点/符号
+		if isAllPunct(w) {
+			continue
+		}
+		// 过滤停用词（仅对单字词做停用词检查）
+		runes := []rune(w)
+		if len(runes) == 1 && isStopWord(runes[0]) {
+			continue
+		}
+		seen[w] = true
+		result = append(result, w)
+	}
+	return result
+}
+
+// isAllPunct 判断字符串是否全部为标点/符号
+func isAllPunct(s string) bool {
+	for _, r := range s {
+		if !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
+			return false
+		}
+	}
+	return true
+}
 
 // IndexNotes 对指定笔记列表逐篇量化：读取笔记正文 → 切块 → 分批 embedding → 先删该笔记旧块再插入新块（幂等）
 // progressCb(done, total, title, stage, chunkDone, chunkTotal) 每篇笔记处理时回调：
@@ -46,9 +132,9 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *aicli.Clien
 		return 0, 0, fmt.Errorf("embedding 模型未配置")
 	}
 
-	// 查询未软删除的笔记（跳过回收站中的笔记）
+	// 查询未软删除的笔记（跳过回收站中的笔记）；预加载 Tags 用于构造分块元数据前缀
 	var notes []models.Note
-	if err := s.db.WithContext(ctx).Where("id IN ? AND deleted_at IS NULL", noteIDs).Find(&notes).Error; err != nil {
+	if err := s.db.WithContext(ctx).Preload("Tags").Where("id IN ? AND deleted_at IS NULL", noteIDs).Find(&notes).Error; err != nil {
 		s.logger.Errorw("VectorService.IndexNotes 查询笔记失败", fastlog.Error(err))
 		return 0, 0, fmt.Errorf("查询笔记失败: %w", err)
 	}
@@ -63,8 +149,19 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *aicli.Clien
 			return success, failed, ctx.Err()
 		}
 
-		// 切块：单块上限 500 rune；正文为空或切不出块时跳过本篇
-		chunks := ChunkContent(note.Content, 500)
+		// 构造分块元数据前缀（标题/标签/创建时间），提升每块检索命中率
+		tagNames := make([]string, 0, len(note.Tags))
+		for _, tag := range note.Tags {
+			tagNames = append(tagNames, tag.Name)
+		}
+		meta := ChunkMeta{
+			Title:     note.Title,
+			Tags:      tagNames,
+			CreatedAt: note.CreatedAt,
+		}
+
+		// 切块：单块上限 600 rune（含元数据前缀）；正文为空或切不出块时跳过本篇
+		chunks := ChunkContent(note.Content, 600, meta)
 		if len(chunks) == 0 {
 			continue
 		}
@@ -180,33 +277,81 @@ func (s *VectorService) DeleteAllVectors() error {
 	return s.db.Where("1 = 1").Delete(&models.NoteVector{}).Error
 }
 
-// VectorRecall 向量召回：将 query 向量化后，通过 sqlite-vec 扩展在 SQL 内计算余弦距离，
-// 按距离升序召回 TopN 命中块，并补充命中块前后各 1 个相邻块，按笔记合并组装卡片
-// 返回 CardRecallResult（FormattedText 注入 system message + Cards 用于前端展示）
-// 返回分类：
-//   - (result, nil)：召回成功
-//   - (nil, nil)：预期跳过（配置未就绪/无向量数据/无命中/卡片为空），调用方可静默
-//   - (nil, err)：意外错误（embedding/SQL/查询失败），调用方应提示用户
-//
-// notebookIDs 非空时仅召回指定笔记本下的笔记（join notes 过滤）
-func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
-	if query == "" || limit <= 0 {
+// ===== 关键词检索 + 混合召回 =====
+
+// recallHit 表示一个合并后的命中块，记录命中来源和评分信息
+type recallHit struct {
+	vec     models.NoteVector
+	sources int // bit 0=向量, bit 1=关键词 → 1=仅向量, 2=仅关键词, 3=双命中
+	kwScore int // 关键词命中 token 数（仅关键词路有意义）
+}
+
+// KeywordRecall 关键词检索：GSE 分词后在 note_vectors.chunk_text 上执行 LIKE 匹配
+// 不依赖 embedding 模型，可跨模型检索；返回命中的 NoteVector 列表
+// notebookIDs 非空时仅检索指定笔记本下的笔记
+func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit int, notebookIDs ...uint) ([]models.NoteVector, error) {
+	tokens := tokenize(query)
+	if len(tokens) == 0 {
 		return nil, nil
 	}
+
+	// 限制关键词数量，防止超长 LIKE 查询
+	if len(tokens) > maxRecallKeywords {
+		tokens = tokens[:maxRecallKeywords]
+	}
+
+	// 构建 SQL：JOIN notes 过滤软删除 + notebookIDs，WHERE 用 OR 拼接各 token 的 LIKE
+	// 不加 model 过滤——关键词检索跨所有模型
+	kwSQL := "SELECT note_vectors.id, note_vectors.note_id, note_vectors.chunk_index, note_vectors.chunk_text, note_vectors.model " +
+		"FROM note_vectors JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL"
+	args := []interface{}{}
+	if len(notebookIDs) > 0 {
+		kwSQL += " AND notes.notebook_id IN ?"
+		args = append(args, notebookIDs)
+	}
+	kwSQL += " WHERE "
+	for i, t := range tokens {
+		if i > 0 {
+			kwSQL += " OR "
+		}
+		kwSQL += "note_vectors.chunk_text LIKE ?"
+		args = append(args, "%"+t+"%")
+	}
+	kwSQL += " LIMIT ?"
+	args = append(args, limit)
+
+	var hits []models.NoteVector
+	if err := s.db.WithContext(ctx).Raw(kwSQL, args...).Scan(&hits).Error; err != nil {
+		s.logger.Errorw("VectorService.KeywordRecall SQL 检索失败", fastlog.Error(err))
+		return nil, fmt.Errorf("关键词检索失败: %w", err)
+	}
+
+	s.logger.Debugw("VectorService.KeywordRecall 命中",
+		fastlog.String("query", query),
+		fastlog.String("tokens", strings.Join(tokens, " / ")),
+		fastlog.Int("hits", len(hits)))
+
+	return hits, nil
+}
+
+// vectorSearch 向量检索：将 query 向量化后，通过 sqlite-vec 扩展在 SQL 内计算余弦距离，
+// 按距离升序召回 TopN 命中块
+// embedClient 为 nil 或模型未配置时返回 (nil, nil) 静默跳过，由调用方决定是否降级为仅关键词检索
+func (s *VectorService) vectorSearch(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs []uint) ([]models.NoteVector, error) {
 	// embedding client 配置检查：模型未配置时无法向量化 query，静默跳过
 	if embedClient == nil || embedClient.Model == "" {
-		s.logger.Debugw("VectorService.VectorRecall 跳过：embedding 模型未配置")
+		s.logger.Debugw("VectorService.vectorSearch 跳过：embedding 模型未配置")
 		return nil, nil
 	}
 
 	// 前置检查：当前模型是否有向量数据，无则静默跳过
 	var cnt int64
 	if err := s.db.WithContext(ctx).Model(&models.NoteVector{}).Where("model = ?", embedClient.Model).Count(&cnt).Error; err != nil {
-		s.logger.Errorw("VectorService.VectorRecall 查询向量计数失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.vectorSearch 查询向量计数失败", fastlog.Error(err))
 		return nil, fmt.Errorf("查询向量计数失败: %w", err)
 	}
 	if cnt == 0 {
-		s.logger.Debugw("VectorService.VectorRecall 跳过：当前模型无向量数据",
+		s.logger.Debugw("VectorService.vectorSearch 跳过：当前模型无向量数据",
 			fastlog.String("model", embedClient.Model))
 		return nil, nil
 	}
@@ -214,18 +359,17 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	// query 向量化：取首个向量作为查询向量
 	embeddings, err := embedClient.Embed(ctx, []string{query})
 	if err != nil {
-		s.logger.Errorw("VectorService.VectorRecall query 向量化失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.vectorSearch query 向量化失败", fastlog.Error(err))
 		return nil, fmt.Errorf("query 向量化失败: %w", err)
 	}
 	if len(embeddings) == 0 {
-		s.logger.Errorw("VectorService.VectorRecall query 向量化失败", fastlog.String("detail", "返回空向量"))
+		s.logger.Errorw("VectorService.vectorSearch query 向量化失败", fastlog.String("detail", "返回空向量"))
 		return nil, fmt.Errorf("query 向量化失败: 返回空向量")
 	}
-	queryVec := embeddings[0]
 	// query 向量转 JSON 数组字符串，供 sqlite-vec 的 vec_f32 解析
-	queryVecJSON, err := json.Marshal(queryVec)
+	queryVecJSON, err := json.Marshal(embeddings[0])
 	if err != nil {
-		s.logger.Errorw("VectorService.VectorRecall query 向量序列化失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.vectorSearch query 向量序列化失败", fastlog.Error(err))
 		return nil, fmt.Errorf("query 向量序列化失败: %w", err)
 	}
 
@@ -247,23 +391,128 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 
 	var hits []models.NoteVector
 	if err := s.db.WithContext(ctx).Raw(vecSQL, args...).Scan(&hits).Error; err != nil {
-		s.logger.Errorw("VectorService.VectorRecall sqlite-vec 检索失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.vectorSearch sqlite-vec 检索失败", fastlog.Error(err))
 		return nil, fmt.Errorf("向量检索失败: %w", err)
 	}
-	if len(hits) == 0 {
-		s.logger.Debugw("VectorService.VectorRecall 无命中",
-			fastlog.String("query", query), fastlog.String("model", embedClient.Model))
+
+	s.logger.Debugw("VectorService.vectorSearch 命中",
+		fastlog.String("query", query),
+		fastlog.String("model", embedClient.Model),
+		fastlog.Int("hits", len(hits)))
+
+	return hits, nil
+}
+
+// HybridRecall 混合召回：并行执行向量检索与关键词检索，按 (note_id, chunk_index) 去重合并
+// 排序优先级：双命中（向量+关键词）> 仅向量命中 > 仅关键词命中
+// 合并后补充相邻块并组装卡片，返回 CardRecallResult
+func (s *VectorService) HybridRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
+	if query == "" || limit <= 0 {
 		return nil, nil
 	}
 
-	// 按命中 note_id 批量查询笔记元信息（标题/文件后缀），用于组装卡片
+	// 向量检索路
+	vecHits, err := s.vectorSearch(ctx, query, limit, embedClient, notebookIDs)
+	if err != nil {
+		s.logger.Errorw("VectorService.HybridRecall 向量检索失败", fastlog.Error(err))
+		return nil, err
+	}
+
+	// 关键词检索路
+	kwHits, err := s.KeywordRecall(ctx, query, limit, notebookIDs...)
+	if err != nil {
+		s.logger.Errorw("VectorService.HybridRecall 关键词检索失败", fastlog.Error(err))
+		// 关键词检索失败不中断，继续使用向量结果
+		kwHits = nil
+	}
+
+	// 合并去重：按 (note_id, chunk_index) 作为唯一键
+	hitMap := make(map[string]*recallHit)
+	keyOf := func(noteID uint, chunkIdx int) string {
+		return fmt.Sprintf("%d:%d", noteID, chunkIdx)
+	}
+
+	for _, h := range vecHits {
+		k := keyOf(h.NoteID, h.ChunkIndex)
+		if existing, ok := hitMap[k]; ok {
+			existing.sources |= 1 // 标记向量命中
+		} else {
+			hitMap[k] = &recallHit{vec: h, sources: 1}
+		}
+	}
+
+	// 关键词命中 token 列表（用于计算 kwScore）
+	kwTokens := tokenize(query)
+	for _, h := range kwHits {
+		k := keyOf(h.NoteID, h.ChunkIndex)
+		score := 0
+		for _, t := range kwTokens {
+			if strings.Contains(h.ChunkText, t) {
+				score++
+			}
+		}
+		if existing, ok := hitMap[k]; ok {
+			existing.sources |= 2 // 标记关键词命中
+			existing.kwScore = score
+		} else {
+			hitMap[k] = &recallHit{vec: h, sources: 2, kwScore: score}
+		}
+	}
+
+	if len(hitMap) == 0 {
+		s.logger.Debugw("VectorService.HybridRecall 无命中",
+			fastlog.String("query", query),
+			fastlog.Int("vec_hits", len(vecHits)),
+			fastlog.Int("kw_hits", len(kwHits)))
+		return nil, nil
+	}
+
+	// 排序：双命中 > 仅向量 > 仅关键词；同优先级内保持向量原始顺序（距离升序）
+	// 向量命中先入 hitMap，天然保持距离升序；关键词命中追加在后
+	merged := make([]*recallHit, 0, len(hitMap))
+	// 先收集向量命中的（保持原始顺序）
+	vecSeen := make(map[string]bool)
+	for _, h := range vecHits {
+		k := keyOf(h.NoteID, h.ChunkIndex)
+		if !vecSeen[k] {
+			vecSeen[k] = true
+			merged = append(merged, hitMap[k])
+		}
+	}
+	// 再收集仅关键词命中的
+	for _, h := range kwHits {
+		k := keyOf(h.NoteID, h.ChunkIndex)
+		if !vecSeen[k] {
+			vecSeen[k] = true
+			merged = append(merged, hitMap[k])
+		}
+	}
+
+	// 按优先级稳定排序：双命中(3) > 仅向量(1) > 仅关键词(2)
+	// 同优先级内仅关键词块按 kwScore 降序
+	sortHybridHits(merged)
+
+	// 合并后截断回 limit，防止两路无交集时结果膨胀到 2×limit
+	if len(merged) > limit {
+		merged = merged[:limit]
+	}
+
+	// 提取最终 hits 列表（用于后续相邻块扩展和卡片组装）
+	hits := make([]models.NoteVector, 0, len(merged))
+	for _, h := range merged {
+		hits = append(hits, h.vec)
+	}
+
+	// ===== 以下为相邻块扩展 + 卡片组装（复用原 VectorRecall 逻辑） =====
+
+	// 按命中 note_id 批量查询笔记元信息
 	noteIDs := make([]uint, 0, len(hits))
 	for _, h := range hits {
 		noteIDs = append(noteIDs, h.NoteID)
 	}
 	var notes []models.Note
 	if err := s.db.WithContext(ctx).Where("id IN ?", noteIDs).Find(&notes).Error; err != nil {
-		s.logger.Errorw("VectorService.VectorRecall 查询笔记失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.HybridRecall 查询笔记失败", fastlog.Error(err))
 		return nil, fmt.Errorf("查询命中笔记失败: %w", err)
 	}
 	noteMeta := make(map[uint]models.Note, len(notes))
@@ -271,11 +520,12 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 		noteMeta[n.ID] = n
 	}
 
-	// 二次查询命中笔记的全部块（按 ChunkIndex 升序），用于相邻块补充与按笔记合并卡片
+	// 二次查询命中笔记的全部块（按 ChunkIndex 升序）
+	// 注意：不按 model 过滤——混合召回中关键词命中可能跨模型
 	var blocks []models.NoteVector
-	if err := s.db.WithContext(ctx).Where("model = ? AND note_id IN ?", embedClient.Model, noteIDs).
+	if err := s.db.WithContext(ctx).Where("note_id IN ?", noteIDs).
 		Order("chunk_index ASC").Find(&blocks).Error; err != nil {
-		s.logger.Errorw("VectorService.VectorRecall 查询命中笔记块失败", fastlog.Error(err))
+		s.logger.Errorw("VectorService.HybridRecall 查询命中笔记块失败", fastlog.Error(err))
 		return nil, fmt.Errorf("查询命中笔记块失败: %w", err)
 	}
 	byNote := make(map[uint][]models.NoteVector)
@@ -298,7 +548,7 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 		}
 	}
 
-	// 命中笔记顺序按 hits 首次出现先后（= 距离升序），保持相关度排序稳定
+	// 命中笔记顺序按 hits 首次出现先后（= 排序后顺序）
 	hitOrder := make([]uint, 0, len(hitIndexes))
 	seenNote := make(map[uint]bool, len(hitIndexes))
 	for _, h := range hits {
@@ -309,9 +559,8 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 	}
 
 	// 组装格式化上下文文本与结构化卡片
-	// Content 为命中块 + 相邻块按 ChunkIndex 拼接（按笔记合并为一张卡片）
 	var b strings.Builder
-	b.WriteString("以下是用户笔记库中与问题相关的笔记片段（来源：本地笔记向量检索），请优先参考这些笔记内容回答用户的问题：\n\n")
+	b.WriteString("以下是用户笔记库中与问题相关的笔记片段（来源：本地笔记混合检索），请优先参考这些笔记内容回答用户的问题：\n\n")
 
 	cards := make([]RecallCard, 0, len(hitOrder))
 	for _, noteID := range hitOrder {
@@ -322,14 +571,10 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 		var parts []string
 		for _, v := range byNote[noteID] {
 			if hitIndexes[noteID][v.ChunkIndex] {
-				parts = append(parts, v.ChunkText)
+				parts = append(parts, stripMetaPrefix(v.ChunkText))
 			}
 		}
 		content := strings.Join(parts, "\n\n")
-		// 单卡片内容长度上限，防止相邻块补充导致注入 token 膨胀
-		if runeLen(content) > maxCardRunes {
-			content = string([]rune(content)[:maxCardRunes])
-		}
 		fmt.Fprintf(&b, "--- 📄 《%s》 ---\n%s\n\n", note.Title, content)
 		cards = append(cards, RecallCard{
 			ID:        note.ID,
@@ -340,18 +585,75 @@ func (s *VectorService) VectorRecall(ctx context.Context, query string, limit in
 		})
 	}
 	if len(cards) == 0 {
-		s.logger.Debugw("VectorService.VectorRecall 组装卡片为空")
+		s.logger.Debugw("VectorService.HybridRecall 组装卡片为空")
 		return nil, nil
 	}
 	b.WriteString("请基于以上笔记内容回答用户的问题。如果笔记内容不足以回答，请如实说明。")
 
-	s.logger.Debugw("VectorService.VectorRecall 命中",
+	// 统计双命中/向量/关键词各路命中数
+	dualCnt, vecOnlyCnt, kwOnlyCnt := 0, 0, 0
+	for _, h := range merged {
+		switch h.sources {
+		case 3:
+			dualCnt++
+		case 1:
+			vecOnlyCnt++
+		case 2:
+			kwOnlyCnt++
+		}
+	}
+	s.logger.Debugw("VectorService.HybridRecall 命中",
 		fastlog.Int("cards_count", len(cards)),
-		fastlog.String("query", query),
-		fastlog.String("model", embedClient.Model))
+		fastlog.Int("dual_hits", dualCnt),
+		fastlog.Int("vec_only_hits", vecOnlyCnt),
+		fastlog.Int("kw_only_hits", kwOnlyCnt),
+		fastlog.String("query", query))
 
 	return &CardRecallResult{
 		FormattedText: b.String(),
 		Cards:         cards,
 	}, nil
+}
+
+// sortHybridHits 按命中优先级稳定排序：双命中(3) > 仅向量(1) > 仅关键词(2)
+// 同优先级内：仅关键词块按 kwScore 降序（命中 token 数越多越靠前）；其余保持原始顺序
+func sortHybridHits(hits []*recallHit) {
+	// 优先级映射：sources 3→0(最高), 1→1, 2→2
+	priority := func(sources int) int {
+		switch sources {
+		case 3:
+			return 0
+		case 1:
+			return 1
+		default:
+			return 2
+		}
+	}
+	// 稳定排序：按优先级分组，同优先级内仅关键词块按 kwScore 降序
+	// 使用插入排序（数据量小，通常 < 2*limit）
+	for i := 1; i < len(hits); i++ {
+		for j := i; j > 0; j-- {
+			pj, pj1 := priority(hits[j].sources), priority(hits[j-1].sources)
+			if pj < pj1 {
+				hits[j], hits[j-1] = hits[j-1], hits[j]
+			} else if pj == pj1 && pj == 2 && hits[j].kwScore > hits[j-1].kwScore {
+				// 同为仅关键词命中时，按 kwScore 降序
+				hits[j], hits[j-1] = hits[j-1], hits[j]
+			} else {
+				break
+			}
+		}
+	}
+}
+
+// VectorRecall 卡片召回（对外接口，签名不变）
+// 内部委托 HybridRecall 执行向量+关键词混合检索
+// 当 embedClient 为 nil 或模型无数据时，仍可仅走关键词检索路
+//
+// 返回分类：
+//   - (result, nil)：召回成功
+//   - (nil, nil)：预期跳过（query 为空/无命中/卡片为空），调用方可静默
+//   - (nil, err)：意外错误，调用方应提示用户
+func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
+	return s.HybridRecall(ctx, query, limit, embedClient, notebookIDs...)
 }

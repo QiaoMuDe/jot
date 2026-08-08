@@ -5,19 +5,62 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 )
+
+// ChunkMeta 笔记元数据，用于在每个分块前注入前缀以提升检索命中率
+type ChunkMeta struct {
+	Title     string
+	Tags      []string
+	CreatedAt time.Time
+}
+
+// formatMetaPrefix 按统一模板生成分块元数据前缀：
+//   - 笔记标题：{title}
+//   - 分类标签：{tag1、tag2}（无标签时整行省略；多个标签用中文顿号「、」分隔）
+//   - 创建时间：{2006-01-02}（精确到天）
+//   - 笔记核心内容：
+//
+// 末尾以「笔记核心内容：」结尾，不带尾随换行（后续拼接标题链+正文时由调用方加换行）
+func formatMetaPrefix(meta ChunkMeta) string {
+	var b strings.Builder
+	b.WriteString("笔记标题：")
+	b.WriteString(meta.Title)
+	b.WriteString("\n")
+	if len(meta.Tags) > 0 {
+		b.WriteString("分类标签：")
+		b.WriteString(strings.Join(meta.Tags, "、"))
+		b.WriteString("\n")
+	}
+	b.WriteString("创建时间：")
+	b.WriteString(meta.CreatedAt.Format("2006-01-02"))
+	b.WriteString("\n")
+	b.WriteString("笔记核心内容：")
+	return b.String()
+}
+
+// stripMetaPrefix 剥离分块元数据前缀，返回正文部分（标题链+内容）
+// 前缀由 formatMetaPrefix 生成，以 "笔记核心内容：\n" 为分隔标记；找该标记首次出现位置取其后内容
+// 找不到标记时（旧数据/无前缀）原样返回，保证向后兼容
+func stripMetaPrefix(text string) string {
+	const marker = "笔记核心内容：\n"
+	if idx := strings.Index(text, marker); idx >= 0 {
+		return text[idx+len(marker):]
+	}
+	return text
+}
 
 // ChunkContent 将笔记内容按 Markdown 结构切块，并为每个块补充所属标题链（结构感知切片）
 // 规则（对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack 语义）：
 //   - 标题级别 1-6 级（# ~ ######），标题行作为"节的开始标记"开启新块
-//   - 标题与内容强制耦合：标题行后跟空行时不落块，等待与后续正文合并，杜绝孤立标题块
+//   - 段落聚合：空行不触发切块，作为段落分隔保留在块内，多段落累积直到接近 maxRunes 才落块
 //   - 空节（无正文的孤立标题）直接丢弃，不产生噪音块；标题保留在链栈中作为后续子节父级指引
 //   - 块首补全所属标题链：块首非标题补完整链，块首已是标题仅补更高级父级
 //   - ``` / ~~~ 围栏代码块保护：块内空行、伪标题行不触发切块
 //   - 单块超过 maxRunes 时按 rune 硬切，硬切非首段同样补链
 //
-// 返回的每块长度（含标题链）不超过 maxRunes；maxRunes<=0 时使用默认值 500
-func ChunkContent(content string, maxRunes int) []string {
+// 返回的每块长度（含元数据前缀+标题链）不超过 maxRunes；maxRunes<=0 时使用默认值 500
+func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 	if maxRunes <= 0 {
 		maxRunes = 500
 	}
@@ -40,11 +83,14 @@ func ChunkContent(content string, maxRunes int) []string {
 		}
 		// 补全所属标题链（父级链）
 		text = prependChain(text, stack)
-		if runeLen(text) > maxRunes {
-			chunks = append(chunks, splitWithHeading(text, maxRunes, stack)...)
+		// 拼接元数据前缀；maxRunes 预算包含前缀长度（最终块总长 runeLen(prefix+text) 不超过 maxRunes）
+		prefix := formatMetaPrefix(meta)
+		if runeLen(prefix)+1+runeLen(text) > maxRunes {
+			// 超限硬切：传入未含前缀的标题链+正文，每段独立拼接 prefix
+			chunks = append(chunks, splitWithHeading(text, maxRunes, stack, prefix)...)
 			return
 		}
-		chunks = append(chunks, text)
+		chunks = append(chunks, prefix+"\n"+text)
 	}
 
 	for _, line := range strings.Split(content, "\n") {
@@ -66,8 +112,13 @@ func ChunkContent(content string, maxRunes int) []string {
 			stack = pushHeadingStack(stack, trimmed)
 			cur = append(cur, line)
 		case trimmed == "":
-			// 空行：段落分隔。当前块仅含标题行时不落块（标题+空行等待与正文合并）
-			if len(cur) != 1 || headingLevel(strings.TrimSpace(cur[0])) <= 0 {
+			// 段落聚合：空行作为段落分隔保留在块内，不触发切块
+			// 块首空行跳过（避免块首留空行）；累积后超限才落块
+			if len(cur) == 0 {
+				continue
+			}
+			cur = append(cur, line)
+			if runeLen(strings.Join(cur, "\n")) > maxRunes {
 				flush()
 			}
 		default:
@@ -145,15 +196,18 @@ func isCodeFence(line string) bool {
 	return strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~")
 }
 
-// splitWithHeading 对超长块硬切，并为非首段补充所属标题链指引
-// 首段可能已以标题开头或已由 flush 补链，无需处理
-func splitWithHeading(text string, maxRunes int, stack []string) []string {
-	segs := hardSplit(text, maxRunes)
-	if len(segs) <= 1 {
-		return segs
+// splitWithHeading 对超长块硬切，并为每段补充元数据前缀 + 所属标题链指引
+// text 为未含前缀的标题链+正文；prefix 为元数据前缀，硬切后每段都拼接 prefix+"\n"+prependChain(段, stack)
+// 首段同样适用（首段也加 prefix，保持一致）；maxRunes 预算包含前缀长度
+func splitWithHeading(text string, maxRunes int, stack []string, prefix string) []string {
+	// 预留元数据前缀 + 换行的 rune 预算，硬切作用于标题链+正文部分
+	budget := maxRunes - runeLen(prefix) - 1
+	if budget < 1 {
+		budget = 1
 	}
-	for i := 1; i < len(segs); i++ {
-		segs[i] = prependChain(segs[i], stack)
+	segs := hardSplit(text, budget)
+	for i := range segs {
+		segs[i] = prefix + "\n" + prependChain(segs[i], stack)
 	}
 	return segs
 }

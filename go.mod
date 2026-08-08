@@ -9,6 +9,7 @@ require (
 	gitee.com/MM-Q/zhihu-go v1.0.0
 	github.com/conductor-oss/markitdown v0.0.1
 	github.com/glebarez/sqlite v1.11.0
+	github.com/go-ego/gse v1.0.2
 	github.com/hekmon/tavily v1.3.0
 	github.com/ollama/ollama v0.31.1
 	github.com/sashabaranov/go-openai v1.41.2
@@ -77,6 +78,7 @@ require (
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/vcaesar/cedar v0.30.0 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect

@@ -50,7 +50,7 @@ jot/                                    # 项目根目录
 │       ├── query_refiner.go            # 搜索 Query 精炼
 │       ├── notebook_service.go         # 笔记本 CRUD
 │       ├── vector_service.go           # 笔记向量索引（IndexNotes 切块量化/GetIndexStatus/Count*/DeleteAllVectors）+ sqlite-vec 函数式向量召回 VectorRecall（SQL 内余弦距离 + 笔记本过滤 + 相邻块补充）
-│       ├── chunk.go                    # 文档切块（500 rune 上限 + 多级标题栈 1-6 级 + 标题块合并 + 空节丢弃 + 围栏代码块保护 + 块首父级链补全）
+│       ├── chunk.go                    # 文档切块（600 rune 上限 + 元数据前缀注入（标题/标签/创建时间）+ 段落聚合 + 多级标题栈 1-6 级 + 标题块合并 + 空节丢弃 + 围栏代码块保护 + 块首父级链补全）
 │   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
@@ -166,7 +166,7 @@ jot/                                    # 项目根目录
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
 | **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索与卡片召回通用 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
-| **向量召回** | 笔记切块向量化（`chunk.go` 标题链拼接 + `IndexNotes` 先删后插幂等量化）后由 sqlite-vec 函数式检索——`vec_distance_cosine` SQL 内余弦距离 + `vec_f32` 解析 query 向量 JSON，`dist < 1.0` 过滤 + 距离升序 TopN；支持指定笔记本（JOIN notes 过滤）或全部笔记；命中块补充前后各 1 相邻块并按笔记合并卡片（单卡 1200 rune 截断）；embedClient/模型未配置或当前模型无向量数据时静默跳过 | `services/vector_service.go:VectorRecall` + `services/chunk.go` + `models/note_vector.go` | 用户问题 query + 可选笔记本 ID 列表 | CardRecallResult（FormattedText 注入 system message + Cards 前端展示） |
+| **向量召回** | 笔记切块向量化（`chunk.go` 标题链拼接 + `IndexNotes` 先删后插幂等量化）后由 sqlite-vec 函数式检索——`vec_distance_cosine` SQL 内余弦距离 + `vec_f32` 解析 query 向量 JSON，`dist < 1.0` 过滤 + 距离升序 TopN；支持指定笔记本（JOIN notes 过滤）或全部笔记；命中块补充前后各 1 相邻块并按笔记合并卡片（召回块完整注入，已去掉单卡截断，由 ai_card_recall_limit 控制总量）；embedClient/模型未配置或当前模型无向量数据时静默跳过 | `services/vector_service.go:VectorRecall` + `services/chunk.go` + `models/note_vector.go` | 用户问题 query + 可选笔记本 ID 列表 | CardRecallResult（FormattedText 注入 system message + Cards 前端展示） |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
 
@@ -613,18 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：编辑器操作菜单 + 预览模式按钮显隐控制 + executeAction 委托重构
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增编辑器顶栏「操作」按钮 + 配置驱动下拉菜单（[editor-actions.js](frontend/src/js/editor-actions.js) 定义操作注册表 `EDITOR_ACTIONS` 并通过 `window.initEditorActionsMenu` 全局注册，[main.js](frontend/src/main.js) 顶部 `import './js/editor-actions.js'`）。当前含「格式化」分组（JSON 格式化/JSON 压缩），支持选中文本或全文处理、CM6 `dispatch` 写回（Ctrl+Z 可撤销）、非法 JSON 用 `nm.show()` 提示、查看模式按钮隐藏。**后续新增**：预览模式（编辑/新建内的 Markdown 预览）下操作按钮隐藏——`switchEditorMode` 函数中根据模式切换 `editorActionsBtn` 显隐，CSS 添加 `[data-mode="preview"] #editorActionsBtn { display: none !important }` 兜底。同时 `executeAction` 函数的预览→编辑切换从手动 DOM 操作重构为调用 `switchEditorMode('edit')`，确保按钮显隐与模式同步。操作注册表为数组配置（group/label/handler），新增操作只需追加条目，空分组不渲染。菜单交互参照 `themeDropdown` 模式（点击切 `.open` + 外部点击关闭 + 子菜单 hover 切换）。 |
-| **菜单锚定关键方案** | 编辑器下拉菜单必须锚定**按钮本身**，不能锚定整个操作栏容器 `.editor-header-actions`（该 flex 容器含目录/M-T/编辑/查看/全屏/关闭等多个按钮、宽约 248px，`justify-content: flex-end` 右对齐）。正确做法：按钮+菜单外包 `<div class="editor-actions-wrap">`（`position: relative; display: inline-flex`，宽度=按钮宽度），根菜单 `right: calc(100% + 4px)` 出现在按钮左侧、子菜单 `left: calc(100% + 4px)` 向右弹出，全部落在 560px 编辑器面板内。定位属性（`left/right/top/transform-origin`）加 `!important` 抵御 `.dropdown-menu` 基类（[topbar.css](frontend/src/css/components/topbar.css) 中 `left: 8px`/`transform-origin: top right`）。**教训**：此前多轮把菜单锚定在整个操作栏容器上并设 `left: 0`，导致根菜单主体全部位于按钮右侧、子菜单继续向右溢出面板被裁剪，表现为"菜单太靠右/子菜单弹不出来"。 |
-| **Wails 构建流程教训** | **前端改动后只 `npm run build` 不生效**——生产模式经 `go:embed all:frontend/dist`（[main.go](main.go)）在 **`wails build` 编译期**嵌入 dist，必须重新 `wails build`（`rnx --run run` 或 `rnx --run build`）才能生效，直接运行旧 exe 加载的仍是旧界面。排查手段：对比 `build/bin/jot.exe` 与 `frontend/dist` 下资源的修改时间，exe 必须晚于 dist 才包含最新前端。`Rnx.toml` 的 `frontend` 任务有 `if [ ! -d "dist" ]` 守卫（dist 存在时不自动重建）。另已为 [main.go](main.go) 的 `assetserver.Options` 添加 `Middleware`，给 `/` 与 `/index.html` 设置 `Cache-Control: no-cache, no-store, must-revalidate`，根治 WebView2 缓存旧入口页引用旧哈希资源。`frontend/vite.config.js` 固定 dev 端口 5174。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（操作按钮 + `.editor-actions-wrap` 包装器 + `#editorActionsMenu`）、[frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（操作注册表 + 菜单渲染/交互/执行 + executeAction 调用 switchEditorMode）、[frontend/src/main.js](frontend/src/main.js)（import 模块、`els` 注册、`openEditor()` 只读隐藏、`switchEditorMode()` 预览隐藏、`window.cmEditor` 全局暴露且 5 处 CM6 重建点同步置空）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（`.editor-actions-wrap` + 菜单/子菜单定位 + `[data-mode="preview"]` 按钮隐藏兜底，`min-width: 130px`）、[main.go](main.go)（AssetServer Middleware no-cache） |
-
----
-
-## 记忆点 2：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
+## 记忆点 1：编辑器操作菜单扩展——文本转换 + 文本清理 + 编码解码 + 渲染逻辑修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：MD 语法插入操作 + 编辑器操作菜单模块化拆分
+## 记忆点 2：MD 语法插入操作 + 编辑器操作菜单模块化拆分
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 3：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 4：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 5：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +679,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 6：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -702,7 +691,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 7：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -717,7 +706,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 8：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -729,7 +718,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 9：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -738,6 +727,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **关闭策略** | `closeVectorIndexModal(force)` 带 force 参数，默认 false 拦截遮罩关闭。`onVectorIndexCloseRequested` 量化中弹确认框 → 确认后 `CancelVectorIndex` 后端停止 + 关闭弹窗。后端 `CancelVectorIndex` 防重入锁校验，`context.Canceled` 不发 `vector:index-error` 事件（仅日志）。 |
 | **错误分类** | [vector_service.go](internal/services/vector_service.go#L84-L96) embedding 失败时 `aicli.ClassifyError(err)` 映射：401/403→"API 密钥无效或权限不足"、429→"请求过于频繁"/"API 额度已用尽"、404→"模型不存在或已弃用"、5xx→"AI 服务暂时不可用"、超时→"请求超时"、网络错误→"网络连接失败"、无法分类→回退原始错误。前端 3 秒去重防刷屏。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（标题图标 SVG + 分段指示条元素）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（vector-index 区块完整重写 ~640 行 CSS）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（指示条定位/视图切换动画/进度逻辑/关闭策略/前置校验/搜索高亮/错误通知）、[app.go](app.go)（ValidateVectorIndexConfig / CancelVectorIndex / GetVectorIndexStatus struct 修复）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 参数名 aicli→embedClient 修复 + ClassifyError 错误映射）、[frontend/src/main.js](frontend/src/main.js)（全局 ESC 优先托付量化弹窗） |
+
+---
+
+## 记忆点 10：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 五组改动优化向量检索链路：① **分块元数据前缀注入**——[chunk.go](internal/services/chunk.go) 新增 `ChunkMeta` 结构体（Title/Tags/CreatedAt）+ `formatMetaPrefix` 函数，`ChunkContent` 签名增加 `meta` 参数，每块正文前注入"笔记标题：{title}\n分类标签：{tags}\n创建时间：{date}\n笔记核心内容：\n"前缀，提升 embedding 语义密度和关键词命中率；分块大小 500→600 rune 补偿前缀占用；② **段落聚合**——`ChunkContent` 空行处理从"触发 flush 切块"改为"保留作段落分隔累积"，短段落自动合并到接近 maxRunes 才切，消除碎块，元数据前缀占比从 20%-60% 降到 ~10%；③ **混合检索排序修复**——[vector_service.go](internal/services/vector_service.go) `sortHybridHits` 同优先级内仅关键词块按 `kwScore`（命中 token 数）降序，解决关键词命中块排序无序；合并后截断回 limit 防止两路无交集时结果膨胀到 2×limit；④ **召回注入剥离元数据前缀**——新增 `stripMetaPrefix` 函数，组装 FormattedText/RecallCard 时从 chunk_text 剥离"笔记核心内容：\n"之前的前缀，只注入正文（标题链+内容），数据库 chunk_text 不变（检索仍用含前缀原文），省 ~40 rune/块 token；⑤ **去掉单卡截断**——删除 `maxCardRunes=1200` 常量和截断逻辑，召回块完整注入 LLM，总量由 `ai_card_recall_limit`（卡片篇数，默认5）单一控制 |
+| **元数据前缀设计** | 前缀模板：`笔记标题：{title}\n分类标签：{tag1, tag2}\n创建时间：{2006-01-02}\n笔记核心内容：\n`。前缀在三个阶段价值不同：量化 embedding（必需，让向量携带标题/标签语义）、关键词 LIKE 检索（必需，标题/标签可被命中）、注入对话（冗余，剥离）。`stripMetaPrefix` 找 `笔记核心内容：\n` 标记取其后内容，旧数据（无前缀）兜底返回原文 |
+| **段落聚合要点** | 旧逻辑空行触发 flush 导致每个 Markdown 段落切成独立块（碎块多、前缀占比高）。新逻辑：空行作为段落分隔保留在块内，累积到接近 maxRunes 才 flush。标题行、代码块仍触发切块。效果：块从"每段一块"变为"多段聚合一块"，块大小接近 600 rune 上限 |
+| **混合检索排序** | `sortHybridHits` 优先级：双命中(3) > 仅向量(1) > 仅关键词(2)。同优先级内：仅关键词块按 `kwScore` 降序（命中 token 数越多越靠前），其余保持原始顺序。使用插入排序（数据量小）。合并后 `if len(merged) > limit { merged = merged[:limit] }` 截断防膨胀 |
+| **截断去除决策** | `maxCardRunes=1200` 是早期"卡片预览"思维下定的硬编码常量（无 spec 依据），段落聚合+前缀后单篇命中 11 块拼接 4091 rune，截断丢弃 71%。去掉后总量由 `ai_card_recall_limit` 控制，爆窗口时 LLM 报错用户可感知并调小卡片数，比静默截断丢信息更透明 |
+| **涉及文件** | [internal/services/chunk.go](internal/services/chunk.go)（ChunkMeta + formatMetaPrefix + stripMetaPrefix + ChunkContent 签名加 meta + 段落聚合）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 构造 ChunkMeta + maxRunes 600 + sortHybridHits kwScore 排序 + 合并截断 + stripMetaPrefix 注入 + 删除 maxCardRunes）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新调用 + 新增 TestStripMetaPrefix/TestChunkMetaPrefix* 用例） |
 
 ---
 
