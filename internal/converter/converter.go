@@ -30,7 +30,6 @@ var officeExtensions = map[string]bool{
 	".pptx": true,
 	".pdf":  true,
 	".epub": true,
-	".zip":  true,
 }
 
 // markitdown 实例（复用）

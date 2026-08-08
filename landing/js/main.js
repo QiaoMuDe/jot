@@ -31,42 +31,6 @@ revealElements.forEach(function(el) {
   revealObserver.observe(el);
 });
 
-/* ========== Counter Animation ========== */
-const counters = document.querySelectorAll('.stat-counter');
-
-const counterObserver = new IntersectionObserver(function(entries) {
-  entries.forEach(function(entry) {
-    if (entry.isIntersecting) {
-      const counter = entry.target;
-      const target = parseInt(counter.getAttribute('data-target'), 10);
-      const duration = 1800;
-      const start = performance.now();
-
-      function updateCounter(currentTime) {
-        const elapsed = currentTime - start;
-        const progress = Math.min(elapsed / duration, 1);
-        // easeOutExpo
-        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-        const current = Math.floor(eased * target);
-        counter.textContent = current;
-
-        if (progress < 1) {
-          requestAnimationFrame(updateCounter);
-        } else {
-          counter.textContent = target;
-        }
-      }
-
-      requestAnimationFrame(updateCounter);
-      counterObserver.unobserve(counter);
-    }
-  });
-}, { threshold: 0.5 });
-
-counters.forEach(function(counter) {
-  counterObserver.observe(counter);
-});
-
 /* ========== Smooth Anchor Scroll (fallback for older browsers) ========== */
 document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
   anchor.addEventListener('click', function(e) {
