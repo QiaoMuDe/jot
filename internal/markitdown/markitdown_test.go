@@ -237,6 +237,24 @@ func TestNormalization(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdownTablePipeEscaping(t *testing.T) {
+	records := [][]string{
+		{"name", "formula"},
+		{"a|b", "x|y|z"},
+	}
+	result := renderMarkdownTable(records)
+	// 管道符应被转义为 \|
+	if strings.Contains(result, "a|b") && !strings.Contains(result, "a\\|b") {
+		t.Errorf("pipe in cell not escaped:\n%s", result)
+	}
+	if !strings.Contains(result, "a\\|b") {
+		t.Errorf("expected escaped pipe a\\|b not found:\n%s", result)
+	}
+	if !strings.Contains(result, "x\\|y\\|z") {
+		t.Errorf("expected escaped pipe x\\|y\\|z not found:\n%s", result)
+	}
+}
+
 func TestConverterAccepts(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -55,6 +55,14 @@ func ConvertToMarkdown(path string) (string, error) {
 	ch := make(chan result, 1)
 
 	go func() {
+		// 第三方解析库对畸形文件可能 panic，若不拦截会直接拖垮整个进程。
+		// 这里把 panic 转成错误返回，保证导入失败只是提示错误而不是闪退。
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- result{err: fmt.Errorf("文件内容解析失败，该文件可能已损坏或不是有效的办公文档（%v）", r)}
+			}
+		}()
+
 		f, err := os.Open(path)
 		if err != nil {
 			ch <- result{err: fmt.Errorf("打开文件失败: %w", err)}

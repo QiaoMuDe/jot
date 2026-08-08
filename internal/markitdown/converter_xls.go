@@ -28,6 +28,26 @@ func NewXlsConverter() *XlsConverter {
 	return &XlsConverter{}
 }
 
+// safeRowCells 安全地提取一行的所有单元格文本。
+// extrame/xls 库在行缺失、SST 索引越界、MULRK 空切片等场景会 panic，
+// 这里用 recover 统一兜底，把异常行当作空行跳过。
+func safeRowCells(sheet *xls.WorkSheet, rowIdx int) (cells []string) {
+	defer func() {
+		if recover() != nil {
+			cells = nil
+		}
+	}()
+	row := sheet.Row(rowIdx)
+	if row == nil {
+		return nil
+	}
+	lastCol := row.LastCol()
+	for colIdx := 0; colIdx < lastCol; colIdx++ {
+		cells = append(cells, row.Col(colIdx))
+	}
+	return cells
+}
+
 func (c *XlsConverter) Accepts(info StreamInfo) bool {
 	if info.Extension == ".xls" {
 		return true
@@ -73,15 +93,9 @@ func (c *XlsConverter) Convert(reader io.ReadSeeker, info StreamInfo) (*Document
 		var rows [][]string
 		maxRow := int(sheet.MaxRow)
 		for rowIdx := 0; rowIdx <= maxRow; rowIdx++ {
-			row := sheet.Row(rowIdx)
-			if row == nil {
+			cells := safeRowCells(sheet, rowIdx)
+			if cells == nil {
 				continue
-			}
-
-			var cells []string
-			lastCol := row.LastCol()
-			for colIdx := 0; colIdx < lastCol; colIdx++ {
-				cells = append(cells, row.Col(colIdx))
 			}
 			rows = append(rows, cells)
 		}

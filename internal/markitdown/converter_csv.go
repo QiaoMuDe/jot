@@ -75,6 +75,11 @@ func (c *CsvConverter) Convert(reader io.ReadSeeker, info StreamInfo) (*Document
 	}, nil
 }
 
+// escapeTableCell 转义 Markdown 表格单元格中的管道符。
+func escapeTableCell(s string) string {
+	return strings.ReplaceAll(s, "|", "\\|")
+}
+
 // renderMarkdownTable renders a 2D string slice as a markdown table.
 func renderMarkdownTable(records [][]string) string {
 	if len(records) == 0 {
@@ -90,7 +95,7 @@ func renderMarkdownTable(records [][]string) string {
 	b.WriteString("| ")
 	for i := 0; i < numCols; i++ {
 		if i < len(records[0]) {
-			b.WriteString(records[0][i])
+			b.WriteString(escapeTableCell(records[0][i]))
 		}
 		b.WriteString(" | ")
 	}
@@ -109,7 +114,7 @@ func renderMarkdownTable(records [][]string) string {
 		b.WriteString("| ")
 		for i := 0; i < numCols; i++ {
 			if i < len(row) {
-				b.WriteString(row[i])
+				b.WriteString(escapeTableCell(row[i]))
 			}
 			b.WriteString(" | ")
 		}
