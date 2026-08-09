@@ -521,6 +521,8 @@ let vectorIndexNotes = [];           // 笔记列表缓存（{ id, title }）
 let vectorIndexBound = false;        // 弹窗内部事件是否已绑定（懒绑定，防止重复注册）
 let vectorIndexRunning = false;      // 量化是否进行中（进行中禁止关闭弹窗）
 let vectorIndexChunkResetTimer = null; // 块级进度延迟清零定时器（让上一篇 100% 完整显示）
+let vectorIndexPickerTimer = null; // 选择区切换动画定时器（防止动画中断残留状态）
+let vectorIndexStatus = null; // 已量化索引统计缓存（noteCount/chunkCount/sizeBytes），供「全部笔记」信息卡片使用
 let vectorIndexLastErrorMsg = ''; // 单篇失败即时提示去重：记录上一条错误信息
 let vectorIndexLastErrorAt = 0;   // 单篇失败即时提示去重：记录上一条错误时间
 
@@ -628,6 +630,12 @@ export async function openVectorIndexModal() {
     const ntPicker = document.getElementById('vectorIndexNotePicker');
     if (nbPicker) nbPicker.style.display = 'none';
     if (ntPicker) ntPicker.style.display = 'none';
+    // 复位「全部笔记」信息卡片（初始范围即全部笔记，加载完成后显示）
+    const allInfo = document.getElementById('vectorIndexAllInfo');
+    if (allInfo) {
+        allInfo.style.display = 'none';
+        allInfo.classList.remove('picker-enter', 'picker-leave');
+    }
     const summaryEl = document.getElementById('vectorIndexSummary');
     const errorEl = document.getElementById('vectorIndexError');
     if (summaryEl) summaryEl.style.display = 'none';
@@ -650,11 +658,16 @@ export async function openVectorIndexModal() {
     // 弹窗布局稳定后定位分段指示条
     repositionVectorIndexScopeIndicator();
 
-    // 并行加载笔记本与笔记列表
+    // 并行加载笔记本、笔记列表与已量化统计
     await Promise.all([
         loadVectorIndexNotebooks(),
         loadVectorIndexNotes(),
+        loadVectorIndexStatus(),
     ]);
+    // 初始范围为「全部笔记」：渲染并显示信息卡片
+    renderVectorIndexAllInfo();
+    const allInfoEl = document.getElementById('vectorIndexAllInfo');
+    if (allInfoEl) allInfoEl.style.display = '';
 }
 
 /**
@@ -673,6 +686,11 @@ export function closeVectorIndexModal(force = false) {
     if (vectorIndexChunkResetTimer) {
         clearTimeout(vectorIndexChunkResetTimer);
         vectorIndexChunkResetTimer = null;
+    }
+    // 取消选择区切换动画定时器，避免残留回调
+    if (vectorIndexPickerTimer) {
+        clearTimeout(vectorIndexPickerTimer);
+        vectorIndexPickerTimer = null;
     }
     // 关闭时清理事件监听，防止泄漏
     cleanupVectorIndexEvents();
@@ -718,6 +736,8 @@ function setVectorIndexView(view) {
     const selectView = document.getElementById('vectorIndexSelectView');
     const progressView = document.getElementById('vectorIndexProgressView');
     if (!selectView || !progressView) return;
+    // 取消未完成的选择区切换动画，避免与视图切换冲突残留 display 状态
+    if (vectorIndexPickerTimer) { clearTimeout(vectorIndexPickerTimer); vectorIndexPickerTimer = null; }
     const showEl = view === 'select' ? selectView : progressView;
     const hideEl = view === 'select' ? progressView : selectView;
     // 快速路径：目标视图已显示则不做动画（打开弹窗初始状态 / 重复调用）
@@ -738,6 +758,40 @@ function setVectorIndexView(view) {
 }
 
 /**
+ * 选择区进入/退场动画：先让旧选择区退场（150ms），再展示新选择区并入场（200ms）
+ * @param {HTMLElement|null} showEl - 要展示的选择区；null 表示无（切到「全部笔记」）
+ * @param {HTMLElement|null} hideEl - 当前可见的选择区；null 表示当前无可见选择区
+ */
+function animateVectorIndexPicker(showEl, hideEl) {
+    if (vectorIndexPickerTimer) { clearTimeout(vectorIndexPickerTimer); vectorIndexPickerTimer = null; }
+    // 快速路径：目标与当前一致（或均为空），无需动画
+    if (showEl === hideEl) return;
+    const done = () => {
+        if (hideEl) { hideEl.style.display = 'none'; hideEl.classList.remove('picker-leave'); }
+        if (showEl) {
+            showEl.style.display = '';
+            showEl.classList.remove('picker-leave');
+            showEl.classList.add('picker-enter');
+            vectorIndexPickerTimer = setTimeout(() => {
+                showEl.classList.remove('picker-enter');
+                vectorIndexPickerTimer = null;
+            }, 220);
+        }
+    };
+    if (!hideEl || hideEl.style.display === 'none') {
+        // 旧选择区不可见：直接展示新的并入场
+        done();
+        return;
+    }
+    // 旧选择区可见：先退场再展示新的
+    hideEl.classList.add('picker-leave');
+    vectorIndexPickerTimer = setTimeout(() => {
+        vectorIndexPickerTimer = null;
+        done();
+    }, 150);
+}
+
+/**
  * 切换量化范围（全部笔记 / 指定笔记本 / 指定笔记）
  * @param {string} scope - 'all' / 'notebooks' / 'notes'
  */
@@ -749,11 +803,19 @@ function switchVectorIndexScope(scope) {
     });
     // 移动滑动指示条到新选中的按钮
     repositionVectorIndexScopeIndicator();
-    // 切换对应选择区显示
+    // 切换对应选择区显示（带进入/退场动画）
     const nbPicker = document.getElementById('vectorIndexNotebookPicker');
     const ntPicker = document.getElementById('vectorIndexNotePicker');
-    if (nbPicker) nbPicker.style.display = scope === 'notebooks' ? '' : 'none';
-    if (ntPicker) ntPicker.style.display = scope === 'notes' ? '' : 'none';
+    const allInfo = document.getElementById('vectorIndexAllInfo');
+    if (!nbPicker || !ntPicker) return;
+    const target = scope === 'notebooks' ? nbPicker : scope === 'notes' ? ntPicker : (scope === 'all' ? allInfo : null);
+    // 三个区域互斥可见，最多一个处于显示态
+    const visible = [allInfo, ntPicker, nbPicker].find(el => el && el.style.display !== 'none') || null;
+    animateVectorIndexPicker(target, visible);
+    // 切到「全部笔记」时刷新已量化统计并渲染信息卡片
+    if (scope === 'all') {
+        loadVectorIndexStatus().then(renderVectorIndexAllInfo);
+    }
     // 切换范围时清空已选
     vectorIndexSelected = new Set();
     updateVectorIndexCount();
@@ -863,6 +925,59 @@ async function loadVectorIndexNotes() {
         vectorIndexNotes = [];
     }
     renderVectorIndexNoteList();
+}
+
+/**
+ * 获取已量化索引统计（GetVectorIndexStatus），供「全部笔记」信息卡片使用
+ */
+async function loadVectorIndexStatus() {
+    vectorIndexStatus = null;
+    try {
+        if (window.go?.main?.App?.GetVectorIndexStatus) {
+            const v = await window.go.main.App.GetVectorIndexStatus();
+            if (v) {
+                vectorIndexStatus = {
+                    noteCount: v.noteCount || 0,
+                    chunkCount: v.chunkCount || 0,
+                    sizeBytes: v.sizeBytes || 0,
+                };
+            }
+        }
+    } catch (_) { /* 忽略统计失败，卡片按 0 显示 */ }
+}
+
+/**
+ * 渲染「全部笔记」信息卡片（待量化 / 已量化 / 涉及笔记本 + 说明文案）
+ */
+function renderVectorIndexAllInfo() {
+    const el = document.getElementById('vectorIndexAllInfo');
+    if (!el) return;
+    const total = vectorIndexNotes.length;
+    const indexed = vectorIndexStatus?.noteCount || 0;
+    const pending = Math.max(0, total - indexed);
+    const notebooks = vectorIndexNotebooks.length;
+    const chunks = vectorIndexStatus?.chunkCount || 0;
+    const sizeMB = ((vectorIndexStatus?.sizeBytes || 0) / 1048576).toFixed(2);
+    if (total === 0) {
+        el.innerHTML = '<p class="vector-index-all-note">当前没有可量化的笔记</p>';
+        return;
+    }
+    el.innerHTML = `
+        <div class="vector-index-all-cards">
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num">${pending}</div>
+                <div class="vector-index-all-card-label">待量化</div>
+            </div>
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num">${indexed}</div>
+                <div class="vector-index-all-card-label">已量化 ${chunks} 片段</div>
+            </div>
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num">${notebooks}</div>
+                <div class="vector-index-all-card-label">涉及笔记本</div>
+            </div>
+        </div>
+        <p class="vector-index-all-note">将量化全部 ${total} 篇笔记，无需选择。已量化占用 ${sizeMB} MB。</p>`;
 }
 
 /**

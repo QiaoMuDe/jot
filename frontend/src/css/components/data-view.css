@@ -624,6 +624,13 @@
   overflow: hidden;
 }
 
+/* 选择视图固定高度：三种范围（全部笔记/指定笔记本/指定笔记）切换时面板高度恒定，避免弹窗整体上下跳动（列表内部滚动）
+   flex: none 覆盖 .vector-index-view 的 flex:1（flex-basis:0% 会忽略 height），让 height 真正生效 */
+#vectorIndexSelectView {
+  flex: none;
+  height: min(480px, 60vh);
+}
+
 /* 视图切换动画 */
 .vector-index-view.view-leave {
   animation: vectorIndexViewLeave 0.17s ease-in forwards;
@@ -702,6 +709,72 @@
   gap: 10px;
   min-height: 0;
   flex: 1;
+}
+
+/* 选择区切换动画（与视图切换节奏一致：退场 150ms / 入场 200ms spring） */
+.vector-index-picker.picker-leave,
+.vector-index-all-info.picker-leave {
+  animation: vectorIndexPickerLeave 0.15s ease-in forwards;
+}
+
+.vector-index-picker.picker-enter,
+.vector-index-all-info.picker-enter {
+  animation: vectorIndexPickerEnter 0.2s var(--anim-easing-spring) forwards;
+}
+
+@keyframes vectorIndexPickerLeave {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes vectorIndexPickerEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 全部笔记信息卡片（量化概览，替代选择区填充「全部笔记」范围的固定区域） */
+.vector-index-all-info {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+}
+
+.vector-index-all-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.vector-index-all-card {
+  background: var(--bg-secondary, var(--hover-bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 8px;
+  text-align: center;
+}
+
+.vector-index-all-card-num {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.vector-index-all-card-label {
+  margin-top: 5px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.vector-index-all-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .vector-index-picker-toolbar {
@@ -951,6 +1024,8 @@
   gap: 10px;
   flex-shrink: 0;
   padding-top: 2px;
+  /* 「全部笔记」无选择区时贴底，留白集中在分段控件与按钮之间 */
+  margin-top: auto;
 }
 
 /* 「全部笔记」范围隐藏计数后按钮居中 */
@@ -1153,6 +1228,10 @@
   .vector-index-overlay,
   .vector-index-view.view-leave,
   .vector-index-view.view-enter,
+  .vector-index-picker.picker-leave,
+  .vector-index-picker.picker-enter,
+  .vector-index-all-info.picker-leave,
+  .vector-index-all-info.picker-enter,
   .vector-index-scope-indicator,
   .vector-index-progress-fill,
   .vector-index-progress-fill.is-done,

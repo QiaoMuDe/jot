@@ -934,7 +934,7 @@
                     </button>
                     <button class="data-nav-item" data-panel="vector">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        AI 量化索引
+                        量化索引
                     </button>
                 </nav>
                 <div class="data-panels">
@@ -2030,6 +2030,9 @@ console.log(greet("Jot"));
                         </div>
                         <div class="vector-index-list" id="vectorIndexNoteList"></div>
                     </div>
+
+                    <!-- 全部笔记信息卡片（仅「全部笔记」范围显示，展示量化概览，由 JS 渲染） -->
+                    <div class="vector-index-all-info" id="vectorIndexAllInfo" style="display:none;"></div>
 
                     <div class="vector-index-footer">
                         <span class="vector-index-count" id="vectorIndexCount">已选 0 篇</span>

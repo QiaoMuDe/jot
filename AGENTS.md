@@ -613,19 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：MD 语法插入操作 + 编辑器操作菜单模块化拆分
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两项改动：① 新增「MD 语法」分组，22 个插入类操作项，通过 `type: 'insert'` 标记与既有变换类操作区分——有选中文本时包裹选中内容（如 `**文本**`、`[文本](url)`），无选中文本时在光标处插入语法样板（如 `**粗体文本**`、表格模板）；② 模块化拆分——操作项定义从 [editor-actions.js](frontend/src/js/editor-actions.js) 按分组拆分为 4 个独立模块（[format.js](frontend/src/js/editor-actions/format.js) 含 18 项格式化 + SQL 辅助函数 compactSQL/convertSQLCase、[text-transform.js](frontend/src/js/editor-actions/text-transform.js) 7 项、[text-clean.js](frontend/src/js/editor-actions/text-clean.js) 5 项、[encode-decode.js](frontend/src/js/editor-actions/encode-decode.js) 6 项），主文件仅保留聚合导入 + 菜单渲染/交互/执行引擎，`EDITOR_ACTIONS` 通过 `...展开` 合并各模块导出。 |
-| **插入模式执行逻辑** | [editor-actions.js](frontend/src/js/editor-actions.js) 的 `executeAction` 新增 `actionType` 参数（默认 `'transform'`）。`'insert'` 模式且无选中文本时，插入点从「替换全文」改为「光标处插入」——changes 的 `from/to` 使用 `cmEditor.state.selection.main.head` 定位，未选中时 from/to 相等即为纯插入；有选中文本时按 handler 包裹逻辑写回。点击事件通过 `action.type` 透传。 |
-| **MD 语法操作项** | [md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)：22 项覆盖 7 个子分组——行内样式（粗体/斜体/删除线/行内代码）、标题（H1~H6）、列表（无序/有序/任务）、块元素（代码块/引用/分割线/折叠详情）、链接/媒体（链接/图片）、表格、数学公式（行内/块级）。handler 接收选中文本参数，空值返回样板文本。 |
-| **模块化拆分要点** | [format.js](frontend/src/js/editor-actions/format.js) 内 formatters 引用路径从 `./formatters/...` 调整为 `../formatters/...`（因文件移入 editor-actions/ 子目录）。`compactSQL`/`convertSQLCase` 原样迁移至 format.js，无外部引用，迁移安全。主文件渲染/执行引擎零改动，菜单分组渲染顺序不变（格式化 → 文本转换 → 文本清理 → 编码解码 → MD 语法）。 |
-| **涉及文件** | [frontend/src/js/editor-actions.js](frontend/src/js/editor-actions.js)（聚合导入 + 执行引擎 actionType 支持）、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)（新增）、[frontend/src/js/editor-actions/format.js](frontend/src/js/editor-actions/format.js)（新增）、[frontend/src/js/editor-actions/text-transform.js](frontend/src/js/editor-actions/text-transform.js)（新增）、[frontend/src/js/editor-actions/text-clean.js](frontend/src/js/editor-actions/text-clean.js)（新增）、[frontend/src/js/editor-actions/encode-decode.js](frontend/src/js/editor-actions/encode-decode.js)（新增） |
-
----
-
-## 记忆点 2：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
+## 记忆点 1：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 2：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 3：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 4：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -674,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 5：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 6：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -701,7 +689,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 7：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -713,7 +701,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 8：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -726,7 +714,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 9：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -736,6 +724,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **滚动条贴窗方案** | `#viewData.view { padding: 24px 0 24px 32px }` + `#mainContent:has(#viewData.active) { scrollbar-gutter: auto; overflow-y: hidden }`（settings-panel.css 对 `#viewSettings` 同步处理）。教训：todo 页负 margin 方案（`margin-right: -32px; padding-right: 32px`）依赖无中间裁剪层；数据/设置页的 `.data-content`/`.settings-content` 有 `overflow: hidden`（分类导航布局需要），负 margin 把滚动容器右缘推到父裁剪边界外，滚动条区域连带被裁剪直接消失 |
 | **标签宽度统一** | `.ai-setting-label` 从 `width: 80px` 改为 `width: 112px`（容纳最长标签"大文件预览阈值"7 汉字 ≈ 104px 并留余量）+ `white-space: nowrap`。hint 说明行对齐输入框需 `padding-left: 124px`（112px 标签 + 12px gap）。**`.settings-input` 全局 `flex: 1` 会拉伸覆盖内联 `width`（flex-basis: 0 优先于 width）**，作为 `.ai-setting-item` 直接子项时需补内联 `flex: none` 才生效（如"大文件预览阈值"输入框 64px→120px 调整） |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（数据页分类导航结构 + 设置页标签/输入框调整）、[frontend/src/main.js](frontend/src/main.js)（initDataNav/switchDataTab + 滚动条自动显隐容器）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（导航/面板/按压反馈 + 滚动条贴窗）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（label 统一宽度 + 滚动条贴窗）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（.data-panels 并入自动显隐） |
+
+---
+
+## 记忆点 10：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动：① **范围切换过渡动画**——`switchVectorIndexScope` 从 `style.display` 瞬间切换改为两阶段动画：新增 `animateVectorIndexPicker(target, visible)`，旧区域先退场（`picker-leave` 150ms ease-in）再展示目标区域并入场（`picker-enter` 200ms spring）；三个区域（全部笔记信息卡片 `#vectorIndexAllInfo` / 笔记选择区 / 笔记本选择区）互斥可见，用 `[allInfo, ntPicker, nbPicker].find(el => el.style.display !== 'none')` 判定当前可见区域，目标即当前时跳过动画；模块级定时器 `vectorIndexPickerTimer` 统一管理，`setVectorIndexView`/`closeVectorIndexModal` 开头清理未完成定时器，防止动画中断残留 display 状态；② **面板高度固定**——`#vectorIndexSelectView` 补 `flex: none` + `height: min(480px, 60vh)`，三种范围下面板高度恒定不再跳动；`.vector-index-footer` 加 `margin-top: auto` 使「全部笔记」时按钮贴底、留白居中；③ **全部笔记信息卡片**——新增 `#vectorIndexAllInfo` 区域，`openVectorIndexModal` 并行 `loadVectorIndexStatus()`（缓存 `GetVectorIndexStatus` 的 noteCount/chunkCount/sizeBytes），`renderVectorIndexAllInfo()` 渲染三张统计卡（待量化 / 已量化+片段 / 涉及笔记本）+ 说明文案（含已量化占用 MB）+ 无笔记空态，切到「全部笔记」时自动刷新统计；另：数据管理导航项「AI 量化索引」改名「量化索引」，卡片标签去掉「已量化 · N 片段」中间点。 |
+| **flexbox 教训（重要）** | `.flex-1`（`flex: 1 1 0%`，flex-basis 0%）元素上设置 `height` 属性会被忽略——此前给 `#vectorIndexSelectView` 加 `height: min(480px,60vh)` 完全无效（用户反馈"没有变化"），必须补 `flex: none` 才生效。修复后选择视图高度由固定值决定，与列表项数量无关，列表区 `flex:1 + min-height:0 + overflow-y:auto` 内部滚动。 |
+| **动画实现** | [data-view.css](frontend/src/css/components/data-view.css)：`.picker-leave`（淡出 + 上移 6px，150ms ease-in）与 `.picker-enter`（淡入 + 下移 8px，200ms spring）动画类 + keyframes，选择器同时覆盖 `.vector-index-picker` 与 `.vector-index-all-info`，均纳入 `prefers-reduced-motion` 禁用列表；[data-management.js](frontend/src/js/data-management.js)：`animateVectorIndexPicker` 快速路径（无可见区域 / 目标即当前）直接展示不播动画，两阶段路径先加 `picker-leave` 再 150ms 定时器切换 display 与入场 class、220ms 后清理，`openVectorIndexModal` 初始范围「全部笔记」直接渲染显示卡片不播动画（弹窗自身有 panelIn 入场）。 |
+| **信息卡片数据** | 全部来自弹窗已加载数据 + 一次状态请求：`vectorIndexNotebooks.length`（笔记本数）、`vectorIndexNotes.length`（总笔记数，`loadVectorIndexNotes` 全量加载）、`vectorIndexStatus`（`GetVectorIndexStatus` → noteCount/chunkCount/sizeBytes）；待量化 = `max(0, 总笔记 − 已量化)`；`total === 0` 时显示「当前没有可量化的笔记」空态。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（`#vectorIndexAllInfo` 区域 + 导航名「量化索引」）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（picker 动画类/keyframes/reduced-motion + 视图高度固定 + 信息卡片样式 + footer 贴底）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`animateVectorIndexPicker`/`loadVectorIndexStatus`/`renderVectorIndexAllInfo` + `switchVectorIndexScope`/`openVectorIndexModal`/`setVectorIndexView`/`closeVectorIndexModal` 改造 + `vectorIndexPickerTimer`/`vectorIndexStatus` 状态） |
 
 ---
 
