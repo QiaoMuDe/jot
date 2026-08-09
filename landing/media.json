@@ -2,28 +2,28 @@
   "screenshots": [
     {
       "id": "notebook-grid",
-      "src": "images/1.png",
+      "src": "images/1.jpg",
       "alt": "卡片式笔记网格",
       "caption": "笔记本 → 笔记卡片 → 编辑器的三步交互范式",
       "feature": "笔记网格"
     },
     {
       "id": "ai-assistant",
-      "src": "images/2.png",
+      "src": "images/2.jpg",
       "alt": "AI 智能助手",
       "caption": "流式输出 + 深度思考 + 12 项技能一键切换",
       "feature": "AI 助手"
     },
     {
       "id": "editor",
-      "src": "images/3.png",
+      "src": "images/3.jpg",
       "alt": "Markdown 编辑器",
       "caption": "基于 CodeMirror 6 的专业编辑，实时预览 + TOC 目录自动生成",
       "feature": "编辑器"
     },
     {
       "id": "note-vector",
-      "src": "images/4.png",
+      "src": "images/4.jpg",
       "alt": "笔记向量化",
       "caption": "数据管理中一键向量化，混合检索让 AI 更懂你的笔记",
       "feature": "笔记向量化"
@@ -33,21 +33,21 @@
     {
       "id": "video-intro",
       "src": "videos/jot-intro.mp4",
-      "poster": "images/poster.png",
+      "poster": "images/poster.jpg",
       "title": "产品功能演示",
       "caption": "完整工作流：新建笔记 → Markdown 编辑 → 打标签 → 搜索 → 回收站恢复"
     },
     {
       "id": "video-ai",
       "src": "videos/ai-demo.mp4",
-      "poster": "images/poster.png",
+      "poster": "images/poster.jpg",
       "title": "AI 助手演示",
       "caption": "深度思考（思维链折叠）+ 流式输出 + 联网搜索的实际效果"
     },
     {
       "id": "video-import",
       "src": "videos/jot-import.mp4",
-      "poster": "images/poster.png",
+      "poster": "images/poster.jpg",
       "title": "异构文件导入与向量化",
       "caption": "异构办公文件清洗转换 → Markdown 入库 → 一键向量化 → 混合检索就绪"
     }

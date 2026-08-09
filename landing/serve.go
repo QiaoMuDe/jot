@@ -20,9 +20,11 @@
 package main
 
 import (
+	"compress/gzip"
 	"embed"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -72,6 +74,42 @@ func cacheControl(next http.Handler) http.Handler {
 	})
 }
 
+// gzipResponseWriter 包装 gzip.Writer，让 http.FileServer 的输出经过 gzip 压缩。
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
+
+// gzipMiddleware 对文本类文件（HTML/CSS/JS/JSON 等）做 gzip 压缩，减少传输体积。
+// 图片/视频等已是压缩格式，再 gzip 无效甚至可能变大，因此不压缩。
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 客户端不支持 gzip 或 HEAD 请求，直接透传
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Method == http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// 只压缩文本类文件
+		ext := strings.ToLower(path.Ext(r.URL.Path))
+		switch ext {
+		case ".html", ".css", ".js", ".json", ".svg", ".txt", ".xml":
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Del("Content-Length") // gzip 后长度变化，删除避免不匹配
+			gz := gzip.NewWriter(w)
+			defer gz.Close()
+			next.ServeHTTP(&gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
+		default:
+			// 图片/视频等已压缩格式：不压缩
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
 // listen 监听指定地址端口；端口被占用时自动顺延为系统分配的可用端口。
 func listen(host string, port int) (net.Listener, int) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
@@ -110,6 +148,6 @@ func main() {
 		}
 	}
 
-	// 提供内嵌的静态文件服务（按文件类型设置缓存策略）
-	log.Fatal(http.Serve(listener, cacheControl(http.FileServer(http.FS(staticFiles)))))
+	// 提供内嵌的静态文件服务（缓存策略 + 文本 gzip 压缩）
+	log.Fatal(http.Serve(listener, cacheControl(gzipMiddleware(http.FileServer(http.FS(staticFiles))))))
 }
