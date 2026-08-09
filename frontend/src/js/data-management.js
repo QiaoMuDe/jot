@@ -573,6 +573,21 @@ function cleanupVectorIndexEvents() {
 }
 
 /**
+ * 异步测试量化服务连通性（弹窗打开后后台执行，不阻塞弹窗）
+ * 失败时 toast 提示，成功静默；接口异常时忽略，由开始量化时的后端校验兜底
+ */
+async function checkVectorIndexConnection() {
+    const app = window.go?.main?.App;
+    if (!app?.TestVectorIndexConnection) return;
+    try {
+        const res = await app.TestVectorIndexConnection();
+        if (res && !res.ok && res.message) {
+            window.nm?.show?.(res.message, 'error');
+        }
+    } catch (_) { /* 忽略异常，后端 startVectorIndex 兜底 */ }
+}
+
+/**
  * 打开 AI 量化索引弹窗（懒绑定内部事件 + 注册进度事件 + 加载列表）
  */
 export async function openVectorIndexModal() {
@@ -590,6 +605,9 @@ export async function openVectorIndexModal() {
             }
         } catch (_) { /* 忽略校验异常，放行 */ }
     }
+
+    // 配置校验通过后，异步测试量化服务连通性（不阻塞弹窗打开；失败时 toast 提示，成功静默）
+    checkVectorIndexConnection();
 
     // 懒绑定弹窗内部交互事件（只执行一次）
     bindVectorIndexModalEvents();

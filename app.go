@@ -1696,6 +1696,24 @@ func (a *App) TestAIConnection(provider, baseURL, apiKey string) (bool, error) {
 	return a.testAIConnection(provider, baseURL, apiKey, "TestAIConnection")
 }
 
+// TestVectorIndexConnection 测试量化服务连通性（量化弹窗打开时异步调用，不阻塞弹窗）
+// 通过轻量 GET 请求检测服务可用性：openai 走 /models，ollama 走 /api/tags（均 5s 超时）
+func (a *App) TestVectorIndexConnection() CardRecallCheckResult {
+	provider, baseURL, apiKey, _, _ := a.GetEmbedConfig()
+	if provider == "" || baseURL == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+	}
+	if provider == "openai" && apiKey == "" {
+		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+	}
+	ok, err := a.testAIConnection(provider, baseURL, apiKey, "TestVectorIndexConnection")
+	if err != nil || !ok {
+		// 原始错误（网络/HTTP 细节）由 testAIConnection 记入日志，不向用户透出以免困惑
+		return CardRecallCheckResult{OK: false, Message: "量化服务连接失败，请检查服务是否已启动"}
+	}
+	return CardRecallCheckResult{OK: true, Message: ""}
+}
+
 // TestTavilyConnection 测试 Tavily API Key 是否有效
 func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
 	a.LogSvc.Logger.Debugw("TestTavilyConnection", fastlog.String("key", "***"))

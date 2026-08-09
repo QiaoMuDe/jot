@@ -244,6 +244,8 @@ export function TestAIConnection(arg1:string,arg2:string,arg3:string):Promise<bo
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
+export function TestVectorIndexConnection():Promise<main.CardRecallCheckResult>;
+
 export function TestZhihuConnection(arg1:string):Promise<boolean>;
 
 export function TogglePinAISession(arg1:number):Promise<void>;

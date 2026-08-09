@@ -482,6 +482,10 @@ export function TestTavilyConnection(arg1) {
   return window['go']['main']['App']['TestTavilyConnection'](arg1);
 }
 
+export function TestVectorIndexConnection() {
+  return window['go']['main']['App']['TestVectorIndexConnection']();
+}
+
 export function TestZhihuConnection(arg1) {
   return window['go']['main']['App']['TestZhihuConnection'](arg1);
 }
