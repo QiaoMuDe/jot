@@ -33,21 +33,21 @@
     {
       "id": "video-intro",
       "src": "videos/jot-intro.mp4",
-      "poster": "",
+      "poster": "images/poster.png",
       "title": "产品功能演示",
       "caption": "完整工作流：新建笔记 → Markdown 编辑 → 打标签 → 搜索 → 回收站恢复"
     },
     {
       "id": "video-ai",
       "src": "videos/ai-demo.mp4",
-      "poster": "",
+      "poster": "images/poster.png",
       "title": "AI 助手演示",
       "caption": "深度思考（思维链折叠）+ 流式输出 + 联网搜索的实际效果"
     },
     {
       "id": "video-import",
       "src": "videos/jot-import.mp4",
-      "poster": "",
+      "poster": "images/poster.png",
       "title": "异构文件导入与向量化",
       "caption": "异构办公文件清洗转换 → Markdown 入库 → 一键向量化 → 混合检索就绪"
     }

@@ -27,7 +27,9 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"path"
 	"runtime"
+	"strings"
 )
 
 const defaultPort = 8123
@@ -47,10 +49,25 @@ func openBrowser(url string) error {
 	}
 }
 
-// noCache 包装静态文件处理器，禁用浏览器缓存，保证改动后刷新即可看到最新内容。
-func noCache(next http.Handler) http.Handler {
+// cacheControl 按文件类型设置缓存策略：
+//   - 媒体/图片/字体：长缓存（24h），避免重复下载，再次打开时从缓存秒开
+//   - HTML/CSS/JS：no-cache（每次验证是否更新，304 快速响应）
+//
+// 视频已做 fast start 处理（moov atom 在文件开头），浏览器请求开头即可获取
+// 元数据并边下边播，配合长缓存再次打开时从缓存读取，无需重新下载。
+func cacheControl(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+		ext := strings.ToLower(path.Ext(r.URL.Path))
+		switch ext {
+		case ".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mp3", ".wav",
+			".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico",
+			".woff", ".woff2", ".ttf", ".eot":
+			// 媒体/图片/字体：长缓存 24h
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		default:
+			// HTML/CSS/JS：每次验证是否更新（304 响应无 body，极快）
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -93,6 +110,6 @@ func main() {
 		}
 	}
 
-	// 提供内嵌的静态文件服务（禁用浏览器缓存）
-	log.Fatal(http.Serve(listener, noCache(http.FileServer(http.FS(staticFiles)))))
+	// 提供内嵌的静态文件服务（按文件类型设置缓存策略）
+	log.Fatal(http.Serve(listener, cacheControl(http.FileServer(http.FS(staticFiles)))))
 }
