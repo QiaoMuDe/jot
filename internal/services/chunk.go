@@ -50,6 +50,92 @@ func stripMetaPrefix(text string) string {
 	return text
 }
 
+// normalizeChunkSource 归一化分块源文本，压缩非代码围栏行的连续空白：
+//   - 连续 2+ 个 ASCII 空格/制表符折叠为 1 个空格
+//   - 行尾空白去除
+//   - 代码围栏（``` / ~~~）内的行不做处理，保护代码缩进
+//
+// 背景：PPT/PDF 转换出的 markdown 表格常带大量填充空格（如 "| 小时数据 |·····| 2061 |"），
+// 既稀释嵌入向量质量，又挤占 maxRunes 预算；归一化后提升表格类块的检索命中率
+func normalizeChunkSource(content string) string {
+	lines := strings.Split(content, "\n")
+	inCode := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if inCode {
+			// 围栏内：检查是否闭合，内容原样保留
+			if isCodeFence(trimmed) {
+				inCode = false
+			}
+			continue
+		}
+		if isCodeFence(trimmed) {
+			inCode = true
+			continue
+		}
+		lines[i] = collapseSpaces(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// collapseSpaces 将连续 2+ 个空格/制表符折叠为 1 个空格，并去除行尾空白
+func collapseSpaces(line string) string {
+	var b strings.Builder
+	b.Grow(len(line))
+	prevSpace := false
+	for _, r := range line {
+		if r == ' ' || r == '\t' {
+			if prevSpace {
+				continue
+			}
+			prevSpace = true
+			b.WriteByte(' ')
+		} else {
+			prevSpace = false
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimRight(b.String(), " \t")
+}
+
+// isTableRowLine 判断是否为 markdown 管道表格行（行首以 | 开头）
+func isTableRowLine(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "|")
+}
+
+// isTableSeparatorLine 判断是否为 markdown 表格分隔线（仅含 | - : 空格/制表符且含 -）
+func isTableSeparatorLine(line string) bool {
+	hasDash := false
+	for _, r := range line {
+		switch r {
+		case '|', '-', ':', ' ', '\t':
+			if r == '-' {
+				hasDash = true
+			}
+		default:
+			return false
+		}
+	}
+	return hasDash
+}
+
+// hasTableDataRow 判断文本中是否含表格数据行（排除表头行本身与分隔线）
+// 用于决定是否需要给块补充表头上下文
+func hasTableDataRow(text, header string) bool {
+	headerTrim := strings.TrimSpace(header)
+	for _, ln := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(ln)
+		if !isTableRowLine(trimmed) || isTableSeparatorLine(trimmed) {
+			continue
+		}
+		if trimmed == headerTrim {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // ChunkContent 将笔记内容按 Markdown 结构切块，并为每个块补充所属标题链（结构感知切片）
 // 规则（对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack 语义）：
 //   - 标题级别 1-6 级（# ~ ######），标题行作为"节的开始标记"开启新块
@@ -64,11 +150,16 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 	if maxRunes <= 0 {
 		maxRunes = 500
 	}
+	// 归一化源文本：压缩非代码围栏行的连续空白（表格填充空格/行尾空白），提升嵌入质量
+	content = normalizeChunkSource(content)
 
 	var chunks []string
 	var cur []string   // 当前块原始行
 	var stack []string // 当前所属标题链栈（多级，如 ["# 大标题", "## 目录"]）
 	inCode := false    // 是否处于围栏代码块内
+	// tableHeader 当前 markdown 表格的表头行；表头与数据行常被切到不同块，
+	// 记录后在 flush 时给含数据行的块补上表头，让"列名语义"进入每个表格行块的嵌入
+	tableHeader := ""
 
 	// flush 将当前累积行合并为一块；纯标题块（空节）丢弃；超长硬切；块首补父级标题链
 	flush := func() {
@@ -83,6 +174,10 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 		}
 		// 补全所属标题链（父级链）
 		text = prependChain(text, stack)
+		// 表格行块补充表头上下文：块内含表格数据行但缺表头时，在块首补一行表头
+		if tableHeader != "" && !strings.Contains(text, tableHeader) && hasTableDataRow(text, tableHeader) {
+			text = tableHeader + "\n" + text
+		}
 		// 拼接元数据前缀；maxRunes 预算包含前缀长度（最终块总长 runeLen(prefix+text) 不超过 maxRunes）
 		prefix := formatMetaPrefix(meta)
 		if runeLen(prefix)+1+runeLen(text) > maxRunes {
@@ -93,7 +188,8 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 		chunks = append(chunks, prefix+"\n"+text)
 	}
 
-	for _, line := range strings.Split(content, "\n") {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case inCode:
@@ -122,6 +218,10 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 				flush()
 			}
 		default:
+			// 表格表头识别：本行是表格行且下一行是分隔线 → 记录为新表头（新表头覆盖旧表头）
+			if isTableRowLine(trimmed) && i+1 < len(lines) && isTableSeparatorLine(strings.TrimSpace(lines[i+1])) {
+				tableHeader = trimmed
+			}
 			cur = append(cur, line)
 			// 当前块已超限则立即落块，避免单块无限膨胀
 			if runeLen(strings.Join(cur, "\n")) > maxRunes {

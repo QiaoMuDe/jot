@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"unicode"
@@ -30,6 +31,14 @@ func NewVectorService(db *gorm.DB, logger *fastlog.Logger) *VectorService {
 // adjacentBlocks 向量召回时命中块前后各补充的相邻块数
 // 轻量父块上下文：命中小块后顺带返回其相邻块，近似"子块检索 + 父块上下文"效果
 const adjacentBlocks = 1
+
+// chunkCandidateMultiplier 向量检索 chunk 候选放大倍数：
+// vectorSearch 的 SQL LIMIT 取 limit×该倍数，先多捞候选块（第 6 名以后也有机会），
+// 再由 selectTopNotes 按笔记聚合截断回 limit 个笔记，保证相关度优先 + 笔记多样性
+const chunkCandidateMultiplier = 5
+
+// maxChunksPerNote 每个命中笔记最多保留的命中块数，防止单篇笔记命中块过多挤占其他笔记的卡片槽位
+const maxChunksPerNote = 4
 
 // ===== GSE 中文分词器（懒加载，EMBED 嵌入式词典） =====
 
@@ -62,6 +71,12 @@ func isStopWord(r rune) bool {
 
 // maxRecallKeywords 卡片召回最大关键词数，防止超长 query 导致 LIKE 查询性能问题
 const maxRecallKeywords = 20
+
+// kwHighFreqDivisor / kwHighFreqMin 高频词过滤阈值：
+// 命中块数超过 max(totalChunks/kwHighFreqDivisor, kwHighFreqMin) 的 token 视为无区分度高频词，检索时丢弃
+// 依据实测："数据"命中 ~93% 块、"2061"命中 ~1% 块；"数据"这类词进 OR LIKE 只会刷屏
+const kwHighFreqDivisor = 10
+const kwHighFreqMin = 100
 
 var (
 	gseSeg     gse.Segmenter
@@ -279,6 +294,10 @@ func (s *VectorService) DeleteAllVectors() error {
 
 // ===== 关键词检索 + 混合召回 =====
 
+// enableKeywordRecall 关键词检索开关
+// 临时禁用关键词召回用于对比测试时置为 false，恢复后改回 true 即可（仅影响 HybridRecall 内部，无需改其他代码）
+const enableKeywordRecall = true
+
 // recallHit 表示一个合并后的命中块，记录命中来源和评分信息
 type recallHit struct {
 	vec     models.NoteVector
@@ -286,9 +305,68 @@ type recallHit struct {
 	kwScore int // 关键词命中 token 数（仅关键词路有意义）
 }
 
+// filterHighFreqTokens 剔除命中数超过阈值的高频词（无区分度），返回保留的 token 列表
+// threshold = max(total/kwHighFreqDivisor, kwHighFreqMin)
+func filterHighFreqTokens(tokens []string, counts []int, total int) []string {
+	threshold := total / kwHighFreqDivisor
+	if threshold < kwHighFreqMin {
+		threshold = kwHighFreqMin
+	}
+	kept := make([]string, 0, len(tokens))
+	for i, t := range tokens {
+		if counts[i] > threshold {
+			continue
+		}
+		kept = append(kept, t)
+	}
+	return kept
+}
+
+// rankKwHits 按"命中 token 数"降序排序候选块（同分按块 id 升序，保证稳定），截断到 limit
+// 与 HybridRecall 中 kwScore 口径一致（都统计块文本包含的 token 数）
+func rankKwHits(hits []models.NoteVector, tokens []string, limit int) []models.NoteVector {
+	if limit <= 0 {
+		return nil
+	}
+	type scored struct {
+		hit   models.NoteVector
+		score int
+	}
+	list := make([]scored, 0, len(hits))
+	for _, h := range hits {
+		sc := 0
+		for _, t := range tokens {
+			if strings.Contains(h.ChunkText, t) {
+				sc++
+			}
+		}
+		list = append(list, scored{h, sc})
+	}
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].score != list[j].score {
+			return list[i].score > list[j].score
+		}
+		return list[i].hit.ID < list[j].hit.ID
+	})
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	out := make([]models.NoteVector, 0, len(list))
+	for _, s := range list {
+		out = append(out, s.hit)
+	}
+	return out
+}
+
 // KeywordRecall 关键词检索：GSE 分词后在 note_vectors.chunk_text 上执行 LIKE 匹配
 // 不依赖 embedding 模型，可跨模型检索；返回命中的 NoteVector 列表
 // notebookIDs 非空时仅检索指定笔记本下的笔记
+//
+// 检索流程（第一级修复）：
+//  1. 统计总块数与各 token 命中数（COUNT + LIKE）
+//  2. 高频词过滤：命中数超过 max(总块数/10, 100) 的 token 丢弃（如"数据"这类 ~93% 命中率的无区分度词）
+//  3. 候选放大：主查询 LIMIT 取 limit×chunkCandidateMultiplier，避免好块被直接截断
+//  4. 截断前排序：按"命中 token 数"降序 + 块 id 升序，截断回 limit
 func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit int, notebookIDs ...uint) ([]models.NoteVector, error) {
 	tokens := tokenize(query)
 	if len(tokens) == 0 {
@@ -300,7 +378,43 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 		tokens = tokens[:maxRecallKeywords]
 	}
 
-	// 构建 SQL：JOIN notes 过滤软删除 + notebookIDs，WHERE 用 OR 拼接各 token 的 LIKE
+	// 构建基础过滤子句：JOIN notes 过滤软删除笔记，notebookIDs 非空时限定笔记本
+	// 计数与主检索共用，保证口径一致
+	base := "FROM note_vectors JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL"
+	cntArgs := []interface{}{}
+	if len(notebookIDs) > 0 {
+		base += " AND notes.notebook_id IN ?"
+		cntArgs = append(cntArgs, notebookIDs)
+	}
+
+	// 总块数（用于相对阈值）
+	var total int
+	if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) "+base, cntArgs...).Scan(&total).Error; err != nil {
+		s.logger.Errorw("VectorService.KeywordRecall 统计总块数失败", fastlog.Error(err))
+		return nil, fmt.Errorf("统计笔记块总数失败: %w", err)
+	}
+
+	// 各 token 命中数（COUNT + LIKE）
+	counts := make([]int, len(tokens))
+	for i, t := range tokens {
+		args := append(append([]interface{}{}, cntArgs...), "%"+t+"%")
+		if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) "+base+" WHERE note_vectors.chunk_text LIKE ?", args...).Scan(&counts[i]).Error; err != nil {
+			s.logger.Errorw("VectorService.KeywordRecall 统计 token 命中数失败", fastlog.String("token", t), fastlog.Error(err))
+			return nil, fmt.Errorf("统计关键词命中数失败: %w", err)
+		}
+	}
+
+	// 高频词过滤：无区分度 token 丢弃；全部被过滤时关键词路不贡献，返回空
+	before := len(tokens)
+	tokens = filterHighFreqTokens(tokens, counts, total)
+	if len(tokens) == 0 {
+		s.logger.Debugw("VectorService.KeywordRecall 无有效关键词",
+			fastlog.String("query", query),
+			fastlog.Int("dropped", before))
+		return nil, nil
+	}
+
+	// 构建主检索 SQL：OR 拼接各 token 的 LIKE，LIMIT 放大避免好块被截断
 	// 不加 model 过滤——关键词检索跨所有模型
 	kwSQL := "SELECT note_vectors.id, note_vectors.note_id, note_vectors.chunk_index, note_vectors.chunk_text, note_vectors.model " +
 		"FROM note_vectors JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL"
@@ -318,7 +432,7 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 		args = append(args, "%"+t+"%")
 	}
 	kwSQL += " LIMIT ?"
-	args = append(args, limit)
+	args = append(args, limit*chunkCandidateMultiplier)
 
 	var hits []models.NoteVector
 	if err := s.db.WithContext(ctx).Raw(kwSQL, args...).Scan(&hits).Error; err != nil {
@@ -326,9 +440,13 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 		return nil, fmt.Errorf("关键词检索失败: %w", err)
 	}
 
+	// 截断前排序：按命中 token 数降序（同分按块 id 升序），截断回 limit
+	hits = rankKwHits(hits, tokens, limit)
+
 	s.logger.Debugw("VectorService.KeywordRecall 命中",
 		fastlog.String("query", query),
 		fastlog.String("tokens", strings.Join(tokens, " / ")),
+		fastlog.Int("dropped", before-len(tokens)),
 		fastlog.Int("hits", len(hits)))
 
 	return hits, nil
@@ -373,7 +491,8 @@ func (s *VectorService) vectorSearch(ctx context.Context, query string, limit in
 		return nil, fmt.Errorf("query 向量序列化失败: %w", err)
 	}
 
-	// sqlite-vec 函数式检索：SQL 内计算余弦距离（vec_distance_cosine），按距离升序取 TopN
+	// sqlite-vec 函数式检索：SQL 内计算余弦距离（vec_distance_cosine），按距离升序取候选 TopN
+	// LIMIT 取 limit×chunkCandidateMultiplier：先多捞候选块，再由 selectTopNotes 按笔记聚合截断回 limit 个笔记
 	// dist < 1.0 等价原逻辑 score > 0 过滤；无条件 JOIN notes 过滤软删除笔记（回收站笔记不参与召回），
 	// 指定笔记本时 ON 条件追加 notebook_id 过滤；JOIN 必须紧跟 FROM（位于 WHERE 之前），
 	// 列名加 note_vectors 前缀避免 JOIN notes 时 id 列歧义
@@ -387,7 +506,7 @@ func (s *VectorService) vectorSearch(ctx context.Context, query string, limit in
 	vecSQL += " WHERE note_vectors.model = ? " +
 		"AND vec_distance_cosine(note_vectors.embedding, vec_f32(?)) < 1.0" +
 		" ORDER BY vec_distance_cosine(note_vectors.embedding, vec_f32(?)) ASC LIMIT ?"
-	args = append(args, embedClient.Model, string(queryVecJSON), string(queryVecJSON), limit)
+	args = append(args, embedClient.Model, string(queryVecJSON), string(queryVecJSON), limit*chunkCandidateMultiplier)
 
 	var hits []models.NoteVector
 	if err := s.db.WithContext(ctx).Raw(vecSQL, args...).Scan(&hits).Error; err != nil {
@@ -418,12 +537,15 @@ func (s *VectorService) HybridRecall(ctx context.Context, query string, limit in
 		return nil, err
 	}
 
-	// 关键词检索路
-	kwHits, err := s.KeywordRecall(ctx, query, limit, notebookIDs...)
-	if err != nil {
-		s.logger.Errorw("VectorService.HybridRecall 关键词检索失败", fastlog.Error(err))
-		// 关键词检索失败不中断，继续使用向量结果
-		kwHits = nil
+	// 关键词检索路（enableKeywordRecall=false 时临时禁用，仅走向量检索）
+	var kwHits []models.NoteVector
+	if enableKeywordRecall {
+		kwHits, err = s.KeywordRecall(ctx, query, limit, notebookIDs...)
+		if err != nil {
+			s.logger.Errorw("VectorService.HybridRecall 关键词检索失败", fastlog.Error(err))
+			// 关键词检索失败不中断，继续使用向量结果
+			kwHits = nil
+		}
 	}
 
 	// 合并去重：按 (note_id, chunk_index) 作为唯一键
@@ -492,16 +614,13 @@ func (s *VectorService) HybridRecall(ctx context.Context, query string, limit in
 	// 同优先级内仅关键词块按 kwScore 降序
 	sortHybridHits(merged)
 
-	// 合并后截断回 limit，防止两路无交集时结果膨胀到 2×limit
-	if len(merged) > limit {
-		merged = merged[:limit]
-	}
-
-	// 提取最终 hits 列表（用于后续相邻块扩展和卡片组装）
-	hits := make([]models.NoteVector, 0, len(merged))
+	// 按笔记聚合选择：保留前 limit 个不同笔记的块，同一笔记最多 maxChunksPerNote 个
+	// 替代原按 chunk 截断（merged[:limit]），避免多个命中块来自同一笔记时卡片过少、多样性差
+	mergedVecs := make([]models.NoteVector, 0, len(merged))
 	for _, h := range merged {
-		hits = append(hits, h.vec)
+		mergedVecs = append(mergedVecs, h.vec)
 	}
+	hits := selectTopNotes(mergedVecs, limit, maxChunksPerNote)
 
 	// ===== 以下为相邻块扩展 + 卡片组装（复用原 VectorRecall 逻辑） =====
 
@@ -644,6 +763,36 @@ func sortHybridHits(hits []*recallHit) {
 			}
 		}
 	}
+}
+
+// selectTopNotes 按笔记聚合选择命中块：hits 已按相关度（距离升序/优先级）排序，
+// 保留前 limit 个不同笔记的块，同一笔记最多保留 maxPerNote 个块
+// 避免按 chunk 级截断导致的笔记多样性差（多个命中块来自同一笔记时卡片过少）
+// 返回的新切片保持传入顺序（即相关度顺序）
+func selectTopNotes(hits []models.NoteVector, limit, maxPerNote int) []models.NoteVector {
+	if limit <= 0 {
+		return nil
+	}
+	if maxPerNote <= 0 {
+		maxPerNote = 1
+	}
+	noteCnt := make(map[uint]int, limit)
+	out := make([]models.NoteVector, 0, len(hits))
+	for _, h := range hits {
+		cnt := noteCnt[h.NoteID]
+		if cnt == 0 {
+			// 新笔记：已集满 limit 个则跳过
+			if len(noteCnt) >= limit {
+				continue
+			}
+		} else if cnt >= maxPerNote {
+			// 已有笔记：达到块数上限则跳过该笔记后续命中
+			continue
+		}
+		noteCnt[h.NoteID] = cnt + 1
+		out = append(out, h)
+	}
+	return out
 }
 
 // VectorRecall 卡片召回（对外接口，签名不变）

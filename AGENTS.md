@@ -613,18 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：代码块背景移除 + 行内代码红色加粗字体 + Decoration.line 空 range 教训
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 解决 CM6 代码块选中层不可见问题：方向从"加背景再清除"转为"压根不加背景"。核心改动：① 移除所有 14 处 monospace 规则的 `background: var(--hover-bg)`，代码块（命中语言/未命中语言）均无底色，命中语言由嵌套解析（`markdown({ codeLanguages })`）产生语法高亮，未命中语言保持纯文本；② 删除 `markdownFallbackCodePlugin`（约 70 行 ViewPlugin 类），该插件用 `Decoration.line` 做行标记，导致 CM6 内部 `text.skip()` 跳过整行文本 → 代码块内容消失；③ 新增 `markdownInlineCodePlugin`（`Decoration.mark` 模式），给 InlineCode 节点添加 `.cm-inline-code` 类，配合 CSS 用 `color: var(--accent) !important; font-weight: 700 !important;` 替代背景色，避免影响选中高亮。 |
-| **根因分析** | `Decoration.line` 必须使用空 range（`builder.add(line.from, line.from, deco)`，与 `highlightActiveLine` 用法一致）。若 range 覆盖整行（`line.from` 到 `line.to`），CM6 渲染器在 `emit()` 中调用 `this.text.skip(to - from)` 将该段文本跳过，导致整行内容从视图中消失且不报错。 |
-| **方向决策** | 用户指出背景块影响选中高亮，提议改用字体颜色/粗细区分。行内代码与未命中语言代码块在语法树中命中同一个 `tags.monospace`，无法仅靠 HighlightStyle 区分两者，因此保留 `markdownInlineCodePlugin` 做标记、CSS 控制样式。 |
-| **涉及文件** | [frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（删除 `markdownFallbackCodePlugin` + `NodeProp`/`ViewPlugin`/`Decoration`/`RangeSetBuilder`/`syntaxTree` 等导入；新增 `markdownInlineCodePlugin` + 对应导入恢复；移除 14 处 monospace 的 `background`；`getHighlightExtension` .md 分支替换插件引用）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（删除 `.cm-fallback-code` 规则；新增 `span.cm-inline-code` 规则用 `color: var(--accent) + font-weight: 700` 替代背景色）；[project_memory.md](project_memory.md)（更新过时约定 + 新增 `Decoration.line` 空 range 教训） |
-
----
-
-## 记忆点 2：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
+## 记忆点 1：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 2：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 3：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 4：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 5：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -689,7 +678,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 6：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -701,7 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 7：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -714,7 +703,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 8：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -727,7 +716,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 9：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -736,6 +725,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **动画实现** | [data-view.css](frontend/src/css/components/data-view.css)：`.picker-leave`（淡出 + 上移 6px，150ms ease-in）与 `.picker-enter`（淡入 + 下移 8px，200ms spring）动画类 + keyframes，选择器同时覆盖 `.vector-index-picker` 与 `.vector-index-all-info`，均纳入 `prefers-reduced-motion` 禁用列表；[data-management.js](frontend/src/js/data-management.js)：`animateVectorIndexPicker` 快速路径（无可见区域 / 目标即当前）直接展示不播动画，两阶段路径先加 `picker-leave` 再 150ms 定时器切换 display 与入场 class、220ms 后清理，`openVectorIndexModal` 初始范围「全部笔记」直接渲染显示卡片不播动画（弹窗自身有 panelIn 入场）。 |
 | **信息卡片数据** | 全部来自弹窗已加载数据 + 一次状态请求：`vectorIndexNotebooks.length`（笔记本数）、`vectorIndexNotes.length`（总笔记数，`loadVectorIndexNotes` 全量加载）、`vectorIndexStatus`（`GetVectorIndexStatus` → noteCount/chunkCount/sizeBytes）；待量化 = `max(0, 总笔记 − 已量化)`；`total === 0` 时显示「当前没有可量化的笔记」空态。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（`#vectorIndexAllInfo` 区域 + 导航名「量化索引」）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（picker 动画类/keyframes/reduced-motion + 视图高度固定 + 信息卡片样式 + footer 贴底）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`animateVectorIndexPicker`/`loadVectorIndexStatus`/`renderVectorIndexAllInfo` + `switchVectorIndexScope`/`openVectorIndexModal`/`setVectorIndexView`/`closeVectorIndexModal` 改造 + `vectorIndexPickerTimer`/`vectorIndexStatus` 状态） |
+
+---
+
+## 记忆点 10：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动提升卡片召回质量：① **向量召回 chunk 级候选放大 + 笔记级聚合**——[vector_service.go](internal/services/vector_service.go) 新增 `chunkCandidateMultiplier=5`：`vectorSearch` 与 `KeywordRecall` 的 SQL LIMIT 均取 `limit×5` 先多捞候选块（"第 6 名以后的块"也有机会），再由 `selectTopNotes` 按笔记聚合（保留前 limit 个不同笔记的块、单篇最多 `maxChunksPerNote=4` 块）截断回 limit，避免"chunk 级直接截断导致多命中块来自同一笔记时卡片过少/笔记多样性差"，卡片总数仍由 `ai_card_recall_limit` 控制；② **Markdown 表格表头上下文携带**——[chunk.go](internal/services/chunk.go) `ChunkContent` 切块时记录当前 `tableHeader`（表格行 + 下一行分隔线识别，新表头覆盖旧表头），flush 时若块内含表格数据行但缺表头（`hasTableDataRow` 排除表头行本身与分隔线），自动在块首补一行 `tableHeader + "\n" + text`，解决"表头与数据行被切到不同块（且被分隔线块隔开）导致列名语义丢失、'XX是什么/代码是多少'类 query 命中不了 2061 类代码行块"的问题，语义对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack；③ **关键词召回第一级修复**——`KeywordRecall` 检索流程：GSE 分词（`tokenize` 停用词过滤仅对单字词）→ 统计总块数与各 token 命中数（COUNT + LIKE）→ `filterHighFreqTokens` 高频词过滤（命中数 > `max(总块数/10, 100)` 的 token 丢弃，如"数据"这类 ~93% 命中率的无区分度词，避免进 OR LIKE 刷屏）→ OR LIKE 检索（LIMIT 放大）→ `rankKwHits` 截断前排序（按命中 token 数降序 + 块 id 升序，与 HybridRecall kwScore 口径一致）截断回 limit；全部 token 被过滤时关键词路返回空不贡献。 |
+| **候选放大设计** | `chunkCandidateMultiplier=5` 覆盖向量路与关键词路：向量路 SQL `LIMIT limit×5` + `ORDER BY vec_distance_cosine ASC`；关键词路 `LIMIT limit×5` 后 `rankKwHits` 截断。原因：SQL 层直接 LIMIT limit 时"第 6 名以后的块直接出局"，且多命中块同笔记时聚合后卡片不足；放大后再按笔记聚合可保证"相关度优先 + 笔记多样性"。`maxChunksPerNote=4` 防止单篇笔记命中块过多挤占其他笔记的卡片槽位。该改动仅影响召回侧（编译后即时生效），不需重新量化；分块/嵌入逻辑改动（如表头补全）则必须重新量化相关笔记才生效。 |
+| **高频词过滤阈值** | `threshold = max(totalChunks/kwHighFreqDivisor, kwHighFreqMin)`，即 `max(总块数/10, 100)`（`kwHighFreqDivisor=10`、`kwHighFreqMin=100`）；依据实测："数据"命中 ~93% 块、"2061"命中 ~1% 块，"数据"这类词进 OR LIKE 只会刷屏。`maxRecallKeywords=20` 限制关键词数量防止超长 LIKE 查询。关键词检索跨所有模型（不加 model 过滤），与向量路（按当前 embedding 模型隔离）不同。 |
+| **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)（chunkCandidateMultiplier/maxChunksPerNote/selectTopNotes/filterHighFreqTokens/rankKwHits/tokenize 停用词表 + vectorSearch/KeywordRecall/HybridRecall 改造）、[internal/services/chunk.go](internal/services/chunk.go)（tableHeader 记录 + 块首补表头 + hasTableDataRow/isTableSeparatorLine）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新用例） |
 
 ---
 

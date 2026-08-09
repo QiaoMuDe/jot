@@ -353,3 +353,64 @@ func TestStripMetaPrefix(t *testing.T) {
 		t.Errorf("无前缀旧数据应原样返回：期望 %q，实际 %q", legacy, got)
 	}
 }
+
+// TestNormalizeChunkSource 验证空白压缩：非代码围栏行的连续空格折叠、行尾空格去除，
+// 代码围栏内内容（缩进/对齐空格）原样保留
+func TestNormalizeChunkSource(t *testing.T) {
+	input := "这是  普通  文本   有连续空格。\n" +
+		"| 小时数据 |      2061      | 内容 |\n" +
+		"```go\n" +
+		"func main() {\n" +
+		"    x := 1   // 保留缩进与空格\n" +
+		"}\n" +
+		"```\n" +
+		"行尾空格  \n" +
+		"下一段 内容"
+	want := "这是 普通 文本 有连续空格。\n" +
+		"| 小时数据 | 2061 | 内容 |\n" +
+		"```go\n" +
+		"func main() {\n" +
+		"    x := 1   // 保留缩进与空格\n" +
+		"}\n" +
+		"```\n" +
+		"行尾空格\n" +
+		"下一段 内容"
+	got := normalizeChunkSource(input)
+	if got != want {
+		t.Errorf("normalizeChunkSource 结果不符：\n期望 %q\n实际 %q", want, got)
+	}
+}
+
+// TestChunkTableHeaderCarry 验证表格行块自动携带表头上下文：
+// 表头与数据行被切到不同块时，含数据行的块在块首补上表头（列名语义进入嵌入）；
+// 无表格数据行的普通段落块不补表头
+func TestChunkTableHeaderCarry(t *testing.T) {
+	header := "| 数据类型 | 命令编码 | 上传内容 |"
+	longRow := "| 小时数据 | 2061 | " + strings.Repeat("污染物浓度（标干、折算浓度）均值，排放量，流量，温度、压力、流速、氧含量、湿度等均值。", 2) + " |"
+	content := "## 数据上传编码\n\n" +
+		header + "\n" +
+		"| --- | --- | --- |\n" +
+		"| 分钟数据 | 2051 | 颗粒物浓度均值 |\n" +
+		longRow + "\n" +
+		"| 日数据 | 2031 | 日均值 |\n" +
+		"\n## 后续说明\n\n" +
+		"表格到此结束，这是普通段落，与表格无关。"
+
+	// 小 maxRunes 强制切块，模拟真实场景：表头与数据行被切到不同块
+	chunks := ChunkContent(content, 120, ChunkMeta{})
+	if len(chunks) < 2 {
+		t.Fatalf("期望至少 2 块，实际 %d 块", len(chunks))
+	}
+	for i, c := range chunks {
+		if strings.Contains(c, "2051") || strings.Contains(c, "2061") || strings.Contains(c, "2031") {
+			if !strings.Contains(c, "命令编码") {
+				t.Errorf("第 %d 块含表格数据行但缺少表头上下文：\n%s", i, c)
+			}
+		}
+	}
+	// 普通段落块不应被补表头
+	last := chunks[len(chunks)-1]
+	if strings.Contains(last, "命令编码") {
+		t.Errorf("普通段落块不应携带表头：\n%s", last)
+	}
+}
