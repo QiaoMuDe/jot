@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"jot/internal/aicli"
+	"jot/internal/aierrors"
 	"jot/internal/models"
 
 	"gitee.com/MM-Q/fastlog"
@@ -198,7 +199,7 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *aicli.Clien
 			s.logger.Errorw("VectorService.IndexNotes embedding 失败", fastlog.Uint("note_id", note.ID), fastlog.Error(err))
 			// 与 AI 助手一致：错误分类为中文友好提示后随进度事件推送，前端直接展示
 			userMsg := err.Error()
-			if aiErr := aicli.ClassifyError(err); aiErr != nil && aiErr.UserMsg != "" {
+			if aiErr := aierrors.ClassifyError(err); aiErr != nil && aiErr.UserMsg != "" {
 				userMsg = aiErr.UserMsg
 			}
 			if progressCb != nil {

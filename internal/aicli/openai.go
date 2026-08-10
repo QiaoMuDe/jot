@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"jot/internal/aierrors"
+
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -36,7 +38,7 @@ func (c *Client) openaiChatStream(ctx context.Context, messages []Message, think
 		}
 	}
 
-	// 对支持 enable_thinking 的模型（如 Qwen3 / Ollama OpenAI 兼容接口）传递思考参数
+	// 对支持 enable_thinking 的模型（如 Qwen3 / DeepSeek 等兼容接口）传递思考参数
 	// 关闭时也显式设为 false，从根源上不让后端请求思考内容
 	req.ChatTemplateKwargs = map[string]any{
 		"enable_thinking": thinkingEnabled,
@@ -44,8 +46,8 @@ func (c *Client) openaiChatStream(ctx context.Context, messages []Message, think
 
 	stream, err := client.CreateChatCompletionStream(ctx, req)
 	if err != nil {
-		if ae := ClassifyError(err); ae != nil {
-			return &AIErrorWrapper{Err: ae}
+		if ae := aierrors.ClassifyError(err); ae != nil {
+			return &aierrors.AIErrorWrapper{Err: ae}
 		}
 		return fmt.Errorf("创建流失败: %w", err)
 	}
@@ -62,8 +64,8 @@ func (c *Client) openaiChatStream(ctx context.Context, messages []Message, think
 				return nil
 			}
 			// 其他错误：尝试分类
-			if ae := ClassifyError(err); ae != nil {
-				return &AIErrorWrapper{Err: ae}
+			if ae := aierrors.ClassifyError(err); ae != nil {
+				return &aierrors.AIErrorWrapper{Err: ae}
 			}
 			return nil
 		}
@@ -114,8 +116,8 @@ func (c *Client) openaiChat(ctx context.Context, messages []Message) (string, st
 
 	resp, err := client.CreateChatCompletion(ctx, req)
 	if err != nil {
-		if ae := ClassifyError(err); ae != nil {
-			return "", "", &AIErrorWrapper{Err: ae}
+		if ae := aierrors.ClassifyError(err); ae != nil {
+			return "", "", &aierrors.AIErrorWrapper{Err: ae}
 		}
 		return "", "", fmt.Errorf("非流式调用失败: %w", err)
 	}
@@ -141,8 +143,8 @@ func (c *Client) openaiEmbed(ctx context.Context, texts []string) ([][]float32, 
 	}
 	resp, err := client.CreateEmbeddings(ctx, req)
 	if err != nil {
-		if ae := ClassifyError(err); ae != nil {
-			return nil, &AIErrorWrapper{Err: ae}
+		if ae := aierrors.ClassifyError(err); ae != nil {
+			return nil, &aierrors.AIErrorWrapper{Err: ae}
 		}
 		return nil, fmt.Errorf("embedding 调用失败: %w", err)
 	}

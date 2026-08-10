@@ -13,6 +13,7 @@ import (
 	"io"
 	"jot/internal/agent"
 	"jot/internal/aicli"
+	"jot/internal/aierrors"
 	"jot/internal/database"
 	"jot/internal/fontutil"
 	"jot/internal/models"
@@ -212,12 +213,8 @@ func (a *App) startup(ctx context.Context) {
 	if len(profiles) == 0 {
 		baseURL := a.settingService.Get("ai_base_url")
 		if baseURL != "" {
-			provider := a.settingService.Get("ai_provider")
 			apiKey := a.settingService.Get("ai_api_key")
-			if provider == "" {
-				provider = "openai"
-			}
-			profile := a.profileService.CreateProfile("默认配置", provider, baseURL, apiKey, true)
+			profile := a.profileService.CreateProfile("默认配置", baseURL, apiKey, true)
 			// 标记为激活
 			if err := a.profileService.SwitchProfile("chat", profile.ID); err != nil {
 				a.LogSvc.Logger.Errorw("迁移警告：激活默认配置失败", fastlog.Error(err))
@@ -249,6 +246,8 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
+	// 迁移移除服务商（Provider）后的存量数据
+	a.migrateProviderRemoval()
 	// 迁移存量明文密钥为 Base64 编码格式（放在旧迁移之后，确保旧迁移逻辑读到的是明文）
 	a.migrateSensitiveKeys()
 
@@ -267,6 +266,47 @@ func (a *App) shutdown(ctx context.Context) {
 		if err == nil && sqlDB != nil {
 			_ = sqlDB.Close()
 		}
+	}
+}
+
+// migrateProviderRemoval 迁移移除服务商（Provider）后的存量数据：
+// 1. 删除 settings 表的 ai_provider / ai_embed_provider 键
+// 2. api_profiles 中 provider='ollama' 的记录改写为 openai，并为其 BaseURL 追加 OpenAI 兼容的 /v1 路径（无后缀时）
+// 3. settings 表 ai_embed_base_url 若指向 Ollama 默认地址且无 /v1 后缀则追加
+// 4. 尝试删除 api_profiles 表的 provider 列（SQLite 不支持删列时忽略，保留列但不再使用）
+func (a *App) migrateProviderRemoval() {
+	// 1. 删除 settings 键
+	a.db.Where("key IN ?", []string{"ai_provider", "ai_embed_provider"}).Delete(&models.Setting{})
+	// 2. 迁移 ollama 预设（APIProfile 结构体已无 Provider 字段，走原始 SQL 读取存量列）
+	type legacyProfile struct {
+		ID      uint
+		Name    string
+		BaseURL string
+	}
+	var legacy []legacyProfile
+	if err := a.db.Raw("SELECT id, name, base_url FROM api_profiles WHERE provider = ?", "ollama").Scan(&legacy).Error; err == nil {
+		for _, p := range legacy {
+			updates := map[string]interface{}{"provider": "openai"}
+			if !strings.HasSuffix(strings.TrimRight(p.BaseURL, "/"), "/v1") {
+				updates["base_url"] = strings.TrimRight(p.BaseURL, "/") + "/v1"
+			}
+			a.db.Model(&models.APIProfile{}).Where("id = ?", p.ID).Updates(updates)
+			a.LogSvc.Logger.Infow("迁移预设服务商", fastlog.String("profile", p.Name))
+		}
+	}
+	// 3. 迁移 embed base_url（Ollama 默认地址追加 /v1）
+	embedURL := a.settingService.Get("ai_embed_base_url")
+	if strings.Contains(embedURL, "localhost:11434") && !strings.HasSuffix(strings.TrimRight(embedURL, "/"), "/v1") {
+		newURL := strings.TrimRight(embedURL, "/") + "/v1"
+		if err := a.settingService.Set("ai_embed_base_url", newURL); err != nil {
+			a.LogSvc.Logger.Errorw("迁移量化地址追加 /v1 失败", fastlog.Error(err))
+		} else {
+			a.LogSvc.Logger.Infow("迁移量化地址追加 /v1", fastlog.String("baseURL", newURL))
+		}
+	}
+	// 4. 删除 provider 列（失败忽略）
+	if err := a.db.Exec("ALTER TABLE api_profiles DROP COLUMN provider").Error; err != nil {
+		a.LogSvc.Logger.Debugw("跳过删除 provider 列（SQLite 不支持）", fastlog.Error(err))
 	}
 }
 
@@ -1264,11 +1304,7 @@ func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
 	// 无预设时自动创建"默认配置"
 	profiles := a.profileService.ListProfiles()
 	if len(profiles) == 0 && cfg.AIBaseURL != "" && cfg.AIAPIKey != "" {
-		provider := cfg.AIProvider
-		if provider == "" {
-			provider = "openai"
-		}
-		profile := a.profileService.CreateProfile("默认配置", provider, cfg.AIBaseURL, cfg.AIAPIKey, true)
+		profile := a.profileService.CreateProfile("默认配置", cfg.AIBaseURL, cfg.AIAPIKey, true)
 		if err := a.profileService.SetActive(profile.ID); err != nil {
 			a.LogSvc.Logger.Errorw("激活默认配置失败", fastlog.Error(err))
 		}
@@ -1413,7 +1449,7 @@ func (a *App) SaveAIConfig(cfg services.AIConfig) error {
 	// 无预设时自动创建"默认配置"
 	profiles := a.profileService.ListProfiles()
 	if len(profiles) == 0 {
-		profile := a.profileService.CreateProfile("默认配置", cfg.Provider, cfg.BaseURL, cfg.APIKey, true)
+		profile := a.profileService.CreateProfile("默认配置", cfg.BaseURL, cfg.APIKey, true)
 		if err := a.profileService.SetActive(profile.ID); err != nil {
 			a.LogSvc.Logger.Errorw("激活默认配置失败", fastlog.Error(err))
 		}
@@ -1431,15 +1467,15 @@ func (a *App) GetProfiles() []models.APIProfile {
 }
 
 // CreateProfile 创建 API 配置预设
-func (a *App) CreateProfile(name, provider, baseURL, apiKey string) models.APIProfile {
-	a.LogSvc.Logger.Debugw("CreateProfile", fastlog.String("name", name), fastlog.String("provider", provider), fastlog.String("key", "***"))
-	return a.profileService.CreateProfile(name, provider, baseURL, apiKey)
+func (a *App) CreateProfile(name, baseURL, apiKey string) models.APIProfile {
+	a.LogSvc.Logger.Debugw("CreateProfile", fastlog.String("name", name), fastlog.String("key", "***"))
+	return a.profileService.CreateProfile(name, baseURL, apiKey)
 }
 
 // UpdateProfile 更新 API 配置预设
-func (a *App) UpdateProfile(id uint, name, provider, baseURL, apiKey string) error {
-	a.LogSvc.Logger.Debugw("UpdateProfile", fastlog.Uint("id", id), fastlog.String("name", name), fastlog.String("provider", provider), fastlog.String("key", "***"))
-	if err := a.profileService.UpdateProfile(id, name, provider, baseURL, apiKey); err != nil {
+func (a *App) UpdateProfile(id uint, name, baseURL, apiKey string) error {
+	a.LogSvc.Logger.Debugw("UpdateProfile", fastlog.Uint("id", id), fastlog.String("name", name), fastlog.String("key", "***"))
+	if err := a.profileService.UpdateProfile(id, name, baseURL, apiKey); err != nil {
 		a.LogSvc.Logger.Errorw("UpdateProfile 失败", fastlog.Error(err))
 		return err
 	}
@@ -1545,14 +1581,13 @@ func (a *App) CancelVectorIndex() error {
 	return nil
 }
 
-// GetEmbedConfig 读取量化连接配置（ai_embed_* 四键），apiKey 按现有 B64 编码方式解码
-func (a *App) GetEmbedConfig() (provider, baseURL, apiKey, model string, err error) {
+// GetEmbedConfig 读取量化连接配置（ai_embed_* 三键），apiKey 按现有 B64 编码方式解码
+func (a *App) GetEmbedConfig() (baseURL, apiKey, model string, err error) {
 	a.LogSvc.Logger.Debugw("GetEmbedConfig")
-	provider = a.settingService.Get("ai_embed_provider")
 	baseURL = a.settingService.Get("ai_embed_base_url")
 	apiKey = services.DecodeB64(a.settingService.Get("ai_embed_api_key"))
 	model = a.settingService.Get("ai_embed_model")
-	return provider, baseURL, apiKey, model, nil
+	return baseURL, apiKey, model, nil
 }
 
 // CardRecallCheckResult 卡片召回开启校验结果
@@ -1562,17 +1597,17 @@ type CardRecallCheckResult struct {
 }
 
 // ValidateCardRecall 校验卡片召回是否可以开启：
-//  1. 基础判断：量化连接（provider/base_url）或量化模型未设置 → 拒绝
-//  2. 模型类型判断：openai 必须填写 API Key；ollama 跳过 Key 检查
+//  1. 基础判断：量化连接（base_url）或量化模型未设置 → 拒绝
+//  2. API Key 必填
 //  3. 量化表内容判断：表为空拒绝；当前量化模型无对应记录拒绝
 func (a *App) ValidateCardRecall() CardRecallCheckResult {
-	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	// 1. 基础判断：量化连接或量化模型未设置
-	if provider == "" || baseURL == "" || model == "" {
+	if baseURL == "" || model == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
 	}
-	// 2. 模型类型判断：openai 必须填写 API Key；ollama 无需 Key
-	if provider == "openai" && apiKey == "" {
+	// 2. API Key 必填
+	if apiKey == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
 	}
 	// 3. 量化表内容判断
@@ -1596,16 +1631,16 @@ func (a *App) ValidateCardRecall() CardRecallCheckResult {
 }
 
 // ValidateVectorIndexConfig 校验量化连接配置是否可以发起量化：
-//  1. 基础判断：量化连接（provider/base_url）或量化模型未设置 → 拒绝
-//  2. 模型类型判断：openai 必须填写 API Key；ollama 跳过 Key 检查
+//  1. 基础判断：量化连接（base_url）或量化模型未设置 → 拒绝
+//  2. API Key 必填
 //
 // （仅校验配置本身，不检查量化表内容，与卡片召回 ValidateCardRecall 的检查范围不同）
 func (a *App) ValidateVectorIndexConfig() CardRecallCheckResult {
-	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
-	if provider == "" || baseURL == "" || model == "" {
+	baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	if baseURL == "" || model == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
 	}
-	if provider == "openai" && apiKey == "" {
+	if apiKey == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
 	}
 	return CardRecallCheckResult{OK: true, Message: ""}
@@ -1641,10 +1676,14 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	}
 
 	// 未完整配置量化连接时直接返回可读错误，不发起索引（与 ValidateCardRecall 校验强度一致）
-	provider, baseURL, apiKey, model, _ := a.GetEmbedConfig()
-	if provider == "" || baseURL == "" || model == "" {
+	baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	if baseURL == "" || model == "" {
 		release()
 		return errors.New("请先在设置中配置量化连接与量化模型")
+	}
+	if apiKey == "" {
+		release()
+		return errors.New("请先填写量化 API Key")
 	}
 	if len(noteIDs) == 0 {
 		release()
@@ -1653,10 +1692,9 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 
 	// 构造 embedding 客户端（GetEmbedConfig 已解码 apiKey）
 	client := aicli.NewClient(aicli.Config{
-		Provider: provider,
-		BaseURL:  baseURL,
-		APIKey:   apiKey,
-		Model:    model,
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Model:   model,
 	})
 
 	// 异步执行量化，避免阻塞 Wails 事件循环（参考 CallAIStream 的 goroutine 模式）
@@ -1692,10 +1730,10 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	return nil
 }
 
-// testAIConnection 连通性测试公共实现（按 Provider 分发，Wails 绑定方法共用）
-func (a *App) testAIConnection(provider, baseURL, apiKey, logName string) (bool, error) {
-	a.LogSvc.Logger.Debugw(logName, fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
-	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
+// testAIConnection 连通性测试公共实现（Wails 绑定方法共用）
+func (a *App) testAIConnection(baseURL, apiKey, logName string) (bool, error) {
+	a.LogSvc.Logger.Debugw(logName, fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+	cfg := services.AIConfig{BaseURL: baseURL, APIKey: apiKey}
 	result, err := a.aiService.TestConnection(cfg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw(logName+" 失败", fastlog.Error(err))
@@ -1705,27 +1743,27 @@ func (a *App) testAIConnection(provider, baseURL, apiKey, logName string) (bool,
 	return result, nil
 }
 
-// TestAIBaseURL 按指定 Provider/BaseURL/APIKey 测试连通性（对话/量化连接共用）
-func (a *App) TestAIBaseURL(provider, baseURL, apiKey string) (bool, error) {
-	return a.testAIConnection(provider, baseURL, apiKey, "TestAIBaseURL")
+// TestAIBaseURL 按指定 BaseURL/APIKey 测试连通性（对话/量化连接共用）
+func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
+	return a.testAIConnection(baseURL, apiKey, "TestAIBaseURL")
 }
 
 // TestAIConnection 测试指定 AI 配置的连通性（预设使用）
-func (a *App) TestAIConnection(provider, baseURL, apiKey string) (bool, error) {
-	return a.testAIConnection(provider, baseURL, apiKey, "TestAIConnection")
+func (a *App) TestAIConnection(baseURL, apiKey string) (bool, error) {
+	return a.testAIConnection(baseURL, apiKey, "TestAIConnection")
 }
 
 // TestVectorIndexConnection 测试量化服务连通性（量化弹窗打开时异步调用，不阻塞弹窗）
-// 通过轻量 GET 请求检测服务可用性：openai 走 /models，ollama 走 /api/tags（均 5s 超时）
+// 通过轻量 GET 请求检测服务可用性（均 5s 超时）
 func (a *App) TestVectorIndexConnection() CardRecallCheckResult {
-	provider, baseURL, apiKey, _, _ := a.GetEmbedConfig()
-	if provider == "" || baseURL == "" {
+	baseURL, apiKey, model, _ := a.GetEmbedConfig()
+	if baseURL == "" || model == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
 	}
-	if provider == "openai" && apiKey == "" {
+	if apiKey == "" {
 		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
 	}
-	ok, err := a.testAIConnection(provider, baseURL, apiKey, "TestVectorIndexConnection")
+	ok, err := a.testAIConnection(baseURL, apiKey, "TestVectorIndexConnection")
 	if err != nil || !ok {
 		// 原始错误（网络/HTTP 细节）由 testAIConnection 记入日志，不向用户透出以免困惑
 		return CardRecallCheckResult{OK: false, Message: "量化服务连接失败，请检查服务是否已启动"}
@@ -1782,10 +1820,10 @@ func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
 }
 
 // FetchAIModels 获取可用模型列表
-// FetchAIModels 按指定 Provider/BaseURL/APIKey 获取模型列表（对话/量化连接共用）
-func (a *App) FetchAIModels(provider, baseURL, apiKey string) ([]string, error) {
-	a.LogSvc.Logger.Debugw("FetchAIModels", fastlog.String("provider", provider), fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
-	cfg := services.AIConfig{Provider: provider, BaseURL: baseURL, APIKey: apiKey}
+// FetchAIModels 按指定 BaseURL/APIKey 获取模型列表（对话/量化连接共用）
+func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
+	a.LogSvc.Logger.Debugw("FetchAIModels", fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
+	cfg := services.AIConfig{BaseURL: baseURL, APIKey: apiKey}
 	models, err := a.aiService.FetchModels(cfg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("FetchAIModels 失败", fastlog.Error(err))
@@ -1933,6 +1971,12 @@ func (a *App) processAIChatFile(path string, maxSize int64) AIChatFileResult {
 // CallAI 调用 AI 对话接口（非流式）
 // 创建可取消的 context 并存入 aiStreamCancel，供 CancelAIStream 中途取消
 func (a *App) CallAI(messages []services.Message) (string, error) {
+	// 检查 AI 配置（URL / API Key / 模型三要素齐全）
+	cfg := a.aiService.GetConfig()
+	if cfg.BaseURL == "" || cfg.APIKey == "" || cfg.Model == "" {
+		return "", fmt.Errorf("请先配置 AI 服务（API 地址 / API Key / 模型）")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.aiStreamCancel = cancel
 	defer func() {
@@ -2060,11 +2104,11 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 					return
 				}
-				var aiErr *aicli.AIErrorWrapper
+				var aiErr *aierrors.AIErrorWrapper
 				if errors.As(err, &aiErr) {
 					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
 				} else {
-					ae := aicli.NewAIError(aicli.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
+					ae := aierrors.NewAIError(aierrors.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
 					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
 				}
 				return
@@ -2238,13 +2282,12 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					}
 				}
 
-				// 构建 embedding client（ai_embed_* 四键，apiKey 为 B64 存储需解码）
-				embedProvider, embedBaseURL, embedAPIKey, embedModel, _ := a.GetEmbedConfig()
+				// 构建 embedding client（ai_embed_* 三键，apiKey 为 B64 存储需解码）
+				embedBaseURL, embedAPIKey, embedModel, _ := a.GetEmbedConfig()
 				embedClient := aicli.NewClient(aicli.Config{
-					Provider: embedProvider,
-					BaseURL:  embedBaseURL,
-					APIKey:   embedAPIKey,
-					Model:    embedModel,
+					BaseURL: embedBaseURL,
+					APIKey:  embedAPIKey,
+					Model:   embedModel,
 				})
 
 				// 召回开始：独立状态事件
@@ -2588,7 +2631,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 				return
 			}
 			a.LogSvc.Logger.Errorw("AI Agent 流错误", fastlog.Error(err))
-			aiErr := aicli.ClassifyError(err)
+			aiErr := aierrors.ClassifyError(err)
 			if aiErr == nil {
 				// context.Canceled 等非错误情况，补发完成事件
 				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
@@ -2775,10 +2818,10 @@ func (a *App) CancelAIStream() {
 func (a *App) AITextOperation(text string, operation string) (string, error) {
 	a.LogSvc.Logger.Debugw("AITextOperation", fastlog.String("operation", operation), fastlog.Int("text_len", len(text)))
 
-	// 1. 检查 AI 配置
+	// 1. 检查 AI 配置（URL / API Key / 模型三要素齐全）
 	cfg := a.aiService.GetConfig()
-	if cfg.BaseURL == "" || cfg.APIKey == "" {
-		return "", fmt.Errorf("请先配置 AI 服务")
+	if cfg.BaseURL == "" || cfg.APIKey == "" || cfg.Model == "" {
+		return "", fmt.Errorf("请先配置 AI 服务（API 地址 / API Key / 模型）")
 	}
 
 	// 2. 根据 operation 构造 system prompt

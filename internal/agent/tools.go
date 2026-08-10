@@ -220,7 +220,7 @@ func (w *webSearchTool) intSetting(key string, def, max int) int {
 type recallNotesTool struct {
 	vector         *services.VectorService
 	setting        *services.SettingService
-	getEmbedConfig func() (provider, baseURL, apiKey, model string, err error)
+	getEmbedConfig func() (baseURL, apiKey, model string, err error)
 	notebookIDs    []uint
 	logger         *fastlog.Logger
 	collector      *resultCollector // 收集本轮召回卡片（Run 中创建并传入）
@@ -268,18 +268,17 @@ func (r *recallNotesTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	}
 
 	// 构建 embedding client（ai_embed_* 四键，apiKey 为 B64 存储由工厂解码）
-	provider, baseURL, apiKey, model, err := r.getEmbedConfig()
+	baseURL, apiKey, model, err := r.getEmbedConfig()
 	if err != nil {
 		return "", fmt.Errorf("读取量化连接配置失败: %w", err)
 	}
-	if provider == "" || baseURL == "" || model == "" {
-		return "", errors.New("量化连接未配置，无法检索本地笔记")
+	if baseURL == "" || apiKey == "" || model == "" {
+		return "", errors.New("量化连接未配置（API 地址 / API Key / 模型），无法检索本地笔记")
 	}
 	embedClient := aicli.NewClient(aicli.Config{
-		Provider: provider,
-		BaseURL:  baseURL,
-		APIKey:   apiKey,
-		Model:    model,
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Model:   model,
 	})
 
 	// VectorRecall 返回分类：成功 / 预期跳过（nil,nil）/ 意外错误（nil,err）

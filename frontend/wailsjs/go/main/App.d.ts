@@ -50,7 +50,7 @@ export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Prom
 
 export function CreateNotebook(arg1:string):Promise<models.Notebook>;
 
-export function CreateProfile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<models.APIProfile>;
+export function CreateProfile(arg1:string,arg2:string,arg3:string):Promise<models.APIProfile>;
 
 export function CreateTag(arg1:string,arg2:string):Promise<models.Tag>;
 
@@ -86,7 +86,7 @@ export function ExportDataWithDialog():Promise<string>;
 
 export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
-export function FetchAIModels(arg1:string,arg2:string,arg3:string):Promise<Array<string>>;
+export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetAICardRecallLimit():Promise<number>;
 
@@ -240,9 +240,9 @@ export function SetSortOrder(arg1:string):Promise<void>;
 
 export function SwitchProfile(arg1:string,arg2:number):Promise<void>;
 
-export function TestAIBaseURL(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
-export function TestAIConnection(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+export function TestAIConnection(arg1:string,arg2:string):Promise<boolean>;
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 
@@ -268,7 +268,7 @@ export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Prom
 
 export function UpdateNoteFileExt(arg1:number,arg2:string):Promise<models.Note>;
 
-export function UpdateProfile(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+export function UpdateProfile(arg1:number,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function UpdateSessionContextTokens(arg1:number,arg2:number):Promise<void>;
 

@@ -1232,22 +1232,10 @@
     border-top: 1px solid var(--border);
 }
 
-/* 预设下拉项前缀标识 */
 .preset-dropdown-item {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.preset-provider-badge {
-    font-size: 0.7rem;
-    padding: 1px 6px;
-    border-radius: 3px;
-    background: var(--accent-light);
-    color: var(--accent);
-    font-weight: 500;
-    line-height: 1.5;
-    flex-shrink: 0;
 }
 
 /* 预设删除项滑出动画 */

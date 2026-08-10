@@ -94,8 +94,8 @@ export function CreateNotebook(arg1) {
   return window['go']['main']['App']['CreateNotebook'](arg1);
 }
 
-export function CreateProfile(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CreateProfile'](arg1, arg2, arg3, arg4);
+export function CreateProfile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateProfile'](arg1, arg2, arg3);
 }
 
 export function CreateTag(arg1, arg2) {
@@ -166,8 +166,8 @@ export function ExportNoteAsMarkdown(arg1) {
   return window['go']['main']['App']['ExportNoteAsMarkdown'](arg1);
 }
 
-export function FetchAIModels(arg1, arg2, arg3) {
-  return window['go']['main']['App']['FetchAIModels'](arg1, arg2, arg3);
+export function FetchAIModels(arg1, arg2) {
+  return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
 }
 
 export function GetAICardRecallLimit() {
@@ -474,12 +474,12 @@ export function SwitchProfile(arg1, arg2) {
   return window['go']['main']['App']['SwitchProfile'](arg1, arg2);
 }
 
-export function TestAIBaseURL(arg1, arg2, arg3) {
-  return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2, arg3);
+export function TestAIBaseURL(arg1, arg2) {
+  return window['go']['main']['App']['TestAIBaseURL'](arg1, arg2);
 }
 
-export function TestAIConnection(arg1, arg2, arg3) {
-  return window['go']['main']['App']['TestAIConnection'](arg1, arg2, arg3);
+export function TestAIConnection(arg1, arg2) {
+  return window['go']['main']['App']['TestAIConnection'](arg1, arg2);
 }
 
 export function TestTavilyConnection(arg1) {
@@ -530,8 +530,8 @@ export function UpdateNoteFileExt(arg1, arg2) {
   return window['go']['main']['App']['UpdateNoteFileExt'](arg1, arg2);
 }
 
-export function UpdateProfile(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['UpdateProfile'](arg1, arg2, arg3, arg4, arg5);
+export function UpdateProfile(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateProfile'](arg1, arg2, arg3, arg4);
 }
 
 export function UpdateSessionContextTokens(arg1, arg2) {

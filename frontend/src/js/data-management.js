@@ -596,7 +596,7 @@ export async function openVectorIndexModal() {
     const modal = document.getElementById('vectorIndexModal');
     if (!modal) return;
 
-    // 打开弹窗前先校验量化连接配置（provider/baseURL/model 必填，openai 需 key），
+    // 打开弹窗前先校验量化连接配置（BaseURL/APIKey/Model 必填），
     // 未配置时提示引导去设置，不打开弹窗；校验接口异常时放行，由开始量化时的后端校验兜底
     if (window.go?.main?.App?.ValidateVectorIndexConfig) {
         try {

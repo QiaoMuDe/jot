@@ -65,11 +65,9 @@ type SettingsConfig struct {
 	SortOrder                   string `json:"sort_order"`
 	PageSize                    int    `json:"page_size"`
 	CMSyntaxHighlight           bool   `json:"cm_syntax_highlight"`
-	AIProvider                  string `json:"ai_provider"`
 	AIBaseURL                   string `json:"ai_base_url"`
 	AIAPIKey                    string `json:"ai_api_key"`
 	AIModel                     string `json:"ai_model"`
-	AIEmbedProvider             string `json:"ai_embed_provider"`
 	AIEmbedBaseURL              string `json:"ai_embed_base_url"`
 	AIEmbedAPIKey               string `json:"ai_embed_api_key"`
 	AIEmbedModel                string `json:"ai_embed_model"`
@@ -103,11 +101,9 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		SortOrder:                   s.Get("sort_order"),
 		PageSize:                    parseIntSetting(s.Get("page_size"), 20),
 		CMSyntaxHighlight:           parseBoolSetting(s.Get("cm_syntax_highlight")),
-		AIProvider:                  s.Get("ai_provider"),
 		AIBaseURL:                   s.Get("ai_base_url"),
 		AIAPIKey:                    s.Get("ai_api_key"),
 		AIModel:                     s.Get("ai_model"),
-		AIEmbedProvider:             s.Get("ai_embed_provider"),
 		AIEmbedBaseURL:              s.Get("ai_embed_base_url"),
 		AIEmbedAPIKey:               s.Get("ai_embed_api_key"),
 		AIEmbedModel:                s.Get("ai_embed_model"),
@@ -210,11 +206,9 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"sort_order":                      cfg.SortOrder,
 		"page_size":                       strconv.Itoa(cfg.PageSize),
 		"cm_syntax_highlight":             strconv.FormatBool(cfg.CMSyntaxHighlight),
-		"ai_provider":                     cfg.AIProvider,
 		"ai_base_url":                     cfg.AIBaseURL,
 		"ai_api_key":                      cfg.AIAPIKey,
 		"ai_model":                        cfg.AIModel,
-		"ai_embed_provider":               cfg.AIEmbedProvider,
 		"ai_embed_base_url":               cfg.AIEmbedBaseURL,
 		"ai_embed_api_key":                cfg.AIEmbedAPIKey,
 		"ai_embed_model":                  cfg.AIEmbedModel,

@@ -30,12 +30,11 @@ func (p *ProfileService) ListProfiles() []models.APIProfile {
 }
 
 // CreateProfile 创建预设
-func (p *ProfileService) CreateProfile(name, provider, baseURL, apiKey string, isDefault ...bool) models.APIProfile {
+func (p *ProfileService) CreateProfile(name, baseURL, apiKey string, isDefault ...bool) models.APIProfile {
 	profile := models.APIProfile{
-		Name:     name,
-		Provider: provider,
-		BaseURL:  baseURL,
-		APIKey:   EncodeB64(apiKey),
+		Name:    name,
+		BaseURL: baseURL,
+		APIKey:  EncodeB64(apiKey),
 	}
 	if len(isDefault) > 0 && isDefault[0] {
 		profile.IsDefault = true
@@ -45,10 +44,9 @@ func (p *ProfileService) CreateProfile(name, provider, baseURL, apiKey string, i
 }
 
 // UpdateProfile 更新预设
-func (p *ProfileService) UpdateProfile(id uint, name, provider, baseURL, apiKey string) error {
+func (p *ProfileService) UpdateProfile(id uint, name, baseURL, apiKey string) error {
 	err := p.db.Model(&models.APIProfile{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"name":     name,
-		"provider": provider,
 		"base_url": baseURL,
 		"api_key":  EncodeB64(apiKey),
 	}).Error
@@ -86,8 +84,8 @@ func (p *ProfileService) DeleteProfile(id uint) error {
 }
 
 // SwitchProfile 切换预设：将指定预设的值写入当前配置（settings 表），并标记为激活
-// target 决定写入的键组："chat" 写入 ai_provider/ai_base_url/ai_api_key 并清空 ai_model 与所有会话模型；
-// "embed" 写入 ai_embed_provider/ai_embed_base_url/ai_embed_api_key 并清空 ai_embed_model（不影响会话配置）
+// target 决定写入的键组："chat" 写入 ai_base_url/ai_api_key 并清空 ai_model 与所有会话模型；
+// "embed" 写入 ai_embed_base_url/ai_embed_api_key 并清空 ai_embed_model（不影响会话配置）
 func (p *ProfileService) SwitchProfile(target string, id uint) error {
 	var profile models.APIProfile
 	if err := p.db.First(&profile, id).Error; err != nil {
@@ -109,10 +107,6 @@ func (p *ProfileService) SwitchProfile(target string, id uint) error {
 	prefix := "ai_"
 	if target == "embed" {
 		prefix = "ai_embed_"
-	}
-	if err := svc.Set(prefix+"provider", profile.Provider); err != nil {
-		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
-		return err
 	}
 	if err := svc.Set(prefix+"base_url", profile.BaseURL); err != nil {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))

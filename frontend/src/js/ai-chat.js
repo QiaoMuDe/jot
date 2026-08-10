@@ -163,7 +163,7 @@ async function openModelDropdown() {
         try {
             const cfg = await window.go.main.App.GetAIConfig();
             if (cfg.base_url && cfg.api_key) {
-                modelList = await window.go.main.App.FetchAIModels(cfg.provider, cfg.base_url, cfg.api_key);
+                modelList = await window.go.main.App.FetchAIModels(cfg.base_url, cfg.api_key);
             }
         } catch (_) {}
     }
@@ -511,12 +511,8 @@ function bindEvents() {
             const text = inputEl.value.trim();
             if (!text || isStreaming || isPolishOptimizing) return;
 
-            // 检查是否已选择模型
-            const currentModel = modelLabel?.textContent;
-            if (!currentModel || currentModel === '--') {
-                window.showNotification?.('请先在模型选择下拉列表中选一个模型，再优化表达。', 'warning');
-                return;
-            }
+            // 校验 AI 配置完整性与模型选择
+            if (!(await ensureAIReady('优化表达'))) return;
 
             // 还原模式：恢复原文
             if (polishBtn.classList.contains('is-revert')) {
@@ -2176,18 +2172,37 @@ async function getSelectedNotesInfo(ids) {
 }
 
 /**
+ * 校验 AI 配置完整性：API 地址 / API Key / 模型三要素齐全才允许发起 AI 调用
+ * @param {string} actionLabel 动作描述（用于提示文案），如 '开始对话'
+ * @returns {Promise<boolean>} true 表示配置完整可继续
+ */
+async function ensureAIReady(actionLabel) {
+    let cfg = null;
+    try {
+        cfg = await window.go.main.App.GetAIConfig();
+    } catch (_) {}
+    const hasConfig = !!(cfg && cfg.base_url && cfg.base_url.trim() && cfg.api_key && cfg.api_key.trim());
+    if (!hasConfig) {
+        window.showNotification?.('请先在设置中完整配置 AI 服务（API 地址 / API Key / 模型），再' + actionLabel + '。', 'warning');
+        return false;
+    }
+    const currentModel = modelLabel?.textContent;
+    if (!currentModel || currentModel === '--') {
+        window.showNotification?.('请先在模型选择下拉列表中选一个模型，再' + actionLabel + '。', 'warning');
+        return false;
+    }
+    return true;
+}
+
+/**
  * 发送消息
  */
 async function onSend() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
 
-    // 检查是否已选择模型
-    const currentModel = modelLabel?.textContent;
-    if (!currentModel || currentModel === '--') {
-        window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
-        return;
-    }
+    // 校验 AI 配置完整性与模型选择
+    if (!(await ensureAIReady('开始对话'))) return;
 
     // 如果没有激活的会话, 自动创建
     if (activeSessionId === null) {
@@ -3283,10 +3298,7 @@ export async function onAIChatViewActivated() {
 
     try {
         const cfg = await window.go.main.App.GetAIConfig();
-        const provider = cfg.provider || 'openai';
-        const hasRequired = (provider === 'ollama')
-            ? !!cfg.base_url
-            : !!cfg.api_key;
+        const hasRequired = !!(cfg.base_url && cfg.api_key && cfg.model);
         if (!hasRequired) {
             showEmptyState();
             return;
@@ -4341,11 +4353,7 @@ async function applyEdit(msgEl, newContent) {
     if (oldTokensEl) oldTokensEl.style.display = 'none';
 
     if (!isStreaming) {
-        const curModel = modelLabel?.textContent;
-        if (!curModel || curModel === '--') {
-            window.showNotification?.('请先在模型选择下拉列表中选一个模型，再开始对话。', 'warning');
-            return;
-        }
+        if (!(await ensureAIReady('开始对话'))) return;
         await startStreaming(newContent, true, 0);
         scrollToBottom();
     }
@@ -4433,6 +4441,7 @@ async function handleRegenerate(msgEl) {
     }
 
     // 再生（regenerate 不新建用户消息，userMsgID 传 0）
+    if (!(await ensureAIReady('重新生成'))) return;
     await startStreaming('', true, 0);
     scrollToBottom();
 }
@@ -4495,6 +4504,7 @@ async function handleResend(msgEl) {
     }
 
     // 重新发送
+    if (!(await ensureAIReady('重新发送'))) return;
     await startStreaming(content, false, newUserMsgId);
     scrollToBottom();
 }

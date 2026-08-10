@@ -5,27 +5,27 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"jot/internal/aierrors"
 )
 
 // Client 统一 AI API 适配层
 type Client struct {
-	Provider string // "openai" 或 "ollama"
-	BaseURL  string
-	APIKey   string
-	Model    string
+	BaseURL string
+	APIKey  string
+	Model   string
 }
 
 // NewClient 创建新的适配层客户端
 func NewClient(cfg Config) *Client {
 	return &Client{
-		Provider: cfg.Provider,
-		BaseURL:  strings.TrimRight(cfg.BaseURL, "/"),
-		APIKey:   cfg.APIKey,
-		Model:    cfg.Model,
+		BaseURL: strings.TrimRight(cfg.BaseURL, "/"),
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
 	}
 }
 
-// Stream 流式调用 AI 接口，自动根据 Provider 选择后端
+// Stream 流式调用 AI 接口，调用 OpenAI 兼容 API 流式接口
 func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled bool, callbacks StreamCallbacks) {
 	streamStart := time.Now()
 	var thinkingStart time.Time
@@ -56,19 +56,13 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 		OnError: callbacks.OnError,
 	}
 
-	var err error
-	switch c.Provider {
-	case "ollama":
-		err = c.ollamaChatStream(ctx, messages, thinkingEnabled, wrappedCallbacks)
-	default:
-		err = c.openaiChatStream(ctx, messages, thinkingEnabled, wrappedCallbacks)
-	}
+	err := c.openaiChatStream(ctx, messages, thinkingEnabled, wrappedCallbacks)
 
 	if err != nil {
 		if ctx.Err() != nil {
 			// 用户取消，不报错
 		} else if callbacks.OnError != nil {
-			var aiErr *AIErrorWrapper
+			var aiErr *aierrors.AIErrorWrapper
 			if errors.As(err, &aiErr) {
 				callbacks.OnError(aiErr.Err.ToJSON())
 			} else {
@@ -91,26 +85,16 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 
 // Chat 非流式调用 AI 接口
 func (c *Client) Chat(ctx context.Context, messages []Message, thinkingEnabled bool) (string, string, error) {
-	switch c.Provider {
-	case "ollama":
-		return c.ollamaChat(ctx, messages, thinkingEnabled)
-	default:
-		return c.openaiChat(ctx, messages)
-	}
+	return c.openaiChat(ctx, messages)
 }
 
-// Embed 批量生成文本向量，按 Provider 分发到 openai/ollama 实现
+// Embed 批量生成文本向量，调用 OpenAI 兼容 embeddings 接口
 // texts 为空时返回空切片且不调用外部 API；返回与 texts 一一对应的向量列表
 func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return [][]float32{}, nil
 	}
-	switch c.Provider {
-	case "ollama":
-		return c.ollamaEmbed(ctx, texts)
-	default:
-		return c.openaiEmbed(ctx, texts)
-	}
+	return c.openaiEmbed(ctx, texts)
 }
 
 // EmbedWithProgress 按批次批量生成文本向量：每完成一批回调一次块级进度
@@ -133,12 +117,7 @@ func (c *Client) EmbedWithProgress(ctx context.Context, texts []string, batchSiz
 
 		var batchVec [][]float32
 		var err error
-		switch c.Provider {
-		case "ollama":
-			batchVec, err = c.ollamaEmbed(ctx, texts[start:end])
-		default:
-			batchVec, err = c.openaiEmbed(ctx, texts[start:end])
-		}
+		batchVec, err = c.openaiEmbed(ctx, texts[start:end])
 		if err != nil {
 			return nil, err
 		}

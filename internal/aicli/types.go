@@ -16,8 +16,7 @@ type StreamCallbacks struct {
 
 // Config 客户端配置
 type Config struct {
-	Provider string // "openai" 或 "ollama"
-	BaseURL  string // 例如 http://localhost:11434（Ollama）或 https://api.openai.com/v1（OpenAI）
-	APIKey   string
-	Model    string
+	BaseURL string // 例如 https://api.openai.com/v1 或任意 OpenAI 兼容端点
+	APIKey  string
+	Model   string
 }

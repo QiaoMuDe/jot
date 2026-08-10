@@ -132,7 +132,6 @@ export namespace models {
 	export class APIProfile {
 	    id: number;
 	    name: string;
-	    provider: string;
 	    base_url: string;
 	    api_key: string;
 	    is_default: boolean;
@@ -148,7 +147,6 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
-	        this.provider = source["provider"];
 	        this.base_url = source["base_url"];
 	        this.api_key = source["api_key"];
 	        this.is_default = source["is_default"];
@@ -355,7 +353,6 @@ export namespace models {
 export namespace services {
 	
 	export class AIConfig {
-	    provider: string;
 	    base_url: string;
 	    api_key: string;
 	    model: string;
@@ -368,7 +365,6 @@ export namespace services {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.provider = source["provider"];
 	        this.base_url = source["base_url"];
 	        this.api_key = source["api_key"];
 	        this.model = source["model"];
@@ -600,11 +596,9 @@ export namespace services {
 	    sort_order: string;
 	    page_size: number;
 	    cm_syntax_highlight: boolean;
-	    ai_provider: string;
 	    ai_base_url: string;
 	    ai_api_key: string;
 	    ai_model: string;
-	    ai_embed_provider: string;
 	    ai_embed_base_url: string;
 	    ai_embed_api_key: string;
 	    ai_embed_model: string;
@@ -640,11 +634,9 @@ export namespace services {
 	        this.sort_order = source["sort_order"];
 	        this.page_size = source["page_size"];
 	        this.cm_syntax_highlight = source["cm_syntax_highlight"];
-	        this.ai_provider = source["ai_provider"];
 	        this.ai_base_url = source["ai_base_url"];
 	        this.ai_api_key = source["ai_api_key"];
 	        this.ai_model = source["ai_model"];
-	        this.ai_embed_provider = source["ai_embed_provider"];
 	        this.ai_embed_base_url = source["ai_embed_base_url"];
 	        this.ai_embed_api_key = source["ai_embed_api_key"];
 	        this.ai_embed_model = source["ai_embed_model"];

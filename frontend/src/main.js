@@ -550,8 +550,6 @@ const els = {
     // AI 配置 - 对话连接
     aiBaseURL: $('aiBaseURL'),
     aiAPIKey: $('aiAPIKey'),
-    aiProviderSegmented: $('aiProviderSegmented'),
-    aiProviderIndicator: $('aiProviderIndicator'),
     aiModelTrigger: $('aiModelTrigger'),
     aiModelDropdown: $('aiModelDropdown'),
     aiModelLabel: $('aiModelLabel'),
@@ -563,8 +561,6 @@ const els = {
     // AI 配置 - 量化连接
     aiEmbedBaseURL: $('aiEmbedBaseURL'),
     aiEmbedAPIKey: $('aiEmbedAPIKey'),
-    aiEmbedProviderSegmented: $('aiEmbedProviderSegmented'),
-    aiEmbedProviderIndicator: $('aiEmbedProviderIndicator'),
     aiEmbedModelTrigger: $('aiEmbedModelTrigger'),
     aiEmbedModelDropdown: $('aiEmbedModelDropdown'),
     aiEmbedModelLabel: $('aiEmbedModelLabel'),
@@ -1915,54 +1911,7 @@ async function initSortSettings() {
 // 各服务商对应的默认 API 地址（仅用于 UI 初始提示，实际默认值由后端 DB 管理）
 const AI_DEFAULT_URLS = {
     openai: 'https://api.openai.com/v1',
-    ollama: 'http://localhost:11434',
 };
-
-/**
- * 获取分段控件当前选中的服务商值（对话/量化共用）
- * @param {HTMLElement} segEl - 分段控件容器
- * @returns {string} 服务商值，默认 'openai'
- */
-function getSegmentedValue(segEl) {
-    const active = segEl?.querySelector('.segmented-btn.active');
-    return active?.dataset.providerValue || 'openai';
-}
-
-/**
- * 设置分段控件选中项并移动指示器（对话/量化共用）
- * @param {HTMLElement} segEl - 分段控件容器
- * @param {HTMLElement} indicatorEl - 指示器元素
- * @param {string} value - 服务商值
- */
-function setSegmentedActive(segEl, indicatorEl, value) {
-    if (!segEl) return;
-    segEl.querySelectorAll('.segmented-btn').forEach(btn => btn.classList.remove('active'));
-    const target = segEl.querySelector(`[data-provider-value="${value}"]`);
-    if (target) target.classList.add('active');
-    // 移动指示器（面板隐藏时 offsetWidth=0，定位会在面板显示后补充执行）
-    repositionSegmentedIndicator(segEl, indicatorEl);
-}
-
-/**
- * 重新定位分段控件指示器（对话/量化共用，面板从隐藏变为可见后调用）
- * @param {HTMLElement} segEl - 分段控件容器
- * @param {HTMLElement} indicatorEl - 指示器元素
- */
-function repositionSegmentedIndicator(segEl, indicatorEl) {
-    if (!segEl || !indicatorEl) return;
-    const target = segEl.querySelector('.segmented-btn.active');
-    if (!target) return;
-    const btns = Array.from(segEl.querySelectorAll('.segmented-btn'));
-    if (btns.length === 0) return;
-    const cw = segEl.offsetWidth;
-    // 面板仍未显示时跳过（如 loadSettings 执行时面板处于 display:none 状态）
-    if (cw === 0) return;
-    const index = btns.indexOf(target);
-    if (index < 0) return;
-    const segW = (cw - 8) / btns.length;
-    indicatorEl.style.transform = `translateX(${2 + index * segW}px)`;
-    indicatorEl.style.width = `${segW}px`;
-}
 
 /**
  * 重置 API Key 输入框为隐藏状态（进入设置页时调用，对话/量化共用）
@@ -1983,7 +1932,7 @@ function resetApiKeyVisibility(input, toggleBtn) {
  * @param {HTMLElement} container - 下拉列表容器
  * @param {HTMLElement} labelEl - 触发按钮上的标签元素
  * @param {Array} profiles - 预设列表（来自 App.GetProfiles）
- * @param {Object} current - 当前表单值 {provider, base_url, api_key}
+ * @param {Object} current - 当前表单值 {base_url, api_key}
  * @param {Function} onSelect - 点击预设项的回调，参数为预设对象
  * @returns {number|null} 匹配高亮的预设 id
  */
@@ -2001,18 +1950,12 @@ function renderPresetList(container, labelEl, profiles, current, onSelect) {
         const item = document.createElement('div');
         item.className = 'theme-select-item';
         item.dataset.profileId = p.id;
-        // 展示名称 + 服务商标识
-        const badge = document.createElement('span');
-        badge.className = 'preset-provider-badge';
-        badge.style.marginRight = '6px';
-        badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
+        // 展示名称
         const nameSpan = document.createElement('span');
         nameSpan.textContent = p.name;
-        item.appendChild(badge);
         item.appendChild(nameSpan);
         // 按当前表单值匹配高亮（不再依赖 is_active 字段做唯一选中）
         const isMatch = current &&
-            p.provider === current.provider &&
             (p.base_url || '') === (current.base_url || '') &&
             (p.api_key || '') === (current.api_key || '');
         if (isMatch) {
@@ -2152,10 +2095,10 @@ function bindModelDropdown(m) {
 
 /**
  * 获取模型列表并渲染到指定下拉（对话/量化共用）
- * @param {Object} m - { provider, url, key, dropdown, label, savedModel, onSaved }
+ * @param {Object} m - { url, key, dropdown, label, savedModel, onSaved }
  */
 async function fetchModelsAndRender(m) {
-    const models = await window.go.main.App.FetchAIModels(m.provider, m.url, m.key);
+    const models = await window.go.main.App.FetchAIModels(m.url, m.key);
     if (models && models.length > 0) {
         // 仅清除模型列表项，保留搜索框
         m.dropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
@@ -2210,13 +2153,13 @@ function setBtnLoading(btn, loading) {
 
 /**
  * 初始化 API 连接模块（对话/量化共用）
- * 负责：测试连通性、Key 显隐、获取模型、模型下拉交互、服务商分段切换、
+ * 负责：测试连通性、Key 显隐、获取模型、模型下拉交互、
  *       URL/Key 自动保存、预设下拉展开/关闭。
  * @param {Object} m - 模块配置对象
- *   { seg, indicator, baseURL, apiKey, apiKeyToggle, testBtn, fetchBtn,
+ *   { baseURL, apiKey, apiKeyToggle, testBtn, fetchBtn,
  *     modelTrigger, modelDropdown, modelLabel, modelSearch,
  *     presetTrigger, presetDropdown,
- *     getProvider, getSavedModel, onModelChange,
+ *     getSavedModel, onModelChange,
  *     onSettingsSaved, onBeforeOpenPreset }
  */
 function initApiConnectionModule(m) {
@@ -2225,9 +2168,8 @@ function initApiConnectionModule(m) {
         const url = m.baseURL.value.trim();
         const key = m.apiKey.value.trim();
         const model = m.modelLabel.textContent;
-        // URL 必填；仅 OpenAI 兼容服务要求 API Key（Ollama 本地服务无需 Key）
+        // URL 必填
         if (!url) return;
-        if (m.getProvider() === 'openai' && !key) return;
         // 模型未选中（占位符）时不保存模型名
         if (model === '-- 请先获取模型列表 --' || !model) return;
         await saveSettings();
@@ -2240,28 +2182,23 @@ function initApiConnectionModule(m) {
         m.testBtn.addEventListener('click', async () => {
             const url = m.baseURL.value.trim();
             const key = m.apiKey.value.trim();
-            const provider = m.getProvider();
             if (!url) {
                 nm.show('请先填写 API 地址', 'warning');
                 return;
             }
-            if (provider === 'openai' && !key) {
-                nm.show('请先填写 API Key', 'warning');
-                return;
-            }
             setBtnLoading(m.testBtn, true);
             try {
-                const ok = await window.go.main.App.TestAIBaseURL(provider, url, key);
+                const ok = await window.go.main.App.TestAIBaseURL(url, key);
                 if (ok) {
-                    nm.show(provider + ' 服务连接成功', 'success');
+                    nm.show('服务连接成功', 'success');
                     // 测试成功即持久化当前表单值（覆盖"改值后未失焦直接点测试"场景；失败不保存避免误存错误值）
                     await saveSettings();
                     if (m.onSettingsSaved) m.onSettingsSaved();
                 } else {
-                    nm.show(provider + ' 服务连接失败，请检查地址和 Key 是否正确', 'warning');
+                    nm.show('服务连接失败，请检查地址和 Key 是否正确', 'warning');
                 }
             } catch (e) {
-                nm.show(provider + ' 连接失败: ' + e, 'error');
+                nm.show('连接失败: ' + e, 'error');
             } finally {
                 setBtnLoading(m.testBtn, false);
             }
@@ -2290,19 +2227,13 @@ function initApiConnectionModule(m) {
         m.fetchBtn.addEventListener('click', async () => {
             const url = m.baseURL.value.trim();
             const key = m.apiKey.value.trim();
-            const provider = m.getProvider();
             if (!url) {
                 nm.show('请先填写 API 地址', 'warning');
-                return;
-            }
-            if (provider === 'openai' && !key) {
-                nm.show('请先填写 API Key', 'warning');
                 return;
             }
             setBtnLoading(m.fetchBtn, true);
             try {
                 await fetchModelsAndRender({
-                    provider,
                     url,
                     key,
                     dropdown: m.modelDropdown,
@@ -2329,33 +2260,6 @@ function initApiConnectionModule(m) {
         searchInput: m.modelSearch,
         onSelect: m.onModelChange || saveModuleConfig,
     });
-
-    // ── 服务商分段控件事件 ──
-    if (m.seg) {
-        m.seg.addEventListener('click', (e) => {
-            const btn = e.target.closest('.segmented-btn');
-            if (!btn) return;
-            const value = btn.dataset.providerValue;
-            if (!value || value === m.getProvider()) return;
-
-            setSegmentedActive(m.seg, m.indicator, value);
-
-            // 切换时清空模型列表、为 URL 空或匹配旧默认值时填入新默认 URL
-            const currentURL = m.baseURL.value.trim();
-            const isOldDefault = Object.values(AI_DEFAULT_URLS).includes(currentURL);
-            if (!currentURL || isOldDefault) {
-                m.baseURL.value = AI_DEFAULT_URLS[value] || currentURL;
-            }
-
-            // 清空模型列表
-            m.modelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
-            m.modelLabel.textContent = '-- 请先获取模型列表 --';
-            const wrap = m.modelDropdown.querySelector('.ai-model-search-wrap');
-            if (wrap) wrap.style.display = 'none';
-
-            saveSettings().then(() => nm.show('AI 配置已保存', 'success'));
-        });
-    }
 
     // ── 自动保存 ▸ URL 输入完成 ──
     if (m.baseURL) {
@@ -2415,28 +2319,6 @@ function initApiConnectionModule(m) {
     }
 }
 
-function getActiveProvider() {
-    return getSegmentedValue(els.aiProviderSegmented);
-}
-
-function setActiveProvider(value) {
-    setSegmentedActive(els.aiProviderSegmented, els.aiProviderIndicator, value);
-}
-
-/**
- * 重新定位服务商分段控件的指示器（面板从隐藏变为可见后调用）
- */
-function repositionProviderIndicator() {
-    repositionSegmentedIndicator(els.aiProviderSegmented, els.aiProviderIndicator);
-}
-
-/**
- * 重新定位量化连接模块服务商分段控件的指示器（面板从隐藏变为可见后调用）
- */
-function repositionEmbedProviderIndicator() {
-    repositionSegmentedIndicator(els.aiEmbedProviderSegmented, els.aiEmbedProviderIndicator);
-}
-
 /**
  * 重新定位日志级别分段控件指示器（面板从 hidden→visible 时调用）
  */
@@ -2460,10 +2342,8 @@ function repositionLogLevelIndicator() {
 
 async function initAISettings() {
 
-    // ── 对话连接模块初始化（预设下拉、服务商分段、URL/Key、模型获取/选择共用同一套逻辑）──
+    // ── 对话连接模块初始化（预设下拉、URL/Key、模型获取/选择共用同一套逻辑）──
     initApiConnectionModule({
-        seg: els.aiProviderSegmented,
-        indicator: els.aiProviderIndicator,
         baseURL: els.aiBaseURL,
         apiKey: els.aiAPIKey,
         apiKeyToggle: els.aiAPIKeyToggle,
@@ -2475,8 +2355,6 @@ async function initAISettings() {
         modelSearch: els.aiSettingModelSearch,
         presetTrigger: $('presetTrigger'),
         presetDropdown: $('presetDropdown'),
-        // 读取当前服务商（测试连通性 / 获取模型时校验 Key）
-        getProvider: getActiveProvider,
         // 获取模型时用于高亮当前已保存的模型
         getSavedModel: async () => (await window.go.main.App.GetAIConfig()).model,
         // URL/Key/模型 变更保存后刷新对话预设下拉
@@ -2487,8 +2365,6 @@ async function initAISettings() {
 
     // ── 量化连接模块初始化（结构对应对话连接，预设切换走 SwitchProfile("embed", id)）──
     initApiConnectionModule({
-        seg: els.aiEmbedProviderSegmented,
-        indicator: els.aiEmbedProviderIndicator,
         baseURL: els.aiEmbedBaseURL,
         apiKey: els.aiEmbedAPIKey,
         apiKeyToggle: els.aiEmbedAPIKeyToggle,
@@ -2500,8 +2376,6 @@ async function initAISettings() {
         modelSearch: els.aiEmbedModelSearch,
         presetTrigger: els.aiEmbedPresetTrigger,
         presetDropdown: els.aiEmbedPresetDropdown,
-        // 读取当前服务商（测试连通性 / 获取模型时校验 Key）
-        getProvider: () => getSegmentedValue(els.aiEmbedProviderSegmented),
         // 获取模型时用于高亮当前已保存的量化模型
         getSavedModel: async () => (await window.go.main.App.GetAllSettings()).ai_embed_model,
         // URL/Key/模型 变更保存后刷新量化预设下拉
@@ -3078,26 +2952,6 @@ async function initAISettings() {
     document.getElementById('presetModalOverlay')?.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closePresetModal();
     });
-    // 弹窗内服务商下拉切换
-    document.getElementById('presetModalProviderTrigger')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dd = document.getElementById('presetModalProviderDropdown');
-        dd?.classList.toggle('open');
-    });
-    document.querySelectorAll('#presetModalProviderDropdown .theme-select-item').forEach(item => {
-        item.addEventListener('click', () => {
-            document.querySelectorAll('#presetModalProviderDropdown .theme-select-item').forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-            document.getElementById('presetModalProviderLabel').textContent = item.textContent.trim();
-            document.getElementById('presetModalProviderDropdown')?.classList.remove('open');
-        });
-    });
-    // 点击弹窗遮罩关闭下拉
-    document.getElementById('presetModalOverlay')?.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) {
-            document.getElementById('presetModalProviderDropdown')?.classList.remove('open');
-        }
-    });
     // 弹窗内 API Key 显示/隐藏切换
     document.getElementById('presetModalKeyToggle')?.addEventListener('click', () => {
         const input = document.getElementById('presetModalKey');
@@ -3124,21 +2978,15 @@ async function initAISettings() {
 
     // 测试预设连接
     async function testPresetConnection() {
-        const providerEl = document.querySelector('#presetModalProviderDropdown .theme-select-item.active');
-        const provider = providerEl ? providerEl.dataset.presetProvider : 'openai';
         const baseURL = document.getElementById('presetModalURL').value.trim();
         const apiKey = document.getElementById('presetModalKey').value.trim();
         if (!baseURL) {
             nm.show('请先填写 API 地址', 'warning');
             return;
         }
-        if (provider === 'openai' && !apiKey) {
-            nm.show('请先填写 API Key', 'warning');
-            return;
-        }
         setBtnLoading(els.presetModalTestBtn, true, '测试中…');
         try {
-            const ok = await window.go.main.App.TestAIConnection(provider, baseURL, apiKey);
+            const ok = await window.go.main.App.TestAIConnection(baseURL, apiKey);
             if (ok) {
                 const presetName = document.getElementById('presetModalName').value.trim();
                 nm.show(presetName ? `「${presetName}」连接成功` : '连接成功', 'success');
@@ -3170,9 +3018,8 @@ async function loadProfiles() {
         const label = document.getElementById('presetLabel');
         if (!dropdown) return;
 
-        // 按当前对话表单值（服务商/地址/Key）与预设匹配高亮
+        // 按当前对话表单值（地址/Key）与预设匹配高亮
         renderPresetList(dropdown, label, profiles, {
-            provider: getActiveProvider(),
             base_url: (els.aiBaseURL.value || '').trim(),
             api_key: (els.aiAPIKey.value || '').trim(),
         }, (p) => switchProfile('chat', p.id));
@@ -3187,9 +3034,8 @@ async function loadProfilesEmbed() {
         const profiles = await window.go.main.App.GetProfiles();
         if (!els.aiEmbedPresetDropdown) return;
 
-        // 按当前量化表单值（服务商/地址/Key）与预设匹配高亮
+        // 按当前量化表单值（地址/Key）与预设匹配高亮
         renderPresetList(els.aiEmbedPresetDropdown, els.aiEmbedPresetLabel, profiles, {
-            provider: getSegmentedValue(els.aiEmbedProviderSegmented),
             base_url: (els.aiEmbedBaseURL.value || '').trim(),
             api_key: (els.aiEmbedAPIKey.value || '').trim(),
         }, (p) => switchProfileEmbed(p.id));
@@ -3206,8 +3052,6 @@ async function switchProfile(target, id, silent) {
         const cfg = await window.go.main.App.GetAIConfig();
         els.aiBaseURL.value = cfg.base_url || '';
         els.aiAPIKey.value = cfg.api_key || '';
-        // 更新服务商分段控件
-        setActiveProvider(cfg.provider);
         // 重置模型下拉
         els.aiModelLabel.textContent = '-- 请先获取模型列表 --';
         els.aiModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
@@ -3236,7 +3080,6 @@ async function switchProfileEmbed(id, silent) {
         const cfg = await window.go.main.App.GetAllSettings();
         els.aiEmbedBaseURL.value = cfg.ai_embed_base_url || '';
         els.aiEmbedAPIKey.value = cfg.ai_embed_api_key || '';
-        setSegmentedActive(els.aiEmbedProviderSegmented, els.aiEmbedProviderIndicator, cfg.ai_embed_provider || 'openai');
         // 重置模型下拉
         els.aiEmbedModelLabel.textContent = '-- 请先获取模型列表 --';
         els.aiEmbedModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
@@ -3270,21 +3113,13 @@ function openAddProfileModal(embed = false) {
         eye.style.display = '';
         eyeOff.style.display = 'none';
     }
-    // 重置服务商为当前选中的
-    const currentProvider = embed
-        ? getSegmentedValue(els.aiEmbedProviderSegmented)
-        : getActiveProvider();
-    const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
-    providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === currentProvider));
-    document.getElementById('presetModalProviderLabel').textContent =
-        currentProvider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
     const overlay = document.getElementById('presetModalOverlay');
     overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
 // 打开编辑预设弹窗
-function openEditProfileModal(id, name, provider, baseURL, apiKey) {
+function openEditProfileModal(id, name, baseURL, apiKey) {
     editingProfileId = id;
     document.getElementById('presetModalTitle').textContent = '编辑配置';
     document.getElementById('presetModalName').value = name || '';
@@ -3300,11 +3135,6 @@ function openEditProfileModal(id, name, provider, baseURL, apiKey) {
         eye.style.display = '';
         eyeOff.style.display = 'none';
     }
-    // 设置服务商
-    const providerItems = document.querySelectorAll('#presetModalProviderDropdown .theme-select-item');
-    providerItems.forEach(item => item.classList.toggle('active', item.dataset.presetProvider === provider));
-    document.getElementById('presetModalProviderLabel').textContent =
-        provider === 'ollama' ? 'Ollama' : 'OpenAI 兼容';
     const overlay = document.getElementById('presetModalOverlay');
     overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
@@ -3319,8 +3149,6 @@ function closePresetModal() {
 // 保存预设（新增或编辑）
 async function savePresetModal() {
     const name = document.getElementById('presetModalName').value.trim();
-    const providerEl = document.querySelector('#presetModalProviderDropdown .theme-select-item.active');
-    const provider = providerEl ? providerEl.dataset.presetProvider : 'openai';
     const baseURL = document.getElementById('presetModalURL').value.trim();
     const apiKey = document.getElementById('presetModalKey').value.trim();
     if (!name) { nm.show('请输入名称', 'error'); return; }
@@ -3341,10 +3169,10 @@ async function savePresetModal() {
     try {
         let profile = null;
         if (editingProfileId) {
-            await window.go.main.App.UpdateProfile(editingProfileId, name, provider, baseURL, apiKey);
+            await window.go.main.App.UpdateProfile(editingProfileId, name, baseURL, apiKey);
             nm.show('配置已更新', 'success');
         } else {
-            profile = await window.go.main.App.CreateProfile(name, provider, baseURL, apiKey);
+            profile = await window.go.main.App.CreateProfile(name, baseURL, apiKey);
             nm.show('配置已新增', 'success');
         }
         const wasEditingId = editingProfileId; // 保存编辑状态，closePresetModal 会清空
@@ -3353,7 +3181,7 @@ async function savePresetModal() {
         await loadProfilesEmbed(); // 预设共享，两个模块的下拉同步刷新
         if (wasEditingId && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
             // 编辑模式：精准替换对应行，避免全量重渲染，无需入场动画
-            const updatedProfile = { id: wasEditingId, name, provider, base_url: baseURL, api_key: apiKey };
+            const updatedProfile = { id: wasEditingId, name, base_url: baseURL, api_key: apiKey };
             const oldRow = presetMgrContainer.querySelector(`[data-profile-id="${wasEditingId}"]`);
             if (oldRow) {
                 const newRow = createPresetRowElement(updatedProfile);
@@ -3494,13 +3322,9 @@ function createPresetRowElement(p) {
     info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
     const nameRow = document.createElement('div');
     nameRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
-    const badge = document.createElement('span');
-    badge.className = 'preset-provider-badge';
-    badge.textContent = p.provider === 'ollama' ? 'Ollama' : 'OpenAI';
     const nameSpan = document.createElement('strong');
     nameSpan.style.cssText = 'font-size:0.85rem;color:var(--text-primary);';
     nameSpan.textContent = p.name;
-    nameRow.appendChild(badge);
     nameRow.appendChild(nameSpan);
     const detail = document.createElement('div');
     detail.style.cssText = 'font-size:0.75rem;color:var(--text-muted);';
@@ -3515,7 +3339,7 @@ function createPresetRowElement(p) {
     editBtn.textContent = '编辑';
     editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        openEditProfileModal(p.id, p.name, p.provider, p.base_url, p.api_key);
+        openEditProfileModal(p.id, p.name, p.base_url, p.api_key);
     });
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-sm btn-danger';
@@ -6404,12 +6228,9 @@ async function handleKeyboardNavigation(e) {
     if (e.key === 'Enter') {
         const presetOverlay = document.getElementById('presetModalOverlay');
         if (presetOverlay && presetOverlay.classList.contains('visible')) {
-            const providerDd = document.getElementById('presetModalProviderDropdown');
-            if (!(providerDd && providerDd.classList.contains('open'))) {
-                e.preventDefault();
-                savePresetModal();
-                return;
-            }
+            e.preventDefault();
+            savePresetModal();
+            return;
         }
     }
 
@@ -9081,9 +8902,6 @@ async function loadSettings() {
             }
         }
 
-        // --- AI: 服务商分段控件 ---
-        setActiveProvider(cfg.ai_provider);
-
         // --- AI: base_url & api_key ---
         if (els.aiBaseURL) els.aiBaseURL.value = cfg.ai_base_url || '';
         if (els.aiAPIKey) els.aiAPIKey.value = cfg.ai_api_key || '';
@@ -9104,9 +8922,6 @@ async function loadSettings() {
                 loadWrap.style.display = els.aiModelDropdown.querySelectorAll('.theme-select-item').length > 1 ? '' : 'none';
             }
         }
-
-        // --- AI 量化: 服务商分段控件 ---
-        setSegmentedActive(els.aiEmbedProviderSegmented, els.aiEmbedProviderIndicator, cfg.ai_embed_provider || 'openai');
 
         // --- AI 量化: base_url & api_key ---
         if (els.aiEmbedBaseURL) els.aiEmbedBaseURL.value = cfg.ai_embed_base_url || '';
@@ -9235,22 +9050,6 @@ async function loadSettings() {
             }
         }
 
-        // --- AI: 获取模型按钮状态 ---
-        const canFetch = cfg.ai_provider === 'openai' || cfg.ai_provider === 'ollama';
-        if (els.aiFetchModelsBtn) {
-            els.aiFetchModelsBtn.disabled = !canFetch;
-            els.aiFetchModelsBtn.style.opacity = canFetch ? '' : '0.5';
-            els.aiFetchModelsBtn.title = canFetch ? '' : '该服务商不支持获取模型列表';
-        }
-
-        // --- AI 量化: 获取模型按钮状态 ---
-        const embedCanFetch = cfg.ai_embed_provider === 'openai' || cfg.ai_embed_provider === 'ollama';
-        if (els.aiEmbedFetchModelsBtn) {
-            els.aiEmbedFetchModelsBtn.disabled = !embedCanFetch;
-            els.aiEmbedFetchModelsBtn.style.opacity = embedCanFetch ? '' : '0.5';
-            els.aiEmbedFetchModelsBtn.title = embedCanFetch ? '' : '该服务商不支持获取模型列表';
-        }
-
         // --- AI: 预设配置 ---
         await loadProfiles();
 
@@ -9297,19 +9096,11 @@ async function saveSettings() {
                 return parseInt(active?.dataset.value) || 20;
             })(),
             cm_syntax_highlight: els.mdHighlightToggle?.checked || false,
-            ai_provider: (() => {
-                const active = els.aiProviderSegmented?.querySelector('.segmented-btn.active');
-                return active?.dataset.providerValue || 'openai';
-            })(),
             ai_base_url: els.aiBaseURL?.value || '',
             ai_api_key: els.aiAPIKey?.value || '',
             ai_model: (() => {
                 const m = els.aiModelLabel?.textContent || '';
                 return m === '-- 请先获取模型列表 --' ? '' : m;
-            })(),
-            ai_embed_provider: (() => {
-                const active = els.aiEmbedProviderSegmented?.querySelector('.segmented-btn.active');
-                return active?.dataset.providerValue || 'openai';
             })(),
             ai_embed_base_url: els.aiEmbedBaseURL?.value || '',
             ai_embed_api_key: els.aiEmbedAPIKey?.value || '',
@@ -9378,8 +9169,6 @@ function switchSettingsTab(panelName) {
         if (currentPanel) currentPanel.classList.remove('active');
         targetPanel.classList.add('active');
         // 面板从 hidden→visible，重算可能受 display:none 影响的分段控件指示器
-        repositionProviderIndicator();
-        repositionEmbedProviderIndicator();
         repositionLogLevelIndicator();
         return;
     }
@@ -9398,8 +9187,6 @@ function switchSettingsTab(panelName) {
         // 阶段2: 新面板进入动画
         targetPanel.classList.add('panel-enter');
         // 面板已具备 display:block，立即重算分段控件指示器（不需要等动画播完）
-        repositionProviderIndicator();
-        repositionEmbedProviderIndicator();
         repositionLogLevelIndicator();
 
         targetPanel.addEventListener('animationend', function onEnterEnd() {

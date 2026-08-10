@@ -1,4 +1,4 @@
-package aicli
+package aierrors
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"testing"
 
+	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -241,5 +242,51 @@ func TestClassifyByText_NetworkError(t *testing.T) {
 	}
 	if ae.Category != CategoryNetworkError {
 		t.Errorf("expected category %q, got %q", CategoryNetworkError, ae.Category)
+	}
+}
+
+func TestClassifyError_EinoAPIError_AuthError_401(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 401,
+		Message:        "Incorrect API key provided",
+		Type:           "invalid_request_error",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryAuthError {
+		t.Errorf("expected category %q, got %q", CategoryAuthError, ae.Category)
+	}
+	if ae.UserMsg == "" {
+		t.Error("expected non-empty UserMsg")
+	}
+}
+
+func TestClassifyError_EinoAPIError_RateLimit_429(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 429,
+		Message:        "Too Many Requests",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryRateLimit {
+		t.Errorf("expected category %q, got %q", CategoryRateLimit, ae.Category)
+	}
+}
+
+func TestClassifyError_EinoAPIError_ContextLength_400(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "context_length_exceeded: maximum context length is 8192 tokens",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryContextLength {
+		t.Errorf("expected category %q, got %q", CategoryContextLength, ae.Category)
 	}
 }

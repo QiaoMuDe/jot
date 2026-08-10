@@ -19,67 +19,55 @@ func InitBuiltinProfiles(db *gorm.DB) error {
 
 	builtinProfiles := []models.APIProfile{
 		{
-			Name:     "DeepSeek",
-			Provider: "openai",
-			BaseURL:  "https://api.deepseek.com",
+			Name:    "DeepSeek",
+			BaseURL: "https://api.deepseek.com",
 		},
 		{
-			Name:     "VIP 中转",
-			Provider: "openai",
-			BaseURL:  "https://vip.j3gb.com/v1",
+			Name:    "VIP 中转",
+			BaseURL: "https://vip.j3gb.com/v1",
 		},
 		{
-			Name:     "OpenRouter",
-			Provider: "openai",
-			BaseURL:  "https://openrouter.ai/api/v1",
+			Name:    "OpenRouter",
+			BaseURL: "https://openrouter.ai/api/v1",
 		},
 		{
-			Name:     "NVIDIA",
-			Provider: "openai",
-			BaseURL:  "https://integrate.api.nvidia.com/v1",
+			Name:    "NVIDIA",
+			BaseURL: "https://integrate.api.nvidia.com/v1",
 		},
 		{
-			Name:     "智谱 GLM",
-			Provider: "openai",
-			BaseURL:  "https://open.bigmodel.cn/api/paas/v4",
+			Name:    "智谱 GLM",
+			BaseURL: "https://open.bigmodel.cn/api/paas/v4",
 		},
 		{
-			Name:     "小米 Mimo",
-			Provider: "openai",
-			BaseURL:  "https://api.xiaomimimo.com/v1",
+			Name:    "小米 Mimo",
+			BaseURL: "https://api.xiaomimimo.com/v1",
 		},
 		{
-			Name:     "小米 Mimo TokenPlan",
-			Provider: "openai",
-			BaseURL:  "https://token-plan-cn.xiaomimimo.com/v1",
+			Name:    "小米 Mimo TokenPlan",
+			BaseURL: "https://token-plan-cn.xiaomimimo.com/v1",
 		},
 		{
-			Name:     "商汤日日新",
-			Provider: "openai",
-			BaseURL:  "https://token.sensenova.cn/v1",
+			Name:    "商汤日日新",
+			BaseURL: "https://token.sensenova.cn/v1",
 		},
 		{
-			Name:     "Ollama",
-			Provider: "ollama",
-			BaseURL:  "http://localhost:11434",
+			Name:    "Ollama",
+			BaseURL: "http://localhost:11434/v1",
 		},
 		{
-			Name:     "阶跃星辰",
-			Provider: "openai",
-			BaseURL:  "https://api.stepfun.com/v1",
+			Name:    "阶跃星辰",
+			BaseURL: "https://api.stepfun.com/v1",
 		},
 		{
-			Name:     "阶跃星辰 TokenPlan",
-			Provider: "openai",
-			BaseURL:  "https://api.stepfun.com/step_plan/v1",
+			Name:    "阶跃星辰 TokenPlan",
+			BaseURL: "https://api.stepfun.com/step_plan/v1",
 		},
 		{
-			Name:     "Agnes",
-			Provider: "openai",
-			BaseURL:  "https://api.agnes-ai.cn/v1",
+			Name:    "Agnes",
+			BaseURL: "https://api.agnes-ai.cn/v1",
 		},
 		// ↓ 用户可在下面继续添加更多内置服务商 ↓
-		// {Name: "XX", Provider: "openai", BaseURL: "https://api.xxx.com"},
+		// {Name: "XX", BaseURL: "https://api.xxx.com"},
 	}
 
 	var toInsert []models.APIProfile

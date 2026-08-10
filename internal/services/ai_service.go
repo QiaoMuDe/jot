@@ -12,6 +12,7 @@ import (
 
 	"gitee.com/MM-Q/fastlog"
 	"jot/internal/aicli"
+	"jot/internal/aierrors"
 	"jot/internal/models"
 
 	"gorm.io/gorm"
@@ -33,7 +34,6 @@ type Message struct {
 
 // AIConfig 表示 AI 服务配置
 type AIConfig struct {
-	Provider          string `json:"provider"`
 	BaseURL           string `json:"base_url"`
 	APIKey            string `json:"api_key"`
 	Model             string `json:"model"`
@@ -108,7 +108,6 @@ func (s *AIService) GetSkillPrompts(skillIds []string, translateArgs map[string]
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
 	cfg := AIConfig{
-		Provider:          svc.Get("ai_provider"),
 		BaseURL:           svc.Get("ai_base_url"),
 		APIKey:            svc.Get("ai_api_key"),
 		Model:             svc.Get("ai_model"),
@@ -174,10 +173,6 @@ func TruncateMessagesForLLM(messages []Message, n int) []Message {
 // SaveConfig 保存 AI 配置到 SettingService
 func (a *AIService) SaveConfig(cfg AIConfig) error {
 	svc := NewSettingService(a.db)
-	if err := svc.Set("ai_provider", cfg.Provider); err != nil {
-		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
-		return err
-	}
 	if err := svc.Set("ai_base_url", cfg.BaseURL); err != nil {
 		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
@@ -207,10 +202,9 @@ func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, err
 	cfg := a.GetConfig()
 
 	client := aicli.NewClient(aicli.Config{
-		Provider: cfg.Provider,
-		BaseURL:  cfg.BaseURL,
-		APIKey:   cfg.APIKey,
-		Model:    cfg.Model,
+		BaseURL: cfg.BaseURL,
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
 	})
 
 	// Convert services.Message to aicli.Message
@@ -223,8 +217,8 @@ func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, err
 	if err != nil {
 		a.logger.Errorw("AIService.CallAI 失败", fastlog.Error(err))
 		// 使用 ClassifyError 分类错误，返回带 user_msg 的结构化错误
-		if classified := aicli.ClassifyError(err); classified != nil {
-			return "", &aicli.AIErrorWrapper{Err: classified}
+		if classified := aierrors.ClassifyError(err); classified != nil {
+			return "", &aierrors.AIErrorWrapper{Err: classified}
 		}
 		// ClassifyError 返回 nil（用户主动取消），原样返回
 		return "", err
@@ -240,10 +234,9 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 	cfg := a.GetConfig()
 
 	client := aicli.NewClient(aicli.Config{
-		Provider: cfg.Provider,
-		BaseURL:  cfg.BaseURL,
-		APIKey:   cfg.APIKey,
-		Model:    cfg.Model,
+		BaseURL: cfg.BaseURL,
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
 	})
 
 	// Convert services.Message to aicli.Message
@@ -263,18 +256,9 @@ func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinki
 }
 
 // TestConnection 测试 AI 服务连通性
-// - openai: 调用 /models 端点
-// - ollama: 调用 /api/tags 端点
-// - other: 尝试创建一个简单调用
+// 统一调用 OpenAI 兼容 /models 端点
 func (a *AIService) TestConnection(cfg AIConfig) (bool, error) {
-	switch cfg.Provider {
-	case "openai":
-		return testOpenAIConnection(cfg)
-	case "ollama":
-		return testOllamaConnection(cfg)
-	default:
-		return testGenericConnection(cfg)
-	}
+	return testOpenAIConnection(cfg)
 }
 
 // httpGetJSON 发起 GET 请求并读取完整响应体，统一超时与错误处理
@@ -313,40 +297,6 @@ func testOpenAIConnection(cfg AIConfig) (bool, error) {
 	return false, fmt.Errorf("服务器返回状态码 %d", status)
 }
 
-// testOllamaConnection 测试 Ollama 连通性（调用 /api/tags）
-func testOllamaConnection(cfg AIConfig) (bool, error) {
-	baseURL := strings.TrimRight(cfg.BaseURL, "/")
-	_, status, err := httpGetJSON(baseURL+"/api/tags", "", 5*time.Second)
-	if err != nil {
-		return false, fmt.Errorf("连接测试失败: %w", err)
-	}
-	if status >= 200 && status < 300 {
-		return true, nil
-	}
-	return false, fmt.Errorf("服务器返回状态码 %d", status)
-}
-
-// testGenericConnection 通过创建 AI 客户端并执行简单调用来测试连通性
-func testGenericConnection(cfg AIConfig) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client := aicli.NewClient(aicli.Config{
-		Provider: cfg.Provider,
-		BaseURL:  cfg.BaseURL,
-		APIKey:   cfg.APIKey,
-		Model:    cfg.Model,
-	})
-
-	msgs := []aicli.Message{{Role: "user", Content: "test"}}
-	_, _, err := client.Chat(ctx, msgs, false)
-	if err != nil {
-		return false, fmt.Errorf("连接测试失败: %w", err)
-	}
-
-	return true, nil
-}
-
 // modelsResponse 表示 /models 接口的响应体
 type modelsResponse struct {
 	Data []struct {
@@ -355,18 +305,9 @@ type modelsResponse struct {
 }
 
 // FetchModels 获取可用模型列表
-// - openai: 调用 /models 端点
-// - ollama: 调用 /api/tags 端点
-// - other: 返回空列表
+// 统一调用 OpenAI 兼容 /models 端点
 func (a *AIService) FetchModels(cfg AIConfig) ([]string, error) {
-	switch cfg.Provider {
-	case "openai":
-		return fetchOpenAIModels(cfg)
-	case "ollama":
-		return fetchOllamaModels(cfg)
-	default:
-		return []string{}, nil
-	}
+	return fetchOpenAIModels(cfg)
 }
 
 // fetchOpenAIModels 从 OpenAI 兼容 API 获取模型列表
@@ -386,34 +327,6 @@ func fetchOpenAIModels(cfg AIConfig) ([]string, error) {
 	models := make([]string, 0, len(modelsResp.Data))
 	for _, item := range modelsResp.Data {
 		models = append(models, item.ID)
-	}
-	return models, nil
-}
-
-// ollamaTagResponse Ollama /api/tags 响应结构
-type ollamaTagResponse struct {
-	Models []struct {
-		Name string `json:"name"`
-	} `json:"models"`
-}
-
-// fetchOllamaModels 从 Ollama API 获取本地模型列表
-func fetchOllamaModels(cfg AIConfig) ([]string, error) {
-	baseURL := strings.TrimRight(cfg.BaseURL, "/")
-	body, status, err := httpGetJSON(baseURL+"/api/tags", "", 15*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("获取模型列表失败: %w", err)
-	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("获取模型列表失败: HTTP %d", status)
-	}
-	var tagResp ollamaTagResponse
-	if err := json.Unmarshal(body, &tagResp); err != nil {
-		return nil, fmt.Errorf("获取模型列表失败: %w", err)
-	}
-	models := make([]string, 0, len(tagResp.Models))
-	for _, item := range tagResp.Models {
-		models = append(models, item.Name)
 	}
 	return models, nil
 }

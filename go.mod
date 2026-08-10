@@ -13,7 +13,6 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-ego/gse v1.0.2
 	github.com/hekmon/tavily v1.3.0
-	github.com/ollama/ollama v0.31.1
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/wailsapp/wails/v2 v2.12.0
 	gorm.io/gorm v1.31.1
@@ -106,6 +105,7 @@ require (
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
+	golang.org/x/image v0.22.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.43.0 // indirect

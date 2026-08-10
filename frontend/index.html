@@ -502,18 +502,6 @@
                                 <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                             </div>
                         </div>
-                        <!-- 服务商 -->
-                        <div class="ai-setting-item">
-                            <span class="ai-setting-label">服务商</span>
-                            <span class="font-setting-desc" style="flex:1;">选择 AI 接口类型</span>
-                            <div class="ai-setting-control" style="flex:none;max-width:none;">
-                                <div class="segmented-control" id="aiProviderSegmented">
-                                    <div class="segmented-indicator" id="aiProviderIndicator"></div>
-                                    <button class="segmented-btn active" data-provider-value="openai">OpenAI</button>
-                                    <button class="segmented-btn" data-provider-value="ollama">Ollama</button>
-                                </div>
-                            </div>
-                        </div>
                         <!-- API Key -->
                         <div class="ai-setting-item">
                             <span class="ai-setting-label">API Key</span>
@@ -579,18 +567,6 @@
                             <div class="ai-setting-control" style="max-width:none;">
                                 <input type="text" id="aiEmbedBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
                                 <button id="aiEmbedTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
-                            </div>
-                        </div>
-                        <!-- 服务商 -->
-                        <div class="ai-setting-item">
-                            <span class="ai-setting-label">服务商</span>
-                            <span class="font-setting-desc" style="flex:1;">选择向量嵌入接口类型</span>
-                            <div class="ai-setting-control" style="flex:none;max-width:none;">
-                                <div class="segmented-control" id="aiEmbedProviderSegmented">
-                                    <div class="segmented-indicator" id="aiEmbedProviderIndicator"></div>
-                                    <button class="segmented-btn active" data-provider-value="openai">OpenAI</button>
-                                    <button class="segmented-btn" data-provider-value="ollama">Ollama</button>
-                                </div>
                             </div>
                         </div>
                         <!-- API Key -->
@@ -2243,20 +2219,7 @@ console.log(greet("Jot"));
                 <div class="preset-modal-body">
                     <div class="preset-modal-field">
                         <label>名称</label>
-                        <input type="text" id="presetModalName" class="settings-input" placeholder="如：DeepSeek、Ollama 本地" />
-                    </div>
-                    <div class="preset-modal-field">
-                        <label>服务商</label>
-                        <div class="theme-select" id="presetModalProvider" style="max-width:none;">
-                            <div class="theme-select-trigger" id="presetModalProviderTrigger">
-                                <span id="presetModalProviderLabel">OpenAI 兼容</span>
-                                <svg class="theme-select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                            </div>
-                            <div class="theme-select-dropdown" id="presetModalProviderDropdown">
-                                <div class="theme-select-item active" data-preset-provider="openai">OpenAI 兼容</div>
-                                <div class="theme-select-item" data-preset-provider="ollama">Ollama</div>
-                            </div>
-                        </div>
+                        <input type="text" id="presetModalName" class="settings-input" placeholder="如：DeepSeek" />
                     </div>
                     <div class="preset-modal-field">
                         <label>API 地址</label>

@@ -47,8 +47,8 @@ type Deps struct {
 	Vector  *services.VectorService
 	Setting *services.SettingService
 	Logger  *fastlog.Logger
-	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 四键），apiKey 已解码。
-	GetEmbedConfig func() (provider, baseURL, apiKey, model string, err error)
+	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
+	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }
 
 // AgentService 封装 Agent 对话链路。
@@ -81,7 +81,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		return result, errors.New("请先配置 AI 服务（BaseURL / APIKey / Model）")
 	}
 
-	// 2. 构建 ChatModel（OpenAI 兼容协议，BaseURL 指向 DeepSeek/通义/Ollama 等端点）
+	// 2. 构建 ChatModel（OpenAI 兼容协议，BaseURL 指向 DeepSeek/通义等兼容端点）
 	chatModelCfg := &openai.ChatModelConfig{
 		APIKey:  aiCfg.APIKey,
 		Model:   aiCfg.Model,

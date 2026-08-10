@@ -1,4 +1,4 @@
-package aicli
+package aierrors
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 
+	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -74,6 +75,9 @@ func (e *AIErrorWrapper) Error() string {
 }
 
 // ClassifyError 对错误进行分类，返回结构化错误信息
+// 同时兼容两类错误来源：
+//   - eino：eino-ext components/model/openai 转换后的 *APIError
+//   - go-openai 家族（sashabaranov 等）：*APIError / *RequestError
 func ClassifyError(err error) *AIError {
 	if err == nil {
 		return nil
@@ -81,10 +85,16 @@ func ClassifyError(err error) *AIError {
 
 	raw := err.Error()
 
-	// 检测 OpenAI API 错误
+	// 检测 eino 转换后的错误类型
+	var einoErr *einoopenai.APIError
+	if errors.As(err, &einoErr) {
+		return classifyAPIErrorLike(einoErr.HTTPStatusCode, einoErr.Code, einoErr.Message, raw)
+	}
+
+	// 检测 go-openai 家族 API 错误
 	var apiErr *openai.APIError
 	if errors.As(err, &apiErr) {
-		return classifyOpenAIAPIError(apiErr, raw)
+		return classifyAPIErrorLike(apiErr.HTTPStatusCode, apiErr.Code, apiErr.Message, raw)
 	}
 
 	var reqErr *openai.RequestError
@@ -112,12 +122,8 @@ func ClassifyError(err error) *AIError {
 	return classifyByText(raw)
 }
 
-// classifyOpenAIAPIError 分类 OpenAI APIError
-func classifyOpenAIAPIError(apiErr *openai.APIError, raw string) *AIError {
-	statusCode := apiErr.HTTPStatusCode
-	msg := apiErr.Message
-	code := apiErr.Code
-
+// classifyAPIErrorLike 按 HTTP 状态码与错误码分类（eino 与 go-openai 的 APIError 字段一致，共用此函数）
+func classifyAPIErrorLike(statusCode int, code any, msg, raw string) *AIError {
 	switch statusCode {
 	case 401, 403:
 		return NewAIError(CategoryAuthError, raw)
@@ -139,7 +145,7 @@ func classifyOpenAIAPIError(apiErr *openai.APIError, raw string) *AIError {
 	}
 }
 
-// classifyOpenAIRequestError 分类 OpenAI RequestError
+// classifyOpenAIRequestError 分类 go-openai RequestError
 func classifyOpenAIRequestError(reqErr *openai.RequestError, raw string) *AIError {
 	// RequestError 通常包含 HTTP 状态码
 	if reqErr.HTTPStatusCode != 0 {
