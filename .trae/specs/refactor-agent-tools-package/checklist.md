@@ -1,0 +1,21 @@
+# Checklist
+
+- [x] `internal/agent/tools/` 子包存在，含 `context.go` / `web_search.go` / `recall_notes.go` / `refine_query.go` 四个文件
+- [x] tools 子包不 import `agent` 包（无循环依赖）
+- [x] 共享类型已下沉并导出：`EmitFn` / `Record` / `Collector` / `Context` / `WrapWithError` / `TruncateRunes` / `MaxResultLen`
+- [x] `Collector` 不再含 `SourceErrors` 字段，`sourceError` 类型已删除
+- [x] 三个工具结构体保持私有，各提供导出构造器 `NewWebSearch` / `NewRecallNotes` / `NewRefineSearchQuery`
+- [x] web_search 的部分失败信息由工具本地维护并通过 `ctx.AddPartial` 登记，不再写 collector
+- [x] 父包 `registry.go` 存在，`buildTools` 一行一个工具注册，工具顺序与现实现一致
+- [x] `agent.go` Run() 通过 `buildTools` 构建工具切片，不再手写工具实例化
+- [x] `agent.go` 事件循环不再包含任何工具名硬编码特判（`name == "web_search"` 已删除）
+- [x] `ctx.DrainPartials` 在 `tool_result` 之后调用，`tool_partial` 事件顺序保持 tool_start → tool_result → tool_partial
+- [x] `tool_error` 路径行为不变（错误回填模型、发射 tool_error 事件、记录工具失败日志）
+- [x] 全部来源未配置 / 全部失败的错误文本与现实现一致
+- [x] `agent/types.go` 保留 `Deps` / `Request` / `Result` / `NewAgentService` 导出与签名不变
+- [x] `agent.EmitFn` 以 `type EmitFn = tools.EmitFn` 别名保留
+- [x] `internal/agent/tools.go` 已删除
+- [x] `app.go` 编译不受影响（仅引用 `agent.NewAgentService(agent.Deps{...})` 与 `agent.Request`）
+- [x] `doc.go` 已更新说明新结构与新增工具步骤
+- [x] `go build ./...` 通过
+- [x] `go vet ./internal/agent/...` 通过
