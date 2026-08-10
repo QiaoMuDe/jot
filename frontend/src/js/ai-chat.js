@@ -799,49 +799,68 @@ function bindEvents() {
         });
     }
 
-    // ── 多源搜索按钮：开关切换 + 下拉菜单 ──
+    // ── 多源搜索按钮：左 2/3=批量开关，右 1/3=搜索源菜单 ──
     const sourceItemIds = ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'];
     if (searchSourcesBtn && searchSourcesDropdown) {
+        const sourcesWrap = document.querySelector('.ai-chat-sources-wrap');
+        // 计算右侧菜单区宽度（至少 30px，按钮较窄时保证可点）
+        const menuZoneWidth = (el) => Math.max(30, el.getBoundingClientRect().width * 0.33);
+        const inMenuZone = (el, clientX) => {
+            const rect = el.getBoundingClientRect();
+            return (clientX - rect.left) >= rect.width - menuZoneWidth(el);
+        };
+
         searchSourcesBtn.addEventListener('click', async (e) => {
-            // 点击 knob 区域：开关全选/全取消
-            const knob = e.target.closest('.ai-chat-toggle-switch, .ai-chat-toggle-knob');
-            if (knob) {
-                const allChecked = sourceItemIds.every(id => {
-                    const cb = document.getElementById(id);
-                    return cb && cb.checked;
-                });
-                const newState = !allChecked;
-                sourceItemIds.forEach(id => {
-                    const cb = document.getElementById(id);
-                    if (cb && !cb.disabled) {
-                        cb.checked = newState;
-                        const source = cb.dataset.source;
-                        if (newState) {
-                            searchSources.add(source);
-                        } else {
-                            searchSources.delete(source);
-                        }
-                    }
-                });
-                if (searchSourcesBtn) {
-                    searchSourcesBtn.classList.toggle('active', newState);
-                }
-                e.stopPropagation();
-                await saveCurrentSessionConfig();
+            e.stopPropagation();
+            // 右侧 1/3：展开/收起搜索源菜单
+            if (inMenuZone(searchSourcesBtn, e.clientX)) {
+                const open = searchSourcesDropdown.classList.toggle('open');
+                if (sourcesWrap) sourcesWrap.classList.toggle('menu-open', open);
                 return;
             }
-            // 点击文字/图标/箭头：切换下拉菜单
-            e.stopPropagation();
-            searchSourcesDropdown.classList.toggle('open');
+            // 左侧 2/3：批量开启/关闭全部搜索源
+            const allChecked = sourceItemIds.every(id => {
+                const cb = document.getElementById(id);
+                return cb && cb.checked;
+            });
+            const newState = !allChecked;
+            sourceItemIds.forEach(id => {
+                const cb = document.getElementById(id);
+                if (cb && !cb.disabled) {
+                    cb.checked = newState;
+                    const source = cb.dataset.source;
+                    if (newState) {
+                        searchSources.add(source);
+                    } else {
+                        searchSources.delete(source);
+                    }
+                }
+            });
+            if (searchSourcesBtn) {
+                searchSourcesBtn.classList.toggle('active', newState);
+            }
+            // 开关时顺手收起菜单
+            searchSourcesDropdown.classList.remove('open');
+            if (sourcesWrap) sourcesWrap.classList.remove('menu-open');
+            await saveCurrentSessionConfig();
         });
-        
+
+        // 悬停右侧菜单区时箭头高亮提示（离开按钮时移除）
+        searchSourcesBtn.addEventListener('mousemove', (e) => {
+            searchSourcesBtn.classList.toggle('arrow-hover', inMenuZone(searchSourcesBtn, e.clientX));
+        });
+        searchSourcesBtn.addEventListener('mouseleave', () => {
+            searchSourcesBtn.classList.remove('arrow-hover');
+        });
+
         // 点击外部关闭下拉菜单
         document.addEventListener('click', () => {
             if (searchSourcesDropdown) {
                 searchSourcesDropdown.classList.remove('open');
+                if (sourcesWrap) sourcesWrap.classList.remove('menu-open');
             }
         });
-        
+
         if (searchSourcesDropdown) {
             searchSourcesDropdown.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -884,76 +903,97 @@ function bindEvents() {
         }
     });
 
-    // ── 卡片召回切换 ──
+    // ── 卡片召回按钮：左 2/3=批量开关，右 1/3=笔记本菜单 ──
     if (cardRecallToggle) {
         if (enableCardRecall) cardRecallToggle.classList.add('active');
+        // 计算右侧菜单区宽度（至少 30px，按钮较窄时保证可点）
+        const recallMenuZone = () => Math.max(30, cardRecallToggle.getBoundingClientRect().width * 0.33);
+        const recallInMenuZone = (clientX) => {
+            const rect = cardRecallToggle.getBoundingClientRect();
+            return (clientX - rect.left) >= rect.width - recallMenuZone();
+        };
+
         cardRecallToggle.addEventListener('click', async (e) => {
-            // 点击切换开关 knob 区域：开关卡片召回，全选/全取消笔记本
-            const knob = e.target.closest('.ai-chat-toggle-switch, .ai-chat-toggle-knob');
-            if (knob) {
-                enableCardRecall = cardRecallToggle.classList.toggle('active');
-                if (enableCardRecall) {
-                    // 开启前校验量化配置与量化表
-                    try {
-                        const check = await window.go.main.App.ValidateCardRecall();
-                        if (!check.ok) {
-                            // 校验失败：回滚开关状态
-                            enableCardRecall = false;
-                            cardRecallToggle.classList.toggle('active');
-                            nm.show(check.message || '卡片召回校验未通过', 'warning');
-                            return;
-                        }
-                    } catch (e) {
-                        enableCardRecall = false;
-                        cardRecallToggle.classList.toggle('active');
-                        nm.show('卡片召回校验失败: ' + e, 'error');
-                        return;
-                    }
-                    // 开→全选所有笔记本（加载菜单后勾选全部）
-                    try {
-                        const notebooks = await window.go.main.App.GetAllNotebooks();
-                        if (notebooks) {
-                            notebooks.forEach(nb => recallNotebookIds.add(nb.id));
-                        }
-                    } catch (_) {}
-                    // 更新菜单复选框状态
-                    if (cardRecallDropdown) {
-                        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
-                            cb.checked = true;
-                        });
-                    }
+            e.stopPropagation();
+            // 右侧 1/3：展开/收起笔记本菜单
+            if (recallInMenuZone(e.clientX)) {
+                const dropdown = cardRecallDropdown;
+                if (!dropdown) return;
+                const isCurrentlyOpen = dropdown.classList.contains('open');
+                if (isCurrentlyOpen) {
+                    // 关闭菜单
+                    dropdown.classList.remove('open');
+                    if (recallWrap) recallWrap.classList.remove('menu-open');
                 } else {
-                    // 关→全取消
-                    recallNotebookIds.clear();
-                    if (cardRecallDropdown) {
-                        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
-                            cb.checked = false;
-                        });
-                    }
+                    // 打开菜单：先构建子项（隐藏态），再添加 .open 触发入场动画
+                    await loadRecallNotebookMenu();
+                    dropdown.classList.add('open');
+                    if (recallWrap) recallWrap.classList.add('menu-open');
+                    dropdown.scrollTop = 0;
+                    // 点击外部关闭菜单
+                    const closeHandler = (ev) => {
+                        if (!recallWrap || recallWrap.contains(ev.target)) return;
+                        dropdown.classList.remove('open');
+                        if (recallWrap) recallWrap.classList.remove('menu-open');
+                        document.removeEventListener('click', closeHandler);
+                    };
+                    setTimeout(() => document.addEventListener('click', closeHandler), 10);
                 }
-                await saveCurrentSessionConfig();
                 return;
             }
-            // 点击文字/图标/箭头区域：打开/关闭下拉菜单
-            const dropdown = cardRecallDropdown;
-            if (!dropdown) return;
-            const isCurrentlyOpen = dropdown.classList.contains('open');
-            if (isCurrentlyOpen) {
-                // 关闭菜单
-                dropdown.classList.remove('open');
+            // 左侧 2/3：批量开启/关闭卡片召回（开→全选所有笔记本，关→全取消）
+            enableCardRecall = cardRecallToggle.classList.toggle('active');
+            if (enableCardRecall) {
+                // 开启前校验量化配置与量化表
+                try {
+                    const check = await window.go.main.App.ValidateCardRecall();
+                    if (!check.ok) {
+                        // 校验失败：回滚开关状态
+                        enableCardRecall = false;
+                        cardRecallToggle.classList.toggle('active');
+                        nm.show(check.message || '卡片召回校验未通过', 'warning');
+                        return;
+                    }
+                } catch (e) {
+                    enableCardRecall = false;
+                    cardRecallToggle.classList.toggle('active');
+                    nm.show('卡片召回校验失败: ' + e, 'error');
+                    return;
+                }
+                // 开→全选所有笔记本（加载菜单后勾选全部）
+                try {
+                    const notebooks = await window.go.main.App.GetAllNotebooks();
+                    if (notebooks) {
+                        notebooks.forEach(nb => recallNotebookIds.add(nb.id));
+                    }
+                } catch (_) {}
+                // 更新菜单复选框状态
+                if (cardRecallDropdown) {
+                    cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
+                        cb.checked = true;
+                    });
+                }
             } else {
-                // 打开菜单：先构建子项（隐藏态），再添加 .open 触发入场动画
-                await loadRecallNotebookMenu();
-                dropdown.classList.add('open');
-                dropdown.scrollTop = 0;
-                // 点击外部关闭菜单
-                const closeHandler = (ev) => {
-                    if (!recallWrap || recallWrap.contains(ev.target)) return;
-                    dropdown.classList.remove('open');
-                    document.removeEventListener('click', closeHandler);
-                };
-                setTimeout(() => document.addEventListener('click', closeHandler), 10);
+                // 关→全取消
+                recallNotebookIds.clear();
+                if (cardRecallDropdown) {
+                    cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
+                        cb.checked = false;
+                    });
+                }
             }
+            // 开关时顺手收起菜单
+            if (cardRecallDropdown) cardRecallDropdown.classList.remove('open');
+            if (recallWrap) recallWrap.classList.remove('menu-open');
+            await saveCurrentSessionConfig();
+        });
+
+        // 悬停右侧菜单区时箭头高亮提示（离开按钮时移除）
+        cardRecallToggle.addEventListener('mousemove', (e) => {
+            cardRecallToggle.classList.toggle('arrow-hover', recallInMenuZone(e.clientX));
+        });
+        cardRecallToggle.addEventListener('mouseleave', () => {
+            cardRecallToggle.classList.remove('arrow-hover');
         });
     }
 

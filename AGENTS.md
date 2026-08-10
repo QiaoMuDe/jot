@@ -613,20 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：GitHub 风格 Alert 引用块支持 + 操作按钮显隐修复 + 弹窗 UI 修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 五个独立改动：① 预览模式支持 GitHub 风格 Alert 引用块 — 安装 `marked-alert` 包，在 [main.js](frontend/src/main.js) 和 [preview-worker.js](frontend/src/js/preview-worker.js) 中注册扩展，支持 `NOTE/TIP/IMPORTANT/WARNING/CAUTION` 五种类型，预览渲染为带主题语义色边框的卡片。CM6 编辑器不做特殊高亮，以默认引用块样式显示；② MD 语法菜单新增 5 个 Alert 引用块插入操作项 — 在 `md-syntax.js` 的「块元素」子菜单中新增 `NOTE/TIP/IMPORTANT/WARNING/CAUTION` 操作项，无选中时插入样板、有选中时包裹文本；③ 操作按钮查看模式显隐修复 — 在 [editor.css](frontend/src/css/components/editor.css) 新增 `.editor-view-mode #editorActionsBtn` 规则，`!important` 确保查看模式下无论 CM6 编辑器处于纯文本还是预览模式均隐藏按钮；④ 确认弹窗按钮居中修复 — [modals.css](frontend/src/css/components/modals.css) 中 `.confirm-actions` 的 `justify-content` 从 `flex-end` 改为 `center`；⑤ 锁屏密码弹窗取消按钮样式修复 — [index.html](frontend/index.html#L2173) 中 `#pwdModalCancelBtn` 补全 `btn-cancel` 类，消除无边框/无背景色的显示问题。 |
-| **marked-alert 集成** | [package.json](frontend/package.json) 新增 `marked-alert` 依赖；[main.js](frontend/src/main.js) 和 [preview-worker.js](frontend/src/js/preview-worker.js) 均导入 `alert()` 并 `marked.use(alert({ variants: [...] }))`；[editor.css](frontend/src/css/components/editor.css)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[md-reference.css](frontend/src/css/components/md-reference.css) 三处同步新增 `.markdown-alert` 系列样式。 |
-| **Alert 插入操作** | [md-syntax.js](frontend/src/js/editor-actions/md-syntax.js) 在 `块元素` 子菜单「引用」之后新增 5 项 Alert 操作，handler 判断 `text` 有值时每行加 `> ` 前缀包裹，无值时返回 `> [!TYPE]\n> 提示内容` 样板。 |
-| **操作按钮显隐修复** | [editor.css](frontend/src/css/components/editor.css#L287-L290) 新增 `.editor-view-mode #editorActionsBtn { display: none !important }`，利用 `editor-view-mode` 类（进入查看模式时添加）的 `!important` 优先级高于 `switchEditorMode` 的内联 `display` 设置。 |
-| **弹窗修复** | [modals.css](frontend/src/css/components/modals.css#L535) 将 `.confirm-actions` 从 `justify-content: flex-end` 改为 `center` 使按钮居中；[index.html](frontend/index.html#L2173) 将 `#pwdModalCancelBtn` 从 `class="btn btn-sm"` 补全为 `class="btn btn-sm btn-cancel"`。 |
-| **涉及文件** | [frontend/package.json](frontend/package.json)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)、[frontend/src/js/editor-actions/md-syntax.js](frontend/src/js/editor-actions/md-syntax.js)、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/src/css/components/md-reference.css](frontend/src/css/components/md-reference.css)、[frontend/index.html](frontend/index.html) |
-
----
-
-## 记忆点 2：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
+## 记忆点 1：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 2：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 3：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 4：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 5：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 6：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -703,7 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 7：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -716,7 +703,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 8：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,7 +715,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 9：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -736,6 +723,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **候选放大设计** | `chunkCandidateMultiplier=5` 覆盖向量路与关键词路：向量路 SQL `LIMIT limit×5` + `ORDER BY vec_distance_cosine ASC`；关键词路 `LIMIT limit×5` 后 `rankKwHits` 截断。原因：SQL 层直接 LIMIT limit 时"第 6 名以后的块直接出局"，且多命中块同笔记时聚合后卡片不足；放大后再按笔记聚合可保证"相关度优先 + 笔记多样性"。`maxChunksPerNote=4` 防止单篇笔记命中块过多挤占其他笔记的卡片槽位。该改动仅影响召回侧（编译后即时生效），不需重新量化；分块/嵌入逻辑改动（如表头补全）则必须重新量化相关笔记才生效。 |
 | **高频词过滤阈值** | `threshold = max(totalChunks/kwHighFreqDivisor, kwHighFreqMin)`，即 `max(总块数/10, 100)`（`kwHighFreqDivisor=10`、`kwHighFreqMin=100`）；依据实测："数据"命中 ~93% 块、"2061"命中 ~1% 块，"数据"这类词进 OR LIKE 只会刷屏。`maxRecallKeywords=20` 限制关键词数量防止超长 LIKE 查询。关键词检索跨所有模型（不加 model 过滤），与向量路（按当前 embedding 模型隔离）不同。 |
 | **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)（chunkCandidateMultiplier/maxChunksPerNote/selectTopNotes/filterHighFreqTokens/rankKwHits/tokenize 停用词表 + vectorSearch/KeywordRecall/HybridRecall 改造）、[internal/services/chunk.go](internal/services/chunk.go)（tableHeader 记录 + 块首补表头 + hasTableDataRow/isTableSeparatorLine）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新用例） |
+
+---
+
+## 记忆点 10：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 五组改动重构 AI 对话输入区：① **一体式输入坞 Composer**——[index.html](frontend/index.html) 将原「独立工具行 + chips bar + 输入行」重构为 `.ai-chat-composer` 单容器（上层多行 textarea + 下层内嵌工具行 + 最右圆形发送/停止按钮竖排贴底），[ai-chat.css](frontend/src/css/components/ai-chat.css) 圆角 16px 胶囊 + accent 30% 混合浅描边 + `--card-bg` 白底；工具行按钮间距 `gap: 10px`，`+ 添加` 右侧细竖线分隔；追问引用/笔记引用/技能/上传文件 chips 条移出容器，悬浮于容器上方（`gap: 6px`）；② **背景融合**——`.ai-chat-input-area` 背景与消息列表同色（`--bg`）通栏无圆角，composer 卡片 `--card-bg`；消息区底部 `::after` 渐变遮罩（40px 渐变到 `--bg`）实现沉入效果；底部留白 8+8=16px；③ **聚焦动效**——`:focus-within` 4px 光环（accent 26%，呼吸峰值 28%）+ 三层光晕扩散（24/56/96px blur，accent 12%/8%/4%）+ `ai-composer-glow` 呼吸动画 2.6s + 边框流光（`@property --composer-flow-angle` + `::after` conic-gradient 光带 + `mask-composite: exclude` 裁成 1px 圆角环，3.5s 旋转）；常态阴影三层（`--shadow-elevated/dropdown/modal`，中距/远距负扩散 `-8/-20px` 偏底部投影）；④ **联网搜索/卡片召回一体按钮**——拆出的独立箭头按钮回滚，恢复单按钮，click 用 `e.clientX` 坐标分流：左侧 2/3 批量开关（联网全选/全取消搜索源，召回 `ValidateCardRecall` 校验+全选/全取消笔记本）、右侧 1/3 展开菜单（命中区 `Math.max(30, rect.width*0.33)` 保护）；`mousemove`/`mouseleave` 驱动 `.arrow-hover` 箭头悬停变色 + `.menu-open` 菜单展开期间箭头保持高亮；⑤ **Chat/Agent 分段切换滑块**——`.ai-chat-mode-switch::before` 伪元素做滑块（`width: calc(50% - 2px)`），`:has(.ai-chat-mode-option[data-mode="agent"].active)` 驱动 `translateX(100%)` 弹性滑动（`cubic-bezier(0.34,1.56,0.64,1)` 0.25s），按钮 `flex: 1 + min-width: 44px` 等宽贴合、`z-index: 1` 浮于滑块之上，`:active scale(0.93)` 按压回弹，原 active 白底/阴影由滑块承担 |
+| **JS 零改动原则** | 本轮全部为 HTML/CSS 改动，JS 零改动：JS 依赖的 `.ai-chat-toolbar`（Agent 模式隐藏）、`.ai-chat-input-wrap`（优化按钮/打字光标）、`.ai-chat-toggle-switch`（点击代理，DOM 保留但 CSS 隐藏）、`classList.contains('active')` 状态读取、设置页 `__syncRecallNotebooks` 全部兼容；Chat/Agent 滑块由 `:has()` 驱动跟随 active class，无需 JS 同步 transform |
+| **构建教训（重要）** | **Wails 桌面应用前端资源打包进 exe（`go:embed all:frontend/dist`），修改前端源码后必须重新构建才生效**：源码改了但 `frontend/dist` 未更新时，运行的应用加载的是旧 CSS/JS（本次踩坑：dist 产物比源码旧 35 分钟，用户反馈"样式没生效"实为旧产物）。开发流程：`cd frontend && npm run build` → `wails build`。验证时先对比 `dist` 与源码 `LastWriteTime` |
+| **WebView2 兼容性验证** | `:has()`（Chrome 105+）、`@property` 动画（Chrome 85+）、`color-mix()`（Chrome 111+）在 Wails WebView2 全部可用；`@property` 经 Vite 3 + esbuild CSS minify 后保留不被丢弃（在 `frontend/dist/assets/index.*.css` 中可搜到 `composer-flow-angle`）；`mask-composite: exclude` 需同时写 `-webkit-mask-composite: xor` 双前缀 |
+| **阴影负扩散认知** | box-shadow 负 spread（如 `0 8px 24px -8px`）会把模糊向内收窄，四周光晕消失只剩底部投影（适合"贴地"阴影）；spread=0 时 blur 向四周均匀铺开（笔记卡片 `--shadow-md` 风格，四向均有阴影）。本次曾放开负扩散做四周阴影 + 聚焦 `translateY(-2px)` 浮动，用户要求撤销——最终保留负扩散偏底部投影、无位移 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（`.ai-chat-composer` 结构 + 一体按钮 + Chat/Agent 分段）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（composer 全部样式 + 聚焦动效 + 滑块 + 一体按钮提示态）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（联网/召回一体按钮坐标分流 + mousemove 悬停提示） |
 
 ---
 

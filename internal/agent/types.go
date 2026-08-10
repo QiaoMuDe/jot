@@ -34,14 +34,14 @@ type HistoryMessage struct {
 // 结构化来源与召回卡片（与问答模式存 search_sources / recall_cards 的格式一致），
 // ToolCalls 为完整工具调用链摘要（action/name/args/result）。
 type Result struct {
-	Content           string // 最终回答全文
-	SearchSources     string // 联网搜索来源 JSON（[]services.SearchSource）
-	RecallCards       string // 召回卡片 JSON（[]services.RecallCard）
-	ToolCalls         string // 工具调用链 JSON（[]toolCallRecord）
-	ReasoningContent  string // 深度思考链全文（流式 reasoning_content 拼接，供落库与展示）
-	ThinkingElapsed   float64 // 思考净时长（秒）：按每轮 assistant 消息独立计时并累加，排除工具执行时间
-	PromptTokens      int // 全部 ReAct 轮次的真实输入 token 累计（provider usage.PromptTokens 求和）
-	CompletionTokens  int // 全部 ReAct 轮次的真实输出 token 累计（provider usage.CompletionTokens 求和）
+	Content          string  // 最终回答全文
+	SearchSources    string  // 联网搜索来源 JSON（[]services.SearchSource）
+	RecallCards      string  // 召回卡片 JSON（[]services.RecallCard）
+	ToolCalls        string  // 工具调用链 JSON（[]toolCallRecord）
+	ReasoningContent string  // 深度思考链全文（流式 reasoning_content 拼接，供落库与展示）
+	ThinkingElapsed  float64 // 思考净时长（秒）：按每轮 assistant 消息独立计时并累加，排除工具执行时间
+	PromptTokens     int     // 全部 ReAct 轮次的真实输入 token 累计（provider usage.PromptTokens 求和）
+	CompletionTokens int     // 全部 ReAct 轮次的真实输出 token 累计（provider usage.CompletionTokens 求和）
 }
 
 // EmitFn 事件回调，由调用方注入（内部封装 runtime.EventsEmit）。

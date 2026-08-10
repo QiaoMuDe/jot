@@ -6,7 +6,7 @@
     flex-direction: column;
     align-items: center;
     overflow: hidden;
-    padding: 0 0 16px;
+    padding: 0 0 8px;
     gap: 0;
     height: 100%;
     position: relative;
@@ -20,12 +20,26 @@
     min-height: 0;
     width: 100%;
     box-sizing: border-box;
+    position: relative;
+}
+
+/* 底部渐变遮罩：消息滚动到底平滑"沉入"，避免与输入坞生硬相接 */
+.ai-chat-messages::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 48px;
+    background: linear-gradient(to top, var(--bg), transparent);
+    pointer-events: none;
+    z-index: 2;
 }
 
 .ai-chat-messages-inner {
     max-width: clamp(800px, min(92vw, 100%), 1600px);
     margin: 0 auto;
-    padding: 16px 15px 120px 18px;
+    padding: 16px 15px 96px 18px;
     display: flex;
     flex-direction: column;
     gap: 40px;
@@ -1140,27 +1154,152 @@
 
 
 
-/* ── 输入区 ── */
+/* ── 输入区：背景与消息列表一致（--bg），无独立色块 ── */
 .ai-chat-input-area {
     display: flex;
     flex-direction: column;
-    gap: 0;
-    padding: 8px 48px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--bg);
+    gap: 6px;
+    padding: 8px 24px 8px;
     width: 100%;
-    max-width: clamp(800px, min(92vw, 100%), 1600px);
+    max-width: clamp(800px, min(94vw, 100%), 1800px);
     box-sizing: border-box;
+    background: var(--bg);
+}
+
+/* ── 一体式输入坞（Composer）：浅蓝细边框大圆角胶囊，输入区与工具栏同容器 ── */
+.ai-chat-composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 12px 12px 10px 14px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 16px;
+    background: var(--card-bg);
+    /* 三层悬浮阴影：贴合轮廓 + 中距光晕 + 底部远距投影 */
+    box-shadow: 0 1px 2px var(--shadow-elevated), 0 8px 24px -8px var(--shadow-dropdown), 0 24px 60px -20px var(--shadow-modal);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    position: relative;
+}
+
+/* 悬停输入坞：边框与阴影同步加深，提供明确的"可交互"反馈 */
+.ai-chat-composer:hover {
+    border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+    box-shadow: 0 2px 4px var(--shadow-elevated), 0 12px 32px -8px var(--shadow-dropdown), 0 32px 72px -20px var(--shadow-modal);
+}
+
+/* 输入框有内容：边框 accent 强化，提示"已就绪，可发送" */
+.ai-chat-composer:has(.ai-chat-input:not(:placeholder-shown)) {
+    border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+}
+
+/* 顶部细高光线：接壤处细腻过渡，与上方的对话列表衔接 */
+.ai-chat-composer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 18px;
+    right: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+    pointer-events: none;
+}
+
+.ai-chat-composer:focus-within {
+    border-color: var(--accent);
+    /* 4px 光环（accent 26%，清晰可见）+ 多层向外散发的柔光（光晕微降，突出光环层次） */
+    box-shadow:
+        0 1px 2px var(--shadow-elevated),
+        0 8px 24px -8px var(--shadow-dropdown),
+        0 24px 60px -20px var(--shadow-modal),
+        0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent),
+        0 0 24px 8px color-mix(in srgb, var(--accent) 12%, transparent),
+        0 0 56px 24px color-mix(in srgb, var(--accent) 8%, transparent),
+        0 0 96px 40px color-mix(in srgb, var(--accent) 4%, transparent);
+    /* 光晕轻微"呼吸"，聚焦期间柔和脉动 */
+    animation: ai-composer-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes ai-composer-glow {
+    0%, 100% {
+        box-shadow:
+            0 1px 2px var(--shadow-elevated),
+            0 8px 24px -8px var(--shadow-dropdown),
+            0 24px 60px -20px var(--shadow-modal),
+            0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent),
+            0 0 24px 8px color-mix(in srgb, var(--accent) 12%, transparent),
+            0 0 56px 24px color-mix(in srgb, var(--accent) 8%, transparent),
+            0 0 96px 40px color-mix(in srgb, var(--accent) 4%, transparent);
+    }
+    50% {
+        box-shadow:
+            0 1px 2px var(--shadow-elevated),
+            0 8px 24px -8px var(--shadow-dropdown),
+            0 24px 60px -20px var(--shadow-modal),
+            0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent),
+            0 0 32px 12px color-mix(in srgb, var(--accent) 16%, transparent),
+            0 0 72px 32px color-mix(in srgb, var(--accent) 10%, transparent),
+            0 0 120px 56px color-mix(in srgb, var(--accent) 5%, transparent);
+    }
+}
+
+/* 边框动态流光：仅聚焦时沿边框流动的微弱光带（配合光晕扩散营造氛围） */
+@property --composer-flow-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+.ai-chat-composer:focus-within::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+        from var(--composer-flow-angle),
+        transparent 0deg 300deg,
+        color-mix(in srgb, var(--accent) 65%, transparent) 335deg,
+        transparent 360deg
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    animation: ai-composer-border-flow 3.5s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes ai-composer-border-flow {
+    to {
+        --composer-flow-angle: 360deg;
+    }
+}
+
+.ai-chat-composer-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ai-chat-composer-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+    padding-bottom: 1px;
 }
 
 /* 工具栏行（模型选择器 + 联网搜索） */
 .ai-chat-toolbar {
     display: flex;
     align-items: center;
-    padding: 0 0 6px 0;
-    gap: 12px;
+    padding: 8px 0 0 0;
+    gap: 10px;
     flex-wrap: wrap;
     row-gap: 6px;
+    min-width: 0;
 }
 
 /* ── 问答 / Agent 模式切换（分段式控件） ── */
@@ -1174,12 +1313,35 @@
     border-radius: var(--radius-md);
     flex-shrink: 0;
     user-select: none;
+    position: relative;
+}
+
+/* 滑块：切换 Chat/Agent 时弹性滑动到另一侧（iOS 分段控件风，零 JS，:has() 驱动） */
+.ai-chat-mode-switch::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: calc(50% - 2px);
+    background: var(--card-bg);
+    border-radius: calc(var(--radius-md) - 2px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 0;
+}
+
+.ai-chat-mode-switch:has(.ai-chat-mode-option[data-mode="agent"].active)::before {
+    transform: translateX(100%);
 }
 
 .ai-chat-mode-option {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    flex: 1;
+    min-width: 44px;
     padding: 2px 8px;
     font-size: 0.78rem;
     line-height: 1.4;
@@ -1189,18 +1351,23 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-family: inherit;
-    transition: all 0.15s;
+    transition: color 0.15s, transform 0.15s;
     user-select: none;
+    position: relative;
+    z-index: 1;
 }
 
 .ai-chat-mode-option:hover {
     color: var(--text-primary);
 }
 
+/* 按压反馈：点击瞬间轻微缩小回弹 */
+.ai-chat-mode-option:active {
+    transform: scale(0.93);
+}
+
 .ai-chat-mode-option.active {
     color: var(--accent);
-    background: var(--card-bg);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
     font-weight: 600;
 }
 
@@ -1241,14 +1408,15 @@
     flex-shrink: 0;
 }
 
+/* 按钮式开关：隐藏迷你 switch（DOM 保留以兼容 JS 点击逻辑），激活态由按钮高亮呈现 */
 .ai-chat-toggle-switch {
-    width: 28px;
-    height: 16px;
-    border-radius: 10px;
-    background: var(--border);
-    position: relative;
-    transition: background 0.2s;
-    flex-shrink: 0;
+    display: none;
+}
+
+.ai-chat-search-toggle.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    font-weight: 500;
 }
 
 .ai-chat-search-toggle.active .ai-chat-toggle-switch {
@@ -1274,6 +1442,13 @@
 /* ── 多源搜索下拉菜单 ── */
 .ai-chat-sources-wrap {
     position: relative;
+}
+
+/* 悬停在按钮右侧菜单区（1/3）时的箭头提示；菜单打开时箭头保持高亮 */
+.ai-chat-search-toggle.arrow-hover svg:last-child,
+.ai-chat-sources-wrap.menu-open .ai-chat-search-toggle svg:last-child,
+.ai-chat-recall-wrap.menu-open .ai-chat-search-toggle svg:last-child {
+    color: var(--accent);
 }
 
 .ai-chat-search-sources-dropdown {
@@ -1458,7 +1633,6 @@
 /* ── 更多技能 ── */
 .ai-chat-skills-wrap {
     position: relative;
-    margin-left: auto;
 }
 
 .ai-chat-skills-dropdown {
@@ -1817,7 +1991,7 @@
 .ai-chat-skill-bar {
     display: flex;
     align-items: flex-start;
-    padding: 0 0 6px 0;
+    padding: 0;
     gap: 6px;
     flex-wrap: wrap;
     min-height: 0;
@@ -2005,13 +2179,6 @@
     color: var(--text-muted);
 }
 
-/* 输入框行 */
-.ai-chat-input-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-}
-
 /* 输入框包裹容器 */
 .ai-chat-input-wrap {
     position: relative;
@@ -2122,24 +2289,23 @@
 
 .ai-chat-input {
     flex: 1;
-    min-height: 40px;
+    min-height: 44px;
     max-height: 140px;
-    padding: 9px 14px;
-    font-size: 0.875rem;
+    padding: 6px 2px;
+    font-size: 0.9rem;
     font-family: inherit;
     color: var(--text-primary);
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    background: transparent;
+    border: none;
     outline: none;
     resize: none;
-    line-height: 1.45;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    line-height: 1.5;
 }
 
+/* 聚焦态由 .ai-chat-composer:focus-within 呈现（accent 描边 + 光环），输入框本身不画框 */
 .ai-chat-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+    border-color: transparent;
+    box-shadow: none;
 }
 
 .ai-chat-input::placeholder {
@@ -2159,28 +2325,34 @@
     color: #fff;
     cursor: pointer;
     flex-shrink: 0;
-    transition: opacity 0.15s, transform 0.1s, background 0.15s;
+    /* accent 微光晕：常态即可辨识为可点击的主操作 */
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 28%, transparent);
+    transition: opacity 0.15s, transform 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
 .ai-chat-send-btn:hover:not(:disabled) {
-    opacity: 0.85;
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .ai-chat-send-btn:active:not(:disabled) {
     transform: scale(0.92);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .ai-chat-send-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
+    box-shadow: none;
 }
 
 /* ── 停止生成按钮 ── */
 .ai-chat-stop-btn {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border: none;
-    border-radius: 8px;
+    border-radius: 50%;
     background: var(--error, #ef4444);
     color: #fff;
     cursor: pointer;
@@ -2195,6 +2367,32 @@
 .ai-chat-stop-btn:hover {
     background: #dc2626;
     opacity: 1;
+}
+
+.ai-chat-stop-btn:active {
+    transform: scale(0.92);
+}
+
+/* 减少动态效果偏好：禁用悬浮位移与按压缩放 */
+@media (prefers-reduced-motion: reduce) {
+    .ai-chat-composer:focus-within {
+        animation: none;
+    }
+    .ai-chat-composer:focus-within::after {
+        animation: none;
+    }
+    .ai-chat-mode-switch::before {
+        transition: none;
+    }
+    .ai-chat-mode-option:active {
+        transform: none;
+    }
+    .ai-chat-send-btn:hover:not(:disabled),
+    .ai-chat-send-btn:active:not(:disabled),
+    .ai-chat-stop-btn:active {
+        transform: none;
+        transition: none;
+    }
 }
 
 /* ── 空状态 ── */
@@ -2827,14 +3025,16 @@
     pointer-events: none;
 }
 
-/* ── 追问引用栏 ── */
+/* ── 追问引用栏（悬浮于输入坞上方的浅色条） ── */
 .ai-chat-followup-bar {
     display: flex;
     align-items: center;
-    padding: 4px 0 6px 0;
+    padding: 5px 10px;
     gap: 8px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    margin: 0;
 }
 
 .ai-chat-followup-text {
@@ -2874,7 +3074,7 @@
 .ai-chat-ref-bar {
     display: flex;
     align-items: flex-start;
-    padding: 0 0 6px 0;
+    padding: 0;
     gap: 6px;
     flex-wrap: wrap;
     min-height: 0;
@@ -2997,7 +3197,7 @@
 .ai-chat-file-bar {
     display: flex;
     align-items: flex-start;
-    padding: 0 0 6px 0;
+    padding: 0;
     gap: 6px;
     flex-wrap: wrap;
     min-height: 0;
