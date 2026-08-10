@@ -34,8 +34,8 @@
 
 ### 🤖 AI 助手
 
-- **自研 AI 对话引擎** — 基于自研 `aicli` 适配层（底层 `go-openai` + Ollama 原生 API），统一流式接口
-- **双 Provider 支持** — OpenAI 兼容（DeepSeek、通义千问等）或 Ollama 本地模型
+- **eino 驱动对话引擎** — 基于 eino 库 + `einocli` 薄适配层（OpenAI 兼容协议），统一流式接口
+- **OpenAI 兼容端点** — 支持 DeepSeek、通义千问等兼容服务商（已移除 Ollama 原生协议）
 - **API 配置预设** — 多 API 配置管理，一键切换预设，内置服务商预设，支持配置预设导入导出、测试连接
 - **流式输出** — 逐块推送 + Markdown 渲染 + 代码高亮（hljs），支持随时停止生成
 - **深度思考** — 支持 `reasoning_content` 字段，思维链可折叠展示
@@ -105,7 +105,7 @@
 | **中文分词** | go-ego/gse | v1.0 | AI 混合检索关键词分词 + 停用词过滤 |
 | **文档转换** | 自研 markitdown 集成 | — | PDF/Word/Excel/PPT/EPUB 等 → Markdown |
 | **联网搜索** | hekmon/tavily + zhihu-go | — | Tavily/知乎/全网搜索 |
-| **AI 适配层** | 自研 aicli | — | 底层 `go-openai` + `ollama/ollama/api` |
+| **AI 适配层** | einocli（薄适配层） | — | 基于 eino（`cloudwego/eino` + `eino-ext`）驱动 OpenAI 兼容端点 |
 | **日志库** | MM-Q/fastlog | v1.6 | 文件日志 |
 | **版本注入** | MM-Q/verman | v0.0.19 | 构建时注入版本号 |
 | **前端构建** | Vite | v3.2.11 | 前端打包 |
@@ -155,7 +155,7 @@ golangci-lint fmt ./... && golangci-lint run ./...
 | 问题 | 回答 |
 |------|------|
 | **数据存在哪里？** | 所有数据存储在本地 SQLite 文件中，位于用户目录下的 `.jot/data/jot.db`，图片存储于 `.jot/images/`，备份存储于 `.jot/backup/`，日志存储于 `.jot/logs/` |
-| **AI 对话需要什么？** | 需要 API Key，支持 OpenAI 兼容服务商（DeepSeek、通义千问等）或本地 Ollama 模型 |
+| **AI 对话需要什么？** | 需要 API Key，支持 OpenAI 兼容服务商（DeepSeek、通义千问等），在设置页「预设管理」中配置 API 地址、Key 与模型 |
 | **联网搜索怎么用？** | 在设置中配置 API Key（Tavily 或知乎 Access Secret），对话时开启"联网搜索"开关即可，支持 Tavily/知乎/全网搜索三个来源 |
 | **AI 卡片召回怎么用？** | 对话时开启"卡片召回"开关即可。AI 回复前自动从笔记库中召回相关笔记片段注入上下文，支持向量检索 + 关键词检索双路混合召回。需先在数据管理页面配置 Embedding 模型并执行量化索引 |
 | **可以导出数据吗？** | 可以，在数据管理页面可导出为 `.zip`（完整备份，含图片）或 `.db`（SQLite 数据库文件），也可一键备份/还原到数据目录 |

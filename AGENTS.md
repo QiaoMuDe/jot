@@ -1,7 +1,7 @@
 # Jot 项目分析报告
 
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
-> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ aicli 自研 AI 客户端（go-openai/Ollama 双驱动）
+> 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ einocli 薄适配层（eino 库驱动，OpenAI 兼容）
 
 ---
 
@@ -40,7 +40,7 @@ jot/                                    # 项目根目录
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
-│       ├── ai_service.go               # AI 业务层（自研 aicli 客户端，OpenAI 兼容/Ollama 双 Provider + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
+│       ├── ai_service.go               # AI 业务层（einocli 客户端，OpenAI 兼容 + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
 │       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
 │       ├── profile_service.go          # API 配置预设 CRUD + 切换/激活
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
@@ -165,7 +165,7 @@ jot/                                    # 项目根目录
 | **一键备份** | 备份当前库到 `~/.jot/backup/jot-backup.db`（覆盖）| `app.go:BackupToDir()` | — | 备份成功提示 |
 | **一键还原** | 从 `jot-backup.db` 还原并刷新笔记/标签/统计 | `app.go:RestoreFromDir()` | — | Toast 提示结果 |
 | **外观设置** | 字体族下拉选择（搜索+键盘导航）+ 字体大小滑条（10-32px 实时预览）+ 主题选择（14 种）+ 主题预览迷你 UI 卡片 | `frontend/src/main.js:loadFontSettings/applyFontFamily/applyFontSize` + `loadThemeSetting` | 字体名称/大小/主题名称 | 更新 CSS 变量 |
-| **AI 对话** | 自研 aicli 客户端，支持 OpenAI 兼容 + Ollama 双 Provider 流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索与卡片召回通用 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `aicli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
+| **AI 对话** | einocli 薄适配层（eino 库）驱动 OpenAI 兼容流式对话（自实现聊天引擎 + Markdown/代码高亮渲染 + 多会话管理 + 会话置顶 + 更多按钮下拉菜单 + 多来源联网搜索（Tavily/知乎/全网搜索）+ 卡片召回 + 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + 操作按钮折叠 + Token 显示 + 提示词迁移到数据库 + 联网搜索与卡片召回通用 Query 精炼 + 搜索指示器三态展示 + 搜索来源与召回卡片结构化数据持久化 + 会话自动恢复 + 后端统一上下文注入 + 分页懒加载消息 + 基于 msgID 的截断操作 + 再生原子化 + 搜索来源与召回卡片前端预览截断 200 字） | `services/ai_service.go`+ `einocli/` + `frontend/src/js/ai-chat.js`+ `frontend/src/css/components/ai-chat.css` | 用户消息 | AI 流式回复 |
 | **向量召回** | 笔记切块向量化（`chunk.go` 标题链拼接 + `IndexNotes` 先删后插幂等量化）后由 sqlite-vec 函数式检索——`vec_distance_cosine` SQL 内余弦距离 + `vec_f32` 解析 query 向量 JSON，`dist < 1.0` 过滤 + 距离升序 TopN；支持指定笔记本（JOIN notes 过滤）或全部笔记；命中块补充前后各 1 相邻块并按笔记合并卡片（召回块完整注入，已去掉单卡截断，由 ai_card_recall_limit 控制总量）；embedClient/模型未配置或当前模型无向量数据时静默跳过 | `services/vector_service.go:VectorRecall` + `services/chunk.go` + `models/note_vector.go` | 用户问题 query + 可选笔记本 ID 列表 | CardRecallResult（FormattedText 注入 system message + Cards 前端展示） |
 | **AI 配置管理** | Base URL/API Key/Model 的读写 + 连通性测试 + 模型列表获取 | `app.go:GetAIConfig/SaveAIConfig/TestBaseURL/FetchAIModels` | 配置项 | 配置/测试结果 |
 | **统一通知系统** | NotificationManager 单例类，右上角浮动通知，4 种类型 + undo 撤销 | `frontend/src/js/notification.js` | 消息/类型/回调 | 通知 DOM 创建与自动销毁 |
@@ -360,7 +360,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **Markdown 解析** | marked | v12.0 | Markdown → HTML 渲染 |
 | **代码高亮** | highlight.js | v11.10 | 代码块语法高亮 |
 | **Mermaid 图表** | mermaid | v11.4 | Markdown 代码块图表渲染（mermaid/render 子路径） |
-| **AI 对话** | 自研 aicli 客户端（go-openai + ollama 双驱动） | github.com/sashabaranov/go-openai v1.41.2 + github.com/ollama/ollama v0.31.1 | 流式对话/深度思考/多会话/联网搜索/卡片召回 |
+| **AI 对话** | einocli 薄适配层（eino 库） | github.com/cloudwego/eino v0.9.13 + eino-ext（components/model/openai v0.1.13 + libs/acl/openai v0.1.17，底层 github.com/meguminnnnnnnnn/go-openai v0.1.2） | 流式对话/深度思考/多会话/联网搜索/卡片召回 |
 | **本地存储** | localStorage | — | UI 状态持久化（主题/侧栏状态等） |
 
 ### 5.2 技术栈选型评价
@@ -450,7 +450,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 4. **三步交互范式**：笔记本（容器）→ 笔记卡片（列表）→ 编辑器（操作），符合直觉的文件夹-文件-编辑结构
 
-5. **自实现 AI 对话引擎（go-openai + ollama/ollama/api 双驱动）**：基于 go-openai 和 ollama/api 双库实现统一流式接口，支持 OpenAI 兼容（DeepSeek、通义千问等）和 Ollama 本地模型双 Provider。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索，含全选/全取消开关）+ 卡片召回（含笔记本选择菜单）+ 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计 + **后端统一上下文注入**。Provider 通过前端设置页下拉切换，配置自动持久化。
+5. **AI 对话引擎（einocli 薄适配层 + eino 库）**：基于 eino（components/model/openai）实现 OpenAI 兼容统一接口，通过 einocli 薄适配层对外暴露，支持 DeepSeek、通义千问等兼容端点（已移除 Ollama 原生协议）。流式输出 + Markdown 渲染 + 代码高亮 + 思维链折叠 + 多会话管理 + 侧栏折叠 + 多来源联网搜索（Tavily/知乎/全网搜索，含全选/全取消开关）+ 卡片召回（含笔记本选择菜单）+ 引用笔记 + 更多技能 + 用户消息编辑/删除/重新发送 + Token 统计 + **后端统一上下文注入**。API 连接通过设置页预设管理配置与持久化。
 
 6. **统一的通知系统**：NotificationManager 单例，右上角浮动通知，支持 success/error/warning/info 四种类型 + undo 撤销
 
@@ -613,20 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：笔记卡片 UI 重构（方案 G）+ 入场动画修复 + 回收站修复 + 标签上限
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 四项改动：① 笔记首页卡片按方案 G「内容优先」重构 — 标题加大加粗（1rem/700w）、极浅阴影（0 1px 2px rgba(45,42,36,0.06)）、圆角缩小（10px）、幽灵风格标签恢复紧凑纯色背景样式、置顶按钮恢复为图标（空心/实心 SVG）+ 旋转动画（`rotateIn`），置顶状态左侧 3px 彩色边框；② 卡片入场动画最终方案 — `backwards` 填充模式 + `cubic-bezier(0.16,1,0.3,1)` 轻微 overshoot 缓动曲线 + 30ms 交错间隔，移除 `opacity: 0` 默认态使得 `:hover` 不再被 `forwards` 阻塞，回收站列表去掉 `.anim-fadeUp` 类避免入场动画冲突；③ 回收站入场动画彻底移除 + 修复 `transition: all` 干扰 `backwards` 动画导致闪烁的问题（改为 `transition: box-shadow, border-color`）+ 进入回收站时自动滚动到顶（`els.mainContent.scrollTop = 0`）；④ 限制每篇笔记最多选 3 个标签（编辑器标签选择 + 批量标签弹窗 `selectedTags.length >= 3` 时拒绝并通知）。 |
-| **卡片样式** | [main-content.css](frontend/src/css/components/main-content.css)：`.note-card` 圆角 `10px`、阴影 `0 1px 2px`、hover 时 `translateY(-2px) scale(1.01)` + `box-shadow: var(--shadow-md)`；`.card-title` 字号 `1rem` 字重 `700`；`.card-tag` 紧凑风格 `padding: 2px 8px` 字号 `0.688rem` 白色文字；`.pin-btn` 默认 `opacity: 0.2` hover 显现，置顶态 `opacity: 1` + `color: var(--accent)`。 |
-| **入场动画** | [animations.css](frontend/src/css/animations.css)：`@keyframes cardFadeUp` 变换为 `backwards` 填充模式；`animation: cardFadeUp 0.35s cubic-bezier(0.16,1,0.3,1) backwards`，`stagger-*` 类控制 30ms 交错延迟。 |
-| **回收站修复** | [trash-page.js](frontend/src/js/trash-page.js)：`loadTrashNotes()` 顶部 `els.mainContent.scrollTop = 0` 确保滚动到顶；移除 `anim-fadeUp` 入场动画 class；[main-content.css](frontend/src/css/components/main-content.css) 中 `transition: all` 改为 `transition: transform, box-shadow, border-color` 消除闪烁。 |
-| **标签限制** | [main.js](frontend/src/main.js)：标签选择回调中 `selectedTags.length >= 3` 时 `nm.show('最多选择 3 个标签', 'warning')` 并拒绝；批量标签弹窗同样受控。 |
-| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)、[frontend/src/css/animations.css](frontend/src/css/animations.css)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/src/main.js](frontend/src/main.js) |
-
----
-
-## 记忆点 2：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
+## 记忆点 1：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 2：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 3：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +652,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 4：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 5：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +677,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 6：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -703,7 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 7：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -715,7 +702,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 8：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -726,7 +713,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 9：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -736,6 +723,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **WebView2 兼容性验证** | `:has()`（Chrome 105+）、`@property` 动画（Chrome 85+）、`color-mix()`（Chrome 111+）在 Wails WebView2 全部可用；`@property` 经 Vite 3 + esbuild CSS minify 后保留不被丢弃（在 `frontend/dist/assets/index.*.css` 中可搜到 `composer-flow-angle`）；`mask-composite: exclude` 需同时写 `-webkit-mask-composite: xor` 双前缀 |
 | **阴影负扩散认知** | box-shadow 负 spread（如 `0 8px 24px -8px`）会把模糊向内收窄，四周光晕消失只剩底部投影（适合"贴地"阴影）；spread=0 时 blur 向四周均匀铺开（笔记卡片 `--shadow-md` 风格，四向均有阴影）。本次曾放开负扩散做四周阴影 + 聚焦 `translateY(-2px)` 浮动，用户要求撤销——最终保留负扩散偏底部投影、无位移 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（`.ai-chat-composer` 结构 + 一体按钮 + Chat/Agent 分段）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（composer 全部样式 + 聚焦动效 + 滑块 + 一体按钮提示态）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（联网/召回一体按钮坐标分流 + mousemove 悬停提示） |
+
+---
+
+## 记忆点 10：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动：① **AI 客户端平替 eino**——删除自研 [internal/aicli](internal/aicli)（sashabaranov/go-openai 客户端），新建 [internal/einocli](internal/einocli) 薄适配层保持公共 API 不变（[types.go](internal/einocli/types.go) 的 `Client/Config/Message/StreamCallbacks`；[chat.go](internal/einocli/chat.go) 的 `Chat/Stream` 走 eino `Generate`/`Stream` + `WithExtraFields{"enable_thinking"}` 等价原 `ChatTemplateKwargs`；[embedding.go](internal/einocli/embedding.go) 的 `Embed/EmbedWithProgress` 走 eino acl 库 + float64→float32）；调用方仅改 import（[ai_service.go](internal/services/ai_service.go)/[vector_service.go](internal/services/vector_service.go)/[agent/tools.go](internal/agent/tools.go)/[app.go](app.go) 共 4 处）；[aierrors/errors.go](internal/aierrors/errors.go) 错误分类的 `errors.As` 目标从 sashabaranov/go-openai 切换到 eino 底层 fork `meguminnnnnnnnn/go-openai`（字段结构一致零成本），并保留 eino components `*APIError` 分支；go.mod 移除 `github.com/sashabaranov/go-openai`。② **预设配置品牌徽章**——新增 [preset-brand.js](frontend/src/js/preset-brand.js)（23 个 OpenAI 兼容服务商按 base_url 域名离线识别 + 双字母品牌简称如 DS/GLM/OL + 未命中时名称/域名首字符 + FNV 哈希稳定配色兜底，前景色按背景亮度自适应黑/白），[main.js](frontend/src/main.js) 三处接入（预设下拉列表项/预设管理列表行/触发按钮选中态前置小徽章），[settings-panel.css](frontend/src/css/components/settings-panel.css) 22px/18px 圆角方形徽章样式。③ **AI 输入框展开功能尝试后撤回**——曾按"微信式放大输入框"方案实现（composer 右上角展开按钮 + 输入区宽度撑满窗口 + textarea 高度上限 140px→60vh 封顶 900px，autoResizeInput 联动展开态），用户评估后放弃并完全回退，**该想法已否决勿重复实现**。 |
+| **einocli 与原 aicli 行为差异** | 非回归的两处差异（结论：保持现状）：① 流中途普通错误（非 EOF/非取消/无法分类）从"静默触发 OnDone 带部分内容"改为"触发 OnError 且不 OnDone"——错误显式暴露更合理；② Embed 从按响应 `Index` 字段回填改为按返回顺序直接映射——acl 库 `EmbedStrings` 丢弃 Index 无法还原，OpenAI 规范保证响应顺序与输入一致，数量校验保留。 |
+| **eino 使用要点** | `components/model/openai` 的 `NewChatModel` + `Generate/Stream`，`WithExtraFields(map{"enable_thinking": bool})` 传递深度思考开关（兼容 Qwen3/DeepSeek）；流式消费 `schema.StreamReader[*schema.Message]` 的 `Recv()` 返回 `(msg, io.EOF)`，`chunk.Content`/`chunk.ReasoningContent`，多 chunk 用 `schema.ConcatMessages` 合并（参照 [internal/agent/agent.go](internal/agent/agent.go) `consumeAssistantStream`）；`stream.Close()` 无返回值（`defer stream.Close()`）；embedding 用 `libs/acl/openai` 的 `NewEmbeddingClient` + `EmbedStrings` 返回 `[][]float64`。 |
+| **涉及文件** | [internal/einocli/](internal/einocli/)（新建 3 文件）、[internal/aierrors/errors.go](internal/aierrors/errors.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[internal/agent/tools.go](internal/agent/tools.go)、[app.go](app.go)、[go.mod](go.mod)/[go.sum](go.sum)、[frontend/src/js/preset-brand.js](frontend/src/js/preset-brand.js)（新建）、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
 
 ---
 
