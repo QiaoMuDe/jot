@@ -20,20 +20,6 @@
     min-height: 0;
     width: 100%;
     box-sizing: border-box;
-    position: relative;
-}
-
-/* 底部渐变遮罩：消息滚动到底平滑"沉入"，避免与输入坞生硬相接 */
-.ai-chat-messages::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 48px;
-    background: linear-gradient(to top, var(--bg), transparent);
-    pointer-events: none;
-    z-index: 2;
 }
 
 .ai-chat-messages-inner {
