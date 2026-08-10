@@ -1269,6 +1269,9 @@
 }
 
 .ai-chat-composer-actions {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -1281,7 +1284,7 @@
 .ai-chat-toolbar {
     display: flex;
     align-items: center;
-    padding: 8px 0 0 0;
+    padding: 8px 50px 0 0;
     gap: 10px;
     flex-wrap: wrap;
     row-gap: 6px;
@@ -2190,7 +2193,7 @@
 /* 内嵌优化表达按钮 */
 .ai-chat-polish-btn {
     position: absolute;
-    right: 6px;
+    right: 12px;
     top: 6px;
     display: inline-flex;
     align-items: center;
@@ -2253,7 +2256,7 @@
 .ai-chat-input-wrap.is-typing::before {
     content: '';
     position: absolute;
-    right: 36px;
+    right: 74px;
     bottom: 10px;
     width: 2px;
     height: 16px;
@@ -2277,7 +2280,7 @@
     flex: 1;
     min-height: 44px;
     max-height: 140px;
-    padding: 6px 2px;
+    padding: 6px 72px 6px 2px;
     font-size: 0.9rem;
     font-family: inherit;
     color: var(--text-primary);
