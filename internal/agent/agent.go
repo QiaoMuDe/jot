@@ -3,6 +3,10 @@ package agent
 // 本文件实现 AgentService 主模块：基于 cloudwego/eino 的 ChatModelAgent（ReAct 循环）
 // 组装一轮 Agent 对话并消费事件流，通过注入的 EmitFn 实时推送流式文本与工具状态。
 //
+// 工具实现在 tools 子包（每文件一个工具 + 导出构造器），父包 registry.go 统一装配注册；
+// 工具经 tools.WrapWithError 包装（失败回填模型不中断循环），部分失败经 tools.Context 登记，
+// 由本文件在 tool_result 之后统一 DrainPartials 发射 tool_partial 事件。
+//
 // 事件消费要点：
 //   - 纯文本流式：assistant 事件以 IsStreaming 形式出现，逐 chunk 读 MessageStream，
 //     将 chunk.Content 直接 emit（只emit内容，不拼接任何前缀）。
@@ -18,22 +22,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
 	"gitee.com/MM-Q/fastlog"
+	"jot/internal/agent/tools"
 	"jot/internal/services"
 )
-
-// maxToolResultLen 工具调用参数 / 结果摘要截断长度（用于事件与落库，避免超长）。
-const maxToolResultLen = 500
 
 // maxIterations 限制 ReAct 循环最大迭代次数，防止死循环（与 agent-demo 一致）。
 const maxIterations = 8
@@ -97,24 +96,13 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		return result, fmt.Errorf("创建 ChatModel 失败: %w", err)
 	}
 
-	// 3. 注册工具（notebook 过滤在构造 recall_notes 时绑定）
-	//    collector 收集工具执行产生的结构化来源与召回卡片，供结果汇总
-	//    工具统一经 wrapToolWithError 包装：失败时不中断 ReAct 循环（错误回填模型），
-	//    并记录服务日志、发射 tool_error 事件供前端展示失败态
-	collector := &resultCollector{}
-	var toolRecords []toolCallRecord
-	tools := []tool.BaseTool{
-		wrapToolWithError("refine_search_query", &refineSearchQueryTool{ai: s.deps.AI}, emit, &toolRecords, s.deps.Logger),
-		wrapToolWithError("web_search", &webSearchTool{ai: s.deps.AI, setting: s.deps.Setting, logger: s.deps.Logger, collector: collector}, emit, &toolRecords, s.deps.Logger),
-		wrapToolWithError("recall_notes", &recallNotesTool{
-			vector:         s.deps.Vector,
-			setting:        s.deps.Setting,
-			getEmbedConfig: s.deps.GetEmbedConfig,
-			notebookIDs:    req.RecallNotebookIDs,
-			logger:         s.deps.Logger,
-			collector:      collector,
-		}, emit, &toolRecords, s.deps.Logger),
-	}
+	// 3. 统一装配并注册工具（registry.go 的 buildTools，notebook 过滤在构造 recall_notes 时绑定）
+	//    collector/ctx 贯穿本轮：工具经 tools.WrapWithError 包装（失败回填模型不中断循环），
+	//    部分失败由工具经 ctx.AddPartial 登记，tool_result 之后统一 DrainPartials 发射
+	collector := &tools.Collector{}
+	var toolRecords []tools.Record
+	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
+	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx})
 
 	// 4. 组装 ChatModelAgent（内部是 ReAct 循环：模型决策 → 调用工具 → 反馈 → 继续）
 	//    Instruction 作为 system 消息由默认 GenModelInput 放在最前
@@ -125,7 +113,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		Model:       chatModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: tools,
+				Tools: toolList,
 			},
 		},
 		MaxIterations: maxIterations,
@@ -235,28 +223,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						fastlog.Int("result_len", len(content)))
 				}
 				emitToolResult(emit, &toolRecords, name, content)
-				// 部分来源失败提示（web_search 成功但部分来源失败）：
-				// 在 tool_result 之后发射 tool_partial，前端展示 ⚠️ 警告；读取后清空防重复
-				if name == "web_search" && len(collector.SourceErrors) > 0 {
-					if s.deps.Logger != nil {
-						s.deps.Logger.Debugw("Agent 发射 tool_partial 事件",
-							fastlog.Int("failed_sources", len(collector.SourceErrors)))
-					}
-					sourceNames := make([]string, 0, len(collector.SourceErrors))
-					for _, se := range collector.SourceErrors {
-						sourceNames = append(sourceNames, se.Source+"（"+se.Err+"）")
-					}
-					rec := toolCallRecord{
-						Action: "tool_partial",
-						Name:   name,
-						Result: strings.Join(sourceNames, "、"),
-					}
-					toolRecords = append(toolRecords, rec)
-					if b, err := json.Marshal(rec); err == nil {
-						emit("ai:tool-status", string(b))
-					}
-					collector.SourceErrors = nil
-				}
+				// 部分失败提示（如 web_search 部分来源失败）：工具内部经 ctx.AddPartial 登记，
+				// 此处统一在 tool_result 之后发射 tool_partial，前端展示 ⚠️ 警告；发射后清空防重复
+				toolCtx.DrainPartials(name)
 			}
 		}
 	}
@@ -270,13 +239,13 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	result.Content = finalContent
 	result.PromptTokens = promptTokensTotal
 	result.CompletionTokens = completionTokensTotal
-	if len(collector.Sources) > 0 {
-		if b, err := json.Marshal(collector.Sources); err == nil {
+	if len(toolCtx.Collector.Sources) > 0 {
+		if b, err := json.Marshal(toolCtx.Collector.Sources); err == nil {
 			result.SearchSources = string(b)
 		}
 	}
-	if len(collector.Cards) > 0 {
-		if b, err := json.Marshal(collector.Cards); err == nil {
+	if len(toolCtx.Collector.Cards) > 0 {
+		if b, err := json.Marshal(toolCtx.Collector.Cards); err == nil {
 			result.RecallCards = string(b)
 		}
 	}
@@ -397,38 +366,12 @@ func consumeToolStream(stream *schema.StreamReader[*schema.Message]) string {
 	return full.Content
 }
 
-// wrapToolWithError 包装工具：执行失败时不中断 ReAct 循环，
-// 错误文本回填给模型继续推理，同时记录服务日志并发射 tool_error 事件供前端展示失败态。
-func wrapToolWithError(name string, t tool.InvokableTool, emit EmitFn, records *[]toolCallRecord, logger *fastlog.Logger) tool.InvokableTool {
-	return utils.WrapInvokableToolWithErrorHandler(t, func(ctx context.Context, err error) string {
-		// 用户取消：不误报失败，直接返回错误文本（循环会随 ctx 终止）
-		if ctx.Err() != nil {
-			return err.Error()
-		}
-		if logger != nil {
-			logger.Warnw("Agent 工具执行失败",
-				fastlog.String("tool", name),
-				fastlog.Error(err))
-		}
-		rec := toolCallRecord{
-			Action: "tool_error",
-			Name:   name,
-			Result: truncateRunes(err.Error(), maxToolResultLen),
-		}
-		*records = append(*records, rec)
-		if b, err := json.Marshal(rec); err == nil {
-			emit("ai:tool-status", string(b))
-		}
-		return "工具执行失败：" + err.Error() + "。请依据错误信息调整策略，或直接基于已有信息回答用户。"
-	})
-}
-
 // emitToolStart 推送工具调用开始事件，并记录到工具调用摘要。
-func emitToolStart(emit EmitFn, records *[]toolCallRecord, tc schema.ToolCall) {
-	rec := toolCallRecord{
+func emitToolStart(emit EmitFn, records *[]tools.Record, tc schema.ToolCall) {
+	rec := tools.Record{
 		Action: "tool_start",
 		Name:   tc.Function.Name,
-		Args:   truncateRunes(tc.Function.Arguments, maxToolResultLen),
+		Args:   tools.TruncateRunes(tc.Function.Arguments, tools.MaxResultLen),
 	}
 	*records = append(*records, rec)
 	b, _ := json.Marshal(rec)
@@ -437,7 +380,7 @@ func emitToolStart(emit EmitFn, records *[]toolCallRecord, tc schema.ToolCall) {
 
 // emitToolResult 推送工具返回事件，并记录到工具调用摘要。
 // 若该工具刚失败（已发射 tool_error），则跳过结果事件，保持失败态不被 ✓ 覆盖。
-func emitToolResult(emit EmitFn, records *[]toolCallRecord, name, result string) {
+func emitToolResult(emit EmitFn, records *[]tools.Record, name, result string) {
 	for i := len(*records) - 1; i >= 0; i-- {
 		if (*records)[i].Name != name {
 			continue
@@ -447,24 +390,12 @@ func emitToolResult(emit EmitFn, records *[]toolCallRecord, name, result string)
 		}
 		break
 	}
-	rec := toolCallRecord{
+	rec := tools.Record{
 		Action: "tool_result",
 		Name:   name,
-		Result: truncateRunes(result, maxToolResultLen),
+		Result: tools.TruncateRunes(result, tools.MaxResultLen),
 	}
 	*records = append(*records, rec)
 	b, _ := json.Marshal(rec)
 	emit("ai:tool-status", string(b))
-}
-
-// truncateRunes 按 rune 截断字符串（支持中文），超过 maxLen 时追加省略号；maxLen<=0 不截断。
-func truncateRunes(s string, maxLen int) string {
-	if maxLen <= 0 || len(s) == 0 {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	return string(runes[:maxLen]) + "..."
 }

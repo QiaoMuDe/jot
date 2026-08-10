@@ -4,8 +4,9 @@ package agent
 // 模块职责：基于 cloudwego/eino 的 ChatModelAgent（ReAct 循环）实现 Agent 对话链路，
 // 内置 web_search（多源联网搜索）与 recall_notes（本地笔记向量召回）两个只读工具，
 // 通过事件回调把流式文本与工具状态实时推给调用方（app.go 包装 runtime.EventsEmit）。
+// 工具实现在 tools 子包，本文件通过类型别名复用其 EmitFn / Record / Collector 契约。
 
-import "jot/internal/services"
+import "jot/internal/agent/tools"
 
 // Request 一轮 Agent 对话的入参。
 // Instruction 由调用方（app.go）组装：baseSystemPrompt + 技能提示词 + 角色扮演 + 引用笔记等，
@@ -30,14 +31,14 @@ type HistoryMessage struct {
 }
 
 // Result 一轮 Agent 对话的结果，供调用方落库（写入 ai_messages 表）。
-// SearchSources / RecallCards 分别为 web_search、recall_notes 工具执行时收集的
-// 结构化来源与召回卡片（与问答模式存 search_sources / recall_cards 的格式一致），
-// ToolCalls 为完整工具调用链摘要（action/name/args/result）。
+// SearchSources / RecallCards 分别为 web_search、recall_notes 工具执行时经 tools.Collector
+// 收集的结构化来源与召回卡片（与问答模式存 search_sources / recall_cards 的格式一致），
+// ToolCalls 为完整工具调用链摘要（tools.Record 序列化：action/name/args/result）。
 type Result struct {
 	Content          string  // 最终回答全文
-	SearchSources    string  // 联网搜索来源 JSON（[]services.SearchSource）
-	RecallCards      string  // 召回卡片 JSON（[]services.RecallCard）
-	ToolCalls        string  // 工具调用链 JSON（[]toolCallRecord）
+	SearchSources    string  // 联网搜索来源 JSON（tools.Collector.Sources）
+	RecallCards      string  // 召回卡片 JSON（tools.Collector.Cards）
+	ToolCalls        string  // 工具调用链 JSON（[]tools.Record）
 	ReasoningContent string  // 深度思考链全文（流式 reasoning_content 拼接，供落库与展示）
 	ThinkingElapsed  float64 // 思考净时长（秒）：按每轮 assistant 消息独立计时并累加，排除工具执行时间
 	PromptTokens     int     // 全部 ReAct 轮次的真实输入 token 累计（provider usage.PromptTokens 求和）
@@ -46,28 +47,4 @@ type Result struct {
 
 // EmitFn 事件回调，由调用方注入（内部封装 runtime.EventsEmit）。
 // event 为事件名（如 "ai:stream-chunk" / "ai:tool-status"），data 为事件负载。
-type EmitFn func(event string, data string)
-
-// toolCallRecord 工具调用记录，用于组装 Result.ToolCalls 摘要 JSON。
-type toolCallRecord struct {
-	Action string `json:"action"`           // "tool_start" / "tool_result" / "tool_error" / "tool_partial"
-	Name   string `json:"name"`             // 工具名
-	Args   string `json:"args,omitempty"`   // 工具调用参数（JSON，截断后）
-	Result string `json:"result,omitempty"` // 工具返回结果摘要（截断后）
-}
-
-// sourceError 记录 web_search 单个来源的失败信息，用于部分失败提示。
-type sourceError struct {
-	Source string // 来源标识（tavily / zhihu_search / zhihu_global）
-	Err    string // 失败原因
-}
-
-// resultCollector 收集一轮 Agent 对话中工具执行产生的结构化结果：
-// web_search 的来源列表与 recall_notes 的召回卡片，供 Run 结束时汇总进 Result。
-type resultCollector struct {
-	Sources []services.SearchSource
-	Cards   []services.RecallCard
-	// SourceErrors web_search 部分来源失败信息（agent.go 在工具结果到达时读取并清空，
-	// 用于发射 tool_partial 事件；全部来源失败时仍走工具 error 路径，不依赖此字段）
-	SourceErrors []sourceError
-}
+type EmitFn = tools.EmitFn

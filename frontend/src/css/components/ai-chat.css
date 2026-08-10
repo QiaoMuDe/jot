@@ -453,6 +453,13 @@
     line-height: 1;
 }
 
+/* 明细中的工具名（历史回放折叠展开后）：加粗突出 */
+.ai-tool-status-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-right: 2px;
+}
+
 .ai-tool-status-item.is-done .ai-tool-status-icon {
     color: var(--accent);
 }

@@ -2506,13 +2506,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // ── Agent 模式工具调用过程展示（ai:tool-status） ──
     // 工具状态条渲染在消息气泡正文（contentDiv）上方，样式与搜索/召回指示器保持一致观感
-    const TOOL_NAMES = { web_search: '联网搜索', recall_notes: '笔记检索', refine_search_query: '搜索词精炼' };
     let toolStatusListEl = null;   // 工具状态容器
     let toolStatusItems = {};      // { [name]: {itemEl, iconEl, textEl} }
     let streamToolRecords = [];    // 本轮流的工具调用记录（落库 tool_calls，历史回放）
-
-    /** 获取工具展示名称 */
-    const getToolName = (name) => TOOL_NAMES[name] || name || '工具';
 
     /** 创建工具状态容器（懒创建，插入到正文 contentDiv 上方） */
     const ensureToolStatusList = () => {
@@ -2535,17 +2531,20 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     const showToolStatusStart = (payload) => {
         const name = payload.name || 'tool';
         const args = parseField(payload.args) || {};
-        let label = '正在调用 ' + getToolName(name) + '...';
+        let action = '执行';
         if (name === 'web_search') {
             const query = args.query || args.keywords || '';
-            label = query ? '正在搜索：' + query : '正在联网搜索...';
+            action = query ? '搜索 ' + query : '搜索互联网';
         } else if (name === 'recall_notes') {
             const ids = args.notebook_ids;
             const count = Array.isArray(ids) ? ids.length : 0;
-            label = count > 0 ? '正在检索 ' + count + ' 个笔记本...' : '正在检索本地笔记...';
+            action = count > 0 ? '检索 ' + count + ' 个笔记本' : '检索本地笔记';
         } else if (name === 'refine_search_query') {
-            label = '正在精炼搜索词...';
+            action = '精炼搜索关键词';
+        } else if (name === 'get_current_time') {
+            action = '获取当前日期时间';
         }
+        let label = '调用「' + getToolLabel(name) + '」工具：' + action;
         let item = toolStatusItems[name];
         if (!item) {
             const list = ensureToolStatusList();
@@ -2577,17 +2576,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
-        const result = parseField(payload.result);
-        let label = '已获取结果';
-        if (name === 'web_search') {
-            const n = Array.isArray(result) ? result.length : 0;
-            label = n > 0 ? '已获取 ' + n + ' 条搜索结果' : '已完成搜索';
-        } else if (name === 'recall_notes') {
-            const n = Array.isArray(result) ? result.length : 0;
-            label = n > 0 ? '已检索 ' + n + ' 篇笔记' : '已完成检索';
-        } else if (name === 'refine_search_query') {
-            label = '已精炼';
-        }
+        const label = '「' + getToolLabel(name) + '」：已完成';
         item.el.classList.add('is-done');
         item.el.classList.remove('is-active');
         item.el.classList.remove('is-error');
@@ -2616,18 +2605,15 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             list.appendChild(item.el);
             toolStatusItems[name] = item;
         }
-        let label = '工具执行失败';
-        if (name === 'web_search') label = '联网搜索失败';
-        else if (name === 'recall_notes') label = '笔记检索失败';
-        else if (name === 'refine_search_query') label = '搜索词精炼失败';
+        const label = '「' + getToolLabel(name) + '」：失败';
         const reason = payload.result ? String(payload.result) : '';
-        if (reason) label += '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason);
+        const fullLabel = reason ? label + '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason) : label;
         item.el.classList.remove('is-done');
         item.el.classList.add('is-error');
         item.el.classList.remove('is-active');
         item.el.classList.remove('is-warning');
         item.iconEl.innerHTML = svgIcon('x');
-        item.textEl.textContent = label;
+        item.textEl.textContent = fullLabel;
         scrollToBottom();
     };
 
@@ -2636,15 +2622,15 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
-        let label = '部分来源失败';
+        const label = '「' + getToolLabel(name) + '」：部分来源失败';
         const parts = payload.result ? String(payload.result) : '';
-        if (parts) label += '：' + parts;
+        const fullLabel = parts ? label + '：' + parts : label;
         item.el.classList.remove('is-done');
         item.el.classList.remove('is-error');
         item.el.classList.add('is-warning');
         item.el.classList.remove('is-active');
         item.iconEl.innerHTML = svgIcon('alert');
-        item.textEl.textContent = label;
+        item.textEl.textContent = fullLabel;
         scrollToBottom();
     };
 
@@ -4056,6 +4042,10 @@ function renderRecallCards(el, cards) {
     });
 }
 
+// 工具展示名：直接展示后端下发的英文工具名（web_search / recall_notes / ...），
+// 不维护中文映射，避免新增工具时前端遗漏同步；如需本地化，可在此加映射兜底。
+var getToolLabel = function(name) { return name || '工具'; };
+
 /**
  * 渲染 Agent 工具调用链（历史消息回放 / 实时完成态）。
  * 统一为默认折叠的工具摘要组件：一行「已调用 N 个工具」（+失败/部分失败徽标），
@@ -4065,18 +4055,17 @@ function renderRecallCards(el, cards) {
 function renderToolCalls(el, toolCalls) {
     if (!toolCalls || toolCalls.length === 0) return;
 
-    var TOOL_LABELS = { web_search: '联网搜索', recall_notes: '笔记检索', refine_search_query: '搜索词精炼' };
-    // 失败/部分失败名集合：tool_error、tool_partial 记录优先渲染对应状态
-    var failedNames = {};
-    var partialNames = {};
+    // 失败/部分失败名集合（存原因文本）：tool_error、tool_partial 记录优先渲染对应状态
+    var failedDetails = {};
+    var partialDetails = {};
     var total = 0;
     for (var i = 0; i < toolCalls.length; i++) {
         if (toolCalls[i].action === 'tool_start') {
             total++;
         } else if (toolCalls[i].action === 'tool_error' && toolCalls[i].name) {
-            failedNames[toolCalls[i].name] = true;
+            failedDetails[toolCalls[i].name] = toolCalls[i].result ? String(toolCalls[i].result) : '';
         } else if (toolCalls[i].action === 'tool_partial' && toolCalls[i].name) {
-            partialNames[toolCalls[i].name] = true;
+            partialDetails[toolCalls[i].name] = toolCalls[i].result ? String(toolCalls[i].result) : '';
         }
     }
     if (total === 0) return;
@@ -4092,38 +4081,35 @@ function renderToolCalls(el, toolCalls) {
         var item = document.createElement('div');
         var iconEl = document.createElement('span');
         iconEl.className = 'ai-tool-status-icon';
+        var nameEl = document.createElement('span');
+        nameEl.className = 'ai-tool-status-name';
+        nameEl.textContent = '「' + getToolLabel(name) + '」';
         var textEl = document.createElement('span');
         textEl.className = 'ai-tool-status-text';
 
-        if (failedNames[name]) {
-            // 失败态：❌ + 对应失败文案
+        var detail = function(text) {
+            if (!text) return '';
+            return text.length > 40 ? text.slice(0, 40) + '…' : text;
+        };
+
+        if (failedDetails.hasOwnProperty(name)) {
+            // 失败态：❌ + 工具名 + 失败原因（截断 40 字符）
             item.className = 'ai-tool-status-item is-error';
             iconEl.innerHTML = svgIcon('x');
-            var errLabel = '工具执行失败';
-            if (name === 'web_search') errLabel = '联网搜索失败';
-            else if (name === 'recall_notes') errLabel = '笔记检索失败';
-            else if (name === 'refine_search_query') errLabel = '搜索词精炼失败';
-            textEl.textContent = errLabel;
-        } else if (partialNames[name]) {
+            textEl.textContent = '：失败' + (failedDetails[name] ? '：' + detail(failedDetails[name]) : '');
+        } else if (partialDetails.hasOwnProperty(name)) {
             // 部分失败态：⚠️（仅 web_search 可能）
             item.className = 'ai-tool-status-item is-warning';
             iconEl.innerHTML = svgIcon('alert');
-            textEl.textContent = '部分来源失败';
+            textEl.textContent = '：部分来源失败' + (partialDetails[name] ? '：' + detail(partialDetails[name]) : '');
         } else {
-            // 完成态：✓ + 已完成文案
+            // 完成态：✓ + 工具名 + 已完成
             item.className = 'ai-tool-status-item is-done';
             iconEl.innerHTML = svgIcon('check');
-            var doneLabel = '已获取结果';
-            if (name === 'web_search') {
-                doneLabel = '已完成搜索';
-            } else if (name === 'recall_notes') {
-                doneLabel = '已完成检索';
-            } else if (name === 'refine_search_query') {
-                doneLabel = '已完成精炼';
-            }
-            textEl.textContent = doneLabel;
+            textEl.textContent = '：已完成';
         }
         item.appendChild(iconEl);
+        item.appendChild(nameEl);
         item.appendChild(textEl);
         list.appendChild(item);
     }
@@ -4150,8 +4136,8 @@ function renderToolCalls(el, toolCalls) {
     textSpan.textContent = '已调用 ' + total + ' 个工具';
     header.appendChild(textSpan);
 
-    var failCount = Object.keys(failedNames).length;
-    var partialCount = Object.keys(partialNames).length;
+    var failCount = Object.keys(failedDetails).length;
+    var partialCount = Object.keys(partialDetails).length;
     if (failCount > 0) {
         var failBadge = document.createElement('span');
         failBadge.className = 'ai-tool-summary-status is-error';

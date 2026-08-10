@@ -3,6 +3,7 @@ package einocli
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"jot/internal/aierrors"
 
@@ -78,11 +79,16 @@ func (c *Client) EmbedWithProgress(ctx context.Context, texts []string, batchSiz
 }
 
 // newEmbeddingClient 创建 eino OpenAI EmbeddingClient
+// 注意：必须显式设置 HTTPClient。eino-ext 的 NewEmbeddingClient 中
+// clientConf.HTTPClient = config.HTTPClient 将 nil 的 *http.Client 赋给 HTTPDoer 接口后
+// 成为 typed-nil，== nil 判断失效，不会回退 http.DefaultClient，导致 go-openai 发送请求时
+// 对 nil 调用 Do() 触发 panic（invalid memory address or nil pointer dereference）。
 func (c *Client) newEmbeddingClient(ctx context.Context) (*openai.EmbeddingClient, error) {
 	ec, err := openai.NewEmbeddingClient(ctx, &openai.EmbeddingConfig{
-		APIKey:  c.APIKey,
-		BaseURL: c.BaseURL,
-		Model:   c.Model,
+		APIKey:     c.APIKey,
+		BaseURL:    c.BaseURL,
+		Model:      c.Model,
+		HTTPClient: http.DefaultClient,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建 EmbeddingClient 失败: %w", err)
