@@ -185,6 +185,7 @@ func NewApp() *App {
 		AI:             aiService,
 		Vector:         vectorService,
 		Setting:        settingService,
+		Todo:           todoService,
 		Logger:         logSvc.Logger,
 		GetEmbedConfig: app.GetEmbedConfig,
 	})

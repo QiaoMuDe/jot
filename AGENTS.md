@@ -613,19 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：笔记卡片 hover 精简 + 待办滚动条贴窗 + 未完成待办启动提示
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三项独立改动：① 笔记卡片 hover 去掉边框变色——[main-content.css](frontend/src/css/components/main-content.css) 中 `.note-card:hover` 从「阴影+上浮+边框染 accent」三重反馈精简为「阴影+上浮」两重，同步删除 `.note-card.pinned:hover` 特判（其唯一用途是防止 hover 边框覆盖置顶左边框）。理由：accent 色是"选中态"语义，hover 染 accent 与选中态视觉语言冲突；② 待办清单滚动条移至窗口（#mainContent）右缘——[todo.css](frontend/src/css/components/todo.css) 中 `.todo-container` 放弃 `max-width: 720px + margin: 0 auto` 居中改为撑满，滚动容器 `.todo-list-wrap` 用 `margin-right: -32px` 抵消 `.view` 的 `padding-right` 贴到窗口右缘 + `padding-right: 32px` 保住内容位置，`.todo-filter-bar`/`.todo-list`/`.todo-empty` 各自 `max-width: calc(720px - 2*var(--space-5)); margin: 0 auto` 重新居中，滚动归属不变（仅列表滚动、头部固定）；③ 未完成待办启动提示——新增后端 `CountUnfinished()`（`WHERE done = false`）+ [app.go](app.go) `CountUnfinishedTodos()` 绑定，前端 `checkUnfinishedTodosReminder()` 在 init 中 `checkScreenLock()` 之后调用，未完成数 > 0 才弹 `showConfirmDialog`（"你有 N 个未完成的待办事项，是否现在去查看？"，按钮"去查看/取消"），点去查看 `switchView('todo')`，每次启动仅提示一次。 |
-| **滚动条贴窗数学** | `width: auto` + 负 margin 时元素宽 = 父 content 宽 - margin-left - margin-right，`.todo-list-wrap` 宽自动 + 32px（-32px margin），右缘恰好 = `#mainContent` 右缘，无水平溢出；content box = `[32, Wmc-32]`，居中参照与筛选栏一致（左侧 32px padding = 右侧 32px content 余量，对称）。必须移除 `scrollbar-gutter: stable`，否则 5px 轨道与 padding 叠加导致内容位移。基于 `#mainContent` 定位，sidebar 折叠/展开均稳定。 |
-| **弹窗按钮文本延迟恢复** | `showConfirmDialog` 新增 `okText`/`cancelText` 可选参数（默认"确定/取消"）。设置自定义文本后，cleanup 恢复默认文本必须延迟到关闭动画结束（最长 200ms，取 260ms），否则动画期间按钮文字瞬变；延迟恢复前检查 `els.confirmDialog.classList.contains('visible')`，若期间已有新弹窗打开则不恢复，避免覆盖新弹窗文本。恢复是必须的——`showSaveConfirmDialog`/`showDeleteNotebookDialog` 打开时**不设置**按钮文本，依赖共享 DOM 的默认值，不恢复会泄漏"去查看/取消"。 |
-| **锁屏联动** | `unlockApp()` 解锁成功后 `dispatchEvent(new CustomEvent('app-unlocked'))`；`checkUnfinishedTodosReminder` 一次性监听该事件，解锁后约 1s 再弹，未启用锁屏则延迟 600ms 直接弹。函数带 `window.go?.main?.App?.GetAllSettings` guard（与 `checkScreenLock` 同款）。`#mainContent:has(#viewTodo.active)` 的 `overflow-y: hidden` 规则保持不变（外层不滚动）。 |
-| **涉及文件** | [frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（hover 去边框 + 删 pinned:hover）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（滚动条贴窗布局）、[internal/services/todo_service.go](internal/services/todo_service.go)（CountUnfinished）、[app.go](app.go)（CountUnfinishedTodos 绑定）、[frontend/src/main.js](frontend/src/main.js)（checkUnfinishedTodosReminder + showConfirmDialog 扩展 + unlockApp 派发事件） |
-
----
-
-## 记忆点 2：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
+## 记忆点 1：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 2：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 3：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,7 +652,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 4：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 5：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +678,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 6：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -702,7 +690,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 7：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -713,7 +701,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 8：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -726,7 +714,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 9：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -734,6 +722,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **einocli 与原 aicli 行为差异** | 非回归的两处差异（结论：保持现状）：① 流中途普通错误（非 EOF/非取消/无法分类）从"静默触发 OnDone 带部分内容"改为"触发 OnError 且不 OnDone"——错误显式暴露更合理；② Embed 从按响应 `Index` 字段回填改为按返回顺序直接映射——acl 库 `EmbedStrings` 丢弃 Index 无法还原，OpenAI 规范保证响应顺序与输入一致，数量校验保留。 |
 | **eino 使用要点** | `components/model/openai` 的 `NewChatModel` + `Generate/Stream`，`WithExtraFields(map{"enable_thinking": bool})` 传递深度思考开关（兼容 Qwen3/DeepSeek）；流式消费 `schema.StreamReader[*schema.Message]` 的 `Recv()` 返回 `(msg, io.EOF)`，`chunk.Content`/`chunk.ReasoningContent`，多 chunk 用 `schema.ConcatMessages` 合并（参照 [internal/agent/agent.go](internal/agent/agent.go) `consumeAssistantStream`）；`stream.Close()` 无返回值（`defer stream.Close()`）；embedding 用 `libs/acl/openai` 的 `NewEmbeddingClient` + `EmbedStrings` 返回 `[][]float64`。 |
 | **涉及文件** | [internal/einocli/](internal/einocli/)（新建 3 文件）、[internal/aierrors/errors.go](internal/aierrors/errors.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[internal/agent/tools.go](internal/agent/tools.go)、[app.go](app.go)、[go.mod](go.mod)/[go.sum](go.sum)、[frontend/src/js/preset-brand.js](frontend/src/js/preset-brand.js)（新建）、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+
+---
+
+## 记忆点 10：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两组改动：① **manage_todo 列表分页**——[todo_service.go](internal/services/todo_service.go) 新增 `ListPaged(done *bool, page, pageSize int) ([]models.Todo, int64, error)`（返回当前页条目 + 满足条件总数），过滤（`WHERE done = ?`）与 `LIMIT/OFFSET` 分页全部下沉 SQL；提取统一排序常量 `todoOrder = "done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC, id DESC"` 并在 `List()` 中复用——追加 `id DESC` 唯一键保证分页跨页稳定、不重复不遗漏；`List()` 全量版保留（供前端 [app.go](app.go) `ListTodos` 绑定使用）。[manage_todo.go](internal/agent/tools/manage_todo.go) `listTodos(status, page, pageSize)`：pageSize 缺省 10、上限 50，页尾提示"还有 n 条未展示，如需继续查看可要求查看第 x 页"引导模型对话式翻页；统计行用 `CountUnfinished`/`CountCompleted` 全量计数避免过滤后失真；工具 schema 新增可选参数 `page`/`pageSize`，`Info().Desc` 同步说明；[TOOLS.md](internal/agent/TOOLS.md) 工具表标注"list 支持 page/pageSize 分页"。② **待办页白屏 + 导航卡住修复**——根因：`#viewAiChat` 视图在 [index.html](frontend/index.html) 中缺少一个闭合 `</div>`（回归自 AI 输入区一体化重构提交 9d4d857），浏览器解析后 `#viewTodo`/`#viewMdRef`/`#viewCalendar` 三个视图被吞入 `display:none` 的 `#viewAiChat` 内部。修复：补齐闭合 `</div>`，用 HTML 解析器验证 5 个 `.view` 均为 `main#mainContent` 直接子级。 |
+| **分页设计要点** | 只新增 `ListPaged` 而**不改 `List()` 签名**——前端 `window.go.main.App.ListTodos` 依赖 `List()` 的全量返回签名 `([]models.Todo, error)`，改签名会破坏 Wails 绑定（需同步改 app.go 与前端）。参数校验：`page < 1 → 1`；`pageSize <= 0 → 10`（DB 层兜底 20），工具层额外钳制 `> 50 → 50` 防模型传超大值。**分页前必须保证排序含唯一键**（追加 `id DESC`），否则同 `created_at` 条目跨页会重复/遗漏。 |
+| **白屏机制（重要教训）** | 位于 `display:none` 祖先内的元素：子树渲染为 0×0；其上 CSS 动画（如 `.view-enter`）冻结在 0%（`animationPlayState` 显示 `running` 但进度不动）→ **`animationend` 事件永不触发**。[main.js](frontend/src/main.js) 的 `switchView()` 靠 `animationend` 驱动 `showTargetView()` 并复位 `_viewAnimating` 锁；事件不触发 → 锁被永久占用 → 之后所有视图切换被拒 = 用户感知"进入页面卡住、白屏"。"**动画不结束/视图切换卡死"类 Bug 优先排查元素是否位于 `display:none` 祖先内**：用 `getComputedStyle(el).display` 看自身，沿 `parentElement` 向上遍历 4 层即可定位（本次即通过该链锁定 `#viewTodo → #viewAiChat(disp=none) → #mainContent → .main-content-area → #mainLayout`）。 |
+| **验证方法** | 修改 [index.html](frontend/index.html) 的视图结构后，用 Python `html.parser` 或标签开闭统计验证 div 配平，并确认各 `.view`（`#viewGrid`/`#viewAiChat`/`#viewMdRef`/`#viewCalendar`/`#viewTodo`）均为 `main#mainContent` 的**直接子级**；同时可对比 `git show <旧提交>:frontend/index.html` 校验回归来源。 |
+| **涉及文件** | [internal/services/todo_service.go](internal/services/todo_service.go)（ListPaged + todoOrder 常量 + List 复用稳定排序）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（listTodos 分页 + schema page/pageSize + Desc + 文件头注释）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具表标注分页）、[frontend/index.html](frontend/index.html)（补 `#viewAiChat` 闭合 div）、[frontend/src/main.js](frontend/src/main.js)（白屏调试后清除插桩，无业务残留） |
 
 ---
 

@@ -24,13 +24,53 @@ func (s *TodoService) Create(text string) (*models.Todo, error) {
 	return todo, nil
 }
 
+// todoOrder 待办统一排序：未完成在前，未完成按创建时间倒序、已完成按更新时间倒序，
+// 追加 id DESC 保证唯一键，使分页跨页时顺序稳定、不重复不遗漏。
+const todoOrder = "done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC, id DESC"
+
+// List 全量列出待办（供前端页面一次性渲染使用）。
 func (s *TodoService) List() ([]models.Todo, error) {
 	var todos []models.Todo
-	if err := s.db.Order("done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC").Find(&todos).Error; err != nil {
+	if err := s.db.Order(todoOrder).Find(&todos).Error; err != nil {
 		s.logger.Errorw("TodoService.List 失败", fastlog.Error(err))
 		return nil, err
 	}
 	return todos, nil
+}
+
+// ListPaged 分页列出待办，返回当前页条目与满足过滤条件的总数。
+// done 为 nil 表示全部；非 nil 表示按完成状态过滤（false=未完成，true=已完成）。
+// page 从 1 开始（小于 1 视为 1），pageSize 小于等于 0 时默认 20。
+// 排序与 List 一致（见 todoOrder），保证跨页稳定。
+func (s *TodoService) ListPaged(done *bool, page, pageSize int) ([]models.Todo, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	base := s.db.Model(&models.Todo{})
+	if done != nil {
+		base = base.Where("done = ?", *done)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		s.logger.Errorw("TodoService.ListPaged 计数失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+
+	var todos []models.Todo
+	if err := base.
+		Order(todoOrder).
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&todos).Error; err != nil {
+		s.logger.Errorw("TodoService.ListPaged 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return todos, total, nil
 }
 
 func (s *TodoService) Toggle(id uint) (*models.Todo, error) {

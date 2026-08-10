@@ -22,5 +22,6 @@ func buildTools(p BuildParams) []tool.BaseTool {
 		tools.WrapWithError("web_search", tools.NewWebSearch(p.deps.AI, p.deps.Setting, p.ctx), p.ctx),
 		tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting, p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx),
 		tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx),
+		tools.WrapWithError("manage_todo", tools.NewManageTodo(p.deps.Todo, p.ctx), p.ctx),
 	}
 }

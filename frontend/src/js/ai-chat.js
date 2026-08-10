@@ -2543,6 +2543,15 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             action = '精炼搜索关键词';
         } else if (name === 'get_current_time') {
             action = '获取当前日期时间';
+        } else if (name === 'manage_todo') {
+            const act = args.action;
+            if (act === 'create') {
+                action = '创建待办';
+            } else if (act === 'list') {
+                action = '列出待办';
+            } else if (act === 'toggle') {
+                action = '更新待办状态';
+            }
         }
         let label = '调用「' + getToolLabel(name) + '」工具：' + action;
         let item = toolStatusItems[name];
