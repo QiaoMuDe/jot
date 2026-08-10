@@ -16,5 +16,6 @@ type AIMessage struct {
 	Tokens           int       `gorm:"default:0" json:"tokens"`
 	SearchSources    string    `gorm:"type:text" json:"search_sources"`
 	RecallCards      string    `gorm:"type:text" json:"recall_cards"`
+	ToolCalls        string    `gorm:"type:text" json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
 	CreatedAt        time.Time `json:"created_at"`
 }

@@ -135,6 +135,11 @@ let skillsDropdown = null;       // #aiChatSkillsDropdown
 let skillBar = null;             // #aiChatSkillBar
 let skillChips = null;           // #aiChatSkillChips
 
+// 问答 / Agent 模式状态
+let agentEnabled = false;        // 当前会话是否为 Agent 模式（后端 SessionConfig.agent_enabled）
+let agentModeQaBtn = null;       // #aiChatModeQa
+let agentModeAgentBtn = null;    // #aiChatModeAgent
+
 
 
 // 优化表达提示词（输入框内嵌按钮专用，与下拉菜单的「文本润色」技能区分）
@@ -236,6 +241,11 @@ export async function initAIChat() {
     modelDropdown = document.getElementById('aiChatModelDropdown');
     modelLabel = document.getElementById('aiChatModelLabel');
     modelList = [];
+
+    // 问答 / Agent 模式切换
+    agentModeQaBtn = document.getElementById('aiChatModeQa');
+    agentModeAgentBtn = document.getElementById('aiChatModeAgent');
+    agentEnabled = false;
 
     // 深度思考
     searchToggle = document.getElementById('aiChatSearchToggle');
@@ -772,6 +782,14 @@ function bindEvents() {
         }
     }
 
+    // ── 问答 / Agent 模式切换 ──
+    if (agentModeQaBtn) {
+        agentModeQaBtn.addEventListener('click', () => switchAgentMode(false));
+    }
+    if (agentModeAgentBtn) {
+        agentModeAgentBtn.addEventListener('click', () => switchAgentMode(true));
+    }
+
     // ── 深度思考切换 ──
     if (searchToggle) {
         if (enableThinking) searchToggle.classList.add('active');
@@ -1249,6 +1267,36 @@ function bindEvents() {
 
 }
 
+/* ── 问答 / Agent 模式 ── */
+
+/**
+ * 切换问答 / Agent 模式（持久化到当前会话配置）
+ * @param {boolean} enabled - true=Agent 模式, false=问答模式
+ */
+async function switchAgentMode(enabled) {
+    if (isStreaming || agentEnabled === enabled) return;
+    agentEnabled = enabled;
+    updateAgentModeUI();
+    await saveCurrentSessionConfig();
+}
+
+/**
+ * 根据当前会话的 Agent 模式状态刷新工具栏 UI：
+ * - 高亮模式切换控件（问答 / Agent）
+ * - Agent 模式隐藏 联网搜索 / 卡片召回 两个开关（深度思考开关保留可用；
+ *   仅隐藏不修改开关值，切回时原值保留）
+ */
+function updateAgentModeUI() {
+    if (agentModeQaBtn) agentModeQaBtn.classList.toggle('active', !agentEnabled);
+    if (agentModeAgentBtn) agentModeAgentBtn.classList.toggle('active', agentEnabled);
+    // 隐藏/显示问答模式专属开关容器（限定在 AI 对话工具栏内）
+    const toolbarEl = document.querySelector('.ai-chat-toolbar');
+    const sourcesWrapEl = toolbarEl?.querySelector('.ai-chat-sources-wrap');
+    const recallWrapEl = toolbarEl?.querySelector('.ai-chat-recall-wrap');
+    if (sourcesWrapEl) sourcesWrapEl.classList.toggle('ai-chat-mode-hidden', agentEnabled);
+    if (recallWrapEl) recallWrapEl.classList.toggle('ai-chat-mode-hidden', agentEnabled);
+}
+
 /* ── 会话侧栏管理 ── */
 
 /**
@@ -1462,6 +1510,9 @@ async function switchSession(id) {
             const config = await window.go.main.App.LoadSessionConfig(id);
             if (config) {
                 if (config.model_name && modelLabel) modelLabel.textContent = config.model_name;
+                // 恢复问答 / Agent 模式状态并刷新工具栏 UI
+                agentEnabled = !!config.agent_enabled;
+                updateAgentModeUI();
                 enableThinking = !!config.enable_thinking;
                 if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
                 // 恢复搜索源
@@ -1518,7 +1569,7 @@ async function switchSession(id) {
         } catch (_) {}
 
         // 重建 chatHistory (仅渲染缓冲区)
-        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null })) : [];
+        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null })) : [];
         // 记录最旧消息 ID 用于分页加载
         _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
@@ -1544,14 +1595,14 @@ async function switchSession(id) {
             const chunk = msgs.slice(i, i + 5);
             for (const msg of chunk) {
                 if (msg.role === 'user') {
-                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
+                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true);
                     const userMsgEl = messagesInnerEl.lastElementChild;
                     if (userMsgEl) {
                         userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     }
                 } else if (msg.role === 'assistant') {
-                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, true, true);
+                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, msg.tool_calls, true, true);
                     el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                     bindMsgContextMenu(el, msg.content, 'assistant');
                 }
@@ -1595,14 +1646,14 @@ async function switchSession(id) {
                 // 渲染新消息（addMessage 会追加到末尾）
                 for (const msg of olderMsgs) {
                     if (msg.role === 'user') {
-                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true);
+                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true);
                         const userMsgEl = messagesInnerEl.lastElementChild;
                         if (userMsgEl) {
                             userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
                         }
                     } else if (msg.role === 'assistant') {
-                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, true, true);
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, msg.tool_calls, true, true);
                         el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                         bindMsgContextMenu(el, msg.content, 'assistant');
                     }
@@ -1618,7 +1669,7 @@ async function switchSession(id) {
                 messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
                 messagesEl.style.scrollBehavior = '';
                 // 更新 chatHistory 缓冲区
-                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null })));
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null })));
             } catch (_) { /* 静默 */ }
             _loadingMore = false;
         };
@@ -1662,6 +1713,9 @@ async function createSession() {
         const defaultCfg = await window.go.main.App.LoadSessionConfig(id);
         if (defaultCfg) {
             if (defaultCfg.model_name) modelLabel.textContent = defaultCfg.model_name;
+            // 恢复问答 / Agent 模式状态并刷新工具栏 UI
+            agentEnabled = !!defaultCfg.agent_enabled;
+            updateAgentModeUI();
             enableThinking = !!defaultCfg.enable_thinking;
             if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
             searchSources = new Set();
@@ -2152,9 +2206,13 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     _aiStreamGen++;
     const myGen = _aiStreamGen;
 
+    // 记录发送时的模式快照：Agent 流的事件参数形态与问答流不同（chunk 为单参数），
+    // 用快照区分，避免发送过程中切换模式导致解析错乱
+    const isAgentFlow = agentEnabled;
+
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords', 'ai:tool-status', 'ai:agent-result'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2194,7 +2252,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         if (_thinkingStartedAt <= 0) return;
         const elapsed = (Date.now() - _thinkingStartedAt) / 1000;
         const summary = thinkingDetails?.querySelector('.thinking-summary');
-        if (summary) summary.textContent = '💭 思考中 ' + elapsed.toFixed(1) + ' 秒';
+        const text = summary?.querySelector('.thinking-text');
+        if (text) text.textContent = '思考中 ' + elapsed.toFixed(1) + ' 秒';
     }
 
     /** 停止实时计时, 设为最终态 */
@@ -2203,14 +2262,16 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             clearInterval(_thinkingTimer);
             _thinkingTimer = null;
         }
-        if (finalElapsed > 0 && thinkingDetails) {
+        if (thinkingDetails) {
             const summary = thinkingDetails.querySelector('.thinking-summary');
-            if (summary) summary.textContent = '💭 已思考 ' + finalElapsed.toFixed(1) + ' 秒';
+            const text = summary?.querySelector('.thinking-text');
+            if (text && finalElapsed > 0) text.textContent = '已思考 ' + finalElapsed.toFixed(1) + ' 秒';
+            if (summary) summary.classList.remove('is-thinking');
         }
     }
 
-    const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
-        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+    /** 追加思维链分片：懒创建 thinkingDetails 折叠区并流式填充（问答/Agent 两模式共用） */
+    const appendThinkingChunk = (chunk) => {
         if (!enableThinking) return; // 深度思考关闭时跳过展示思维链
         if (!thinkingDetails) {
             // 召回指示器若还在最小展示时长延迟中，立即完成收尾（切回打字点），
@@ -2228,8 +2289,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
                 localStorage.setItem('ai_cot_collapsed', thinkingDetails.open ? 'false' : 'true');
             });
             const summary = document.createElement('summary');
-            summary.className = 'thinking-summary';
-            summary.textContent = '💭 思考中';
+            summary.className = 'thinking-summary is-thinking';
+            summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">思考中</span>';
             thinkingDetails.appendChild(summary);
             thinkingContentEl = document.createElement('div');
             thinkingContentEl.className = 'thinking-content';
@@ -2241,6 +2302,16 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         streamingThinking += chunk;
         thinkingContentEl.textContent = streamingThinking;
         scrollToBottom();
+    };
+
+    const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
+        if (isAgentFlow) {
+            // Agent 模式：后端事件为单参数（data=thinking 增量文本）
+            appendThinkingChunk(streamGen);
+            return;
+        }
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        appendThinkingChunk(chunk);
     });
     unsubs.push(unsubThinking);
 
@@ -2346,8 +2417,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     });
     unsubs.push(unsubRecall);
 
-    const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
-        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+    /** 处理 AI 流式正文 chunk（问答 / Agent 模式共用） */
+    const handleStreamChunk = (chunk) => {
+        if (!chunk) return;
         if (!hasReceivedChunk) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
@@ -2355,12 +2427,214 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             if (streamingThinking && _thinkingStartedAt > 0) {
                 stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
             }
+            // Agent 模式：ReAct 循环中工具调用均发生在正文输出前，首个正文 token 即
+            // 已全部终态，此时移除上方实时工具条（完成态折叠摘要仍在 stream-done 渲染）
+            if (isAgentFlow && toolStatusListEl && toolStatusListEl.parentNode) {
+                toolStatusListEl.parentNode.removeChild(toolStatusListEl);
+            }
         }
         streamingContent += chunk;
         contentDiv.innerHTML = marked.parse(streamingContent);
         scrollToBottom();
+    };
+
+    const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
+        if (isAgentFlow) {
+            // Agent 模式：后端事件为单参数（data=纯文本 chunk），streamGen 位置即 chunk 文本
+            handleStreamChunk(streamGen);
+            return;
+        }
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        handleStreamChunk(chunk);
     });
     unsubs.push(unsubChunk);
+
+    // ── Agent 模式工具调用过程展示（ai:tool-status） ──
+    // 工具状态条渲染在消息气泡正文（contentDiv）上方，样式与搜索/召回指示器保持一致观感
+    const TOOL_NAMES = { web_search: '联网搜索', recall_notes: '笔记检索', refine_search_query: '搜索词精炼' };
+    let toolStatusListEl = null;   // 工具状态容器
+    let toolStatusItems = {};      // { [name]: {itemEl, iconEl, textEl} }
+    let streamToolRecords = [];    // 本轮流的工具调用记录（落库 tool_calls，历史回放）
+
+    /** 获取工具展示名称 */
+    const getToolName = (name) => TOOL_NAMES[name] || name || '工具';
+
+    /** 创建工具状态容器（懒创建，插入到正文 contentDiv 上方） */
+    const ensureToolStatusList = () => {
+        if (toolStatusListEl) return toolStatusListEl;
+        toolStatusListEl = document.createElement('div');
+        toolStatusListEl.className = 'ai-tool-status-list';
+        streamingEl.insertBefore(toolStatusListEl, contentDiv);
+        return toolStatusListEl;
+    };
+
+    /** 解析可能为 JSON 字符串的字段（args / result） */
+    const parseField = (val) => {
+        if (typeof val === 'string') {
+            try { return JSON.parse(val); } catch (_) { return null; }
+        }
+        return val || null;
+    };
+
+    /** 展示工具调用开始状态（tool_start） */
+    const showToolStatusStart = (payload) => {
+        const name = payload.name || 'tool';
+        const args = parseField(payload.args) || {};
+        let label = '正在调用 ' + getToolName(name) + '...';
+        if (name === 'web_search') {
+            const query = args.query || args.keywords || '';
+            label = query ? '正在搜索：' + query : '正在联网搜索...';
+        } else if (name === 'recall_notes') {
+            const ids = args.notebook_ids;
+            const count = Array.isArray(ids) ? ids.length : 0;
+            label = count > 0 ? '正在检索 ' + count + ' 个笔记本...' : '正在检索本地笔记...';
+        } else if (name === 'refine_search_query') {
+            label = '正在精炼搜索词...';
+        }
+        let item = toolStatusItems[name];
+        if (!item) {
+            const list = ensureToolStatusList();
+            item = { el: null, iconEl: null, textEl: null };
+            item.el = document.createElement('div');
+            item.el.className = 'ai-tool-status-item';
+            item.el.dataset.name = name;
+            item.iconEl = document.createElement('span');
+            item.iconEl.className = 'ai-tool-status-icon';
+            item.iconEl.innerHTML = svgIcon('search');
+            item.textEl = document.createElement('span');
+            item.textEl.className = 'ai-tool-status-text';
+            item.el.appendChild(item.iconEl);
+            item.el.appendChild(item.textEl);
+            list.appendChild(item.el);
+            toolStatusItems[name] = item;
+        }
+        item.el.classList.remove('is-done');
+        item.el.classList.remove('is-error');
+        item.el.classList.remove('is-warning');
+        item.el.classList.add('is-active');
+        item.iconEl.innerHTML = svgIcon('search');
+        item.textEl.textContent = label;
+        scrollToBottom();
+    };
+
+    /** 展示工具调用完成状态（tool_result） */
+    const showToolStatusDone = (payload) => {
+        const name = payload.name || 'tool';
+        const item = toolStatusItems[name];
+        if (!item) return; // 未展示过开始状态，忽略
+        const result = parseField(payload.result);
+        let label = '已获取结果';
+        if (name === 'web_search') {
+            const n = Array.isArray(result) ? result.length : 0;
+            label = n > 0 ? '已获取 ' + n + ' 条搜索结果' : '已完成搜索';
+        } else if (name === 'recall_notes') {
+            const n = Array.isArray(result) ? result.length : 0;
+            label = n > 0 ? '已检索 ' + n + ' 篇笔记' : '已完成检索';
+        } else if (name === 'refine_search_query') {
+            label = '已精炼';
+        }
+        item.el.classList.add('is-done');
+        item.el.classList.remove('is-active');
+        item.el.classList.remove('is-error');
+        item.el.classList.remove('is-warning');
+        item.iconEl.innerHTML = svgIcon('check');
+        item.textEl.textContent = label;
+        scrollToBottom();
+    };
+
+    /** 展示工具调用失败状态（tool_error） */
+    const showToolStatusError = (payload) => {
+        const name = payload.name || 'tool';
+        let item = toolStatusItems[name];
+        if (!item) {
+            const list = ensureToolStatusList();
+            item = { el: null, iconEl: null, textEl: null };
+            item.el = document.createElement('div');
+            item.el.className = 'ai-tool-status-item';
+            item.el.dataset.name = name;
+            item.iconEl = document.createElement('span');
+            item.iconEl.className = 'ai-tool-status-icon';
+            item.textEl = document.createElement('span');
+            item.textEl.className = 'ai-tool-status-text';
+            item.el.appendChild(item.iconEl);
+            item.el.appendChild(item.textEl);
+            list.appendChild(item.el);
+            toolStatusItems[name] = item;
+        }
+        let label = '工具执行失败';
+        if (name === 'web_search') label = '联网搜索失败';
+        else if (name === 'recall_notes') label = '笔记检索失败';
+        else if (name === 'refine_search_query') label = '搜索词精炼失败';
+        const reason = payload.result ? String(payload.result) : '';
+        if (reason) label += '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason);
+        item.el.classList.remove('is-done');
+        item.el.classList.add('is-error');
+        item.el.classList.remove('is-active');
+        item.el.classList.remove('is-warning');
+        item.iconEl.innerHTML = svgIcon('x');
+        item.textEl.textContent = label;
+        scrollToBottom();
+    };
+
+    /** 展示部分来源失败状态（tool_partial，仅 web_search：成功但部分来源失败） */
+    const showToolStatusPartial = (payload) => {
+        const name = payload.name || 'tool';
+        const item = toolStatusItems[name];
+        if (!item) return; // 未展示过开始状态，忽略
+        let label = '部分来源失败';
+        const parts = payload.result ? String(payload.result) : '';
+        if (parts) label += '：' + parts;
+        item.el.classList.remove('is-done');
+        item.el.classList.remove('is-error');
+        item.el.classList.add('is-warning');
+        item.el.classList.remove('is-active');
+        item.iconEl.innerHTML = svgIcon('alert');
+        item.textEl.textContent = label;
+        scrollToBottom();
+    };
+
+    const unsubToolStatus = window.runtime.EventsOn('ai:tool-status', (data) => {
+        if (!isAgentFlow) return; // 仅 Agent 流展示工具状态
+        let payload = null;
+        try {
+            payload = typeof data === 'string' ? JSON.parse(data) : data;
+        } catch (_) { return; }
+        if (!payload || !payload.action) return;
+        streamToolRecords.push(payload); // 收集工具调用记录（tool_start / tool_result），供落库 tool_calls
+        if (payload.action === 'tool_start') {
+            showToolStatusStart(payload);
+        } else if (payload.action === 'tool_result') {
+            showToolStatusDone(payload);
+        } else if (payload.action === 'tool_error') {
+            showToolStatusError(payload);
+        } else if (payload.action === 'tool_partial') {
+            showToolStatusPartial(payload);
+        }
+    });
+    unsubs.push(unsubToolStatus);
+
+    // ── Agent 模式结构化结果回传（ai:agent-result，先于 stream-done 到达） ──
+    // 后端在流结束后把搜索来源 / 召回卡片 / 工具调用链 / 思考链 一并回传，
+    // 填充 streamSearchSources / recallCards / streamToolRecords，
+    // 使 stream-done 的 chatHistory.push 与气泡渲染拿到与历史加载一致的数据。
+    const unsubAgentResult = window.runtime.EventsOn('ai:agent-result', (evtGen, searchSourcesJSON, recallCardsJSON, toolCallsJSON, reasoningContent) => {
+        if (evtGen !== myGen) return; // 属于旧流, 丢弃
+        if (searchSourcesJSON) {
+            try { streamSearchSources = JSON.parse(searchSourcesJSON); } catch (_) {}
+        }
+        if (recallCardsJSON) {
+            try { recallCards = JSON.parse(recallCardsJSON); } catch (_) {}
+        }
+        if (toolCallsJSON) {
+            try { streamToolRecords = JSON.parse(toolCallsJSON); } catch (_) {}
+        }
+        // 思考链兜底：流式 ai:stream-thinking 未触发时，用后端汇总的完整思考链补渲染
+        if (reasoningContent && !streamingThinking) {
+            streamingThinking = reasoningContent;
+            appendThinkingChunk(reasoningContent);
+        }
+    });
+    unsubs.push(unsubAgentResult);
 
     const unsubDone = window.runtime.EventsOn('ai:stream-done', async (streamGen, fullContent, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID) => {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
@@ -2391,7 +2665,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         if (thinkingDetails && thinkingContentEl && streamingThinking) {
             const summary = thinkingDetails.querySelector('.thinking-summary');
             if (summary) {
-                summary.textContent = elapsedThinking > 0 ? '💭 已思考 ' + elapsedThinking.toFixed(1) + ' 秒' : '💭 已思考';
+                const text = summary.querySelector('.thinking-text');
+                if (text) text.textContent = elapsedThinking > 0 ? '已思考 ' + elapsedThinking.toFixed(1) + ' 秒' : '已思考';
+                summary.classList.remove('is-thinking');
             }
             renderMarkdown(thinkingContentEl, streamingThinking);
         }
@@ -2414,7 +2690,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             }
         }
 
-        chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null });
+        chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
         updateContextSize();
         streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
         bindMsgContextMenu(streamingEl, finalContent, 'assistant');
@@ -2448,6 +2724,16 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             } else {
                 renderRecallCards(streamingEl, recallCards);
             }
+        }
+
+        // 工具调用链：移除上方实时工具条，折叠为正文下方附录（与来源/卡片一致插到 actions 前）
+        if (streamToolRecords.length > 0) {
+            if (toolStatusListEl && toolStatusListEl.parentNode) {
+                toolStatusListEl.parentNode.removeChild(toolStatusListEl);
+            }
+            renderToolCalls(streamingEl, streamToolRecords);
+            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+            if (actionsEl) streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
         }
 
         scrollToBottom();
@@ -2517,7 +2803,12 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         const searchSourcesArray = Array.from(searchSources);
         const refNoteIDs = referencedNotes.map(n => n.id);
         const roleNoteIDs = roleplayNotes.map(n => n.id);
-        if (isRegenerate) {
+        if (isAgentFlow) {
+            // Agent 模式：调用 Agent 流式接口（联网搜索/卡片召回由 Agent 工具执行，无对应开关参数）
+            // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
+            // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, recallNotebookIDs, userMsgID
+            window.go.main.App.CallAIAgentStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, Array.from(recallNotebookIds), userMsgID);
+        } else if (isRegenerate) {
             window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
         } else {
             window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
@@ -2676,6 +2967,21 @@ function renderMarkdown(el, content, deferHighlight) {
     }
 }
 
+// ── AI 消息内嵌 SVG 图标（Feather 线条风格，随 currentColor 着色） ──
+function svgIcon(name, size = 14) {
+    const paths = {
+        search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+        check: '<polyline points="20 6 9 17 4 12"/>',
+        x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+        alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+        brain: '<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>',
+        wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    };
+    const p = paths[name];
+    if (!p) return '';
+    return '<svg class="ai-inline-icon' + (name === 'brain' ? ' ai-brain-icon' : '') + '" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
+}
+
 /**
  * 添加消息气泡 (不含操作按钮, 调用方自行添加) 
  * @param {string} content - 消息内容
@@ -2684,7 +2990,7 @@ function renderMarkdown(el, content, deferHighlight) {
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, skipScroll = false, deferHighlight = false) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, toolCalls, skipScroll = false, deferHighlight = false) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     // 仅流式消息播放入场动画，切换历史会话时跳过
@@ -2701,7 +3007,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         });
         const summary = document.createElement('summary');
         summary.className = 'thinking-summary';
-        summary.textContent = thinkingElapsed > 0 ? '💭 已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '💭 已思考';
+        summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">' + (thinkingElapsed > 0 ? '已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '已思考') + '</span>';
         details.appendChild(summary);
         const thinkingEl = document.createElement('div');
         thinkingEl.className = 'thinking-content';
@@ -2740,6 +3046,9 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     if (typeof recallCards === 'string') {
         try { recallCards = JSON.parse(recallCards); } catch (_) { recallCards = null; }
     }
+    if (typeof toolCalls === 'string') {
+        try { toolCalls = JSON.parse(toolCalls); } catch (_) { toolCalls = null; }
+    }
 
     // 渲染搜索来源（单一来源→卡片，多个来源→折叠面板）
     if (role === 'assistant' && searchSources && searchSources.length > 0) {
@@ -2749,6 +3058,11 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     // 渲染召回卡片折叠面板
     if (role === 'assistant' && recallCards && recallCards.length > 0) {
         renderRecallCards(el, recallCards);
+    }
+
+    // 渲染 Agent 工具调用链折叠面板（历史消息回放，复用工具状态样式）
+    if (role === 'assistant' && toolCalls && toolCalls.length > 0) {
+        renderToolCalls(el, toolCalls);
     }
 
     messagesInnerEl.appendChild(el);
@@ -3688,6 +4002,137 @@ function renderRecallCards(el, cards) {
         var isOpen = panel.classList.toggle('open');
         header.setAttribute('aria-expanded', isOpen);
     });
+}
+
+/**
+ * 渲染 Agent 工具调用链（历史消息回放 / 实时完成态）。
+ * 统一为默认折叠的工具摘要组件：一行「已调用 N 个工具」（+失败/部分失败徽标），
+ * 点击展开明细（每个工具一条最终态记录，✓/❌/⚠️ + 文案），追加到消息末尾（正文下方证据区）。
+ * toolCalls: [{ action: 'tool_start'|'tool_result', name, args, result }]
+ */
+function renderToolCalls(el, toolCalls) {
+    if (!toolCalls || toolCalls.length === 0) return;
+
+    var TOOL_LABELS = { web_search: '联网搜索', recall_notes: '笔记检索', refine_search_query: '搜索词精炼' };
+    // 失败/部分失败名集合：tool_error、tool_partial 记录优先渲染对应状态
+    var failedNames = {};
+    var partialNames = {};
+    var total = 0;
+    for (var i = 0; i < toolCalls.length; i++) {
+        if (toolCalls[i].action === 'tool_start') {
+            total++;
+        } else if (toolCalls[i].action === 'tool_error' && toolCalls[i].name) {
+            failedNames[toolCalls[i].name] = true;
+        } else if (toolCalls[i].action === 'tool_partial' && toolCalls[i].name) {
+            partialNames[toolCalls[i].name] = true;
+        }
+    }
+    if (total === 0) return;
+
+    var list = document.createElement('div');
+    list.className = 'ai-tool-status-list';
+
+    for (var i = 0; i < toolCalls.length; i++) {
+        var rec = toolCalls[i];
+        if (rec.action !== 'tool_start') continue; // 只渲染工具开始记录（结果已并入最终态）
+        var name = rec.name || 'tool';
+
+        var item = document.createElement('div');
+        var iconEl = document.createElement('span');
+        iconEl.className = 'ai-tool-status-icon';
+        var textEl = document.createElement('span');
+        textEl.className = 'ai-tool-status-text';
+
+        if (failedNames[name]) {
+            // 失败态：❌ + 对应失败文案
+            item.className = 'ai-tool-status-item is-error';
+            iconEl.innerHTML = svgIcon('x');
+            var errLabel = '工具执行失败';
+            if (name === 'web_search') errLabel = '联网搜索失败';
+            else if (name === 'recall_notes') errLabel = '笔记检索失败';
+            else if (name === 'refine_search_query') errLabel = '搜索词精炼失败';
+            textEl.textContent = errLabel;
+        } else if (partialNames[name]) {
+            // 部分失败态：⚠️（仅 web_search 可能）
+            item.className = 'ai-tool-status-item is-warning';
+            iconEl.innerHTML = svgIcon('alert');
+            textEl.textContent = '部分来源失败';
+        } else {
+            // 完成态：✓ + 已完成文案
+            item.className = 'ai-tool-status-item is-done';
+            iconEl.innerHTML = svgIcon('check');
+            var doneLabel = '已获取结果';
+            if (name === 'web_search') {
+                doneLabel = '已完成搜索';
+            } else if (name === 'recall_notes') {
+                doneLabel = '已完成检索';
+            } else if (name === 'refine_search_query') {
+                doneLabel = '已完成精炼';
+            }
+            textEl.textContent = doneLabel;
+        }
+        item.appendChild(iconEl);
+        item.appendChild(textEl);
+        list.appendChild(item);
+    }
+
+    // 折叠摘要组件：结构与样式与来源/卡片面板一致（icon | 文本 | 徽标 | 箭头），
+    // 追加到消息末尾（正文下方证据区）
+    var uid = 'ai-tool-detail-' + Date.now();
+    var summary = document.createElement('div');
+    summary.className = 'ai-tool-summary';
+
+    var header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'ai-tool-summary-header';
+    header.setAttribute('aria-expanded', 'false');
+    header.setAttribute('aria-controls', uid);
+
+    var iconSpan = document.createElement('span');
+    iconSpan.className = 'ai-tool-summary-header-icon';
+    iconSpan.innerHTML = svgIcon('wrench');
+    header.appendChild(iconSpan);
+
+    var textSpan = document.createElement('span');
+    textSpan.className = 'ai-tool-summary-header-text';
+    textSpan.textContent = '已调用 ' + total + ' 个工具';
+    header.appendChild(textSpan);
+
+    var failCount = Object.keys(failedNames).length;
+    var partialCount = Object.keys(partialNames).length;
+    if (failCount > 0) {
+        var failBadge = document.createElement('span');
+        failBadge.className = 'ai-tool-summary-status is-error';
+        failBadge.textContent = failCount + ' 失败';
+        header.appendChild(failBadge);
+    }
+    if (partialCount > 0) {
+        var partialBadge = document.createElement('span');
+        partialBadge.className = 'ai-tool-summary-status is-warning';
+        partialBadge.textContent = partialCount + ' 来源不可用';
+        header.appendChild(partialBadge);
+    }
+
+    var arrowSpan = document.createElement('span');
+    arrowSpan.className = 'ai-tool-summary-header-arrow';
+    arrowSpan.innerHTML = CHEVRON_RIGHT_ICON;
+    header.appendChild(arrowSpan);
+
+    var body = document.createElement('div');
+    body.className = 'ai-tool-summary-body';
+    body.id = uid;
+    body.appendChild(list);
+
+    summary.appendChild(header);
+    summary.appendChild(body);
+
+    // 与来源/卡片面板一致：点击 header 切换面板 .open（aria-expanded 同步）
+    header.addEventListener('click', function() {
+        var isOpen = summary.classList.toggle('open');
+        header.setAttribute('aria-expanded', isOpen);
+    });
+
+    el.appendChild(summary);
 }
 
 /**
@@ -4966,6 +5411,7 @@ async function saveCurrentSessionConfig() {
     try {
         await window.go.main.App.SaveSessionConfig(activeSessionId, {
             model_name: modelLabel?.textContent || '',
+            agent_enabled: agentEnabled,
             enable_thinking: enableThinking,
             zhihu_search_enabled: searchSources.has('zhihu_search'),
             zhihu_global_search_enabled: searchSources.has('zhihu_global'),

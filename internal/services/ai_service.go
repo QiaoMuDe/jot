@@ -28,6 +28,7 @@ type Message struct {
 	Tokens           int     `json:"tokens"`
 	SearchSources    string  `json:"search_sources"`
 	RecallCards      string  `json:"recall_cards"`
+	ToolCalls        string  `json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
 }
 
 // AIConfig 表示 AI 服务配置
@@ -52,6 +53,7 @@ type SessionConfig struct {
 	EnabledSkills            string `json:"enabled_skills"`
 	RoleplayNotes            string `json:"roleplay_notes"`
 	RecallNotebookIDs        string `json:"recall_notebook_ids"`
+	AgentEnabled             bool   `json:"agent_enabled"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -490,6 +492,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnabledSkills:            "{}",
 		RoleplayNotes:            "[]",
 		RecallNotebookIDs:        "[]",
+		AgentEnabled:             false, // 默认问答模式
 	}
 	record := models.AISessionConfig{
 		SessionID:                sessionID,
@@ -503,6 +506,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnabledSkills:            cfg.EnabledSkills,
 		RoleplayNotes:            cfg.RoleplayNotes,
 		RecallNotebookIDs:        cfg.RecallNotebookIDs,
+		AgentEnabled:             cfg.AgentEnabled,
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -524,6 +528,7 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"enabled_skills":              cfg.EnabledSkills,
 		"roleplay_notes":              cfg.RoleplayNotes,
 		"recall_notebook_ids":         cfg.RecallNotebookIDs,
+		"agent_enabled":               cfg.AgentEnabled,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
@@ -546,6 +551,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 				EnabledSkills:     "{}",
 				RoleplayNotes:     "[]",
 				RecallNotebookIDs: "[]",
+				AgentEnabled:      false,
 			}
 		}
 	}
@@ -560,6 +566,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		EnabledSkills:            record.EnabledSkills,
 		RoleplayNotes:            record.RoleplayNotes,
 		RecallNotebookIDs:        record.RecallNotebookIDs,
+		AgentEnabled:             record.AgentEnabled,
 	}
 }
 
@@ -641,7 +648,7 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
+		result[i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls}
 	}
 	return result
 }
@@ -659,7 +666,7 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 	// 反转为 ASC 顺序
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards}
+		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls}
 	}
 
 	// 截断 RecallCards 和 SearchSources 的 Content 字段，减小 Wails 桥传输量
@@ -800,6 +807,7 @@ func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
 		Tokens:           msg.Tokens,
 		SearchSources:    msg.SearchSources,
 		RecallCards:      msg.RecallCards,
+		ToolCalls:        msg.ToolCalls,
 		CreatedAt:        now,
 	}
 	if err := a.db.Create(&m).Error; err != nil {
@@ -846,6 +854,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			Tokens:           msg.Tokens,
 			SearchSources:    msg.SearchSources,
 			RecallCards:      msg.RecallCards,
+			ToolCalls:        msg.ToolCalls,
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {
@@ -908,6 +917,7 @@ func (a *AIService) ReplaceAISessionMessages(sessionID uint, messages []Message)
 				Tokens:           msg.Tokens,
 				SearchSources:    msg.SearchSources,
 				RecallCards:      msg.RecallCards,
+				ToolCalls:        msg.ToolCalls,
 				CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 			}
 			if err := tx.Create(&m).Error; err != nil {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"jot/internal/agent"
 	"jot/internal/aicli"
 	"jot/internal/database"
 	"jot/internal/fontutil"
@@ -96,6 +97,7 @@ type App struct {
 	todoService     *services.TodoService
 	LogSvc          *services.LogService
 	aiStreamCancel  context.CancelFunc
+	AgentSvc        *agent.AgentService
 	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
 	vectorIndexRunning bool
@@ -157,18 +159,35 @@ func NewApp() *App {
 	logSvc.SetLevel(services.LevelFromInt(logLevelVal))
 
 	// 4. 创建各服务（Logger 已就绪，非 nil）
-	return &App{
+	noteService := services.NewNoteService(db, settingService, logSvc.Logger)
+	tagService := services.NewTagService(db, logSvc.Logger)
+	notebookService := services.NewNotebookService(db, logSvc.Logger)
+	aiService := services.NewAIService(db, logSvc.Logger)
+	profileService := services.NewProfileService(db, logSvc.Logger)
+	vectorService := services.NewVectorService(db, logSvc.Logger)
+	todoService := services.NewTodoService(db, logSvc.Logger)
+
+	app := &App{
 		db:              db,
-		noteService:     services.NewNoteService(db, settingService, logSvc.Logger),
-		tagService:      services.NewTagService(db, logSvc.Logger),
+		noteService:     noteService,
+		tagService:      tagService,
 		settingService:  settingService,
-		notebookService: services.NewNotebookService(db, logSvc.Logger),
-		aiService:       services.NewAIService(db, logSvc.Logger),
-		profileService:  services.NewProfileService(db, logSvc.Logger),
-		vectorService:   services.NewVectorService(db, logSvc.Logger),
-		todoService:     services.NewTodoService(db, logSvc.Logger),
+		notebookService: notebookService,
+		aiService:       aiService,
+		profileService:  profileService,
+		vectorService:   vectorService,
+		todoService:     todoService,
 		LogSvc:          logSvc,
 	}
+	// Agent 服务：复用 AI/向量/设置服务与量化连接配置，供 CallAIAgentStream 使用
+	app.AgentSvc = agent.NewAgentService(agent.Deps{
+		AI:             aiService,
+		Vector:         vectorService,
+		Setting:        settingService,
+		Logger:         logSvc.Logger,
+		GetEmbedConfig: app.GetEmbedConfig,
+	})
+	return app
 }
 
 // startup is called when the app starts. The context is saved
@@ -2392,6 +2411,251 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
 			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 		}
+	}()
+}
+
+// CallAIAgentStream Agent 模式流式对话绑定方法（基于 internal/agent 模块）。
+// 深度思考通过 thinkingEnabled 传递（开启时 Agent 的 ChatModel 配置 reasoning_effort=high）；
+// 去掉 searchSources / cardRecallEnabled 两个开关：Agent 内部自带 web_search / recall_notes 工具，
+// 联网搜索与卡片召回由 Agent 自行执行，调用方仅负责组装 Instruction、截断历史、落库与事件收发。
+func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, recallNotebookIDs []uint, userMsgID uint) {
+	// 创建可取消的 ctx 并存入 a.aiStreamCancel，供停止按钮（CancelAIStream）取消
+	ctx, cancel := context.WithCancel(context.Background())
+	a.aiStreamCancel = cancel
+
+	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+	messages := a.truncateAIMessages(sessionID, "AI Agent 滑动窗口截断")
+
+	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
+	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与
+	// stream-done 回传（语义与 CallAIStreamRegenerate 一致）。
+	if userMsgID == 0 {
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				userMsgID = messages[i].ID
+				break
+			}
+		}
+	}
+
+	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环
+	go func() {
+		// 计时：总耗时（含工具调用/思考）从调用开始计；
+		// 思考净时长由 agent.Run 按每轮 assistant 消息统计（排除工具执行时间）
+		startTime := time.Now()
+
+		// ── 组装 Instruction（系统提示词全文），内容与顺序对齐 CallAIStream ──
+		// 基础提示词：无技能时注入完整三层（身份层 + 规范边界层），
+		// 有技能时仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
+		var instruction strings.Builder
+		if len(skillIds) == 0 {
+			instruction.WriteString(baseSystemPrompt)
+		} else {
+			instruction.WriteString(baseNormsBoundaries)
+		}
+
+		// 角色扮演上下文注入
+		hasRoleplay := false
+		for _, sid := range skillIds {
+			if sid == "skill_roleplay" {
+				hasRoleplay = true
+				break
+			}
+		}
+		var roleplayContext string
+		if hasRoleplay && len(roleplayNoteIDs) > 0 {
+			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
+			if err == nil && refCtx != nil && refCtx.Context != "" {
+				roleplayContext = refCtx.Context
+				roleplayText := "以下是用户提供的人物设定笔记内容（来源：角色设定笔记），你在角色扮演中应严格遵循这些设定：\n\n" + refCtx.Context
+				instruction.WriteString("\n\n" + roleplayText)
+			}
+		}
+
+		// 笔记引用上下文注入
+		if len(referencedNoteIDs) > 0 {
+			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
+			if err == nil && refCtx != nil && refCtx.Context != "" {
+				refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
+				instruction.WriteString("\n\n" + refText)
+			}
+		}
+
+		// 追问引用内容注入
+		if followUpRefContent != "" {
+			refText := "用户正在追问以下内容：\n" + followUpRefContent
+			if len([]rune(followUpRefContent)) > 500 {
+				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
+			}
+			instruction.WriteString("\n\n" + refText)
+		}
+
+		// 上传文件内容注入
+		if len(uploadedFiles) > 0 {
+			var b strings.Builder
+			b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
+			for _, f := range uploadedFiles {
+				if f.Error != "" || f.Content == "" {
+					continue
+				}
+				sizeStr := formatFileSize(f.Size)
+				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
+			}
+			if b.Len() > 0 {
+				instruction.WriteString("\n\n" + b.String())
+			}
+		}
+
+		// 技能提示词注入
+		if len(skillIds) > 0 {
+			// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
+			translateArgs := make(map[string]string)
+			cleanSkillIds := make([]string, 0, len(skillIds))
+			for _, id := range skillIds {
+				if strings.HasPrefix(id, "skill_translate:") {
+					parts := strings.SplitN(id, ":", 3)
+					if len(parts) == 3 {
+						translateArgs["source"] = parts[1]
+						translateArgs["target"] = parts[2]
+					}
+					cleanSkillIds = append(cleanSkillIds, "skill_translate")
+				} else {
+					cleanSkillIds = append(cleanSkillIds, id)
+				}
+			}
+			skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
+			if err == nil && skillPrompt != "" {
+				// 替换角色扮演占位符
+				if hasRoleplay && roleplayContext != "" {
+					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
+				}
+				instruction.WriteString("\n\n" + skillPrompt)
+			} else if err != nil {
+				a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
+			}
+		}
+
+		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
+		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
+		history := make([]agent.HistoryMessage, 0, len(messages))
+		for _, m := range messages {
+			if m.Role == "system" {
+				continue
+			}
+			history = append(history, agent.HistoryMessage{Role: m.Role, Content: m.Content})
+		}
+
+		// 如果已被用户取消（停止按钮），不再调用 Agent，避免白调用；
+		// 取消时用户消息已入库，需重算会话 token 缓存（与 CallAIStream 一致）
+		if ctx.Err() != nil {
+			if userMsgID > 0 {
+				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
+			}
+			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+			return
+		}
+
+		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
+		a.LogSvc.Logger.Debugw("AI Agent 流开始",
+			fastlog.Int("history_count", len(history)),
+			fastlog.Int("skill_count", len(skillIds)),
+		)
+		result, err := a.AgentSvc.Run(ctx, agent.Request{
+			SessionID:         sessionID,
+			UserText:          userText,
+			History:           history,
+			Instruction:       instruction.String(),
+			ThinkingEnabled:   thinkingEnabled,
+			SkillIDs:          skillIds,
+			RecallNotebookIDs: recallNotebookIDs,
+			UserMsgID:         userMsgID,
+		}, func(ev, data string) {
+			runtime.EventsEmit(a.ctx, ev, data)
+		})
+
+		// 失败处理：经 ClassifyError 转中文提示（与 CallAIStream 错误分支一致）
+		if err != nil {
+			// 用户取消导致的结束：补发完成事件确保前端清理气泡，并刷新 token 缓存
+			if ctx.Err() != nil {
+				if userMsgID > 0 {
+					_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
+				}
+				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+				return
+			}
+			a.LogSvc.Logger.Errorw("AI Agent 流错误", fastlog.Error(err))
+			aiErr := aicli.ClassifyError(err)
+			if aiErr == nil {
+				// context.Canceled 等非错误情况，补发完成事件
+				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+				return
+			}
+			// 与 CallAIStream 错误分支一致：附带 userTokens 供前端更新用户消息气泡 token 显示
+			runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.ToJSON(), estimateUserTokens(messages))
+			return
+		}
+
+		// 成功：保存 assistant 消息（与 CallAIStream 尾部一致）。
+		// SearchSources（联网搜索来源）/ RecallCards（召回卡片）/ ToolCalls（工具调用链）
+		// 分别写入 search_sources / recall_cards / tool_calls 字段。
+		// 思考净时长（agent.Run 内按轮统计，排除工具执行时间）与总耗时（调用开始到流结束）
+		elapsedThinking := result.ThinkingElapsed
+		elapsedTotal := time.Since(startTime).Seconds()
+
+		// token 统计：优先用 Agent 各轮真实 usage（输入=ΣPromptTokens 记用户消息，
+		// 输出=ΣCompletionTokens 记 assistant 消息，含中间轮工具参数/思考/工具结果回填）；
+		// 仅当 provider 未返回 usage（两项均为 0）时回退现状估算，保持统计不为空
+		userTokens := estimateUserTokens(messages)
+		assistantTokens := estimateTokens(result.Content)
+		// 深度思考链计入 assistant token（与 CallAIStream 一致）
+		if thinkingEnabled && result.ReasoningContent != "" {
+			assistantTokens += estimateTokens(result.ReasoningContent)
+		}
+		if result.PromptTokens > 0 {
+			userTokens = result.PromptTokens
+		}
+		if result.CompletionTokens > 0 {
+			assistantTokens = result.CompletionTokens
+		}
+		totalTokens := userTokens + assistantTokens
+
+		// 保存 assistant 消息到数据库（与 CallAIStream 一致）：
+		// 耗时与深度思考链一起落库，切换会话后历史消息仍展示 ⏱ 耗时与思考秒数
+		assistantMsg := services.Message{
+			Role:             "assistant",
+			Content:          result.Content,
+			ReasoningContent: result.ReasoningContent,
+			ThinkingElapsed:  elapsedThinking,
+			TotalElapsed:     elapsedTotal,
+			Tokens:           assistantTokens,
+			SearchSources:    result.SearchSources,
+			RecallCards:      result.RecallCards,
+			ToolCalls:        result.ToolCalls,
+		}
+		assistantMsgID, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
+		if saveErr != nil {
+			a.LogSvc.Logger.Errorw("保存 assistant 消息失败", fastlog.Error(saveErr))
+		}
+
+		// 更新用户消息的 tokens 为完整上下文 token 数（含 system 上下文），
+		// 并重新计算会话累计 token 持久化
+		_ = a.aiService.UpdateAIMessageTokens(userMsgID, userTokens)
+		accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+		_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+
+		// 通过 stream-done 一并返回 token 数据和消息 ID（与 CallAIStream 一致）
+		a.LogSvc.Logger.Infow("AI Agent 流完成",
+			fastlog.Int("total_tokens", totalTokens),
+			fastlog.Float64("elapsed_total", elapsedTotal),
+		)
+		// agent-result 事件先于 stream-done 发送：把结构化结果（搜索来源/召回卡片/工具调用链/思考链）
+		// 回传前端，供流式完成后立即渲染（无需切换会话），并供 chatHistory.push 落库前使用
+		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.SearchSources, result.RecallCards, result.ToolCalls, result.ReasoningContent)
+		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
 	}()
 }
 

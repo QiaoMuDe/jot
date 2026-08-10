@@ -14,4 +14,6 @@ type AISessionConfig struct {
 	EnabledSkills            string `gorm:"type:text" json:"enabled_skills"`
 	RoleplayNotes            string `gorm:"type:text;default:''" json:"roleplay_notes"`
 	RecallNotebookIDs        string `gorm:"type:text" json:"recall_notebook_ids"`
+	// AgentEnabled 会话是否为 Agent 模式（模型自主调用工具），默认问答模式
+	AgentEnabled bool `gorm:"default:false" json:"agent_enabled"`
 }

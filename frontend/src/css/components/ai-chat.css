@@ -425,6 +425,180 @@
     white-space: nowrap;
 }
 
+/* ── Agent 工具调用过程状态条（展示在 AI 气泡正文上方） ── */
+.ai-tool-status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 6px 0;
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+}
+
+.ai-tool-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--hover-bg);
+    animation: ai-search-indicator-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ai-tool-status-icon {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.ai-tool-status-item.is-done .ai-tool-status-icon {
+    color: var(--accent);
+}
+
+.ai-tool-status-item.is-done .ai-tool-status-text {
+    color: var(--text-muted);
+}
+
+.ai-tool-status-item.is-error .ai-tool-status-icon {
+    color: var(--danger, #e5484d);
+}
+
+.ai-tool-status-item.is-error .ai-tool-status-text {
+    color: var(--danger, #e5484d);
+}
+
+.ai-tool-status-item.is-warning .ai-tool-status-icon {
+    color: var(--warning, #d97706);
+}
+
+.ai-tool-status-item.is-warning .ai-tool-status-text {
+    color: var(--warning, #d97706);
+}
+
+/* AI 消息内联 SVG 图标（Feather 线条风格，随 currentColor 着色） */
+.ai-inline-icon {
+    flex-shrink: 0;
+    display: block;
+}
+
+.ai-tool-status-icon .ai-inline-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* 进行中 / 思考中：图标脉冲动画（class-driven，支持减少动态效果） */
+.ai-tool-status-item.is-active .ai-tool-status-icon,
+.thinking-summary.is-thinking .ai-inline-icon {
+    animation: ai-icon-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-icon-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-status-item.is-active .ai-tool-status-icon,
+    .thinking-summary.is-thinking .ai-inline-icon {
+        animation: none;
+    }
+}
+
+/* ── Agent 工具调用折叠摘要（完成后归入正文下方证据区，样式与来源/卡片面板一致） ── */
+.ai-tool-summary {
+    margin: 6px 0 4px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.ai-tool-summary-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-family: inherit;
+    text-align: left;
+    transition: color 0.15s, background 0.15s;
+}
+.ai-tool-summary-header:hover {
+    color: var(--accent);
+    background: var(--hover-bg);
+}
+
+.ai-tool-summary-header-icon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    color: var(--accent);
+}
+
+.ai-tool-summary-header-text {
+    flex: 1;
+    font-weight: 500;
+}
+
+.ai-tool-summary-status {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.ai-tool-summary-status.is-error {
+    color: var(--danger, #e5484d);
+    background: var(--error-bg);
+}
+.ai-tool-summary-status.is-warning {
+    color: var(--warning, #d97706);
+    background: var(--warning-bg);
+}
+
+.ai-tool-summary-header-arrow {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+}
+.ai-tool-summary.open .ai-tool-summary-header-arrow {
+    transform: rotate(90deg);
+}
+
+.ai-tool-summary-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    opacity: 0;
+}
+.ai-tool-summary.open .ai-tool-summary-body {
+    max-height: 2000px;
+    opacity: 1;
+}
+
+.ai-tool-summary-body > .ai-tool-status-list {
+    padding: 10px 12px 10px;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-tool-summary-header-arrow,
+    .ai-tool-summary-body {
+        transition: none;
+    }
+}
+
 /* 关键词数量徽标 */
 .ai-search-badge {
     display: inline-flex;
@@ -664,7 +838,7 @@
 
 /* ── 搜索来源折叠面板（统一面板，默认收起） ── */
 .search-sources-panel {
-    margin: 12px 0 4px 0;
+    margin: 6px 0 4px 0;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--bg-secondary);
@@ -841,7 +1015,7 @@
 
 /* ── 召回笔记折叠面板 ── */
 .recall-cards-panel {
-    margin: 12px 0 4px 0;
+    margin: 6px 0 4px 0;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--bg-secondary);
@@ -988,6 +1162,53 @@
     flex-wrap: wrap;
     row-gap: 6px;
 }
+
+/* ── 问答 / Agent 模式切换（分段式控件） ── */
+.ai-chat-mode-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: var(--hover-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.ai-chat-mode-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+    border: none;
+    background: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.ai-chat-mode-option:hover {
+    color: var(--text-primary);
+}
+
+.ai-chat-mode-option.active {
+    color: var(--accent);
+    background: var(--card-bg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+}
+
+/* Agent 模式下隐藏问答专属开关（深度思考 / 联网搜索 / 卡片召回），仅隐藏不改变开关值 */
+.ai-chat-toolbar .ai-chat-mode-hidden {
+    display: none !important;
+}
+
 
 /* 模型选择器容器 */
 .ai-chat-model-select {
@@ -2115,6 +2336,11 @@
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.thinking-summary .ai-inline-icon {
+    width: 14px;
+    height: 14px;
 }
 
 .thinking-summary:hover {

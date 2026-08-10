@@ -24,6 +24,8 @@ export function BatchRestoreNotes(arg1:Array<number>):Promise<void>;
 
 export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
+export function CallAIAgentStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:Array<number>,arg7:Array<number>,arg8:string,arg9:Array<main.AIChatFileResult>,arg10:Array<number>,arg11:number):Promise<void>;
+
 export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:boolean,arg7:Array<number>,arg8:Array<string>,arg9:Array<number>,arg10:Array<number>,arg11:string,arg12:Array<main.AIChatFileResult>,arg13:number):Promise<void>;
 
 export function CallAIStreamRegenerate(arg1:number,arg2:number,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:Array<number>,arg7:Array<string>,arg8:Array<number>,arg9:Array<number>,arg10:string,arg11:Array<main.AIChatFileResult>):Promise<void>;

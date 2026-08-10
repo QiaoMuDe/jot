@@ -470,6 +470,7 @@ export namespace services {
 	    tokens: number;
 	    search_sources: string;
 	    recall_cards: string;
+	    tool_calls: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -486,6 +487,7 @@ export namespace services {
 	        this.tokens = source["tokens"];
 	        this.search_sources = source["search_sources"];
 	        this.recall_cards = source["recall_cards"];
+	        this.tool_calls = source["tool_calls"];
 	    }
 	}
 	export class NoteRefInfo {
@@ -568,6 +570,7 @@ export namespace services {
 	    enabled_skills: string;
 	    roleplay_notes: string;
 	    recall_notebook_ids: string;
+	    agent_enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -585,6 +588,7 @@ export namespace services {
 	        this.enabled_skills = source["enabled_skills"];
 	        this.roleplay_notes = source["roleplay_notes"];
 	        this.recall_notebook_ids = source["recall_notebook_ids"];
+	        this.agent_enabled = source["agent_enabled"];
 	    }
 	}
 	export class SettingsConfig {
