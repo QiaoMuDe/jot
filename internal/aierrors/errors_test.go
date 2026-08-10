@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
-	openai "github.com/sashabaranov/go-openai"
+	openai "github.com/meguminnnnnnnnn/go-openai"
 )
 
 func TestClassifyError_AuthError_401(t *testing.T) {

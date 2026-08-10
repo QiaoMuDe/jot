@@ -9,8 +9,8 @@ import (
 	"sync"
 	"unicode"
 
-	"jot/internal/aicli"
 	"jot/internal/aierrors"
+	"jot/internal/einocli"
 	"jot/internal/models"
 
 	"gitee.com/MM-Q/fastlog"
@@ -142,7 +142,7 @@ func isAllPunct(s string) bool {
 //
 // 单条笔记失败不终止整体，计入 failed；软删除笔记（deleted_at 非空）在查询阶段跳过
 // 返回 (success, failed int, err error)，err 仅当整体性错误（如无有效笔记或 embedding client 配置错误）
-func (s *VectorService) IndexNotes(ctx context.Context, embedClient *aicli.Client, noteIDs []uint, progressCb func(done, total int, title string, stage string, chunkDone, chunkTotal int, errMsg string)) (success, failed int, err error) {
+func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Client, noteIDs []uint, progressCb func(done, total int, title string, stage string, chunkDone, chunkTotal int, errMsg string)) (success, failed int, err error) {
 	// embedding client 配置检查：模型未配置时无法量化，直接返回整体性错误
 	if embedClient == nil || embedClient.Model == "" {
 		return 0, 0, fmt.Errorf("embedding 模型未配置")
@@ -456,7 +456,7 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 // vectorSearch 向量检索：将 query 向量化后，通过 sqlite-vec 扩展在 SQL 内计算余弦距离，
 // 按距离升序召回 TopN 命中块
 // embedClient 为 nil 或模型未配置时返回 (nil, nil) 静默跳过，由调用方决定是否降级为仅关键词检索
-func (s *VectorService) vectorSearch(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs []uint) ([]models.NoteVector, error) {
+func (s *VectorService) vectorSearch(ctx context.Context, query string, limit int, embedClient *einocli.Client, notebookIDs []uint) ([]models.NoteVector, error) {
 	// embedding client 配置检查：模型未配置时无法向量化 query，静默跳过
 	if embedClient == nil || embedClient.Model == "" {
 		s.logger.Debugw("VectorService.vectorSearch 跳过：embedding 模型未配置")
@@ -526,7 +526,7 @@ func (s *VectorService) vectorSearch(ctx context.Context, query string, limit in
 // HybridRecall 混合召回：并行执行向量检索与关键词检索，按 (note_id, chunk_index) 去重合并
 // 排序优先级：双命中（向量+关键词）> 仅向量命中 > 仅关键词命中
 // 合并后补充相邻块并组装卡片，返回 CardRecallResult
-func (s *VectorService) HybridRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
+func (s *VectorService) HybridRecall(ctx context.Context, query string, limit int, embedClient *einocli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
 	if query == "" || limit <= 0 {
 		return nil, nil
 	}
@@ -804,6 +804,6 @@ func selectTopNotes(hits []models.NoteVector, limit, maxPerNote int) []models.No
 //   - (result, nil)：召回成功
 //   - (nil, nil)：预期跳过（query 为空/无命中/卡片为空），调用方可静默
 //   - (nil, err)：意外错误，调用方应提示用户
-func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *aicli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
+func (s *VectorService) VectorRecall(ctx context.Context, query string, limit int, embedClient *einocli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
 	return s.HybridRecall(ctx, query, limit, embedClient, notebookIDs...)
 }

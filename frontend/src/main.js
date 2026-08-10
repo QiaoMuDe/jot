@@ -20,6 +20,8 @@ import { codeHighlightThemeLabels, getHighlightExtension, jotTheme } from './js/
 // 独立模块
 import { SVGS, debounce, formatTime, getSummary } from './js/constants.js';
 import { NotificationManager, getMockNotes, getMockTags } from './js/notification.js';
+// 预设品牌徽章模块
+import { createPresetBadge } from './js/preset-brand.js';
 
 // 数据管理模块
 import { backupToDir, cleanupOrphanImages, clearAISessions, clearCompletedTodos, deleteAllVectors, exportData, importData, loadDataStats, onVectorIndexCloseRequested, openDataDir, openLogDir, openVectorIndexModal, resetDatabase, restoreFromDir, vacuumDatabase } from './js/data-management.js';
@@ -1940,7 +1942,7 @@ function renderPresetList(container, labelEl, profiles, current, onSelect) {
     if (!container) return null;
     if (!profiles || profiles.length === 0) {
         container.innerHTML = '';
-        if (labelEl) labelEl.textContent = '无预设配置';
+        setPresetTriggerLabel(labelEl, null, true);
         return null;
     }
 
@@ -1948,8 +1950,10 @@ function renderPresetList(container, labelEl, profiles, current, onSelect) {
     let matchedId = null;
     for (const p of profiles) {
         const item = document.createElement('div');
-        item.className = 'theme-select-item';
+        item.className = 'theme-select-item preset-option';
         item.dataset.profileId = p.id;
+        // 品牌徽章（按 API 地址域名识别，未命中回退首字符色块）
+        item.appendChild(createPresetBadge(p.base_url, p.name));
         // 展示名称
         const nameSpan = document.createElement('span');
         nameSpan.textContent = p.name;
@@ -1967,8 +1971,24 @@ function renderPresetList(container, labelEl, profiles, current, onSelect) {
         container.appendChild(item);
     }
     const matched = profiles.find(p => p.id === matchedId);
-    if (labelEl) labelEl.textContent = matched ? matched.name : '选择预设';
+    setPresetTriggerLabel(labelEl, matched || null, false);
     return matchedId;
+}
+
+// 设置预设触发按钮标签：有匹配预设时前置小号品牌徽章 + 名称；否则显示提示文本
+// empty 为 true 表示预设列表为空（显示"无预设配置"），否则显示"选择预设"
+function setPresetTriggerLabel(labelEl, profile, empty) {
+    if (!labelEl) return;
+    labelEl.innerHTML = '';
+    if (profile) {
+        labelEl.appendChild(createPresetBadge(profile.base_url, profile.name, true));
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'preset-option-name';
+        nameSpan.textContent = profile.name;
+        labelEl.appendChild(nameSpan);
+    } else {
+        labelEl.textContent = empty ? '无预设配置' : '选择预设';
+    }
 }
 
 /**
@@ -3322,6 +3342,8 @@ function createPresetRowElement(p) {
     info.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;';
     const nameRow = document.createElement('div');
     nameRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+    // 品牌徽章（与预设下拉列表一致）
+    nameRow.appendChild(createPresetBadge(p.base_url, p.name));
     const nameSpan = document.createElement('strong');
     nameSpan.style.cssText = 'font-size:0.85rem;color:var(--text-primary);';
     nameSpan.textContent = p.name;

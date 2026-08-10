@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"io"
 	"jot/internal/agent"
-	"jot/internal/aicli"
 	"jot/internal/aierrors"
 	"jot/internal/database"
+	"jot/internal/einocli"
 	"jot/internal/fontutil"
 	"jot/internal/models"
 	"jot/internal/services"
@@ -1691,7 +1691,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 	}
 
 	// 构造 embedding 客户端（GetEmbedConfig 已解码 apiKey）
-	client := aicli.NewClient(aicli.Config{
+	client := einocli.NewClient(einocli.Config{
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 		Model:   model,
@@ -2284,7 +2284,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 
 				// 构建 embedding client（ai_embed_* 三键，apiKey 为 B64 存储需解码）
 				embedBaseURL, embedAPIKey, embedModel, _ := a.GetEmbedConfig()
-				embedClient := aicli.NewClient(aicli.Config{
+				embedClient := einocli.NewClient(einocli.Config{
 					BaseURL: embedBaseURL,
 					APIKey:  embedAPIKey,
 					Model:   embedModel,

@@ -1,4 +1,6 @@
-package aicli
+package einocli
+
+import "strings"
 
 // Message 表示 AI 对话中的一条消息
 type Message struct {
@@ -19,4 +21,20 @@ type Config struct {
 	BaseURL string // 例如 https://api.openai.com/v1 或任意 OpenAI 兼容端点
 	APIKey  string
 	Model   string
+}
+
+// Client eino 适配层客户端（OpenAI 兼容协议）
+type Client struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+}
+
+// NewClient 创建适配层客户端
+func NewClient(cfg Config) *Client {
+	return &Client{
+		BaseURL: strings.TrimRight(cfg.BaseURL, "/"),
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
+	}
 }

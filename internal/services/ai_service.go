@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"gitee.com/MM-Q/fastlog"
-	"jot/internal/aicli"
 	"jot/internal/aierrors"
+	"jot/internal/einocli"
 	"jot/internal/models"
 
 	"gorm.io/gorm"
@@ -201,16 +201,16 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, error) {
 	cfg := a.GetConfig()
 
-	client := aicli.NewClient(aicli.Config{
+	client := einocli.NewClient(einocli.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
 	})
 
-	// Convert services.Message to aicli.Message
-	aicliMsgs := make([]aicli.Message, len(messages))
+	// Convert services.Message to einocli.Message
+	aicliMsgs := make([]einocli.Message, len(messages))
 	for i, m := range messages {
-		aicliMsgs[i] = aicli.Message{Role: m.Role, Content: m.Content}
+		aicliMsgs[i] = einocli.Message{Role: m.Role, Content: m.Content}
 	}
 
 	content, _, err := client.Chat(ctx, aicliMsgs, false)
@@ -233,19 +233,19 @@ func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, err
 func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, float64, float64), onError func(string)) {
 	cfg := a.GetConfig()
 
-	client := aicli.NewClient(aicli.Config{
+	client := einocli.NewClient(einocli.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
 	})
 
-	// Convert services.Message to aicli.Message
-	aicliMsgs := make([]aicli.Message, len(messages))
+	// Convert services.Message to einocli.Message
+	aicliMsgs := make([]einocli.Message, len(messages))
 	for i, m := range messages {
-		aicliMsgs[i] = aicli.Message{Role: m.Role, Content: m.Content}
+		aicliMsgs[i] = einocli.Message{Role: m.Role, Content: m.Content}
 	}
 
-	callbacks := aicli.StreamCallbacks{
+	callbacks := einocli.StreamCallbacks{
 		OnChunk:    onChunk,
 		OnThinking: onThinking,
 		OnDone:     onDone,

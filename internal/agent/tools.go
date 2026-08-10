@@ -16,7 +16,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"gitee.com/MM-Q/fastlog"
-	"jot/internal/aicli"
+	"jot/internal/einocli"
 	"jot/internal/services"
 )
 
@@ -275,7 +275,7 @@ func (r *recallNotesTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	if baseURL == "" || apiKey == "" || model == "" {
 		return "", errors.New("量化连接未配置（API 地址 / API Key / 模型），无法检索本地笔记")
 	}
-	embedClient := aicli.NewClient(aicli.Config{
+	embedClient := einocli.NewClient(einocli.Config{
 		BaseURL: baseURL,
 		APIKey:  apiKey,
 		Model:   model,

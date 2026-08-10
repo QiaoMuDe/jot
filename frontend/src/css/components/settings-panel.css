@@ -1085,6 +1085,53 @@
     min-width: 0;
 }
 
+/* 预设品牌徽章（圆角方形色块，色值由 JS 内联指定） */
+.preset-brand-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1;
+    user-select: none;
+}
+
+.preset-brand-badge.sm {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+    border-radius: 5px;
+}
+
+/* 预设下拉项：徽章 + 名称 flex 布局 */
+.theme-select-item.preset-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 预设触发按钮标签：小号徽章 + 名称（超长截断） */
+#presetLabel,
+#aiEmbedPresetLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.preset-option-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* 预设管理列表 — 入场/离场动画通过独立 class 触发，避免 CSS animation 切换不重启的浏览器缺陷 */
 .preset-mgr-list {
     margin-bottom: 16px;
