@@ -17,7 +17,6 @@ let stopBtnEl = null;         // #aiChatStopBtn
 let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
-let sessionTitleEl = null;    // #aiSessionTitle
 let contextSizeEl = null;     // #aiChatContextSize
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
@@ -233,7 +232,6 @@ export async function initAIChat() {
     askPanelEl = document.getElementById('aiAskPanel');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
-    sessionTitleEl = document.getElementById('aiSessionTitle');
     sessionSearchEl = document.getElementById('aiSessionSearch');
     contextSizeEl = document.getElementById('aiChatContextSize');
     polishBtn = document.getElementById('aiChatPolishBtn');
@@ -374,15 +372,6 @@ function formatFileSize(bytes) {
  * 绑定所有事件
  */
 function bindEvents() {
-    // 返回按钮
-    const backBtn = document.getElementById('aiChatBackBtn');
-    if (backBtn) {
-        backBtn.addEventListener('click', () => {
-            window.switchView('grid');
-            window.loadNotes();
-        });
-    }
-
     // 清空当前对话
     if (clearBtnEl) {
         clearBtnEl.addEventListener('click', async () => {
@@ -413,20 +402,13 @@ function bindEvents() {
         });
     }
 
-    // 双击标题新建会话
-    if (sessionTitleEl) {
-        sessionTitleEl.addEventListener('dblclick', () => {
-            triggerPulseFeedback(sessionTitleEl);
-            createSession();
-        });
-    }
-
-    // 双击 AI 助手标题新建会话
+    // 双击标题栏标题重命名当前会话（内联编辑，同侧栏条目重命名）
     const aiChatTitleEl = document.getElementById('aiChatTitle');
     if (aiChatTitleEl) {
         aiChatTitleEl.addEventListener('dblclick', () => {
+            if (activeSessionId === null) return;
             triggerPulseFeedback(aiChatTitleEl);
-            createSession();
+            startInlineEdit(aiChatTitleEl, activeSessionId);
         });
     }
 
@@ -660,22 +642,19 @@ function bindEvents() {
     // 侧栏折叠/展开
     const toggleBtn = document.getElementById('aiSidebarToggle');
     const sidebar = document.querySelector('.ai-session-sidebar');
-    const headerToolsEl = document.querySelector('.ai-chat-header-tools');
-    // 面板图标：panel-left-open（面板+右箭头=展开侧栏）/ panel-left-close（面板+左箭头=折叠侧栏）
-    const panelOpenIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg>';
-    const panelCloseIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>';
+    // 侧栏图标：面板图标（不带方向箭头，折叠/展开共用）
+    const panelOpenIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>';
+    const panelCloseIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>';
 
     if (toggleBtn && sidebar) {
         // 恢复保存的状态 (默认展开) 
         const saved = localStorage.getItem('ai_sidebar_collapsed');
         if (saved === 'false') {
             sidebar.classList.add('collapsed');
-            headerToolsEl?.classList.add('collapsed');
             toggleBtn.innerHTML = panelOpenIcon;
             toggleBtn.title = '展开侧栏';
         } else {
             sidebar.classList.remove('collapsed');
-            headerToolsEl?.classList.remove('collapsed');
             toggleBtn.innerHTML = panelCloseIcon;
             toggleBtn.title = '折叠侧栏';
         }
@@ -686,7 +665,6 @@ function bindEvents() {
         if (!toggleBtn || !sidebar) return;
         const wasCollapsed = sidebar.classList.contains('collapsed');
         const isCollapsed = sidebar.classList.toggle('collapsed');
-        headerToolsEl?.classList.toggle('collapsed', isCollapsed);
         toggleBtn.innerHTML = isCollapsed ? panelOpenIcon : panelCloseIcon;
         toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
         localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
@@ -1387,6 +1365,7 @@ function startInlineEdit(titleEl, sessionId) {
                 if (s) s.title = newTitle;
                 titleEl.title = newTitle;
                 updateChatTitle();
+                renderSessionList();
             } catch (_) {
                 titleEl.textContent = orig;
             }

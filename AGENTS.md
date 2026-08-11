@@ -613,20 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动：① **数据管理页分类导航改造**——单页纵向滚动改为"左侧 176px 固定导航 + 右侧面板"结构（仿设置页），6 个导航项（概览/传输/维护/数据清理/备份/量化），面板切换带退场/入场动画，"恢复出厂设置"放入"数据清理"面板底部；② **滚动条贴窗修复**——数据页/设置页滚动条从容器边缘改贴窗口右缘，负 margin 方案（todo 先例）在有 `overflow: hidden` 中间裁剪层时滚动条被整体裁剪消失，改用 calendar 先例方案；③ **设置页标签布局统一**——`.ai-setting-label` 全局 `width: 112px` + `white-space: nowrap`（80px 放不下"大文件预览阈值"等 7 字标签导致换行；`width: auto` 各行宽度不一破坏对齐），替换内联覆盖；标签改名"知乎Token/Tavily Token"、"上传导入限制" |
-| **分类导航实现** | [main.js](frontend/src/main.js)：`initDataNav()` 绑定 `.data-nav-item` 点击 + `switchDataTab(panelName)`（`_dataAnimating` 标记 + `animationend` 驱动 `panel-exit`/`panel-enter` + `prefers-reduced-motion` 直接切换分支）；`switchView` 的 data case 调 `initDataNav(); loadDataStats(); switchDataTab('overview')`；`.data-panels` 并入 scrollbar 自动显隐规则；[index.html](frontend/index.html) 面板分组：overview/transfer/maintenance/cleanup/backup/vector |
-| **按压反馈设计** | 条状按钮 `.data-action-row:active` **不缩放整行**（整行 `scale()` 会让圆角变尖角、尺寸变化），改为背景加深（`--active-bg` 变量不存在时回退 hover）+ 内容元素 `.dar-icon`/`.dar-body` `translateY(1px)` 下压 + `.dar-chevron` `translateX(5px)`，保持行外框圆角尺寸不变；danger 行 active 保持红色系背景避免跳动回中性色；`transition-duration: 30ms` 制造快速按压感 |
-| **滚动条贴窗方案** | `#viewData.view { padding: 24px 0 24px 32px }` + `#mainContent:has(#viewData.active) { scrollbar-gutter: auto; overflow-y: hidden }`（settings-panel.css 对 `#viewSettings` 同步处理）。教训：todo 页负 margin 方案（`margin-right: -32px; padding-right: 32px`）依赖无中间裁剪层；数据/设置页的 `.data-content`/`.settings-content` 有 `overflow: hidden`（分类导航布局需要），负 margin 把滚动容器右缘推到父裁剪边界外，滚动条区域连带被裁剪直接消失 |
-| **标签宽度统一** | `.ai-setting-label` 从 `width: 80px` 改为 `width: 112px`（容纳最长标签"大文件预览阈值"7 汉字 ≈ 104px 并留余量）+ `white-space: nowrap`。hint 说明行对齐输入框需 `padding-left: 124px`（112px 标签 + 12px gap）。**`.settings-input` 全局 `flex: 1` 会拉伸覆盖内联 `width`（flex-basis: 0 优先于 width）**，作为 `.ai-setting-item` 直接子项时需补内联 `flex: none` 才生效（如"大文件预览阈值"输入框 64px→120px 调整） |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（数据页分类导航结构 + 设置页标签/输入框调整）、[frontend/src/main.js](frontend/src/main.js)（initDataNav/switchDataTab + 滚动条自动显隐容器）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（导航/面板/按压反馈 + 滚动条贴窗）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（label 统一宽度 + 滚动条贴窗）、[frontend/src/css/scrollbar.css](frontend/src/css/scrollbar.css)（.data-panels 并入自动显隐） |
-
----
-
-## 记忆点 2：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 1：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 2：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 3：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 4：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 5：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,7 +672,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 6：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -696,7 +683,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 7：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -708,18 +695,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+## 记忆点 8：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 10 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 9 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
 | **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
 | **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
 
 ---
 
-## 记忆点 10：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 9：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,6 +715,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **selection 协议要点** | 事件负载向后兼容（旧前端忽略 selection 即默认单选）；规范化：非 "multiple" 一律 "single"。多选发送格式 `我选择：A、B`（顿号分隔），单选/自定义直接发原文本。 |
 | **面板生命周期规则（重要）** | 面板是"临时交互态"而非消息流组件：必须在 `startStreaming` 开头（防用户绕答直接发消息导致残留）、`switchSession`、清空会话、`resetAIChatState` 四处挂钩 `hideAskPanel()`，否则跨会话残留挂起问题面板。回答**发送成功**才隐藏；发送失败（流未结束 / 未配置 API）保留面板；右上角 × 关闭按钮随时隐藏退出选择。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（selection 字段 + 事件负载 + Desc）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 正文优先/参数兜底 + 新增 `askUserQuestionFromArgs` + strings import）、[frontend/index.html](frontend/index.html)（#aiAskPanel 容器）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（移除 renderAskCard + showAskPanel/hideAskPanel（含 × 关闭按钮）+ ai:ask-user 回调 + 4 处生命周期挂钩 + sendUserText 返回 bool + doSend 成功才隐藏 + askPanelEl 引用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-panel 悬浮浮层 + 宽度自适应 + 关闭按钮 + 垂直列表 + 多选左侧常显 checkbox + error 抖动 + prefers-reduced-motion；`.ai-chat-input-area` 加 position:relative）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 面板交互 + selection 语义 + 生命周期 + 落库兜底说明） |
+
+---
+
+## 记忆点 10：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 四组前端改动：① **AI 会话侧栏顶天立地重构**——侧栏不再"在标题栏里模拟边框"，`.ai-session-sidebar` 位于 `#viewAiChat .ai-chat-layout` 内，从 topbar 下缘一直顶天立地到底部，左边框连续无断层；删除侧栏头部"会话"标题层，搜索框 `.ai-session-search-wrap` 直接顶到侧栏最上面。② **标题栏按钮固定**——标题栏恒为三列 grid（`1fr auto 1fr`：左 `.view-header-left` / 中 `#aiChatTitle` / 右 `.view-controls`），标题始终居中；左侧固定「折叠/展开 + 新建」两个 32×32 按钮（`.ai-tool-btn`，图标 `stroke-width: 2.5`），返回按钮已删除；折叠图标固定面板样式（无方向箭头），折叠走 `classList.toggle('collapsed')` + localStorage 持久化 + Ctrl+J 触发，按钮不随折叠迁移。③ **双击标题重命名**——`#aiChatTitle` 双击从"新建会话"改为"重命名当前会话"（无 activeSessionId 忽略），复用 `startInlineEdit`（contenteditable + 全选 + Enter/失焦保存 `RenameAISession` + Escape 取消），保存后 `renderSessionList()` 同步侧栏标题；编辑态 `#aiChatTitle[contenteditable="true"]` 加 `min-width: 220px` + input-bg 圆角背景。④ **HTML div 配平修复 + 检查工具链配置**。 |
+| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与记忆点 5 的待办页 div 配平问题同类）。 |
+| **前端检查工具链** | 新增 devDeps：eslint@10 + html-validate@11 + prettier@3 + eslint-config-prettier + globals + @eslint/js。配置：[eslint.config.mjs](frontend/eslint.config.mjs)（flat config；ignores：dist/node_modules/hljs-themes-data.js；`no-undef`/`no-unused-vars` 降 warn 防存量噪音；项目隐式 window 全局声明 readonly globals：nm/SVGS/getMockNotes/exportNote/initEditorActionsMenu/switchEditorMode/mockNotes）、[.prettierrc.json](frontend/.prettierrc.json)（tabWidth 4/singleQuote/printWidth 120）、[.prettierignore](frontend/.prettierignore)（dist/node_modules/wailsjs/hljs-themes-data.js）、[.htmlvalidate.json](frontend/.htmlvalidate.json)（关闭风格噪音：button type/void-style/text-content/landmark 等，保留 close-order 结构校验）。package.json scripts：`lint`/`format`/`format:check`/`validate:html`。当前 lint 0 errors/90 warnings、validate:html 0 errors。 |
+| **工具链暴露的存量风险** | `mockNotes` 在 [main.js](frontend/src/main.js) 直接引用但无声明/无 window 挂载（定义在 [notification.js](frontend/src/js/notification.js) 内且未导出）——疑似死代码分支；多个已定义未使用的函数（setAIStatus/updateTodoProgress/closeSearchModalDatePicker 等）；项目大量"`window.xxx = ...` 后裸标识符调用"隐式全局（运行正常，但建议逐步改 `window.` 前缀或 import）。 |
+| **搜索框方案演进** | 曾尝试：放大镜图标（left 14px→17px 反复微调后移除）、方案 C 平面样式+列表顶分隔线（用户撤回，恢复凹陷 bg-secondary 样式）。最终保持原始凹陷搜索框样式不变。教训：纯视觉微调尽量一次到位，避免逐像素拉扯。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（侧栏结构 + view-header 三列 grid + 双击标题 + 删除多余 div）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（折叠逻辑/图标切换/双击重命名/startInlineEdit 补 renderSessionList）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（侧栏顶天立地 + 标题栏 grid + 按钮/编辑态样式）、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)、[frontend/.prettierrc.json](frontend/.prettierrc.json)、[frontend/.prettierignore](frontend/.prettierignore)、[frontend/.htmlvalidate.json](frontend/.htmlvalidate.json)、[frontend/package.json](frontend/package.json) |
 
 ---
 

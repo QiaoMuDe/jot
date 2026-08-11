@@ -2576,14 +2576,15 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
+    width: 100%;
     padding: 12px 16px 8px;
     margin-bottom: 0;
     margin-left: 0;
 }
 
 #viewAiChat .view-title {
-    text-align: center;
     margin: 0;
+    text-align: center;
     white-space: nowrap;
     cursor: pointer;
     transition: color 0.15s ease;
@@ -2592,41 +2593,29 @@
     color: var(--accent);
 }
 
+/* 标题栏标题内联重命名（双击）时加宽编辑框 */
+#viewAiChat #aiChatTitle[contenteditable="true"] {
+    min-width: 220px;
+    background: var(--input-bg);
+    border-radius: 4px;
+    padding: 0 4px;
+}
+
 #viewAiChat .view-controls {
     justify-self: end;
 }
 
-/* AI 页左上角侧栏头部区：返回 / 折叠 / 会话标题 / 新建（并入侧栏，顶天立地） */
-.ai-chat-header-tools {
+/* 标题栏左侧容器：返回 / 展开折叠 / 新建 三个固定按钮 */
+#viewAiChat .view-header-left {
     justify-self: start;
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    align-self: stretch;
-    padding-right: 10px;
-    border-right: 1px solid var(--border);
-    transition: border-color 0.25s ease;
 }
 
-/* 折叠态：仅剩返回 + 展开按钮，去掉侧栏分隔线 */
-.ai-chat-header-tools.collapsed {
-    border-right: none;
-    padding-right: 0;
-}
-
-.ai-chat-header-tools.collapsed .ai-session-sidebar-title,
-.ai-chat-header-tools.collapsed #aiSessionNewBtn {
-    display: none;
-}
-
-.ai-chat-header-tools .ai-session-sidebar-title {
-    margin-left: 6px;
-    margin-right: 2px;
-}
-
-.ai-chat-header-tools .ai-tool-btn {
-    width: 28px;
-    height: 28px;
+#viewAiChat .view-header-left .ai-tool-btn {
+    width: 32px;
+    height: 32px;
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -2640,12 +2629,12 @@
     padding: 0;
 }
 
-.ai-chat-header-tools .ai-tool-btn:hover {
+#viewAiChat .view-header-left .ai-tool-btn:hover {
     background: var(--hover-bg);
     color: var(--accent);
 }
 
-.ai-chat-header-tools .ai-tool-btn:active {
+#viewAiChat .view-header-left .ai-tool-btn:active {
     transform: scale(0.92);
 }
 
@@ -2666,27 +2655,13 @@
     transition: width 0.25s ease;
     overflow: hidden;
     position: relative;
+    height: 100%;
 }
 
 /* 折叠状态 */
 .ai-session-sidebar.collapsed {
     width: 0;
     border-right: none;
-}
-
-.ai-session-sidebar-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-    cursor: pointer;
-    transition: color 0.15s ease;
-}
-
-.ai-session-sidebar-title:hover {
-    color: var(--accent);
 }
 
 .ai-session-list {
@@ -2924,17 +2899,17 @@
 
 /* ── 对话搜索 ── */
 .ai-session-search-wrap {
-    padding: 14px 10px 8px;
+    padding: 10px 10px 8px;
 }
 
 .ai-session-search {
     width: 100%;
-    padding: 4px 8px;
+    padding: 7px 10px;
     border: 1px solid var(--border);
     border-radius: 5px;
     background: var(--bg-secondary);
     color: var(--text);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.15s;
