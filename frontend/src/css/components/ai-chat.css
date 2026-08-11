@@ -2095,7 +2095,8 @@
     bottom: 100%;
     left: 0;
     margin-bottom: 3px;
-    min-width: 160px;
+    min-width: 280px;
+    max-width: min(420px, calc(100vw - 48px));
     max-height: 240px;
     overflow-y: auto;
     background: var(--card-bg);
