@@ -613,22 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：卡片召回重构——关键词召回移除 + sqlite-vec 函数式向量召回
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 卡片召回彻底从「关键词召回（gse 分词）」切换为「向量召回（sqlite-vec 函数式）」：① [recall_service.go](internal/services/recall_service.go) 删除全部 gse 分词/停用词过滤/相关度打分逻辑，仅保留 `RecallCard`/`CardRecallResult` 类型与 `MergeRecallCards`/`TruncateRecallCardsPreview`/`TruncateSearchSourcesPreview` 工具；② `modernc.org/sqlite` v1.23.1 → v1.51.0（含 sqlite-vec v0.1.9 子包），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册（sqlite3_auto_extension 自动生效）；③ [vector_service.go](internal/services/vector_service.go) `VectorRecall` 从「全量加载向量到 Go 内存 + 自写 `cosineSimilarity` 遍历」改为 **SQL 内计算**：`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` + 距离升序 LIMIT TopN；④ 保留相邻块补充（命中块前后各 1 块，二次查询该笔记全部块）+ 按笔记合并卡片 + `maxCardRunes` 1200 rune 截断。 |
-| **sqlite-vec 函数式核心** | query 向量化后 `json.Marshal` 生成 JSON 数组字符串，`vec_f32(?JSON)` 在 SQL 内解析（免自写 BLOB 编码）；`dist < 1.0` 等价旧逻辑 `score > 0` 过滤（余弦距离 = 1 − 余弦相似度）；**无条件 JOIN notes 过滤软删除**（`ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL`，全库/指定笔记本行为统一，回收站笔记不参与召回），指定笔记本时 ON 追加 `notebook_id IN ?`。 |
-| **JOIN 位置教训（重要）** | **JOIN 必须紧跟 FROM、位于 WHERE 之前**。此前把 JOIN 拼在 WHERE 子句之后，运行时报 `near "JOIN": syntax error (1)`；而手工写的测试 SQL 顺序正确但未复刻真实拼接逻辑 → 测试通过、wails dev 运行时才炸。修复后测试改为完整复刻 vector_service.go 拼接顺序（FROM → JOIN 分支 → WHERE）。另：JOIN notes 后 SELECT 列必须加 `note_vectors.` 前缀防 `ambiguous column name: id`。 |
-| **已删除/保留** | `cosineSimilarity`（Go 侧全表扫描）删除；`Float32ToBlob`（IndexNotes 写入）/`BlobToFloat32`（测试解码）保留；`vec-poc/` 探针回归（TestProbeVecLoads）确认扩展在 glebarez 驱动可加载。 |
-| **前置静默跳过** | `VectorRecall` 在 embedClient 为空 / Model 为空 / 当前模型无向量数据（`CountVectorsByModel`=0）/ query 向量化失败 / 无命中时返回 nil 静默跳过，不注入不发射；前置检查用 `WHERE model = ?` 按当前 embedding 模型隔离（model 字段 = 向量血统证明）。 |
-| **量化与切块** | `IndexNotes`：`ChunkContent` 切块（单块 500 rune 上限；[chunk.go](internal/services/chunk.go) 多级标题栈 1-6 级 + 标题块合并——标题+空行不落块、空节丢弃、```/~~~ 代码块保护、块首 `prependChain` 补父级标题链、超长硬切非首段补链）→ 分批 EmbedWithProgress（每批 16 块）→ 事务内先删该 note 旧块再插新块（幂等）。软删除笔记查询阶段跳过。**切块规则变更后必须清空重量化（旧向量基于旧分块）**。 |
-| **生命周期管理** | 向量清理在 [note_service.go](internal/services/note_service.go) 内聚处理：`PermanentDelete`（单条永久删除）、`EmptyTrash`（清空回收站，先 Pluck 软删除笔记 ID 再删向量）、`CleanExpiredTrash`（VACUUM 过期清理，同理先收集 ID）三处删除笔记后联动 `Delete NoteVector WHERE note_id IN ?`，避免孤儿向量残留；向量删除失败仅记日志不阻断笔记删除。**软删除（Delete/BatchDelete）不动向量**——回收站恢复后向量立即可用，且召回侧已被 JOIN 过滤，不会召回回收站内容。 |
-| **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)、[internal/services/recall_service.go](internal/services/recall_service.go)、[internal/services/chunk.go](internal/services/chunk.go)、[internal/models/note_vector.go](internal/models/note_vector.go)、[internal/database/db.go](internal/database/db.go)、[go.mod](go.mod)/[go.sum](go.sum) |
-
----
-
-## 记忆点 2：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
+## 记忆点 1：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 2：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 3：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 4：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -678,7 +663,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 5：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,7 +675,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 6：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -701,7 +686,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 7：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -714,7 +699,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 8：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -725,7 +710,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 9：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -734,6 +719,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **白屏机制（重要教训）** | 位于 `display:none` 祖先内的元素：子树渲染为 0×0；其上 CSS 动画（如 `.view-enter`）冻结在 0%（`animationPlayState` 显示 `running` 但进度不动）→ **`animationend` 事件永不触发**。[main.js](frontend/src/main.js) 的 `switchView()` 靠 `animationend` 驱动 `showTargetView()` 并复位 `_viewAnimating` 锁；事件不触发 → 锁被永久占用 → 之后所有视图切换被拒 = 用户感知"进入页面卡住、白屏"。"**动画不结束/视图切换卡死"类 Bug 优先排查元素是否位于 `display:none` 祖先内**：用 `getComputedStyle(el).display` 看自身，沿 `parentElement` 向上遍历 4 层即可定位（本次即通过该链锁定 `#viewTodo → #viewAiChat(disp=none) → #mainContent → .main-content-area → #mainLayout`）。 |
 | **验证方法** | 修改 [index.html](frontend/index.html) 的视图结构后，用 Python `html.parser` 或标签开闭统计验证 div 配平，并确认各 `.view`（`#viewGrid`/`#viewAiChat`/`#viewMdRef`/`#viewCalendar`/`#viewTodo`）均为 `main#mainContent` 的**直接子级**；同时可对比 `git show <旧提交>:frontend/index.html` 校验回归来源。 |
 | **涉及文件** | [internal/services/todo_service.go](internal/services/todo_service.go)（ListPaged + todoOrder 常量 + List 复用稳定排序）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（listTodos 分页 + schema page/pageSize + Desc + 文件头注释）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具表标注分页）、[frontend/index.html](frontend/index.html)（补 `#viewAiChat` 闭合 div）、[frontend/src/main.js](frontend/src/main.js)（白屏调试后清除插桩，无业务残留） |
+
+---
+
+## 记忆点 10：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两组改动补齐 Agent 工具能力：① **新增 manage_notebook / manage_tag 两个管理工具 + manage_todo 补 update 动作**——[registry.go](internal/agent/registry.go) `buildTools` 统一注册 7 个工具（refine_search_query / web_search / recall_notes / get_current_time / manage_todo / manage_notebook / manage_tag，均 `WrapWithError` 包装失败回填）；**manage_notebook**（[manage_notebook.go](internal/agent/tools/manage_notebook.go)，复用 `NotebookService.Create/Update/ListPaged/Search`）：create（name 必填）/ rename（id + name 必填）/ list（keyword 过滤 + page/pageSize 分页，pageSize 缺省 10 上限 50，页尾提示可翻页）；**manage_tag**（[manage_tag.go](internal/agent/tools/manage_tag.go)，复用 `TagService`）：list / create（name 必填、color 可选 #RRGGBB）/ update（按 id 重命名、改色，name/color 至少其一，`GetByName` 查重排除自身）；**manage_todo update**（[manage_todo.go](internal/agent/tools/manage_todo.go)）：按 id 修改待办文本（id + text 必填）。② **rebuildServices 重建 AgentSvc**——[app.go](app.go) `rebuildServices` 用新 gorm.DB 重建全部服务后，末尾同步重建 `a.AgentSvc = agent.NewAgentService(agent.Deps{...})`（注入新服务实例），修复数据库重置/切换后 Agent 工具仍持旧服务指针（旧连接）导致操作失效的问题。 |
+| **工具设计要点** | 一文件一工具、构造器 `NewXxx`（导出）+ 结构体 `xxxTool`（包内私有）+ 编译期断言 `var _ tool.InvokableTool`；`Info()` 的 action Enum / 参数 Schema（Required 标记）与 `InvokableRun` 的 case 分发**必须同步维护**（新增动作时两处同改，[TOOLS.md](internal/agent/TOOLS.md) 表格同步）；update 类动作统一用列表返回的 `[数字]` id 定位（与 toggle 一致），id 需正整数校验；全空更新字段返回提示文本而非错误；服务层错误直接透传（上层 `WrapWithError` 回填模型继续对话）；list 分页参数校验统一：`page < 1 → 1`、`pageSize <= 0 → 10`、`> 50 → 50`；`ctx.Err()` 用户取消检查在动作分发前执行。 |
+| **AI 消息空白根因（重要教训）** | 恢复出厂/还原备份后 AI 助手切换历史会话消息空白（连空态打字机提示也不显示）。根因：[data-management.js](frontend/src/js/data-management.js) `resetDatabase` 里 `aiMessagesEl.innerHTML = ''` 清空消息容器，连带删除了容器内的 `.ai-chat-messages-inner` 子元素，导致 [ai-chat.js](frontend/src/js/ai-chat.js) 模块级变量 `messagesInnerEl` 悬空指向已脱离 DOM 的孤儿节点——此后消息渲染全部写进孤儿节点，children 正常、display 正常但 UI 不可见，`querySelector` 返回 null（F12 渲染日志 `rendered children=6` 与诊断 `messages-inner: null` 互相矛盾即命中）。修复：新增导出 `resetAIChatState()` 重建 `messagesInnerEl` 引用（null 则 `createElement` + `appendChild` 重建），`resetDatabase` 与 `restoreFromDir` 统一改调 `window.resetAIChatState?.()` + `window.onAIChatViewActivated?.()`；[main.js](frontend/src/main.js) 导入并暴露 `window.resetAIChatState`。**清空复杂容器必须走模块自带 reset 函数（重新查询/重建内部引用），不得直接 `innerHTML=''`**。 |
+| **涉及文件** | [internal/agent/registry.go](internal/agent/registry.go)（buildTools 注册）、[internal/agent/agent.go](internal/agent/agent.go)（Deps 结构）、[app.go](app.go)（NewAgentService + rebuildServices 末尾重建 AgentSvc）、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)（新增）、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)（新增 + update）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（补 update）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增导出 `resetAIChatState`）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`resetDatabase`/`restoreFromDir` 改用 `resetAIChatState` + `onAIChatViewActivated`）、[frontend/src/main.js](frontend/src/main.js)（导入并暴露 `window.resetAIChatState`） |
 
 ---
 
