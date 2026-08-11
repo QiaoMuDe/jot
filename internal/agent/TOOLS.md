@@ -95,6 +95,8 @@ func buildTools(p BuildParams) []tool.BaseTool {
 		tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting,
 			p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx),
 		tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx),
+		tools.WrapWithError("manage_todo", tools.NewManageTodo(p.deps.Todo, p.ctx), p.ctx),
+		tools.WrapWithError("manage_notebook", tools.NewManageNotebook(p.deps.Notebook, p.ctx), p.ctx),
 	}
 }
 ```
@@ -299,7 +301,9 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 | `web_search` | [web_search.go](internal/agent/tools/web_search.go) | `ai`、`setting`、`ctx` | 多源联网搜索（模型自选来源、按 URL 去重分组） | `Collector.Sources` |
 | `recall_notes` | [recall_notes.go](internal/agent/tools/recall_notes.go) | `vector`、`setting`、`getEmbedConfig`、`notebookIDs`、`ctx` | 本地笔记向量 + 关键词混合召回 | `Collector.Cards` |
 | `get_current_time` | [current_time.go](internal/agent/tools/current_time.go) | 无 | 返回当前日期 / 时间 / 星期 / 年份 | 无 |
-| `manage_todo` | [manage_todo.go](internal/agent/tools/manage_todo.go) | `todo`、`ctx` | 创建 / 列出（支持 page/pageSize 分页） / 勾选（完成或取消）待办 | 无 |
+| `manage_todo` | [manage_todo.go](internal/agent/tools/manage_todo.go) | `todo`、`ctx` | 创建 / 列出（支持 status/keyword 过滤与 page/pageSize 分页） / 勾选（完成或取消） / 修改文本（update）待办 | 无 |
+| `manage_notebook` | [manage_notebook.go](internal/agent/tools/manage_notebook.go) | `notebook`、`ctx` | 创建 / 重命名 / 列出（支持 keyword 过滤与 page/pageSize 分页）笔记本 | 无 |
+| `manage_tag` | [manage_tag.go](internal/agent/tools/manage_tag.go) | `tag`、`ctx` | 列出全部标签 / 创建标签（name 必填，color 可选 #RRGGBB） / 更新标签（重命名、改色，name/color 至少其一） | 无 |
 
 ---
 

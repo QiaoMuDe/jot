@@ -91,6 +91,16 @@ func (s *TagService) Count() (int64, error) {
 	return total, nil
 }
 
+// GetByName 按名称精确查找标签（名称唯一），未找到返回 gorm.ErrRecordNotFound。
+func (s *TagService) GetByName(name string) (*models.Tag, error) {
+	var tag models.Tag
+	if err := s.db.Where("name = ?", name).First(&tag).Error; err != nil {
+		s.logger.Errorw("TagService.GetByName 失败", fastlog.String("name", name), fastlog.Error(err))
+		return nil, err
+	}
+	return &tag, nil
+}
+
 // BatchAddTagToNotes 批量将指定标签添加到多篇笔记
 func (s *TagService) BatchAddTagToNotes(noteIDs []uint, tagID uint) error {
 	tag, err := s.getTagByID(tagID)

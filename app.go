@@ -186,6 +186,8 @@ func NewApp() *App {
 		Vector:         vectorService,
 		Setting:        settingService,
 		Todo:           todoService,
+		Notebook:       notebookService,
+		Tag:            tagService,
 		Logger:         logSvc.Logger,
 		GetEmbedConfig: app.GetEmbedConfig,
 	})
@@ -3953,6 +3955,20 @@ func (a *App) rebuildServices(db *gorm.DB) {
 		a.LogSvc.Logger.Errorw("日志重新初始化失败", fastlog.Error(err))
 	}
 	a.LogSvc.Logger.Infow("rebuildServices 成功")
+
+	// 重建 AgentSvc：rebuildServices 重建了各服务（新 gorm.DB 连接），
+	// 必须同步用最新实例重新装配 AgentSvc，否则 Agent 工具（manage_todo / manage_notebook /
+	// manage_tag 等）仍持有旧服务指针，数据库重置或切换后操作的是旧连接。
+	a.AgentSvc = agent.NewAgentService(agent.Deps{
+		AI:             a.aiService,
+		Vector:         a.vectorService,
+		Setting:        a.settingService,
+		Todo:           a.todoService,
+		Notebook:       a.notebookService,
+		Tag:            a.tagService,
+		Logger:         a.LogSvc.Logger,
+		GetEmbedConfig: a.GetEmbedConfig,
+	})
 }
 
 // ==================== Todo 相关绑定方法 ====================

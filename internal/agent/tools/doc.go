@@ -1,8 +1,10 @@
 // Package tools 提供 Agent 工具实现与共享上下文。
 //
 // 职责：
-//   - 工具实现（web_search / recall_notes / refine_search_query / get_current_time / manage_todo）每文件一个，
-//     均提供导出构造器（NewWebSearch / NewRecallNotes / NewRefineSearchQuery / NewGetCurrentTime / NewManageTodo），
+//   - 工具实现（web_search / recall_notes / refine_search_query / get_current_time / manage_todo /
+//     manage_notebook / manage_tag）每文件一个，
+//     均提供导出构造器（NewWebSearch / NewRecallNotes / NewRefineSearchQuery / NewGetCurrentTime /
+//     NewManageTodo / NewManageNotebook / NewManageTag），
 //     由父包 agent 的 registry.go 统一装配与注册。
 //   - 共享上下文类型（EmitFn / Record / Collector / Context / WrapWithError）定义于
 //     context.go：工具通过注入的 Context 发射事件、登记调用记录、收集结构化结果

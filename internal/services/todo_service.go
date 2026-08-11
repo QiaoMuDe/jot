@@ -1,6 +1,8 @@
 package services
 
 import (
+	"strings"
+
 	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
 	"jot/internal/models"
@@ -68,6 +70,45 @@ func (s *TodoService) ListPaged(done *bool, page, pageSize int) ([]models.Todo, 
 		Offset((page - 1) * pageSize).
 		Find(&todos).Error; err != nil {
 		s.logger.Errorw("TodoService.ListPaged 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return todos, total, nil
+}
+
+// Search 按关键字模糊搜索待办内容，支持按完成状态过滤与分页。
+// keyword trim 后为空时等价于 ListPaged（全量）；done 为 nil 表示全部；
+// page 从 1 开始（小于 1 视为 1），pageSize 小于等于 0 时默认 20。
+// 排序与 List 一致（见 todoOrder），保证跨页稳定。
+func (s *TodoService) Search(keyword string, done *bool, page, pageSize int) ([]models.Todo, int64, error) {
+	keyword = strings.TrimSpace(keyword)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	base := s.db.Model(&models.Todo{})
+	if done != nil {
+		base = base.Where("done = ?", *done)
+	}
+	if keyword != "" {
+		base = base.Where("text LIKE ?", "%"+keyword+"%")
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		s.logger.Errorw("TodoService.Search 计数失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+
+	var todos []models.Todo
+	if err := base.
+		Order(todoOrder).
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&todos).Error; err != nil {
+		s.logger.Errorw("TodoService.Search 失败", fastlog.Error(err))
 		return nil, 0, err
 	}
 	return todos, total, nil

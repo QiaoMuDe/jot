@@ -23,5 +23,7 @@ func buildTools(p BuildParams) []tool.BaseTool {
 		tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting, p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx),
 		tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx),
 		tools.WrapWithError("manage_todo", tools.NewManageTodo(p.deps.Todo, p.ctx), p.ctx),
+		tools.WrapWithError("manage_notebook", tools.NewManageNotebook(p.deps.Notebook, p.ctx), p.ctx),
+		tools.WrapWithError("manage_tag", tools.NewManageTag(p.deps.Tag, p.ctx), p.ctx),
 	}
 }

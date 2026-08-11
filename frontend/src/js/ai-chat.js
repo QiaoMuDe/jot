@@ -2552,6 +2552,22 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             } else if (act === 'toggle') {
                 action = '更新待办状态';
             }
+        } else if (name === 'manage_notebook') {
+            const act = args.action;
+            if (act === 'create') {
+                action = '创建笔记本';
+            } else if (act === 'rename') {
+                action = '重命名笔记本';
+            } else if (act === 'list') {
+                action = '列出笔记本';
+            }
+        } else if (name === 'manage_tag') {
+            const act = args.action;
+            if (act === 'create') {
+                action = '创建标签';
+            } else if (act === 'list') {
+                action = '列出标签';
+            }
         }
         let label = '调用「' + getToolLabel(name) + '」工具：' + action;
         let item = toolStatusItems[name];
@@ -3280,6 +3296,32 @@ function scrollToBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
         messagesEl.style.scrollBehavior = orig;
     });
+}
+
+/**
+ * 重置 AI 聊天前端状态（恢复出厂/还原备份后调用）
+ * 数据库已被替换，旧的会话缓存（activeSessionId / sessions / chatHistory）已失效，
+ * 必须全部清空并清掉消息 DOM，下次激活视图时才会从后端重新加载。
+ * 注意：恢复出厂流程用 innerHTML='' 清空 #aiChatMessages 会连带删除
+ * .ai-chat-messages-inner 子元素，导致 messagesInnerEl 引用悬空（消息渲染进
+ * 孤儿节点而不可见），因此这里必须重新查询/重建该引用。
+ */
+export function resetAIChatState() {
+    chatHistory = [];
+    sessions = [];
+    activeSessionId = null;
+    _oldestMsgId = 0;
+    _loadingMore = false;
+    if (messagesEl) {
+        messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
+        if (!messagesInnerEl) {
+            messagesInnerEl = document.createElement('div');
+            messagesInnerEl.className = 'ai-chat-messages-inner';
+            messagesEl.appendChild(messagesInnerEl);
+        }
+        messagesInnerEl.innerHTML = '';
+    }
+    if (sessionListEl) sessionListEl.innerHTML = '';
 }
 
 /**

@@ -3,10 +3,12 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
+
+	"jot/internal/models"
 
 	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
-	"jot/internal/models"
 )
 
 // NotebookService 封装笔记本相关的业务逻辑操作
@@ -179,6 +181,72 @@ func (s *NotebookService) GetAll() ([]models.Notebook, error) {
 		return nil, err
 	}
 	return notebooks, nil
+}
+
+// ListPaged 分页列出未删除的笔记本，返回当前页条目与总数。
+// page 从 1 开始（小于 1 视为 1），pageSize 小于等于 0 时默认 20。
+// 排序与 GetAll 一致（sort_order ASC, id ASC），保证跨页顺序稳定、不重复不遗漏。
+func (s *NotebookService) ListPaged(page, pageSize int) ([]models.Notebook, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	base := s.db.Model(&models.Notebook{}).Where("deleted_at IS NULL")
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		s.logger.Errorw("NotebookService.ListPaged 计数失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+
+	var notebooks []models.Notebook
+	if err := base.
+		Order("sort_order ASC, id ASC").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&notebooks).Error; err != nil {
+		s.logger.Errorw("NotebookService.ListPaged 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return notebooks, total, nil
+}
+
+// Search 按名称关键字模糊搜索未删除的笔记本，支持分页。
+// keyword trim 后为空时等价于 ListPaged（全量）；
+// page 从 1 开始（小于 1 视为 1），pageSize 小于等于 0 时默认 20。
+// 排序与 GetAll 一致（sort_order ASC, id ASC），保证跨页稳定。
+func (s *NotebookService) Search(keyword string, page, pageSize int) ([]models.Notebook, int64, error) {
+	keyword = strings.TrimSpace(keyword)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	base := s.db.Model(&models.Notebook{}).Where("deleted_at IS NULL")
+	if keyword != "" {
+		base = base.Where("name LIKE ?", "%"+keyword+"%")
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		s.logger.Errorw("NotebookService.Search 计数失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+
+	var notebooks []models.Notebook
+	if err := base.
+		Order("sort_order ASC, id ASC").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
+		Find(&notebooks).Error; err != nil {
+		s.logger.Errorw("NotebookService.Search 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return notebooks, total, nil
 }
 
 // GetAllNotesCount 获取每个笔记本下未删除的笔记数量，返回 map[notebook_id]count

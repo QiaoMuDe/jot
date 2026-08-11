@@ -42,11 +42,13 @@ const maxIterations = 8
 // SearchGlobalContent），不存在 *services.SearchService 类型，故此处不注入 Search，
 // 由 web_search 工具内部直接调用包级函数。
 type Deps struct {
-	AI      *services.AIService
-	Vector  *services.VectorService
-	Setting *services.SettingService
-	Todo    *services.TodoService // Todo 待办服务（manage_todo 工具使用）
-	Logger  *fastlog.Logger
+	AI       *services.AIService
+	Vector   *services.VectorService
+	Setting  *services.SettingService
+	Todo     *services.TodoService     // Todo 待办服务（manage_todo 工具使用）
+	Notebook *services.NotebookService // Notebook 笔记本服务（manage_notebook 工具使用）
+	Tag      *services.TagService      // Tag 标签服务（manage_tag 工具使用）
+	Logger   *fastlog.Logger
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }

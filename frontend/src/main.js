@@ -31,7 +31,7 @@ import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
 
 // AI 对话页面模块
-import { initAIChat, onAIChatViewActivated } from './js/ai-chat.js';
+import { initAIChat, onAIChatViewActivated, resetAIChatState } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';
@@ -40,6 +40,8 @@ import './js/editor-actions.js';
 
 // 暴露到 window，供 data-management.js 等模块在重置/还原后预加载 AI 聊天页面
 window.onAIChatViewActivated = onAIChatViewActivated;
+// 供还原备份/恢复出厂后清空前端 AI 会话缓存（旧数据已失效）
+window.resetAIChatState = resetAIChatState;
 
 // 配置 marked（breaks + gfm；代码高亮在 updatePreview 中通过 hljs 后处理实现）
 marked.setOptions({

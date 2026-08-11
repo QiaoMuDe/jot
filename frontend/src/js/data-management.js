@@ -279,12 +279,9 @@ export async function resetDatabase() {
     window.loadNotebooks();
     // 重置后重新应用默认设置
     reloadSettings();
-    // 清除 AI 聊天页面的旧消息 HTML，防止后续切换视图时闪烁旧内容
-    const aiMessagesEl = document.getElementById('aiChatMessages');
-    if (aiMessagesEl) aiMessagesEl.innerHTML = '';
-    // 清除 AI 会话侧边栏中的旧会话列表
-    const aiSessionListEl = document.getElementById('aiSessionList');
-    if (aiSessionListEl) aiSessionListEl.innerHTML = '';
+    // 清除 AI 聊天前端状态（消息/会话 DOM + 内存缓存），避免切换视图时残留旧内容；
+    // 内部会重建 .ai-chat-messages-inner 引用，防止消息渲染进已脱离 DOM 的孤儿节点
+    window.resetAIChatState?.();
     // 提前预加载 AI 聊天页面状态，使 AI 助手选项卡切换时不再闪烁
     window.onAIChatViewActivated?.();
     // 重置后折叠侧栏，用户展开时自动触发刷新笔记本数据
@@ -497,6 +494,10 @@ export async function restoreFromDir() {
                     loadDataStats();
                     window.loadTags();
                     reloadSettings();
+                    // 还原后数据库已替换，前端 AI 会话缓存（activeSessionId/sessions/chatHistory）已失效：
+                    // 清空状态 + 预加载 AI 聊天页面，避免切会话时空白（与 resetDatabase 行为一致）
+                    window.resetAIChatState?.();
+                    window.onAIChatViewActivated?.();
                 }
             }
         } else {
