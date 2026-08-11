@@ -1149,6 +1149,7 @@
 
 /* ── 输入区：背景与消息列表一致（--bg），无独立色块 ── */
 .ai-chat-input-area {
+    position: relative; /* 反问面板 absolute 浮层的定位上下文 */
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -4044,6 +4045,193 @@
 
 .ai-note-ref-select-all.checked .ai-note-ref-select-all-check svg {
     stroke: var(--accent, #4a9eff);
+}
+
+/* ── Agent 反问面板（ai:ask-user） ── */
+.ai-ask-panel {
+    position: absolute;  /* 悬浮浮层：覆盖在消息列表上方，不占文档流 */
+    left: 0;
+    bottom: calc(100% + 8px); /* 悬浮于输入区正上方（消息列表区域） */
+    z-index: 50;
+    width: fit-content;  /* 面板宽度跟随内容收缩 = 最长选项（标题/输入行跟随） */
+    min-width: 280px;    /* 短选项时保证面板宽度（用户确认 280px） */
+    max-width: 100%;     /* 最长选项超容器时面板满宽，内部换行 */
+    padding: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); /* 悬浮阴影，浮层感 */
+    animation: ai-ask-panel-in 0.2s ease-out both;
+}
+
+@keyframes ai-ask-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-ask-panel {
+        animation: none;
+    }
+}
+
+.ai-ask-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ai-ask-question {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ai-ask-close {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s, color 0.12s;
+}
+
+.ai-ask-close:hover {
+    background: color-mix(in srgb, var(--error, #e53e3e) 12%, transparent);
+    color: var(--error, #e53e3e);
+}
+
+.ai-ask-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.ai-ask-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    text-align: left;
+    color: var(--text-primary);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ai-ask-option:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    border-color: var(--accent);
+}
+
+.ai-ask-option.selected {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-color: var(--accent);
+}
+
+.ai-ask-check {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    line-height: 1;
+    color: transparent; /* 未选中：对勾隐藏，框常显（多选语义可见） */
+    border: 1.5px solid var(--text-muted);
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ai-ask-option.selected .ai-ask-check {
+    color: #fff; /* 选中：白对勾 */
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.ai-ask-input-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.ai-ask-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ai-ask-input::placeholder {
+    color: var(--text-muted);
+}
+
+.ai-ask-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.ai-ask-input.error {
+    border-color: var(--error, #dc2626);
+    animation: ai-ask-shake 0.4s ease;
+}
+
+@keyframes ai-ask-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+.ai-ask-submit {
+    flex-shrink: 0;
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+.ai-ask-submit:hover {
+    filter: brightness(0.92);
+}
+
+.ai-ask-submit:active {
+    transform: scale(0.97);
 }
 
 

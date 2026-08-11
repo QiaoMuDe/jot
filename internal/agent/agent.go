@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -149,6 +150,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 
 	var finalContent string
 	var promptTokensTotal, completionTokensTotal int
+	// ask_user 反向提问兜底：该轮正文（问句）在最终回答为空时作为 finalContent，
+	// 保证落库内容为问句、历史回放可读
+	var pendingQuestion string
 
 	for {
 		event, ok := iter.Next()
@@ -200,6 +204,18 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					for _, tc := range full.ToolCalls {
 						emitToolStart(emit, &toolRecords, tc, toolByName)
 					}
+					// ask_user 反向提问：该轮正文（问句）登记为兜底，供最终回答为空时落库；
+					// 正文为空（模型未遵守"正文写问句"约束）时退而取工具参数里的 question
+					for _, tc := range full.ToolCalls {
+						if tc.Function.Name != "ask_user" {
+							continue
+						}
+						if full.Content != "" {
+							pendingQuestion = full.Content
+						} else if q := askUserQuestionFromArgs(tc.Function.Arguments); q != "" {
+							pendingQuestion = q
+						}
+					}
 				} else if full.Content != "" {
 					// 无工具调用的 assistant 消息即最终回答（ReAct 循环最后一条）
 					finalContent = full.Content
@@ -213,6 +229,18 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				if len(mv.Message.ToolCalls) > 0 {
 					for _, tc := range mv.Message.ToolCalls {
 						emitToolStart(emit, &toolRecords, tc, toolByName)
+					}
+					// ask_user 反向提问：该轮正文（问句）登记为兜底，供最终回答为空时落库；
+					// 正文为空（模型未遵守"正文写问句"约束）时退而取工具参数里的 question
+					for _, tc := range mv.Message.ToolCalls {
+						if tc.Function.Name != "ask_user" {
+							continue
+						}
+						if mv.Message.Content != "" {
+							pendingQuestion = mv.Message.Content
+						} else if q := askUserQuestionFromArgs(tc.Function.Arguments); q != "" {
+							pendingQuestion = q
+						}
 					}
 				} else if mv.Message.Content != "" {
 					emit("ai:stream-chunk", mv.Message.Content)
@@ -248,6 +276,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	// 用户取消：Agent 循环随 ctx 终止
 	if ctx.Err() != nil {
 		return result, ctx.Err()
+	}
+
+	// ask_user 反向提问兜底：最终回答为空时用该轮正文问句作为 finalContent，
+	// 保证落库内容为问句、历史回放可读
+	if finalContent == "" && pendingQuestion != "" {
+		finalContent = pendingQuestion
 	}
 
 	// 7. 汇总结果：内容 + 工具收集的结构化来源/卡片 + 工具调用链 + 真实 token usage
@@ -419,4 +453,20 @@ func emitToolResult(emit EmitFn, records *[]tools.Record, name, result string) {
 	*records = append(*records, rec)
 	b, _ := json.Marshal(rec)
 	emit("ai:tool-status", string(b))
+}
+
+// askUserQuestionFromArgs 从 ask_user 工具调用参数中提取 question（问句兜底用）：
+// 模型未遵守"正文写问句"约束（正文为空）时，以参数里的 question 作为落库兜底，
+// 保证历史回放时 assistant 消息仍为可读的问句。解析失败返回空串。
+func askUserQuestionFromArgs(argumentsJSON string) string {
+	if argumentsJSON == "" {
+		return ""
+	}
+	var args struct {
+		Question string `json:"question"`
+	}
+	if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(args.Question)
 }

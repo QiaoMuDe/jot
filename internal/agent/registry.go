@@ -27,5 +27,6 @@ func buildTools(p BuildParams) []tool.BaseTool {
 		tools.WrapWithError("manage_tag", tools.NewManageTag(p.deps.Tag, p.ctx), p.ctx),
 		tools.WrapWithError("manage_note", tools.NewManageNote(p.deps.Note, p.deps.Tag, p.deps.Setting, p.ctx), p.ctx),
 		tools.WrapWithError("get_stats", tools.NewGetStats(p.deps.Stats, p.deps.Vector, p.ctx), p.ctx),
+		tools.WrapWithError("ask_user", tools.NewAskUser(p.ctx), p.ctx),
 	}
 }

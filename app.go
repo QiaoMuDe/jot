@@ -2543,6 +2543,12 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			}
 		}
 
+		// Agent 模式专用约束：ask_user 反向提问工具使用规范（仅 Agent 模式注入，问答模式不受影响）
+		instruction.WriteString("\n\n【工具使用规范 - ask_user 反向提问】\n" +
+			"1. 仅在用户意图不明确、缺少必要信息或需要在多个方案间做选择时，才调用 ask_user 工具向用户发起澄清提问；一次只问一个问题，提供 2-6 个候选选项；严禁用于闲聊或无意义的确认。\n" +
+			"2. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后立即停止生成，不要再输出任何内容，等待用户回答。\n" +
+			"3. 用户回答后（会作为新消息发来），结合你的问题与用户的回答继续正常回答用户，不要重复提问。\n")
+
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
 		history := make([]agent.HistoryMessage, 0, len(messages))

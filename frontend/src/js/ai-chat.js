@@ -14,6 +14,7 @@ let welcomeEl = null;         // #aiChatWelcome
 let inputAreaEl = null;       // #aiChatInputArea
 let clearBtnEl = null;        // #aiChatClearBtn
 let stopBtnEl = null;         // #aiChatStopBtn
+let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let sessionTitleEl = null;    // #aiSessionTitle
@@ -229,6 +230,7 @@ export async function initAIChat() {
     inputAreaEl = document.getElementById('aiChatInputArea');
     clearBtnEl = document.getElementById('aiChatClearBtn');
     stopBtnEl = document.getElementById('aiChatStopBtn');
+    askPanelEl = document.getElementById('aiAskPanel');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
     sessionTitleEl = document.getElementById('aiSessionTitle');
@@ -397,6 +399,7 @@ function bindEvents() {
 
             messagesInnerEl.innerHTML = '';
             chatHistory = [];
+            hideAskPanel(); // 清空会话时收起 Agent 反问面板
             updateContextSize();
             scrollToBottom();
         });
@@ -1529,6 +1532,9 @@ function renderSessionList() {
 async function switchSession(id) {
     if (isStreaming || id === activeSessionId) return;
 
+    // 切换会话时收起 Agent 反问面板
+    hideAskPanel();
+
     // 切换会话时清空笔记引用和技能
     referencedNotes = [];
     cachedRefContext = '';
@@ -2223,16 +2229,39 @@ async function onSend() {
 
     hideWelcome();
 
+    // 保存消息 → 渲染用户气泡 → 启动流式（公共发送逻辑，ask_user 反问面板也复用）
+    await sendUserText(text);
+
+    // 发送后清空上传文件列表
+    uploadedFiles = [];
+    renderFileChips();
+}
+
+/**
+ * 发送用户消息（onSend 与 ask_user 反问面板共用）
+ * 保存消息到数据库 → 渲染用户气泡 → 启动流式。
+ * onSend 已做过 ensureAIReady / createSession 时重复执行无害（幂等）。
+ */
+async function sendUserText(text) {
+    if (!text) return false;
+    if (isStreaming) {
+        // 当前回复仍在生成：不静默丢弃，提示后保留反问面板
+        window.showNotification?.('请等待当前回复完成后再选择', 'info');
+        return false;
+    }
+    if (!(await ensureAIReady('开始对话'))) return false; // 未配置：保留面板，方便配置后重试
+    if (activeSessionId === null) {
+        await createSession();
+        if (activeSessionId === null) return false;
+    }
     // 先保存用户消息到数据库，确保前端能立即拿到 msgId 和 token 数
     let userMsgId = 0;
     let userTokens = 0;
-    if (activeSessionId !== null) {
-        try {
-            const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
-            userMsgId = result?.msgID || 0;
-            userTokens = result?.tokens || 0;
-        } catch (_) { /* 静默失败，后续流程继续 */ }
-    }
+    try {
+        const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
+        userMsgId = result?.msgID || 0;
+        userTokens = result?.tokens || 0;
+    } catch (_) { /* 静默失败，后续流程继续 */ }
 
     addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined);
     const userMsgEl = messagesInnerEl.lastElementChild;
@@ -2241,10 +2270,7 @@ async function onSend() {
         bindMsgContextMenu(userMsgEl, text, 'user');
     }
     startStreaming(text, false, userMsgId);
-
-    // 发送后清空上传文件列表
-    uploadedFiles = [];
-    renderFileChips();
+    return true;
 }
 
 /**
@@ -2267,7 +2293,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords', 'ai:tool-status', 'ai:agent-result'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2287,6 +2313,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     let recallPendingStatus = '';   // 延迟切换等待中的收尾状态（'done'/'error'）
     let recallPendingDetail = '';   // 延迟切换等待中的错误详情
     let refinedKeywords = '';
+
+    // 新一轮输出开始：收起 Agent 反问面板（提交回答后由 sendUserText 触达此处）
+    hideAskPanel();
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -2640,6 +2669,19 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         }
     });
     unsubs.push(unsubToolStatus);
+
+    // ── Agent 反向提问（ai:ask-user） ──
+    // 模型调用 ask_user 工具时后端发射该事件（tool_start 之后），
+    // 负载为 JSON 字符串 {"question": "...", "options": [...], "selection": "single"|"multiple"}，
+    // 在输入区上方渲染反问面板，提交回答后作为新一轮用户消息发送
+    const unsubAskUser = window.runtime.EventsOn('ai:ask-user', (data) => {
+        if (!isAgentFlow) return;
+        let payload = null;
+        try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
+        if (!payload || !payload.question) return;
+        showAskPanel(payload.question, Array.isArray(payload.options) ? payload.options : [], payload.selection);
+    });
+    unsubs.push(unsubAskUser);
 
     // ── Agent 模式结构化结果回传（ai:agent-result，先于 stream-done 到达） ──
     // 后端在流结束后把搜索来源 / 召回卡片 / 工具调用链 / 思考链 一并回传，
@@ -3274,6 +3316,7 @@ export function resetAIChatState() {
     activeSessionId = null;
     _oldestMsgId = 0;
     _loadingMore = false;
+    hideAskPanel(); // 重置状态时收起 Agent 反问面板
     if (messagesEl) {
         messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
         if (!messagesInnerEl) {
@@ -4058,6 +4101,138 @@ function renderRecallCards(el, cards) {
 // 工具展示名：直接展示后端下发的英文工具名（web_search / recall_notes / ...），
 // 不维护中文映射，避免新增工具时前端遗漏同步；如需本地化，可在此加映射兜底。
 var getToolLabel = function(name) { return name || '工具'; };
+
+/**
+ * 显示 Agent 反问面板（ai:ask-user）
+ * 渲染在输入区上方：问句标题 + 选项（单选/多选）+ 输入行（输入框 + 唯一按钮）。
+ * 单选：点击选项即发送；多选：勾选后点「确认提交」汇总发送（勾选 + 自定义输入可拼接）。
+ * 输入行按钮文案单选「发送」/多选「确认提交」，Enter 与按钮走同一逻辑。提交后隐藏面板。
+ */
+function showAskPanel(question, options, selection) {
+    if (!askPanelEl) return;
+    askPanelEl.innerHTML = '';
+    const isMultiple = selection === 'multiple'; // 非 "multiple" 一律按单选处理
+
+    // 问句标题行（标题 + 右上角关闭按钮，退出选择）
+    const header = document.createElement('div');
+    header.className = 'ai-ask-header';
+    const title = document.createElement('div');
+    title.className = 'ai-ask-question';
+    title.textContent = question;
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ai-ask-close';
+    closeBtn.title = '关闭';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', hideAskPanel);
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    askPanelEl.appendChild(header);
+
+    // 输入行元素（先创建：唯一按钮回调与 Enter 需读取输入值）
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'ai-ask-input';
+    inp.placeholder = '输入你的答案…';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ai-ask-submit';
+    btn.textContent = isMultiple ? '确认提交' : '发送'; // 统一布局：输入框 + 唯一按钮同排
+    const shake = () => {
+        inp.classList.add('error');
+        setTimeout(() => inp.classList.remove('error'), 600);
+    };
+    // 发送成功才隐藏面板；失败（流未结束 / API 未配置）保留面板便于重试
+    const doSend = async (text) => { if (await sendUserText(text)) hideAskPanel(); };
+
+    let doPrimary; // 唯一按钮与 Enter 共用的提交逻辑
+    if (isMultiple) {
+        // 多选：勾选多个选项，唯一按钮汇总提交（勾选优先，自定义输入作为补充拼接）
+        const selected = new Set();
+        if (options && options.length > 0) {
+            const opts = document.createElement('div');
+            opts.className = 'ai-ask-options';
+            options.forEach(opt => {
+                const optBtn = document.createElement('button');
+                optBtn.type = 'button';
+                optBtn.className = 'ai-ask-option';
+                // 对勾图标 + 文本节点（textContent 会覆盖子元素，故用文本节点追加）
+                const check = document.createElement('span');
+                check.className = 'ai-ask-check';
+                check.textContent = '✓';
+                optBtn.appendChild(check);
+                optBtn.appendChild(document.createTextNode(opt));
+                optBtn.addEventListener('click', () => {
+                    if (selected.has(opt)) {
+                        selected.delete(opt);
+                        optBtn.classList.remove('selected');
+                    } else {
+                        selected.add(opt);
+                        optBtn.classList.add('selected');
+                    }
+                });
+                opts.appendChild(optBtn);
+            });
+            askPanelEl.appendChild(opts);
+        }
+        doPrimary = () => {
+            const v = inp.value.trim();
+            if (selected.size > 0) {
+                let text = '我选择：' + [...selected].join('、');
+                if (v) text += '。补充说明：' + v; // 勾选 + 自定义输入拼接
+                doSend(text);
+            } else if (v) {
+                doSend(v);
+            } else {
+                shake(); // 均空：不发送，输入框加轻微抖动提示
+            }
+        };
+    } else {
+        // 单选：点击选项即发送；唯一按钮发送自定义输入
+        if (options && options.length > 0) {
+            const opts = document.createElement('div');
+            opts.className = 'ai-ask-options';
+            options.forEach(opt => {
+                const optBtn = document.createElement('button');
+                optBtn.type = 'button';
+                optBtn.className = 'ai-ask-option';
+                optBtn.textContent = opt;
+                optBtn.addEventListener('click', () => {
+                    optBtn.classList.add('selected'); // 点过的按钮临时选中反馈
+                    doSend(opt);
+                });
+                opts.appendChild(optBtn);
+            });
+            askPanelEl.appendChild(opts);
+        }
+        doPrimary = () => {
+            const v = inp.value.trim();
+            if (!v) { shake(); return; } // 空输入不发送，抖动提示
+            doSend(v);
+        };
+    }
+
+    // 输入行：输入框 + 唯一按钮（Enter 与按钮走同一逻辑）
+    btn.addEventListener('click', doPrimary);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPrimary(); } });
+    const row = document.createElement('div');
+    row.className = 'ai-ask-input-row';
+    row.appendChild(inp);
+    row.appendChild(btn);
+    askPanelEl.appendChild(row);
+
+    // 显示面板
+    askPanelEl.style.display = '';
+}
+
+/**
+ * 隐藏并清空 Agent 反问面板
+ */
+function hideAskPanel() {
+    if (!askPanelEl) return;
+    askPanelEl.innerHTML = '';
+    askPanelEl.style.display = 'none';
+}
 
 /**
  * 渲染 Agent 工具调用链（历史消息回放 / 实时完成态）。

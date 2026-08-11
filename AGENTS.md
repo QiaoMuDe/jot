@@ -613,32 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 针对笔记量化弹窗（向量索引）进行完整 UI 重构及交互优化：① **UI 重构**——使用 `frontend-design` + `ui-ux-pro-max` 技能重写弹窗样式（spring 弹性入场动画、分段滑动指示条、自定义 checkbox 对勾描边动画 + 半选态、列表项左缘 accent 指示条 + 勾选 tint 背景、视图切换位移动画、进度条流光 + 完成脉冲脉冲、summary 上浮入场、错误 shake 动画、`prefers-reduced-motion` 全部关闭）；② **单篇进度 50% 起步**——`updateVectorIndexProgress` 中 embedding 阶段主进度按 "当前篇处理到一半" 计（单篇从 50% 起步），done 阶段按实际完成篇数计；③ **量化中关闭分层**——右上角 X 弹确认框"是否停止"（确认后调 `CancelVectorIndex` 后端取消 ctx），遮罩点击保持拦截提示；ESC 全局键在 `handleKeyboardNavigation` 优先托付给 `onVectorIndexCloseRequested`；底部操作按钮移除（仅保留右上角 X 和遮罩两个入口）；④ **前置校验**——`openVectorIndexModal` 前调 `ValidateVectorIndexConfig` 检查 provider/baseURL/model/apiKey，未配置时不打开弹窗并提示去设置；⑤ **错误友好化**——`IndexNotes` 中 embedding 失败时复用 `aicli.ClassifyError` 将原始错误映射为中文友好提示（如"API 密钥无效"、"请求过于频繁"等），即时弹通知而非等全部完成才显示；⑥ **分块进度条完成隐藏**——`showVectorIndexSummary` 时隐藏分块进度条和当前笔记标题，只保留总进度条 + 完成摘要（成功/失败篇数，移除片段数）；⑦ **统计修复**——`GetVectorIndexStatus` 从多返回值改为单 struct 返回修复前端一直显示"未量化"的 Bug；⑧ **选择范围 UX**——"全部笔记"范围隐藏左下角已选计数 + 按钮居中；搜索关键词高亮（`highlightKeyword` + `<mark>` 包裹）；⑨ **后端取消支持**——App struct 新增 `vectorIndexCancel context.CancelFunc`，`startVectorIndex` 用 `context.WithCancel`，`CancelVectorIndex` 绑定供前端调用。 |
-| **进度设计** | `updateVectorIndexProgress` 主进度按 `stage` 区分：`embedding` 阶段 `(doneNotes + 0.5) / total`（单篇 50% 起步），`done`/`error` 阶段 `doneNotes / total`（完成后 100%）。多篇时第 N 篇处理中 = `(N-1.5)/total`，进度平滑递增。 |
-| **关闭策略** | `closeVectorIndexModal(force)` 带 force 参数，默认 false 拦截遮罩关闭。`onVectorIndexCloseRequested` 量化中弹确认框 → 确认后 `CancelVectorIndex` 后端停止 + 关闭弹窗。后端 `CancelVectorIndex` 防重入锁校验，`context.Canceled` 不发 `vector:index-error` 事件（仅日志）。 |
-| **错误分类** | [vector_service.go](internal/services/vector_service.go#L84-L96) embedding 失败时 `aicli.ClassifyError(err)` 映射：401/403→"API 密钥无效或权限不足"、429→"请求过于频繁"/"API 额度已用尽"、404→"模型不存在或已弃用"、5xx→"AI 服务暂时不可用"、超时→"请求超时"、网络错误→"网络连接失败"、无法分类→回退原始错误。前端 3 秒去重防刷屏。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（标题图标 SVG + 分段指示条元素）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（vector-index 区块完整重写 ~640 行 CSS）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（指示条定位/视图切换动画/进度逻辑/关闭策略/前置校验/搜索高亮/错误通知）、[app.go](app.go)（ValidateVectorIndexConfig / CancelVectorIndex / GetVectorIndexStatus struct 修复）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 参数名 aicli→embedClient 修复 + ClassifyError 错误映射）、[frontend/src/main.js](frontend/src/main.js)（全局 ESC 优先托付量化弹窗） |
-
----
-
-## 记忆点 2：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 五组改动优化向量检索链路：① **分块元数据前缀注入**——[chunk.go](internal/services/chunk.go) 新增 `ChunkMeta` 结构体（Title/Tags/CreatedAt）+ `formatMetaPrefix` 函数，`ChunkContent` 签名增加 `meta` 参数，每块正文前注入"笔记标题：{title}\n分类标签：{tags}\n创建时间：{date}\n笔记核心内容：\n"前缀，提升 embedding 语义密度和关键词命中率；分块大小 500→600 rune 补偿前缀占用；② **段落聚合**——`ChunkContent` 空行处理从"触发 flush 切块"改为"保留作段落分隔累积"，短段落自动合并到接近 maxRunes 才切，消除碎块，元数据前缀占比从 20%-60% 降到 ~10%；③ **混合检索排序修复**——[vector_service.go](internal/services/vector_service.go) `sortHybridHits` 同优先级内仅关键词块按 `kwScore`（命中 token 数）降序，解决关键词命中块排序无序；合并后截断回 limit 防止两路无交集时结果膨胀到 2×limit；④ **召回注入剥离元数据前缀**——新增 `stripMetaPrefix` 函数，组装 FormattedText/RecallCard 时从 chunk_text 剥离"笔记核心内容：\n"之前的前缀，只注入正文（标题链+内容），数据库 chunk_text 不变（检索仍用含前缀原文），省 ~40 rune/块 token；⑤ **去掉单卡截断**——删除 `maxCardRunes=1200` 常量和截断逻辑，召回块完整注入 LLM，总量由 `ai_card_recall_limit`（卡片篇数，默认5）单一控制 |
-| **元数据前缀设计** | 前缀模板：`笔记标题：{title}\n分类标签：{tag1, tag2}\n创建时间：{2006-01-02}\n笔记核心内容：\n`。前缀在三个阶段价值不同：量化 embedding（必需，让向量携带标题/标签语义）、关键词 LIKE 检索（必需，标题/标签可被命中）、注入对话（冗余，剥离）。`stripMetaPrefix` 找 `笔记核心内容：\n` 标记取其后内容，旧数据（无前缀）兜底返回原文 |
-| **段落聚合要点** | 旧逻辑空行触发 flush 导致每个 Markdown 段落切成独立块（碎块多、前缀占比高）。新逻辑：空行作为段落分隔保留在块内，累积到接近 maxRunes 才 flush。标题行、代码块仍触发切块。效果：块从"每段一块"变为"多段聚合一块"，块大小接近 600 rune 上限 |
-| **混合检索排序** | `sortHybridHits` 优先级：双命中(3) > 仅向量(1) > 仅关键词(2)。同优先级内：仅关键词块按 `kwScore` 降序（命中 token 数越多越靠前），其余保持原始顺序。使用插入排序（数据量小）。合并后 `if len(merged) > limit { merged = merged[:limit] }` 截断防膨胀 |
-| **截断去除决策** | `maxCardRunes=1200` 是早期"卡片预览"思维下定的硬编码常量（无 spec 依据），段落聚合+前缀后单篇命中 11 块拼接 4091 rune，截断丢弃 71%。去掉后总量由 `ai_card_recall_limit` 控制，爆窗口时 LLM 报错用户可感知并调小卡片数，比静默截断丢信息更透明 |
-| **涉及文件** | [internal/services/chunk.go](internal/services/chunk.go)（ChunkMeta + formatMetaPrefix + stripMetaPrefix + ChunkContent 签名加 meta + 段落聚合）、[internal/services/vector_service.go](internal/services/vector_service.go)（IndexNotes 构造 ChunkMeta + maxRunes 600 + sortHybridHits kwScore 排序 + 合并截断 + stripMetaPrefix 注入 + 删除 maxCardRunes）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新调用 + 新增 TestStripMetaPrefix/TestChunkMetaPrefix* 用例） |
-
----
-
-## 记忆点 3：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 1：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 2：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 3：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -674,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 4：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 5：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -698,7 +673,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 6：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -710,7 +685,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 7：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -721,7 +696,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 8：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -730,6 +705,29 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **StatsService 聚合要点** | 数据统计必须走 [StatsService.GetDataStats](internal/services/stats_service.go)（唯一聚合入口），禁止直接调 `NoteService.GetStats` 充当概览（缺标签/AI 用量/待办/DB 大小）。**循环依赖坑**：`internal/database` 已 import `services`，StatsService 不能反向 import database → DB 文件路径经构造器注入函数（app 层传 `database.DefaultDBPath`）。`GetMonthCounts` 也纳入 StatsService，工具只依赖 stats+vector 两个服务。 |
 | **TOOLS.md 定位变更（重要）** | [TOOLS.md](internal/agent/TOOLS.md) 从"工具清单 + 规范"转为**纯开发维护规范**：删除 §6 具体工具清单表格，改为"权威来源指引"——工具清单以 [tools/doc.go](internal/agent/tools/doc.go)（工具列表与构造器名）与 [registry.go](internal/agent/registry.go) 为准，**新增工具无需更新 TOOLS.md**；§1 架构树瘦身为参考示例（current_time.go 最简 / manage_note.go 复杂）。[agent/doc.go](internal/agent/doc.go) 只读清单补 `get_current_time`。命名语义分界：manage_* = 管理操作，get_/recall_* = 只读；不可逆操作（PermanentDelete/EmptyTrash/批量删除）不暴露给 Agent 工具（与"关键操作需确认"约束一致）。 |
 | **涉及文件** | [internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（新增）、[internal/agent/tools/get_stats.go](internal/agent/tools/get_stats.go)（新增）、[internal/services/stats_service.go](internal/services/stats_service.go)（新增）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（ActionTextProvider + Record.ActionText + wrappedTool）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.Stats + tool_start 填 action_text）、[internal/agent/registry.go](internal/agent/registry.go)（注册 manage_note/get_stats）、[app.go](app.go)（GetDataStats 委托 + 两处 Deps + rebuildServices）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（转纯规范）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（权威清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showToolStatusStart 读 action_text、删 switch） |
+
+---
+
+## 记忆点 9：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 10 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
+| **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
+| **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
+
+---
+
+## 记忆点 10：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 用户评估第一版"气泡内嵌问题卡片"（仅单选即发、随消息滚动易被忽略）后否决，重设计为**方案 B：输入区上方反问面板**：① **后端 selection 协议**（[ask_user.go](internal/agent/tools/ask_user.go)）——Schema 新增 `selection`（string，"single"\|"multiple"，缺省 single），`ai:ask-user` 事件负载扩展为 `{question, options, selection}`；Desc 补充多选决策场景说明。② **前端面板迁移**——[index.html](frontend/index.html) 在 `#aiChatInputArea` 内顶部（追问引用栏之前）新增静态容器 `#aiAskPanel`；[ai-chat.js](frontend/src/js/ai-chat.js) **移除 `renderAskCard`**，新增 `showAskPanel(question, options, selection)` 与 `hideAskPanel()`；`ai:ask-user` 监听回调改调 `showAskPanel`（位置与 unsubs 机制不变）。③ **交互**——单选点选项即发 `sendUserText(opt)`；多选 Set 勾选，条目**左侧常显 checkbox 方框**（勾选后整行高亮 + 方框填充对勾），唯一按钮「确认提交」汇总发送 `我选择：A、B`（勾选 + 自定义输入并存时拼接为 `我选择：A、B。补充说明：xxx`）；两种模式统一布局「输入框 + 唯一按钮」同排一行（单选「发送」/ 多选「确认提交」），Enter 与按钮走同一逻辑，未勾选且无输入时输入框加 `.error` 抖动提示不发送。选项以垂直列表一行一个展示。④ **面板形态迭代**——**悬浮浮层**：`.ai-ask-panel` 改 `position:absolute`（`#aiChatInputArea` 加 `position:relative` 作定位上下文），`bottom:calc(100%+8px)` 悬浮于输入区上方（覆盖消息列表、不占文档流），`z-index:50` + 悬浮阴影；**右上角 × 关闭按钮**（`.ai-ask-close`，点击 `hideAskPanel` 退出选择）；**宽度自适应**：`width:fit-content`（= 最长选项宽度）+ `min-width:280px`（短选项兜底）+ `max-width:100%`（超长满宽且文本换行）。⑤ **面板生命周期（重要）**——回答后隐藏；`startStreaming` 开头、`switchSession`、清空会话、`resetAIChatState` 4 处挂钩 `hideAskPanel()`；新问题到达替换旧内容。⑥ **历史回放不变**——agent.go pendingQuestion 兜底保证 assistant 正文为问句，面板不重现。 |
+| **缺陷修复（2026-08-11 审查后）** | ① **问句落库兜底增强**：pendingQuestion 改为"正文优先、参数兜底"——模型正文为空（未遵守"正文写问句"约束）时，经新增 `askUserQuestionFromArgs` 解析 ask_user 工具参数的 `question` 兜底（流式/非流式两分支同步处理），避免问句整轮丢失（否则 finalContent 为空 → 前端判 `isEmptyMsg` 移除气泡且不落库）。② **发送链路健壮性**：`sendUserText` 改为返回布尔结果（false = 未发送）；`doSend` 改为**发送成功才 `hideAskPanel()`**——流未结束（isStreaming）时提示"请等待当前回复完成后再选择"并保留面板，未配置 AI 服务时 `ensureAIReady` 弹 warning 且面板保留便于重试；`onSend`/`handleResend` 等既有调用点忽略返回值行为不变。③ **CSS 清理**：删除 `.ai-ask-panel` 冗余 `margin-bottom:10px`（absolute 定位下无布局作用且参与 bottom 偏移，使悬浮间距由 8px 变 18px）。 |
+| **selection 协议要点** | 事件负载向后兼容（旧前端忽略 selection 即默认单选）；规范化：非 "multiple" 一律 "single"。多选发送格式 `我选择：A、B`（顿号分隔），单选/自定义直接发原文本。 |
+| **面板生命周期规则（重要）** | 面板是"临时交互态"而非消息流组件：必须在 `startStreaming` 开头（防用户绕答直接发消息导致残留）、`switchSession`、清空会话、`resetAIChatState` 四处挂钩 `hideAskPanel()`，否则跨会话残留挂起问题面板。回答**发送成功**才隐藏；发送失败（流未结束 / 未配置 API）保留面板；右上角 × 关闭按钮随时隐藏退出选择。 |
+| **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（selection 字段 + 事件负载 + Desc）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 正文优先/参数兜底 + 新增 `askUserQuestionFromArgs` + strings import）、[frontend/index.html](frontend/index.html)（#aiAskPanel 容器）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（移除 renderAskCard + showAskPanel/hideAskPanel（含 × 关闭按钮）+ ai:ask-user 回调 + 4 处生命周期挂钩 + sendUserText 返回 bool + doSend 成功才隐藏 + askPanelEl 引用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-panel 悬浮浮层 + 宽度自适应 + 关闭按钮 + 垂直列表 + 多选左侧常显 checkbox + error 抖动 + prefers-reduced-motion；`.ai-chat-input-area` 加 position:relative）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 面板交互 + selection 语义 + 生命周期 + 落库兜底说明） |
 
 ---
 
