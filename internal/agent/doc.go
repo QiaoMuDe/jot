@@ -2,7 +2,9 @@
 //
 // 职责：
 //   - AgentService.Run：组装 ChatModelAgent（OpenAI 兼容协议，配置复用现有 AI 设置）、
-//     统一注册只读工具（web_search / recall_notes / refine_search_query）、消费事件流，
+//     统一注册工具（只读：web_search / recall_notes / refine_search_query / get_stats /
+//     get_current_time；写操作：manage_todo / manage_notebook / manage_tag / manage_note）、
+//     消费事件流，
 //     通过 EmitFn 实时推送流式文本与工具状态，返回最终回答与工具调用摘要供调用方落库。
 //   - 事件通过回调透出（不依赖 Wails runtime），调用方（app.go）包装 runtime.EventsEmit。
 //
@@ -15,7 +17,7 @@
 //     3) 若引入新服务则扩展 Deps。无需改动 Run() 的事件消费逻辑）。
 //
 // 未来扩展点：
-//   - 新增写操作工具（创建 / 保存笔记）按上述步骤在 tools/ 子包实现并注册即可；
+//   - 新增写操作工具（如笔记更新 / 删除类操作）按上述步骤在 tools/ 子包实现并注册即可；
 //   - 多 Agent 编排（子 Agent、工具 Agent）可基于 adk 的 AgentTool / DeepAgent 扩展；
 //   - 记忆 / 会话上下文可在 Request 中扩展字段，由调用方组装进 Instruction。
 package agent

@@ -34,6 +34,27 @@ type manageNotebookTool struct {
 // 编译期断言：确保 manageNotebookTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageNotebookTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
+// 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
+func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
+	var args struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
+		return ""
+	}
+	switch args.Action {
+	case "create":
+		return "创建笔记本"
+	case "rename":
+		return "重命名笔记本"
+	case "list":
+		return "列出笔记本"
+	default:
+		return "执行"
+	}
+}
+
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
 func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{

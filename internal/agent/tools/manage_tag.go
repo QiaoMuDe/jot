@@ -35,6 +35,27 @@ type manageTagTool struct {
 // 编译期断言：确保实现 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageTagTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
+// 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
+func (m *manageTagTool) ActionText(argumentsInJSON string) string {
+	var args struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
+		return ""
+	}
+	switch args.Action {
+	case "create":
+		return "创建标签"
+	case "list":
+		return "列出标签"
+	case "update":
+		return "更新标签"
+	default:
+		return "执行"
+	}
+}
+
 // tagColorPattern 合法标签颜色格式：#RRGGBB。
 var tagColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 

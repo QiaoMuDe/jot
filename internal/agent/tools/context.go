@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
+	"github.com/cloudwego/eino/schema"
 
 	"gitee.com/MM-Q/fastlog"
 	"jot/internal/services"
@@ -24,10 +24,17 @@ type EmitFn func(event string, data string)
 
 // Record 工具调用记录，用于组装 Result.ToolCalls 摘要 JSON。
 type Record struct {
-	Action string `json:"action"`           // "tool_start" / "tool_result" / "tool_error" / "tool_partial"
-	Name   string `json:"name"`             // 工具名
-	Args   string `json:"args,omitempty"`   // 工具调用参数（JSON，截断后）
-	Result string `json:"result,omitempty"` // 工具返回结果摘要（截断后）
+	Action     string `json:"action"`                // "tool_start" / "tool_result" / "tool_error" / "tool_partial"
+	Name       string `json:"name"`                  // 工具名
+	Args       string `json:"args,omitempty"`        // 工具调用参数（JSON，截断后）
+	Result     string `json:"result,omitempty"`      // 工具返回结果摘要（截断后）
+	ActionText string `json:"action_text,omitempty"` // tool_start 的动作中文文案（由工具 ActionTextProvider 提供）
+}
+
+// ActionTextProvider 可选接口：工具实现后在 tool_start 时由父包自动采用其动作文案，
+// 供前端状态条展示"调用「工具名」工具：{动作}"；未实现或返回空串则前端回退"执行"。
+type ActionTextProvider interface {
+	ActionText(argumentsInJSON string) string
 }
 
 // Collector 收集一轮 Agent 对话中工具执行产生的结构化结果：
@@ -70,30 +77,60 @@ func (c *Context) DrainPartials(name string) {
 	c.partials = nil
 }
 
-// WrapWithError 包装工具：执行失败时不中断 ReAct 循环，
-// 错误文本回填给模型继续推理，同时记录服务日志并发射 tool_error 事件供前端展示失败态。
-func WrapWithError(name string, t tool.InvokableTool, ctx *Context) tool.InvokableTool {
-	return utils.WrapInvokableToolWithErrorHandler(t, func(c context.Context, err error) string {
+// wrappedTool 自定义包装器：委托内层工具执行；失败时不中断 ReAct 循环
+// （错误文本回填模型继续推理 + 记 tool_error 记录 + 发射事件），
+// 并实现 ActionTextProvider 转发，使父包可对包装后的工具统一断言动作文案。
+type wrappedTool struct {
+	name  string
+	inner tool.InvokableTool
+	ctx   *Context
+}
+
+var _ tool.InvokableTool = (*wrappedTool)(nil)
+var _ ActionTextProvider = (*wrappedTool)(nil)
+
+func (w *wrappedTool) Info(c context.Context) (*schema.ToolInfo, error) {
+	return w.inner.Info(c)
+}
+
+func (w *wrappedTool) InvokableRun(c context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	out, err := w.inner.InvokableRun(c, argumentsInJSON, opts...)
+	if err != nil {
 		// 用户取消：不误报失败，直接返回错误文本（循环会随 ctx 终止）
 		if c.Err() != nil {
-			return err.Error()
+			return err.Error(), nil
 		}
-		if ctx.Logger != nil {
-			ctx.Logger.Warnw("Agent 工具执行失败",
-				fastlog.String("tool", name),
+		if w.ctx.Logger != nil {
+			w.ctx.Logger.Warnw("Agent 工具执行失败",
+				fastlog.String("tool", w.name),
 				fastlog.Error(err))
 		}
 		rec := Record{
 			Action: "tool_error",
-			Name:   name,
+			Name:   w.name,
 			Result: TruncateRunes(err.Error(), MaxResultLen),
 		}
-		*ctx.Records = append(*ctx.Records, rec)
+		*w.ctx.Records = append(*w.ctx.Records, rec)
 		if b, err := json.Marshal(rec); err == nil {
-			ctx.Emit("ai:tool-status", string(b))
+			w.ctx.Emit("ai:tool-status", string(b))
 		}
-		return "工具执行失败：" + err.Error() + "。请依据错误信息调整策略，或直接基于已有信息回答用户。"
-	})
+		return "工具执行失败：" + err.Error() + "。请依据错误信息调整策略，或直接基于已有信息回答用户。", nil
+	}
+	return out, nil
+}
+
+func (w *wrappedTool) ActionText(argumentsInJSON string) string {
+	if p, ok := w.inner.(ActionTextProvider); ok {
+		return p.ActionText(argumentsInJSON)
+	}
+	return ""
+}
+
+// WrapWithError 包装工具：执行失败时不中断 ReAct 循环，
+// 错误文本回填给模型继续推理，同时记录服务日志并发射 tool_error 事件供前端展示失败态。
+// 包装器同时实现 ActionTextProvider：内层工具实现了则转发其动作文案，否则返回空串。
+func WrapWithError(name string, t tool.InvokableTool, ctx *Context) tool.InvokableTool {
+	return &wrappedTool{name: name, inner: t, ctx: ctx}
 }
 
 // TruncateRunes 按 rune 截断字符串（支持中文），超过 maxLen 时追加省略号；maxLen<=0 不截断。

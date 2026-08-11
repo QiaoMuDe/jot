@@ -27,6 +27,11 @@ type refineSearchQueryTool struct {
 // 编译期断言：确保 refineSearchQueryTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*refineSearchQueryTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：固定文案，无需解析参数。
+func (r *refineSearchQueryTool) ActionText(_ string) string {
+	return "精炼搜索关键词"
+}
+
 // Info 返回工具元信息。
 func (r *refineSearchQueryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{

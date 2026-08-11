@@ -2530,45 +2530,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     /** 展示工具调用开始状态（tool_start） */
     const showToolStatusStart = (payload) => {
         const name = payload.name || 'tool';
-        const args = parseField(payload.args) || {};
-        let action = '执行';
-        if (name === 'web_search') {
-            const query = args.query || args.keywords || '';
-            action = query ? '搜索 ' + query : '搜索互联网';
-        } else if (name === 'recall_notes') {
-            const ids = args.notebook_ids;
-            const count = Array.isArray(ids) ? ids.length : 0;
-            action = count > 0 ? '检索 ' + count + ' 个笔记本' : '检索本地笔记';
-        } else if (name === 'refine_search_query') {
-            action = '精炼搜索关键词';
-        } else if (name === 'get_current_time') {
-            action = '获取当前日期时间';
-        } else if (name === 'manage_todo') {
-            const act = args.action;
-            if (act === 'create') {
-                action = '创建待办';
-            } else if (act === 'list') {
-                action = '列出待办';
-            } else if (act === 'toggle') {
-                action = '更新待办状态';
-            }
-        } else if (name === 'manage_notebook') {
-            const act = args.action;
-            if (act === 'create') {
-                action = '创建笔记本';
-            } else if (act === 'rename') {
-                action = '重命名笔记本';
-            } else if (act === 'list') {
-                action = '列出笔记本';
-            }
-        } else if (name === 'manage_tag') {
-            const act = args.action;
-            if (act === 'create') {
-                action = '创建标签';
-            } else if (act === 'list') {
-                action = '列出标签';
-            }
-        }
+        let action = payload.action_text || '执行';
         let label = '调用「' + getToolLabel(name) + '」工具：' + action;
         let item = toolStatusItems[name];
         if (!item) {

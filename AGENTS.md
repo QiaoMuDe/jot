@@ -613,19 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：数据模型集中注册（database.AllModels）+ 设置页 API 连接收敛 + 召回/Token 状态一致性
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 五组独立改动：① **数据模型集中注册**——新增 [internal/database/models.go](internal/database/models.go) 全局注册表 `AllModels`（11 个模型按"子表在前"排列），[db.go](internal/database/db.go) 的 `InitDB` 与 [app.go](app.go) 的 `ResetDatabase` 的 DropTable/AutoMigrate 全部复用该列表；② **设置页量化连接补全**——量化模块补传 `getSavedModel`（`GetAllSettings().ai_embed_model`）实现已保存模型高亮、新增/管理预设按钮（`openAddProfileModal(embed)` 参数化 + `renderPresetMgrList(anchorRow)` 插入触发行下方 + 预设保存/删除后双下拉刷新）；③ **斜杠与保存一致性**——[ai_service.go](internal/services/ai_service.go) `testOpenAIConnection`/`fetchOpenAIModels` 补 `strings.TrimRight(baseURL, "/")`（与 ollama 路径、`NewClient` 三层收敛）；测试连通性/获取模型成功后立即 `saveSettings()` 持久化 URL/Key（修复改值未失焦直接点按钮导致不保存）；④ **召回状态独立指示器**——召回脱离联网搜索状态机（`searching` 标志仅由 `len(searchSources) > 0` 触发），改用独立事件 `ai:recall-status`（searching/done/error），前端放大镜图标 + 左右扫动动画 + 最小展示时长 800ms（`finishRecallIndicator` 收尾），thinking 到达时打断延迟切换避免与思考动画重叠；`VectorRecall` 签名改为 `(*CardRecallResult, error)` 分类预期跳过（nil,nil）与意外错误（返回 err，发射 error 事件弹通知）；召回笔记本全部取消勾选（空集）时跳过召回而非回退全库；⑤ **Token 缓存一致性**——`TruncateAISessionAtMessage`/`TruncateAISessionAfterMessage` 删除消息后事务内 `SumSessionTokens` 重算 `context_tokens`，[app.go](app.go) 召回/搜索阶段取消与 LLM 流中取消兜底分支均补缓存重算；前端 `handleResend` 截断后 `updateContextSize()`。 |
-| **模型注册规则** | **新增/修改数据模型时必须维护 [internal/database/models.go](internal/database/models.go) 的 `AllModels`（唯一注册点）**，InitDB 建表与 ResetDatabase 重置出厂自动同步，杜绝"重置遗漏新表"。注意：多对多表（如 `note_tags`）无 model struct，需在 [app.go](app.go) `ResetDatabase` 保留显式 `DROP TABLE IF EXISTS`。 |
-| **召回状态设计** | `ai:recall-status` 事件仅服务召回；前端 `createRecallIndicator()` 复用搜索指示器布局 + 书图标语义区分；CSS 覆盖 `.ai-search-bar > svg:first-child` 的旋转动画（`[data-status="recall"]` 下改扫动）；最小展示时长与 thinking 打断通过 `recallSwapTimer`/`recallPendingStatus` 协调（[ai-chat.js](frontend/src/js/ai-chat.js) `startStreaming`）。 |
-| **Token 缓存教训** | `context_tokens` 是缓存字段，所有改动消息的操作（删除/截断/停止/取消）都必须同步重算，否则右上角显示过期值。重算必须在同一事务内用 tx 执行（连接池下 a.db 读不到未提交删除）。 |
-| **涉及文件** | [internal/database/models.go](internal/database/models.go)（新增）、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) |
-
----
-
-## 记忆点 2：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
+## 记忆点 1：笔记量化弹窗 UI 重构 + 进度交互优化 + 配置前置校验 + 错误友好化
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
+## 记忆点 2：分块元数据前缀注入 + 段落聚合 + 混合检索优化 + 召回注入剥离前缀 + 去掉单卡截断
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
+## 记忆点 3：数据管理页分类导航改造 + 滚动条贴窗修复 + 设置页标签宽度统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -663,7 +651,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
+## 记忆点 4：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -675,7 +663,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 5：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -686,7 +674,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 6：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -699,7 +687,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 7：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -710,7 +698,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 8：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -722,7 +710,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 9：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -730,6 +718,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **工具设计要点** | 一文件一工具、构造器 `NewXxx`（导出）+ 结构体 `xxxTool`（包内私有）+ 编译期断言 `var _ tool.InvokableTool`；`Info()` 的 action Enum / 参数 Schema（Required 标记）与 `InvokableRun` 的 case 分发**必须同步维护**（新增动作时两处同改，[TOOLS.md](internal/agent/TOOLS.md) 表格同步）；update 类动作统一用列表返回的 `[数字]` id 定位（与 toggle 一致），id 需正整数校验；全空更新字段返回提示文本而非错误；服务层错误直接透传（上层 `WrapWithError` 回填模型继续对话）；list 分页参数校验统一：`page < 1 → 1`、`pageSize <= 0 → 10`、`> 50 → 50`；`ctx.Err()` 用户取消检查在动作分发前执行。 |
 | **AI 消息空白根因（重要教训）** | 恢复出厂/还原备份后 AI 助手切换历史会话消息空白（连空态打字机提示也不显示）。根因：[data-management.js](frontend/src/js/data-management.js) `resetDatabase` 里 `aiMessagesEl.innerHTML = ''` 清空消息容器，连带删除了容器内的 `.ai-chat-messages-inner` 子元素，导致 [ai-chat.js](frontend/src/js/ai-chat.js) 模块级变量 `messagesInnerEl` 悬空指向已脱离 DOM 的孤儿节点——此后消息渲染全部写进孤儿节点，children 正常、display 正常但 UI 不可见，`querySelector` 返回 null（F12 渲染日志 `rendered children=6` 与诊断 `messages-inner: null` 互相矛盾即命中）。修复：新增导出 `resetAIChatState()` 重建 `messagesInnerEl` 引用（null 则 `createElement` + `appendChild` 重建），`resetDatabase` 与 `restoreFromDir` 统一改调 `window.resetAIChatState?.()` + `window.onAIChatViewActivated?.()`；[main.js](frontend/src/main.js) 导入并暴露 `window.resetAIChatState`。**清空复杂容器必须走模块自带 reset 函数（重新查询/重建内部引用），不得直接 `innerHTML=''`**。 |
 | **涉及文件** | [internal/agent/registry.go](internal/agent/registry.go)（buildTools 注册）、[internal/agent/agent.go](internal/agent/agent.go)（Deps 结构）、[app.go](app.go)（NewAgentService + rebuildServices 末尾重建 AgentSvc）、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)（新增）、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)（新增 + update）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（补 update）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增导出 `resetAIChatState`）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`resetDatabase`/`restoreFromDir` 改用 `resetAIChatState` + `onAIChatViewActivated`）、[frontend/src/main.js](frontend/src/main.js)（导入并暴露 `window.resetAIChatState`） |
+
+---
+
+## 记忆点 10：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 本会话 Agent 工具链四组改造：① **新增 manage_note 笔记管理工具**（[manage_note.go](internal/agent/tools/manage_note.go)，7 动作：create/list/view/pin/move/add_tag/remove_tag，按产品决策不暴露 update/删除/不可逆操作；file_ext 缺省 .md；list 在 notebook_id>0 时走 `SearchByNotebook`）。② **动作文案后移（ActionTextProvider 机制）**——前端 [showToolStatusStart](frontend/src/js/ai-chat.js) 的工具名 switch 整体删除，改为读后端下发的 `action_text`（缺失回退"执行"）；新增可选接口 `ActionTextProvider{ActionText(argumentsInJSON string) string}`，工具在自己的 .go 文件实现返回中文文案（manage_note create→"创建笔记"），父包 [agent.go](internal/agent/agent.go) 在 `tool_start` 时按工具名断言调用、填进 `Record.ActionText`（json `action_text`）下发。③ **新增 get_stats 统计工具**（[get_stats.go](internal/agent/tools/get_stats.go)，只读）：overview（StatsService.GetDataStats + VectorService.GetIndexStatus，字节格式化 B/KB/MB）/ month（GetMonthCounts 某月每日笔记数）。④ **StatsService 聚合（工具与数据管理页同源）**——修复 get_stats 直接调 `NoteService.GetStats` 导致标签/AI 用量/待办/DB 大小全为 0 的口径漂移：新建 [services/stats_service.go](internal/services/stats_service.go) 聚合 Note(GetStats)+Tag(Count)+AI(会话/消息/token/耗时)+Todo(Count/CountCompleted)+DB 文件大小，[app.go](app.go) `GetDataStats` 绑定委托它，工具与数据管理页走同一代码路径；`Deps` 加 `Stats` 字段并在 app.go 两处（构造 + rebuildServices 末尾重建 AgentSvc）传入。 |
+| **ActionTextProvider 机制（设计要点）** | 工具可选实现 `ActionTextProvider`（定义于 [context.go](internal/agent/tools/context.go)），`ActionText` 解析 arguments JSON 返回中文动作文案。**关键坑**：eino `WrapInvokableToolWithErrorHandler` 包装后丢失原类型方法，父包对包装结果断言接口会失败——`WrapWithError` 改自定义 `wrappedTool` 实现接口转发（失败回填文本 / `tool_error` 事件 / 用户取消行为逐字保持）。未实现接口的工具前端回退"执行"。web_search 的"搜索 {query}"对 query 用 `TruncateRunes` 截断 30 字符防状态条超长；recall_notes 的 ActionText 不解析会话级注入参数（notebook 过滤是构造器注入，模型不传）。 |
+| **StatsService 聚合要点** | 数据统计必须走 [StatsService.GetDataStats](internal/services/stats_service.go)（唯一聚合入口），禁止直接调 `NoteService.GetStats` 充当概览（缺标签/AI 用量/待办/DB 大小）。**循环依赖坑**：`internal/database` 已 import `services`，StatsService 不能反向 import database → DB 文件路径经构造器注入函数（app 层传 `database.DefaultDBPath`）。`GetMonthCounts` 也纳入 StatsService，工具只依赖 stats+vector 两个服务。 |
+| **TOOLS.md 定位变更（重要）** | [TOOLS.md](internal/agent/TOOLS.md) 从"工具清单 + 规范"转为**纯开发维护规范**：删除 §6 具体工具清单表格，改为"权威来源指引"——工具清单以 [tools/doc.go](internal/agent/tools/doc.go)（工具列表与构造器名）与 [registry.go](internal/agent/registry.go) 为准，**新增工具无需更新 TOOLS.md**；§1 架构树瘦身为参考示例（current_time.go 最简 / manage_note.go 复杂）。[agent/doc.go](internal/agent/doc.go) 只读清单补 `get_current_time`。命名语义分界：manage_* = 管理操作，get_/recall_* = 只读；不可逆操作（PermanentDelete/EmptyTrash/批量删除）不暴露给 Agent 工具（与"关键操作需确认"约束一致）。 |
+| **涉及文件** | [internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（新增）、[internal/agent/tools/get_stats.go](internal/agent/tools/get_stats.go)（新增）、[internal/services/stats_service.go](internal/services/stats_service.go)（新增）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（ActionTextProvider + Record.ActionText + wrappedTool）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.Stats + tool_start 填 action_text）、[internal/agent/registry.go](internal/agent/registry.go)（注册 manage_note/get_stats）、[app.go](app.go)（GetDataStats 委托 + 两处 Deps + rebuildServices）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（转纯规范）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（权威清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showToolStatusStart 读 action_text、删 switch） |
 
 ---
 

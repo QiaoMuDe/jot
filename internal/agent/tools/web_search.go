@@ -46,6 +46,21 @@ type webSearchTool struct {
 // 编译期断言：确保 webSearchTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*webSearchTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
+// query 非空显示具体搜索词（截断防超长），否则回退通用文案。
+func (w *webSearchTool) ActionText(argumentsInJSON string) string {
+	var args struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
+		return ""
+	}
+	if args.Query = strings.TrimSpace(args.Query); args.Query != "" {
+		return "搜索 " + TruncateRunes(args.Query, 30)
+	}
+	return "搜索互联网"
+}
+
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
 func (w *webSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{

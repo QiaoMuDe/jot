@@ -96,6 +96,7 @@ type App struct {
 	profileService  *services.ProfileService
 	vectorService   *services.VectorService
 	todoService     *services.TodoService
+	statsService    *services.StatsService
 	LogSvc          *services.LogService
 	aiStreamCancel  context.CancelFunc
 	AgentSvc        *agent.AgentService
@@ -167,6 +168,7 @@ func NewApp() *App {
 	profileService := services.NewProfileService(db, logSvc.Logger)
 	vectorService := services.NewVectorService(db, logSvc.Logger)
 	todoService := services.NewTodoService(db, logSvc.Logger)
+	statsService := services.NewStatsService(noteService, tagService, todoService, aiService, database.DefaultDBPath)
 
 	app := &App{
 		db:              db,
@@ -178,6 +180,7 @@ func NewApp() *App {
 		profileService:  profileService,
 		vectorService:   vectorService,
 		todoService:     todoService,
+		statsService:    statsService,
 		LogSvc:          logSvc,
 	}
 	// Agent 服务：复用 AI/向量/设置服务与量化连接配置，供 CallAIAgentStream 使用
@@ -188,6 +191,8 @@ func NewApp() *App {
 		Todo:           todoService,
 		Notebook:       notebookService,
 		Tag:            tagService,
+		Note:           noteService,
+		Stats:          statsService,
 		Logger:         logSvc.Logger,
 		GetEmbedConfig: app.GetEmbedConfig,
 	})
@@ -829,57 +834,14 @@ func (a *App) GetMonthNoteCounts(year int, month int) (map[int]int, error) {
 	return counts, nil
 }
 
-// GetDataStats 获取数据统计概览
+// GetDataStats 获取数据统计概览（委托 StatsService 聚合，口径与 get_stats 工具一致）
 func (a *App) GetDataStats() (*services.DataStats, error) {
 	a.LogSvc.Logger.Debugw("GetDataStats")
-	stats, err := a.noteService.GetStats()
+	stats, err := a.statsService.GetDataStats()
 	if err != nil {
 		a.LogSvc.Logger.Errorw("GetDataStats 失败", fastlog.Error(err))
 		return nil, err
 	}
-	tagCount, err := a.tagService.Count()
-	if err != nil {
-		return nil, err
-	}
-	stats.TotalTags = tagCount
-	// 获取数据库文件大小
-	dbPath, pathErr := database.DefaultDBPath()
-	if pathErr == nil {
-		if fi, statErr := os.Stat(dbPath); statErr == nil {
-			size := fi.Size()
-			stats.DBSize = size
-			switch {
-			case size < 1024:
-				stats.DBSizeStr = fmt.Sprintf("%d B", size)
-			case size < 1024*1024:
-				stats.DBSizeStr = fmt.Sprintf("%.1f KB", float64(size)/1024)
-			default:
-				stats.DBSizeStr = fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
-			}
-		}
-	}
-	// AI 会话/消息统计
-	aiSessions, _ := a.aiService.CountSessions()
-	aiMessages, _ := a.aiService.CountMessages()
-	stats.AISessions = aiSessions
-	stats.AIMessages = aiMessages
-
-	// AI 性能统计
-	totalTokens, _ := a.aiService.SumTokens()
-	avgResponseTime, _ := a.aiService.AvgResponseTime()
-	avgThinkingTime, _ := a.aiService.AvgThinkingTime()
-	maxResponseTime, _ := a.aiService.MaxResponseTime()
-	stats.TotalTokens = totalTokens
-	stats.AvgResponseTime = avgResponseTime
-	stats.AvgThinkingTime = avgThinkingTime
-	stats.MaxResponseTime = maxResponseTime
-
-	// 待办统计
-	totalTodos, _ := a.todoService.Count()
-	completedTodos, _ := a.todoService.CountCompleted()
-	stats.TotalTodos = totalTodos
-	stats.CompletedTodos = completedTodos
-
 	return stats, nil
 }
 
@@ -3941,6 +3903,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.profileService = services.NewProfileService(db, a.LogSvc.Logger)
 	a.vectorService = services.NewVectorService(db, a.LogSvc.Logger)
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
+	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
 	a.LogSvc = services.NewLogService()
 	home, _ := os.UserHomeDir()
@@ -3966,6 +3929,8 @@ func (a *App) rebuildServices(db *gorm.DB) {
 		Todo:           a.todoService,
 		Notebook:       a.notebookService,
 		Tag:            a.tagService,
+		Note:           a.noteService,
+		Stats:          a.statsService,
 		Logger:         a.LogSvc.Logger,
 		GetEmbedConfig: a.GetEmbedConfig,
 	})

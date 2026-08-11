@@ -26,6 +26,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
@@ -48,6 +49,8 @@ type Deps struct {
 	Todo     *services.TodoService     // Todo 待办服务（manage_todo 工具使用）
 	Notebook *services.NotebookService // Notebook 笔记本服务（manage_notebook 工具使用）
 	Tag      *services.TagService      // Tag 标签服务（manage_tag 工具使用）
+	Note     *services.NoteService     // Note 笔记服务（manage_note 工具使用）
+	Stats    *services.StatsService    // Stats 数据统计聚合服务（get_stats 工具使用）
 	Logger   *fastlog.Logger
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
@@ -106,6 +109,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	var toolRecords []tools.Record
 	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx})
+
+	// 按工具名索引已装配的工具：emitToolStart 时据此查找 ActionTextProvider，
+	// 为 tool_start 事件生成动作文案（action_text）随事件下发前端
+	toolByName := make(map[string]tool.BaseTool, len(toolList))
+	for _, t := range toolList {
+		if info, err := t.Info(ctx); err == nil && info != nil {
+			toolByName[info.Name] = t
+		}
+	}
 
 	// 4. 组装 ChatModelAgent（内部是 ReAct 循环：模型决策 → 调用工具 → 反馈 → 继续）
 	//    Instruction 作为 system 消息由默认 GenModelInput 放在最前
@@ -186,7 +198,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				if len(full.ToolCalls) > 0 {
 					// 模型决定调用工具：流式 Arguments 已按 Index 合并
 					for _, tc := range full.ToolCalls {
-						emitToolStart(emit, &toolRecords, tc)
+						emitToolStart(emit, &toolRecords, tc, toolByName)
 					}
 				} else if full.Content != "" {
 					// 无工具调用的 assistant 消息即最终回答（ReAct 循环最后一条）
@@ -200,7 +212,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				}
 				if len(mv.Message.ToolCalls) > 0 {
 					for _, tc := range mv.Message.ToolCalls {
-						emitToolStart(emit, &toolRecords, tc)
+						emitToolStart(emit, &toolRecords, tc, toolByName)
 					}
 				} else if mv.Message.Content != "" {
 					emit("ai:stream-chunk", mv.Message.Content)
@@ -370,11 +382,17 @@ func consumeToolStream(stream *schema.StreamReader[*schema.Message]) string {
 }
 
 // emitToolStart 推送工具调用开始事件，并记录到工具调用摘要。
-func emitToolStart(emit EmitFn, records *[]tools.Record, tc schema.ToolCall) {
+// toolByName 供按工具名查找 ActionTextProvider 生成动作文案，随事件下发前端。
+func emitToolStart(emit EmitFn, records *[]tools.Record, tc schema.ToolCall, toolByName map[string]tool.BaseTool) {
 	rec := tools.Record{
 		Action: "tool_start",
 		Name:   tc.Function.Name,
 		Args:   tools.TruncateRunes(tc.Function.Arguments, tools.MaxResultLen),
+	}
+	if t, ok := toolByName[tc.Function.Name]; ok {
+		if p, ok := t.(tools.ActionTextProvider); ok {
+			rec.ActionText = p.ActionText(tc.Function.Arguments)
+		}
 	}
 	*records = append(*records, rec)
 	b, _ := json.Marshal(rec)

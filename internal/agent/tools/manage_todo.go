@@ -37,6 +37,29 @@ type manageTodoTool struct {
 // 编译期断言：确保 manageTodoTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageTodoTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
+// 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
+func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
+	var args struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
+		return ""
+	}
+	switch args.Action {
+	case "create":
+		return "创建待办"
+	case "list":
+		return "列出待办"
+	case "toggle":
+		return "更新待办状态"
+	case "update":
+		return "修改待办文本"
+	default:
+		return "执行"
+	}
+}
+
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
 func (m *manageTodoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{

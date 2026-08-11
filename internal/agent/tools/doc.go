@@ -2,9 +2,9 @@
 //
 // 职责：
 //   - 工具实现（web_search / recall_notes / refine_search_query / get_current_time / manage_todo /
-//     manage_notebook / manage_tag）每文件一个，
+//     manage_notebook / manage_tag / manage_note / get_stats）每文件一个，
 //     均提供导出构造器（NewWebSearch / NewRecallNotes / NewRefineSearchQuery / NewGetCurrentTime /
-//     NewManageTodo / NewManageNotebook / NewManageTag），
+//     NewManageTodo / NewManageNotebook / NewManageTag / NewManageNote / NewGetStats），
 //     由父包 agent 的 registry.go 统一装配与注册。
 //   - 共享上下文类型（EmitFn / Record / Collector / Context / WrapWithError）定义于
 //     context.go：工具通过注入的 Context 发射事件、登记调用记录、收集结构化结果

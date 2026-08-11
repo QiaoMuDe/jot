@@ -23,6 +23,11 @@ type currentTimeTool struct{}
 // 编译期断言：确保 currentTimeTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*currentTimeTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：固定文案，无需解析参数。
+func (c *currentTimeTool) ActionText(_ string) string {
+	return "获取当前日期时间"
+}
+
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
 func (c *currentTimeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{

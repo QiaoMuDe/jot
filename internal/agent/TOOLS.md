@@ -1,7 +1,7 @@
 # Agent 工具开发与维护指南
 
 > 本指南面向 `internal/agent` 模块的后续维护者：如何**新增**、**维护**、**注册**和**编写** Agent 工具，以及必须遵守的规范。
-> 适用对象：`web_search` / `recall_notes` / `refine_search_query` / `get_current_time` 等 ReAct 循环中模型可调用的工具。
+> 适用对象：`web_search` / `recall_notes` / `refine_search_query` / `manage_note` / `get_stats` 等 ReAct 循环中模型可调用的工具（完整清单见 §6）。
 
 ---
 
@@ -13,12 +13,10 @@ internal/agent/                    父包（Agent 对话链路）
 ├── registry.go                    buildTools：统一注册全部工具（新增工具的必经之地）
 ├── types.go                       Request / Result / EmitFn 对外契约
 ├── doc.go                         包级说明文档
-└── tools/                         工具子包（每文件一个工具）
+└── tools/                         工具子包（每文件一个工具，完整清单见 §6）
     ├── context.go                 共享上下文：Context / Record / Collector / WrapWithError
-    ├── web_search.go              多源联网搜索工具（模型自选来源 + URL 去重）
-    ├── recall_notes.go            本地笔记向量召回工具
-    ├── refine_query.go            搜索词精炼工具
-    ├── current_time.go            当前时间工具（最简无参示例）
+    ├── current_time.go            最简无参工具模板（参考示例）
+    ├── manage_note.go             带依赖 + ActionText 的复杂工具参考（create/list/view/...）
     └── doc.go                     子包说明文档（工具清单，需同步维护）
 
 前端对应展示（工具名直接展示英文，无需维护映射；如需动作文案见 §8）：
@@ -56,7 +54,7 @@ frontend/src/css/components/ai-chat.css    状态条与折叠摘要样式
 
 ### 第 3 步：注册
 
-打开 [registry.go](internal/agent/registry.go#L19-L25) 的 `buildTools`，**追加一行**：
+打开 [registry.go](internal/agent/registry.go#L19-L31) 的 `buildTools`，**追加一行**：
 
 ```go
 tools.WrapWithError("your_tool", tools.NewYourTool(...), p.ctx),
@@ -64,13 +62,15 @@ tools.WrapWithError("your_tool", tools.NewYourTool(...), p.ctx),
 
 ### 第 4 步：更新工具清单文档
 
-两处包说明文档各补一行：
-- [tools/doc.go](internal/agent/tools/doc.go) 的工具列表与构造器名
+Go 包文档是工具清单的**唯一权威来源**，各补一行：
+- [tools/doc.go](internal/agent/tools/doc.go) 的工具列表与构造器名（**必须**，权威清单）
 - [doc.go](internal/agent/doc.go) 的结构说明（如涉及新依赖，同步更新 `Deps` 说明）
 
-### 第 5 步：按需更新前端动作文案（可选）
+注意：本指南（TOOLS.md）不维护具体工具清单，新增工具**无需更新本文件**（见 §6）。
 
-工具状态条与历史明细**直接展示英文工具名**（web_search 等），无需维护中文名映射。仅当需要在开始调用时展示具体动作（如 web_search 的"搜索 {query}"、recall_notes 的"检索本地笔记"）时，在 [showToolStatusStart](frontend/src/js/ai-chat.js#L2530-L2547) 的 switch 中补一个 `name` 分支（见 §8）。此步可跳过。
+### 第 5 步：按需在工具实现内维护动作文案（可选）
+
+工具状态条与历史明细直接展示英文工具名（web_search 等），无需维护中文名映射；若要在开始调用时展示具体动作（如"创建待办"），让工具实现可选接口 `ActionTextProvider`（`ActionText(argumentsInJSON string) string`），父包在 `tool_start` 时自动生成 `action_text` 下发前端，无需修改前端（见 §8）。此步可跳过。
 
 ### 第 6 步：验证
 
@@ -85,20 +85,11 @@ go vet ./internal/agent/...
 
 ## 3. 注册位置（核心）
 
-**唯一注册入口：`internal/agent/registry.go` 的 `buildTools` 函数。**
+**唯一注册入口：`internal/agent/registry.go` 的 `buildTools` 函数。** 注册形式如下（完整清单以 [registry.go](internal/agent/registry.go#L19-L31) 的 `buildTools` 为准）：
 
 ```go
-func buildTools(p BuildParams) []tool.BaseTool {
-	return []tool.BaseTool{
-		tools.WrapWithError("refine_search_query", tools.NewRefineSearchQuery(p.deps.AI), p.ctx),
-		tools.WrapWithError("web_search", tools.NewWebSearch(p.deps.AI, p.deps.Setting, p.ctx), p.ctx),
-		tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting,
-			p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx),
-		tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx),
-		tools.WrapWithError("manage_todo", tools.NewManageTodo(p.deps.Todo, p.ctx), p.ctx),
-		tools.WrapWithError("manage_notebook", tools.NewManageNotebook(p.deps.Notebook, p.ctx), p.ctx),
-	}
-}
+// 在 buildTools 返回的切片中追加（每个工具一行，用 WrapWithError 包装）：
+tools.WrapWithError("your_tool", tools.NewYourTool(...), p.ctx),
 ```
 
 要点：
@@ -106,16 +97,19 @@ func buildTools(p BuildParams) []tool.BaseTool {
 - **每个工具都用 `tools.WrapWithError` 包装**。它保证工具执行失败时不中断 ReAct 循环：错误文本回填给模型继续推理、记 `tool_error` 记录、发射 `tool_error` 事件供前端展示失败态。
 - 注册顺序即工具暴露给模型的顺序，无强依赖，但建议按用途分组排列。
 - 工具依赖从 `BuildParams` 取：
-  - `p.deps`：`Deps{A I, Vector, Setting, Logger, GetEmbedConfig}`（见 [agent.go](internal/agent/agent.go#L44-L51)）
+  - `p.deps`：`Deps{AI, Vector, Setting, Todo, Notebook, Tag, Note, Stats, Logger, GetEmbedConfig}`（见 [agent.go](internal/agent/agent.go#L44-L57)）
   - `p.req`：本轮 `Request`（如需绑定会话级参数，如 `recall_notes` 的笔记本过滤 `RecallNotebookIDs`）
   - `p.ctx`：本轮共享的 `*tools.Context`
 - **新增依赖**：若工具需要新的服务，先在 `Deps` 加字段，再在 [app.go](app.go) 构造 `NewAgentService` 处传入。
+- **动作文案（可选）**：由工具实现可选接口 `ActionTextProvider` 提供，父包在 `tool_start` 时自动调用其 `ActionText` 生成 `action_text` 下发前端；未实现则前端回退"执行"（见 §8）。
 
 ---
 
 ## 4. 编写规范
 
 ### 4.1 标准骨架（带依赖 + 结构化收集，参考 [recall_notes.go](internal/agent/tools/recall_notes.go)）
+
+> 如需动作文案，工具可额外实现可选接口 `ActionTextProvider`（见 §8.3），骨架中无对应代码。
 
 ```go
 package tools
@@ -251,7 +245,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 | 部分失败登记 | `ctx.AddPartial(msg)` | 父包在 `tool_result` 后统一以 `tool_partial` 事件发射，前端显示 ⚠️ |
 | 结构化收集 | `ctx.Collector.Sources` / `ctx.Collector.Cards` | 供 `Result.SearchSources` / `Result.RecallCards` 落库，格式与问答模式一致 |
 
-**收集规则**：结构化数据（搜索来源 `services.SearchSource` / 召回卡片 `services.RecallCard`）追加到 `ctx.Collector`，不要塞进返回文本的 JSON。父包在 [agent.go 汇总段](internal/agent/agent.go#L242-L251) 统一序列化落库。
+**收集规则**：结构化数据（搜索来源 `services.SearchSource` / 召回卡片 `services.RecallCard`）追加到 `ctx.Collector`，不要塞进返回文本的 JSON。父包在 [agent.go 汇总段](internal/agent/agent.go#L259-L264) 统一序列化落库。
 
 ### 4.7 约束与红线
 
@@ -269,9 +263,9 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 - **改描述 / 参数**：只改 `Info()`，无需动注册与事件循环。
 - **改执行逻辑**：只改 `InvokableRun()`。
-- **改依赖**：同时改结构体字段、`NewXxx()` 签名、以及 [registry.go](internal/agent/registry.go#L19-L25) 中对应注册行。
+- **改依赖**：同时改结构体字段、`NewXxx()` 签名、以及 [registry.go](internal/agent/registry.go#L19-L31) 中对应注册行。
 - **改结构化收集**：确认收集类型与 `services` 包中数据结构一致（前端按该结构渲染）。
-- **改动作文案**：如需调整开始调用时的动作提示，改前端 `showToolStatusStart` 对应分支（见 §8）；工具名直接展示英文名，无需映射。
+- **改动作文案**：直接改对应工具文件里的 `ActionText` 方法实现（见 §8），无需改前端。
 
 ### 5.2 删除工具
 
@@ -287,23 +281,19 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 - [ ] 参数校验完备（必填项、非法枚举）？
 - [ ] 需要结构化收集 / 部分失败时注入了 `ctx` 并使用 `Collector` / `AddPartial`？
 - [ ] registry.go 注册了（且用 `WrapWithError` 包装）？
-- [ ] 两个 doc.go 清单更新了？
-- [ ] （如需动作文案）`showToolStatusStart` 分支符合 §8 格式？工具名直接展示英文名，无需映射。
+- [ ] 两个 doc.go 清单更新了（含 get_stats 等只读工具与全部构造器名）？
+- [ ] （如需动作文案）工具实现了 `ActionTextProvider` 接口（见 §8）？工具名直接展示英文名，无需映射。
 - [ ] `go build ./...`、`go vet ./internal/agent/...` 通过？
 
 ---
 
-## 6. 现有工具清单
+## 6. 工具清单（权威来源）
 
-| 工具名 | 文件 | 依赖注入 | 功能 | 结构化收集 |
-|---|---|---|---|---|
-| `refine_search_query` | [refine_query.go](internal/agent/tools/refine_query.go) | `ai` | 口语化搜索词精炼 | 无 |
-| `web_search` | [web_search.go](internal/agent/tools/web_search.go) | `ai`、`setting`、`ctx` | 多源联网搜索（模型自选来源、按 URL 去重分组） | `Collector.Sources` |
-| `recall_notes` | [recall_notes.go](internal/agent/tools/recall_notes.go) | `vector`、`setting`、`getEmbedConfig`、`notebookIDs`、`ctx` | 本地笔记向量 + 关键词混合召回 | `Collector.Cards` |
-| `get_current_time` | [current_time.go](internal/agent/tools/current_time.go) | 无 | 返回当前日期 / 时间 / 星期 / 年份 | 无 |
-| `manage_todo` | [manage_todo.go](internal/agent/tools/manage_todo.go) | `todo`、`ctx` | 创建 / 列出（支持 status/keyword 过滤与 page/pageSize 分页） / 勾选（完成或取消） / 修改文本（update）待办 | 无 |
-| `manage_notebook` | [manage_notebook.go](internal/agent/tools/manage_notebook.go) | `notebook`、`ctx` | 创建 / 重命名 / 列出（支持 keyword 过滤与 page/pageSize 分页）笔记本 | 无 |
-| `manage_tag` | [manage_tag.go](internal/agent/tools/manage_tag.go) | `tag`、`ctx` | 列出全部标签 / 创建标签（name 必填，color 可选 #RRGGBB） / 更新标签（重命名、改色，name/color 至少其一） | 无 |
+本指南不维护具体工具清单。现有工具与构造器以以下代码真相为准：
+- [tools/doc.go](internal/agent/tools/doc.go)：工具列表与导出构造器名（权威清单）
+- [registry.go](internal/agent/registry.go#L19-L31)：注册顺序与依赖注入
+
+新增/删除工具时仅需同步上述 Go 文档，**无需更新本文件**。
 
 ---
 
@@ -313,22 +303,22 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 | Action | 含义 | Record 字段 |
 |---|---|---|
-| `tool_start` | 模型决定调用 | `name`、`args`（截断） |
+| `tool_start` | 模型决定调用 | `name`、`args`（截断）、`action_text`（动作文案，由工具实现 `ActionTextProvider` 提供） |
 | `tool_result` | 工具执行成功 | `name`、`result`（截断） |
 | `tool_error` | 工具执行失败（回填模型） | `name`、`result`（错误文本截断） |
 | `tool_partial` | 部分失败提示（前端 ⚠️） | `name`、`result`（失败说明） |
 
-父包逻辑见 [agent.go](internal/agent/agent.go#L369-L401)：`emitToolStart` / `emitToolResult` / `DrainPartials`。注意 `emitToolResult` 会检查"最近一条同名记录是否为 tool_error"，失败态不会被 result 覆盖。
+父包逻辑见 [agent.go](internal/agent/agent.go#L384-L410)（`emitToolStart` / `emitToolResult`）与 [context.go](internal/agent/tools/context.go#L66)（`DrainPartials`）。注意 `emitToolResult` 会检查"最近一条同名记录是否为 tool_error"，失败态不会被 result 覆盖。
 
 ---
 
-## 8. 前端工具状态提示（动作文案按需维护）
+## 8. 前端工具状态提示（动作文案在工具实现内维护）
 
 Agent 工具的前端状态提示集中在 `frontend/src/js/ai-chat.js`。**工具名直接展示后端下发的英文名**（web_search / recall_notes / ...），前端不维护中文名映射，新增工具无需改动前端展示名。
 
 ### 8.1 展示名规则
 
-`getToolLabel(name)`（[ai-chat.js#L4045-L4047](frontend/src/js/ai-chat.js#L4045-L4047)）直接返回英文工具名（带 `「」` 展示）：
+`getToolLabel(name)`（[ai-chat.js#L4060](frontend/src/js/ai-chat.js#L4060)）直接返回英文工具名（带 `「」` 展示）：
 
 ```js
 var getToolLabel = function(name) { return name || '工具'; };
@@ -346,20 +336,39 @@ var getToolLabel = function(name) { return name || '工具'; };
 | 部分失败 | `tool_partial` | `「{工具名}」：部分来源失败：{说明}` | `showToolStatusPartial` |
 
 - 工具名一律通过 `getToolLabel(name)` 获取并带 `「」`。
-- 需要展示具体动作（如 web_search 的"搜索 {query}"、recall_notes 的"检索本地笔记"）时，在 [showToolStatusStart](frontend/src/js/ai-chat.js#L2530-L2547) 的 switch 中补一个 `name` 分支；无特殊展示需求走默认"执行"即可。
+- **动作文案**：开始调用一行的"动作"来自后端 `tool_start` 记录的 `action_text`（由工具实现 `ActionTextProvider` 提供），缺失或为空时回退"执行"；前端不再维护任何工具名/动作分支。
 - 失败原因 / 部分失败说明来自 `payload.result`，截断 40 字符展示。
 
-### 8.3 历史回放明细（折叠组件）
+### 8.3 在工具实现内维护动作文案
 
-[renderToolCalls](frontend/src/js/ai-chat.js#L4055-L4115) 只渲染 `tool_start` 记录，每条 = 图标 + 加粗工具名 `「X」`（`.ai-tool-status-name`）+ 状态文本：
+若要在开始调用时展示具体动作（如 manage_note 的"创建笔记"、web_search 的"搜索 {query}"），让工具在自己的 .go 文件里实现可选接口 `ActionTextProvider`：
+
+```go
+// ActionTextProvider 可选接口：提供开始调用时的中文动作文案。
+// 实现后，父包在 tool_start 时自动调用 ActionText 生成 action_text 下发前端。
+type ActionTextProvider interface {
+	ActionText(argumentsInJSON string) string
+}
+```
+
+实现要点：
+
+- 工具在自己的 .go 文件实现 `ActionText(argumentsInJSON string) string`：解析 arguments JSON 中的 action / 关键参数，返回中文文案（如 manage_note 的 create → "创建笔记"、web_search 的 query 非空 → "搜索 {query}"）。
+- **解析失败返回 ""**：前端回退显示"执行"。
+- **action 未命中返回 "执行"**：给出明确的兜底文案。
+- 父包在 `tool_start` 时按工具名自动调用 `ActionText`，把结果放进 `Record.ActionText`（json 字段 `action_text`）随 `ai:tool-status` 下发，**无需改动前端**。
+- 未实现该接口的工具 → 前端回退显示"执行"。
+
+### 8.4 历史回放明细（折叠组件）
+
+[renderToolCalls](frontend/src/js/ai-chat.js#L4068-L4130) 只渲染 `tool_start` 记录，每条 = 图标 + 加粗工具名 `「X」`（`.ai-tool-status-name`）+ 状态文本：
 
 - 完成：`「web_search」：已完成`
 - 失败：`「web_search」：失败：{原因前40字}`（原因取自 `tool_error` 记录 `result`）
 - 部分失败：`「web_search」：部分来源失败：{说明前40字}`（取自 `tool_partial` 记录 `result`）
 
-### 8.4 前端维护自查
+### 8.5 前端维护自查
 
 - [ ] 无需维护中文名映射（工具名直接展示英文）。
-- [ ] `showToolStatusStart` 按需补了动作分支（否则默认"执行"）？
-- [ ] 实时状态条与历史明细均保持 `「工具名」：状态` 的格式风格？
+- [ ] 无需在 `showToolStatusStart` 维护工具名分支（已删除）。
 - [ ] `npm run build` 通过？

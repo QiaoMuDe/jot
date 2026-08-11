@@ -33,6 +33,13 @@ type recallNotesTool struct {
 // 编译期断言：确保 recallNotesTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*recallNotesTool)(nil)
 
+// ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）。
+// 笔记本过滤（notebook_ids）由构造器注入会话级参数、模型不感知，
+// 因此直接返回固定文案。
+func (r *recallNotesTool) ActionText(_ string) string {
+	return "检索本地笔记"
+}
+
 // Info 返回工具元信息。
 func (r *recallNotesTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
