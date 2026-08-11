@@ -31,9 +31,11 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
-	"gitee.com/MM-Q/fastlog"
 	"jot/internal/agent/tools"
+	"jot/internal/mcpserver"
 	"jot/internal/services"
+
+	"gitee.com/MM-Q/fastlog"
 )
 
 // maxIterations 限制 ReAct 循环最大迭代次数，防止死循环（与 agent-demo 一致）。
@@ -53,6 +55,9 @@ type Deps struct {
 	Note     *services.NoteService     // Note 笔记服务（manage_note 工具使用）
 	Stats    *services.StatsService    // Stats 数据统计聚合服务（get_stats 工具使用）
 	Logger   *fastlog.Logger
+	// MCPServerConfigPath 外部 MCP 服务器配置文件路径（测试阶段，配置文件驱动）；
+	// 为空时回退 mcpserver.DefaultConfigFile（"mcp-servers.json"，相对进程工作目录）。
+	MCPServerConfigPath string
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }
@@ -110,6 +115,69 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	var toolRecords []tools.Record
 	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx})
+
+	// 追加外部 MCP 服务器工具（测试阶段，配置文件驱动）：读取 mcp-servers.json，
+	// 对每个 enabled 服务器连接并发现工具，改名后并入 toolList（须在 toolByName 索引构建之前）；
+	// 配置缺失 / 单服务器失败仅记录日志跳过，不中断内置工具与整体 Agent 运行
+	mcpPath := s.deps.MCPServerConfigPath
+	if mcpPath == "" {
+		mcpPath = mcpserver.DefaultConfigFile
+	}
+	mcpCfg, err := mcpserver.Load(mcpPath)
+	if err != nil {
+		if s.deps.Logger != nil {
+			s.deps.Logger.Debugw("MCP 服务器配置不可用，跳过 MCP 工具装配",
+				fastlog.String("path", mcpPath),
+				fastlog.Error(err))
+		}
+	} else {
+		// 单条服务器校验失败时该条被跳过，其余合法条目正常装配；逐条输出告警便于定位
+		if s.deps.Logger != nil {
+			for _, loadErr := range mcpCfg.LoadErrors {
+				s.deps.Logger.Warnw("MCP 服务器配置校验失败，该服务器已跳过",
+					fastlog.String("path", mcpPath),
+					fastlog.Error(loadErr))
+			}
+		}
+		for _, server := range mcpCfg.EnabledServers() {
+			sess, err := mcpserver.OpenSession(ctx, server)
+			if err != nil {
+				if s.deps.Logger != nil {
+					s.deps.Logger.Warnw("MCP 服务器连接失败，跳过该服务器",
+						fastlog.String("server", server.Name),
+						fastlog.Error(err))
+				}
+				continue
+			}
+			// 会话随本轮 Run 结束统一关闭（defer 延迟到函数末尾，for 循环内注册的会话同样覆盖）
+			defer func() { _ = sess.Close() }()
+			var toolNames []string
+			for _, t := range sess.Tools {
+				invokable, ok := t.(tool.InvokableTool)
+				if !ok {
+					if s.deps.Logger != nil {
+						s.deps.Logger.Warnw("MCP 工具不支持执行，已跳过",
+							fastlog.String("server", server.Name))
+					}
+					continue
+				}
+				// 取改名后的工具名（mcp_{服务器名}_{工具名}），供 WrapWithError 日志与调用记录使用
+				mcpToolName := server.Name
+				if info, err := t.Info(ctx); err == nil && info != nil {
+					mcpToolName = info.Name
+				}
+				toolNames = append(toolNames, mcpToolName)
+				toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
+			}
+			// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称），便于排查工具是否生效
+			if s.deps.Logger != nil {
+				s.deps.Logger.Infow("MCP 服务器工具已上线",
+					fastlog.String("server", server.Name),
+					fastlog.Int("count", len(toolNames)),
+					fastlog.String("tools", strings.Join(toolNames, ", ")))
+			}
+		}
+	}
 
 	// 按工具名索引已装配的工具：emitToolStart 时据此查找 ActionTextProvider，
 	// 为 tool_start 事件生成动作文案（action_text）随事件下发前端

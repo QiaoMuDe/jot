@@ -613,19 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 量化弹窗范围切换动画 + 面板高度固定 + 全部笔记信息卡片
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动：① **范围切换过渡动画**——`switchVectorIndexScope` 从 `style.display` 瞬间切换改为两阶段动画：新增 `animateVectorIndexPicker(target, visible)`，旧区域先退场（`picker-leave` 150ms ease-in）再展示目标区域并入场（`picker-enter` 200ms spring）；三个区域（全部笔记信息卡片 `#vectorIndexAllInfo` / 笔记选择区 / 笔记本选择区）互斥可见，用 `[allInfo, ntPicker, nbPicker].find(el => el.style.display !== 'none')` 判定当前可见区域，目标即当前时跳过动画；模块级定时器 `vectorIndexPickerTimer` 统一管理，`setVectorIndexView`/`closeVectorIndexModal` 开头清理未完成定时器，防止动画中断残留 display 状态；② **面板高度固定**——`#vectorIndexSelectView` 补 `flex: none` + `height: min(480px, 60vh)`，三种范围下面板高度恒定不再跳动；`.vector-index-footer` 加 `margin-top: auto` 使「全部笔记」时按钮贴底、留白居中；③ **全部笔记信息卡片**——新增 `#vectorIndexAllInfo` 区域，`openVectorIndexModal` 并行 `loadVectorIndexStatus()`（缓存 `GetVectorIndexStatus` 的 noteCount/chunkCount/sizeBytes），`renderVectorIndexAllInfo()` 渲染三张统计卡（待量化 / 已量化+片段 / 涉及笔记本）+ 说明文案（含已量化占用 MB）+ 无笔记空态，切到「全部笔记」时自动刷新统计；另：数据管理导航项「AI 量化索引」改名「量化索引」，卡片标签去掉「已量化 · N 片段」中间点。 |
-| **flexbox 教训（重要）** | `.flex-1`（`flex: 1 1 0%`，flex-basis 0%）元素上设置 `height` 属性会被忽略——此前给 `#vectorIndexSelectView` 加 `height: min(480px,60vh)` 完全无效（用户反馈"没有变化"），必须补 `flex: none` 才生效。修复后选择视图高度由固定值决定，与列表项数量无关，列表区 `flex:1 + min-height:0 + overflow-y:auto` 内部滚动。 |
-| **动画实现** | [data-view.css](frontend/src/css/components/data-view.css)：`.picker-leave`（淡出 + 上移 6px，150ms ease-in）与 `.picker-enter`（淡入 + 下移 8px，200ms spring）动画类 + keyframes，选择器同时覆盖 `.vector-index-picker` 与 `.vector-index-all-info`，均纳入 `prefers-reduced-motion` 禁用列表；[data-management.js](frontend/src/js/data-management.js)：`animateVectorIndexPicker` 快速路径（无可见区域 / 目标即当前）直接展示不播动画，两阶段路径先加 `picker-leave` 再 150ms 定时器切换 display 与入场 class、220ms 后清理，`openVectorIndexModal` 初始范围「全部笔记」直接渲染显示卡片不播动画（弹窗自身有 panelIn 入场）。 |
-| **信息卡片数据** | 全部来自弹窗已加载数据 + 一次状态请求：`vectorIndexNotebooks.length`（笔记本数）、`vectorIndexNotes.length`（总笔记数，`loadVectorIndexNotes` 全量加载）、`vectorIndexStatus`（`GetVectorIndexStatus` → noteCount/chunkCount/sizeBytes）；待量化 = `max(0, 总笔记 − 已量化)`；`total === 0` 时显示「当前没有可量化的笔记」空态。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（`#vectorIndexAllInfo` 区域 + 导航名「量化索引」）、[frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)（picker 动画类/keyframes/reduced-motion + 视图高度固定 + 信息卡片样式 + footer 贴底）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`animateVectorIndexPicker`/`loadVectorIndexStatus`/`renderVectorIndexAllInfo` + `switchVectorIndexScope`/`openVectorIndexModal`/`setVectorIndexView`/`closeVectorIndexModal` 改造 + `vectorIndexPickerTimer`/`vectorIndexStatus` 状态） |
-
----
-
-## 记忆点 2：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
+## 记忆点 1：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 2：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 3：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +648,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 4：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 5：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,7 +671,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 6：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,18 +683,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+## 记忆点 7：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 9 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 8 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
 | **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
 | **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
 
 ---
 
-## 记忆点 9：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 8：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -718,7 +706,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 9：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,6 +716,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **工具链暴露的存量风险** | `mockNotes` 在 [main.js](frontend/src/main.js) 直接引用但无声明/无 window 挂载（定义在 [notification.js](frontend/src/js/notification.js) 内且未导出）——疑似死代码分支；多个已定义未使用的函数（setAIStatus/updateTodoProgress/closeSearchModalDatePicker 等）；项目大量"`window.xxx = ...` 后裸标识符调用"隐式全局（运行正常，但建议逐步改 `window.` 前缀或 import）。 |
 | **搜索框方案演进** | 曾尝试：放大镜图标（left 14px→17px 反复微调后移除）、方案 C 平面样式+列表顶分隔线（用户撤回，恢复凹陷 bg-secondary 样式）。最终保持原始凹陷搜索框样式不变。教训：纯视觉微调尽量一次到位，避免逐像素拉扯。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（侧栏结构 + view-header 三列 grid + 双击标题 + 删除多余 div）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（折叠逻辑/图标切换/双击重命名/startInlineEdit 补 renderSessionList）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（侧栏顶天立地 + 标题栏 grid + 按钮/编辑态样式）、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)、[frontend/.prettierrc.json](frontend/.prettierrc.json)、[frontend/.prettierignore](frontend/.prettierignore)、[frontend/.htmlvalidate.json](frontend/.htmlvalidate.json)、[frontend/package.json](frontend/package.json) |
+
+---
+
+## 记忆点 10：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | Agent 模式新增调用外部 MCP 服务器的能力，**来源为配置文件而非数据库**（测试阶段用户拍板不做 CRUD UI/建表）。配置文件 `mcp-servers.json`（项目根目录，可经 `Deps.MCPServerConfigPath` 覆盖路径），编写规范见 [MCP_CONFIG.md](MCP_CONFIG.md)。新增 [internal/mcpserver](internal/mcpserver) 包：`config.go`（Server/Config 结构 + `Load` 解析校验 + `EnabledServers`）、`client.go`（按 stdio/sse/http 三种传输用 mark3labs/mcp-go 构建客户端 + Start + Initialize 握手）、`tools.go`（基于 eino-ext components/tool/mcp 把服务器工具转 eino `tool.BaseTool`，统一改名 `mcp_{服务器}_{工具}` 防命名冲突 + ActionTextProvider 提供"调用 {服务器} 的 {工具}"文案 + Session/OpenSession/Close 生命周期）。[agent.go](internal/agent/agent.go) `Run()` 在 toolByName 索引构建前并入 MCP 工具，全部经 `WrapWithError` 包装（失败回填模型 + tool_error 事件，不中断 ReAct 循环），单服务器连接失败仅 Warn 跳过，会话随本轮 Run defer 关闭。eino 版本保持 v0.9.13（eino-ext mcp 要求 eino >=v0.6.0，兼容）。 |
+| **配置校验与日志（重要）** | `Load` 整体性错误（文件缺失/JSON 语法错误）返回 error 跳过全部 MCP 装配（Debug 日志）；**单条服务器校验失败仅跳过该条**，错误收集到 `Config.LoadErrors`（错误信息带 `server[i]` 索引定位），其余合法服务器正常装配，agent.go 逐条 Warn 告警（此前实现是"一条非法全盘跳过"的坑，已修）。每台服务器装配成功打 Info 日志（`MCP 服务器工具已上线 server=xxx count=N tools=...`，tools 为改名后名称）便于排查。`enabled` 默认 false（安全考量）：stdio 可执行任意命令、sse/http 可执行远程工具操作，env 密钥明文在配置文件。 |
+| **测试服务器** | [playground/mcp-math](playground/mcp-math)（add/multiply/sqrt）与 [playground/mcp-text](playground/mcp-text)（to_uppercase/to_lowercase/word_count）两个独立 Go module（mark3labs/mcp-go stdio 传输），已编译 exe 并写入 `mcp-servers.json` 启用；参数解析兼容 map / JSON 字符串 / RawMessage 三种客户端传参形态。单测覆盖：config_test.go（合法/非法/混合跳过）+ tools_test.go（内存 SSE 服务器全链路：握手→工具发现→前缀改名→真实调用→关闭）。 |
+| **设计决策** | 测试阶段确定**不做 CRUD UI/数据库表**（用户权衡：文件配置成本低、改完即生效、可版本控制），正式发布如需 UI 可把 mcp-servers.json 作为导入源平滑迁移（非互斥）。连接生命周期采用**每轮对话重连**（非长连接缓存）：实现简单、无残留连接、工具列表每轮刷新，stdio 子进程启动开销可接受；后续如需优化可升级为连接缓存。 |
+| **涉及文件** | [internal/mcpserver/config.go](internal/mcpserver/config.go)、[internal/mcpserver/client.go](internal/mcpserver/client.go)、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)、[internal/mcpserver/config_test.go](internal/mcpserver/config_test.go)、[internal/mcpserver/tools_test.go](internal/mcpserver/tools_test.go)、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerConfigPath + 装配/日志）、[mcp-servers.json](mcp-servers.json)、[MCP_CONFIG.md](MCP_CONFIG.md)（配置规范）、[playground/mcp-math](playground/mcp-math)、[playground/mcp-text](playground/mcp-text) |
 
 ---
 

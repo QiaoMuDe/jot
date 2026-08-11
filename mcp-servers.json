@@ -1,0 +1,22 @@
+{
+  "servers": [
+    {
+      "name": "math",
+      "transport": "stdio",
+      "command": "playground/mcp-math/mcp-math.exe",
+      "args": [],
+      "env": {},
+      "url": "",
+      "enabled": true
+    },
+    {
+      "name": "text",
+      "transport": "stdio",
+      "command": "playground/mcp-text/mcp-text.exe",
+      "args": [],
+      "env": {},
+      "url": "",
+      "enabled": true
+    }
+  ]
+}
