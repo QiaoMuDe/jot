@@ -660,19 +660,23 @@ function bindEvents() {
     // 侧栏折叠/展开
     const toggleBtn = document.getElementById('aiSidebarToggle');
     const sidebar = document.querySelector('.ai-session-sidebar');
-    const chevronLeft = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
-    const chevronRight = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+    const headerToolsEl = document.querySelector('.ai-chat-header-tools');
+    // 面板图标：panel-left-open（面板+右箭头=展开侧栏）/ panel-left-close（面板+左箭头=折叠侧栏）
+    const panelOpenIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg>';
+    const panelCloseIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>';
 
     if (toggleBtn && sidebar) {
         // 恢复保存的状态 (默认展开) 
         const saved = localStorage.getItem('ai_sidebar_collapsed');
         if (saved === 'false') {
             sidebar.classList.add('collapsed');
-            toggleBtn.innerHTML = chevronLeft;
+            headerToolsEl?.classList.add('collapsed');
+            toggleBtn.innerHTML = panelOpenIcon;
             toggleBtn.title = '展开侧栏';
         } else {
             sidebar.classList.remove('collapsed');
-            toggleBtn.innerHTML = chevronRight;
+            headerToolsEl?.classList.remove('collapsed');
+            toggleBtn.innerHTML = panelCloseIcon;
             toggleBtn.title = '折叠侧栏';
         }
     }
@@ -682,7 +686,8 @@ function bindEvents() {
         if (!toggleBtn || !sidebar) return;
         const wasCollapsed = sidebar.classList.contains('collapsed');
         const isCollapsed = sidebar.classList.toggle('collapsed');
-        toggleBtn.innerHTML = isCollapsed ? chevronLeft : chevronRight;
+        headerToolsEl?.classList.toggle('collapsed', isCollapsed);
+        toggleBtn.innerHTML = isCollapsed ? panelOpenIcon : panelCloseIcon;
         toggleBtn.title = isCollapsed ? '展开侧栏' : '折叠侧栏';
         localStorage.setItem('ai_sidebar_collapsed', String(!isCollapsed));
         // 从折叠变为展开时，刷新会话列表

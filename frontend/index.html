@@ -1103,17 +1103,23 @@
         <!-- 视图 7: AI 对话页面 -->
         <div id="viewAiChat" class="view">
             <div class="view-header">
-                <button class="back-btn" id="aiChatBackBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> 返回</button>
+                <!-- 左上角侧栏头部区：返回 / 折叠 / 会话标题 / 新建（顶天立地侧栏） -->
+                <div class="ai-chat-header-tools">
+                    <button class="back-btn" id="aiChatBackBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> 返回</button>
+                    <button id="aiSidebarToggle" class="ai-tool-btn" title="展开侧栏">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg>
+                    </button>
+                    <span class="ai-session-sidebar-title" id="aiSessionTitle">会话</span>
+                    <button id="aiSessionNewBtn" class="ai-tool-btn" title="新建会话">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                </div>
                 <h2 class="view-title" id="aiChatTitle">AI 助手</h2>
                 <div class="view-controls"><span id="aiChatContextSize" class="ai-context-size"></span></div>
             </div>
             <div class="ai-chat-layout">
-                <!-- 左侧会话侧栏 -->
+                <!-- 左侧会话侧栏（顶天立地，头部已并入顶部栏） -->
                 <div class="ai-session-sidebar">
-                    <div class="ai-session-sidebar-header">
-                        <span class="ai-session-sidebar-title" id="aiSessionTitle">会话</span>
-                        <button id="aiSessionNewBtn" class="ai-session-new-btn" title="新建会话">+</button>
-                    </div>
                     <div class="ai-session-search-wrap">
                         <input type="text" id="aiSessionSearch" class="ai-session-search" placeholder="搜索会话..." />
                     </div>
@@ -1124,10 +1130,6 @@
                         <button id="aiChatClearBtn" class="ai-session-clear-btn">清空当前对话</button>
                     </div>
                 </div>
-                <!-- 侧栏折叠/展开按钮（侧栏外部，避免 overflow:hidden 裁剪） -->
-                <button id="aiSidebarToggle" class="ai-sidebar-toggle" title="展开侧栏">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
                 <!-- 右侧对话区 -->
                 <div class="ai-chat-content">
                     <!-- 未配置 AI 时的提示 -->
