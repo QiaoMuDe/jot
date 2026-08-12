@@ -65,7 +65,7 @@ func (w *webSearchTool) ActionText(argumentsInJSON string) string {
 func (w *webSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "web_search",
-		Desc: "搜索互联网获取实时信息。当用户询问新闻、天气、最新动态、人物、事件等需要联网获取实时或外部信息的问题时调用。可根据问题性质自主选择搜索来源（sources 参数，可选）：tavily 为通用互联网搜索，适合时事、新闻、一般性问题；zhihu_search 为知乎站内搜索，适合知乎相关话题、经验观点类问题；zhihu_global 为知乎全网搜索，可在需要全网信息时补充检索。需要多个来源时可传入多个值；不传或传空则搜索全部可用来源。如果查询词是口语化表达、含义模糊或包含多个话题，请先调用 refine_search_query 工具精炼，再使用精炼后的关键词作为本工具的 query。",
+		Desc: "搜索互联网获取实时信息。当用户询问新闻、天气、最新动态、人物、事件等需要联网获取实时或外部信息的问题时调用；当本地笔记检索（recall_notes）未返回足够内容时，也应调用本工具补充信息。可根据问题性质自主选择搜索来源（sources 参数，可选）：tavily 为通用互联网搜索，适合时事、新闻、一般性问题；zhihu_search 为知乎站内搜索，适合知乎相关话题、经验观点类问题；zhihu_global 为知乎全网搜索，可在需要全网信息时补充检索。需要多个来源时可传入多个值；不传或传空则搜索全部可用来源。如果查询词是口语化表达、含义模糊或包含多个话题，请先调用 refine_search_query 工具精炼，再使用精炼后的关键词作为本工具的 query。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
