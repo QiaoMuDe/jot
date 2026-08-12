@@ -6299,7 +6299,7 @@ function getScrollContainer() {
 // FindReplaceManager 已删除（CM6 search 替代）
 
 /**
- * 处理键盘快捷键（Ctrl+Home/End, PgUp/PgDn, Ctrl+F, Ctrl+H）
+ * 处理键盘快捷键（Ctrl/Cmd+Home/End, PgUp/PgDn, Ctrl/Cmd+F, Ctrl/Cmd+H）
  */
 async function handleKeyboardNavigation(e) {
     const container = getScrollContainer();
@@ -6318,8 +6318,8 @@ async function handleKeyboardNavigation(e) {
         }
     }
 
-    // Ctrl+S: 编辑器内保存（编辑/新建模式有效，查看模式忽略）
-    if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+    // Ctrl/Cmd+S: 编辑器内保存（编辑/新建模式有效，查看模式忽略）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active') && els.editorSaveBtn.style.display !== 'none') {
             (state.editingNoteId ? updateNote(state.editingNoteId) : createNote());
@@ -6327,8 +6327,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）;编辑器外则打开搜索弹窗
-    if (e.ctrlKey && e.key === 'f') {
+    // Ctrl/Cmd+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）;编辑器外则打开搜索弹窗
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active') && cmEditor) {
             // 预览模式自动切回编辑模式
@@ -6351,8 +6351,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+H: 编辑器内查找替换（仅在编辑模式生效）
-    if (e.ctrlKey && e.key === 'h') {
+    // Ctrl/Cmd+H: 编辑器内查找替换（仅在编辑模式生效）
+    if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active') && cmEditor && els.editorOverlay.dataset.mode !== 'preview') {
             openSearchPanel(cmEditor);
@@ -6360,8 +6360,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+N: 打开新建笔记（编辑器未打开时）
-    if (e.ctrlKey && e.key === 'n') {
+    // Ctrl/Cmd+N: 打开新建笔记（编辑器未打开时）
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
         if (!els.viewEditor.classList.contains('active')) {
             openEditor(null, false, getNoteOpenFullscreen());
@@ -6369,16 +6369,16 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+L: 编辑器打开时切换编辑/预览模式（仅 Markdown 模式支持）
-    if (e.ctrlKey && (e.key === 'l' || e.key === 'L') && els.viewEditor.classList.contains('active') && els.editorFileExt.textContent === '.md') {
+    // Ctrl/Cmd+L: 编辑器打开时切换编辑/预览模式（仅 Markdown 模式支持）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L') && els.viewEditor.classList.contains('active') && els.editorFileExt.textContent === '.md') {
         e.preventDefault();
         const current = els.editorOverlay.dataset.mode;
         switchEditorMode(current === 'preview' ? 'edit' : 'preview');
         return;
     }
 
-    // Ctrl+J: AI 助手侧栏折叠/展开（仅 AI 助手视图生效）
-    if (e.ctrlKey && (e.key === 'j' || e.key === 'J') && state.currentView === 'ai-chat') {
+    // Ctrl/Cmd+J: AI 助手侧栏折叠/展开（仅 AI 助手视图生效）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J') && state.currentView === 'ai-chat') {
         e.preventDefault();
         if (typeof window.toggleAISessionSidebar === 'function') {
             window.toggleAISessionSidebar();
@@ -6386,8 +6386,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+E: 切换编辑器全屏模式（仅编辑器打开时有效）
-    if (e.ctrlKey && (e.key === 'e' || e.key === 'E')) {
+    // Ctrl/Cmd+E: 切换编辑器全屏模式（仅编辑器打开时有效）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active')) {
             toggleEditorFullscreen();
@@ -6395,8 +6395,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+P: 打开/关闭启动器网格
-    if (e.ctrlKey && (e.key === 'p' || e.key === 'P')) {
+    // Ctrl/Cmd+P: 打开/关闭启动器网格
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
         // 编辑器/查看器/新建页面打开时屏蔽启动器
         if (els.viewEditor.classList.contains('active')) return;
@@ -6422,8 +6422,8 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl+Q: 退出程序（全局生效，退出前提示保存）
-    if (e.ctrlKey && (e.key === 'q' || e.key === 'Q')) {
+    // Ctrl/Cmd+Q: 退出程序（全局生效，退出前提示保存）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'q' || e.key === 'Q')) {
         e.preventDefault();
         await handleAppExit();
         return;
@@ -6586,22 +6586,22 @@ async function handleKeyboardNavigation(e) {
         }
     }
 
-    // 编辑器打开时，Ctrl+Home/End 和 PgUp/PgDn 交由编辑器/textarea 原生处理
+    // 编辑器打开时，Ctrl/Cmd+Home/End 和 PgUp/PgDn 交由编辑器/textarea 原生处理
     if (els.viewEditor.classList.contains('active') &&
-        ((e.ctrlKey && (e.key === 'Home' || e.key === 'End')) || e.key === 'PageUp' || e.key === 'PageDown')) {
+        (((e.ctrlKey || e.metaKey) && (e.key === 'Home' || e.key === 'End')) || e.key === 'PageUp' || e.key === 'PageDown')) {
         return;
     }
 
     if (!container) return;
 
-    // Ctrl+Home: 滚动到顶部
-    if (e.ctrlKey && e.key === 'Home') {
+    // Ctrl/Cmd+Home: 滚动到顶部
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Home') {
         e.preventDefault();
         container.scrollTop = 0;
         return;
     }
-    // Ctrl+End: 加载所有剩余页后跳到底部
-    if (e.ctrlKey && e.key === 'End') {
+    // Ctrl/Cmd+End: 加载所有剩余页后跳到底部
+    if ((e.ctrlKey || e.metaKey) && e.key === 'End') {
         e.preventDefault();
         if (hasMoreNotes && !isLoadingMore) {
             loadAllRemainingNotes();
