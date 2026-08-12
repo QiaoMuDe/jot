@@ -29,7 +29,9 @@ git_version = '@git describe --tags --always --dirty'
 ldflags = "-s -w -X 'gitee.com/MM-Q/verman.appName={{app_name}}' -X 'gitee.com/MM-Q/verman.gitVersion={{git_version}}'"
 main_path = '.'
 output_dir = './build/bin'
-release_name = '{{app_name}}_windows_amd64_{{git_version}}.zip'
+release_name_darwin = '{{app_name}}_darwin_amd64_{{git_version}}.tar.gz'
+release_name_linux = '{{app_name}}_linux_amd64_{{git_version}}.tar.gz'
+release_name_windows = '{{app_name}}_windows_amd64_{{git_version}}.zip'
 
 # 任务定义
 [task]
@@ -104,7 +106,7 @@ cmds = [
 work_dir = ''
 # 依赖任务列表
 depends_on = []
-# 后继任务列表：前端构建完成后执行代码检查
+# 后继任务列表
 run_after = [
     'fclint'
 ]
@@ -115,11 +117,83 @@ internal = false
 
 [task.release]
 # 任务描述
-desc = '发布程序'
+desc = '发布程序 (按当前平台自动执行对应发布任务) '
+# 命令列表
+cmds = [
+    'echo "release 已按当前平台分发，请查看上方各平台任务输出"'
+]
+# 任务工作目录
+work_dir = ''
+# 依赖任务列表
+depends_on = [
+    'release_windows',
+    'release_linux',
+    'release_darwin'
+]
+# 后继任务列表
+run_after = []
+# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
+platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
+
+[task.release_darwin]
+# 任务描述
+desc = '发布 macOS 程序 (tar.gz 包，无 UPX) '
+# 命令列表
+cmds = [
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -clean',
+    'fck pack -o {{output_dir}}/{{release_name_darwin}} {{output_dir}}/{{app_name}}.app',
+    'fck rm -f -r {{output_dir}}/{{app_name}}.app'
+]
+# 任务工作目录
+work_dir = ''
+# 依赖任务列表
+depends_on = [
+    'frontend',
+    'fc'
+]
+# 后继任务列表
+run_after = []
+# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
+platform = [
+    'darwin'
+]
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
+
+[task.release_linux]
+# 任务描述
+desc = '发布 Linux 程序 (tar.gz 包) '
+# 命令列表
+cmds = [
+    'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -upxflags="-2" -clean',
+    'fck pack -o {{output_dir}}/{{release_name_linux}} {{exe_path}}',
+    'fck rm -f {{exe_path}}'
+]
+# 任务工作目录
+work_dir = ''
+# 依赖任务列表
+depends_on = [
+    'frontend',
+    'fc'
+]
+# 后继任务列表
+run_after = []
+# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
+platform = [
+    'linux'
+]
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
+
+[task.release_windows]
+# 任务描述
+desc = '发布 Windows 程序 (含 NSIS 安装器) '
 # 命令列表
 cmds = [
     'wails build -ldflags "{{ldflags}}" -o {{exe_name}} -trimpath -upx -upxflags="-2" -clean -nsis',
-    'fck pack -o {{output_dir}}/{{release_name}} {{exe_path}}',
+    'fck pack -o {{output_dir}}/{{release_name_windows}} {{exe_path}}',
     'fck rm -f {{exe_path}}',
     'fck mv -f {{output_dir}}/jot-amd64-installer.exe {{output_dir}}/jot_windows_amd64_installer_{{git_version}}.exe'
 ]
@@ -133,7 +207,9 @@ depends_on = [
 # 后继任务列表
 run_after = []
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
-platform = []
+platform = [
+    'windows'
+]
 # 是否为内部任务 (true 时不显示在任务列表中)
 internal = false
 
