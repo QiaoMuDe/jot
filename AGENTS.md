@@ -611,22 +611,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 26. **sqlite-vec 函数式向量召回**：卡片召回已从 gse 关键词召回彻底切换为 sqlite-vec 函数式向量召回。`modernc.org/sqlite` 升级 v1.51.0（含 vec 子包 v0.1.9），[db.go](internal/database/db.go) blank import `_ "modernc.org/sqlite/vec"` 注册扩展（sqlite3_auto_extension 自动生效，测试包需自行 import）。[vector_service.go](internal/services/vector_service.go) `VectorRecall`：query 向量 `json.Marshal` 为 JSON 数组字符串，`vec_f32(?)` SQL 内解析；`vec_distance_cosine(embedding, vec_f32(?)) < 1.0` 过滤（dist<1.0 等价 score>0）+ 距离升序 LIMIT TopN；**无条件 JOIN notes 过滤软删除笔记**（回收站笔记不参与召回，全库/指定笔记本行为统一；指定笔记本时 ON 追加 `notebook_id IN ?`；列必须加 `note_vectors.` 前缀防 id 歧义，**JOIN 必须紧跟 FROM、位于 WHERE 之前**，否则运行时报 `near "JOIN": syntax error`）；命中后二次查询该笔记全部块补相邻块（前后各 1）并按笔记合并卡片（单卡 1200 rune 截断）。`recall_service.go` 仅剩类型与合并/截断工具，`cosineSimilarity`（Go 全表扫描）已删，`Float32ToBlob`/`BlobToFloat32` 保留。embedClient/Model 为空或当前模型无向量数据时静默跳过（Debugw 日志）。**向量生命周期**：笔记永久删除（PermanentDelete / EmptyTrash / CleanExpiredTrash）时在 note_service 内联动清理 NoteVector（软删除不动向量，恢复后可直接用）。测试教训：SQL 拼接测试必须完整复刻真实代码顺序，否则测试过但运行时炸。
 
----
-
-## 记忆点 1：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 五组改动重构 AI 对话输入区：① **一体式输入坞 Composer**——[index.html](frontend/index.html) 将原「独立工具行 + chips bar + 输入行」重构为 `.ai-chat-composer` 单容器（上层多行 textarea + 下层内嵌工具行 + 最右圆形发送/停止按钮竖排贴底），[ai-chat.css](frontend/src/css/components/ai-chat.css) 圆角 16px 胶囊 + accent 30% 混合浅描边 + `--card-bg` 白底；工具行按钮间距 `gap: 10px`，`+ 添加` 右侧细竖线分隔；追问引用/笔记引用/技能/上传文件 chips 条移出容器，悬浮于容器上方（`gap: 6px`）；② **背景融合**——`.ai-chat-input-area` 背景与消息列表同色（`--bg`）通栏无圆角，composer 卡片 `--card-bg`；消息区底部 `::after` 渐变遮罩（40px 渐变到 `--bg`）实现沉入效果；底部留白 8+8=16px；③ **聚焦动效**——`:focus-within` 4px 光环（accent 26%，呼吸峰值 28%）+ 三层光晕扩散（24/56/96px blur，accent 12%/8%/4%）+ `ai-composer-glow` 呼吸动画 2.6s + 边框流光（`@property --composer-flow-angle` + `::after` conic-gradient 光带 + `mask-composite: exclude` 裁成 1px 圆角环，3.5s 旋转）；常态阴影三层（`--shadow-elevated/dropdown/modal`，中距/远距负扩散 `-8/-20px` 偏底部投影）；④ **联网搜索/卡片召回一体按钮**——拆出的独立箭头按钮回滚，恢复单按钮，click 用 `e.clientX` 坐标分流：左侧 2/3 批量开关（联网全选/全取消搜索源，召回 `ValidateCardRecall` 校验+全选/全取消笔记本）、右侧 1/3 展开菜单（命中区 `Math.max(30, rect.width*0.33)` 保护）；`mousemove`/`mouseleave` 驱动 `.arrow-hover` 箭头悬停变色 + `.menu-open` 菜单展开期间箭头保持高亮；⑤ **Chat/Agent 分段切换滑块**——`.ai-chat-mode-switch::before` 伪元素做滑块（`width: calc(50% - 2px)`），`:has(.ai-chat-mode-option[data-mode="agent"].active)` 驱动 `translateX(100%)` 弹性滑动（`cubic-bezier(0.34,1.56,0.64,1)` 0.25s），按钮 `flex: 1 + min-width: 44px` 等宽贴合、`z-index: 1` 浮于滑块之上，`:active scale(0.93)` 按压回弹，原 active 白底/阴影由滑块承担 |
-| **JS 零改动原则** | 本轮全部为 HTML/CSS 改动，JS 零改动：JS 依赖的 `.ai-chat-toolbar`（Agent 模式隐藏）、`.ai-chat-input-wrap`（优化按钮/打字光标）、`.ai-chat-toggle-switch`（点击代理，DOM 保留但 CSS 隐藏）、`classList.contains('active')` 状态读取、设置页 `__syncRecallNotebooks` 全部兼容；Chat/Agent 滑块由 `:has()` 驱动跟随 active class，无需 JS 同步 transform |
-| **构建教训（重要）** | **Wails 桌面应用前端资源打包进 exe（`go:embed all:frontend/dist`），修改前端源码后必须重新构建才生效**：源码改了但 `frontend/dist` 未更新时，运行的应用加载的是旧 CSS/JS（本次踩坑：dist 产物比源码旧 35 分钟，用户反馈"样式没生效"实为旧产物）。开发流程：`cd frontend && npm run build` → `wails build`。验证时先对比 `dist` 与源码 `LastWriteTime` |
-| **WebView2 兼容性验证** | `:has()`（Chrome 105+）、`@property` 动画（Chrome 85+）、`color-mix()`（Chrome 111+）在 Wails WebView2 全部可用；`@property` 经 Vite 3 + esbuild CSS minify 后保留不被丢弃（在 `frontend/dist/assets/index.*.css` 中可搜到 `composer-flow-angle`）；`mask-composite: exclude` 需同时写 `-webkit-mask-composite: xor` 双前缀 |
-| **阴影负扩散认知** | box-shadow 负 spread（如 `0 8px 24px -8px`）会把模糊向内收窄，四周光晕消失只剩底部投影（适合"贴地"阴影）；spread=0 时 blur 向四周均匀铺开（笔记卡片 `--shadow-md` 风格，四向均有阴影）。本次曾放开负扩散做四周阴影 + 聚焦 `translateY(-2px)` 浮动，用户要求撤销——最终保留负扩散偏底部投影、无位移 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（`.ai-chat-composer` 结构 + 一体按钮 + Chat/Agent 分段）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（composer 全部样式 + 聚焦动效 + 滑块 + 一体按钮提示态）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（联网/召回一体按钮坐标分流 + mousemove 悬停提示） |
+27. **Agent 内置工具开关配置 + fclint 前端检查任务**：`ai_agent_tools_disabled` 黑名单（默认全注册）控制 10 个内置工具注册（注册级过滤，被禁工具模型不可见）；设置页「Agent 工具」下拉多选（英文名+中文说明，关闭浮层汇总 toast）；Rnx.toml `fclint` 任务（lint + validate:html）挂 frontend 的 run_after。详见 [registry.go](internal/agent/registry.go)、[tools/meta.go](internal/agent/tools/meta.go)、[app.go](app.go)、[Rnx.toml](Rnx.toml)
 
 ---
 
-## 记忆点 2：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 1：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 2：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -649,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 3：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 4：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+## 记忆点 5：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,7 +672,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 6：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,7 +684,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 7：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -708,7 +697,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 8：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -720,7 +709,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 9：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,6 +717,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **typed-nil 接口 panic（重要教训）** | 测试暴露 **stdio 命令不存在时应用 panic 崩溃**：`NewStdioMCPClient` 失败返回 `(*Client)(nil)`，赋给接口后 `cli != nil` 误判为真，`Close()` 对 nil 指针 panic。修复：stdio 分支先判错再赋接口 + `safeClose`（reflect 校验底层指针）防御兜底。**凡是构造函数可能返回 nil 指针的，赋接口前必须显式判 err**；接口判空 ≠ 指针判空。 |
 | **装配小优化** | ① for 循环内 defer 改为收集 `mcpSessions` 末尾统一关闭（可读性 + 提前 return 不延迟关闭）；② `mcpTool.Info` 缓存改名结果（消除装配/框架多次调用重复 JSON deepcopy），返回浅拷贝副本防共享污染（测试验证修改返回值不影响缓存）；③ 单工具 Info 失败跳过计数进 `Session.Skipped` + Warn 日志；④ golangci-lint govet inline 检查：`reflect.Ptr` 弃用别名 → `reflect.Pointer`。 |
 | **涉及文件** | [internal/config/config.go](internal/config/config.go)（新建，统一路径）、[internal/database/db.go](internal/database/db.go)（DefaultDBPath/BackupDir 收敛）、[app.go](app.go)（logs/images 收敛 + startup EnsureConfig + 回退 LoadDefault）、[main.go](main.go)（logs 收敛）、[internal/mcpserver/config.go](internal/mcpserver/config.go)（DefaultConfigPath/LoadDefault/EnsureConfig + config_test.go）、[internal/mcpserver/client.go](internal/mcpserver/client.go)（ConnectTimeout + wrapConnectError + safeClose）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（Info 缓存 + Skipped 统计）、[internal/agent/agent.go](internal/agent/agent.go)（回退 LoadDefault + 报错退出 + MaxIterations + 统一关闭 + duration_ms）、[playground/agent-demo/main.go](playground/agent-demo/main.go)（MaxIterations=20 同步）、[internal/mcpserver/MCP_CONFIG.md](internal/mcpserver/MCP_CONFIG.md)（自动初始化说明）、[internal/agent/doc.go](internal/agent/doc.go) |
+
+---
+
+## 记忆点 10：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增 Agent 内置工具启用配置，控制注册给 Agent 的工具集（默认全部注册）：① **存储**——Setting KV `ai_agent_tools_disabled`（**黑名单**语义，JSON 数组字符串，默认空 = 全启用；未来新增内置工具自动默认可用），[db.go](internal/database/db.go) `InitDefaultSettings` 补默认值，[types.go](internal/services/types.go) `SettingsConfig` 新增字段 + Get/Save 映射；② **后端**——[tools/meta.go](internal/agent/tools/meta.go) 新增 `BuiltinTools()` 返回 10 个工具英文名 + 中文说明（单一事实来源），[registry.go](internal/agent/registry.go) `buildTools` 按禁用集合过滤（**注册级**：被禁工具不进模型工具列表、不会误调），[types.go](internal/agent/types.go) `Request.DisabledTools` + `agent.ToolMeta`，[app.go](app.go) `CallAIAgentStream` 读设置解析传入（解析失败按空=全启用静默降级）+ 新增 `GetAgentTools()` 绑定供前端渲染（含启用状态）；③ **前端**——[index.html](frontend/index.html)「对话与搜索」面板尾部新增「Agent 工具」设置项 + 下拉浮层（checkbox + 英文工具名 + 中文说明，默认全选），[main.js](frontend/src/main.js) 浮层渲染/开合（点击外部/ESC/切换设置面板自动关闭）、勾选即时保存、按钮显示「已启用 N/10」、**关闭浮层时汇总 toast**（`agentToolsChanges` 记录净变更：`工具配置已保存：禁用 2 个工具，启用 1 个工具`）、打开时 `scrollTop=0`、aria-expanded 同步；[settings-panel.css](frontend/src/css/components/settings-panel.css) 浮层**向上弹出**（`bottom: calc(100%+8px)`）+ 460px 宽（max-width:100% 防溢出）+ 描述 ellipsis 截断 + hover/active/打开态动效（弹性回弹 `cubic-bezier(0.34,1.56,0.64,1)`，按下 `scale(0.93)`）。 |
+| **类名冲突踩坑（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 全局规则 `.ai-chat-toggle-switch { display: none; }`（工具栏开关改按钮式时加的，隐藏迷你 switch）会**连坐设置页复用同类名的开关**——设置页深度思考/卡片召回/知乎/Tavily/全网搜索 5 个开关全部隐身。设置页复用公共类必须在 [settings-panel.css](frontend/src/css/components/settings-panel.css) 显式恢复 `display: inline-block` 并补齐基础样式（28×16 圆角胶囊 + 12px 圆点 knob 位移 left 14px），否则开关对用户不可见。 |
+| **Rnx fclint 任务** | [Rnx.toml](Rnx.toml) 新增独立任务 `fclint`（`cd frontend && npm run lint` + `cd frontend && npm run validate:html`），挂 frontend 的 **run_after**（构建完成后执行检查，非前置依赖），可单独 `rnx -r fclint` 或随 build/run/release 自动执行；lint 当前 0 errors/90 warnings（warning 为配置降级，不阻塞任务）。 |
+| **涉及文件** | [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/types.go](internal/agent/types.go)、[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[Rnx.toml](Rnx.toml) |
 
 ---
 

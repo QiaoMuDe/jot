@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"jot/internal/agent"
+	"jot/internal/agent/tools"
 	"jot/internal/aierrors"
 	"jot/internal/config"
 	"jot/internal/database"
@@ -2572,10 +2573,21 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			return
 		}
 
+		// 读取禁用工具集合（JSON 数组字符串），解析失败按空处理（默认全部启用）
+		var disabledTools []string
+		if raw := a.settingService.Get("ai_agent_tools_disabled"); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &disabledTools); err != nil {
+				disabledTools = nil
+				a.LogSvc.Logger.Warnw("解析 ai_agent_tools_disabled 失败，按空处理（全部工具启用）",
+					fastlog.String("raw", raw), fastlog.Error(err))
+			}
+		}
+
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
 		a.LogSvc.Logger.Debugw("AI Agent 流开始",
 			fastlog.Int("history_count", len(history)),
 			fastlog.Int("skill_count", len(skillIds)),
+			fastlog.Int("disabled_tool_count", len(disabledTools)),
 		)
 		result, err := a.AgentSvc.Run(ctx, agent.Request{
 			SessionID:         sessionID,
@@ -2586,6 +2598,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			SkillIDs:          skillIds,
 			RecallNotebookIDs: recallNotebookIDs,
 			UserMsgID:         userMsgID,
+			DisabledTools:     disabledTools,
 		}, func(ev, data string) {
 			runtime.EventsEmit(a.ctx, ev, data)
 		})
@@ -2672,6 +2685,27 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.SearchSources, result.RecallCards, result.ToolCalls, result.ReasoningContent)
 		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
 	}()
+}
+
+// GetAgentTools 返回 Agent 内置工具清单（含中文说明与当前启用状态），供前端工具开关配置使用。
+// 禁用集合读取设置 ai_agent_tools_disabled（JSON 数组字符串），解析失败按空处理（默认全部启用）。
+func (a *App) GetAgentTools() []agent.ToolMeta {
+	var disabled []string
+	if raw := a.settingService.Get("ai_agent_tools_disabled"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &disabled); err != nil {
+			disabled = nil
+		}
+	}
+	disabledSet := make(map[string]bool, len(disabled))
+	for _, name := range disabled {
+		disabledSet[name] = true
+	}
+	metas := tools.BuiltinTools()
+	result := make([]agent.ToolMeta, 0, len(metas))
+	for _, m := range metas {
+		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name]})
+	}
+	return result
 }
 
 // CallAIStreamRegenerate 重新生成 AI 回复（不加用户消息，复用末条用户消息）。

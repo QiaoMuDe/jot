@@ -114,7 +114,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	collector := &tools.Collector{}
 	var toolRecords []tools.Record
 	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
-	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx})
+	// 禁用工具集合转 map（黑名单语义：默认空 = 全部注册，被禁工具模型不可见）
+	disabledTools := make(map[string]bool, len(req.DisabledTools))
+	for _, name := range req.DisabledTools {
+		disabledTools[name] = true
+	}
+	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools)
 
 	// 追加外部 MCP 服务器工具（测试阶段，配置文件驱动）：读取 ~/.jot/mcp/mcp-servers.json，
 	// 对每个 enabled 服务器连接并发现工具，改名后并入 toolList（须在 toolByName 索引构建之前）；

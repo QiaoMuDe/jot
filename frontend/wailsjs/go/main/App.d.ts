@@ -3,6 +3,7 @@
 import {services} from '../models';
 import {main} from '../models';
 import {models} from '../models';
+import {agent} from '../models';
 
 export function AITextOperation(arg1:string,arg2:string):Promise<string>;
 
@@ -95,6 +96,8 @@ export function GetAIConfig():Promise<services.AIConfig>;
 export function GetAISearchResultLimit():Promise<number>;
 
 export function GetAISessions():Promise<Array<services.AISessionSummary>>;
+
+export function GetAgentTools():Promise<Array<agent.ToolMeta>>;
 
 export function GetAllNoteIDs():Promise<Array<number>>;
 

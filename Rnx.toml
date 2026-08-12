@@ -9,7 +9,7 @@ work_dir = '.'
 # 超时时间
 timeout = '120s'
 # 是否显示输出
-show_output = true
+show_output = false
 # 任务执行失败时是否退出程序
 exit_on_error = true
 # 是否显示执行的命令
@@ -73,6 +73,25 @@ platform = []
 # 是否为内部任务 (true 时不显示在任务列表中)
 internal = false
 
+[task.fclint]
+# 任务描述
+desc = '检查前端代码质量与 HTML 规范性'
+# 命令列表
+cmds = [
+    'cd frontend && npm run lint',
+    'cd frontend && npm run validate:html'
+]
+# 任务工作目录
+work_dir = ''
+# 依赖任务列表
+depends_on = []
+# 后继任务列表
+run_after = []
+# 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
+platform = []
+# 是否为内部任务 (true 时不显示在任务列表中)
+internal = false
+
 [task.frontend]
 # 任务描述
 desc = '构建前端资源'
@@ -85,8 +104,10 @@ cmds = [
 work_dir = ''
 # 依赖任务列表
 depends_on = []
-# 后继任务列表
-run_after = []
+# 后继任务列表：前端构建完成后执行代码检查
+run_after = [
+    'fclint'
+]
 # 支持运行的平台, 为空时表示支持所有平台(支持配置为: windows, linux, darwin)
 platform = []
 # 是否为内部任务 (true 时不显示在任务列表中)

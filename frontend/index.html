@@ -738,6 +738,22 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- Agent 工具 -->
+                        <div class="ai-setting-item" id="aiAgentToolsSettingItem">
+                            <span class="ai-setting-label">Agent 工具</span>
+                            <span class="font-setting-desc">控制 Agent 模式可调用的内置工具</span>
+                            <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                                <button id="aiAgentToolsBtn" class="btn btn-sm btn-secondary" aria-expanded="false" aria-controls="aiAgentToolsPopover">
+                                    <span id="aiAgentToolsBtnText">已启用 10/10</span>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </button>
+                                <div id="aiAgentToolsPopover" class="ai-agent-tools-popover" hidden>
+                                    <div id="aiAgentToolsList"></div>
+                                </div>
+                            </div>
+                        </div>
                 </div>
 
                 <!-- 标签管理 -->

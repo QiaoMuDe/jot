@@ -1019,9 +1019,20 @@
   left: 14px;
 }
 
-/* AI 设置项三栏布局中的 toggle 开关（ai-setting-item > ai-setting-control > .ai-chat-toggle-switch） */
+/* AI 设置项三栏布局中的 toggle 开关（ai-setting-item > ai-setting-control > .ai-chat-toggle-switch）
+   注：ai-chat.css 全局将 .ai-chat-toggle-switch 隐藏（工具栏按钮式开关改造），
+   设置页仍以迷你 switch 呈现，故在此恢复显示并补齐基础样式（knob 样式见 ai-chat.css） */
 .ai-setting-item .ai-setting-control .ai-chat-toggle-switch {
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  flex-shrink: 0;
   cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.2s;
 }
 
 .ai-setting-item .ai-setting-control .ai-chat-toggle-switch.active {
@@ -1544,5 +1555,124 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 4px 24px 20px;
+}
+
+/* ==========================================================================
+   Agent 工具设置浮层（对话与搜索面板）
+   ========================================================================== */
+
+/* 设置项作为浮层的定位上下文（仅该设置项，不影响其它布局） */
+#aiAgentToolsSettingItem {
+  position: relative;
+}
+
+/* 按钮内下拉箭头：浮层打开时旋转 180° */
+#aiAgentToolsBtn svg {
+  transition: transform 0.2s ease;
+}
+
+#aiAgentToolsBtn.open svg {
+  transform: rotate(180deg);
+}
+
+/* 按钮动效：hover 上浮 + accent 边框高亮，按下弹性回弹，打开态保持高亮 */
+#aiAgentToolsBtn {
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+              box-shadow 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+#aiAgentToolsBtn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+#aiAgentToolsBtn:hover svg {
+  transform: translateY(1px);
+}
+#aiAgentToolsBtn:active {
+  transform: scale(0.93);
+  transition-duration: 0.15s;
+}
+/* 浮层打开时按钮保持 accent 高亮（置于 hover 规则之后以覆盖） */
+#aiAgentToolsBtn.open {
+  background: color-mix(in srgb, var(--accent) 10%, var(--hover-bg));
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+#aiAgentToolsBtn.open svg {
+  transform: rotate(180deg);
+}
+
+.ai-agent-tools-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 460px;
+  max-width: 100%;
+  box-sizing: border-box;
+  z-index: 100;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* 浮层有 display 规则，需单独覆盖 hidden 属性的默认显隐 */
+.ai-agent-tools-popover[hidden] {
+  display: none;
+}
+
+.ai-agent-tools-popover::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-agent-tools-popover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+.ai-agent-tools-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ai-agent-tools-item:hover {
+  background: var(--hover-bg);
+}
+
+.ai-agent-tools-item input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.ai-agent-tools-name {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-agent-tools-desc {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 

@@ -186,6 +186,10 @@ export function GetAISessions() {
   return window['go']['main']['App']['GetAISessions']();
 }
 
+export function GetAgentTools() {
+  return window['go']['main']['App']['GetAgentTools']();
+}
+
 export function GetAllNoteIDs() {
   return window['go']['main']['App']['GetAllNoteIDs']();
 }

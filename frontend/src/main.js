@@ -2640,6 +2640,34 @@ async function initAISettings() {
         });
     }
 
+    // ── Agent 工具设置浮层（展开/关闭交互） ──
+    const agentToolsBtn = document.getElementById('aiAgentToolsBtn');
+    const agentToolsPopover = document.getElementById('aiAgentToolsPopover');
+    const agentToolsSettingItem = document.getElementById('aiAgentToolsSettingItem');
+    if (agentToolsBtn && agentToolsPopover) {
+        agentToolsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const willOpen = agentToolsPopover.hidden;
+            agentToolsPopover.hidden = !willOpen;
+            agentToolsBtn.classList.toggle('open', willOpen);
+            agentToolsBtn.setAttribute('aria-expanded', String(willOpen));
+            // 每次展开时滚动到第一个条目（顶部）
+            if (willOpen) agentToolsPopover.scrollTop = 0;
+        });
+        // 点击页面其它区域（排除按钮与浮层自身及设置项容器）关闭浮层
+        document.addEventListener('click', (e) => {
+            if (agentToolsPopover.hidden) return;
+            if (agentToolsSettingItem && agentToolsSettingItem.contains(e.target)) return;
+            closeAgentToolsPopover();
+        });
+        // 按 ESC 关闭浮层
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !agentToolsPopover.hidden) {
+                closeAgentToolsPopover();
+            }
+        });
+    }
+
     // ── 卡片召回切换 ──
     const settingCardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
     if (settingCardRecallToggle) {
@@ -8860,6 +8888,115 @@ function buildCodePreview(container, themeName) {
 
 /* ===== 统一设置加载/保存 ===== */
 
+/* ===== Agent 工具设置（设置页「对话与搜索」面板） ===== */
+
+/** 当前禁用的 Agent 工具名数组（对应设置键 ai_agent_tools_disabled，值为 JSON 数组字符串） */
+let agentToolsDisabled = [];
+
+/** 后端返回的完整 Agent 工具清单（[{Name, Label, Enabled}]），用于渲染浮层 */
+let agentToolsMeta = [];
+// 本次会话内工具启/停变更记录：关闭浮层后汇总提示一次（去重）
+let agentToolsChanges = { enabled: [], disabled: [] };
+
+/**
+ * 关闭设置页「Agent 工具」浮层
+ */
+function closeAgentToolsPopover() {
+    const popover = document.getElementById('aiAgentToolsPopover');
+    if (popover) popover.hidden = true;
+    const btn = document.getElementById('aiAgentToolsBtn');
+    if (btn) {
+        btn.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    }
+    // 关闭浮层时汇总本次会话的工具启停变更，提示一次
+    const enCount = agentToolsChanges.enabled.length;
+    const deCount = agentToolsChanges.disabled.length;
+    if (enCount > 0 || deCount > 0) {
+        const parts = [];
+        if (deCount > 0) parts.push(`禁用 ${deCount} 个工具`);
+        if (enCount > 0) parts.push(`启用 ${enCount} 个工具`);
+        nm.show(`工具配置已保存：${parts.join('，')}`, 'success');
+        agentToolsChanges = { enabled: [], disabled: [] };
+    }
+}
+
+/**
+ * 更新「Agent 工具」按钮文案（已启用 N/M）
+ */
+function updateAgentToolsButtonText() {
+    const btnText = document.getElementById('aiAgentToolsBtnText');
+    if (!btnText) return;
+    let enabledCount = 0;
+    agentToolsMeta.forEach((tool) => {
+        if (agentToolsDisabled.indexOf(tool.Name) === -1) enabledCount++;
+    });
+    btnText.textContent = `已启用 ${enabledCount}/${agentToolsMeta.length}`;
+}
+
+/**
+ * 按 agentToolsMeta 渲染设置页「Agent 工具」浮层条目，并同步按钮文案
+ * 勾选状态 = 不在 agentToolsDisabled 中；变化时立即保存
+ */
+function renderAgentToolsSettings() {
+    const listEl = document.getElementById('aiAgentToolsList');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    agentToolsMeta.forEach((tool) => {
+        const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
+
+        const itemLabel = document.createElement('label');
+        itemLabel.className = 'ai-agent-tools-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isEnabled;
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+                // 启用 → 从禁用列表移除
+                const idx = agentToolsDisabled.indexOf(tool.Name);
+                if (idx !== -1) agentToolsDisabled.splice(idx, 1);
+                // 记录变更（去重，与禁用记录互斥）
+                const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
+                if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
+                if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
+                    agentToolsChanges.enabled.push(tool.Name);
+                }
+            } else {
+                // 禁用 → 加入禁用列表
+                if (agentToolsDisabled.indexOf(tool.Name) === -1) {
+                    agentToolsDisabled.push(tool.Name);
+                }
+                // 记录变更（去重，与启用记录互斥）
+                const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
+                if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
+                if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
+                    agentToolsChanges.disabled.push(tool.Name);
+                }
+            }
+            updateAgentToolsButtonText();
+            saveSettings();
+        });
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'ai-agent-tools-name';
+        nameSpan.textContent = tool.Name;
+
+        const descSpan = document.createElement('span');
+        descSpan.className = 'ai-agent-tools-desc';
+        descSpan.textContent = tool.Label || '';
+
+        itemLabel.appendChild(checkbox);
+        itemLabel.appendChild(nameSpan);
+        itemLabel.appendChild(descSpan);
+        listEl.appendChild(itemLabel);
+    });
+
+    updateAgentToolsButtonText();
+}
+
 /**
  * 一次性从后端加载所有设置并应用到前端
  */
@@ -9040,7 +9177,20 @@ async function loadSettings() {
             cfg.tavily_search_enabled = false;
         }
 
-
+        // --- Agent 工具开关（禁用清单 + 浮层渲染） ---
+        try {
+            agentToolsDisabled = JSON.parse(cfg.ai_agent_tools_disabled || '[]') || [];
+        } catch (e) {
+            agentToolsDisabled = [];
+        }
+        if (!Array.isArray(agentToolsDisabled)) agentToolsDisabled = [];
+        try {
+            agentToolsMeta = (await window.go.main.App.GetAgentTools()) || [];
+        } catch (e) {
+            agentToolsMeta = [];
+        }
+        renderAgentToolsSettings();
+        closeAgentToolsPopover();
 
         // --- AI: 限制输入 ---
         const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
@@ -9144,6 +9294,7 @@ async function saveSettings() {
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
+            ai_agent_tools_disabled: JSON.stringify(agentToolsDisabled || []),
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
             screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
@@ -9163,6 +9314,9 @@ let _settingsAnimating = false;
  * @param {string} panelName - data-panel 属性值，如 'appearance', 'editor' 等
  */
 function switchSettingsTab(panelName) {
+    // 切换面板时关闭「Agent 工具」浮层
+    closeAgentToolsPopover();
+
     // 动画进行中 → 忽略本次切换，避免面板重叠
     if (_settingsAnimating) return;
 

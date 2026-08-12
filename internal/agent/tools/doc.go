@@ -10,4 +10,5 @@
 //     context.go：工具通过注入的 Context 发射事件、登记调用记录、收集结构化结果
 //     （搜索来源 / 召回卡片）与日志，通过 WrapWithError 统一包装失败行为。
 //   - 本子包不感知父包 agent 的事件循环细节，也不 import 父包（避免循环依赖）。
+//   - 工具中文展示文案以 meta.go 的 BuiltinTools 为权威来源。
 package tools

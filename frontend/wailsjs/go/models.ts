@@ -1,3 +1,24 @@
+export namespace agent {
+	
+	export class ToolMeta {
+	    Name: string;
+	    Label: string;
+	    Enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Name = source["Name"];
+	        this.Label = source["Label"];
+	        this.Enabled = source["Enabled"];
+	    }
+	}
+
+}
+
 export namespace gorm {
 	
 	export class DeletedAt {
@@ -614,6 +635,7 @@ export namespace services {
 	    ai_web_search_max_chars: number;
 	    ai_large_file_preview_threshold: number;
 	    ai_search_result_limit: number;
+	    ai_agent_tools_disabled: string;
 	    trash_cleanup_retention_days: number;
 	    log_level: number;
 	    screen_lock_enabled: boolean;
@@ -652,6 +674,7 @@ export namespace services {
 	        this.ai_web_search_max_chars = source["ai_web_search_max_chars"];
 	        this.ai_large_file_preview_threshold = source["ai_large_file_preview_threshold"];
 	        this.ai_search_result_limit = source["ai_search_result_limit"];
+	        this.ai_agent_tools_disabled = source["ai_agent_tools_disabled"];
 	        this.trash_cleanup_retention_days = source["trash_cleanup_retention_days"];
 	        this.log_level = source["log_level"];
 	        this.screen_lock_enabled = source["screen_lock_enabled"];

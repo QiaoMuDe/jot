@@ -83,6 +83,7 @@ type SettingsConfig struct {
 	AIWebSearchMaxChars         int    `json:"ai_web_search_max_chars"`
 	AILargeFilePreviewThreshold int    `json:"ai_large_file_preview_threshold"`
 	AISearchResultLimit         int    `json:"ai_search_result_limit"`
+	AIAgentToolsDisabled        string `json:"ai_agent_tools_disabled"`
 	TrashCleanupRetentionDays   int    `json:"trash_cleanup_retention_days"`
 	LogLevel                    int    `json:"log_level"`
 	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
@@ -119,6 +120,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AIWebSearchMaxChars:         parseIntSetting(s.Get("ai_web_search_max_chars"), 5000),
 		AILargeFilePreviewThreshold: parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
 		AISearchResultLimit:         parseIntSetting(s.Get("ai_search_result_limit"), 5),
+		AIAgentToolsDisabled:        s.Get("ai_agent_tools_disabled"),
 		TrashCleanupRetentionDays:   parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 		LogLevel:                    parseIntSetting(s.Get("log_level"), 1),
 		ScreenLockEnabled:           parseBoolSetting(s.Get("screen_lock_enabled")),
@@ -224,6 +226,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_web_search_max_chars":         strconv.Itoa(cfg.AIWebSearchMaxChars),
 		"ai_large_file_preview_threshold": strconv.Itoa(cfg.AILargeFilePreviewThreshold),
 		"ai_search_result_limit":          strconv.Itoa(cfg.AISearchResultLimit),
+		"ai_agent_tools_disabled":         cfg.AIAgentToolsDisabled,
 		"trash_cleanup_retention_days":    strconv.Itoa(cfg.TrashCleanupRetentionDays),
 		"log_level":                       strconv.Itoa(cfg.LogLevel),
 		"screen_lock_enabled":             strconv.FormatBool(cfg.ScreenLockEnabled),
