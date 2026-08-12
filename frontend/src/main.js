@@ -2994,8 +2994,8 @@ async function initAISettings() {
     });
 
     // ── 预设弹窗事件 ──
-    document.getElementById('presetModalClose')?.addEventListener('click', closePresetModal);
-    document.getElementById('presetModalCancel')?.addEventListener('click', closePresetModal);
+    document.getElementById('presetModalClose')?.addEventListener('click', () => closePresetModal());
+    document.getElementById('presetModalCancel')?.addEventListener('click', () => closePresetModal());
     document.getElementById('presetModalSave')?.addEventListener('click', savePresetModal);
     document.getElementById('presetModalTestBtn')?.addEventListener('click', testPresetConnection);
     // 点击遮罩关闭弹窗
@@ -3055,6 +3055,9 @@ async function initAISettings() {
 
 // 当前编辑的预设 ID（编辑模式用）
 let editingProfileId = null;
+
+// 预设弹窗打开时的表单初始值快照（用于关闭时判断是否有未保存修改）
+let presetModalInitial = { name: '', url: '', key: '' };
 
 // 管理列表是否已展开
 let presetMgrExpanded = false;
@@ -3163,6 +3166,12 @@ function openAddProfileModal(embed = false) {
         eye.style.display = '';
         eyeOff.style.display = 'none';
     }
+    // 记录表单初始快照，用于关闭时判断是否有未保存修改
+    presetModalInitial = {
+        name: document.getElementById('presetModalName').value,
+        url: document.getElementById('presetModalURL').value,
+        key: document.getElementById('presetModalKey').value,
+    };
     const overlay = document.getElementById('presetModalOverlay');
     overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
@@ -3185,15 +3194,34 @@ function openEditProfileModal(id, name, baseURL, apiKey) {
         eye.style.display = '';
         eyeOff.style.display = 'none';
     }
+    // 记录表单初始快照，用于关闭时判断是否有未保存修改
+    presetModalInitial = {
+        name: document.getElementById('presetModalName').value,
+        url: document.getElementById('presetModalURL').value,
+        key: document.getElementById('presetModalKey').value,
+    };
     const overlay = document.getElementById('presetModalOverlay');
     overlay.classList.add('visible');
     document.getElementById('presetModalName').focus();
 }
 
-// 关闭预设弹窗
-function closePresetModal() {
+// 关闭预设弹窗；force 为 true 时跳过未保存修改确认（保存成功后使用）
+async function closePresetModal(force = false) {
+    // force 必须是字面量 true 才跳过确认（防御：避免事件对象等 truthy 值误传入跳过确认）
+    if (force !== true && hasPresetModalChanges()) {
+        const ok = await showConfirmDialog('有未保存的修改，确定放弃并关闭吗？');
+        if (!ok) return;
+    }
     document.getElementById('presetModalOverlay').classList.remove('visible');
     editingProfileId = null;
+}
+
+// 判断预设弹窗表单是否相对初始快照有修改
+function hasPresetModalChanges() {
+    const g = (id) => (document.getElementById(id)?.value ?? '');
+    return g('presetModalName') !== presetModalInitial.name
+        || g('presetModalURL') !== presetModalInitial.url
+        || g('presetModalKey') !== presetModalInitial.key;
 }
 
 // 保存预设（新增或编辑）
@@ -3226,7 +3254,7 @@ async function savePresetModal() {
             nm.show('配置已新增', 'success');
         }
         const wasEditingId = editingProfileId; // 保存编辑状态，closePresetModal 会清空
-        closePresetModal();
+        closePresetModal(true); // 保存成功后跳过未保存修改确认
         await loadProfiles();
         await loadProfilesEmbed(); // 预设共享，两个模块的下拉同步刷新
         if (wasEditingId && presetMgrExpanded && presetMgrContainer && presetMgrContainer.parentNode) {
@@ -6278,6 +6306,10 @@ async function handleKeyboardNavigation(e) {
 
     // Enter: 预设弹窗保存（需在 Ctrl 快捷键之前拦截）
     if (e.key === 'Enter') {
+        // 确认框打开时（如预设弹窗"未保存修改"确认）忽略 Enter，避免误触发预设保存
+        if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
+            return;
+        }
         const presetOverlay = document.getElementById('presetModalOverlay');
         if (presetOverlay && presetOverlay.classList.contains('visible')) {
             e.preventDefault();
@@ -6425,6 +6457,10 @@ async function handleKeyboardNavigation(e) {
         // 待办输入面板打开时关闭它
         if (els.todoFabPanel && els.todoFabPanel.classList.contains('open')) {
             closeTodoInputPanel();
+            return;
+        }
+        // 确认框打开时（如预设弹窗"未保存修改"确认）忽略 ESC，避免重复触发确认逻辑
+        if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
             return;
         }
         // 预设弹窗打开时关闭它（不继续执行导航逻辑）
