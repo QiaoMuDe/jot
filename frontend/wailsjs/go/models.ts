@@ -636,6 +636,7 @@ export namespace services {
 	    ai_large_file_preview_threshold: number;
 	    ai_search_result_limit: number;
 	    ai_agent_tools_disabled: string;
+	    ai_agent_max_iterations: number;
 	    trash_cleanup_retention_days: number;
 	    log_level: number;
 	    screen_lock_enabled: boolean;
@@ -675,6 +676,7 @@ export namespace services {
 	        this.ai_large_file_preview_threshold = source["ai_large_file_preview_threshold"];
 	        this.ai_search_result_limit = source["ai_search_result_limit"];
 	        this.ai_agent_tools_disabled = source["ai_agent_tools_disabled"];
+	        this.ai_agent_max_iterations = source["ai_agent_max_iterations"];
 	        this.trash_cleanup_retention_days = source["trash_cleanup_retention_days"];
 	        this.log_level = source["log_level"];
 	        this.screen_lock_enabled = source["screen_lock_enabled"];

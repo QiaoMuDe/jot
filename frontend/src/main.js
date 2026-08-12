@@ -2952,6 +2952,26 @@ async function initAISettings() {
         });
     }
 
+    // ── Agent 最大运行次数保存 ──
+    const agentMaxIterations = document.getElementById('aiAgentMaxIterations');
+    if (agentMaxIterations) {
+        agentMaxIterations.addEventListener('change', async () => {
+            const val = parseInt(agentMaxIterations.value);
+            if (isNaN(val) || val < 1) {
+                agentMaxIterations.value = 20;
+                nm.show('Agent 运行上限必须大于 0，已重置为 20', 'warning');
+                return;
+            }
+            if (val > 100) {
+                agentMaxIterations.value = 100;
+                nm.show('Agent 运行上限不能超过 100，已重置为 100', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('Agent 运行上限已保存', 'success');
+        });
+    }
+
     // ── 回收站自动清理天数保存 ──
     const retentionDaysInput = document.getElementById('trashCleanupRetentionDays');
     if (retentionDaysInput) {
@@ -9244,6 +9264,9 @@ async function loadSettings() {
         const searchResultLimit = document.getElementById('aiSearchResultLimit');
         if (searchResultLimit) searchResultLimit.value = cfg.ai_search_result_limit;
 
+        const agentMaxIterations = document.getElementById('aiAgentMaxIterations');
+        if (agentMaxIterations) agentMaxIterations.value = cfg.ai_agent_max_iterations || 20;
+
         const retentionDays = document.getElementById('trashCleanupRetentionDays');
         if (retentionDays) retentionDays.value = cfg.trash_cleanup_retention_days || 30;
 
@@ -9330,6 +9353,7 @@ async function saveSettings() {
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
+            ai_agent_max_iterations: parseInt(document.getElementById('aiAgentMaxIterations')?.value) || 20,
             ai_agent_tools_disabled: JSON.stringify(agentToolsDisabled || []),
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,

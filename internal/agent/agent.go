@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,8 +39,8 @@ import (
 	"gitee.com/MM-Q/fastlog"
 )
 
-// MaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（统一默认值，供装配与日志引用）。
-const MaxIterations = 20
+// DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用）。
+const DefaultMaxIterations = 20
 
 // Deps AgentService 依赖注入。
 // 注意：搜索功能在现有代码中是 services 包级函数（services.SearchWeb / SearchZhihuContent /
@@ -84,6 +85,14 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	var result Result
 	if emit == nil {
 		emit = func(string, string) {}
+	}
+
+	// 读取配置的最大迭代次数（默认 20），防止 ReAct 循环死循环
+	maxIterations := DefaultMaxIterations
+	if s.deps.Setting != nil {
+		if n, err := strconv.Atoi(s.deps.Setting.Get("ai_agent_max_iterations")); err == nil && n > 0 {
+			maxIterations = n
+		}
 	}
 
 	// 1. 读取 AI 配置（复用现有 GetConfig 逻辑，含 B64 解码）
@@ -244,7 +253,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				Tools: toolList,
 			},
 		},
-		MaxIterations: MaxIterations,
+		MaxIterations: maxIterations,
 	})
 	if err != nil {
 		return result, fmt.Errorf("创建 ChatModelAgent 失败: %w", err)
@@ -419,7 +428,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		s.deps.Logger.Debugw("Agent 对话完成",
 			fastlog.Int("content_len", len(result.Content)),
 			fastlog.Int("tool_calls", len(toolRecords)),
-			fastlog.Int("max_iterations", MaxIterations))
+			fastlog.Int("max_iterations", maxIterations))
 	}
 	return result, nil
 }

@@ -546,6 +546,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_large_file_preview_threshold", Value: "10000"},
 		{Key: "ai_search_result_limit", Value: "5"},
 		{Key: "ai_agent_tools_disabled", Value: ""},
+		{Key: "ai_agent_max_iterations", Value: "20"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},
 		{Key: "log_level", Value: "1"},
 		{Key: "screen_lock_enabled", Value: "false"},

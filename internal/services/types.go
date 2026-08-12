@@ -84,6 +84,7 @@ type SettingsConfig struct {
 	AILargeFilePreviewThreshold int    `json:"ai_large_file_preview_threshold"`
 	AISearchResultLimit         int    `json:"ai_search_result_limit"`
 	AIAgentToolsDisabled        string `json:"ai_agent_tools_disabled"`
+	AIAgentMaxIterations        int    `json:"ai_agent_max_iterations"`
 	TrashCleanupRetentionDays   int    `json:"trash_cleanup_retention_days"`
 	LogLevel                    int    `json:"log_level"`
 	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
@@ -121,6 +122,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AILargeFilePreviewThreshold: parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
 		AISearchResultLimit:         parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		AIAgentToolsDisabled:        s.Get("ai_agent_tools_disabled"),
+		AIAgentMaxIterations:        parseIntSetting(s.Get("ai_agent_max_iterations"), 20),
 		TrashCleanupRetentionDays:   parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 		LogLevel:                    parseIntSetting(s.Get("log_level"), 1),
 		ScreenLockEnabled:           parseBoolSetting(s.Get("screen_lock_enabled")),
@@ -181,6 +183,11 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.LogLevel > 5 {
 		cfg.LogLevel = 5
 	}
+	if cfg.AIAgentMaxIterations < 1 {
+		cfg.AIAgentMaxIterations = 20
+	} else if cfg.AIAgentMaxIterations > 100 {
+		cfg.AIAgentMaxIterations = 100
+	}
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
 	cfg.AIEmbedAPIKey = EncodeB64(cfg.AIEmbedAPIKey)
@@ -227,6 +234,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_large_file_preview_threshold": strconv.Itoa(cfg.AILargeFilePreviewThreshold),
 		"ai_search_result_limit":          strconv.Itoa(cfg.AISearchResultLimit),
 		"ai_agent_tools_disabled":         cfg.AIAgentToolsDisabled,
+		"ai_agent_max_iterations":         strconv.Itoa(cfg.AIAgentMaxIterations),
 		"trash_cleanup_retention_days":    strconv.Itoa(cfg.TrashCleanupRetentionDays),
 		"log_level":                       strconv.Itoa(cfg.LogLevel),
 		"screen_lock_enabled":             strconv.FormatBool(cfg.ScreenLockEnabled),
