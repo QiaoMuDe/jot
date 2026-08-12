@@ -7,7 +7,7 @@
       "args": [],
       "env": {},
       "url": "",
-      "enabled": true
+      "enabled": false
     },
     {
       "name": "text",
@@ -16,7 +16,7 @@
       "args": [],
       "env": {},
       "url": "",
-      "enabled": true
+      "enabled": false
     }
   ]
 }

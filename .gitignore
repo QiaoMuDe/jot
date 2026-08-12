@@ -7,6 +7,6 @@ frontend/dist
 data/
 tmp/
 .vscode/
-landing/images/
-landing/videos/
+images/
+videos/
 __pycache__/
