@@ -7,6 +7,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -17,6 +18,21 @@ import (
 
 // MaxResultLen 工具调用参数 / 结果摘要截断长度（用于事件与落库，避免超长）。
 const MaxResultLen = 500
+
+// 文本字段长度上限：防止模型传入超长文本浪费 token 或触发 DB 字段越界报错。
+const (
+	maxToolShortText = 500   // 短文本字段上限：标题/名称/关键字/搜索词/URL/问句/颜色等
+	maxToolFindLen   = 2000  // edit 片段替换 find 原文片段上限
+	maxToolLongText  = 20000 // 正文级字段上限：content / replace / append_content
+)
+
+// validateTextLen 校验文本字段长度（按 rune 计），超长返回描述性错误供回填模型。
+func validateTextLen(field, s string, maxLen int) error {
+	if n := len([]rune(s)); n > maxLen {
+		return fmt.Errorf("%s 过长（%d 字符，上限 %d），请精简后重试", field, n, maxLen)
+	}
+	return nil
+}
 
 // EmitFn 事件回调，由调用方注入（内部封装 runtime.EventsEmit）。
 // event 为事件名（如 "ai:stream-chunk" / "ai:tool-status"），data 为事件负载。
@@ -93,30 +109,47 @@ func (w *wrappedTool) Info(c context.Context) (*schema.ToolInfo, error) {
 	return w.inner.Info(c)
 }
 
-func (w *wrappedTool) InvokableRun(c context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+func (w *wrappedTool) InvokableRun(c context.Context, argumentsInJSON string, opts ...tool.Option) (ret string, retErr error) {
+	// panic 防护：工具内部 panic 转为错误回填模型（不记 tool_error 仅当用户已取消），
+	// 避免单个工具异常导致整个 Agent 进程崩溃
+	defer func() {
+		if r := recover(); r != nil {
+			if c.Err() != nil {
+				ret = fmt.Sprintf("工具内部异常（panic）：%v", r)
+				return
+			}
+			ret = w.fail(c, fmt.Errorf("工具内部异常（panic）：%v", r))
+		}
+	}()
 	out, err := w.inner.InvokableRun(c, argumentsInJSON, opts...)
 	if err != nil {
 		// 用户取消：不误报失败，直接返回错误文本（循环会随 ctx 终止）
 		if c.Err() != nil {
 			return err.Error(), nil
 		}
-		if w.ctx.Logger != nil {
-			w.ctx.Logger.Warnw("Agent 工具执行失败",
-				fastlog.String("tool", w.name),
-				fastlog.Error(err))
-		}
-		rec := Record{
-			Action: "tool_error",
-			Name:   w.name,
-			Result: TruncateRunes(err.Error(), MaxResultLen),
-		}
-		*w.ctx.Records = append(*w.ctx.Records, rec)
-		if b, err := json.Marshal(rec); err == nil {
-			w.ctx.Emit("ai:tool-status", string(b))
-		}
-		return "工具执行失败：" + err.Error() + "。请依据错误信息调整策略，或直接基于已有信息回答用户。", nil
+		return w.fail(c, err), nil
 	}
 	return out, nil
+}
+
+// fail 记录一次工具执行失败（日志 Warnw + tool_error 记录 + 事件发射），
+// 并返回回填给模型的错误文本。供 error 路径与 panic recover 复用。
+func (w *wrappedTool) fail(c context.Context, err error) string {
+	if w.ctx.Logger != nil {
+		w.ctx.Logger.Warnw("Agent 工具执行失败",
+			fastlog.String("tool", w.name),
+			fastlog.Error(err))
+	}
+	rec := Record{
+		Action: "tool_error",
+		Name:   w.name,
+		Result: TruncateRunes(err.Error(), MaxResultLen),
+	}
+	*w.ctx.Records = append(*w.ctx.Records, rec)
+	if b, err := json.Marshal(rec); err == nil {
+		w.ctx.Emit("ai:tool-status", string(b))
+	}
+	return "工具执行失败：" + err.Error() + "。请依据错误信息调整策略，或直接基于已有信息回答用户。"
 }
 
 func (w *wrappedTool) ActionText(argumentsInJSON string) string {

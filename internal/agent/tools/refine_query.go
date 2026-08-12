@@ -60,6 +60,9 @@ func (r *refineSearchQueryTool) InvokableRun(ctx context.Context, argumentsInJSO
 	if args.Query == "" {
 		return "", errors.New("refine_search_query 参数缺少 query")
 	}
+	if err := validateTextLen("query", args.Query, maxToolShortText); err != nil {
+		return "", err
+	}
 
 	refined, err := services.RefineSearchQuery(ctx, args.Query, r.ai)
 	if err != nil {

@@ -67,6 +67,14 @@ func (r *recallNotesTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	if args.Query == "" {
 		return "", errors.New("recall_notes 参数缺少 query")
 	}
+	if err := validateTextLen("query", args.Query, maxToolShortText); err != nil {
+		return "", err
+	}
+
+	// 用户取消检查：父包事件循环随 ctx 终止，工具直接返回 ctx.Err()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 
 	// 召回条数复用 ai_card_recall_limit 设置（默认 5，≤30）
 	limit := 5

@@ -135,6 +135,9 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 		if name == "" {
 			return "", errors.New("manage_notebook 创建笔记本缺少 name")
 		}
+		if err := validateTextLen("name", name, maxToolShortText); err != nil {
+			return "", err
+		}
 		nb, err := m.notebook.Create(name)
 		if err != nil {
 			return "", err
@@ -147,6 +150,9 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 		name := strings.TrimSpace(args.Name)
 		if name == "" {
 			return "", errors.New("manage_notebook 重命名笔记本缺少 name")
+		}
+		if err := validateTextLen("name", name, maxToolShortText); err != nil {
+			return "", err
 		}
 		nb, err := m.notebook.Update(uint(args.ID), name)
 		if err != nil {
@@ -164,6 +170,9 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 // 过滤与分页都在 DB 层完成（NotebookService.ListPaged / Search），只加载当前页条目。
 func (m *manageNotebookTool) listNotebooks(page, pageSize int, keyword string) (string, error) {
 	keyword = strings.TrimSpace(keyword)
+	if err := validateTextLen("keyword", keyword, maxToolShortText); err != nil {
+		return "", err
+	}
 	if page < 1 {
 		page = 1
 	}

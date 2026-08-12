@@ -2560,6 +2560,12 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"2. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后立即停止生成，不要再输出任何内容，等待用户回答。\n" +
 			"3. 用户回答后（会作为新消息发来），结合你的问题与用户的回答继续正常回答用户，不要重复提问。\n")
 
+		// Agent 模式专用约束：写操作确认规范（仅 Agent 模式注入，问答模式不受影响）
+		instruction.WriteString("\n\n【工具使用规范 - 写操作确认】\n" +
+			"1. 执行破坏性或不可逆的写操作前，必须先向用户确认修改意图，得到明确同意后再执行；这类操作包括：整篇替换/删除笔记正文（manage_note 的 edit 动作）、移动笔记、重命名笔记本、删除/替换内容片段等。\n" +
+			"2. 确认时在回复正文中写明将执行的具体操作与影响范围（如“我准备把笔记 #3 的正文整篇替换为……，是否继续？”），可调用 ask_user 工具发起确认；用户确认前不要调用对应写操作工具。\n" +
+			"3. 仅当你推断用户的指令本身就是明确的执行指令（如“帮我创建笔记”“把这篇移到 XX 笔记本”）且无歧义时，可直接执行，无需额外确认。\n")
+
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
 		history := make([]agent.HistoryMessage, 0, len(messages))

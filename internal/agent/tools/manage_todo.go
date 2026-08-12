@@ -148,6 +148,9 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		if text == "" {
 			return "", errors.New("manage_todo 创建待办缺少 text")
 		}
+		if err := validateTextLen("text", text, maxToolShortText); err != nil {
+			return "", err
+		}
 		t, err := m.todo.Create(text)
 		if err != nil {
 			return "", err
@@ -175,6 +178,9 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		if text == "" {
 			return "", errors.New("manage_todo 更新待办缺少 text")
 		}
+		if err := validateTextLen("text", text, maxToolShortText); err != nil {
+			return "", err
+		}
 		t, err := m.todo.Update(uint(args.ID), text)
 		if err != nil {
 			return "", err
@@ -200,6 +206,9 @@ func (m *manageTodoTool) listTodos(status string, page, pageSize int, keyword st
 		return "", fmt.Errorf("manage_todo 参数非法 status: %s", status)
 	}
 	keyword = strings.TrimSpace(keyword)
+	if err := validateTextLen("keyword", keyword, maxToolShortText); err != nil {
+		return "", err
+	}
 	if page < 1 {
 		page = 1
 	}

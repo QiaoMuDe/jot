@@ -98,6 +98,15 @@ func (g *askUserTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 	if q == "" {
 		return "", errors.New("ask_user 参数缺少 question")
 	}
+	if err := validateTextLen("question", q, maxToolShortText); err != nil {
+		return "", err
+	}
+	// 选项长度校验（防止模型传入超长选项撑爆问题卡片）
+	for _, o := range args.Options {
+		if err := validateTextLen("options 元素", o, 200); err != nil {
+			return "", err
+		}
+	}
 
 	// 规范化 options：去重、去空、最多取 6 项；options 为空则为空切片
 	opts := normalizeAskUserOptions(args.Options)

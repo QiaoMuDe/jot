@@ -14,12 +14,14 @@ func BuiltinTools() []ToolMeta {
 	return []ToolMeta{
 		{Name: "refine_search_query", Label: "优化搜索关键词，提升搜索准确率（联网搜索的辅助）"},
 		{Name: "web_search", Label: "联网搜索（多来源），获取实时信息"},
+		{Name: "read_url", Label: "读取网页链接内容"},
 		{Name: "recall_notes", Label: "召回本地笔记，基于向量相似度检索"},
 		{Name: "get_current_time", Label: "获取当前时间/日期/星期"},
-		{Name: "manage_todo", Label: "创建、查看、修改、删除待办"},
-		{Name: "manage_notebook", Label: "管理笔记本（创建/重命名/删除等）"},
-		{Name: "manage_tag", Label: "管理标签（创建/重命名/合并/删除等）"},
-		{Name: "manage_note", Label: "管理笔记（创建/查看/修改/删除等）"},
+		{Name: "manage_todo", Label: "管理待办（创建/查看/修改/勾选等）"},
+		{Name: "manage_notebook", Label: "管理笔记本（创建/重命名/查看等）"},
+		{Name: "manage_tag", Label: "管理标签（创建/查看/重命名/改色等）"},
+		{Name: "manage_note", Label: "管理笔记（创建/查看/编辑/置顶/移动/打标签等）"},
+		{Name: "read_note_section", Label: "分段读取笔记内容"},
 		{Name: "get_stats", Label: "获取笔记/待办/笔记本等数据统计"},
 		{Name: "ask_user", Label: "向用户发起澄清提问（单选/多选）"},
 	}

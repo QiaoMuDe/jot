@@ -95,6 +95,9 @@ func (w *webSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if args.Query == "" {
 		return "", errors.New("web_search 参数缺少 query")
 	}
+	if err := validateTextLen("query", args.Query, maxToolShortText); err != nil {
+		return "", err
+	}
 
 	// 来源选择：剔除非法枚举值并去重；模型未指定（空）时回退全部来源
 	sources := selectSources(args.Sources)
@@ -135,8 +138,8 @@ func (w *webSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	}
 
 	// 搜索结果数与单条最大字符数（复用现有设置项）
-	limit := w.intSetting("ai_search_result_limit", 5, 30)
-	maxChars := w.intSetting("ai_web_search_max_chars", 5000, 50000)
+	limit := getIntSetting(w.setting, "ai_search_result_limit", 5, 30)
+	maxChars := getIntSetting(w.setting, "ai_web_search_max_chars", 5000, 50000)
 
 	// 2. 并发执行可用来源（与 app.go 的搜索状态机一致），任一源失败/未配置只跳过该源
 	type searchResult struct {
@@ -147,6 +150,12 @@ func (w *webSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	resultCh := make(chan searchResult, len(active))
 	for _, src := range active {
 		go func(s string) {
+			// 单源 panic 防护：某源内部异常转为该源错误，不影响其他源与整体进程
+			defer func() {
+				if r := recover(); r != nil {
+					resultCh <- searchResult{source: s, err: fmt.Errorf("搜索源 %s 内部异常: %v", s, r)}
+				}
+			}()
 			var r searchResult
 			r.source = s
 			switch s {
@@ -228,12 +237,13 @@ func (w *webSearchTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	return text, nil
 }
 
-// intSetting 读取 int 类型设置，解析失败或越界时回退默认值。
-func (w *webSearchTool) intSetting(key string, def, max int) int {
-	if w.setting == nil {
+// getIntSetting 读取 int 类型设置，解析失败或越界时回退默认值（越上限取上限）。
+// 供 web_search / read_url 等工具复用同一设置项读取逻辑。
+func getIntSetting(setting *services.SettingService, key string, def, max int) int {
+	if setting == nil {
 		return def
 	}
-	val := w.setting.Get(key)
+	val := setting.Get(key)
 	n, err := strconv.Atoi(val)
 	if err != nil || n < 1 {
 		return def

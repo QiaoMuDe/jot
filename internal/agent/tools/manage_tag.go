@@ -101,6 +101,7 @@ func (m *manageTagTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 manage_tag 参数失败: %w", err)
 	}
+	args.Action = strings.TrimSpace(args.Action)
 
 	if m.ctx != nil && m.ctx.Logger != nil {
 		m.ctx.Logger.Debugw("Agent manage_tag 调用",
@@ -126,6 +127,9 @@ func (m *manageTagTool) createTag(ctx context.Context, name, color string) (stri
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", errors.New("manage_tag 参数缺少 name")
+	}
+	if err := validateTextLen("name", name, maxToolShortText); err != nil {
+		return "", err
 	}
 	color = strings.TrimSpace(color)
 	if color != "" && !tagColorPattern.MatchString(color) {
@@ -187,6 +191,11 @@ func (m *manageTagTool) updateTag(ctx context.Context, id float64, name, color s
 	color = strings.TrimSpace(color)
 	if name == "" && color == "" {
 		return "未提供任何更新字段：需要 name 新名称或 color 新颜色", nil
+	}
+	if name != "" {
+		if err := validateTextLen("name", name, maxToolShortText); err != nil {
+			return "", err
+		}
 	}
 	if color != "" && !tagColorPattern.MatchString(color) {
 		return "", fmt.Errorf("manage_tag 参数非法 color: %s（应为 #RRGGBB 格式）", color)
