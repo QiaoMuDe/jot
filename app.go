@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -3349,6 +3350,20 @@ func sanitizeFilename(title string) string {
 	return name
 }
 
+// openInFileManager 在系统文件管理器中打开指定目录（跨平台 Windows/macOS/Linux）
+func openInFileManager(dir string) error {
+	var cmd *exec.Cmd
+	switch goruntime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+	return cmd.Start()
+}
+
 // OpenDataDir 在文件管理器中打开数据库目录
 func (a *App) OpenDataDir() error {
 	a.LogSvc.Logger.Debugw("OpenDataDir")
@@ -3358,8 +3373,7 @@ func (a *App) OpenDataDir() error {
 		return err
 	}
 	dir := filepath.Dir(dbPath)
-	cmd := exec.Command("explorer", dir)
-	if err := cmd.Start(); err != nil {
+	if err := openInFileManager(dir); err != nil {
 		a.LogSvc.Logger.Errorw("OpenDataDir 失败", fastlog.Error(err))
 		return err
 	}
@@ -3379,8 +3393,7 @@ func (a *App) OpenLogDir() error {
 		}
 		logDir = dir
 	}
-	cmd := exec.Command("explorer", logDir)
-	if err := cmd.Start(); err != nil {
+	if err := openInFileManager(logDir); err != nil {
 		a.LogSvc.Logger.Errorw("OpenLogDir 失败", fastlog.Error(err))
 		return err
 	}
