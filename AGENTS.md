@@ -613,43 +613,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 27. **Agent 内置工具开关配置 + fclint 前端检查任务**：`ai_agent_tools_disabled` 黑名单（默认全注册）控制 10 个内置工具注册（注册级过滤，被禁工具模型不可见）；设置页「Agent 工具」下拉多选（英文名+中文说明，关闭浮层汇总 toast）；Rnx.toml `fclint` 任务（lint + validate:html）挂 frontend 的 run_after。详见 [registry.go](internal/agent/registry.go)、[tools/meta.go](internal/agent/tools/meta.go)、[app.go](app.go)、[Rnx.toml](Rnx.toml)
 
----
+28. **Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认 + ask_user 强制调用规范**：`tools.WrapWithError` 的 `InvokableRun` defer recover（panic 转 fail 回填模型不中断 ReAct 循环）+ web_search 单源 goroutine recover；各工具补 `ctx.Err()` 取消检查；统一文本长度上限（[context.go](internal/agent/tools/context.go) `validateTextLen`：短文本 500 / find 2000 / 正文 20000，按 rune 计）；read_note_section offset/length 整数校验（math.Trunc 防浮点截断）；manage_tag action TrimSpace；read_url `isPrivateHost` SSRF 防护（拒绝 loopback/私网/链路本地含 169.254.169.254/.local/.internal 主机名，不做 DNS 解析）；manage_note `normalizeNoteFileExt` 扩展名校验（纯字母数字 1-10 位，create 空→.md、update 空→保持原值）。**写操作强制确认**：manage_note 的 update/edit/pin/move/add_tag/remove_tag 六动作未携带 `confirm=true` 一律拒绝执行并返回引导文本（正常结果非 error），提示调用 ask_user 向用户确认；app.go【工具使用规范】升级为强制三步（正文说明→ask_user 提问→用户同意后带 confirm=true 执行）。**ask_user 强制调用**：信息模糊/参数不明确/需求不具体、多选项或方案选择、需确认或补充关键信息三类场景必须调用不得省略绕过（app.go 系统提示词 + ask_user 工具 Desc 双通道约束）。详见 [context.go](internal/agent/tools/context.go)、[manage_note.go](internal/agent/tools/manage_note.go)、[ask_user.go](internal/agent/tools/ask_user.go)、[read_url.go](internal/agent/tools/read_url.go)、[web_search.go](internal/agent/tools/web_search.go)、[read_note_section.go](internal/agent/tools/read_note_section.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[recall_notes.go](internal/agent/tools/recall_notes.go)、[app.go](app.go)
 
-## 记忆点 1：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+29. **manage_note 双模式扩展 + 新工具 read_url / read_note_section + meta.go 描述修正**：manage_note 新增 update（标题/扩展名，非空才更新对应字段）、edit 三模式互斥（content 非空整篇替换 / find+replace 片段替换可作删除 / append_content 末尾追加免读全文，未找到片段报错引导重新 view）、file_ext 缺省 .md；read_url 基于 eino-ext URL Loader 抓取网页提取正文按 `ai_web_search_max_chars` 截断（仅放行 http/https、15s 超时、浏览器 UA）；read_note_section 分段续读大笔记（id/offset/length，view 超大截断时给出续读指引）；meta.go Label 修正——工具描述与实际实现必须一致（曾声称有"删除"能力实际没有，已删除虚假描述，教训）。详见 [manage_note.go](internal/agent/tools/manage_note.go)、[read_url.go](internal/agent/tools/read_url.go)、[read_note_section.go](internal/agent/tools/read_note_section.go)、[meta.go](internal/agent/tools/meta.go)
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动：① **AI 客户端平替 eino**——删除自研 [internal/aicli](internal/aicli)（sashabaranov/go-openai 客户端），新建 [internal/einocli](internal/einocli) 薄适配层保持公共 API 不变（[types.go](internal/einocli/types.go) 的 `Client/Config/Message/StreamCallbacks`；[chat.go](internal/einocli/chat.go) 的 `Chat/Stream` 走 eino `Generate`/`Stream` + `WithExtraFields{"enable_thinking"}` 等价原 `ChatTemplateKwargs`；[embedding.go](internal/einocli/embedding.go) 的 `Embed/EmbedWithProgress` 走 eino acl 库 + float64→float32）；调用方仅改 import（[ai_service.go](internal/services/ai_service.go)/[vector_service.go](internal/services/vector_service.go)/[agent/tools.go](internal/agent/tools.go)/[app.go](app.go) 共 4 处）；[aierrors/errors.go](internal/aierrors/errors.go) 错误分类的 `errors.As` 目标从 sashabaranov/go-openai 切换到 eino 底层 fork `meguminnnnnnnnn/go-openai`（字段结构一致零成本），并保留 eino components `*APIError` 分支；go.mod 移除 `github.com/sashabaranov/go-openai`。② **预设配置品牌徽章**——新增 [preset-brand.js](frontend/src/js/preset-brand.js)（23 个 OpenAI 兼容服务商按 base_url 域名离线识别 + 双字母品牌简称如 DS/GLM/OL + 未命中时名称/域名首字符 + FNV 哈希稳定配色兜底，前景色按背景亮度自适应黑/白），[main.js](frontend/src/main.js) 三处接入（预设下拉列表项/预设管理列表行/触发按钮选中态前置小徽章），[settings-panel.css](frontend/src/css/components/settings-panel.css) 22px/18px 圆角方形徽章样式。③ **AI 输入框展开功能尝试后撤回**——曾按"微信式放大输入框"方案实现（composer 右上角展开按钮 + 输入区宽度撑满窗口 + textarea 高度上限 140px→60vh 封顶 900px，autoResizeInput 联动展开态），用户评估后放弃并完全回退，**该想法已否决勿重复实现**。 |
-| **einocli 与原 aicli 行为差异** | 非回归的两处差异（结论：保持现状）：① 流中途普通错误（非 EOF/非取消/无法分类）从"静默触发 OnDone 带部分内容"改为"触发 OnError 且不 OnDone"——错误显式暴露更合理；② Embed 从按响应 `Index` 字段回填改为按返回顺序直接映射——acl 库 `EmbedStrings` 丢弃 Index 无法还原，OpenAI 规范保证响应顺序与输入一致，数量校验保留。 |
-| **eino 使用要点** | `components/model/openai` 的 `NewChatModel` + `Generate/Stream`，`WithExtraFields(map{"enable_thinking": bool})` 传递深度思考开关（兼容 Qwen3/DeepSeek）；流式消费 `schema.StreamReader[*schema.Message]` 的 `Recv()` 返回 `(msg, io.EOF)`，`chunk.Content`/`chunk.ReasoningContent`，多 chunk 用 `schema.ConcatMessages` 合并（参照 [internal/agent/agent.go](internal/agent/agent.go) `consumeAssistantStream`）；`stream.Close()` 无返回值（`defer stream.Close()`）；embedding 用 `libs/acl/openai` 的 `NewEmbeddingClient` + `EmbedStrings` 返回 `[][]float64`。 |
-| **涉及文件** | [internal/einocli/](internal/einocli/)（新建 3 文件）、[internal/aierrors/errors.go](internal/aierrors/errors.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/services/vector_service.go](internal/services/vector_service.go)、[internal/agent/tools.go](internal/agent/tools.go)、[app.go](app.go)、[go.mod](go.mod)/[go.sum](go.sum)、[frontend/src/js/preset-brand.js](frontend/src/js/preset-brand.js)（新建）、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css) |
+30. **前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理**：新增 [intent.go](internal/agent/intent.go) 纯本地规则意图分类（chitchat/time/search/stats/note_write/vague/query 七类，零 API 成本，分类顺序：纯时间→纯闲聊→写操作→模糊→统计→搜索→默认），app.go `CallAIAgentStream` 接入：注入【本请求意图识别】强化提示（写操作→confirm 流程、模糊→ask_user 强制反问、统计→get_stats、搜索→web_search）+ 高置信工具裁剪（**仅纯时间查询保留 get_current_time**；**闲聊不裁剪**——判定不可靠，"应声+正题"如"好的，把今天的安排发我一下"易误判，误裁会导致功能受限，是重要教训）；工具名列表复用 `tools.BuiltinTools()` 防硬编码漂移；agent.go 零改动、问答模式不受影响。另移除已过时的 migrateProviderRemoval 启动迁移（provider 概念已多版本前移除，保留只会产生启动期 DROP COLUMN 报错噪音，删除收益≈0 但需确认无老版本部署）。详见 [intent.go](internal/agent/intent.go)、[app.go](app.go)、[meta.go](internal/agent/tools/meta.go)
 
 ---
 
-## 记忆点 2：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两组改动：① **manage_todo 列表分页**——[todo_service.go](internal/services/todo_service.go) 新增 `ListPaged(done *bool, page, pageSize int) ([]models.Todo, int64, error)`（返回当前页条目 + 满足条件总数），过滤（`WHERE done = ?`）与 `LIMIT/OFFSET` 分页全部下沉 SQL；提取统一排序常量 `todoOrder = "done ASC, CASE WHEN done = 1 THEN updated_at ELSE created_at END DESC, id DESC"` 并在 `List()` 中复用——追加 `id DESC` 唯一键保证分页跨页稳定、不重复不遗漏；`List()` 全量版保留（供前端 [app.go](app.go) `ListTodos` 绑定使用）。[manage_todo.go](internal/agent/tools/manage_todo.go) `listTodos(status, page, pageSize)`：pageSize 缺省 10、上限 50，页尾提示"还有 n 条未展示，如需继续查看可要求查看第 x 页"引导模型对话式翻页；统计行用 `CountUnfinished`/`CountCompleted` 全量计数避免过滤后失真；工具 schema 新增可选参数 `page`/`pageSize`，`Info().Desc` 同步说明；[TOOLS.md](internal/agent/TOOLS.md) 工具表标注"list 支持 page/pageSize 分页"。② **待办页白屏 + 导航卡住修复**——根因：`#viewAiChat` 视图在 [index.html](frontend/index.html) 中缺少一个闭合 `</div>`（回归自 AI 输入区一体化重构提交 9d4d857），浏览器解析后 `#viewTodo`/`#viewMdRef`/`#viewCalendar` 三个视图被吞入 `display:none` 的 `#viewAiChat` 内部。修复：补齐闭合 `</div>`，用 HTML 解析器验证 5 个 `.view` 均为 `main#mainContent` 直接子级。 |
-| **分页设计要点** | 只新增 `ListPaged` 而**不改 `List()` 签名**——前端 `window.go.main.App.ListTodos` 依赖 `List()` 的全量返回签名 `([]models.Todo, error)`，改签名会破坏 Wails 绑定（需同步改 app.go 与前端）。参数校验：`page < 1 → 1`；`pageSize <= 0 → 10`（DB 层兜底 20），工具层额外钳制 `> 50 → 50` 防模型传超大值。**分页前必须保证排序含唯一键**（追加 `id DESC`），否则同 `created_at` 条目跨页会重复/遗漏。 |
-| **白屏机制（重要教训）** | 位于 `display:none` 祖先内的元素：子树渲染为 0×0；其上 CSS 动画（如 `.view-enter`）冻结在 0%（`animationPlayState` 显示 `running` 但进度不动）→ **`animationend` 事件永不触发**。[main.js](frontend/src/main.js) 的 `switchView()` 靠 `animationend` 驱动 `showTargetView()` 并复位 `_viewAnimating` 锁；事件不触发 → 锁被永久占用 → 之后所有视图切换被拒 = 用户感知"进入页面卡住、白屏"。"**动画不结束/视图切换卡死"类 Bug 优先排查元素是否位于 `display:none` 祖先内**：用 `getComputedStyle(el).display` 看自身，沿 `parentElement` 向上遍历 4 层即可定位（本次即通过该链锁定 `#viewTodo → #viewAiChat(disp=none) → #mainContent → .main-content-area → #mainLayout`）。 |
-| **验证方法** | 修改 [index.html](frontend/index.html) 的视图结构后，用 Python `html.parser` 或标签开闭统计验证 div 配平，并确认各 `.view`（`#viewGrid`/`#viewAiChat`/`#viewMdRef`/`#viewCalendar`/`#viewTodo`）均为 `main#mainContent` 的**直接子级**；同时可对比 `git show <旧提交>:frontend/index.html` 校验回归来源。 |
-| **涉及文件** | [internal/services/todo_service.go](internal/services/todo_service.go)（ListPaged + todoOrder 常量 + List 复用稳定排序）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（listTodos 分页 + schema page/pageSize + Desc + 文件头注释）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具表标注分页）、[frontend/index.html](frontend/index.html)（补 `#viewAiChat` 闭合 div）、[frontend/src/main.js](frontend/src/main.js)（白屏调试后清除插桩，无业务残留） |
-
----
-
-## 记忆点 3：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 两组改动补齐 Agent 工具能力：① **新增 manage_notebook / manage_tag 两个管理工具 + manage_todo 补 update 动作**——[registry.go](internal/agent/registry.go) `buildTools` 统一注册 7 个工具（refine_search_query / web_search / recall_notes / get_current_time / manage_todo / manage_notebook / manage_tag，均 `WrapWithError` 包装失败回填）；**manage_notebook**（[manage_notebook.go](internal/agent/tools/manage_notebook.go)，复用 `NotebookService.Create/Update/ListPaged/Search`）：create（name 必填）/ rename（id + name 必填）/ list（keyword 过滤 + page/pageSize 分页，pageSize 缺省 10 上限 50，页尾提示可翻页）；**manage_tag**（[manage_tag.go](internal/agent/tools/manage_tag.go)，复用 `TagService`）：list / create（name 必填、color 可选 #RRGGBB）/ update（按 id 重命名、改色，name/color 至少其一，`GetByName` 查重排除自身）；**manage_todo update**（[manage_todo.go](internal/agent/tools/manage_todo.go)）：按 id 修改待办文本（id + text 必填）。② **rebuildServices 重建 AgentSvc**——[app.go](app.go) `rebuildServices` 用新 gorm.DB 重建全部服务后，末尾同步重建 `a.AgentSvc = agent.NewAgentService(agent.Deps{...})`（注入新服务实例），修复数据库重置/切换后 Agent 工具仍持旧服务指针（旧连接）导致操作失效的问题。 |
-| **工具设计要点** | 一文件一工具、构造器 `NewXxx`（导出）+ 结构体 `xxxTool`（包内私有）+ 编译期断言 `var _ tool.InvokableTool`；`Info()` 的 action Enum / 参数 Schema（Required 标记）与 `InvokableRun` 的 case 分发**必须同步维护**（新增动作时两处同改，[TOOLS.md](internal/agent/TOOLS.md) 表格同步）；update 类动作统一用列表返回的 `[数字]` id 定位（与 toggle 一致），id 需正整数校验；全空更新字段返回提示文本而非错误；服务层错误直接透传（上层 `WrapWithError` 回填模型继续对话）；list 分页参数校验统一：`page < 1 → 1`、`pageSize <= 0 → 10`、`> 50 → 50`；`ctx.Err()` 用户取消检查在动作分发前执行。 |
-| **AI 消息空白根因（重要教训）** | 恢复出厂/还原备份后 AI 助手切换历史会话消息空白（连空态打字机提示也不显示）。根因：[data-management.js](frontend/src/js/data-management.js) `resetDatabase` 里 `aiMessagesEl.innerHTML = ''` 清空消息容器，连带删除了容器内的 `.ai-chat-messages-inner` 子元素，导致 [ai-chat.js](frontend/src/js/ai-chat.js) 模块级变量 `messagesInnerEl` 悬空指向已脱离 DOM 的孤儿节点——此后消息渲染全部写进孤儿节点，children 正常、display 正常但 UI 不可见，`querySelector` 返回 null（F12 渲染日志 `rendered children=6` 与诊断 `messages-inner: null` 互相矛盾即命中）。修复：新增导出 `resetAIChatState()` 重建 `messagesInnerEl` 引用（null 则 `createElement` + `appendChild` 重建），`resetDatabase` 与 `restoreFromDir` 统一改调 `window.resetAIChatState?.()` + `window.onAIChatViewActivated?.()`；[main.js](frontend/src/main.js) 导入并暴露 `window.resetAIChatState`。**清空复杂容器必须走模块自带 reset 函数（重新查询/重建内部引用），不得直接 `innerHTML=''`**。 |
-| **涉及文件** | [internal/agent/registry.go](internal/agent/registry.go)（buildTools 注册）、[internal/agent/agent.go](internal/agent/agent.go)（Deps 结构）、[app.go](app.go)（NewAgentService + rebuildServices 末尾重建 AgentSvc）、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)（新增）、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)（新增 + update）、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)（补 update）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（新增导出 `resetAIChatState`）、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)（`resetDatabase`/`restoreFromDir` 改用 `resetAIChatState` + `onAIChatViewActivated`）、[frontend/src/main.js](frontend/src/main.js)（导入并暴露 `window.resetAIChatState`） |
-
----
-
-## 记忆点 4：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 1：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,18 +633,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+## 记忆点 2：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 7 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 4 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
 | **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
 | **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
 
 ---
 
-## 记忆点 6：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 3：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,12 +656,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 4：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 四组前端改动：① **AI 会话侧栏顶天立地重构**——侧栏不再"在标题栏里模拟边框"，`.ai-session-sidebar` 位于 `#viewAiChat .ai-chat-layout` 内，从 topbar 下缘一直顶天立地到底部，左边框连续无断层；删除侧栏头部"会话"标题层，搜索框 `.ai-session-search-wrap` 直接顶到侧栏最上面。② **标题栏按钮固定**——标题栏恒为三列 grid（`1fr auto 1fr`：左 `.view-header-left` / 中 `#aiChatTitle` / 右 `.view-controls`），标题始终居中；左侧固定「折叠/展开 + 新建」两个 32×32 按钮（`.ai-tool-btn`，图标 `stroke-width: 2.5`），返回按钮已删除；折叠图标固定面板样式（无方向箭头），折叠走 `classList.toggle('collapsed')` + localStorage 持久化 + Ctrl+J 触发，按钮不随折叠迁移。③ **双击标题重命名**——`#aiChatTitle` 双击从"新建会话"改为"重命名当前会话"（无 activeSessionId 忽略），复用 `startInlineEdit`（contenteditable + 全选 + Enter/失焦保存 `RenameAISession` + Escape 取消），保存后 `renderSessionList()` 同步侧栏标题；编辑态 `#aiChatTitle[contenteditable="true"]` 加 `min-width: 220px` + input-bg 圆角背景。④ **HTML div 配平修复 + 检查工具链配置**。 |
-| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与记忆点 5 的待办页 div 配平问题同类）。 |
+| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与记忆点 2 的待办页 div 配平问题同类）。 |
 | **前端检查工具链** | 新增 devDeps：eslint@10 + html-validate@11 + prettier@3 + eslint-config-prettier + globals + @eslint/js。配置：[eslint.config.mjs](frontend/eslint.config.mjs)（flat config；ignores：dist/node_modules/hljs-themes-data.js；`no-undef`/`no-unused-vars` 降 warn 防存量噪音；项目隐式 window 全局声明 readonly globals：nm/SVGS/getMockNotes/exportNote/initEditorActionsMenu/switchEditorMode/mockNotes）、[.prettierrc.json](frontend/.prettierrc.json)（tabWidth 4/singleQuote/printWidth 120）、[.prettierignore](frontend/.prettierignore)（dist/node_modules/wailsjs/hljs-themes-data.js）、[.htmlvalidate.json](frontend/.htmlvalidate.json)（关闭风格噪音：button type/void-style/text-content/landmark 等，保留 close-order 结构校验）。package.json scripts：`lint`/`format`/`format:check`/`validate:html`。当前 lint 0 errors/90 warnings、validate:html 0 errors。 |
 | **工具链暴露的存量风险** | `mockNotes` 在 [main.js](frontend/src/main.js) 直接引用但无声明/无 window 挂载（定义在 [notification.js](frontend/src/js/notification.js) 内且未导出）——疑似死代码分支；多个已定义未使用的函数（setAIStatus/updateTodoProgress/closeSearchModalDatePicker 等）；项目大量"`window.xxx = ...` 后裸标识符调用"隐式全局（运行正常，但建议逐步改 `window.` 前缀或 import）。 |
 | **搜索框方案演进** | 曾尝试：放大镜图标（left 14px→17px 反复微调后移除）、方案 C 平面样式+列表顶分隔线（用户撤回，恢复凹陷 bg-secondary 样式）。最终保持原始凹陷搜索框样式不变。教训：纯视觉微调尽量一次到位，避免逐像素拉扯。 |
@@ -697,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 5：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -709,7 +681,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 6：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -720,7 +692,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 7：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,6 +700,39 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **类名冲突踩坑（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 全局规则 `.ai-chat-toggle-switch { display: none; }`（工具栏开关改按钮式时加的，隐藏迷你 switch）会**连坐设置页复用同类名的开关**——设置页深度思考/卡片召回/知乎/Tavily/全网搜索 5 个开关全部隐身。设置页复用公共类必须在 [settings-panel.css](frontend/src/css/components/settings-panel.css) 显式恢复 `display: inline-block` 并补齐基础样式（28×16 圆角胶囊 + 12px 圆点 knob 位移 left 14px），否则开关对用户不可见。 |
 | **Rnx fclint 任务** | [Rnx.toml](Rnx.toml) 新增独立任务 `fclint`（`cd frontend && npm run lint` + `cd frontend && npm run validate:html`），挂 frontend 的 **run_after**（构建完成后执行检查，非前置依赖），可单独 `rnx -r fclint` 或随 build/run/release 自动执行；lint 当前 0 errors/90 warnings（warning 为配置降级，不阻塞任务）。 |
 | **涉及文件** | [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/types.go](internal/agent/types.go)、[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[Rnx.toml](Rnx.toml) |
+
+---
+
+## 记忆点 8：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动补齐 Agent 工具能力：① **manage_note 扩展**（[manage_note.go](internal/agent/tools/manage_note.go)）——新增 `update`（更新标题/扩展名，id + title/file_ext 至少其一，非空才更新对应字段、不碰正文）、`edit`（编辑正文，**三模式互斥**：content 非空→整篇替换；content 空 + find 非空→片段替换（把第 count 次出现的 find 替换为 replace，replace 缺省空串即删除该片段，未找到报错引导重新 view 获取精确原文）；content 与 find 均空 + append_content 非空→追加模式（正文末尾拼接，无需先读全文））、file_ext 扩展名校验（create 缺省 .md）。② **新增 read_url 工具**（[read_url.go](internal/agent/tools/read_url.go)）——基于 eino-ext URL Document Loader 抓取网页提取正文，按 `ai_web_search_max_chars` 设置截断返回；仅放行 http/https（防 file:// 本地读取）、15s 超时、模拟浏览器 UA（多数站点非浏览器 UA 返回 403）；实现 ActionTextProvider（展示被读链接截断防超长）。③ **新增 read_note_section 工具**（[read_note_section.go](internal/agent/tools/read_note_section.go)）——分段续读大笔记：id/offset/length 参数，返回指定区间正文；view 动作内容超过 `ai_large_file_preview_threshold` 截断时给出该工具续读指引（id/offset 参数），避免模型一次拿不到全文。 |
+| **meta.go 描述一致性教训（重要）** | [meta.go](internal/agent/tools/meta.go) 工具 Label 曾声称 manage_note 有"删除"能力而实际未实现，已修正。**工具描述必须与实际实现严格一致**（虚假能力会诱导模型误调、误导用户预期）；[tools/doc.go](internal/agent/tools/doc.go) 与 [registry.go](internal/agent/registry.go) 是工具清单权威来源，新增/改名/删除工具时 meta.go 与 doc.go 需同步。 |
+| **edit 模式边界** | 三模式互斥判定顺序：content 非空优先 → find 非空 → append_content；片段替换是**字面匹配**（非正则），要求模型先 view 获取精确原文再替换；append 模式刻意"无需先读全文"，与 view 超大截断形成互补，避免模型必须读全文才能追加。 |
+| **涉及文件** | [internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（update/edit/append + file_ext）、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)（新增）、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)（新增）、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)（Label 修正）、[internal/agent/registry.go](internal/agent/registry.go)（注册 read_url/read_note_section）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具边界说明） |
+
+---
+
+## 记忆点 9：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | Agent 全部 12 个工具实施分层防御加固（用户拍板"全部加固"）：**P0 崩溃级**——[context.go](internal/agent/tools/context.go) `WrapWithError.InvokableRun` 改命名返回值 + defer recover（panic 转 fail 回填模型不中断 ReAct 循环，用户取消分支逐字保持）；[web_search.go](internal/agent/tools/web_search.go) 单源 goroutine 加 recover（panic 转错误进结果通道按部分失败跳过）。**P1 稳健级**——各工具补 `ctx.Err()` 取消检查；[read_note_section.go](internal/agent/tools/read_note_section.go) offset/length 整数校验（math.Trunc 防浮点截断）；[manage_tag.go](internal/agent/tools/manage_tag.go) action TrimSpace；统一文本长度上限（[context.go](internal/agent/tools/context.go) `validateTextLen` 按 rune 计：`maxToolShortText`=500 / `maxToolFindLen`=2000 / `maxToolLongText`=20000，覆盖全部文本参数）。**P2 加固级**——[read_url.go](internal/agent/tools/read_url.go) `isPrivateHost` SSRF 防护（拒绝 loopback/私网/链路本地（含 169.254.169.254）/未指定/组播 IP 及 localhost/.local/.internal 主机名，**不做 DNS 解析**防解析绕过）；[manage_note.go](internal/agent/tools/manage_note.go) `normalizeNoteFileExt`（纯字母数字 1-10 位，create 空→.md、update 空→保持原值）。 |
+| **写操作强制确认（重要）** | manage_note 的 update/edit/pin/move/add_tag/remove_tag 六动作：schema 新增 `confirm` 布尔参数，**未携带 `confirm=true` 一律拒绝执行**并返回正常结果（非 error、前端不显示失败态）的引导文本"该操作需要用户确认……调用 ask_user 向用户确认，用户明确同意后携带 confirm=true 重新调用"；Desc 写明缺省拒绝。app.go【写操作确认】规范升级为**强制**三步：正文说明 + ask_user 提问 → 用户同意后带 confirm=true 执行 → 拒绝不得执行。设计边界：create 视为用户明确要求的创建指令不强制确认；工具层只能保证"无 confirm=true 不执行"，模型未问用户就传 confirm=true 的漏洞靠 Desc + 系统提示词强约束压制（纯工具层无法 100% 拦截自主模型首次调用参数，完整封死需跨轮会话状态机，已确认不采用）。 |
+| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 10）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
+| **涉及文件** | [internal/agent/tools/context.go](internal/agent/tools/context.go)（recover + fail + validateTextLen + 上限常量）、[internal/agent/tools/web_search.go](internal/agent/tools/web_search.go)、[internal/agent/tools/recall_notes.go](internal/agent/tools/recall_notes.go)、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)、[internal/agent/tools/refine_query.go](internal/agent/tools/refine_query.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)、[internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（confirm + normalizeNoteFileExt）、[app.go](app.go)（写操作强制确认规范 + ask_user 强制调用规范） |
+
+---
+
+## 记忆点 10：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增循环前规则意图分类层（补上"输入处理前无行为感知"的空档，定位为**感知与信号强化层**，最终决策权仍在循环内模型）：① **[intent.go](internal/agent/intent.go)**——纯本地关键词正则分类，零 API 成本、确定性可单测，7 类意图：`chitchat`/`time`/`search`/`stats`/`note_write`/`vague`/`query`（默认），分类顺序：纯时间→纯闲聊→写操作→模糊→统计→搜索→默认；简单实体提取 + **软信号/硬约束分级**（高置信硬约束=工具裁剪，弱信号仅注入提示）。② **app.go `CallAIAgentStream` 接入**——读设置取 disabledTools 后、Run 前调用 `agent.ClassifyIntent(userText)`：注入【本请求意图识别】强化提示（note_write→confirm 流程、vague→ask_user 强制反问、stats→get_stats、search→web_search）+ 裁剪合并进既有黑名单（**追加语义不覆盖用户配置**）+ Debugw 日志（intent + 裁剪列表）。③ **裁剪策略（保守）**——仅纯时间查询保留 get_current_time；**闲聊不裁剪**（判定不可靠，"应声+正题"如"好的，把今天的安排发我一下"易误判，误裁导致功能受限是重要教训）；工具名列表复用 `tools.BuiltinTools()` 防硬编码漂移；agent.go 零改动、问答模式（CallAIStream）不受影响。 |
+| **意图层与工具层分工（重要）** | **不做"每工具一个规则分类器"**——工具间语义重叠（如"查笔记"该归 recall_notes 还是 manage_note list 由模型按上下文选）规则必误判；工具细粒度选择留给模型（它看全部 schema），工具防御由工具层自身机制承担（confirm/参数校验/文本上限/action 白名单），意图层只做粗粒度决策。工具级推荐留待阶段 2（L2 模型层结构化输出 recommended_tools，而非堆关键词）。演进：阶段 1 已实施；阶段 2 = 规则低置信时按需触发轻量 LLM 意图解析；阶段 3 = 解析结果回传前端展示可解释性。 |
+| **启动迁移清理** | 移除已过时的 `migrateProviderRemoval`（[app.go](app.go)）：provider 概念已多版本前移除，函数完全幂等但每次启动产生 DROP COLUMN 报错噪音；删除收益≈0、风险是破坏老版本升级（需确认无 provider 时代部署）。`migrateSensitiveKeys`（密钥 Base64 编码迁移）保留。判断"迁移代码能否删除"的依据：幂等性 + 是否还有老版本部署 + 启动噪音。 |
+| **涉及文件** | [internal/agent/intent.go](internal/agent/intent.go)（新增）、[app.go](app.go)（ClassifyIntent 接入 + 意图日志 + 移除迁移）、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)（BuiltinTools 复用） |
 
 ---
 

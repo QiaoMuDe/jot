@@ -264,8 +264,6 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
-	// 迁移移除服务商（Provider）后的存量数据
-	a.migrateProviderRemoval()
 	// 迁移存量明文密钥为 Base64 编码格式（放在旧迁移之后，确保旧迁移逻辑读到的是明文）
 	a.migrateSensitiveKeys()
 
@@ -284,47 +282,6 @@ func (a *App) shutdown(ctx context.Context) {
 		if err == nil && sqlDB != nil {
 			_ = sqlDB.Close()
 		}
-	}
-}
-
-// migrateProviderRemoval 迁移移除服务商（Provider）后的存量数据：
-// 1. 删除 settings 表的 ai_provider / ai_embed_provider 键
-// 2. api_profiles 中 provider='ollama' 的记录改写为 openai，并为其 BaseURL 追加 OpenAI 兼容的 /v1 路径（无后缀时）
-// 3. settings 表 ai_embed_base_url 若指向 Ollama 默认地址且无 /v1 后缀则追加
-// 4. 尝试删除 api_profiles 表的 provider 列（SQLite 不支持删列时忽略，保留列但不再使用）
-func (a *App) migrateProviderRemoval() {
-	// 1. 删除 settings 键
-	a.db.Where("key IN ?", []string{"ai_provider", "ai_embed_provider"}).Delete(&models.Setting{})
-	// 2. 迁移 ollama 预设（APIProfile 结构体已无 Provider 字段，走原始 SQL 读取存量列）
-	type legacyProfile struct {
-		ID      uint
-		Name    string
-		BaseURL string
-	}
-	var legacy []legacyProfile
-	if err := a.db.Raw("SELECT id, name, base_url FROM api_profiles WHERE provider = ?", "ollama").Scan(&legacy).Error; err == nil {
-		for _, p := range legacy {
-			updates := map[string]interface{}{"provider": "openai"}
-			if !strings.HasSuffix(strings.TrimRight(p.BaseURL, "/"), "/v1") {
-				updates["base_url"] = strings.TrimRight(p.BaseURL, "/") + "/v1"
-			}
-			a.db.Model(&models.APIProfile{}).Where("id = ?", p.ID).Updates(updates)
-			a.LogSvc.Logger.Infow("迁移预设服务商", fastlog.String("profile", p.Name))
-		}
-	}
-	// 3. 迁移 embed base_url（Ollama 默认地址追加 /v1）
-	embedURL := a.settingService.Get("ai_embed_base_url")
-	if strings.Contains(embedURL, "localhost:11434") && !strings.HasSuffix(strings.TrimRight(embedURL, "/"), "/v1") {
-		newURL := strings.TrimRight(embedURL, "/") + "/v1"
-		if err := a.settingService.Set("ai_embed_base_url", newURL); err != nil {
-			a.LogSvc.Logger.Errorw("迁移量化地址追加 /v1 失败", fastlog.Error(err))
-		} else {
-			a.LogSvc.Logger.Infow("迁移量化地址追加 /v1", fastlog.String("baseURL", newURL))
-		}
-	}
-	// 4. 删除 provider 列（失败忽略）
-	if err := a.db.Exec("ALTER TABLE api_profiles DROP COLUMN provider").Error; err != nil {
-		a.LogSvc.Logger.Debugw("跳过删除 provider 列（SQLite 不支持）", fastlog.Error(err))
 	}
 }
 
@@ -2554,17 +2511,18 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"4. 信息整合优先级：本地笔记信息优先于联网搜索结果，联网搜索结果优先于模型自身知识；引用时标注来源（如“你的笔记《XXX》中记录了……”或“根据搜索结果显示……”）；不同来源信息矛盾时如实说明差异。\n" +
 			"5. 失败降级：recall_notes 因量化连接未配置等原因失败时，直接转 web_search 联网搜索；recall_notes 已返回充足信息时，不再重复联网。\n")
 
-		// Agent 模式专用约束：ask_user 反向提问工具使用规范（仅 Agent 模式注入，问答模式不受影响）
-		instruction.WriteString("\n\n【工具使用规范 - ask_user 反向提问】\n" +
-			"1. 仅在用户意图不明确、缺少必要信息或需要在多个方案间做选择时，才调用 ask_user 工具向用户发起澄清提问；一次只问一个问题，提供 2-6 个候选选项；严禁用于闲聊或无意义的确认。\n" +
-			"2. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后立即停止生成，不要再输出任何内容，等待用户回答。\n" +
-			"3. 用户回答后（会作为新消息发来），结合你的问题与用户的回答继续正常回答用户，不要重复提问。\n")
+		// Agent 模式专用约束：ask_user 反向提问工具强制调用规范（仅 Agent 模式注入，问答模式不受影响）
+		instruction.WriteString("\n\n【工具使用规范 - ask_user 反向提问（强制调用）】\n" +
+			"1. 以下场景必须调用 ask_user 工具向用户发起澄清提问，不得省略或绕过，严禁在缺少必要信息时擅自猜测后直接执行：①用户请求存在信息模糊、参数不明确、需求不具体（如未指明操作对象、数量、范围、目标、方案等）；②需要用户在多个选项或方案之间做选择（如多篇候选笔记、多个方案、多种执行方式）；③需要获取用户进一步确认或补充关键信息才能继续执行（含写操作前的确认）。\n" +
+			"2. 一次只问一个问题，提供 2-6 个候选选项；严禁把猜测当作已确认事实继续后续操作，严禁用于闲聊或无意义的确认。\n" +
+			"3. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后立即停止生成，不要再输出任何内容，等待用户回答。\n" +
+			"4. 用户回答后（会作为新消息发来），结合你的问题与用户的回答继续正常回答用户，不要重复提问。\n")
 
-		// Agent 模式专用约束：写操作确认规范（仅 Agent 模式注入，问答模式不受影响）
-		instruction.WriteString("\n\n【工具使用规范 - 写操作确认】\n" +
-			"1. 执行破坏性或不可逆的写操作前，必须先向用户确认修改意图，得到明确同意后再执行；这类操作包括：整篇替换/删除笔记正文（manage_note 的 edit 动作）、移动笔记、重命名笔记本、删除/替换内容片段等。\n" +
-			"2. 确认时在回复正文中写明将执行的具体操作与影响范围（如“我准备把笔记 #3 的正文整篇替换为……，是否继续？”），可调用 ask_user 工具发起确认；用户确认前不要调用对应写操作工具。\n" +
-			"3. 仅当你推断用户的指令本身就是明确的执行指令（如“帮我创建笔记”“把这篇移到 XX 笔记本”）且无歧义时，可直接执行，无需额外确认。\n")
+		// Agent 模式专用约束：写操作强制确认规范（仅 Agent 模式注入，问答模式不受影响）
+		instruction.WriteString("\n\n【工具使用规范 - 写操作强制确认】\n" +
+			"1. manage_note 的 update / edit / pin / move / add_tag / remove_tag 全部属于写操作，执行前必须先向用户确认修改意图：在回复正文中写明要执行的具体操作与影响范围（如“我准备把笔记 #3 的正文整篇替换为……，是否继续？”），并调用 ask_user 工具向用户发起确认，等待用户回答。\n" +
+			"2. 只有用户明确同意后，才能携带 confirm=true 参数调用对应写操作工具执行；用户确认前不要调用写操作工具，也不要直接传 confirm=true。若先调用了写操作工具被拒绝（工具返回“该操作需要用户确认”提示），按上述流程补一次 ask_user 提问，用户同意后再携带 confirm=true 执行。\n" +
+			"3. 用户明确拒绝或撤回指令时，不得执行对应写操作。create（创建笔记）是用户明确要求的创建指令，无需确认。\n")
 
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
@@ -2596,6 +2554,22 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 				a.LogSvc.Logger.Warnw("解析 ai_agent_tools_disabled 失败，按空处理（全部工具启用）",
 					fastlog.String("raw", raw), fastlog.Error(err))
 			}
+		}
+
+		// 前置意图感知（阶段 1 规则层）：对当前输入分类意图，
+		// 注入针对性强化提示 + 高置信工具裁剪（仅纯时间查询裁剪，其余仅注入提示）
+		ir := agent.ClassifyIntent(userText)
+		if ir.Prompt != "" {
+			instruction.WriteString("\n\n" + ir.Prompt)
+		}
+		if len(ir.Disable) > 0 {
+			disabledTools = append(disabledTools, ir.Disable...)
+			a.LogSvc.Logger.Debugw("Agent 意图感知：按意图裁剪工具",
+				fastlog.String("intent", ir.Intent.String()),
+				fastlog.String("disabled", strings.Join(ir.Disable, ",")))
+		} else if a.LogSvc.Logger != nil {
+			a.LogSvc.Logger.Debugw("Agent 意图感知",
+				fastlog.String("intent", ir.Intent.String()))
 		}
 
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）

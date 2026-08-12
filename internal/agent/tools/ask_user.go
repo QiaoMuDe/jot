@@ -49,7 +49,7 @@ func (g *askUserTool) ActionText(argumentsInJSON string) string {
 func (g *askUserTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "ask_user",
-		Desc: "向用户发起一次结构化澄清提问（不执行业务操作）。当用户意图不明确、缺少必要信息（如未指定搜索源/方案/范围/数量等），或需要在多个选项之间让用户做选择时调用，向用户展示问题卡片并等待其回答。一次只能问一个问题，选项 2-6 个；只有用户主动询问或必须决策时才使用，严禁用于闲聊或无意义的确认。调用后在回复正文中完整写出你的问题，然后停止生成等待用户回答。需要用户多选决策时，将 selection 设为 multiple（选项仍 2-6 个）。",
+		Desc: "向用户发起一次结构化澄清提问（不执行业务操作）。以下场景必须调用本工具，不得省略或绕过，严禁在缺少必要信息时擅自猜测后直接执行：①用户请求存在信息模糊、参数不明确、需求不具体（如未指定搜索源/方案/范围/数量/操作对象等）；②需要用户在多个选项或方案之间做选择；③需要获取用户进一步确认或补充关键信息才能继续执行（含写操作前的确认）。调用时向用户展示问题卡片并等待其回答。一次只能问一个问题，选项 2-6 个；严禁把猜测当作已确认事实继续操作，严禁用于闲聊或无意义的确认。调用后在回复正文中完整写出你的问题，然后停止生成等待用户回答。需要用户多选决策时，将 selection 设为 multiple（选项仍 2-6 个）。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"question": {
 				Type:     schema.String,

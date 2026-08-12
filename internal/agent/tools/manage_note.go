@@ -63,6 +63,37 @@ func normalizeNoteFileExt(raw string) (string, error) {
 	return "." + s, nil
 }
 
+// isManageNoteWriteAction 判断 action 是否为写操作（须用户确认后才执行）。
+// create 视为用户明确要求的创建指令不强制确认；读操作 list/view 无需确认。
+func isManageNoteWriteAction(action string) bool {
+	switch action {
+	case "update", "edit", "pin", "move", "add_tag", "remove_tag":
+		return true
+	default:
+		return false
+	}
+}
+
+// manageNoteActionCN 返回 action 的中文文案（供强制确认引导提示使用），未知 action 回退"操作"。
+func manageNoteActionCN(action string) string {
+	switch action {
+	case "update":
+		return "更新笔记标题/扩展名"
+	case "edit":
+		return "编辑笔记正文"
+	case "pin":
+		return "置顶或取消置顶"
+	case "move":
+		return "移动笔记"
+	case "add_tag":
+		return "添加标签"
+	case "remove_tag":
+		return "移除标签"
+	default:
+		return "操作"
+	}
+}
+
 // manageNoteTool 笔记库管理工具。
 type manageNoteTool struct {
 	note    *services.NoteService    // 笔记服务（创建 / 搜索 / 查看 / 置顶 / 移动）
@@ -111,7 +142,7 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_note",
-		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 id 笔记编号，内容过长时会截断并可要求分段查看）；update=更新笔记标题/扩展名（需提供 id 笔记编号与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 id 笔记编号；整篇替换时提供 content 新正文；只改/删某段时提供 find 要替换的原文片段与 replace 新文本，务必从 view 结果中精确复制 find（标点空格须完全一致），删除片段时 replace 传空字符串，长笔记建议用 find+replace 避免回传全文；末尾追加时提供 append_content，无需先读全文）；pin=置顶/取消置顶笔记（需提供 id 笔记编号）；move=移动笔记到目标笔记本（需提供 id 笔记编号与 notebook_id 目标笔记本）；add_tag=给笔记添加标签（需提供 id 笔记编号与 tag_id 标签编号）；remove_tag=从笔记移除标签（需提供 id 笔记编号与 tag_id 标签编号）。修改重要内容（整篇替换/删除正文片段、移动笔记等不可逆操作）前建议先向用户确认修改意图再执行。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
+		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 id 笔记编号，内容过长时会截断并可要求分段查看）；update=更新笔记标题/扩展名（需提供 id 笔记编号与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 id 笔记编号；整篇替换时提供 content 新正文；只改/删某段时提供 find 要替换的原文片段与 replace 新文本，务必从 view 结果中精确复制 find（标点空格须完全一致），删除片段时 replace 传空字符串，长笔记建议用 find+replace 避免回传全文；末尾追加时提供 append_content，无需先读全文）；pin=置顶/取消置顶笔记（需提供 id 笔记编号）；move=移动笔记到目标笔记本（需提供 id 笔记编号与 notebook_id 目标笔记本）；add_tag=给笔记添加标签（需提供 id 笔记编号与 tag_id 标签编号）；remove_tag=从笔记移除标签（需提供 id 笔记编号与 tag_id 标签编号）。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -206,6 +237,11 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 				Desc:     "标签编号（正整数，manage_tag 列表中的 [数字] 即为 id），action=add_tag / remove_tag 时必填",
 				Required: false,
 			},
+			"confirm": {
+				Type:     schema.Boolean,
+				Desc:     "用户确认标记：update / edit / pin / move / add_tag / remove_tag 等写操作执行前必须先向用户确认修改意图，用户明确同意后传 true 才执行；缺省 false 时工具会拒绝执行并引导先确认",
+				Required: false,
+			},
 		}),
 	}, nil
 }
@@ -231,6 +267,7 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		PageSize      float64   `json:"pageSize"`
 		ID            float64   `json:"id"`
 		TagID         float64   `json:"tag_id"`
+		Confirm       bool      `json:"confirm"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 manage_note 参数失败: %w", err)
@@ -245,6 +282,20 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	// 用户取消检查：父包事件循环随 ctx 终止，工具直接返回 ctx.Err()
 	if ctx.Err() != nil {
 		return "", ctx.Err()
+	}
+
+	// 写操作强制确认：update / edit / pin / move / add_tag / remove_tag 均须携带
+	// confirm=true（用户已明确同意）才执行；缺省 false 时拒绝执行并引导先向用户确认。
+	// 返回正常结果（nil error）而非 error，避免被包装器记为 tool_error 失败态。
+	if !args.Confirm && isManageNoteWriteAction(args.Action) {
+		if m.ctx != nil && m.ctx.Logger != nil {
+			m.ctx.Logger.Debugw("Agent manage_note 写操作待确认",
+				fastlog.String("action", args.Action))
+		}
+		return "该操作需要用户确认：manage_note 的 " + manageNoteActionCN(args.Action) +
+			" 属于写操作，执行前必须先征得用户同意。" +
+			"请在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户确认；" +
+			"用户明确同意后，携带 confirm=true 重新调用本工具即可执行。", nil
 	}
 
 	if m.ctx != nil && m.ctx.Logger != nil {
