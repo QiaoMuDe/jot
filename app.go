@@ -13,9 +13,11 @@ import (
 	"io"
 	"jot/internal/agent"
 	"jot/internal/aierrors"
+	"jot/internal/config"
 	"jot/internal/database"
 	"jot/internal/einocli"
 	"jot/internal/fontutil"
+	"jot/internal/mcpserver"
 	"jot/internal/models"
 	"jot/internal/services"
 	"math"
@@ -108,7 +110,6 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	home, _ := os.UserHomeDir()
 	logSvc := services.NewLogService()
 	var db *gorm.DB
 
@@ -130,7 +131,11 @@ func NewApp() *App {
 	}()
 
 	// 1. 默认 INFO 级别初始化 Logger，使后续操作可用日志记录
-	logDir := filepath.Join(home, ".jot", "logs")
+	logDir, err := config.SubDir(config.DirLogs)
+	if err != nil {
+		println("获取日志目录失败:", err.Error())
+		panic(err)
+	}
 	if err := logSvc.Init(logDir, fastlog.INFO); err != nil {
 		println("日志初始化失败:", err.Error())
 		panic(err)
@@ -204,12 +209,15 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	home, _ := os.UserHomeDir()
-
 	// 确保图片存储目录存在
-	imageDir := filepath.Join(home, ".jot", "images")
+	imageDir, _ := config.SubDir(config.DirImages)
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
 		a.LogSvc.Logger.Errorw("创建图片目录失败", fastlog.Error(err))
+	}
+
+	// 确保 MCP 配置目录与默认配置文件存在（首次启动自动初始化 ~/.jot/mcp/mcp-servers.json）
+	if err := mcpserver.EnsureConfig(); err != nil {
+		a.LogSvc.Logger.Errorw("初始化 MCP 配置失败", fastlog.Error(err))
 	}
 
 	// 确保默认笔记本存在（首次启动自动创建）
@@ -363,14 +371,13 @@ func (a *App) SaveImage(name string, data string) (string, error) {
 		return "", fmt.Errorf("解码图片数据失败: %w", err)
 	}
 
-	home, err := os.UserHomeDir()
+	imageDir, err := config.SubDir(config.DirImages)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("图片保存失败",
 			fastlog.Error(err),
 		)
 		return "", fmt.Errorf("获取用户目录失败: %w", err)
 	}
-	imageDir := filepath.Join(home, ".jot", "images")
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
 		a.LogSvc.Logger.Errorw("图片保存失败",
 			fastlog.Error(err),
@@ -411,11 +418,10 @@ func (a *App) SaveImageFromPath(localPath string) (string, error) {
 		return "", fmt.Errorf("读取本地图片失败: %w", err)
 	}
 
-	home, err := os.UserHomeDir()
+	imageDir, err := config.SubDir(config.DirImages)
 	if err != nil {
 		return "", fmt.Errorf("获取用户目录失败: %w", err)
 	}
-	imageDir := filepath.Join(home, ".jot", "images")
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
 		return "", fmt.Errorf("创建图片目录失败: %w", err)
 	}
@@ -453,11 +459,10 @@ func (a *App) ReadTextFile(localPath string) (string, error) {
 // 返回删除的文件数量
 func (a *App) CleanupOrphanImages() int {
 	a.LogSvc.Logger.Debugw("CleanupOrphanImages")
-	home, err := os.UserHomeDir()
+	imageDir, err := config.SubDir(config.DirImages)
 	if err != nil {
 		return 0
 	}
-	imageDir := filepath.Join(home, ".jot", "images")
 
 	// 读取图片目录
 	entries, err := os.ReadDir(imageDir)
@@ -503,11 +508,7 @@ func (a *App) CleanupOrphanImages() int {
 
 // imageDirPath 返回 ~/.jot/images 目录路径
 func (a *App) imageDirPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("获取用户目录失败: %w", err)
-	}
-	return filepath.Join(home, ".jot", "images"), nil
+	return config.SubDir(config.DirImages)
 }
 
 // ==================== Note 相关绑定方法 ====================
@@ -3329,12 +3330,12 @@ func (a *App) OpenLogDir() error {
 	a.LogSvc.Logger.Debugw("OpenLogDir")
 	logDir := a.LogSvc.LogDir()
 	if logDir == "" {
-		homeDir, err := os.UserHomeDir()
+		dir, err := config.SubDir(config.DirLogs)
 		if err != nil {
 			a.LogSvc.Logger.Errorw("OpenLogDir 失败", fastlog.Error(err))
 			return err
 		}
-		logDir = filepath.Join(homeDir, ".jot", "logs")
+		logDir = dir
 	}
 	cmd := exec.Command("explorer", logDir)
 	if err := cmd.Start(); err != nil {
@@ -3912,8 +3913,10 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
 	a.LogSvc = services.NewLogService()
-	home, _ := os.UserHomeDir()
-	logDir := filepath.Join(home, ".jot", "logs")
+	logDir, err := config.SubDir(config.DirLogs)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("获取日志目录失败", fastlog.Error(err))
+	}
 	logLevelStr := a.settingService.Get("log_level")
 	logLevelVal := 1
 	if n, err := strconv.Atoi(logLevelStr); err == nil {

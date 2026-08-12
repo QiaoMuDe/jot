@@ -22,6 +22,6 @@
 //   - 多 Agent 编排（子 Agent、工具 Agent）可基于 adk 的 AgentTool / DeepAgent 扩展；
 //   - 记忆 / 会话上下文可在 Request 中扩展字段，由调用方组装进 Instruction。
 //   - 外部 MCP 服务器工具（测试阶段，配置文件驱动）：internal/mcpserver 包读取
-//     mcp-servers.json，连接 enabled 服务器并发现工具（改名 mcp_{服务器名}_{工具名}），
+//     ~/.jot/mcp/mcp-servers.json，连接 enabled 服务器并发现工具（改名 mcp_{服务器名}_{工具名}），
 //     在 Run() 中并入 toolList 并同样经 WrapWithError 包装；配置缺失 / 单服务器失败仅记日志跳过。
 package agent

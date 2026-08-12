@@ -38,8 +38,8 @@ import (
 	"gitee.com/MM-Q/fastlog"
 )
 
-// maxIterations 限制 ReAct 循环最大迭代次数，防止死循环（与 agent-demo 一致）。
-const maxIterations = 8
+// MaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（统一默认值，供装配与日志引用）。
+const MaxIterations = 20
 
 // Deps AgentService 依赖注入。
 // 注意：搜索功能在现有代码中是 services 包级函数（services.SearchWeb / SearchZhihuContent /
@@ -56,7 +56,7 @@ type Deps struct {
 	Stats    *services.StatsService    // Stats 数据统计聚合服务（get_stats 工具使用）
 	Logger   *fastlog.Logger
 	// MCPServerConfigPath 外部 MCP 服务器配置文件路径（测试阶段，配置文件驱动）；
-	// 为空时回退 mcpserver.DefaultConfigFile（"mcp-servers.json"，相对进程工作目录）。
+	// 为空时回退 mcpserver.LoadDefault（读取 ~/.jot/mcp/mcp-servers.json）。
 	MCPServerConfigPath string
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
@@ -116,15 +116,27 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx})
 
-	// 追加外部 MCP 服务器工具（测试阶段，配置文件驱动）：读取 mcp-servers.json，
+	// 追加外部 MCP 服务器工具（测试阶段，配置文件驱动）：读取 ~/.jot/mcp/mcp-servers.json，
 	// 对每个 enabled 服务器连接并发现工具，改名后并入 toolList（须在 toolByName 索引构建之前）；
 	// 配置缺失 / 单服务器失败仅记录日志跳过，不中断内置工具与整体 Agent 运行
 	mcpPath := s.deps.MCPServerConfigPath
+	var mcpCfg *mcpserver.Config
 	if mcpPath == "" {
-		mcpPath = mcpserver.DefaultConfigFile
+		// 默认读取用户家目录 ~/.jot/mcp/mcp-servers.json（可由 Deps.MCPServerConfigPath 覆盖）
+		mcpCfg, err = mcpserver.LoadDefault()
+	} else {
+		mcpCfg, err = mcpserver.Load(mcpPath)
 	}
-	mcpCfg, err := mcpserver.Load(mcpPath)
 	if err != nil {
+		// 默认路径下失败：家目录路径解析失败属系统级异常，直接报错退出；
+		// 路径可解析而配置不可用（缺失/损坏）时回填路径供日志，跳过 MCP 装配不阻断对话
+		if mcpPath == "" {
+			p, pErr := mcpserver.DefaultConfigPath()
+			if pErr != nil {
+				return result, fmt.Errorf("解析 MCP 默认配置路径失败: %w", pErr)
+			}
+			mcpPath = p
+		}
 		if s.deps.Logger != nil {
 			s.deps.Logger.Debugw("MCP 服务器配置不可用，跳过 MCP 工具装配",
 				fastlog.String("path", mcpPath),
@@ -139,18 +151,43 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					fastlog.Error(loadErr))
 			}
 		}
-		for _, server := range mcpCfg.EnabledServers() {
+		enabledServers := mcpCfg.EnabledServers()
+		if len(enabledServers) == 0 && s.deps.Logger != nil {
+			s.deps.Logger.Debugw("MCP 配置无启用的服务器，跳过 MCP 工具装配",
+				fastlog.String("path", mcpPath))
+		}
+
+		// 会话统一收集，待本轮 Run 结束后统一关闭（避免 for 循环内 defer 可读性隐患，
+		// 且覆盖其后所有 return 路径）；关闭失败记 Warn 便于发现连接清理异常
+		var mcpSessions []*mcpserver.Session
+		defer func() {
+			for _, sess := range mcpSessions {
+				if err := sess.Close(); err != nil && s.deps.Logger != nil {
+					s.deps.Logger.Warnw("MCP 会话关闭失败",
+						fastlog.String("server", sess.ServerName),
+						fastlog.Error(err))
+				}
+			}
+		}()
+
+		for _, server := range enabledServers {
+			connStart := time.Now()
 			sess, err := mcpserver.OpenSession(ctx, server)
 			if err != nil {
 				if s.deps.Logger != nil {
 					s.deps.Logger.Warnw("MCP 服务器连接失败，跳过该服务器",
 						fastlog.String("server", server.Name),
+						fastlog.Int("duration_ms", int(time.Since(connStart).Milliseconds())),
 						fastlog.Error(err))
 				}
 				continue
 			}
-			// 会话随本轮 Run 结束统一关闭（defer 延迟到函数末尾，for 循环内注册的会话同样覆盖）
-			defer func() { _ = sess.Close() }()
+			mcpSessions = append(mcpSessions, sess)
+			if sess.Skipped > 0 && s.deps.Logger != nil {
+				s.deps.Logger.Warnw("部分 MCP 工具因 Info 解析失败被跳过",
+					fastlog.String("server", server.Name),
+					fastlog.Int("skipped", sess.Skipped))
+			}
 			var toolNames []string
 			for _, t := range sess.Tools {
 				invokable, ok := t.(tool.InvokableTool)
@@ -169,12 +206,14 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				toolNames = append(toolNames, mcpToolName)
 				toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
 			}
-			// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称），便于排查工具是否生效
+			// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与连接耗时，
+			// 便于排查工具是否生效及定位慢服务器
 			if s.deps.Logger != nil {
 				s.deps.Logger.Infow("MCP 服务器工具已上线",
 					fastlog.String("server", server.Name),
 					fastlog.Int("count", len(toolNames)),
-					fastlog.String("tools", strings.Join(toolNames, ", ")))
+					fastlog.String("tools", strings.Join(toolNames, ", ")),
+					fastlog.Int("duration_ms", int(time.Since(connStart).Milliseconds())))
 			}
 		}
 	}
@@ -200,7 +239,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				Tools: toolList,
 			},
 		},
-		MaxIterations: maxIterations,
+		MaxIterations: MaxIterations,
 	})
 	if err != nil {
 		return result, fmt.Errorf("创建 ChatModelAgent 失败: %w", err)
@@ -375,7 +414,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		s.deps.Logger.Debugw("Agent 对话完成",
 			fastlog.Int("content_len", len(result.Content)),
 			fastlog.Int("tool_calls", len(toolRecords)),
-			fastlog.Int("max_iterations", maxIterations))
+			fastlog.Int("max_iterations", MaxIterations))
 	}
 	return result, nil
 }

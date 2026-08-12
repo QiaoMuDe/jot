@@ -236,3 +236,47 @@ func names(servers []mcpserver.Server) []string {
 	}
 	return out
 }
+
+// TestEnsureConfigFile 验证 ensureConfigFile：目录+默认文件创建、幂等不覆盖、已存在文件保留。
+func TestEnsureConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp", "mcp-servers.json")
+
+	// 1. 首次调用：创建目录并写入默认配置
+	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
+		t.Fatalf("ensureConfigFile 首次调用失败: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读取默认配置文件失败: %v", err)
+	}
+	cfg, err := mcpserver.Load(path)
+	if err != nil {
+		t.Fatalf("默认配置应可被 Load 解析: %v", err)
+	}
+	if len(cfg.Servers) != 0 {
+		t.Errorf("默认配置 servers 应为空, got %d 条", len(cfg.Servers))
+	}
+
+	// 2. 二次调用：幂等，不报错且内容不变
+	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
+		t.Fatalf("ensureConfigFile 二次调用失败: %v", err)
+	}
+	again, _ := os.ReadFile(path)
+	if string(again) != string(data) {
+		t.Error("重复调用不应改动已有配置文件内容")
+	}
+
+	// 3. 用户已填写配置时保留原文件（不被默认内容覆盖）
+	custom := `{"servers":[{"name":"x","transport":"stdio","command":"echo","enabled":false}]}`
+	if err := os.WriteFile(path, []byte(custom), 0644); err != nil {
+		t.Fatalf("写入自定义配置失败: %v", err)
+	}
+	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
+		t.Fatalf("ensureConfigFile 对已存在文件调用失败: %v", err)
+	}
+	kept, _ := os.ReadFile(path)
+	if string(kept) != custom {
+		t.Error("已存在的用户配置不应被默认配置覆盖")
+	}
+}

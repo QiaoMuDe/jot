@@ -3,9 +3,9 @@ package main
 import (
 	"embed"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
+
+	"jot/internal/config"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -53,11 +53,13 @@ func main() {
 	r, g, b := themeBG(app.settingService.Get("theme"))
 
 	// 计算图片存储目录路径
-	home, _ := os.UserHomeDir()
-	imageDir := filepath.Join(home, ".jot", "images")
+	imageDir, err := config.SubDir(config.DirImages)
+	if err != nil {
+		println("获取图片存储目录失败:", err.Error())
+	}
 
 	// Create application with options
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:            "jot",
 		Width:            1080,
 		Height:           768,

@@ -1,8 +1,8 @@
 // Package mcpserver 提供外部 MCP 服务器支持：配置文件解析、客户端连接与工具发现包装。
 //
 // 职责：
-//   - 解析与校验 mcp-servers.json（stdio / sse / http 三种传输）：
-//     config.go 定义 Server / Config 结构与 Load / EnabledServers。
+//   - 解析与校验 ~/.jot/mcp/mcp-servers.json（stdio / sse / http 三种传输）：
+//     config.go 定义 Server / Config 结构与 Load / LoadDefault / EnabledServers。
 //   - 基于 mark3labs/mcp-go 按传输类型构建客户端并完成握手（Start + Initialize）：
 //     client.go 的 Connect。
 //   - 基于 eino-ext mcp 组件将服务器工具转为 eino tool.BaseTool，
@@ -17,10 +17,61 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"jot/internal/config"
 )
 
-// DefaultConfigFile 默认 MCP 服务器配置文件路径（相对进程工作目录，即项目根目录）。
-const DefaultConfigFile = "mcp-servers.json"
+// DefaultConfigPath 返回默认 MCP 服务器配置文件路径: ~/.jot/mcp/mcp-servers.json
+func DefaultConfigPath() (string, error) {
+	dir, err := config.SubDir(config.DirMCP)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "mcp-servers.json"), nil
+}
+
+// LoadDefault 读取默认路径（~/.jot/mcp/mcp-servers.json）的 MCP 服务器配置。
+func LoadDefault() (*Config, error) {
+	path, err := DefaultConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	return Load(path)
+}
+
+// DefaultConfigJSON 默认 MCP 服务器配置文件内容（空 servers 列表，按 MCP_CONFIG.md 规范填写后启用）。
+const DefaultConfigJSON = `{
+  "servers": []
+}
+`
+
+// EnsureConfig 确保默认 MCP 配置目录（~/.jot/mcp/）与配置文件存在：
+// 目录不存在时创建；配置文件不存在时写入 DefaultConfigJSON（已存在的文件不会被覆盖）。
+func EnsureConfig() error {
+	path, err := DefaultConfigPath()
+	if err != nil {
+		return err
+	}
+	return EnsureConfigFileAt(path)
+}
+
+// EnsureConfigFileAt 确保指定路径的 MCP 配置文件存在（含目录创建），供 EnsureConfig 及测试复用。
+func EnsureConfigFileAt(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("创建 MCP 配置目录 %s 失败: %w", dir, err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("检查 MCP 配置文件 %s 失败: %w", path, err)
+	}
+	if err := os.WriteFile(path, []byte(DefaultConfigJSON), 0644); err != nil {
+		return fmt.Errorf("写入默认 MCP 配置文件 %s 失败: %w", path, err)
+	}
+	return nil
+}
 
 // Server 单台 MCP 服务器配置。
 type Server struct {

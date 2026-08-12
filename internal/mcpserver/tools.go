@@ -15,15 +15,17 @@ import (
 
 // Session 一次 MCP 服务器会话：持有客户端连接与发现包装后的工具列表。
 // 由调用方（agent.Run）在每轮对话结束时调用 Close 释放连接。
+// Skipped 记录因 Info 解析失败（错误/为空/无名）被跳过的工具数，供调用方日志告警。
 type Session struct {
 	ServerName string
 	Tools      []tool.BaseTool
+	Skipped    int
 	cli        client.MCPClient
 }
 
 // OpenSession 连接 MCP 服务器并发现包装工具：
 // Connect 握手 → mcpp.GetTools 拉取全部工具 → 逐个改名包装（mcp_{服务器名}_{工具名}）→ 填入 Session。
-// 单个工具 Info 异常时跳过该工具，不影响其余工具装配。
+// 单个工具 Info 异常时跳过该工具（累加 Session.Skipped），不影响其余工具装配。
 func OpenSession(ctx context.Context, s Server) (*Session, error) {
 	cli, err := Connect(ctx, s)
 	if err != nil {
@@ -40,6 +42,7 @@ func OpenSession(ctx context.Context, s Server) (*Session, error) {
 	for _, t := range baseTools {
 		info, err := t.Info(ctx)
 		if err != nil || info == nil || info.Name == "" {
+			sess.Skipped++
 			continue
 		}
 		sess.Tools = append(sess.Tools, &mcpTool{
@@ -66,14 +69,22 @@ type mcpTool struct {
 	serverName   string
 	inner        tool.BaseTool
 	originalName string
+	// cachedInfo 首次 Info 构建后的改名工具信息缓存。工具定义在本轮会话内不变，
+	// 缓存可消除 agent.go 装配（取名、建索引）与 eino 框架多次调用 Info 时的重复 JSON deepcopy。
+	cachedInfo *schema.ToolInfo
 }
 
 var _ tool.InvokableTool = (*mcpTool)(nil)
 var _ tools.ActionTextProvider = (*mcpTool)(nil)
 
 // Info 返回改名后的工具信息：深拷贝内层 ToolInfo（避免修改 eino 框架共享对象），
-// Name 改为 mcp_{serverName}_{originalName}。
+// Name 改为 mcp_{serverName}_{originalName}。首次调用后缓存结果，后续直接返回
+// 浅拷贝副本（复制标量与 Name，指针字段共享只读语义），调用方修改返回值不影响缓存。
 func (m *mcpTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	if m.cachedInfo != nil {
+		copied := *m.cachedInfo
+		return &copied, nil
+	}
 	info, err := m.inner.Info(ctx)
 	if err != nil {
 		return nil, err
@@ -86,7 +97,10 @@ func (m *mcpTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 		return nil, err
 	}
 	copied.Name = "mcp_" + m.serverName + "_" + m.originalName
-	return copied, nil
+	m.cachedInfo = copied
+	// 首次调用同样返回浅拷贝副本，保证调用方修改返回值不影响缓存
+	firstCopy := *copied
+	return &firstCopy, nil
 }
 
 // InvokableRun 委托内层工具执行；GetTools 返回的工具均实现 InvokableTool。

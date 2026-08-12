@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"jot/internal/config"
 	"jot/internal/models"
 	"jot/internal/services"
 
@@ -17,11 +18,11 @@ import (
 
 // DefaultDBPath 返回默认数据库路径: ~/.jot/data/jot.db
 func DefaultDBPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := config.SubDir(config.DirData)
 	if err != nil {
-		return "", fmt.Errorf("cannot get user home directory: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".jot", "data", "jot.db"), nil
+	return filepath.Join(dir, "jot.db"), nil
 }
 
 // InitDB 初始化 SQLite 数据库连接并执行自动迁移
@@ -86,11 +87,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 
 // BackupDir 返回备份目录路径 ~/.jot/backup/
 func BackupDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot get user home directory: %w", err)
-	}
-	return filepath.Join(home, ".jot", "backup"), nil
+	return config.SubDir(config.DirBackup)
 }
 
 // EnsureBackupDir 确保备份目录存在, 不存在则创建

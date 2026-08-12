@@ -54,7 +54,7 @@ func main() {
 				Tools: tools,
 			},
 		},
-		MaxIterations: 8, // 限制 ReAct 循环最大迭代次数，防止死循环
+		MaxIterations: 20, // 限制 ReAct 循环最大迭代次数，防止死循环（与主项目 internal/agent.MaxIterations 保持一致）
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "创建 ChatModelAgent 失败: %v\n", err)

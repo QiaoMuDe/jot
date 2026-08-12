@@ -129,7 +129,7 @@ jot/                                    # 项目根目录
 | **前端构建流程** | `wails build` 自动执行 `npm run build`（Vite）→ `frontend/dist/`，再嵌入 Go 二进制 | `go:embed all:frontend/dist` | 前端构建和后端编译都由 `wails build` 一条命令完成 |
 | **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
 | **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
-| **路径工具** | 数据库默认路径 `~/.jot/data/jot.db` | `database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
+| **路径工具** | `~/.jot` 根目录统一解析（data/backup/images/logs/mcp 五个子目录），数据库默认路径 `~/.jot/data/jot.db` | `internal/config/config.go:JotHomeDir()/SubDir()`，`database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
 | **办公文件转换器** | 封装 markitdown 库，将 .docx/.pdf/.xlsx 等 7 种办公文件转为 Markdown 文本，带 60s 超时保护 | `internal/converter/converter.go` | github.com/conductor-oss/markitdown
 
 ### 2.2 业务核心模块
@@ -613,18 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：向量召回质量优化（表格表头携带 + 候选放大 + 笔记级聚合）+ 关键词召回第一级修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动提升卡片召回质量：① **向量召回 chunk 级候选放大 + 笔记级聚合**——[vector_service.go](internal/services/vector_service.go) 新增 `chunkCandidateMultiplier=5`：`vectorSearch` 与 `KeywordRecall` 的 SQL LIMIT 均取 `limit×5` 先多捞候选块（"第 6 名以后的块"也有机会），再由 `selectTopNotes` 按笔记聚合（保留前 limit 个不同笔记的块、单篇最多 `maxChunksPerNote=4` 块）截断回 limit，避免"chunk 级直接截断导致多命中块来自同一笔记时卡片过少/笔记多样性差"，卡片总数仍由 `ai_card_recall_limit` 控制；② **Markdown 表格表头上下文携带**——[chunk.go](internal/services/chunk.go) `ChunkContent` 切块时记录当前 `tableHeader`（表格行 + 下一行分隔线识别，新表头覆盖旧表头），flush 时若块内含表格数据行但缺表头（`hasTableDataRow` 排除表头行本身与分隔线），自动在块首补一行 `tableHeader + "\n" + text`，解决"表头与数据行被切到不同块（且被分隔线块隔开）导致列名语义丢失、'XX是什么/代码是多少'类 query 命中不了 2061 类代码行块"的问题，语义对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack；③ **关键词召回第一级修复**——`KeywordRecall` 检索流程：GSE 分词（`tokenize` 停用词过滤仅对单字词）→ 统计总块数与各 token 命中数（COUNT + LIKE）→ `filterHighFreqTokens` 高频词过滤（命中数 > `max(总块数/10, 100)` 的 token 丢弃，如"数据"这类 ~93% 命中率的无区分度词，避免进 OR LIKE 刷屏）→ OR LIKE 检索（LIMIT 放大）→ `rankKwHits` 截断前排序（按命中 token 数降序 + 块 id 升序，与 HybridRecall kwScore 口径一致）截断回 limit；全部 token 被过滤时关键词路返回空不贡献。 |
-| **候选放大设计** | `chunkCandidateMultiplier=5` 覆盖向量路与关键词路：向量路 SQL `LIMIT limit×5` + `ORDER BY vec_distance_cosine ASC`；关键词路 `LIMIT limit×5` 后 `rankKwHits` 截断。原因：SQL 层直接 LIMIT limit 时"第 6 名以后的块直接出局"，且多命中块同笔记时聚合后卡片不足；放大后再按笔记聚合可保证"相关度优先 + 笔记多样性"。`maxChunksPerNote=4` 防止单篇笔记命中块过多挤占其他笔记的卡片槽位。该改动仅影响召回侧（编译后即时生效），不需重新量化；分块/嵌入逻辑改动（如表头补全）则必须重新量化相关笔记才生效。 |
-| **高频词过滤阈值** | `threshold = max(totalChunks/kwHighFreqDivisor, kwHighFreqMin)`，即 `max(总块数/10, 100)`（`kwHighFreqDivisor=10`、`kwHighFreqMin=100`）；依据实测："数据"命中 ~93% 块、"2061"命中 ~1% 块，"数据"这类词进 OR LIKE 只会刷屏。`maxRecallKeywords=20` 限制关键词数量防止超长 LIKE 查询。关键词检索跨所有模型（不加 model 过滤），与向量路（按当前 embedding 模型隔离）不同。 |
-| **涉及文件** | [internal/services/vector_service.go](internal/services/vector_service.go)（chunkCandidateMultiplier/maxChunksPerNote/selectTopNotes/filterHighFreqTokens/rankKwHits/tokenize 停用词表 + vectorSearch/KeywordRecall/HybridRecall 改造）、[internal/services/chunk.go](internal/services/chunk.go)（tableHeader 记录 + 块首补表头 + hasTableDataRow/isTableSeparatorLine）、[internal/services/chunk_test.go](internal/services/chunk_test.go)（同步更新用例） |
-
----
-
-## 记忆点 2：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
+## 记忆点 1：AI 输入区一体化重构（Composer 输入坞 + 聚焦动效 + 一体按钮交互）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
+## 记忆点 2：aicli 自研 AI 客户端平替为 eino 薄适配层（einocli）+ 预设配置品牌徽章 + AI 输入框展开尝试撤回
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
+## 记忆点 3：manage_todo 待办分页支持 + 待办页白屏/导航卡住根因修复（HTML div 配平）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
+## 记忆点 4：Agent 工具集扩充（manage_notebook / manage_tag / manage_todo update 动作）+ rebuildServices 重建 AgentSvc + 恢复出厂/还原后 AI 消息空白根因修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +660,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 5：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,18 +672,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
+## 记忆点 6：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 8 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 7 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
 | **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
 | **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
 
 ---
 
-## 记忆点 8：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 7：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -706,7 +695,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 8：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -719,15 +708,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 9：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | Agent 模式新增调用外部 MCP 服务器的能力，**来源为配置文件而非数据库**（测试阶段用户拍板不做 CRUD UI/建表）。配置文件 `mcp-servers.json`（项目根目录，可经 `Deps.MCPServerConfigPath` 覆盖路径），编写规范见 [MCP_CONFIG.md](MCP_CONFIG.md)。新增 [internal/mcpserver](internal/mcpserver) 包：`config.go`（Server/Config 结构 + `Load` 解析校验 + `EnabledServers`）、`client.go`（按 stdio/sse/http 三种传输用 mark3labs/mcp-go 构建客户端 + Start + Initialize 握手）、`tools.go`（基于 eino-ext components/tool/mcp 把服务器工具转 eino `tool.BaseTool`，统一改名 `mcp_{服务器}_{工具}` 防命名冲突 + ActionTextProvider 提供"调用 {服务器} 的 {工具}"文案 + Session/OpenSession/Close 生命周期）。[agent.go](internal/agent/agent.go) `Run()` 在 toolByName 索引构建前并入 MCP 工具，全部经 `WrapWithError` 包装（失败回填模型 + tool_error 事件，不中断 ReAct 循环），单服务器连接失败仅 Warn 跳过，会话随本轮 Run defer 关闭。eino 版本保持 v0.9.13（eino-ext mcp 要求 eino >=v0.6.0，兼容）。 |
+| **变更概览** | Agent 模式新增调用外部 MCP 服务器的能力，**来源为配置文件而非数据库**（测试阶段用户拍板不做 CRUD UI/建表）。配置文件 `mcp-servers.json`（默认 `~/.jot/mcp/mcp-servers.json`，路径经 `internal/config` 统一解析，可经 `Deps.MCPServerConfigPath` 覆盖），编写规范见 [MCP_CONFIG.md](MCP_CONFIG.md)。新增 [internal/mcpserver](internal/mcpserver) 包：`config.go`（Server/Config 结构 + `Load`/`LoadDefault` 解析校验 + `EnabledServers`）、`client.go`（按 stdio/sse/http 三种传输用 mark3labs/mcp-go 构建客户端 + Start + Initialize 握手）、`tools.go`（基于 eino-ext components/tool/mcp 把服务器工具转 eino `tool.BaseTool`，统一改名 `mcp_{服务器}_{工具}` 防命名冲突 + ActionTextProvider 提供"调用 {服务器} 的 {工具}"文案 + Session/OpenSession/Close 生命周期）。[agent.go](internal/agent/agent.go) `Run()` 在 toolByName 索引构建前并入 MCP 工具，全部经 `WrapWithError` 包装（失败回填模型 + tool_error 事件，不中断 ReAct 循环），单服务器连接失败仅 Warn 跳过，会话随本轮 Run defer 关闭。eino 版本保持 v0.9.13（eino-ext mcp 要求 eino >=v0.6.0，兼容）。 |
 | **配置校验与日志（重要）** | `Load` 整体性错误（文件缺失/JSON 语法错误）返回 error 跳过全部 MCP 装配（Debug 日志）；**单条服务器校验失败仅跳过该条**，错误收集到 `Config.LoadErrors`（错误信息带 `server[i]` 索引定位），其余合法服务器正常装配，agent.go 逐条 Warn 告警（此前实现是"一条非法全盘跳过"的坑，已修）。每台服务器装配成功打 Info 日志（`MCP 服务器工具已上线 server=xxx count=N tools=...`，tools 为改名后名称）便于排查。`enabled` 默认 false（安全考量）：stdio 可执行任意命令、sse/http 可执行远程工具操作，env 密钥明文在配置文件。 |
 | **测试服务器** | [playground/mcp-math](playground/mcp-math)（add/multiply/sqrt）与 [playground/mcp-text](playground/mcp-text)（to_uppercase/to_lowercase/word_count）两个独立 Go module（mark3labs/mcp-go stdio 传输），已编译 exe 并写入 `mcp-servers.json` 启用；参数解析兼容 map / JSON 字符串 / RawMessage 三种客户端传参形态。单测覆盖：config_test.go（合法/非法/混合跳过）+ tools_test.go（内存 SSE 服务器全链路：握手→工具发现→前缀改名→真实调用→关闭）。 |
 | **设计决策** | 测试阶段确定**不做 CRUD UI/数据库表**（用户权衡：文件配置成本低、改完即生效、可版本控制），正式发布如需 UI 可把 mcp-servers.json 作为导入源平滑迁移（非互斥）。连接生命周期采用**每轮对话重连**（非长连接缓存）：实现简单、无残留连接、工具列表每轮刷新，stdio 子进程启动开销可接受；后续如需优化可升级为连接缓存。 |
-| **涉及文件** | [internal/mcpserver/config.go](internal/mcpserver/config.go)、[internal/mcpserver/client.go](internal/mcpserver/client.go)、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)、[internal/mcpserver/config_test.go](internal/mcpserver/config_test.go)、[internal/mcpserver/tools_test.go](internal/mcpserver/tools_test.go)、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerConfigPath + 装配/日志）、[mcp-servers.json](mcp-servers.json)、[MCP_CONFIG.md](MCP_CONFIG.md)（配置规范）、[playground/mcp-math](playground/mcp-math)、[playground/mcp-text](playground/mcp-text) |
+| **涉及文件** | [internal/mcpserver/config.go](internal/mcpserver/config.go)、[internal/mcpserver/client.go](internal/mcpserver/client.go)、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)、[internal/mcpserver/config_test.go](internal/mcpserver/config_test.go)、[internal/mcpserver/tools_test.go](internal/mcpserver/tools_test.go)、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerConfigPath + 装配/日志）、[internal/config/config.go](internal/config/config.go)（~/.jot 统一路径解析）、[mcp-servers.json](mcp-servers.json)（保留作格式示例，不再被默认读取）、[MCP_CONFIG.md](MCP_CONFIG.md)（配置规范）、[playground/mcp-math](playground/mcp-math)、[playground/mcp-text](playground/mcp-text) |
+
+---
+
+## 记忆点 10：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 四组改动：① **MCP 配置迁移家目录 + 统一路径配置包**——新建 [internal/config/config.go](internal/config/config.go)：`JotHomeDir()`（`~/.jot`，全项目唯一 `os.UserHomeDir()` 调用点）+ `SubDir(name)` + `DirData/DirBackup/DirImages/DirLogs/DirMCP` 常量；[database/db.go](internal/database/db.go) `DefaultDBPath()`/`BackupDir()`、[app.go](app.go) logs/images 全部收敛为 `config.SubDir(...)` 引用；MCP 配置默认路径从项目根迁移至 `~/.jot/mcp/mcp-servers.json`（[mcpserver/config.go](internal/mcpserver/config.go) `DefaultConfigPath()`/`LoadDefault`，[agent.go](internal/agent/agent.go) `Deps.MCPServerConfigPath` 为空时回退 `LoadDefault`，注入覆盖机制保留）。② **启动自动初始化 MCP 配置**——`EnsureConfig()`/`EnsureConfigFileAt(path)`（目录 `MkdirAll`、文件不存在写入空 servers 默认配置、已存在不覆盖），app.go startup 调用；**默认路径下 LoadDefault 失败时**：`DefaultConfigPath()` 再次解析失败（家目录不可用=系统级异常）→ 直接 return 报错退出；仅配置不可用（路径可解析）→ 回填路径 Debug 跳过不阻断对话。③ **单服务器连接超时 10s**——[client.go](internal/mcpserver/client.go) `ConnectTimeout=10s`，`Connect` 内 `context.WithTimeout` 包裹 Start/Initialize，超时走既有"连接失败跳过"分支（文案提示"连接超时"），`wrapConnectError` 附带服务器名；上线/失败日志补 `duration_ms` 耗时字段；会话关闭失败 Warn。④ **Agent 最大迭代统一常量**——[agent.go](internal/agent/agent.go) `const maxIterations=8` → 导出 `MaxIterations=20`，eino ChatModelAgent 与日志同源引用；playground/agent-demo（独立 module 受 internal 规则限制无法 import）数值同步 + 注释对齐。 |
+| **typed-nil 接口 panic（重要教训）** | 测试暴露 **stdio 命令不存在时应用 panic 崩溃**：`NewStdioMCPClient` 失败返回 `(*Client)(nil)`，赋给接口后 `cli != nil` 误判为真，`Close()` 对 nil 指针 panic。修复：stdio 分支先判错再赋接口 + `safeClose`（reflect 校验底层指针）防御兜底。**凡是构造函数可能返回 nil 指针的，赋接口前必须显式判 err**；接口判空 ≠ 指针判空。 |
+| **装配小优化** | ① for 循环内 defer 改为收集 `mcpSessions` 末尾统一关闭（可读性 + 提前 return 不延迟关闭）；② `mcpTool.Info` 缓存改名结果（消除装配/框架多次调用重复 JSON deepcopy），返回浅拷贝副本防共享污染（测试验证修改返回值不影响缓存）；③ 单工具 Info 失败跳过计数进 `Session.Skipped` + Warn 日志；④ golangci-lint govet inline 检查：`reflect.Ptr` 弃用别名 → `reflect.Pointer`。 |
+| **涉及文件** | [internal/config/config.go](internal/config/config.go)（新建，统一路径）、[internal/database/db.go](internal/database/db.go)（DefaultDBPath/BackupDir 收敛）、[app.go](app.go)（logs/images 收敛 + startup EnsureConfig + 回退 LoadDefault）、[main.go](main.go)（logs 收敛）、[internal/mcpserver/config.go](internal/mcpserver/config.go)（DefaultConfigPath/LoadDefault/EnsureConfig + config_test.go）、[internal/mcpserver/client.go](internal/mcpserver/client.go)（ConnectTimeout + wrapConnectError + safeClose）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（Info 缓存 + Skipped 统计）、[internal/agent/agent.go](internal/agent/agent.go)（回退 LoadDefault + 报错退出 + MaxIterations + 统一关闭 + duration_ms）、[playground/agent-demo/main.go](playground/agent-demo/main.go)（MaxIterations=20 同步）、[internal/mcpserver/MCP_CONFIG.md](internal/mcpserver/MCP_CONFIG.md)（自动初始化说明）、[internal/agent/doc.go](internal/agent/doc.go) |
 
 ---
 
