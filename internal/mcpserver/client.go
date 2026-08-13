@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -39,13 +40,21 @@ func Connect(ctx context.Context, s Server) (client.MCPClient, error) {
 		cli = c
 	case "sse":
 		var c *client.Client
-		if c, err = client.NewSSEMCPClient(s.URL); err == nil {
+		var opts []transport.ClientOption
+		if len(s.Headers) > 0 {
+			opts = append(opts, client.WithHeaders(s.Headers))
+		}
+		if c, err = client.NewSSEMCPClient(s.URL, opts...); err == nil {
 			err = c.Start(connCtx)
 			cli = c
 		}
 	case "http":
 		var c *client.Client
-		if c, err = client.NewStreamableHttpClient(s.URL); err == nil {
+		var opts []transport.StreamableHTTPCOption
+		if len(s.Headers) > 0 {
+			opts = append(opts, transport.WithHTTPHeaders(s.Headers))
+		}
+		if c, err = client.NewStreamableHttpClient(s.URL, opts...); err == nil {
 			err = c.Start(connCtx)
 			cli = c
 		}

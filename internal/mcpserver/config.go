@@ -1,8 +1,8 @@
-// Package mcpserver 提供外部 MCP 服务器支持：配置文件解析、客户端连接与工具发现包装。
+// Package mcpserver 提供外部 MCP 服务器支持：配置读取（数据库）、客户端连接与工具发现包装。
 //
 // 职责：
-//   - 解析与校验 ~/.jot/mcp/mcp-servers.json（stdio / sse / http 三种传输）：
-//     config.go 定义 Server / Config 结构与 Load / LoadDefault / EnabledServers。
+//   - 从数据库读取与校验 MCP 服务器配置（stdio / sse / http 三种传输）：
+//     config.go 定义 Server / Config 结构与 LoadFromDB。
 //   - 基于 mark3labs/mcp-go 按传输类型构建客户端并完成握手（Start + Initialize）：
 //     client.go 的 Connect。
 //   - 基于 eino-ext mcp 组件将服务器工具转为 eino tool.BaseTool，
@@ -14,64 +14,11 @@
 package mcpserver
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"jot/internal/config"
+	"gorm.io/gorm"
+	"jot/internal/models"
 )
-
-// DefaultConfigPath 返回默认 MCP 服务器配置文件路径: ~/.jot/mcp/mcp-servers.json
-func DefaultConfigPath() (string, error) {
-	dir, err := config.SubDir(config.DirMCP)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "mcp-servers.json"), nil
-}
-
-// LoadDefault 读取默认路径（~/.jot/mcp/mcp-servers.json）的 MCP 服务器配置。
-func LoadDefault() (*Config, error) {
-	path, err := DefaultConfigPath()
-	if err != nil {
-		return nil, err
-	}
-	return Load(path)
-}
-
-// DefaultConfigJSON 默认 MCP 服务器配置文件内容（空 servers 列表，按 MCP_CONFIG.md 规范填写后启用）。
-const DefaultConfigJSON = `{
-  "servers": []
-}
-`
-
-// EnsureConfig 确保默认 MCP 配置目录（~/.jot/mcp/）与配置文件存在：
-// 目录不存在时创建；配置文件不存在时写入 DefaultConfigJSON（已存在的文件不会被覆盖）。
-func EnsureConfig() error {
-	path, err := DefaultConfigPath()
-	if err != nil {
-		return err
-	}
-	return EnsureConfigFileAt(path)
-}
-
-// EnsureConfigFileAt 确保指定路径的 MCP 配置文件存在（含目录创建），供 EnsureConfig 及测试复用。
-func EnsureConfigFileAt(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("创建 MCP 配置目录 %s 失败: %w", dir, err)
-	}
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("检查 MCP 配置文件 %s 失败: %w", path, err)
-	}
-	if err := os.WriteFile(path, []byte(DefaultConfigJSON), 0644); err != nil {
-		return fmt.Errorf("写入默认 MCP 配置文件 %s 失败: %w", path, err)
-	}
-	return nil
-}
 
 // Server 单台 MCP 服务器配置。
 type Server struct {
@@ -81,39 +28,45 @@ type Server struct {
 	Args      []string          `json:"args"`      // stdio 传输的命令参数
 	Env       map[string]string `json:"env"`       // stdio 传输的环境变量注入（可选）
 	URL       string            `json:"url"`       // sse / http 传输的服务器地址
+	Headers   map[string]string `json:"headers"`   // sse / http 传输的请求头注入（可选）
 	Enabled   bool              `json:"enabled"`   // 是否启用（默认 false，安全考量）
 }
 
-// Config MCP 服务器配置文件根结构。
+// Config MCP 服务器配置根结构。
 type Config struct {
 	Servers []Server `json:"servers"`
-	// LoadErrors Load 时单条服务器校验失败的记录（该条已跳过，不影响其余合法条目装配）
+	// LoadErrors LoadFromDB 时单条服务器校验失败的记录（该条已跳过，不影响其余合法条目装配）
 	LoadErrors []error `json:"-"`
 }
 
-// Load 读取并校验 MCP 服务器配置文件。
-// 整体性错误（文件缺失 / JSON 语法错误）返回 error；
-// 单条服务器校验失败不中断整体加载：该条被跳过并记录到 Config.LoadErrors，
-// 其余合法条目正常返回，由调用方依据 LoadErrors 逐条输出告警。
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("读取 MCP 服务器配置文件 %s 失败: %w", path, err)
+// LoadFromDB 从数据库读取全部 MCP 服务器并校验：非法条目跳过并记录到 Config.LoadErrors，
+// 其余合法条目正常返回，由调用方依据 LoadErrors 逐条输出告警（与原文件版 Load 行为一致）。
+// 查询失败（含空库无表等整体性错误）返回 error；空库返回空 Servers 且 err 为 nil。
+func LoadFromDB(db *gorm.DB) (*Config, error) {
+	var records []models.MCPServer
+	if err := db.Order("sort_order asc, id asc").Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("读取 MCP 服务器配置失败: %w", err)
 	}
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("解析 MCP 服务器配置文件 %s 失败: %w", path, err)
-	}
-	valid := cfg.Servers[:0]
-	for i := range cfg.Servers {
-		if err := validate(&cfg.Servers[i]); err != nil {
+	cfg := &Config{Servers: make([]Server, 0, len(records))}
+	for i := range records {
+		rec := records[i]
+		server := Server{
+			Name:      rec.Name,
+			Transport: rec.Transport,
+			Command:   rec.Command,
+			Args:      rec.Args,
+			Env:       rec.Env,
+			URL:       rec.URL,
+			Headers:   rec.Headers,
+			Enabled:   rec.Enabled,
+		}
+		if err := validate(&server); err != nil {
 			cfg.LoadErrors = append(cfg.LoadErrors, fmt.Errorf("server[%d]: %w", i, err))
 			continue
 		}
-		valid = append(valid, cfg.Servers[i])
+		cfg.Servers = append(cfg.Servers, server)
 	}
-	cfg.Servers = valid
-	return &cfg, nil
+	return cfg, nil
 }
 
 // validate 校验单条服务器配置，失败返回含服务器名的错误。

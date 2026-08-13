@@ -90,20 +90,21 @@ var baseNormsBoundaries = "回答规范：" +
 var baseSystemPrompt = baseIdentity + "\n\n" + baseNormsBoundaries
 
 type App struct {
-	ctx             context.Context
-	db              *gorm.DB
-	noteService     *services.NoteService
-	tagService      *services.TagService
-	settingService  *services.SettingService
-	notebookService *services.NotebookService
-	aiService       *services.AIService
-	profileService  *services.ProfileService
-	vectorService   *services.VectorService
-	todoService     *services.TodoService
-	statsService    *services.StatsService
-	LogSvc          *services.LogService
-	aiStreamCancel  context.CancelFunc
-	AgentSvc        *agent.AgentService
+	ctx              context.Context
+	db               *gorm.DB
+	noteService      *services.NoteService
+	tagService       *services.TagService
+	settingService   *services.SettingService
+	notebookService  *services.NotebookService
+	aiService        *services.AIService
+	profileService   *services.ProfileService
+	vectorService    *services.VectorService
+	todoService      *services.TodoService
+	statsService     *services.StatsService
+	mcpServerService *services.MCPServerService
+	LogSvc           *services.LogService
+	aiStreamCancel   context.CancelFunc
+	AgentSvc         *agent.AgentService
 	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
 	vectorIndexRunning bool
@@ -178,17 +179,18 @@ func NewApp() *App {
 	statsService := services.NewStatsService(noteService, tagService, todoService, aiService, database.DefaultDBPath)
 
 	app := &App{
-		db:              db,
-		noteService:     noteService,
-		tagService:      tagService,
-		settingService:  settingService,
-		notebookService: notebookService,
-		aiService:       aiService,
-		profileService:  profileService,
-		vectorService:   vectorService,
-		todoService:     todoService,
-		statsService:    statsService,
-		LogSvc:          logSvc,
+		db:               db,
+		noteService:      noteService,
+		tagService:       tagService,
+		settingService:   settingService,
+		notebookService:  notebookService,
+		aiService:        aiService,
+		profileService:   profileService,
+		vectorService:    vectorService,
+		todoService:      todoService,
+		statsService:     statsService,
+		mcpServerService: services.NewMCPServerService(db),
+		LogSvc:           logSvc,
 	}
 	// Agent 服务：复用 AI/向量/设置服务与量化连接配置，供 CallAIAgentStream 使用
 	app.AgentSvc = agent.NewAgentService(agent.Deps{
@@ -201,6 +203,7 @@ func NewApp() *App {
 		Note:           noteService,
 		Stats:          statsService,
 		Logger:         logSvc.Logger,
+		MCPServerDB:    db,
 		GetEmbedConfig: app.GetEmbedConfig,
 	})
 	return app
@@ -215,11 +218,6 @@ func (a *App) startup(ctx context.Context) {
 	imageDir, _ := config.SubDir(config.DirImages)
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
 		a.LogSvc.Logger.Errorw("创建图片目录失败", fastlog.Error(err))
-	}
-
-	// 确保 MCP 配置目录与默认配置文件存在（首次启动自动初始化 ~/.jot/mcp/mcp-servers.json）
-	if err := mcpserver.EnsureConfig(); err != nil {
-		a.LogSvc.Logger.Errorw("初始化 MCP 配置失败", fastlog.Error(err))
 	}
 
 	// 确保默认笔记本存在（首次启动自动创建）
@@ -2697,6 +2695,69 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 	return result
 }
 
+// GetMCPServers 返回全部 MCP 服务器配置（按 sort_order, id 升序），供设置页展示与管理
+func (a *App) GetMCPServers() []models.MCPServer {
+	servers, err := a.mcpServerService.List()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("获取 MCP 服务器列表失败", fastlog.Error(err))
+		return nil
+	}
+	return servers
+}
+
+// SaveMCPServer 新增（ID==0）或更新 MCP 服务器配置；校验失败时返回可直接展示的中文错误
+func (a *App) SaveMCPServer(server models.MCPServer) error {
+	return a.mcpServerService.Save(&server)
+}
+
+// DeleteMCPServer 按 ID 删除 MCP 服务器配置
+func (a *App) DeleteMCPServer(id uint) error {
+	return a.mcpServerService.Delete(id)
+}
+
+// TestMCPServerResult MCP 服务器连接测试结果（Wails 绑定需用结构体传复杂数据）
+type TestMCPServerResult struct {
+	OK      bool   `json:"ok"`       // 是否连接可用
+	ToolNum int    `json:"tool_num"` // 连接成功时发现的工具数
+	Message string `json:"message"`  // 中文提示文案（失败时为具体原因）
+}
+
+// toMCPServerConfig models.MCPServer → mcpserver.Server（字段映射与 mcpserver.LoadFromDB 一致）
+func toMCPServerConfig(m models.MCPServer) mcpserver.Server {
+	return mcpserver.Server{
+		Name:      m.Name,
+		Transport: m.Transport,
+		Command:   m.Command,
+		Args:      m.Args,
+		Env:       m.Env,
+		URL:       m.URL,
+		Headers:   m.Headers,
+		Enabled:   m.Enabled,
+	}
+}
+
+// TestMCPServer 按 ID 加载服务器配置并实测连接（连接 + 握手 + 工具发现）。
+// 无论服务器是否启用均可测试；连接/发现内部各自带 ConnectTimeout 超时兜底，不会卡死。
+func (a *App) TestMCPServer(id uint) TestMCPServerResult {
+	rec, err := a.mcpServerService.Get(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return TestMCPServerResult{OK: false, Message: "MCP 服务器不存在或已被删除"}
+		}
+		return TestMCPServerResult{OK: false, Message: "查询 MCP 服务器配置失败"}
+	}
+	sess, err := mcpserver.OpenSession(context.Background(), toMCPServerConfig(*rec))
+	if err != nil {
+		return TestMCPServerResult{OK: false, Message: err.Error()} // 错误文案已中文化
+	}
+	defer func() {
+		if err := sess.Close(); err != nil {
+			a.LogSvc.Logger.Debugw("关闭 MCP 测试会话失败", fastlog.Error(err))
+		}
+	}()
+	return TestMCPServerResult{OK: true, ToolNum: len(sess.Tools), Message: "连接成功"}
+}
+
 // CallAIStreamRegenerate 重新生成 AI 回复（不加用户消息，复用末条用户消息）。
 // 提取后委托给 CallAIStream 执行完整流程。
 func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, recallNotebookIDs []uint, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
@@ -3947,6 +4008,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.profileService = services.NewProfileService(db, a.LogSvc.Logger)
 	a.vectorService = services.NewVectorService(db, a.LogSvc.Logger)
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
+	a.mcpServerService = services.NewMCPServerService(db)
 	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
 	a.LogSvc = services.NewLogService()
@@ -3978,6 +4040,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 		Note:           a.noteService,
 		Stats:          a.statsService,
 		Logger:         a.LogSvc.Logger,
+		MCPServerDB:    db,
 		GetEmbedConfig: a.GetEmbedConfig,
 	})
 }

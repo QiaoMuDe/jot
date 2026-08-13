@@ -614,7 +614,7 @@
   position: fixed;
   top: 16px;
   right: 16px;
-  z-index: 2000;
+  z-index: 99999;   /* 通知永远置顶：高于所有业务弹窗（确认弹窗 10001 / 预设与 MCP 表单 10000 / 锁屏 9999） */
   display: flex;
   flex-direction: column;
   gap: 8px;

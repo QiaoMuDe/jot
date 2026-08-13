@@ -621,30 +621,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：Agent 工具动作文案后移（ActionTextProvider）+ get_stats 统计工具 + StatsService 同源聚合 + TOOLS.md 转纯规范
+## 记忆点 1：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 本会话 Agent 工具链四组改造：① **新增 manage_note 笔记管理工具**（[manage_note.go](internal/agent/tools/manage_note.go)，7 动作：create/list/view/pin/move/add_tag/remove_tag，按产品决策不暴露 update/删除/不可逆操作；file_ext 缺省 .md；list 在 notebook_id>0 时走 `SearchByNotebook`）。② **动作文案后移（ActionTextProvider 机制）**——前端 [showToolStatusStart](frontend/src/js/ai-chat.js) 的工具名 switch 整体删除，改为读后端下发的 `action_text`（缺失回退"执行"）；新增可选接口 `ActionTextProvider{ActionText(argumentsInJSON string) string}`，工具在自己的 .go 文件实现返回中文文案（manage_note create→"创建笔记"），父包 [agent.go](internal/agent/agent.go) 在 `tool_start` 时按工具名断言调用、填进 `Record.ActionText`（json `action_text`）下发。③ **新增 get_stats 统计工具**（[get_stats.go](internal/agent/tools/get_stats.go)，只读）：overview（StatsService.GetDataStats + VectorService.GetIndexStatus，字节格式化 B/KB/MB）/ month（GetMonthCounts 某月每日笔记数）。④ **StatsService 聚合（工具与数据管理页同源）**——修复 get_stats 直接调 `NoteService.GetStats` 导致标签/AI 用量/待办/DB 大小全为 0 的口径漂移：新建 [services/stats_service.go](internal/services/stats_service.go) 聚合 Note(GetStats)+Tag(Count)+AI(会话/消息/token/耗时)+Todo(Count/CountCompleted)+DB 文件大小，[app.go](app.go) `GetDataStats` 绑定委托它，工具与数据管理页走同一代码路径；`Deps` 加 `Stats` 字段并在 app.go 两处（构造 + rebuildServices 末尾重建 AgentSvc）传入。 |
-| **ActionTextProvider 机制（设计要点）** | 工具可选实现 `ActionTextProvider`（定义于 [context.go](internal/agent/tools/context.go)），`ActionText` 解析 arguments JSON 返回中文动作文案。**关键坑**：eino `WrapInvokableToolWithErrorHandler` 包装后丢失原类型方法，父包对包装结果断言接口会失败——`WrapWithError` 改自定义 `wrappedTool` 实现接口转发（失败回填文本 / `tool_error` 事件 / 用户取消行为逐字保持）。未实现接口的工具前端回退"执行"。web_search 的"搜索 {query}"对 query 用 `TruncateRunes` 截断 30 字符防状态条超长；recall_notes 的 ActionText 不解析会话级注入参数（notebook 过滤是构造器注入，模型不传）。 |
-| **StatsService 聚合要点** | 数据统计必须走 [StatsService.GetDataStats](internal/services/stats_service.go)（唯一聚合入口），禁止直接调 `NoteService.GetStats` 充当概览（缺标签/AI 用量/待办/DB 大小）。**循环依赖坑**：`internal/database` 已 import `services`，StatsService 不能反向 import database → DB 文件路径经构造器注入函数（app 层传 `database.DefaultDBPath`）。`GetMonthCounts` 也纳入 StatsService，工具只依赖 stats+vector 两个服务。 |
-| **TOOLS.md 定位变更（重要）** | [TOOLS.md](internal/agent/TOOLS.md) 从"工具清单 + 规范"转为**纯开发维护规范**：删除 §6 具体工具清单表格，改为"权威来源指引"——工具清单以 [tools/doc.go](internal/agent/tools/doc.go)（工具列表与构造器名）与 [registry.go](internal/agent/registry.go) 为准，**新增工具无需更新 TOOLS.md**；§1 架构树瘦身为参考示例（current_time.go 最简 / manage_note.go 复杂）。[agent/doc.go](internal/agent/doc.go) 只读清单补 `get_current_time`。命名语义分界：manage_* = 管理操作，get_/recall_* = 只读；不可逆操作（PermanentDelete/EmptyTrash/批量删除）不暴露给 Agent 工具（与"关键操作需确认"约束一致）。 |
-| **涉及文件** | [internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（新增）、[internal/agent/tools/get_stats.go](internal/agent/tools/get_stats.go)（新增）、[internal/services/stats_service.go](internal/services/stats_service.go)（新增）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（ActionTextProvider + Record.ActionText + wrappedTool）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.Stats + tool_start 填 action_text）、[internal/agent/registry.go](internal/agent/registry.go)（注册 manage_note/get_stats）、[app.go](app.go)（GetDataStats 委托 + 两处 Deps + rebuildServices）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（转纯规范）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（权威清单）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showToolStatusStart 读 action_text、删 switch） |
-
----
-
-## 记忆点 2：Agent 反向提问（ask_user 工具）+ ai:ask-user 问题卡片 + 新消息续流方案
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 4 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
+| **变更概览** | 新增 Agent 反向提问能力（仿 Trae 的"向用户提问选择"交互），采用**新消息发送方案**：① **ask_user 工具**（[ask_user.go](internal/agent/tools/ask_user.go)，不执行业务仅请求澄清）——Schema question（必填）/ options（array，2-6 项）/ reason；执行时 `ctx.Emit("ai:ask-user", {question, options} JSON)` 发射问题卡片数据并返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"给模型；实现 ActionTextProvider（"向用户提问：{question}"截断 30 字符）。② **agent.go 问句兜底**——ask_user 调用轮的正文（模型写出的问句）登记为 pendingQuestion，最终回答为空时作为 finalContent 兜底，保证历史回放可读；其他工具调用轮正文行为不变。③ **app.go Instruction 约束**——仅在信息不足/需决策时用、一次一问、调用后停止生成、用户回答后继续回答。④ **前端问题卡片**（[ai-chat.js](frontend/src/js/ai-chat.js)）——`startStreaming` 监听 `ai:ask-user`，`renderAskCard` 在 assistant 气泡正文下渲染问句标题 + 选项按钮 + 自定义输入行；点击选项/提交输入 → `sendUserText(text)`（新公共函数：SaveAIMessage → addMessage → startStreaming，onSend 重构复用）以新 user 消息续流；卡片保留在气泡中不被 stream-done 清空。⑤ **历史回放退化**——assistant 消息正文即问句文本 + 工具调用链折叠展示，无交互控件。**（注：本记忆点所述第一版"气泡内嵌问题卡片"实现已被记忆点 2 的面板方案取代，`renderAskCard` 与 `.ai-ask-card` 样式均已移除。）** |
 | **新消息发送方案要点** | 选型结论：用户答案作为**新 user 消息**触发新一轮 Agent 流，复用现有历史上下文机制（buildMessages 自动携带"问句 → 用户回答"完整链路），agent.go 事件循环几乎不动、无跨轮状态；**否决"同轮续流"**（需弃用 eino ChatModelAgent 自动循环改手动 ReAct + 跨调用状态 + 前端流生命周期改造，改动大一个量级）。前端事件清理列表（`['ai:stream-done', ...].forEach(EventsOff)`）须同步追加 `ai:ask-user`。 |
 | **ctx.Emit 例外（重要）** | ask_user 是**唯一允许工具内部直接 ctx.Emit 发射事件**的工具（TOOLS.md §4.7/§7.1 已标注例外）：一般工具提示前端只能用 `AddPartial`（tool_partial 事件），交互卡片类需求必须走专用事件 + 前端专用监听，不得仿照 ask_user 随意发射其他事件。 |
 | **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)（注册 ask_user）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 兜底）、[app.go](app.go)（CallAIAgentStream Instruction 追加 ask_user 约束）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（ai:ask-user 监听 + renderAskCard + sendUserText + onSend 复用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-card 系列样式）、[internal/agent/doc.go](internal/agent/doc.go) 与 [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单补 ask_user）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 交互事件 + 红线例外） |
 
 ---
 
-## 记忆点 3：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
+## 记忆点 2：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -656,12 +644,12 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 3：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 四组前端改动：① **AI 会话侧栏顶天立地重构**——侧栏不再"在标题栏里模拟边框"，`.ai-session-sidebar` 位于 `#viewAiChat .ai-chat-layout` 内，从 topbar 下缘一直顶天立地到底部，左边框连续无断层；删除侧栏头部"会话"标题层，搜索框 `.ai-session-search-wrap` 直接顶到侧栏最上面。② **标题栏按钮固定**——标题栏恒为三列 grid（`1fr auto 1fr`：左 `.view-header-left` / 中 `#aiChatTitle` / 右 `.view-controls`），标题始终居中；左侧固定「折叠/展开 + 新建」两个 32×32 按钮（`.ai-tool-btn`，图标 `stroke-width: 2.5`），返回按钮已删除；折叠图标固定面板样式（无方向箭头），折叠走 `classList.toggle('collapsed')` + localStorage 持久化 + Ctrl+J 触发，按钮不随折叠迁移。③ **双击标题重命名**——`#aiChatTitle` 双击从"新建会话"改为"重命名当前会话"（无 activeSessionId 忽略），复用 `startInlineEdit`（contenteditable + 全选 + Enter/失焦保存 `RenameAISession` + Escape 取消），保存后 `renderSessionList()` 同步侧栏标题；编辑态 `#aiChatTitle[contenteditable="true"]` 加 `min-width: 220px` + input-bg 圆角背景。④ **HTML div 配平修复 + 检查工具链配置**。 |
-| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与记忆点 2 的待办页 div 配平问题同类）。 |
+| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与待办页 div 配平问题同类）。 |
 | **前端检查工具链** | 新增 devDeps：eslint@10 + html-validate@11 + prettier@3 + eslint-config-prettier + globals + @eslint/js。配置：[eslint.config.mjs](frontend/eslint.config.mjs)（flat config；ignores：dist/node_modules/hljs-themes-data.js；`no-undef`/`no-unused-vars` 降 warn 防存量噪音；项目隐式 window 全局声明 readonly globals：nm/SVGS/getMockNotes/exportNote/initEditorActionsMenu/switchEditorMode/mockNotes）、[.prettierrc.json](frontend/.prettierrc.json)（tabWidth 4/singleQuote/printWidth 120）、[.prettierignore](frontend/.prettierignore)（dist/node_modules/wailsjs/hljs-themes-data.js）、[.htmlvalidate.json](frontend/.htmlvalidate.json)（关闭风格噪音：button type/void-style/text-content/landmark 等，保留 close-order 结构校验）。package.json scripts：`lint`/`format`/`format:check`/`validate:html`。当前 lint 0 errors/90 warnings、validate:html 0 errors。 |
 | **工具链暴露的存量风险** | `mockNotes` 在 [main.js](frontend/src/main.js) 直接引用但无声明/无 window 挂载（定义在 [notification.js](frontend/src/js/notification.js) 内且未导出）——疑似死代码分支；多个已定义未使用的函数（setAIStatus/updateTodoProgress/closeSearchModalDatePicker 等）；项目大量"`window.xxx = ...` 后裸标识符调用"隐式全局（运行正常，但建议逐步改 `window.` 前缀或 import）。 |
 | **搜索框方案演进** | 曾尝试：放大镜图标（left 14px→17px 反复微调后移除）、方案 C 平面样式+列表顶分隔线（用户撤回，恢复凹陷 bg-secondary 样式）。最终保持原始凹陷搜索框样式不变。教训：纯视觉微调尽量一次到位，避免逐像素拉扯。 |
@@ -669,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 4：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 5：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -692,7 +680,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 6：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -703,7 +691,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 7：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -714,18 +702,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 8：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | Agent 全部 12 个工具实施分层防御加固（用户拍板"全部加固"）：**P0 崩溃级**——[context.go](internal/agent/tools/context.go) `WrapWithError.InvokableRun` 改命名返回值 + defer recover（panic 转 fail 回填模型不中断 ReAct 循环，用户取消分支逐字保持）；[web_search.go](internal/agent/tools/web_search.go) 单源 goroutine 加 recover（panic 转错误进结果通道按部分失败跳过）。**P1 稳健级**——各工具补 `ctx.Err()` 取消检查；[read_note_section.go](internal/agent/tools/read_note_section.go) offset/length 整数校验（math.Trunc 防浮点截断）；[manage_tag.go](internal/agent/tools/manage_tag.go) action TrimSpace；统一文本长度上限（[context.go](internal/agent/tools/context.go) `validateTextLen` 按 rune 计：`maxToolShortText`=500 / `maxToolFindLen`=2000 / `maxToolLongText`=20000，覆盖全部文本参数）。**P2 加固级**——[read_url.go](internal/agent/tools/read_url.go) `isPrivateHost` SSRF 防护（拒绝 loopback/私网/链路本地（含 169.254.169.254）/未指定/组播 IP 及 localhost/.local/.internal 主机名，**不做 DNS 解析**防解析绕过）；[manage_note.go](internal/agent/tools/manage_note.go) `normalizeNoteFileExt`（纯字母数字 1-10 位，create 空→.md、update 空→保持原值）。 |
 | **写操作强制确认（重要）** | manage_note 的 update/edit/pin/move/add_tag/remove_tag 六动作：schema 新增 `confirm` 布尔参数，**未携带 `confirm=true` 一律拒绝执行**并返回正常结果（非 error、前端不显示失败态）的引导文本"该操作需要用户确认……调用 ask_user 向用户确认，用户明确同意后携带 confirm=true 重新调用"；Desc 写明缺省拒绝。app.go【写操作确认】规范升级为**强制**三步：正文说明 + ask_user 提问 → 用户同意后带 confirm=true 执行 → 拒绝不得执行。设计边界：create 视为用户明确要求的创建指令不强制确认；工具层只能保证"无 confirm=true 不执行"，模型未问用户就传 confirm=true 的漏洞靠 Desc + 系统提示词强约束压制（纯工具层无法 100% 拦截自主模型首次调用参数，完整封死需跨轮会话状态机，已确认不采用）。 |
-| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 10）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
+| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 9）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
 | **涉及文件** | [internal/agent/tools/context.go](internal/agent/tools/context.go)（recover + fail + validateTextLen + 上限常量）、[internal/agent/tools/web_search.go](internal/agent/tools/web_search.go)、[internal/agent/tools/recall_notes.go](internal/agent/tools/recall_notes.go)、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)、[internal/agent/tools/refine_query.go](internal/agent/tools/refine_query.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)、[internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（confirm + normalizeNoteFileExt）、[app.go](app.go)（写操作强制确认规范 + ask_user 强制调用规范） |
 
 ---
 
-## 记忆点 10：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 9：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -733,6 +721,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **意图层与工具层分工（重要）** | **不做"每工具一个规则分类器"**——工具间语义重叠（如"查笔记"该归 recall_notes 还是 manage_note list 由模型按上下文选）规则必误判；工具细粒度选择留给模型（它看全部 schema），工具防御由工具层自身机制承担（confirm/参数校验/文本上限/action 白名单），意图层只做粗粒度决策。工具级推荐留待阶段 2（L2 模型层结构化输出 recommended_tools，而非堆关键词）。演进：阶段 1 已实施；阶段 2 = 规则低置信时按需触发轻量 LLM 意图解析；阶段 3 = 解析结果回传前端展示可解释性。 |
 | **启动迁移清理** | 移除已过时的 `migrateProviderRemoval`（[app.go](app.go)）：provider 概念已多版本前移除，函数完全幂等但每次启动产生 DROP COLUMN 报错噪音；删除收益≈0、风险是破坏老版本升级（需确认无 provider 时代部署）。`migrateSensitiveKeys`（密钥 Base64 编码迁移）保留。判断"迁移代码能否删除"的依据：幂等性 + 是否还有老版本部署 + 启动噪音。 |
 | **涉及文件** | [internal/agent/intent.go](internal/agent/intent.go)（新增）、[app.go](app.go)（ClassifyIntent 接入 + 意图日志 + 移除迁移）、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)（BuiltinTools 复用） |
+
+---
+
+## 记忆点 10：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`，见记忆点 5）**迁移到数据库**，并在设置页落地完整管理 UI，取代记忆点 4 所述"配置文件驱动 + 无 CRUD 页面"的旧方案：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
+| **存储迁移与依赖约束（重要）** | `services` 包**不得反向 import `mcpserver`**（依赖链已是 mcpserver → agent/tools → services，反向即循环依赖），因此 **MCPServerService.Save 的校验规则是 mcpserver 包 validate 的复制实现，两处必须同步维护**。`LoadFromDB` 语义与原文件版 Load 一致：非法条目跳过不阻断装配（LoadErrors 逐条告警）、整体查询失败返回 error、空库返回空 Servers 且 err=nil。agent.go 装配流程不变：`LoadFromDB` → `EnabledServers()` → 每台服务器 goroutine 并行 `OpenSession`，单台失败仅 Warn 跳过、会话随本轮 defer 关闭。 |
+| **Save 校验与字段治理** | 校验（失败返回中文错误直接展示）：Name 非空 + transport 合法性（stdio/sse/http）+ 按传输必填（stdio 需 Command / sse、http 需 URL）+ **Name 不能含空白字符**（直接拼入工具名会破坏工具名）+ **Env/Headers 的 KEY 不能含空白或等号**（= 是 KEY=VALUE 分隔符）+ Name 全库唯一（更新排除自身）。**按传输类型清零非相关字段**（stdio 清 URL/Headers，sse/http 清 Command/Args/Env），避免切换传输后旧字段残留脏数据。写入：ID==0 走 `Create`，更新走 `Omit("created_at").Save`（防 Save 全字段更新把 created_at 覆写为零值，前端表单不带该字段）。 |
+| **测试连接 + 设置页交互要点** | `TestMCPServer(id)`：`MCPServerService.Get` 查配置（区分"记录不存在/查询失败"两种错误）→ `toMCPServerConfig` 字段映射 → `OpenSession`（连接+握手+工具发现，各带 ConnectTimeout 超时兜底）→ 返回 `TestMCPServerResult{ok, tool_num, message}`；无论是否启用均可测试。前端：条目操作区 = 启用开关（**乐观更新失败回滚**）+ 测试 + 编辑 + 删除（走确认框）；表单含防重复提交（`mcpFormSaving`）+ 未保存修改关闭确认 + 输入校验；**测试按钮点击转加载态并记录开始时间，无论测试多快强制保持 ≥600ms 加载动画**（本地毫秒级连接也能看到 spinner 反馈）；成功提示「连接成功，发现 N 个工具」，失败直接透传后端文案（已含服务器名如「MCP 服务器 xxx 连接失败: …」，前端**不再重复拼前缀**）。 |
+| **按钮配色与固定宽度加载态不跳宽（重要）** | 测试/编辑统一主题色实心（`--accent` 底白字，悬浮 `--accent-dark`），删除警告红三态（常态浅红描边→悬浮实心红+阴影→按压深红），基于 `--accent`/`--danger` 语义变量随 14 套主题自适应。**固定宽度按钮加载态会跳宽**：项目全局 `box-sizing: border-box`，按钮固定 `width:52px` 时减边框（2px）+ `.btn-sm` 左右 padding（14px×2）后内容区仅约 22px，而 12px 字号两个 CJK 字 ≈ 24px 放不下导致文字偏位；且 `.btn-loading` 会把按钮转 `inline-flex` 用 14px spinner 替换文字，无固定宽度时常态与加载态宽度跳变。解决：宽度 **56px**（内容区 ≥26px 放得下文字）+ 常态即 `display:inline-flex; align-items:center; justify-content:center`（文字与 spinner 恒水平垂直居中），加载态除 spinner 与呼吸动画外零布局变化。 |
+| **涉及文件** | [internal/models/mcp_server.go](internal/models/mcp_server.go)（新增）、[internal/database/models.go](internal/database/models.go)（AllModels 注册）、[internal/mcpserver/config.go](internal/mcpserver/config.go)（LoadFromDB，移除文件版 Load/LoadDefault/EnsureConfig）、[internal/mcpserver/client.go](internal/mcpserver/client.go) 与 [internal/mcpserver/tools.go](internal/mcpserver/tools.go)（连接/发现复用）、[internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（新增 List/Get/Save/Delete）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerDB 从库装配）、[app.go](app.go)（4 个绑定 + toMCPServerConfig + TestMCPServerResult）、[frontend/index.html](frontend/index.html)（MCP 设置面板 + 表单对话框）、[frontend/src/main.js](frontend/src/main.js)（列表/表单/开关/删除/测试）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（mcp-server-* 样式 + mcp-server-accent-btn / mcp-server-del-btn） |
 
 ---
 

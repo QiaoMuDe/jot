@@ -24,6 +24,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -37,6 +38,7 @@ import (
 	"jot/internal/services"
 
 	"gitee.com/MM-Q/fastlog"
+	"gorm.io/gorm"
 )
 
 // DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用）。
@@ -56,9 +58,9 @@ type Deps struct {
 	Note     *services.NoteService     // Note 笔记服务（manage_note 工具使用）
 	Stats    *services.StatsService    // Stats 数据统计聚合服务（get_stats 工具使用）
 	Logger   *fastlog.Logger
-	// MCPServerConfigPath 外部 MCP 服务器配置文件路径（测试阶段，配置文件驱动）；
-	// 为空时回退 mcpserver.LoadDefault（读取 ~/.jot/mcp/mcp-servers.json）。
-	MCPServerConfigPath string
+	// MCPServerDB 外部 MCP 服务器配置的数据来源（数据库驱动）；
+	// 为 nil 时跳过 MCP 工具装配。
+	MCPServerDB *gorm.DB
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }
@@ -130,104 +132,118 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools)
 
-	// 追加外部 MCP 服务器工具（测试阶段，配置文件驱动）：读取 ~/.jot/mcp/mcp-servers.json，
+	// 追加外部 MCP 服务器工具（数据库驱动）：从数据库读取 MCP 服务器配置，
 	// 对每个 enabled 服务器连接并发现工具，改名后并入 toolList（须在 toolByName 索引构建之前）；
-	// 配置缺失 / 单服务器失败仅记录日志跳过，不中断内置工具与整体 Agent 运行
-	mcpPath := s.deps.MCPServerConfigPath
-	var mcpCfg *mcpserver.Config
-	if mcpPath == "" {
-		// 默认读取用户家目录 ~/.jot/mcp/mcp-servers.json（可由 Deps.MCPServerConfigPath 覆盖）
-		mcpCfg, err = mcpserver.LoadDefault()
-	} else {
-		mcpCfg, err = mcpserver.Load(mcpPath)
-	}
-	if err != nil {
-		// 默认路径下失败：家目录路径解析失败属系统级异常，直接报错退出；
-		// 路径可解析而配置不可用（缺失/损坏）时回填路径供日志，跳过 MCP 装配不阻断对话
-		if mcpPath == "" {
-			p, pErr := mcpserver.DefaultConfigPath()
-			if pErr != nil {
-				return result, fmt.Errorf("解析 MCP 默认配置路径失败: %w", pErr)
+	// 查询失败 / 空库仅记录日志跳过，不中断内置工具与整体 Agent 运行
+	if s.deps.MCPServerDB != nil {
+		mcpCfg, err := mcpserver.LoadFromDB(s.deps.MCPServerDB)
+		if err != nil {
+			// 查询失败（数据库异常）仅记录日志，跳过 MCP 装配不阻断对话
+			if s.deps.Logger != nil {
+				s.deps.Logger.Debugw("MCP 服务器配置读取失败，跳过 MCP 工具装配",
+					fastlog.Error(err))
 			}
-			mcpPath = p
-		}
-		if s.deps.Logger != nil {
-			s.deps.Logger.Debugw("MCP 服务器配置不可用，跳过 MCP 工具装配",
-				fastlog.String("path", mcpPath),
-				fastlog.Error(err))
-		}
-	} else {
-		// 单条服务器校验失败时该条被跳过，其余合法条目正常装配；逐条输出告警便于定位
-		if s.deps.Logger != nil {
-			for _, loadErr := range mcpCfg.LoadErrors {
-				s.deps.Logger.Warnw("MCP 服务器配置校验失败，该服务器已跳过",
-					fastlog.String("path", mcpPath),
-					fastlog.Error(loadErr))
+		} else if len(mcpCfg.Servers) == 0 {
+			// 空库：无任何 MCP 服务器记录，跳过装配
+			if s.deps.Logger != nil {
+				s.deps.Logger.Debugw("无启用的 MCP 服务器，跳过 MCP 工具装配")
 			}
-		}
-		enabledServers := mcpCfg.EnabledServers()
-		if len(enabledServers) == 0 && s.deps.Logger != nil {
-			s.deps.Logger.Debugw("MCP 配置无启用的服务器，跳过 MCP 工具装配",
-				fastlog.String("path", mcpPath))
-		}
-
-		// 会话统一收集，待本轮 Run 结束后统一关闭（避免 for 循环内 defer 可读性隐患，
-		// 且覆盖其后所有 return 路径）；关闭失败记 Warn 便于发现连接清理异常
-		var mcpSessions []*mcpserver.Session
-		defer func() {
-			for _, sess := range mcpSessions {
-				if err := sess.Close(); err != nil && s.deps.Logger != nil {
-					s.deps.Logger.Warnw("MCP 会话关闭失败",
-						fastlog.String("server", sess.ServerName),
-						fastlog.Error(err))
+		} else {
+			// 单条服务器校验失败时该条被跳过，其余合法条目正常装配；逐条输出告警便于定位
+			if s.deps.Logger != nil {
+				for _, loadErr := range mcpCfg.LoadErrors {
+					s.deps.Logger.Warnw("MCP 服务器配置校验失败，该服务器已跳过",
+						fastlog.Error(loadErr))
 				}
 			}
-		}()
+			enabledServers := mcpCfg.EnabledServers()
+			if len(enabledServers) == 0 && s.deps.Logger != nil {
+				s.deps.Logger.Debugw("MCP 配置无启用的服务器，跳过 MCP 工具装配")
+			}
 
-		for _, server := range enabledServers {
-			connStart := time.Now()
-			sess, err := mcpserver.OpenSession(ctx, server)
-			if err != nil {
-				if s.deps.Logger != nil {
-					s.deps.Logger.Warnw("MCP 服务器连接失败，跳过该服务器",
-						fastlog.String("server", server.Name),
-						fastlog.Int("duration_ms", int(time.Since(connStart).Milliseconds())),
-						fastlog.Error(err))
+			// 会话统一收集，待本轮 Run 结束后统一关闭（避免 for 循环内 defer 可读性隐患，
+			// 且覆盖其后所有 return 路径）；关闭失败记 Warn 便于发现连接清理异常
+			var mcpSessions []*mcpserver.Session
+			defer func() {
+				for _, sess := range mcpSessions {
+					if err := sess.Close(); err != nil && s.deps.Logger != nil {
+						s.deps.Logger.Warnw("MCP 会话关闭失败",
+							fastlog.String("server", sess.ServerName),
+							fastlog.Error(err))
+					}
 				}
-				continue
+			}()
+
+			// 并行连接 + 工具发现，串行处理结果（保持工具顺序与日志顺序稳定）：
+			// goroutine 并发 OpenSession，最多同时 3 台（stdio 为本地子进程，限制并发拉起进程数）；
+			// 每台内部已有 10s 连接 + 10s 工具发现超时兜底，goroutine 不会永久挂起。
+			type mcpResult struct {
+				server   mcpserver.Server
+				sess     *mcpserver.Session
+				err      error
+				duration time.Duration
 			}
-			mcpSessions = append(mcpSessions, sess)
-			if sess.Skipped > 0 && s.deps.Logger != nil {
-				s.deps.Logger.Warnw("部分 MCP 工具因 Info 解析失败被跳过",
-					fastlog.String("server", server.Name),
-					fastlog.Int("skipped", sess.Skipped))
+			results := make([]mcpResult, len(enabledServers))
+			sem := make(chan struct{}, 3)
+			var wg sync.WaitGroup
+			for i, server := range enabledServers {
+				wg.Add(1)
+				go func(i int, server mcpserver.Server) {
+					defer wg.Done()
+					sem <- struct{}{} // 获取并发槽位
+					defer func() { <-sem }()
+					connStart := time.Now()
+					sess, err := mcpserver.OpenSession(ctx, server)
+					results[i] = mcpResult{server: server, sess: sess, err: err, duration: time.Since(connStart)}
+				}(i, server)
 			}
-			var toolNames []string
-			for _, t := range sess.Tools {
-				invokable, ok := t.(tool.InvokableTool)
-				if !ok {
+			wg.Wait()
+
+			// 按索引顺序串行处理结果：日志输出与工具装配顺序和串行实现完全一致
+			for i := range results {
+				r := results[i]
+				if r.err != nil {
 					if s.deps.Logger != nil {
-						s.deps.Logger.Warnw("MCP 工具不支持执行，已跳过",
-							fastlog.String("server", server.Name))
+						s.deps.Logger.Warnw("MCP 服务器连接失败，跳过该服务器",
+							fastlog.String("server", r.server.Name),
+							fastlog.Int("duration_ms", int(r.duration.Milliseconds())),
+							fastlog.Error(r.err))
 					}
 					continue
 				}
-				// 取改名后的工具名（mcp_{服务器名}_{工具名}），供 WrapWithError 日志与调用记录使用
-				mcpToolName := server.Name
-				if info, err := t.Info(ctx); err == nil && info != nil {
-					mcpToolName = info.Name
+				mcpSessions = append(mcpSessions, r.sess)
+				if r.sess.Skipped > 0 && s.deps.Logger != nil {
+					s.deps.Logger.Warnw("部分 MCP 工具因 Info 解析失败被跳过",
+						fastlog.String("server", r.server.Name),
+						fastlog.Int("skipped", r.sess.Skipped))
 				}
-				toolNames = append(toolNames, mcpToolName)
-				toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
-			}
-			// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与连接耗时，
-			// 便于排查工具是否生效及定位慢服务器
-			if s.deps.Logger != nil {
-				s.deps.Logger.Infow("MCP 服务器工具已上线",
-					fastlog.String("server", server.Name),
-					fastlog.Int("count", len(toolNames)),
-					fastlog.String("tools", strings.Join(toolNames, ", ")),
-					fastlog.Int("duration_ms", int(time.Since(connStart).Milliseconds())))
+				var toolNames []string
+				for _, t := range r.sess.Tools {
+					invokable, ok := t.(tool.InvokableTool)
+					if !ok {
+						if s.deps.Logger != nil {
+							s.deps.Logger.Warnw("MCP 工具不支持执行，已跳过",
+								fastlog.String("server", r.server.Name))
+						}
+						continue
+					}
+					// 取改名后的工具名（mcp_{服务器名}_{工具名}），供 WrapWithError 日志与调用记录使用
+					mcpToolName := r.server.Name
+					if info, err := t.Info(ctx); err == nil && info != nil {
+						mcpToolName = info.Name
+					}
+					toolNames = append(toolNames, mcpToolName)
+					toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
+				}
+				// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与连接耗时，
+				// 便于排查工具是否生效及定位慢服务器
+				if s.deps.Logger != nil {
+					s.deps.Logger.Infow("MCP 服务器工具已上线",
+						fastlog.String("server", r.server.Name),
+						fastlog.Int("count", len(toolNames)),
+						fastlog.String("tools", strings.Join(toolNames, ", ")),
+						fastlog.Int("duration_ms", int(r.duration.Milliseconds())))
+				}
 			}
 		}
 	}

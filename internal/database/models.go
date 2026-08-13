@@ -17,4 +17,5 @@ var AllModels = []interface{}{
 	&models.Note{},       // 子表：NotebookID → Notebook
 	&models.Tag{},
 	&models.Notebook{},
+	&models.MCPServer{},
 }

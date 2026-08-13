@@ -1,41 +1,72 @@
 package mcpserver_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 	"jot/internal/mcpserver"
+	"jot/internal/models"
 )
 
-// writeTempConfig 将 JSON 内容写入 t.TempDir() 下的临时文件，返回文件路径。
-func writeTempConfig(t *testing.T, content string) string {
+// newTestDB 打开内存 SQLite（单连接）并迁移 mcp_servers 表，随后插入种子数据。
+func newTestDB(t *testing.T, seeds ...models.MCPServer) *gorm.DB {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "mcp-servers.json")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("写入临时配置文件失败: %v", err)
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	return path
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("获取 sql.DB 失败: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1) // 内存库必须单连接，否则各连接库相互独立
+	if err := db.AutoMigrate(&models.MCPServer{}); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	for _, s := range seeds {
+		if err := db.Create(&s).Error; err != nil {
+			t.Fatalf("插入种子数据失败: %v", err)
+		}
+	}
+	return db
 }
 
-// TestLoadValidConfig 验证 stdio + sse + http 三种传输的合法配置可正常解析，字段值正确。
-func TestLoadValidConfig(t *testing.T) {
-	path := writeTempConfig(t, `{
-	  "servers": [
-	    {"name": "math", "transport": "stdio", "command": "npx",
-	     "args": ["-y", "@modelcontextprotocol/server-math"], "env": {"FOO": "1"}, "enabled": true},
-	    {"name": "weather", "transport": "sse", "url": "http://127.0.0.1:8000/sse", "enabled": true},
-	    {"name": "files", "transport": "http", "url": "http://127.0.0.1:8080/mcp", "enabled": false}
-	  ]
-	}`)
+// TestLoadFromDBEmpty 验证空库（表存在但无记录）返回空 Servers 且 err 为 nil。
+func TestLoadFromDBEmpty(t *testing.T) {
+	db := newTestDB(t)
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 空库不应报错: %v", err)
+	}
+	if cfg == nil || len(cfg.Servers) != 0 {
+		t.Fatalf("空库 Servers 应为空, got %+v", cfg)
+	}
+	if len(cfg.LoadErrors) != 0 {
+		t.Fatalf("空库 LoadErrors 应为空, got %v", cfg.LoadErrors)
+	}
+}
+
+// TestLoadFromDBValidRecords 验证 stdio + sse + http 三种传输的合法记录可正常读取，字段值正确。
+func TestLoadFromDBValidRecords(t *testing.T) {
+	db := newTestDB(t,
+		models.MCPServer{Name: "math", Transport: "stdio", Command: "npx",
+			Args: []string{"-y", "@modelcontextprotocol/server-math"}, Env: map[string]string{"FOO": "1"}, Enabled: true, SortOrder: 1},
+		models.MCPServer{Name: "weather", Transport: "sse", URL: "http://127.0.0.1:8000/sse", Enabled: true, SortOrder: 2},
+		models.MCPServer{Name: "files", Transport: "http", URL: "http://127.0.0.1:8080/mcp", Enabled: false, SortOrder: 3},
+	)
+
+	cfg, err := mcpserver.LoadFromDB(db)
+	if err != nil {
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	if len(cfg.Servers) != 3 {
 		t.Fatalf("服务器数量 = %d, want 3", len(cfg.Servers))
+	}
+	if len(cfg.LoadErrors) != 0 {
+		t.Fatalf("合法记录不应有 LoadErrors, got %v", cfg.LoadErrors)
 	}
 
 	// stdio 服务器
@@ -72,13 +103,31 @@ func TestLoadValidConfig(t *testing.T) {
 	}
 }
 
-// TestLoadInvalidTransport 验证不支持的 transport（webrtc）被跳过并记录 LoadErrors。
-func TestLoadInvalidTransport(t *testing.T) {
-	path := writeTempConfig(t, `{"servers": [{"name": "bad", "transport": "webrtc", "enabled": true}]}`)
+// TestLoadFromDBSortOrder 验证按 sort_order, id 升序返回。
+func TestLoadFromDBSortOrder(t *testing.T) {
+	db := newTestDB(t,
+		models.MCPServer{Name: "b", Transport: "stdio", Command: "echo", SortOrder: 2},
+		models.MCPServer{Name: "a", Transport: "stdio", Command: "echo", SortOrder: 1},
+		models.MCPServer{Name: "c", Transport: "stdio", Command: "echo", SortOrder: 1},
+	)
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
+	}
+	got := names(cfg.Servers)
+	if len(got) != 3 || got[0] != "a" || got[1] != "c" || got[2] != "b" {
+		t.Errorf("排序结果 = %v, want [a c b]（sort_order 升序，同序按 id 升序）", got)
+	}
+}
+
+// TestLoadFromDBInvalidTransport 验证不支持的 transport（webrtc）被跳过并记录 LoadErrors。
+func TestLoadFromDBInvalidTransport(t *testing.T) {
+	db := newTestDB(t, models.MCPServer{Name: "bad", Transport: "webrtc", Enabled: true})
+
+	cfg, err := mcpserver.LoadFromDB(db)
+	if err != nil {
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	if len(cfg.Servers) != 0 {
 		t.Errorf("非法服务器应被跳过, Servers = %v", cfg.Servers)
@@ -95,13 +144,13 @@ func TestLoadInvalidTransport(t *testing.T) {
 	}
 }
 
-// TestLoadEmptyName 验证 name 为空被跳过并记录 LoadErrors。
-func TestLoadEmptyName(t *testing.T) {
-	path := writeTempConfig(t, `{"servers": [{"name": "", "transport": "stdio", "command": "echo"}]}`)
+// TestLoadFromDBEmptyName 验证 name 为空被跳过并记录 LoadErrors。
+func TestLoadFromDBEmptyName(t *testing.T) {
+	db := newTestDB(t, models.MCPServer{Name: "", Transport: "stdio", Command: "echo"})
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	if len(cfg.LoadErrors) != 1 {
 		t.Fatalf("LoadErrors 数量 = %d, want 1", len(cfg.LoadErrors))
@@ -111,13 +160,13 @@ func TestLoadEmptyName(t *testing.T) {
 	}
 }
 
-// TestLoadStdioMissingCommand 验证 stdio 传输缺 command 被跳过并记录 LoadErrors。
-func TestLoadStdioMissingCommand(t *testing.T) {
-	path := writeTempConfig(t, `{"servers": [{"name": "math", "transport": "stdio"}]}`)
+// TestLoadFromDBStdioMissingCommand 验证 stdio 传输缺 command 被跳过并记录 LoadErrors。
+func TestLoadFromDBStdioMissingCommand(t *testing.T) {
+	db := newTestDB(t, models.MCPServer{Name: "math", Transport: "stdio"})
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	if len(cfg.LoadErrors) != 1 {
 		t.Fatalf("LoadErrors 数量 = %d, want 1", len(cfg.LoadErrors))
@@ -127,8 +176,8 @@ func TestLoadStdioMissingCommand(t *testing.T) {
 	}
 }
 
-// TestLoadHTTPMissingURL 验证 http/sse 传输缺 url 被跳过并记录 LoadErrors。
-func TestLoadHTTPMissingURL(t *testing.T) {
+// TestLoadFromDBMissingURL 验证 http/sse 传输缺 url 被跳过并记录 LoadErrors。
+func TestLoadFromDBMissingURL(t *testing.T) {
 	cases := []struct {
 		name      string
 		transport string
@@ -138,11 +187,11 @@ func TestLoadHTTPMissingURL(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			path := writeTempConfig(t, `{"servers": [{"name": "x", "transport": "`+c.transport+`"}]}`)
+			db := newTestDB(t, models.MCPServer{Name: "x", Transport: c.transport})
 
-			cfg, err := mcpserver.Load(path)
+			cfg, err := mcpserver.LoadFromDB(db)
 			if err != nil {
-				t.Fatalf("Load(%q) 意外错误: %v", path, err)
+				t.Fatalf("LoadFromDB 意外错误: %v", err)
 			}
 			if len(cfg.LoadErrors) != 1 {
 				t.Fatalf("LoadErrors 数量 = %d, want 1", len(cfg.LoadErrors))
@@ -154,19 +203,17 @@ func TestLoadHTTPMissingURL(t *testing.T) {
 	}
 }
 
-// TestLoadSkipInvalidKeepsValid 验证单条非法不影响其余合法服务器装配。
-func TestLoadSkipInvalidKeepsValid(t *testing.T) {
-	path := writeTempConfig(t, `{
-	  "servers": [
-	    {"name": "good", "transport": "stdio", "command": "echo", "enabled": true},
-	    {"name": "", "transport": "stdio", "command": "echo", "enabled": true},
-	    {"name": "files", "transport": "http", "url": "http://127.0.0.1:8080/mcp", "enabled": false}
-	  ]
-	}`)
+// TestLoadFromDBSkipInvalidKeepsValid 验证单条非法不影响其余合法服务器装配。
+func TestLoadFromDBSkipInvalidKeepsValid(t *testing.T) {
+	db := newTestDB(t,
+		models.MCPServer{Name: "good", Transport: "stdio", Command: "echo", Enabled: true},
+		models.MCPServer{Name: "", Transport: "stdio", Command: "echo", Enabled: true},
+		models.MCPServer{Name: "files", Transport: "http", URL: "http://127.0.0.1:8080/mcp", Enabled: false},
+	)
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	if len(cfg.Servers) != 2 {
 		t.Errorf("合法服务器数量 = %d, want 2 (非法条目被跳过), got %v", len(cfg.Servers), names(cfg.Servers))
@@ -186,32 +233,39 @@ func TestLoadSkipInvalidKeepsValid(t *testing.T) {
 	}
 }
 
-// TestLoadMissingFile 验证不存在的配置文件路径返回错误且错误信息包含路径。
-func TestLoadMissingFile(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "not-exist.json")
-
-	_, err := mcpserver.Load(missing)
-	if err == nil {
-		t.Fatal("Load 应返回错误, got nil")
+// TestLoadFromDBTableMissing 验证表缺失（整体性错误，如未迁移）返回错误且信息可定位。
+func TestLoadFromDBTableMissing(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("打开内存数据库失败: %v", err)
 	}
-	if !strings.Contains(err.Error(), missing) {
-		t.Errorf("错误信息应包含路径 %q, got: %v", missing, err)
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("获取 sql.DB 失败: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	// 不做 AutoMigrate，直接查询应报错
+
+	_, err = mcpserver.LoadFromDB(db)
+	if err == nil {
+		t.Fatal("LoadFromDB 应返回错误, got nil")
+	}
+	if !strings.Contains(err.Error(), "读取 MCP 服务器配置失败") {
+		t.Errorf("错误信息应包含「读取 MCP 服务器配置失败」, got: %v", err)
 	}
 }
 
 // TestEnabledServers 验证只返回 enabled=true 的服务器。
 func TestEnabledServers(t *testing.T) {
-	path := writeTempConfig(t, `{
-	  "servers": [
-	    {"name": "a", "transport": "stdio", "command": "echo", "enabled": true},
-	    {"name": "b", "transport": "sse", "url": "http://127.0.0.1:1/sse", "enabled": false},
-	    {"name": "c", "transport": "http", "url": "http://127.0.0.1:2/mcp", "enabled": true}
-	  ]
-	}`)
+	db := newTestDB(t,
+		models.MCPServer{Name: "a", Transport: "stdio", Command: "echo", Enabled: true},
+		models.MCPServer{Name: "b", Transport: "sse", URL: "http://127.0.0.1:1/sse", Enabled: false},
+		models.MCPServer{Name: "c", Transport: "http", URL: "http://127.0.0.1:2/mcp", Enabled: true},
+	)
 
-	cfg, err := mcpserver.Load(path)
+	cfg, err := mcpserver.LoadFromDB(db)
 	if err != nil {
-		t.Fatalf("Load(%q) 意外错误: %v", path, err)
+		t.Fatalf("LoadFromDB 意外错误: %v", err)
 	}
 	got := cfg.EnabledServers()
 	if len(got) != 2 {
@@ -235,48 +289,4 @@ func names(servers []mcpserver.Server) []string {
 		out = append(out, s.Name)
 	}
 	return out
-}
-
-// TestEnsureConfigFile 验证 ensureConfigFile：目录+默认文件创建、幂等不覆盖、已存在文件保留。
-func TestEnsureConfigFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "mcp", "mcp-servers.json")
-
-	// 1. 首次调用：创建目录并写入默认配置
-	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
-		t.Fatalf("ensureConfigFile 首次调用失败: %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("读取默认配置文件失败: %v", err)
-	}
-	cfg, err := mcpserver.Load(path)
-	if err != nil {
-		t.Fatalf("默认配置应可被 Load 解析: %v", err)
-	}
-	if len(cfg.Servers) != 0 {
-		t.Errorf("默认配置 servers 应为空, got %d 条", len(cfg.Servers))
-	}
-
-	// 2. 二次调用：幂等，不报错且内容不变
-	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
-		t.Fatalf("ensureConfigFile 二次调用失败: %v", err)
-	}
-	again, _ := os.ReadFile(path)
-	if string(again) != string(data) {
-		t.Error("重复调用不应改动已有配置文件内容")
-	}
-
-	// 3. 用户已填写配置时保留原文件（不被默认内容覆盖）
-	custom := `{"servers":[{"name":"x","transport":"stdio","command":"echo","enabled":false}]}`
-	if err := os.WriteFile(path, []byte(custom), 0644); err != nil {
-		t.Fatalf("写入自定义配置失败: %v", err)
-	}
-	if err := mcpserver.EnsureConfigFileAt(path); err != nil {
-		t.Fatalf("ensureConfigFile 对已存在文件调用失败: %v", err)
-	}
-	kept, _ := os.ReadFile(path)
-	if string(kept) != custom {
-		t.Error("已存在的用户配置不应被默认配置覆盖")
-	}
 }

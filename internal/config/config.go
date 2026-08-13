@@ -14,7 +14,6 @@ const (
 	DirBackup = "backup" // 备份目录
 	DirImages = "images" // 图片目录
 	DirLogs   = "logs"   // 日志目录
-	DirMCP    = "mcp"    // MCP 配置目录
 )
 
 // JotHomeDir 返回应用根目录: ~/.jot
@@ -26,7 +25,7 @@ func JotHomeDir() (string, error) {
 	return filepath.Join(home, ".jot"), nil
 }
 
-// SubDir 返回应用根目录下的子目录路径，如 SubDir(DirMCP) -> ~/.jot/mcp
+// SubDir 返回应用根目录下的子目录路径，如 SubDir(DirData) -> ~/.jot/data
 func SubDir(sub string) (string, error) {
 	root, err := JotHomeDir()
 	if err != nil {

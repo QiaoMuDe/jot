@@ -6483,6 +6483,12 @@ async function handleKeyboardNavigation(e) {
         if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
             return;
         }
+        // MCP 服务器新增/编辑表单打开时关闭它
+        const mcpFormDlg = document.getElementById('mcpServerFormDialog');
+        if (mcpFormDlg && mcpFormDlg.classList.contains('visible')) {
+            closeMCPServerForm();
+            return;
+        }
         // 预设弹窗打开时关闭它（不继续执行导航逻辑）
         const presetOverlay = document.getElementById('presetModalOverlay');
         if (presetOverlay && presetOverlay.classList.contains('visible')) {
@@ -8112,6 +8118,7 @@ async function init() {
     if (els.todoFab) els.todoFab.classList.add('fab-hidden');
     if (els.todoFabPanel) els.todoFabPanel.classList.add('fab-hidden');
     initEventListeners();
+    initMCPServerSettings();
     initLockScreenEvents();
     initEditorActionsMenu();
     initFontSettings();
@@ -9053,6 +9060,559 @@ function renderAgentToolsSettings() {
     updateAgentToolsButtonText();
 }
 
+/* ===== MCP 服务器设置（设置页「MCP 服务器」面板） ===== */
+
+/** 当前 MCP 服务器列表缓存（来自后端 GetMCPServers） */
+let mcpServers = [];
+
+/** MCP 服务器表单模式：create 新增 / edit 编辑 */
+let mcpFormMode = 'create';
+/** 编辑模式下的服务器 ID（新增时为 0） */
+let mcpFormEditId = 0;
+/** 保存请求进行中标记，防止重复提交 */
+let mcpFormSaving = false;
+/** 表单中服务器的启用状态（新增默认启用；编辑沿用原值） */
+let mcpFormEnabled = true;
+/** 表单中服务器的传输方式（新增默认 stdio；编辑沿用原值） */
+let mcpFormTransport = 'stdio';
+/** MCP 服务器表单打开时的初始值快照（用于关闭时判断是否有未保存修改） */
+let mcpFormInitial = {
+    name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '',
+};
+/** 传输方式选项文案（与表单下拉项一致） */
+const MCP_TRANSPORT_OPTIONS = {
+    stdio: 'stdio（本地进程）',
+    sse: 'sse（远程流式）',
+    http: 'http（远程）',
+};
+
+/**
+ * 格式化后端错误信息：去掉 Wails 包装的 "Error: " 前缀
+ * @param {*} err - 后端返回的错误（字符串或 Error 对象）
+ * @returns {string}
+ */
+function mcpErrMsg(err) {
+    if (!err) return '未知错误';
+    const s = String(err);
+    return s.replace(/^Error:\s*/, '');
+}
+
+/**
+ * 从后端加载 MCP 服务器列表并渲染
+ */
+async function loadMCPServers() {
+    try {
+        mcpServers = (await window.go.main.App.GetMCPServers()) || [];
+        renderMCPServerList();
+    } catch (e) {
+        nm.show('获取 MCP 服务器列表失败', 'error');
+    }
+}
+
+/**
+ * 渲染服务器列表；空列表显示空态
+ */
+function renderMCPServerList() {
+    const listEl = document.getElementById('mcpServerList');
+    const emptyEl = document.getElementById('mcpServerEmpty');
+    if (!listEl || !emptyEl) return;
+    listEl.innerHTML = '';
+    if (!mcpServers.length) {
+        emptyEl.hidden = false;
+        return;
+    }
+    emptyEl.hidden = true;
+    mcpServers.forEach((srv) => listEl.appendChild(buildMCPServerItem(srv)));
+}
+
+/**
+ * 构建单个服务器列表条目（信息区 + 操作区）
+ * @param {object} srv - MCP 服务器记录
+ * @returns {HTMLElement}
+ */
+function buildMCPServerItem(srv) {
+    const item = document.createElement('div');
+    item.className = 'mcp-server-item';
+
+    // ── 信息区：名称（+ 传输徽标）横排，描述另起一行 ──
+    const info = document.createElement('div');
+    info.className = 'mcp-server-item-info';
+
+    const nameRow = document.createElement('div');
+    nameRow.className = 'mcp-server-item-name-row';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'mcp-server-item-name';
+    nameEl.textContent = srv.name || '';
+    nameRow.appendChild(nameEl);
+
+    const badge = document.createElement('span');
+    badge.className = `mcp-server-item-badge mcp-badge-${srv.transport || 'stdio'}`;
+    badge.textContent = (srv.transport || 'stdio').toUpperCase();
+    nameRow.appendChild(badge);
+
+    const desc = document.createElement('span');
+    desc.className = 'mcp-server-item-desc';
+    if (srv.transport === 'stdio') {
+        // stdio：显示命令及参数摘要
+        let descText = srv.command || '';
+        if (Array.isArray(srv.args) && srv.args.length > 0) {
+            const argsText = srv.args.join(' ');
+            descText = descText ? `${descText} ${argsText}` : argsText;
+        }
+        desc.textContent = descText;
+    } else {
+        // sse / http：显示 url
+        desc.textContent = srv.url || '';
+    }
+
+    info.appendChild(nameRow);
+    info.appendChild(desc);
+
+    // ── 操作区：启用开关 + 编辑 + 删除 ──
+    const actions = document.createElement('div');
+    actions.className = 'mcp-server-item-actions';
+
+    const toggle = document.createElement('div');
+    toggle.className = 'ai-chat-toggle-switch';
+    if (srv.enabled) toggle.classList.add('active');
+    toggle.title = srv.enabled ? '点击停用' : '点击启用';
+    const knob = document.createElement('div');
+    knob.className = 'ai-chat-toggle-knob';
+    toggle.appendChild(knob);
+    toggle.addEventListener('click', () => toggleMCPServer(srv, toggle));
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-sm mcp-server-accent-btn';
+    editBtn.textContent = '编辑';
+    editBtn.addEventListener('click', () => openMCPServerForm(srv));
+
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn btn-sm mcp-server-accent-btn';
+    testBtn.textContent = '测试';
+    testBtn.title = '测试该传输方式的连接是否可用';
+    testBtn.addEventListener('click', () => testMCPServer(srv, testBtn));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm mcp-server-del-btn';
+    delBtn.textContent = '删除';
+    delBtn.addEventListener('click', () => deleteMCPServer(srv));
+
+    actions.appendChild(toggle);
+    actions.appendChild(testBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    item.appendChild(info);
+    item.appendChild(actions);
+    return item;
+}
+
+/**
+ * 行内启用开关切换：翻转缓存中的 enabled 并保存；失败回滚 UI
+ * @param {object} srv - 列表条目对应的服务器记录（缓存引用）
+ * @param {HTMLElement} toggleEl - 开关元素
+ */
+async function toggleMCPServer(srv, toggleEl) {
+    const target = mcpServers.find((s) => s.id === srv.id) || srv;
+    const newEnabled = !target.enabled;
+    // 先乐观更新 UI
+    target.enabled = newEnabled;
+    toggleEl.classList.toggle('active', newEnabled);
+    toggleEl.title = newEnabled ? '点击停用' : '点击启用';
+    try {
+        await window.go.main.App.SaveMCPServer({ ...target, enabled: newEnabled });
+        nm.show(newEnabled ? `已启用「${target.name}」` : `已停用「${target.name}」`, 'success');
+    } catch (e) {
+        // 失败回滚 UI 状态
+        target.enabled = !newEnabled;
+        toggleEl.classList.toggle('active', target.enabled);
+        toggleEl.title = target.enabled ? '点击停用' : '点击启用';
+        nm.show(`操作失败：${mcpErrMsg(e)}`, 'error');
+    }
+}
+
+/**
+ * 测试 MCP 服务器连接是否可用（连接 + 握手 + 工具发现）
+ * @param {object} srv - 服务器记录
+ * @param {HTMLElement} btn - 触发测试的按钮（用于加载态）
+ */
+async function testMCPServer(srv, btn) {
+    const startAt = Date.now();
+    setBtnLoading(btn, true);
+    let message = '';
+    let type = 'error';
+    try {
+        const res = await window.go.main.App.TestMCPServer(srv.id);
+        if (res && res.ok) {
+            const toolText = res.tool_num > 0 ? `，发现 ${res.tool_num} 个工具` : '';
+            message = `「${srv.name}」连接成功${toolText}`;
+            type = 'success';
+        } else {
+            // 后端错误文案已含服务器名（如「MCP 服务器 xxx 连接失败: …」），直接展示避免重复前缀
+            message = mcpErrMsg((res && res.message) || '未知错误');
+        }
+    } catch (e) {
+        message = `「${srv.name}」测试出错：${mcpErrMsg(e)}`;
+    } finally {
+        // 保证加载动画至少可见 600ms（本地连接可能瞬时完成，避免动画一闪而过）
+        const rest = 600 - (Date.now() - startAt);
+        if (rest > 0) await new Promise((r) => setTimeout(r, rest));
+        setBtnLoading(btn, false);
+    }
+    if (message) nm.show(message, type);
+}
+
+/**
+ * 删除服务器（带确认对话框）
+ * @param {object} srv - 服务器记录
+ */
+async function deleteMCPServer(srv) {
+    const ok = await showConfirmDialog(`确定删除 MCP 服务器「${srv.name}」？`, '删除');
+    if (!ok) return;
+    try {
+        await window.go.main.App.DeleteMCPServer(srv.id);
+        await loadMCPServers();
+        nm.show(`已删除「${srv.name}」`, 'success');
+    } catch (e) {
+        nm.show(`删除失败：${mcpErrMsg(e)}`, 'error');
+    }
+}
+
+/**
+ * 打开 MCP 服务器表单对话框
+ * @param {object|null} srv - 编辑的服务器记录；null 表示新增
+ */
+function openMCPServerForm(srv) {
+    const dialog = document.getElementById('mcpServerFormDialog');
+    if (!dialog) return;
+    const title = document.getElementById('mcpServerFormTitle');
+    const nameInput = document.getElementById('mcpServerNameInput');
+    const commandInput = document.getElementById('mcpServerCommandInput');
+    const argsInput = document.getElementById('mcpServerArgsInput');
+    const envInput = document.getElementById('mcpServerEnvInput');
+    const urlInput = document.getElementById('mcpServerUrlInput');
+    const headersInput = document.getElementById('mcpServerHeadersInput');
+
+    mcpFormSaving = false;
+
+    if (srv) {
+        // 编辑模式：预填充表单
+        mcpFormMode = 'edit';
+        mcpFormEditId = srv.id;
+        title.textContent = '编辑 MCP 服务器';
+        nameInput.value = srv.name || '';
+        setMCPFormTransport(srv.transport || 'stdio');
+        commandInput.value = srv.command || '';
+        // 参数数组每行一个
+        argsInput.value = Array.isArray(srv.args) ? srv.args.join('\n') : '';
+        // 环境变量对象转 KEY=VALUE 每行一个
+        envInput.value = srv.env ? Object.keys(srv.env).map((k) => `${k}=${srv.env[k]}`).join('\n') : '';
+        urlInput.value = srv.url || '';
+        // 请求头对象转 KEY=VALUE 每行一个
+        headersInput.value = srv.headers ? Object.keys(srv.headers).map((k) => `${k}=${srv.headers[k]}`).join('\n') : '';
+        mcpFormEnabled = !!srv.enabled;
+    } else {
+        // 新增模式：清空字段并使用默认值
+        mcpFormMode = 'create';
+        mcpFormEditId = 0;
+        title.textContent = '添加 MCP 服务器';
+        nameInput.value = '';
+        setMCPFormTransport('stdio');
+        commandInput.value = '';
+        argsInput.value = '';
+        envInput.value = '';
+        urlInput.value = '';
+        headersInput.value = '';
+        mcpFormEnabled = true;
+    }
+
+    // 记录表单初始快照，用于关闭时判断是否有未保存修改
+    mcpFormInitial = {
+        name: nameInput.value,
+        transport: mcpFormTransport,
+        command: commandInput.value,
+        args: argsInput.value,
+        env: envInput.value,
+        url: urlInput.value,
+        headers: headersInput.value,
+    };
+
+    // 显示对话框（visible 类触发淡入动画，与 pwdModal 一致）
+    dialog.style.display = 'flex';
+    requestAnimationFrame(() => dialog.classList.add('visible'));
+    setTimeout(() => nameInput.focus(), 200);
+}
+
+// 判断 MCP 服务器表单是否相对初始快照有修改
+function hasMCPServerFormChanges() {
+    const g = (id) => (document.getElementById(id)?.value ?? '');
+    return g('mcpServerNameInput') !== mcpFormInitial.name
+        || mcpFormTransport !== mcpFormInitial.transport
+        || g('mcpServerCommandInput') !== mcpFormInitial.command
+        || g('mcpServerArgsInput') !== mcpFormInitial.args
+        || g('mcpServerEnvInput') !== mcpFormInitial.env
+        || g('mcpServerUrlInput') !== mcpFormInitial.url
+        || g('mcpServerHeadersInput') !== mcpFormInitial.headers;
+}
+
+/**
+ * 关闭 MCP 服务器表单对话框
+ * @param {boolean} force - true 时跳过未保存修改确认（保存成功后使用）
+ */
+async function closeMCPServerForm(force = false) {
+    const dialog = document.getElementById('mcpServerFormDialog');
+    if (!dialog || dialog.style.display === 'none') return;
+    // force 必须是字面量 true 才跳过确认（防御：避免事件对象等 truthy 值误传入跳过确认）
+    if (force !== true && hasMCPServerFormChanges()) {
+        const ok = await showConfirmDialog('有未保存的修改，确定放弃并关闭吗？');
+        if (!ok) return;
+    }
+    dialog.classList.remove('visible');
+    // 等关闭过渡结束后隐藏 DOM；期间若重新打开（重新加回 visible）则不隐藏
+    setTimeout(() => {
+        if (!dialog.classList.contains('visible')) {
+            dialog.style.display = 'none';
+        }
+    }, 220);
+}
+
+/**
+ * 设置表单传输方式：更新缓存值、触发器文案与选中态，并联动显隐输入组
+ * @param {string} transport - stdio / sse / http
+ */
+function setMCPFormTransport(transport) {
+    mcpFormTransport = transport;
+    const label = document.getElementById('mcpServerTransportLabel');
+    if (label) label.textContent = MCP_TRANSPORT_OPTIONS[transport] || transport;
+    const dropdown = document.getElementById('mcpServerTransportDropdown');
+    if (dropdown) {
+        dropdown.querySelectorAll('.theme-select-item').forEach((item) => {
+            item.classList.toggle('active', item.dataset.transport === transport);
+        });
+    }
+    updateMCPServerTransportGroups(transport);
+}
+
+/**
+ * 按当前传输方式显隐 stdio / url 输入组
+ * @param {string} transport - stdio / sse / http
+ */
+function updateMCPServerTransportGroups(transport) {
+    const stdioGroup = document.getElementById('mcpServerStdioGroup');
+    const urlGroup = document.getElementById('mcpServerUrlGroup');
+    if (!stdioGroup || !urlGroup) return;
+    const isStdio = transport === 'stdio';
+    // 用 collapsed 类而非 hidden：配合 CSS 0fr/1fr 过渡实现平滑展开/收起
+    stdioGroup.classList.toggle('collapsed', !isStdio);
+    urlGroup.classList.toggle('collapsed', isStdio);
+}
+
+/**
+ * 校验失败反馈：输入框抖动 + 红色边框闪烁，动画结束后自动恢复原样
+ * @param {HTMLElement} el - 目标输入框
+ */
+function shakeMCPFormInput(el) {
+    if (!el) return;
+    el.classList.remove('mcp-input-invalid');
+    // 强制 reflow，保证连续触发时动画能重新播放
+    void el.offsetWidth;
+    el.classList.add('mcp-input-invalid');
+    const clear = () => el.classList.remove('mcp-input-invalid');
+    el.addEventListener('animationend', function handler(e) {
+        if (e.animationName === 'mcpFormInputError') {
+            clear();
+            el.removeEventListener('animationend', handler);
+        }
+    });
+    // reduced-motion（无动画）时 animationend 不触发，定时兜底恢复
+    setTimeout(clear, 800);
+}
+
+/**
+ * 保存 MCP 服务器表单（新增 / 编辑）
+ */
+async function saveMCPServerForm() {
+    if (mcpFormSaving) return;
+    const nameInput = document.getElementById('mcpServerNameInput');
+    const commandInput = document.getElementById('mcpServerCommandInput');
+    const argsInput = document.getElementById('mcpServerArgsInput');
+    const envInput = document.getElementById('mcpServerEnvInput');
+    const urlInput = document.getElementById('mcpServerUrlInput');
+    const headersInput = document.getElementById('mcpServerHeadersInput');
+    if (!nameInput) return;
+
+    const name = nameInput.value.trim();
+    const transport = mcpFormTransport;
+    const command = commandInput ? commandInput.value.trim() : '';
+    const url = urlInput ? urlInput.value.trim() : '';
+
+    // 校验：名称必填
+    if (!name) {
+        nm.show('请输入服务器名称', 'error');
+        shakeMCPFormInput(nameInput);
+        nameInput.focus();
+        return;
+    }
+    // 校验：名称不能含空白（名称拼入工具名前缀 mcp_{name}_{tool}）
+    if (/\s/.test(name)) {
+        nm.show('服务器名称不能包含空格等空白字符', 'error');
+        shakeMCPFormInput(nameInput);
+        nameInput.focus();
+        return;
+    }
+    // 校验：stdio 需命令，sse/http 需 URL
+    if (transport === 'stdio' && !command) {
+        nm.show('请输入启动命令', 'error');
+        shakeMCPFormInput(commandInput);
+        commandInput.focus();
+        return;
+    }
+    if (transport !== 'stdio' && !url) {
+        nm.show('请输入服务器 URL', 'error');
+        shakeMCPFormInput(urlInput);
+        urlInput.focus();
+        return;
+    }
+
+    // 解析参数：逐行过滤空行
+    const args = (argsInput.value || '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
+
+    // 解析环境变量：每行必须为 KEY=VALUE，重复 KEY 后者覆盖
+    const env = {};
+    const envLines = (envInput.value || '').split('\n');
+    for (const rawLine of envLines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) {
+            nm.show('环境变量需为 KEY=VALUE 格式', 'error');
+            shakeMCPFormInput(envInput);
+            envInput.focus();
+            return;
+        }
+        const key = line.slice(0, eqIdx).trim();
+        if (!key) {
+            nm.show('环境变量需为 KEY=VALUE 格式', 'error');
+            shakeMCPFormInput(envInput);
+            envInput.focus();
+            return;
+        }
+        if (/\s/.test(key)) {
+            nm.show('环境变量 KEY 不能包含空白字符', 'error');
+            shakeMCPFormInput(envInput);
+            envInput.focus();
+            return;
+        }
+        env[key] = line.slice(eqIdx + 1).trim();
+    }
+
+    // 解析请求头：每行必须为 KEY=VALUE，重复 KEY 后者覆盖
+    const headers = {};
+    const headerLines = (headersInput.value || '').split('\n');
+    for (const rawLine of headerLines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) {
+            nm.show('请求头需为 KEY=VALUE 格式', 'error');
+            shakeMCPFormInput(headersInput);
+            headersInput.focus();
+            return;
+        }
+        const key = line.slice(0, eqIdx).trim();
+        if (!key) {
+            nm.show('请求头需为 KEY=VALUE 格式', 'error');
+            shakeMCPFormInput(headersInput);
+            headersInput.focus();
+            return;
+        }
+        if (/\s/.test(key)) {
+            nm.show('请求头 KEY 不能包含空白字符', 'error');
+            shakeMCPFormInput(headersInput);
+            headersInput.focus();
+            return;
+        }
+        headers[key] = line.slice(eqIdx + 1).trim();
+    }
+
+    // 防重复提交
+    mcpFormSaving = true;
+    const payload = {
+        id: mcpFormEditId,
+        name,
+        transport,
+        command,
+        args,
+        env,
+        url,
+        headers,
+        enabled: mcpFormEnabled,
+    };
+    try {
+        await window.go.main.App.SaveMCPServer(payload);
+        closeMCPServerForm(true); // 保存成功后跳过未保存修改确认
+        await loadMCPServers();
+        nm.show(mcpFormMode === 'create' ? 'MCP 服务器已添加' : 'MCP 服务器已更新', 'success');
+    } catch (e) {
+        // 后端校验/存储错误（Wails 以异常形式返回）
+        nm.show(mcpErrMsg(e), 'error');
+    } finally {
+        mcpFormSaving = false;
+    }
+}
+
+/**
+ * 初始化 MCP 服务器设置面板交互（事件绑定）
+ */
+function initMCPServerSettings() {
+    // 添加按钮 → 打开新增表单
+    const addBtn = document.getElementById('mcpServerAddBtn');
+    if (addBtn) addBtn.addEventListener('click', () => openMCPServerForm(null));
+
+    // 取消按钮 → 关闭表单
+    const cancelBtn = document.getElementById('mcpServerFormCancelBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeMCPServerForm);
+
+    // 对话框：点击 backdrop 关闭（Esc 关闭由全局 handleKeyboardNavigation 统一处理）
+    const dialog = document.getElementById('mcpServerFormDialog');
+    if (dialog) {
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog || (e.target.classList && e.target.classList.contains('mcp-server-form-overlay'))) {
+                closeMCPServerForm();
+            }
+        });
+    }
+
+    // 传输方式自定义下拉（theme-select 样式）：开关 / 选择 / 外部点击关闭
+    const transportTrigger = document.getElementById('mcpServerTransportTrigger');
+    const transportDropdown = document.getElementById('mcpServerTransportDropdown');
+    if (transportTrigger && transportDropdown) {
+        transportTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            transportTrigger.classList.toggle('open');
+            transportDropdown.classList.toggle('open');
+        });
+        transportDropdown.addEventListener('click', (e) => {
+            const item = e.target.closest('.theme-select-item');
+            if (!item) return;
+            setMCPFormTransport(item.dataset.transport);
+            transportDropdown.classList.remove('open');
+            transportTrigger.classList.remove('open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!transportTrigger.contains(e.target) && !transportDropdown.contains(e.target)) {
+                transportDropdown.classList.remove('open');
+                transportTrigger.classList.remove('open');
+            }
+        });
+    }
+
+    // 保存按钮 → 保存表单
+    const saveBtn = document.getElementById('mcpServerFormSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveMCPServerForm);
+}
+
 /**
  * 一次性从后端加载所有设置并应用到前端
  */
@@ -9307,6 +9867,9 @@ async function loadSettings() {
     } catch (e) {
         console.warn('loadSettings: 加载设置失败', e);
     }
+
+    // --- MCP 服务器列表（非阻塞加载，不影响既有流程） ---
+    loadMCPServers();
 }
 
 /**
@@ -9376,6 +9939,8 @@ let _settingsAnimating = false;
 function switchSettingsTab(panelName) {
     // 切换面板时关闭「Agent 工具」浮层
     closeAgentToolsPopover();
+    // 切换面板时关闭 MCP 服务器表单对话框
+    closeMCPServerForm();
 
     // 动画进行中 → 忽略本次切换，避免面板重叠
     if (_settingsAnimating) return;

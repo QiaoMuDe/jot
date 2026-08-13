@@ -65,6 +65,8 @@ export function DeleteAISession(arg1:number):Promise<void>;
 
 export function DeleteAllVectors():Promise<void>;
 
+export function DeleteMCPServer(arg1:number):Promise<void>;
+
 export function DeleteNote(arg1:number):Promise<void>;
 
 export function DeleteNotebook(arg1:number):Promise<void>;
@@ -112,6 +114,8 @@ export function GetBackupInfo():Promise<Record<string, string>>;
 export function GetDataStats():Promise<services.DataStats>;
 
 export function GetEmbedConfig():Promise<string>;
+
+export function GetMCPServers():Promise<Array<models.MCPServer>>;
 
 export function GetMaxFileSize():Promise<number>;
 
@@ -221,6 +225,8 @@ export function SaveImage(arg1:string,arg2:string):Promise<string>;
 
 export function SaveImageFromPath(arg1:string):Promise<string>;
 
+export function SaveMCPServer(arg1:models.MCPServer):Promise<void>;
+
 export function SaveSessionConfig(arg1:number,arg2:services.SessionConfig):Promise<void>;
 
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
@@ -246,6 +252,8 @@ export function SwitchProfile(arg1:string,arg2:number):Promise<void>;
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;
 
 export function TestAIConnection(arg1:string,arg2:string):Promise<boolean>;
+
+export function TestMCPServer(arg1:number):Promise<main.TestMCPServerResult>;
 
 export function TestTavilyConnection(arg1:string):Promise<boolean>;
 

@@ -11,12 +11,12 @@ func TestSubDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("JotHomeDir() 意外错误: %v", err)
 	}
-	got, err := SubDir(DirMCP)
+	got, err := SubDir(DirData)
 	if err != nil {
-		t.Fatalf("SubDir(%q) 意外错误: %v", DirMCP, err)
+		t.Fatalf("SubDir(%q) 意外错误: %v", DirData, err)
 	}
-	want := filepath.Join(root, DirMCP)
+	want := filepath.Join(root, DirData)
 	if got != want {
-		t.Errorf("SubDir(%q) = %q, want %q", DirMCP, got, want)
+		t.Errorf("SubDir(%q) = %q, want %q", DirData, got, want)
 	}
 }

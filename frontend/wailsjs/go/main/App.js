@@ -122,6 +122,10 @@ export function DeleteAllVectors() {
   return window['go']['main']['App']['DeleteAllVectors']();
 }
 
+export function DeleteMCPServer(arg1) {
+  return window['go']['main']['App']['DeleteMCPServer'](arg1);
+}
+
 export function DeleteNote(arg1) {
   return window['go']['main']['App']['DeleteNote'](arg1);
 }
@@ -216,6 +220,10 @@ export function GetDataStats() {
 
 export function GetEmbedConfig() {
   return window['go']['main']['App']['GetEmbedConfig']();
+}
+
+export function GetMCPServers() {
+  return window['go']['main']['App']['GetMCPServers']();
 }
 
 export function GetMaxFileSize() {
@@ -434,6 +442,10 @@ export function SaveImageFromPath(arg1) {
   return window['go']['main']['App']['SaveImageFromPath'](arg1);
 }
 
+export function SaveMCPServer(arg1) {
+  return window['go']['main']['App']['SaveMCPServer'](arg1);
+}
+
 export function SaveSessionConfig(arg1, arg2) {
   return window['go']['main']['App']['SaveSessionConfig'](arg1, arg2);
 }
@@ -484,6 +496,10 @@ export function TestAIBaseURL(arg1, arg2) {
 
 export function TestAIConnection(arg1, arg2) {
   return window['go']['main']['App']['TestAIConnection'](arg1, arg2);
+}
+
+export function TestMCPServer(arg1) {
+  return window['go']['main']['App']['TestMCPServer'](arg1);
 }
 
 export function TestTavilyConnection(arg1) {

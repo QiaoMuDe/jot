@@ -31,7 +31,10 @@ func OpenSession(ctx context.Context, s Server) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	baseTools, err := mcpp.GetTools(ctx, &mcpp.Config{Cli: cli})
+	// 工具发现（ListTools）是独立网络往返，单独包超时，避免远程服务器挂起无限阻塞整轮装配
+	discoverCtx, cancel := context.WithTimeout(ctx, ConnectTimeout)
+	defer cancel()
+	baseTools, err := mcpp.GetTools(discoverCtx, &mcpp.Config{Cli: cli})
 	if err != nil {
 		_ = cli.Close()
 		return nil, fmt.Errorf("MCP 服务器 %s 工具发现失败: %w", s.Name, err)

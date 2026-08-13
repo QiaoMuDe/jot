@@ -1676,3 +1676,445 @@
   text-overflow: ellipsis;
 }
 
+/* ==========================================================================
+   Section P: MCP Server Settings (Settings)
+   ========================================================================== */
+
+/* ── 头部行：说明文字 + 添加按钮 ── */
+.mcp-server-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mcp-server-head-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── 服务器列表 ── */
+.mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 列表条目：卡片式一行布局（左 info / 右 actions），间距与 .ai-setting-item 协调 */
+.mcp-server-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--anim-duration-fast) ease-out,
+              box-shadow var(--anim-duration-fast) ease-out,
+              background var(--anim-duration-fast) ease-out;
+}
+
+.mcp-server-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--hover-bg);
+  box-shadow: var(--shadow-sm);
+}
+
+.mcp-server-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* 名称 + 传输徽标横排一行 */
+.mcp-server-item-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mcp-server-item-name {
+  min-width: 0;
+  font-size: 0.813rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 传输方式徽标（圆角小标签，色值用 color-mix 随主题自适应） */
+.mcp-server-item-badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.mcp-badge-stdio {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.mcp-badge-sse {
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+  color: var(--info);
+}
+
+.mcp-badge-http {
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+}
+
+.mcp-server-item-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-server-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 条目内启用开关：ai-chat.css 全局隐藏 .ai-chat-toggle-switch，
+   在此恢复迷你 switch 显示并保证尺寸（knob 样式见 ai-chat.css） */
+.mcp-server-item-actions .ai-chat-toggle-switch {
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background 0.2s;
+}
+
+.mcp-server-item-actions .ai-chat-toggle-switch.active {
+  background: var(--accent);
+}
+
+.mcp-server-item-actions .ai-chat-toggle-switch.active .ai-chat-toggle-knob {
+  left: 14px;
+}
+
+/* 条目删除按钮：警告红（常态浅红描边 → 悬浮实心红 → 按压深红） */
+.mcp-server-del-btn {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+}
+
+.mcp-server-del-btn:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.mcp-server-del-btn:active {
+  background: color-mix(in srgb, var(--danger) 78%, #1a1a1a);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+/* 测试 / 编辑按钮：统一主题色实心（对齐设置页 API 测试按钮 btn-save），加载态保留主题色 + spinner。
+   inline-flex 居中保证文字 / 加载 spinner 都水平垂直居中；
+   width 固定保证加载时文字换 spinner 宽度不变（btn-loading 会转 inline-flex 居中） */
+.mcp-server-accent-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  width: 56px;
+  white-space: nowrap;
+}
+
+.mcp-server-accent-btn:hover {
+  background: var(--accent-dark);
+  filter: brightness(1.05);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ── 空态 ── */
+.mcp-server-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* hidden 属性时隐藏空态（覆盖 display:flex） */
+.mcp-server-empty[hidden] {
+  display: none;
+}
+
+.mcp-server-empty svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.35;
+}
+
+.mcp-server-empty-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.mcp-server-empty-hint {
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+/* ── 添加 / 编辑表单对话框（fixed 覆盖层 + 居中面板） ── */
+.mcp-server-form-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease-out, visibility 200ms ease-out;
+}
+
+.mcp-server-form-dialog.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.mcp-server-form-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.mcp-server-form-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 85vh;
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+  transform: translateY(-12px) scale(0.96);
+  transition: transform 250ms var(--anim-easing-spring);
+}
+
+.mcp-server-form-dialog.visible .mcp-server-form-panel {
+  transform: translateY(0) scale(1);
+}
+
+.mcp-server-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mcp-server-form-title {
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mcp-server-form-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 1.375rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease-out, color 0.15s ease-out;
+}
+
+.mcp-server-form-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.mcp-server-form-body {
+  display: flex;
+  flex-direction: column;
+  /* flex:1 + min-height:0 让 body 在面板 85vh 限高内被压缩，overflow-y:auto 才能触发内部滚动 */
+  flex: 1;
+  min-height: 0;
+  /* 子元素间距改用 margin（而非 gap），使折叠的输入组不残留空隙 */
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.mcp-server-form-body > * {
+  /* 禁止收缩：body 被压缩后字段保持内容高度，溢出才能触发滚动条
+     （否则字段被 flex-shrink 压扁，内容不溢出、滚动条永不出现） */
+  flex-shrink: 0;
+  margin-bottom: 14px;
+}
+
+.mcp-server-form-body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* stdio / url 输入组：切换传输方式时平滑展开/收起（flex column + max-height 过渡 + 透明度）
+   flex 布局下字段高度始终等于内容高度，不会压缩 label/输入框（grid 1fr 均分行高会压扁内容） */
+.mcp-stdio-group,
+.mcp-url-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  max-height: 400px;   /* 大于展开内容高度（stdio 组约 294px / url 组约 180px），留余量容纳 textarea 增长 */
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+}
+
+/* 折叠状态：高度归零、淡出且不占间距 */
+.mcp-stdio-group.collapsed,
+.mcp-url-group.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+/* 子项禁止收缩，确保 label / 输入框始终完整显示 */
+.mcp-stdio-group > *,
+.mcp-url-group > * {
+  flex-shrink: 0;
+}
+
+/* 表单字段：上下排列 */
+.mcp-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-form-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* 表单校验失败反馈：输入框抖动 + 红色边框闪烁（动画结束后 JS 移除类恢复原样） */
+@keyframes mcpFormInputError {
+  0%   { transform: translateX(0);    border-color: var(--danger); }
+  12%  { transform: translateX(-6px); border-color: var(--danger); }
+  24%  { transform: translateX(6px);  border-color: var(--border); }
+  36%  { transform: translateX(-4px); border-color: var(--danger); }
+  48%  { transform: translateX(4px);  border-color: var(--border); }
+  60%  { transform: translateX(-2px); border-color: var(--danger); }
+  72%  { transform: translateX(2px);  border-color: var(--border); }
+  84%  { transform: translateX(-1px); border-color: var(--danger); }
+  100% { transform: translateX(0);    border-color: var(--border); }
+}
+
+.mcp-server-form-body .settings-input.mcp-input-invalid {
+  animation: mcpFormInputError 0.6s ease;
+  border-color: var(--danger) !important;
+}
+
+/* 传输方式自定义下拉：跟随全局 theme-select 样式，表单内全宽 */
+.mcp-server-form-body .theme-select {
+  max-width: none;
+  width: 100%;
+}
+
+/* 参数 / 环境变量文本域：高度自适应（不写死高度，内容增长） */
+.mcp-form-textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.813rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  background: var(--input-bg);
+  resize: vertical;
+  box-sizing: border-box;
+  transition: var(--transition);
+}
+
+.mcp-form-textarea:focus {
+  border-color: var(--accent);
+  background: var(--card-bg);
+}
+
+.mcp-server-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* 减少动态效果：禁用一切位移动画（panel 弹出退化为纯显示） */
+@media (prefers-reduced-motion: reduce) {
+  .mcp-server-form-dialog,
+  .mcp-server-form-overlay,
+  .mcp-server-form-panel,
+  .mcp-server-item,
+  .mcp-server-item-actions .ai-chat-toggle-switch,
+  .mcp-server-form-close {
+    transition: none;
+    animation: none;
+  }
+
+  .mcp-server-form-dialog .mcp-server-form-panel,
+  .mcp-server-form-dialog.visible .mcp-server-form-panel {
+    transform: none;
+  }
+
+  /* 输入组展开/收起退化为即时切换 */
+  .mcp-stdio-group,
+  .mcp-url-group {
+    transition: none;
+  }
+
+  /* 校验失败抖动退化为仅红色边框提示（由 JS 定时移除） */
+  .mcp-server-form-body .settings-input.mcp-input-invalid {
+    animation: none;
+  }
+}
+
