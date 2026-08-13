@@ -69,6 +69,8 @@
 .md-ref-card:nth-child(8) { animation-delay: 0.42s; }
 .md-ref-card:nth-child(9) { animation-delay: 0.48s; }
 .md-ref-card:nth-child(10) { animation-delay: 0.54s; }
+.md-ref-card:nth-child(11) { animation-delay: 0.60s; }
+.md-ref-card:nth-child(12) { animation-delay: 0.66s; }
 
 /* 卡片头部 - Badge */
 .md-ref-card-header {

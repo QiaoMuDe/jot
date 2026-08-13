@@ -1522,6 +1522,7 @@
                     <a class="md-ref-toc-item" href="#md-ref-card--lists">📋 列表</a>
                     <a class="md-ref-toc-item" href="#md-ref-card--code">💻 代码块</a>
                     <a class="md-ref-toc-item" href="#md-ref-card--blockquote">💬 引用</a>
+                    <a class="md-ref-toc-item" href="#md-ref-card--alerts">💡 Alert 引用块</a>
                     <a class="md-ref-toc-item" href="#md-ref-card--table">📊 表格</a>
                     <a class="md-ref-toc-item" href="#md-ref-card--tasks">✅ 任务列表</a>
                     <a class="md-ref-toc-item" href="#md-ref-card--hr">➖ 分割线</a>
@@ -1773,7 +1774,62 @@ console.log(greet("Jot"));
 > **引用内也支持** `其他` *语法*</script>
                 </div>
 
-                <!-- 卡片 7: 表格 -->
+                <!-- 卡片 7: Alert 引用块 -->
+                <div class="md-ref-card" id="md-ref-card--alerts">
+                    <div class="md-ref-card-header">
+                        <span class="md-ref-badge">💡 Alert 引用块</span>
+                    </div>
+                    <div class="md-ref-card-body">
+                        <div class="md-ref-source-panel">
+                            <div class="md-ref-editor-bar">
+                                <div class="md-ref-editor-dots">
+                                    <span class="md-ref-editor-dot red"></span>
+                                    <span class="md-ref-editor-dot yellow"></span>
+                                    <span class="md-ref-editor-dot green"></span>
+                                </div>
+                                <span class="md-ref-editor-filename">alerts.md</span>
+                                <button class="md-ref-editor-copy-btn" title="复制源码">复制</button>
+                            </div>
+                            <pre><code>&gt; [!NOTE]
+&gt; 提示信息
+
+&gt; [!TIP]
+&gt; 小技巧
+
+&gt; [!IMPORTANT]
+&gt; 重要提醒
+
+&gt; [!WARNING]
+&gt; 警告内容
+
+&gt; [!CAUTION]
+&gt; 小心操作</code></pre>
+                        </div>
+                        <div class="md-ref-preview-panel">
+                            <div class="md-ref-preview" data-ref="6"></div>
+                        </div>
+                    </div>
+                    <div class="md-ref-card-footer">
+                        <div class="md-ref-card-footnote">在引用首行添加 <kbd>[!类型]</kbd> 标记生成彩色提示块，支持 5 种类型</div>
+                        <button class="md-ref-try-btn">打开编辑器试试</button>
+                    </div>
+                    <script type="text/plain" class="md-ref-source">> [!NOTE]
+> 提示信息
+
+> [!TIP]
+> 小技巧
+
+> [!IMPORTANT]
+> 重要提醒
+
+> [!WARNING]
+> 警告内容
+
+> [!CAUTION]
+> 小心操作</script>
+                </div>
+
+                <!-- 卡片 8: 表格 -->
                 <div class="md-ref-card" id="md-ref-card--table">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">📊 表格</span>
@@ -1796,7 +1852,7 @@ console.log(greet("Jot"));
 | 橙子 | 4.00 | 12   |</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-preview" data-ref="6"></div>
+                            <div class="md-ref-preview" data-ref="7"></div>
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
@@ -1810,7 +1866,7 @@ console.log(greet("Jot"));
 | 橙子 | 4.00 | 12   |</script>
                 </div>
 
-                <!-- 卡片 8: 任务列表 -->
+                <!-- 卡片 9: 任务列表 -->
                 <div class="md-ref-card" id="md-ref-card--tasks">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">✅ 任务列表</span>
@@ -1832,7 +1888,7 @@ console.log(greet("Jot"));
   - [x] 子任务已完成</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-preview" data-ref="7"></div>
+                            <div class="md-ref-preview" data-ref="8"></div>
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
@@ -1845,7 +1901,7 @@ console.log(greet("Jot"));
   - [x] 子任务已完成</script>
                 </div>
 
-                <!-- 卡片 9: 分割线 -->
+                <!-- 卡片 10: 分割线 -->
                 <div class="md-ref-card" id="md-ref-card--hr">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">➖ 分割线</span>
@@ -1868,7 +1924,7 @@ console.log(greet("Jot"));
 下方的文字</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-preview" data-ref="8"></div>
+                            <div class="md-ref-preview" data-ref="9"></div>
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
@@ -1882,7 +1938,7 @@ console.log(greet("Jot"));
 下方的文字</script>
                 </div>
 
-                <!-- 卡片 10: 转义字符 -->
+                <!-- 卡片 11: 转义字符 -->
                 <div class="md-ref-card" id="md-ref-card--escape">
                     <div class="md-ref-card-header">
                         <span class="md-ref-badge">\ 转义字符</span>
@@ -1904,7 +1960,7 @@ console.log(greet("Jot"));
 \~\~这不是删除线\~\~</code></pre>
                         </div>
                         <div class="md-ref-preview-panel">
-                            <div class="md-ref-preview" data-ref="9"></div>
+                            <div class="md-ref-preview" data-ref="10"></div>
                         </div>
                     </div>
                     <div class="md-ref-card-footer">
