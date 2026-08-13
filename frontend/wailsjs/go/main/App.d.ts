@@ -5,7 +5,7 @@ import {main} from '../models';
 import {models} from '../models';
 import {agent} from '../models';
 
-export function AITextOperation(arg1:string,arg2:string):Promise<string>;
+export function AITextOperationStream(arg1:number,arg2:string,arg3:string):Promise<void>;
 
 export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
@@ -30,6 +30,8 @@ export function CallAIAgentStream(arg1:number,arg2:number,arg3:string,arg4:boole
 export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:boolean,arg7:Array<number>,arg8:Array<string>,arg9:Array<number>,arg10:Array<number>,arg11:string,arg12:Array<main.AIChatFileResult>,arg13:number):Promise<void>;
 
 export function CallAIStreamRegenerate(arg1:number,arg2:number,arg3:boolean,arg4:Array<string>,arg5:boolean,arg6:Array<number>,arg7:Array<string>,arg8:Array<number>,arg9:Array<number>,arg10:string,arg11:Array<main.AIChatFileResult>):Promise<void>;
+
+export function CancelAIEditorOperation():Promise<void>;
 
 export function CancelAIStream():Promise<void>;
 

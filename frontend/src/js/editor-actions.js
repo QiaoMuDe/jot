@@ -116,6 +116,12 @@ function initEditorActionsMenu() {
     let _aiOperationCancelled = false;
     // 记录 AI 处理前编辑器的只读状态，处理完成后恢复
     let _aiEditorWasReadOnly = false;
+    // AI 写作流式操作状态（模块级）
+    let aiStreamGen = 0;          // 每次 AI 操作自增，关联 ai:aiop-* 事件
+    let aiStreamActive = false;   // 防重入（同一时刻最多一个 AI 写作操作）
+    let _aiOpOriginalText = '';   // 操作前原文（取消/失败恢复用）
+    let _aiOpFrom = 0, _aiOpTo = 0;
+    let _aiOpInsertedLen = 0;     // 流式期间实际写入的区间长度（随每块更新，恢复/写入用）
 
     /**
      * 锁定/解锁编辑器输入（CM6 编辑器 + 标题输入框）
@@ -167,7 +173,7 @@ function initEditorActionsMenu() {
         ball.addEventListener('click', () => {
             _aiOperationCancelled = true;
             if (window.go && window.go.main && window.go.main.App) {
-                window.go.main.App.CancelAIStream();
+                window.go.main.App.CancelAIEditorOperation();
             }
             removeAIStatusIndicator();
         });
@@ -184,11 +190,207 @@ function initEditorActionsMenu() {
     }
 
     /**
-     * 执行操作：读取选中文本或全文 → 交给 handler → 写回
+     * 解析 AI 流式错误消息：aierrors JSON 取 user_msg，纯文本原样返回
+     * @param {*} errMsg
+     * @returns {string}
      */
-    async function executeAction(handler, errorLabel, actionType = 'transform') {
+    function formatAIErrorMsg(errMsg) {
+        if (typeof errMsg !== 'string') return String(errMsg || '未知错误');
+        const trimmed = errMsg.trim();
+        if (trimmed.startsWith('{')) {
+            try {
+                const obj = JSON.parse(trimmed);
+                if (obj && obj.user_msg) return obj.user_msg;
+            } catch (_) { /* 非 JSON，走下方原样返回 */ }
+        }
+        return trimmed;
+    }
+
+    /**
+     * 恢复编辑器为 AI 操作前的原文。
+     * 使用 addToHistory:false：文档回到原文，历史栈保持首块 undo 锚点，
+     * 因此取消后 Ctrl+Z 对已是原文的文档无可见变化（可接受边界）。
+     */
+    function restoreOriginalText() {
         const cmEditor = window.cmEditor;
         if (!cmEditor) return;
+        // 恢复必须覆盖流式期间实际写入的区间 [from, from+_aiOpInsertedLen]，
+        // 而非原始选区 [from, to]——AI 输出通常远长于选区，只恢复 [from,to] 会残留生成内容尾部
+        cmEditor.dispatch({
+            changes: { from: _aiOpFrom, to: _aiOpFrom + _aiOpInsertedLen, insert: _aiOpOriginalText },
+            selection: { anchor: _aiOpFrom, head: _aiOpTo },
+            addToHistory: false,
+            userEvent: 'ai.op',
+        });
+    }
+
+    /**
+     * 段落化兜底：模型未按 prompt 分段时，把超长无换行的文本按句末标点断行。
+     * 已有换行或长度不足（<=80）不处理；无句末标点的超长文本保持原样（不硬切单词）。
+     * @param {string} text
+     * @returns {string}
+     */
+    function paragraphizeLongText(text) {
+        if (!text || text.includes('\n') || text.length <= 80) return text;
+        const MIN_LINE = 40;
+        const lines = [];
+        let current = '';
+        for (const ch of text) {
+            current += ch;
+            if (/[。！？!?；;]/.test(ch) && current.length >= MIN_LINE) {
+                lines.push(current);
+                current = '';
+            }
+        }
+        if (current) lines.push(current);
+        return lines.length > 1 ? lines.join('\n') : text;
+    }
+
+    /**
+     * 清理流式状态：移除事件监听 + 指示器 + 恢复按钮/输入锁定 + 复位标志
+     */
+    function cleanupAIStream() {
+        ['ai:aiop-chunk', 'ai:aiop-done', 'ai:aiop-error'].forEach(function (name) {
+            if (window.runtime && window.runtime.EventsOff) {
+                try { window.runtime.EventsOff(name); } catch (_) { /* 忽略清理异常 */ }
+            }
+        });
+        removeAIStatusIndicator();
+        const btn = document.getElementById('editorActionsBtn');
+        if (btn) btn.disabled = false;
+        setAIEditorLock(_aiEditorWasReadOnly);
+        aiStreamActive = false;
+        _aiOperationCancelled = false;
+    }
+
+    /**
+     * 流式执行 AI 写作操作。
+     * 注册 ai:aiop-* 事件，逐块增量写入编辑器（打字机效果）：
+     * - 首块用正常事务记入历史（undo 锚点，反转即还原原文）
+     * - 后续块 addToHistory:false（CM6 自动把映射累积到历史事件，Ctrl+Z 一步还原原文）
+     * 取消（圆球）与失败均恢复原文；完成保留最终内容并复位锁定态。
+     * @param {string} op - 后端 AITextOperationStream 的 operation 参数
+     * @param {string} text - 选中原文
+     * @param {number} from - 选区起点
+     * @param {number} to - 选区终点
+     * @returns {Promise<void>} 终态（done/error/取消）时 resolve
+     */
+    function runAIStreamAction(op, text, from, to) {
+        return new Promise(function (resolve) {
+            const cmEditor = window.cmEditor;
+            if (!cmEditor || aiStreamActive) { resolve(); return; }
+
+            aiStreamActive = true;
+            aiStreamGen += 1;
+            const myGen = aiStreamGen;
+            _aiOpOriginalText = text;
+            _aiOpFrom = from;
+            _aiOpTo = to;
+            _aiOpInsertedLen = to - from; // 初始为原始选区长度，首块替换 [from, to]
+            _aiEditorWasReadOnly = cmEditor.state.readOnly;
+
+            createAIStatusIndicator();
+            const btn = document.getElementById('editorActionsBtn');
+            if (btn) btn.disabled = true;
+            setAIEditorLock(true);
+
+            let acc = '';
+            let firstChunkApplied = false;
+
+            // 逐块写入：首块替换原始选区 [from, to] 并记入历史（undo 锚点）；
+            // 后续块替换 [from, from+上一块长度]（即上一块已写入的内容）且不入历史。
+            // 不能用固定的原始选区 to 作为终点——AI 输出远长于选区时会反复覆盖头部、残留尾部导致内容错乱。
+            const applyChunk = function (chunk) {
+                if (!cmEditor) return;
+                cmEditor.dispatch({
+                    changes: { from, to: from + _aiOpInsertedLen, insert: chunk },
+                    selection: { anchor: from + chunk.length },
+                    addToHistory: !firstChunkApplied, // 首块 true → 记入历史；后续 false → 不入历史
+                    userEvent: 'ai.op',
+                });
+                firstChunkApplied = true;
+                _aiOpInsertedLen = chunk.length;
+            };
+
+            const finish = function () {
+                cleanupAIStream();
+                resolve();
+            };
+
+            const notifyError = function (msg) {
+                const nm = window.nm;
+                if (nm && nm.show) {
+                    nm.show(`AI 处理失败: ${formatAIErrorMsg(msg)}`, 'error');
+                }
+            };
+
+            // 同步/异步失败统一处理：恢复原文 + 清理 + 提示（取消场景静默）
+            const failOp = function (errMsg) {
+                if (_aiOperationCancelled) {
+                    restoreOriginalText();
+                    finish();
+                    return;
+                }
+                notifyError(errMsg);
+                restoreOriginalText();
+                finish();
+            };
+
+            if (window.runtime && window.runtime.EventsOn) {
+                window.runtime.EventsOn('ai:aiop-chunk', function (g, chunk) {
+                    if (g !== myGen) return; // 属于旧操作，丢弃
+                    acc += chunk;
+                    applyChunk(acc);
+                });
+                window.runtime.EventsOn('ai:aiop-done', function (g, fullContent) {
+                    if (g !== myGen) return;
+                    if (_aiOperationCancelled) {
+                        // 用户点击圆球取消：恢复原文、静默
+                        restoreOriginalText();
+                    } else {
+                        // 兜底后处理：模型未按 prompt 分段时，把超长无换行文本按句末标点断行
+                        const finalContent = paragraphizeLongText(fullContent || acc);
+                        if (finalContent !== acc) {
+                            applyChunk(finalContent);
+                        }
+                    }
+                    finish();
+                });
+                window.runtime.EventsOn('ai:aiop-error', function (g, errMsg) {
+                    if (g !== myGen) return;
+                    failOp(errMsg);
+                });
+            }
+
+            // 发起流式调用（fire-and-forget，结果全部走事件）。
+            // 注意参数顺序与后端签名一致：AITextOperationStream(streamGen, text, operation)
+            try {
+                if (window.go && window.go.main && window.go.main.App) {
+                    window.go.main.App.AITextOperationStream(myGen, text, op)
+                        .catch(function (e) {
+                            // 绑定调用异步失败（如参数解析错误/内部异常）：必须清理，否则编辑器保持锁定
+                            failOp(e?.message || String(e) || '未知错误');
+                        });
+                } else {
+                    failOp('AI 服务不可用');
+                }
+            } catch (e) {
+                failOp(e?.message || String(e) || '未知错误');
+            }
+        });
+    }
+
+    /**
+     * 执行操作：读取选中文本或全文 → 交给 handler → 写回。
+     * AI 操作（type: 'ai'）走 runAIStreamAction 流式引擎，其余走通用 handler。
+     * @param {Object} action - 操作项对象（含 handler/errorLabel/op/type）
+     * @param {string} actionType - 操作类型（'transform'/'insert'/'ai'）
+     */
+    async function executeAction(action, actionType = 'transform') {
+        const cmEditor = window.cmEditor;
+        if (!cmEditor) return;
+        const handler = action.handler;
+        const errorLabel = action.errorLabel;
 
         // 预览模式自动切回编辑模式（调用全局 switchEditorMode 同步按钮显隐等状态）
         const overlay = document.getElementById('editorOverlay');
@@ -217,38 +419,56 @@ function initEditorActionsMenu() {
         const sel = cmEditor.state.selection.main;
         const hasSelection = !sel.empty;
 
-        // AI 操作必须有选中文本，否则提示并返回
-        if (actionType === 'ai' && !hasSelection) {
-            const nm = window.nm;
-            if (nm && nm.show) {
-                nm.show('请先选择要处理的文本', 'warning');
+        // AI 操作必须有选中文本 + op 配置，否则提示并返回
+        if (actionType === 'ai') {
+            if (!hasSelection) {
+                const nm = window.nm;
+                if (nm && nm.show) {
+                    nm.show('请先选择要处理的文本', 'warning');
+                }
+                return;
             }
-            return;
+            if (!action.op) {
+                const nm = window.nm;
+                if (nm && nm.show) {
+                    nm.show('操作配置缺失，请检查 AI 写作操作项', 'warning');
+                }
+                return;
+            }
         }
 
         const from = hasSelection ? sel.from : (actionType === 'insert' ? sel.from : 0);
         const to = hasSelection ? sel.to : (actionType === 'insert' ? sel.from : cmEditor.state.doc.length);
         const sourceText = cmEditor.state.sliceDoc(from, to);
 
-        const btn = document.getElementById('editorActionsBtn');
-
-        try {
-            // AI 操作：显示指示器 + 禁用按钮 + 锁定输入
-            if (actionType === 'ai') {
-                createAIStatusIndicator();
-                if (btn) btn.disabled = true;
-                _aiEditorWasReadOnly = cmEditor.state.readOnly;
-                setAIEditorLock(true);
-            }
-
-            const result = await handler(sourceText);
-
-            // AI 操作：移除指示器 + 恢复按钮 + 解锁输入
-            if (actionType === 'ai') {
+        // AI 操作：走流式执行引擎（指示器/锁定/事件写入/恢复/清理均在引擎内完成）
+        if (actionType === 'ai') {
+            try {
+                await runAIStreamAction(action.op, sourceText, from, to);
+            } catch (e) {
+                // 引擎内同步抛错（如绑定缺失/调用异常）：兜底清理 + 恢复原文 + 提示
+                const nm = window.nm;
                 removeAIStatusIndicator();
+                const btn = document.getElementById('editorActionsBtn');
                 if (btn) btn.disabled = false;
                 setAIEditorLock(_aiEditorWasReadOnly);
+                if (!_aiOperationCancelled && nm && nm.show) {
+                    nm.show(`AI 处理失败: ${e?.message || String(e) || '未知错误'}`, 'error');
+                }
+                _aiOperationCancelled = false;
+                try {
+                    cmEditor.dispatch({
+                        changes: { from, to, insert: sourceText },
+                        addToHistory: false,
+                        userEvent: 'ai.op',
+                    });
+                } catch (_) { /* 忽略恢复失败 */ }
             }
+            return;
+        }
+
+        try {
+            const result = await handler(sourceText);
 
             cmEditor.dispatch({
                 changes: { from, to, insert: result },
@@ -260,24 +480,8 @@ function initEditorActionsMenu() {
             cmEditor.focus();
         } catch (e) {
             const nm = window.nm;
-            // AI 操作：无论成功失败都移除指示器 + 恢复按钮 + 解锁输入
-            if (actionType === 'ai') {
-                removeAIStatusIndicator();
-                if (btn) btn.disabled = false;
-                setAIEditorLock(_aiEditorWasReadOnly);
-                // 用户主动取消时不提示
-                if (_aiOperationCancelled) {
-                    _aiOperationCancelled = false;
-                    return;
-                }
-                const errMsg = e?.message || String(e) || '未知错误';
-                if (nm && nm.show) {
-                    nm.show(`AI 处理失败: ${errMsg}`, 'error');
-                }
-            } else {
-                if (nm && nm.show) {
-                    nm.show(`不是合法的 ${errorLabel || '内容'}`, 'warning');
-                }
+            if (nm && nm.show) {
+                nm.show(`不是合法的 ${errorLabel || '内容'}`, 'warning');
             }
         }
     }
@@ -319,7 +523,7 @@ function initEditorActionsMenu() {
         const label = item.dataset.action;
         const action = EDITOR_ACTIONS.find(a => a.label === label);
         if (action) {
-            executeAction(action.handler, action.errorLabel, action.type);
+            executeAction(action, action.type);
             closeMenu();
         }
     });

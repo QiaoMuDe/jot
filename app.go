@@ -104,6 +104,7 @@ type App struct {
 	mcpServerService *services.MCPServerService
 	LogSvc           *services.LogService
 	aiStreamCancel   context.CancelFunc
+	aiEditorCancel   context.CancelFunc // 编辑器 AI 写作流式操作的取消源（独立于聊天流，避免误杀后台对话）
 	AgentSvc         *agent.AgentService
 	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
@@ -2869,38 +2870,50 @@ func (a *App) CancelAIStream() {
 	}
 }
 
-// AITextOperation 通过 AI 对选中文本进行写作操作（润色/续写/扩写/缩写/校对/改写/翻译等）
-// 返回处理后的文本，前端直接替换到编辑器
-func (a *App) AITextOperation(text string, operation string) (string, error) {
-	a.LogSvc.Logger.Debugw("AITextOperation", fastlog.String("operation", operation), fastlog.Int("text_len", len(text)))
+// aiTextOpSystemPrompt 根据 operation 构造 AI 写作操作的 system prompt
+func aiTextOpSystemPrompt(operation string) (string, error) {
+	// 所有操作统一追加分段约束：避免模型输出超长无换行的单段文本
+	paragraphClause := "输出请保持清晰的分段（用换行分隔段落），不要输出超长无换行的文本。"
+	switch operation {
+	case "polish":
+		return "你是一位专业的写作助手。请润色以下文本，改进其语法、表达和风格，使其更加流畅和专业。只返回润色后的结果，不要添加任何解释或额外内容。" + paragraphClause, nil
+	case "continue":
+		return "你是一位专业的写作助手。请根据以下文本的内容和风格，自然地续写下去。只返回续写的内容，不要重复原文。" + paragraphClause, nil
+	case "expand":
+		return "你是一位专业的写作助手。请扩写以下文本，增加更多细节、例子和说明，使内容更加丰富完整。只返回扩写后的结果，不要添加任何解释。" + paragraphClause, nil
+	case "condense":
+		return "你是一位专业的写作助手。请缩写以下文本，保留所有关键信息和核心观点，删除冗余内容。只返回缩写后的结果，不要添加任何解释。" + paragraphClause, nil
+	case "proofread":
+		return "你是一位专业的校对编辑。请校对以下文本，修正所有语法错误、拼写错误和标点符号问题。只返回校对后的结果，不要添加任何解释。" + paragraphClause, nil
+	case "rewrite":
+		return "你是一位专业的写作助手。请改写以下文本，保持原意不变，但使用不同的表达方式和句式结构。只返回改写后的结果，不要添加任何解释。" + paragraphClause, nil
+	case "translate":
+		return "你是一位专业的翻译。请将以下文本翻译成中文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。" + paragraphClause, nil
+	case "translate-en":
+		return "你是一位专业的翻译。请将以下文本翻译成英文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。" + paragraphClause, nil
+	default:
+		return "", fmt.Errorf("不支持的操作: %s", operation)
+	}
+}
+
+// AITextOperationStream 流式 AI 写作操作（润色/续写/扩写/缩写/校对/改写/翻译等）
+// fire-and-forget：无返回值，生成块通过 ai:aiop-chunk 事件推送，终态通过 ai:aiop-done / ai:aiop-error 通知。
+// 取消通过 CancelAIEditorOperation 触发（独立于聊天流的 CancelAIStream，避免误杀后台对话）。
+func (a *App) AITextOperationStream(streamGen int, text string, operation string) {
+	a.LogSvc.Logger.Debugw("AITextOperationStream", fastlog.String("operation", operation), fastlog.Int("text_len", len(text)), fastlog.Int("stream_gen", streamGen))
 
 	// 1. 检查 AI 配置（URL / API Key / 模型三要素齐全）
 	cfg := a.aiService.GetConfig()
 	if cfg.BaseURL == "" || cfg.APIKey == "" || cfg.Model == "" {
-		return "", fmt.Errorf("请先配置 AI 服务（API 地址 / API Key / 模型）")
+		runtime.EventsEmit(a.ctx, "ai:aiop-error", streamGen, "请先配置 AI 服务（API 地址 / API Key / 模型）")
+		return
 	}
 
 	// 2. 根据 operation 构造 system prompt
-	var systemPrompt string
-	switch operation {
-	case "polish":
-		systemPrompt = "你是一位专业的写作助手。请润色以下文本，改进其语法、表达和风格，使其更加流畅和专业。只返回润色后的结果，不要添加任何解释或额外内容。"
-	case "continue":
-		systemPrompt = "你是一位专业的写作助手。请根据以下文本的内容和风格，自然地续写下去。只返回续写的内容，不要重复原文。"
-	case "expand":
-		systemPrompt = "你是一位专业的写作助手。请扩写以下文本，增加更多细节、例子和说明，使内容更加丰富完整。只返回扩写后的结果，不要添加任何解释。"
-	case "condense":
-		systemPrompt = "你是一位专业的写作助手。请缩写以下文本，保留所有关键信息和核心观点，删除冗余内容。只返回缩写后的结果，不要添加任何解释。"
-	case "proofread":
-		systemPrompt = "你是一位专业的校对编辑。请校对以下文本，修正所有语法错误、拼写错误和标点符号问题。只返回校对后的结果，不要添加任何解释。"
-	case "rewrite":
-		systemPrompt = "你是一位专业的写作助手。请改写以下文本，保持原意不变，但使用不同的表达方式和句式结构。只返回改写后的结果，不要添加任何解释。"
-	case "translate":
-		systemPrompt = "你是一位专业的翻译。请将以下文本翻译成中文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。"
-	case "translate-en":
-		systemPrompt = "你是一位专业的翻译。请将以下文本翻译成英文，保持原文的语气和风格。只返回翻译结果，不要添加任何解释。"
-	default:
-		return "", fmt.Errorf("不支持的操作: %s", operation)
+	systemPrompt, err := aiTextOpSystemPrompt(operation)
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "ai:aiop-error", streamGen, err.Error())
+		return
 	}
 
 	// 3. 构造 messages
@@ -2909,16 +2922,44 @@ func (a *App) AITextOperation(text string, operation string) (string, error) {
 		{Role: "user", Content: text},
 	}
 
-	// 4. 调用 AI（复用可取消的 context）
+	// 4. 可取消的 context（60s 超时兜底），存入独立字段 aiEditorCancel。
+	// 不能 defer cancel()：本绑定 fire-and-forget 立即返回，defer 会立刻取消流；
+	// cancel 存字段供 CancelAIEditorOperation 后续调用（流结束后遗留无害，下次操作覆盖）。
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	a.aiStreamCancel = cancel
-	defer func() {
-		cancel()
-		a.aiStreamCancel = nil
-	}()
+	a.aiEditorCancel = cancel
 
-	// 5. 返回结果
-	return a.aiService.CallAI(ctx, messages)
+	// 5. 流式调用放 goroutine，逐块发射事件
+	go func() {
+		a.aiService.CallAIStream(ctx, messages, false,
+			func(chunk string) {
+				runtime.EventsEmit(a.ctx, "ai:aiop-chunk", streamGen, chunk)
+			},
+			func(string) {}, // OnThinking 忽略（写作操作不需要思维链）
+			func(content string, _, _ float64) {
+				runtime.EventsEmit(a.ctx, "ai:aiop-done", streamGen, content)
+			},
+			func(errMsg string) {
+				runtime.EventsEmit(a.ctx, "ai:aiop-error", streamGen, errMsg)
+			},
+		)
+		// 兜底：取消/超时导致 OnDone/OnError 均未触发时，补发终态事件保证前端清理
+		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				runtime.EventsEmit(a.ctx, "ai:aiop-error", streamGen, "AI 处理超时，请重试")
+			} else { // context.Canceled：用户点击圆球取消
+				runtime.EventsEmit(a.ctx, "ai:aiop-done", streamGen, "")
+			}
+		}
+	}()
+}
+
+// CancelAIEditorOperation 取消编辑器 AI 写作流式操作（仅取消编辑器流，不影响聊天流）
+func (a *App) CancelAIEditorOperation() {
+	a.LogSvc.Logger.Debugw("CancelAIEditorOperation")
+	if a.aiEditorCancel != nil {
+		a.aiEditorCancel()
+		a.aiEditorCancel = nil
+	}
 }
 
 // GetAISessions 获取 AI 会话列表
