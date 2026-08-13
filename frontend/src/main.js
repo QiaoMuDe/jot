@@ -12,7 +12,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { bracketMatching, foldGutter, foldKeymap, indentOnInput } from '@codemirror/language';
-import { SearchQuery, highlightSelectionMatches, openSearchPanel, searchKeymap, setSearchQuery } from '@codemirror/search';
+import { SearchQuery, closeSearchPanel, highlightSelectionMatches, openSearchPanel, searchKeymap, searchPanelOpen, setSearchQuery } from '@codemirror/search';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, placeholder, scrollPastEnd } from '@codemirror/view';
 import { codeHighlightThemeLabels, getHighlightExtension, jotTheme } from './js/cm6-syntax-highlight.js';
@@ -91,6 +91,20 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         keymap.of([
             ...defaultKeymap,
             ...historyKeymap,
+            // 搜索面板打开时 Esc 只关闭面板并阻止冒泡，避免误触发全局 ESC 关闭编辑器
+            // （面板未打开时返回 false，交由后续 keymap / 全局处理，保持原有 Esc 行为）
+            {
+                key: 'Escape',
+                scope: 'editor search-panel',
+                run: (view) => {
+                    if (searchPanelOpen(view.state)) {
+                        closeSearchPanel(view);
+                        return true;
+                    }
+                    return false;
+                },
+                stopPropagation: true
+            },
             ...searchKeymap,
             ...closeBracketsKeymap,
             ...completionKeymap,
@@ -4193,6 +4207,13 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
 /** 预览渲染处理中标志，防重复请求 */
 let _previewWorkerLoading = false;
 
+/** 预览模式查找条状态 */
+let _previewFindBarVisible = false;   // 查找条是否打开
+let _previewSearchQuery = '';         // 当前搜索关键词
+let _previewMarkMatches = [];         // 当前高亮的 <mark> 元素数组
+let _previewMarkCurrent = -1;         // 当前激活匹配索引
+let _previewFindTimer = null;         // 输入防抖定时器
+
 /**
  * 初始化预览渲染 Worker
  */
@@ -4248,6 +4269,10 @@ function initPreviewWorker() {
                     oldLoading.style.transition = 'opacity 0.25s ease-out';
                 });
                 oldLoading.addEventListener('transitionend', () => oldLoading.remove(), { once: true });
+            }
+            // 若预览查找条仍打开，重新执行搜索（innerHTML 替换后 mark 已丢失）
+            if (_previewFindBarVisible && _previewSearchQuery) {
+                runPreviewSearch(_previewSearchQuery);
             }
             _previewWorkerLoading = false;
         };
@@ -4829,6 +4854,10 @@ function updatePreview(content) {
     _integrateToc();
     // 回退路径的淡入动画
     _applyPreviewFadeIn();
+    // 若预览查找条仍打开，重新执行搜索（innerHTML 替换后 mark 已丢失）
+    if (_previewFindBarVisible && _previewSearchQuery) {
+        runPreviewSearch(_previewSearchQuery);
+    }
 }
 
 /**
@@ -4874,6 +4903,7 @@ function switchEditorMode(mode) {
     } else if (mode === 'edit') {
         _setPreviewLayout(false);
         _closeToc();
+        closePreviewFindBar();
     }
     // 切换模式时关闭查找/替换条（CM6 search 自管理）
     if (cmEditor) {
@@ -4882,6 +4912,128 @@ function switchEditorMode(mode) {
 }
 // 暴露给其他模块（editor-actions.js 操作菜单的预览模式切换使用）
 window.switchEditorMode = switchEditorMode;
+
+/**
+ * 打开预览查找条（预览模式下 Ctrl+F 触发，直接在预览渲染区搜索）
+ */
+function openPreviewFindBar() {
+    const bar = document.getElementById('editorFindBar');
+    const input = document.getElementById('findInput');
+    if (!bar || !input) return;
+    bar.style.display = '';
+    _previewFindBarVisible = true;
+    input.value = '';
+    _previewSearchQuery = '';
+    _clearPreviewMarks();
+    updateFindCount(0);
+    input.focus();
+    input.select();
+}
+
+/**
+ * 关闭预览查找条并清除高亮
+ */
+function closePreviewFindBar() {
+    const bar = document.getElementById('editorFindBar');
+    if (bar) bar.style.display = 'none';
+    _previewFindBarVisible = false;
+    _previewSearchQuery = '';
+    _clearPreviewMarks();
+}
+
+/**
+ * 清除预览区所有 mark 高亮（还原为文本节点）
+ */
+function _clearPreviewMarks() {
+    _previewMarkMatches.forEach((m) => {
+        if (m.parentNode) m.replaceWith(document.createTextNode(m.textContent));
+    });
+    _previewMarkMatches = [];
+    _previewMarkCurrent = -1;
+}
+
+/**
+ * 在 mdRendered DOM 中执行搜索并高亮
+ * 使用 TreeWalker 遍历文本节点，跳过 svg(Mermaid)/script/style 内部文本
+ * @param {string} query - 搜索关键词
+ */
+function runPreviewSearch(query) {
+    _clearPreviewMarks();
+    updateFindCount(0);
+    const text = query.trim();
+    if (!text) {
+        _previewSearchQuery = '';
+        return;
+    }
+    _previewSearchQuery = query;
+
+    const lower = text.toLowerCase();
+    const walker = document.createTreeWalker(els.mdRendered, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (node.parentElement && node.parentElement.closest('svg, script, style')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+    // 收集 (node, ranges)——同一节点多个匹配合并处理
+    const grouped = [];
+    let n;
+    while ((n = walker.nextNode())) {
+        const nodeText = n.nodeValue;
+        const lowerNode = nodeText.toLowerCase();
+        const ranges = [];
+        let idx = 0;
+        while ((idx = lowerNode.indexOf(lower, idx)) !== -1) {
+            ranges.push({ start: idx, end: idx + text.length });
+            idx += text.length; // 不重叠匹配
+            if (ranges.length >= 500) break; // 单节点匹配上限，防极端卡顿
+        }
+        if (ranges.length) grouped.push({ node: n, ranges });
+        if (grouped.length >= 1000) break; // 总分组上限，防极端卡顿
+    }
+
+    // 拆分文本节点并包裹 mark
+    for (const { node, ranges } of grouped) {
+        const frag = document.createDocumentFragment();
+        let last = 0;
+        for (const r of ranges) {
+            if (r.start > last) frag.appendChild(document.createTextNode(node.nodeValue.slice(last, r.start)));
+            const mark = document.createElement('mark');
+            mark.textContent = node.nodeValue.slice(r.start, r.end);
+            frag.appendChild(mark);
+            _previewMarkMatches.push(mark);
+            last = r.end;
+        }
+        if (last < node.nodeValue.length) frag.appendChild(document.createTextNode(node.nodeValue.slice(last)));
+        node.parentNode.replaceChild(frag, node);
+    }
+
+    updateFindCount(_previewMarkMatches.length);
+}
+
+/**
+ * 导航到上一个/下一个匹配（dir = 1 下一个，-1 上一个）
+ */
+function navigatePreviewMatch(dir) {
+    const total = _previewMarkMatches.length;
+    if (!total) return;
+    _previewMarkCurrent = (_previewMarkCurrent + dir + total) % total;
+    _previewMarkMatches.forEach((m, i) => m.classList.toggle('active', i === _previewMarkCurrent));
+    updateFindCount(total);
+    const active = _previewMarkMatches[_previewMarkCurrent];
+    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * 更新查找条计数显示（0/0 或 (当前+1)/总数）
+ * @param {number} total
+ */
+function updateFindCount(total) {
+    const el = document.getElementById('findCount');
+    if (!el) return;
+    el.textContent = total ? `${_previewMarkCurrent + 1}/${total}` : '0/0';
+}
 
 /**
  * 编辑器输入事件处理：更新字数 + 预览渲染
@@ -5043,6 +5195,7 @@ function closeEditor() {
         // 清除文件后缀显示
         els.editorFileExt.textContent = '';
         // 重置 Markdown 渲染/编辑显示状态
+        closePreviewFindBar();
         els.mdRendered.style.display = 'none';
         els.mdRendered.innerHTML = '';
         _lastPreviewContent = '';
@@ -6155,6 +6308,27 @@ function initEventListeners() {
     // 键盘快捷键导航
     document.addEventListener('keydown', handleKeyboardNavigation);
 
+    // 预览模式查找条事件（复用废弃的 editorFindBar 骨架，仅在预览模式下启用）
+    const findInput = document.getElementById('findInput');
+    const findPrevBtn = document.getElementById('findPrevBtn');
+    const findNextBtn = document.getElementById('findNextBtn');
+    const findCloseBtn = document.getElementById('findCloseBtn');
+    if (findInput && findPrevBtn && findNextBtn && findCloseBtn) {
+        findInput.addEventListener('input', () => {
+            clearTimeout(_previewFindTimer);
+            _previewFindTimer = setTimeout(() => runPreviewSearch(findInput.value), 150);
+        });
+        findInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                navigatePreviewMatch(e.shiftKey ? -1 : 1);
+            }
+        });
+        findPrevBtn.addEventListener('click', () => navigatePreviewMatch(-1));
+        findNextBtn.addEventListener('click', () => navigatePreviewMatch(1));
+        findCloseBtn.addEventListener('click', closePreviewFindBar);
+    }
+
     // 笔记本侧栏事件
     els.newNotebookBtn?.addEventListener('click', showNewNotebookDialog);
 
@@ -6347,15 +6521,16 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
-    // Ctrl/Cmd+F: 编辑器内搜索（自动填充选中文本，预览模式自动切到编辑模式）;编辑器外则打开搜索弹窗
+    // Ctrl/Cmd+F: 编辑器内搜索（预览模式在预览渲染区直接搜索；编辑模式用 CM6 搜索并填充选中文本）;编辑器外则打开搜索弹窗
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         if (els.viewEditor.classList.contains('active') && cmEditor) {
-            // 预览模式自动切回编辑模式
+            // 预览模式：直接在预览渲染区搜索（不切回纯文本）
             if (els.editorOverlay.dataset.mode === 'preview') {
-                switchEditorMode('edit');
+                openPreviewFindBar();
+                return;
             }
-            // 将当前选中文本填充到搜索框
+            // 编辑模式：将当前选中文本填充到搜索框
             const sel = cmEditor.state.selection.main;
             if (!sel.empty) {
                 const selectedText = cmEditor.state.sliceDoc(sel.from, sel.to);
@@ -6513,6 +6688,16 @@ async function handleKeyboardNavigation(e) {
         // 如果编辑器处于全屏模式，先退出全屏
         if (els.editorPanel.classList.contains('fullscreen')) {
             toggleEditorFullscreen();
+            return;
+        }
+        // CM6 搜索面板打开时，Esc 先关闭它（避免误关编辑器）
+        if (cmEditor && searchPanelOpen(cmEditor.state)) {
+            closeSearchPanel(cmEditor);
+            return;
+        }
+        // 预览查找条打开时，先关闭它（避免 ESC 直接关掉编辑器）
+        if (_previewFindBarVisible) {
+            closePreviewFindBar();
             return;
         }
         // 编辑器打开时关闭它（检查未保存内容）
