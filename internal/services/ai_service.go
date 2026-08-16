@@ -121,13 +121,13 @@ func (a *AIService) GetConfig() AIConfig {
 }
 
 // GetContextWindowSize 获取 AI 上下文窗口大小（保留的 user/assistant 消息条数）
-// 从 setting 表读取 ai_context_window_size，不存在或非法时返回默认值 20
+// 从 setting 表读取 ai_context_window_size，不存在或非法时返回默认值 40
 func (a *AIService) GetContextWindowSize() int {
 	svc := NewSettingService(a.db)
 	val := svc.Get("ai_context_window_size")
 	n, err := strconv.Atoi(val)
 	if err != nil || n < 2 {
-		return 20
+		return 40
 	}
 	if n > 200 {
 		return 200

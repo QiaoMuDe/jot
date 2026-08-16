@@ -518,6 +518,12 @@ func InitDefaultSettings(db *gorm.DB) error {
 		}
 	}
 
+	// 迁移旧默认值: ai_context_window_size 旧默认 20 → 40
+	// 该设置项无前端 UI 暴露，旧值 20 即种子默认，非用户显式配置，直接升级
+	db.Model(&models.Setting{}).
+		Where("key = ? AND value = ?", "ai_context_window_size", "20").
+		Update("value", "40")
+
 	defaults := []models.Setting{
 		{Key: "theme", Value: "default"},
 		{Key: "font_family", Value: ""},
@@ -552,7 +558,7 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "screen_lock_enabled", Value: "false"},
 		{Key: "screen_lock_password", Value: ""},
 		{Key: "editor_word_wrap", Value: "false"},
-		{Key: "ai_context_window_size", Value: "20"},
+		{Key: "ai_context_window_size", Value: "40"},
 	}
 
 	var toInsert []models.Setting
