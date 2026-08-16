@@ -3488,14 +3488,10 @@ function createPresetRowElement(p) {
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-sm btn-danger';
     delBtn.textContent = '删除';
-    if (p.is_default) {
-        delBtn.style.display = 'none';
-    } else {
-        delBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteProfile(p.id, p.name, row);
-        });
-    }
+    delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteProfile(p.id, p.name, row);
+    });
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
     row.appendChild(info);

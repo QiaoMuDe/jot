@@ -225,45 +225,7 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		a.LogSvc.Logger.Errorw("初始化默认笔记本失败", fastlog.Error(err))
 	}
-	// 迁移：已有配置但无预设时，自动创建"默认配置"
-	profiles := a.profileService.ListProfiles()
-	if len(profiles) == 0 {
-		baseURL := a.settingService.Get("ai_base_url")
-		if baseURL != "" {
-			apiKey := a.settingService.Get("ai_api_key")
-			profile := a.profileService.CreateProfile("默认配置", baseURL, apiKey, true)
-			// 标记为激活
-			if err := a.profileService.SwitchProfile("chat", profile.ID); err != nil {
-				a.LogSvc.Logger.Errorw("迁移警告：激活默认配置失败", fastlog.Error(err))
-			}
-			a.LogSvc.Logger.Infow("迁移完成：已从现有配置创建'默认配置'预设")
-		}
-	} else {
-		// 旧数据迁移：如有预设但无一激活，值匹配补标
-		hasActive := false
-		for _, p := range profiles {
-			if p.IsActive {
-				hasActive = true
-				break
-			}
-		}
-		if !hasActive {
-			baseURL := a.settingService.Get("ai_base_url")
-			apiKey := a.settingService.Get("ai_api_key")
-			if baseURL != "" {
-				for _, p := range profiles {
-					if p.BaseURL == baseURL && p.APIKey == apiKey {
-						if err := a.profileService.SwitchProfile("chat", p.ID); err != nil {
-							a.LogSvc.Logger.Errorw("迁移警告：标记激活预设失败", fastlog.Error(err))
-						}
-						a.LogSvc.Logger.Infow("迁移完成：已标记匹配预设为激活")
-						break
-					}
-				}
-			}
-		}
-	}
-	// 迁移存量明文密钥为 Base64 编码格式（放在旧迁移之后，确保旧迁移逻辑读到的是明文）
+	// 迁移存量明文密钥为 Base64 编码格式
 	a.migrateSensitiveKeys()
 
 	a.LogSvc.Logger.Infow("启动初始化完成",
@@ -1240,7 +1202,7 @@ func (a *App) GetAllSettings() services.SettingsConfig {
 	return a.settingService.GetAllSettings()
 }
 
-// SaveAllSettings 保存全部设置项，无预设时自动创建默认配置
+// SaveAllSettings 保存全部设置项
 func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
 	a.LogSvc.Logger.Debugw("SaveAllSettings")
 	if err := a.settingService.SaveAllSettings(cfg); err != nil {
@@ -1257,14 +1219,6 @@ func (a *App) SaveAllSettings(cfg services.SettingsConfig) error {
 				fastlog.String("from", oldLevel.String()),
 				fastlog.String("to", newLevel.String()),
 			)
-		}
-	}
-	// 无预设时自动创建"默认配置"
-	profiles := a.profileService.ListProfiles()
-	if len(profiles) == 0 && cfg.AIBaseURL != "" && cfg.AIAPIKey != "" {
-		profile := a.profileService.CreateProfile("默认配置", cfg.AIBaseURL, cfg.AIAPIKey, true)
-		if err := a.profileService.SetActive(profile.ID); err != nil {
-			a.LogSvc.Logger.Errorw("激活默认配置失败", fastlog.Error(err))
 		}
 	}
 	return nil
@@ -1397,20 +1351,12 @@ func (a *App) GetAIConfig() services.AIConfig {
 	return a.aiService.GetConfig()
 }
 
-// SaveAIConfig 保存 AI 服务配置，无预设时自动创建默认配置
+// SaveAIConfig 保存 AI 服务配置
 func (a *App) SaveAIConfig(cfg services.AIConfig) error {
 	a.LogSvc.Logger.Debugw("SaveAIConfig")
 	if err := a.aiService.SaveConfig(cfg); err != nil {
 		a.LogSvc.Logger.Errorw("SaveAIConfig 失败", fastlog.Error(err))
 		return err
-	}
-	// 无预设时自动创建"默认配置"
-	profiles := a.profileService.ListProfiles()
-	if len(profiles) == 0 {
-		profile := a.profileService.CreateProfile("默认配置", cfg.BaseURL, cfg.APIKey, true)
-		if err := a.profileService.SetActive(profile.ID); err != nil {
-			a.LogSvc.Logger.Errorw("激活默认配置失败", fastlog.Error(err))
-		}
 	}
 	a.LogSvc.Logger.Infow("SaveAIConfig 成功")
 	return nil

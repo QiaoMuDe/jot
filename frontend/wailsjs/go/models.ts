@@ -171,7 +171,6 @@ export namespace models {
 	    name: string;
 	    base_url: string;
 	    api_key: string;
-	    is_default: boolean;
 	    is_active: boolean;
 	    // Go type: time
 	    created_at: any;
@@ -186,7 +185,6 @@ export namespace models {
 	        this.name = source["name"];
 	        this.base_url = source["base_url"];
 	        this.api_key = source["api_key"];
-	        this.is_default = source["is_default"];
 	        this.is_active = source["is_active"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }

@@ -8,7 +8,6 @@ type APIProfile struct {
 	Name      string    `gorm:"size:50;not null" json:"name"`
 	BaseURL   string    `gorm:"size:200;not null" json:"base_url"`
 	APIKey    string    `gorm:"size:200;not null" json:"api_key"`
-	IsDefault bool      `gorm:"default:false" json:"is_default"`
 	IsActive  bool      `gorm:"default:false" json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 }

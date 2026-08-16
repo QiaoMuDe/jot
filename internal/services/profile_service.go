@@ -30,14 +30,11 @@ func (p *ProfileService) ListProfiles() []models.APIProfile {
 }
 
 // CreateProfile 创建预设
-func (p *ProfileService) CreateProfile(name, baseURL, apiKey string, isDefault ...bool) models.APIProfile {
+func (p *ProfileService) CreateProfile(name, baseURL, apiKey string) models.APIProfile {
 	profile := models.APIProfile{
 		Name:    name,
 		BaseURL: baseURL,
 		APIKey:  EncodeB64(apiKey),
-	}
-	if len(isDefault) > 0 && isDefault[0] {
-		profile.IsDefault = true
 	}
 	p.db.Create(&profile)
 	return profile
@@ -56,25 +53,12 @@ func (p *ProfileService) UpdateProfile(id uint, name, baseURL, apiKey string) er
 	return err
 }
 
-// SetActive 将指定预设标记为激活（不清除模型，仅改标记）
-func (p *ProfileService) SetActive(id uint) error {
-	p.db.Model(&models.APIProfile{}).Where("1 = 1").Update("is_active", false)
-	err := p.db.Model(&models.APIProfile{}).Where("id = ?", id).Update("is_active", true).Error
-	if err != nil {
-		p.logger.Errorw("ProfileService.SetActive 失败", fastlog.Error(err))
-	}
-	return err
-}
-
-// DeleteProfile 删除预设（默认配置不可删除）
+// DeleteProfile 删除预设
 func (p *ProfileService) DeleteProfile(id uint) error {
 	var profile models.APIProfile
 	if err := p.db.First(&profile, id).Error; err != nil {
 		p.logger.Errorw("ProfileService.DeleteProfile 失败", fastlog.Error(err))
 		return err
-	}
-	if profile.IsDefault {
-		return errors.New("默认配置不可删除")
 	}
 	err := p.db.Delete(&models.APIProfile{}, id).Error
 	if err != nil {
