@@ -143,6 +143,22 @@ let agentModeAgentBtn = null;    // #aiChatModeAgent
 // 仅保留身份设定，优化指令嵌入到 user 消息中，避免模型将用户输入当作问题回答
 const OPTIMIZE_EXPRESSION_PROMPT = `你是专业的文本表达优化师，负责优化用户提供的文本。`;
 
+// AI 输入框单条消息字符上限（按 rune 计，与后端 SaveAIMessage 校验、Agent 工具
+// maxToolLongText 的 20000 约定保持一致；防止粘贴海量内容撑爆 LLM 上下文窗口）
+const MAX_AI_INPUT_CHARS = 20000;
+
+/**
+ * 将文本按 rune 截断到上限字符数（保留前缀），超限返回截断结果与 true。
+ * @param {string} text
+ * @param {number} [maxChars=MAX_AI_INPUT_CHARS]
+ * @returns {{text: string, truncated: boolean}}
+ */
+function truncateAIInput(text, maxChars = MAX_AI_INPUT_CHARS) {
+    const chars = Array.from(text);
+    if (chars.length <= maxChars) return { text, truncated: false };
+    return { text: chars.slice(0, maxChars).join(''), truncated: true };
+}
+
 /**
  * 加载模型配置到选择器 UI
  */
@@ -412,6 +428,17 @@ function bindEvents() {
 
     // 输入框事件
     if (inputEl) {
+        // 长度上限拦截：超过 MAX_AI_INPUT_CHARS 时截断到上限并提示。
+        // 放在既有 input 监听之前执行，保证按钮状态基于截断后的值计算。
+        inputEl.addEventListener('input', () => {
+            const res = truncateAIInput(inputEl.value);
+            if (res.truncated) {
+                inputEl.value = res.text;
+                // 光标移到末尾，提示截断
+                inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+                window.showNotification?.(`内容过长，已截断至 ${MAX_AI_INPUT_CHARS} 字符`, 'warning');
+            }
+        });
         inputEl.addEventListener('input', () => {
             const val = inputEl.value.trim();
             sendBtnEl.disabled = val.length === 0;
@@ -2174,6 +2201,15 @@ async function ensureAIReady(actionLabel) {
 async function onSend() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
+
+    // 发送前最终校验：输入事件拦截未覆盖的路径（程序赋值等）兜底截断
+    const check = truncateAIInput(text);
+    if (check.truncated) {
+        inputEl.value = check.text;
+        inputEl.style.height = 'auto';
+        window.showNotification?.(`内容过长，已截断至 ${MAX_AI_INPUT_CHARS} 字符`, 'warning');
+        return; // 不发送截断后的半截内容，提示用户确认
+    }
 
     // 校验 AI 配置完整性与模型选择
     if (!(await ensureAIReady('开始对话'))) return;
@@ -4104,6 +4140,15 @@ function showAskPanel(question, options, selection) {
     inp.type = 'text';
     inp.className = 'ai-ask-input';
     inp.placeholder = '输入你的答案…';
+    // 长度上限拦截：超过 MAX_AI_INPUT_CHARS 时截断到上限并提示
+    inp.addEventListener('input', () => {
+        const res = truncateAIInput(inp.value);
+        if (res.truncated) {
+            inp.value = res.text;
+            inp.selectionStart = inp.selectionEnd = inp.value.length;
+            window.showNotification?.(`内容过长，已截断至 ${MAX_AI_INPUT_CHARS} 字符`, 'warning');
+        }
+    });
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'ai-ask-submit';

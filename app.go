@@ -3155,8 +3155,18 @@ type SaveAIMessageResult struct {
 
 // SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID 和 token 数
 // 由前端在调用 CallAIStream 前预先保存用户消息，确保前端能立即拿到 msgId 和 tokens
+// maxAIMessageChars AI 消息单条字符上限（按 rune 计）。
+// 与前端 MAX_AI_INPUT_CHARS、Agent 工具 maxToolLongText 的 20000 约定保持一致，
+// 防止海量内容（粘贴/脚本绕过前端拦截）撑爆 LLM 上下文窗口。
+const maxAIMessageChars = 20000
+
+// SaveAIMessage 保存一条 AI 会话消息（前端仅以 user 角色调用；AI 回复由后端直接
+// 经 aiService.SaveAIMessage 落库，不经本绑定，故校验只作用于用户消息）。
 func (a *App) SaveAIMessage(sessionID uint, content string, role string) (SaveAIMessageResult, error) {
 	a.LogSvc.Logger.Debugw("SaveAIMessage", fastlog.Uint("sessionID", sessionID), fastlog.String("role", role))
+	if len([]rune(content)) > maxAIMessageChars {
+		return SaveAIMessageResult{}, fmt.Errorf("消息内容过长（上限 %d 字符，当前 %d 字符）", maxAIMessageChars, len([]rune(content)))
+	}
 	tokens := estimateTokens(content)
 	msg := services.Message{
 		Role:    role,
