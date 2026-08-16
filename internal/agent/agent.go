@@ -44,6 +44,9 @@ import (
 // DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用）。
 const DefaultMaxIterations = 20
 
+// MaxCachedSessions 会话级 Agent 实例缓存上限（LRU 淘汰），防止注册表无限增长。
+const MaxCachedSessions = 32
+
 // Deps AgentService 依赖注入。
 // 注意：搜索功能在现有代码中是 services 包级函数（services.SearchWeb / SearchZhihuContent /
 // SearchGlobalContent），不存在 *services.SearchService 类型，故此处不注入 Search，
@@ -68,11 +71,188 @@ type Deps struct {
 // AgentService 封装 Agent 对话链路。
 type AgentService struct {
 	deps Deps
+	// 会话级 Agent 实例注册表：以 AI 会话 ID（models.AISession.ID）为键，
+	// 保存每个会话的交互状态（ask_user 同轮等待通道、run 取消源）与缓存的
+	// ChatModel 客户端。同一会话的连续消息复用同一实例，实现"按会话保持
+	// 一个 Agent 实例"，并支撑 ask_user 反问在同轮内暂停/续答。
+	mu       sync.Mutex
+	sessions map[uint]*agentSession
+}
+
+// agentSession 一个 AI 会话对应的 Agent 交互实例。
+// 说明：eino 的 ChatModelAgent 图/runner 与工具链按消息重建——系统提示词
+// （Instruction）逐消息组装（技能/引用/意图裁剪不同），MCP 连接按 run 建立，
+// 因此会话级实例持有的是跨消息可复用的部分：ask_user 等待通道、run 取消源、
+// ChatModel 客户端（指纹不变即复用）。真正支撑"同轮续答"的是 askCh/askPending：
+// ask_user 工具在 ReAct 循环内阻塞等待，AnswerAskUser 把用户答案投递到通道，
+// 循环恢复继续完成原始请求（答案不落库为新用户消息）。
+type agentSession struct {
+	askCh      chan string        // 反问答案投递通道（容量 1，等待期间容纳一次回答）
+	askPending bool               // 当前是否有反问在等待用户回答
+	askMu      sync.Mutex         // 保护 askPending（AnswerAskUser 与工具侧并发访问）
+	runMu      sync.Mutex         // 同一会话 run 串行化（等待中的 run 结束前不启动新 run）
+	runCancel  context.CancelFunc // 当前 run 的取消源（会话释放时取消等待中的 run）
+	cancelMu   sync.Mutex         // 保护 runCancel 的读写
+	chatModel  *openai.ChatModel  // 缓存的 ChatModel 客户端（跨消息复用）
+	chatFP     string             // ChatModel 指纹（BaseURL/APIKey/Model/深度思考）
+	lastSeen   time.Time          // 最近使用时间（LRU 淘汰依据）
+}
+
+// setRunCancel 记录当前 run 的取消源（Run 内赋值，runMu 已串行化，加锁兜底并发读）。
+func (sess *agentSession) setRunCancel(c context.CancelFunc) {
+	sess.cancelMu.Lock()
+	sess.runCancel = c
+	sess.cancelMu.Unlock()
+}
+
+// cancelRun 取消当前 run（幂等：cancel 为 nil 或已取消时无副作用）。
+func (sess *agentSession) cancelRun() {
+	sess.cancelMu.Lock()
+	c := sess.runCancel
+	sess.cancelMu.Unlock()
+	if c != nil {
+		c()
+	}
+}
+
+// ClaimAsk 实现 tools.AskWaiter：在发射 ai:ask-user 事件前原子抢占反问名额。
+// 已有反问在等待（模型同条消息并行发多条 ask_user）时返回错误，
+// 工具据此拒绝阻塞，避免多个等待者共抢一个通道导致整轮挂起。
+func (sess *agentSession) ClaimAsk() error {
+	sess.askMu.Lock()
+	defer sess.askMu.Unlock()
+	if sess.askPending {
+		return errors.New("已有反问正在等待你的回答，请先回答当前问题，不要重复提问")
+	}
+	sess.askPending = true
+	return nil
+}
+
+// WaitForAnswer 实现 tools.AskWaiter：阻塞等待用户对当前反问的回答。
+// 工具已在 emit 前经 ClaimAsk 抢占名额，此处幂等置位兜底；
+// 收到答案或 ctx 取消（停止按钮/会话释放）后清除标记。
+// 答案经通道同轮返回给 ask_user 工具。
+func (sess *agentSession) WaitForAnswer(ctx context.Context) (string, error) {
+	sess.askMu.Lock()
+	sess.askPending = true
+	sess.askMu.Unlock()
+	defer func() {
+		sess.askMu.Lock()
+		sess.askPending = false
+		sess.askMu.Unlock()
+	}()
+	select {
+	case ans := <-sess.askCh:
+		return ans, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+// drainAsk 排空通道中未消费的反问答案（取消竞态残留），防止污染下一轮反问。
+// 场景：用户提交答案的同时取消（停止/会话释放），工具 select 可能抢到 ctx.Done()
+// 而非通道，已投递的答案残留；不排空会被下一轮 ask_user 当作本轮的答案消费。
+func (sess *agentSession) drainAsk() {
+	for {
+		select {
+		case <-sess.askCh:
+		default:
+			return
+		}
+	}
 }
 
 // NewAgentService 创建一个新的 AgentService 实例。
 func NewAgentService(deps Deps) *AgentService {
-	return &AgentService{deps: deps}
+	return &AgentService{deps: deps, sessions: make(map[uint]*agentSession)}
+}
+
+// getOrCreateSession 取或建指定会话的 Agent 交互实例（LRU 淘汰超限缓存）。
+func (s *AgentService) getOrCreateSession(sessionID uint) *agentSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[sessionID]; ok {
+		sess.lastSeen = time.Now()
+		return sess
+	}
+	if len(s.sessions) >= MaxCachedSessions {
+		// 淘汰最久未使用的空闲会话（仅无等待中反问的实例可被淘汰）
+		var oldestID uint
+		var oldest time.Time
+		for id, ss := range s.sessions {
+			ss.askMu.Lock()
+			pending := ss.askPending
+			ss.askMu.Unlock()
+			if pending {
+				continue
+			}
+			if oldest.IsZero() || ss.lastSeen.Before(oldest) {
+				oldest, oldestID = ss.lastSeen, id
+			}
+		}
+		if oldestID != 0 {
+			delete(s.sessions, oldestID)
+		}
+	}
+	sess := &agentSession{
+		askCh:    make(chan string, 1),
+		lastSeen: time.Now(),
+	}
+	s.sessions[sessionID] = sess
+	return sess
+}
+
+// AnswerAskUser 投递用户对 ask_user 反问的回答，恢复同一轮 ReAct 循环：
+// 答案作为 ask_user 工具结果返回给模型，继续完成原始请求（同轮传输，
+// 不落库为新用户消息、不新开一轮）。无等待中的反问时返回中文错误。
+func (s *AgentService) AnswerAskUser(sessionID uint, answer string) error {
+	s.mu.Lock()
+	sess, ok := s.sessions[sessionID]
+	s.mu.Unlock()
+	if !ok {
+		return errors.New("当前没有等待回答的问题（会话无进行中的 Agent 轮次）")
+	}
+	sess.askMu.Lock()
+	if !sess.askPending {
+		sess.askMu.Unlock()
+		return errors.New("当前没有等待回答的问题")
+	}
+	sess.askPending = false // 投递前先清标记，防止重复投递
+	sess.askMu.Unlock()
+	select {
+	case sess.askCh <- answer:
+		return nil
+	default:
+		// 通道已满（极罕见：上一轮答案未消费），兜底拒绝
+		return errors.New("回答投递失败，请稍后重试")
+	}
+}
+
+// ReleaseSession 释放指定会话的 Agent 实例：取消等待中的 run 并删除注册表项。
+// 清空/删除会话、重建服务时调用，防止等待中的反问 run 悬挂占用资源。
+func (s *AgentService) ReleaseSession(sessionID uint) {
+	s.mu.Lock()
+	sess, ok := s.sessions[sessionID]
+	delete(s.sessions, sessionID)
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	sess.cancelRun()
+	sess.drainAsk()
+}
+
+// ReleaseAll 释放全部会话的 Agent 实例（清空所有 AI 会话/工厂重置时调用）：
+// 取消所有等待中的 run 并清空注册表，防止暂停中的反问 goroutine 泄漏。
+func (s *AgentService) ReleaseAll() {
+	s.mu.Lock()
+	sessions := s.sessions
+	s.sessions = make(map[uint]*agentSession)
+	s.mu.Unlock()
+	for _, sess := range sessions {
+		sess.cancelRun()
+		sess.drainAsk()
+	}
 }
 
 // Run 执行一轮 Agent 对话：
@@ -81,8 +261,11 @@ func NewAgentService(deps Deps) *AgentService {
 //  3. 注册 web_search / recall_notes 工具（notebook 过滤绑定 req.RecallNotebookIDs）；
 //  4. runner.Run 消费事件流，流式文本与工具状态通过 emit 推送，最后汇总回答与工具摘要。
 //
-// ctx 支持取消：调用方传入带 cancel 的 ctx，Agent 循环随 ctx 终止，返回 ctx.Err()。
+// ctx 支持取消：调用方传入带 cancel 的 ctx（停止按钮），Agent 循环随 ctx 终止，返回 ctx.Err()。
+// 会话释放（ReleaseSession）会独立取消由 ctx 派生的 runCtx，同样以取消语义终止。
 // 模型不支持 tool calling 或调用失败的报错原样返回 error，由调用方 ClassifyError。
+// ask_user 反问：本方法在工具注入的 AskWaiter（会话实例）上阻塞等待用户回答，
+// 答案经 AnswerAskUser 投递后同一轮 ReAct 循环继续（AI 消息不结束，同轮续答）。
 func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Result, error) {
 	var result Result
 	if emit == nil {
@@ -97,34 +280,62 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 
+	// 0. 会话级 Agent 实例：按会话 ID 取/建交互实例（ask_user 同轮等待通道、
+	//     run 取消源、ChatModel 客户端缓存），同一会话连续消息复用；
+	//     runMu 串行化同一会话的 run（等待中的 run 结束前不启动新 run）。
+	//     本 run 使用从 ctx 派生的 runCtx，ReleaseSession 可独立取消它。
+	sess := s.getOrCreateSession(req.SessionID)
+	sess.runMu.Lock()
+	defer sess.runMu.Unlock()
+	runCtx, runCancel := context.WithCancel(ctx)
+	sess.setRunCancel(runCancel)
+	defer func() {
+		// 清理会话级状态：清除反问等待标记、排空未消费的答案（取消竞态残留）、
+		// 取消本 run 的取消源（幂等）
+		sess.askMu.Lock()
+		sess.askPending = false
+		sess.askMu.Unlock()
+		sess.drainAsk()
+		sess.setRunCancel(nil)
+		runCancel()
+	}()
+
 	// 1. 读取 AI 配置（复用现有 GetConfig 逻辑，含 B64 解码）
 	aiCfg := s.deps.AI.GetConfig()
 	if aiCfg.BaseURL == "" || aiCfg.APIKey == "" || aiCfg.Model == "" {
 		return result, errors.New("请先配置 AI 服务（BaseURL / APIKey / Model）")
 	}
 
-	// 2. 构建 ChatModel（OpenAI 兼容协议，BaseURL 指向 DeepSeek/通义等兼容端点）
-	chatModelCfg := &openai.ChatModelConfig{
-		APIKey:  aiCfg.APIKey,
-		Model:   aiCfg.Model,
-		BaseURL: aiCfg.BaseURL,
-		Timeout: 60 * time.Second,
+	// 2. 构建/复用 ChatModel（OpenAI 兼容协议，BaseURL 指向 DeepSeek/通义等兼容端点）。
+	//    会话级缓存：BaseURL/APIKey/Model/深度思考 指纹不变时复用同一实例。
+	chatFP := fmt.Sprintf("%s|%s|%s|%v", aiCfg.BaseURL, aiCfg.APIKey, aiCfg.Model, req.ThinkingEnabled)
+	if sess.chatModel == nil || sess.chatFP != chatFP {
+		chatModelCfg := &openai.ChatModelConfig{
+			APIKey:  aiCfg.APIKey,
+			Model:   aiCfg.Model,
+			BaseURL: aiCfg.BaseURL,
+			Timeout: 60 * time.Second,
+		}
+		// 深度思考开启时设置 reasoning_effort=high（OpenAI 标准参数，DeepSeek V4 / Qwen3 兼容端点支持）
+		if req.ThinkingEnabled {
+			chatModelCfg.ReasoningEffort = openai.ReasoningEffortLevelHigh
+		}
+		chatModel, err := openai.NewChatModel(runCtx, chatModelCfg)
+		if err != nil {
+			return result, fmt.Errorf("创建 ChatModel 失败: %w", err)
+		}
+		sess.chatModel = chatModel
+		sess.chatFP = chatFP
 	}
-	// 深度思考开启时设置 reasoning_effort=high（OpenAI 标准参数，DeepSeek V4 / Qwen3 兼容端点支持）
-	if req.ThinkingEnabled {
-		chatModelCfg.ReasoningEffort = openai.ReasoningEffortLevelHigh
-	}
-	chatModel, err := openai.NewChatModel(ctx, chatModelCfg)
-	if err != nil {
-		return result, fmt.Errorf("创建 ChatModel 失败: %w", err)
-	}
+	chatModel := sess.chatModel
 
 	// 3. 统一装配并注册工具（registry.go 的 buildTools，notebook 过滤在构造 recall_notes 时绑定）
 	//    collector/ctx 贯穿本轮：工具经 tools.WrapWithError 包装（失败回填模型不中断循环），
-	//    部分失败由工具经 ctx.AddPartial 登记，tool_result 之后统一 DrainPartials 发射
+	//    部分失败由工具经 ctx.AddPartial 登记，tool_result 之后统一 DrainPartials 发射；
+	//    AskWaiter 注入会话实例：ask_user 工具调用时阻塞等待用户回答（同轮续答）。
 	collector := &tools.Collector{}
 	var toolRecords []tools.Record
-	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger}
+	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger, AskWaiter: sess}
 	// 禁用工具集合转 map（黑名单语义：默认空 = 全部注册，被禁工具模型不可见）
 	disabledTools := make(map[string]bool, len(req.DisabledTools))
 	for _, name := range req.DisabledTools {
@@ -193,8 +404,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					sem <- struct{}{} // 获取并发槽位
 					defer func() { <-sem }()
 					connStart := time.Now()
-					sess, err := mcpserver.OpenSession(ctx, server)
-					results[i] = mcpResult{server: server, sess: sess, err: err, duration: time.Since(connStart)}
+					mcpSess, err := mcpserver.OpenSession(runCtx, server)
+					results[i] = mcpResult{server: server, sess: mcpSess, err: err, duration: time.Since(connStart)}
 				}(i, server)
 			}
 			wg.Wait()
@@ -229,7 +440,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					}
 					// 取改名后的工具名（mcp_{服务器名}_{工具名}），供 WrapWithError 日志与调用记录使用
 					mcpToolName := r.server.Name
-					if info, err := t.Info(ctx); err == nil && info != nil {
+					if info, err := t.Info(runCtx); err == nil && info != nil {
 						mcpToolName = info.Name
 					}
 					toolNames = append(toolNames, mcpToolName)
@@ -252,14 +463,14 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	// 为 tool_start 事件生成动作文案（action_text）随事件下发前端
 	toolByName := make(map[string]tool.BaseTool, len(toolList))
 	for _, t := range toolList {
-		if info, err := t.Info(ctx); err == nil && info != nil {
+		if info, err := t.Info(runCtx); err == nil && info != nil {
 			toolByName[info.Name] = t
 		}
 	}
 
 	// 4. 组装 ChatModelAgent（内部是 ReAct 循环：模型决策 → 调用工具 → 反馈 → 继续）
 	//    Instruction 作为 system 消息由默认 GenModelInput 放在最前
-	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+	agent, err := adk.NewChatModelAgent(runCtx, &adk.ChatModelAgentConfig{
 		Name:        "jot-agent",
 		Description: "一个能调用联网搜索与本地笔记召回工具回答问题的助手",
 		Instruction: req.Instruction,
@@ -276,20 +487,25 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 
 	// 5. 创建 Runner 并执行（开启流式输出）
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{
+	runner := adk.NewRunner(runCtx, adk.RunnerConfig{
 		Agent:           agent,
 		EnableStreaming: true,
 	})
 
 	// 6. 消费事件流
 	messages := buildMessages(req)
-	iter := runner.Run(ctx, messages)
+	iter := runner.Run(runCtx, messages)
 
 	var finalContent string
 	var promptTokensTotal, completionTokensTotal int
 	// ask_user 反向提问兜底：该轮正文（问句）在最终回答为空时作为 finalContent，
 	// 保证落库内容为问句、历史回放可读
 	var pendingQuestion string
+	// 本轮所有 assistant 消息的流式正文累计（与前端气泡所见一致）：
+	// ask_user 同轮续答时，最终回答只是末条 assistant 消息，问句落在中间轮，
+	// 仅存 finalContent 会丢失问句；故反问轮用累计正文落库（问句 + 续答全文）
+	var streamedContent string
+	var askedUser bool
 
 	for {
 		event, ok := iter.Next()
@@ -300,8 +516,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			continue
 		}
 		if event.Err != nil {
-			if ctx.Err() != nil {
-				return result, ctx.Err()
+			if runCtx.Err() != nil {
+				return result, runCtx.Err()
 			}
 			return result, event.Err
 		}
@@ -316,8 +532,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			if mv.IsStreaming {
 				full, roundThinking, err := consumeAssistantStream(mv.MessageStream, emit, req.ThinkingEnabled)
 				if err != nil {
-					if ctx.Err() != nil {
-						return result, ctx.Err()
+					if runCtx.Err() != nil {
+						return result, runCtx.Err()
 					}
 					return result, fmt.Errorf("读取模型流失败: %w", err)
 				}
@@ -336,6 +552,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				if req.ThinkingEnabled && full.ReasoningContent != "" {
 					result.ReasoningContent += full.ReasoningContent
 				}
+				// 流式正文累计（与前端气泡所见一致），供 ask_user 同轮续答时整轮落库
+				streamedContent += full.Content
 				if len(full.ToolCalls) > 0 {
 					// 模型决定调用工具：流式 Arguments 已按 Index 合并
 					for _, tc := range full.ToolCalls {
@@ -347,6 +565,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						if tc.Function.Name != "ask_user" {
 							continue
 						}
+						askedUser = true
 						if full.Content != "" {
 							pendingQuestion = full.Content
 						} else if q := askUserQuestionFromArgs(tc.Function.Arguments); q != "" {
@@ -363,6 +582,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					promptTokensTotal += u.Usage.PromptTokens
 					completionTokensTotal += u.Usage.CompletionTokens
 				}
+				// 流式正文累计（与前端气泡所见一致），供 ask_user 同轮续答时整轮落库
+				streamedContent += mv.Message.Content
 				if len(mv.Message.ToolCalls) > 0 {
 					for _, tc := range mv.Message.ToolCalls {
 						emitToolStart(emit, &toolRecords, tc, toolByName)
@@ -373,6 +594,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						if tc.Function.Name != "ask_user" {
 							continue
 						}
+						askedUser = true
 						if mv.Message.Content != "" {
 							pendingQuestion = mv.Message.Content
 						} else if q := askUserQuestionFromArgs(tc.Function.Arguments); q != "" {
@@ -410,15 +632,20 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 
-	// 用户取消：Agent 循环随 ctx 终止
-	if ctx.Err() != nil {
-		return result, ctx.Err()
+	// 用户取消：Agent 循环随 runCtx 终止（父 ctx 取消或 ReleaseSession 独立取消）
+	if runCtx.Err() != nil {
+		return result, runCtx.Err()
 	}
 
 	// ask_user 反向提问兜底：最终回答为空时用该轮正文问句作为 finalContent，
 	// 保证落库内容为问句、历史回放可读
 	if finalContent == "" && pendingQuestion != "" {
 		finalContent = pendingQuestion
+	}
+	// ask_user 同轮续答：问句在中间轮、最终回答在末轮，仅存 finalContent 会丢失问句；
+	// 用本轮全部流式正文（问句 + 续答）落库，与前端同一气泡展示一致
+	if askedUser && streamedContent != "" {
+		finalContent = streamedContent
 	}
 
 	// 7. 汇总结果：内容 + 工具收集的结构化来源/卡片 + 工具调用链 + 真实 token usage

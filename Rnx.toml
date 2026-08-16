@@ -9,7 +9,7 @@ work_dir = '.'
 # 超时时间
 timeout = '120s'
 # 是否显示输出
-show_output = false
+show_output = true
 # 任务执行失败时是否退出程序
 exit_on_error = true
 # 是否显示执行的命令

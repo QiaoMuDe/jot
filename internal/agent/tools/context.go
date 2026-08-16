@@ -60,6 +60,19 @@ type Collector struct {
 	Cards   []services.RecallCard
 }
 
+// AskWaiter 反向提问等待器：由父包注入，供 ask_user 工具在 ReAct 循环内
+// 阻塞等待用户回答（同轮传输）。为 nil 时 ask_user 保持原非阻塞行为
+// （发射事件后立即返回确认文本，循环继续）。
+type AskWaiter interface {
+	// ClaimAsk 在发射 ai:ask-user 事件前原子抢占反问名额；
+	// 已有反问在等待时返回错误（模型在同一条消息里并行发出多条 ask_user 时，
+	// 拒绝多余提问，避免多重阻塞导致整轮挂起）。
+	ClaimAsk() error
+	// WaitForAnswer 阻塞等待用户回答，返回用户输入文本；
+	// ctx 取消（停止按钮/会话释放）时返回 ctx.Err()。
+	WaitForAnswer(ctx context.Context) (string, error)
+}
+
 // Context 注入给每个工具的执行上下文：事件发射、调用记录、结构化收集器与日志。
 // 部分失败等特殊事件由工具内部经 AddPartial 登记，父包在 tool_result 之后统一 DrainPartials 发射。
 type Context struct {
@@ -67,6 +80,7 @@ type Context struct {
 	Records   *[]Record
 	Collector *Collector
 	Logger    *fastlog.Logger
+	AskWaiter AskWaiter // 非 nil 时 ask_user 工具阻塞等待用户回答（同轮续答）
 
 	partials []string // 工具登记的部分失败提示（父包 DrainPartials 消费后清空）
 }

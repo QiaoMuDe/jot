@@ -10,3 +10,6 @@ tmp/
 images/
 videos/
 __pycache__/
+# 本地构建缓存（沙箱环境 GOCACHE/npm cache 重定向）
+.gocache/
+.npmcache/

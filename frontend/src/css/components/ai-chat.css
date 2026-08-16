@@ -341,6 +341,29 @@
     30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* ── Agent 反问等待提示（ask_user 同轮续答期间，AI 消息不结束） ── */
+.ai-msg-waiting-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.ai-msg-waiting-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: ai-waiting-pulse 1.4s infinite ease-in-out;
+}
+
+@keyframes ai-waiting-pulse {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.15); opacity: 1; }
+}
+
 /* ── 搜索指示器 ── */
 .ai-simple-search-indicator {
     display: inline-flex;
@@ -2197,6 +2220,24 @@
 .ai-chat-input-wrap.is-loading .ai-chat-input {
     color: var(--text-muted);
     pointer-events: none;
+}
+
+/* 反问等待态 - Agent ask_user 面板弹出期间输入框禁用（提示"等待你的选择…"） */
+.ai-chat-input-wrap.is-ask-waiting::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+    z-index: 2;
+    pointer-events: all;
+}
+.ai-chat-input-wrap.is-ask-waiting .ai-chat-input {
+    color: var(--text-muted);
+    pointer-events: none;
+}
+.ai-chat-input-wrap.is-ask-waiting .ai-chat-input::placeholder {
+    color: var(--text-muted);
 }
 
 /* 内嵌优化表达按钮 */

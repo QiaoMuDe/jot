@@ -314,12 +314,12 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 `ask_user` 是唯一允许工具内部直接 `ctx.Emit` 事件的例外：执行时发射 `ai:ask-user` 事件，负载为 JSON 字符串 `{"question": "...", "options": ["...", ...], "selection": "single"|"multiple"}`（options 为空数组 `[]`，selection 缺省 "single"）。前端在输入区上方渲染**悬浮浮层反问面板**（`#aiAskPanel`，absolute 定位不占文档流、覆盖消息列表上方）：问句标题（右上角 × 关闭按钮，点击隐藏面板退出选择）+ 选项区 + 自定义输入行；面板宽度自适应内容（= 最长选项宽度，min-width 280px，最长选项超过输入区时满宽且文本换行）。
 
-- 该工具不执行业务，仅请求澄清；返回给模型的文本为"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"
-- **selection 语义**：`single`（缺省）单选——用户点选项即回复；`multiple` 多选——用户勾选多项后点"确认提交"，以 `我选择：A、B` 格式回复，若同时填写了自定义输入则拼接为 `我选择：A、B。补充说明：xxx`。选项以垂直列表一行一个展示（单选点行即发；多选条目**左侧常显 checkbox 方框**，勾选后整行高亮 + 方框填充对勾）；两种模式统一布局为"输入框 + 唯一按钮"同排一行（单选按钮「发送」/ 多选按钮「确认提交」），Enter 与按钮走同一逻辑；未勾选且无输入时抖动提示不发送。需要多选决策（多篇笔记/多个标签/方案组合）时用 multiple，选项仍 2-6 个。
-- **面板生命周期**（前端 `showAskPanel` / `hideAskPanel`）：收到 `ai:ask-user` 填充并显示；用户回答（单选/多选确认/自定义输入）**发送成功**后隐藏，发送失败（当前回复仍在生成 → 提示"请等待…"并保留；未配置 AI 服务 → 保留面板便于重试）面板不隐藏；右上角 × 关闭按钮隐藏面板退出选择；用户绕答直接发新消息（`startStreaming` 开始）、切换会话、清空会话时隐藏；新问题到达替换旧面板内容。
-- 用户回答以**新 user 消息**发来（新的一轮），模型结合上文（问句正文 + ask_user 工具结果）继续回答，无需跨轮状态。
-- 落库保障：若模型最终轮无输出（按约束停止生成），[agent.go](internal/agent/agent.go) 会以 ask_user 调用轮的正文（问句）兜底 `finalContent`，保证历史回放时 assistant 消息可读（面板不重现，仅正文文本 + 工具折叠）；**正文为空**（模型未遵守"正文写问句"约束）时退而取 ask_user 工具参数里的 `question` 兜底，避免问句整轮丢失。
-- Agent Instruction（[app.go](app.go) 的 `CallAIAgentStream`）注入使用边界：仅信息不足/需决策时使用、一次一问、调用后停止生成、用户回答后继续。
+- 该工具不执行业务，仅请求澄清。**同轮传输（AskWaiter）**：父包注入 `tools.AskWaiter`（会话级实例，见 [context.go](internal/agent/tools/context.go) 与 [agent.go](internal/agent/agent.go) 的 `agentSession`）时，工具先经 **`ClaimAsk()` 原子抢占反问名额**（模型同条消息并行发出多条 ask_user 时仅第一条成功，其余返回错误回填模型，避免多重阻塞挂起），再发射 `ai:ask-user` 事件并**阻塞等待用户回答**（ReAct 循环暂停、AI 消息不结束），答案经 `AnswerAskUser(sessionID, answer)` 投递到会话等待通道，作为本工具结果返回给模型继续完成原始请求——**不落库为新 user 消息、不新开一轮**；返回给模型的文本为"用户已回答你的提问。用户的回答是：{answer}。请结合你的问题与用户的回答继续完成用户的原始请求，直接给出最终回答或继续调用后续工具，不要重复提问。"。未注入 AskWaiter（非交互场景/测试）时保持原行为：立即返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"
+- **selection 语义**：`single`（缺省）单选——用户点选项即提交；`multiple` 多选——用户勾选多项后点"确认提交"，以 `我选择：A、B` 格式提交，若同时填写了自定义输入则拼接为 `我选择：A、B。补充说明：xxx`。选项以垂直列表一行一个展示（单选点行即发；多选条目**左侧常显 checkbox 方框**，勾选后整行高亮 + 方框填充对勾）；两种模式统一布局为"输入框 + 唯一按钮"同排一行（单选按钮「发送」/ 多选按钮「确认提交」），Enter 与按钮走同一逻辑；未勾选且无输入时抖动提示不发送。需要多选决策（多篇笔记/多个标签/方案组合）时用 multiple，选项仍 2-6 个。
+- **面板生命周期**（前端 `showAskPanel` / `hideAskPanel`）：收到 `ai:ask-user` 填充并显示（气泡保持流式状态、停止按钮可见、主输入框禁用并提示"等待你的选择…"）；用户回答经 `AnswerAskUser` **提交成功**后隐藏，提交失败（run 已结束/取消等）保留面板并提示可重试；右上角 × 关闭按钮 = **取消本轮**（复用停止按钮逻辑：收起面板、移除流式气泡、取消后端 run，防止悬挂）；切换会话（流式中被拦截）、清空会话、`stream-done`/`stream-error`/停止时隐藏；新问题到达替换旧面板内容。
+- 用户回答**同轮注入**（非新消息）：`AnswerAskUser` 把答案投递到会话级等待通道（[agent.go](internal/agent/agent.go) 的 `agentSession.WaitForAnswer`），ask_user 工具解锁，同一轮 ReAct 循环继续，同一 AI 气泡续答至最终回答。
+- 落库保障：若模型最终轮无输出，[agent.go](internal/agent/agent.go) 会以 ask_user 调用轮的正文（问句）兜底 `finalContent`，保证历史回放时 assistant 消息可读（面板不重现，仅正文文本 + 工具折叠）；**正文为空**（模型未遵守"正文写问句"约束）时退而取 ask_user 工具参数里的 `question` 兜底，避免问句整轮丢失。**同轮续答落库**：反问轮最终回答是末条 assistant 消息、问句在中间轮，仅存末条会丢失问句——故反问轮以本轮全部流式正文（问句 + 续答）作为 `result.Content` 落库，与前端同一气泡展示一致。
+- Agent Instruction（[app.go](app.go) 的 `CallAIAgentStream`）注入使用边界：仅信息不足/需决策时使用、一次一问、调用后本轮暂停等待用户回答、用户回答（作为 ask_user 工具结果）后继续完成原始请求（直接回答或继续调用后续工具，不重复提问）。
 
 ---
 

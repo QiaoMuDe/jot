@@ -9,6 +9,8 @@ export function AITextOperationStream(arg1:number,arg2:string,arg3:string):Promi
 
 export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
+export function AnswerAskUser(arg1:number,arg2:string):Promise<void>;
+
 export function BackupToDir():Promise<string>;
 
 export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>;

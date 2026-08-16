@@ -2514,8 +2514,8 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		instruction.WriteString("\n\n【工具使用规范 - ask_user 反向提问（强制调用）】\n" +
 			"1. 以下场景必须调用 ask_user 工具向用户发起澄清提问，不得省略或绕过，严禁在缺少必要信息时擅自猜测后直接执行：①用户请求存在信息模糊、参数不明确、需求不具体（如未指明操作对象、数量、范围、目标、方案等）；②需要用户在多个选项或方案之间做选择（如多篇候选笔记、多个方案、多种执行方式）；③需要获取用户进一步确认或补充关键信息才能继续执行（含写操作前的确认）。\n" +
 			"2. 一次只问一个问题，提供 2-6 个候选选项；严禁把猜测当作已确认事实继续后续操作，严禁用于闲聊或无意义的确认。\n" +
-			"3. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后立即停止生成，不要再输出任何内容，等待用户回答。\n" +
-			"4. 用户回答后（会作为新消息发来），结合你的问题与用户的回答继续正常回答用户，不要重复提问。\n")
+			"3. 调用 ask_user 工具前，先在回复正文中完整写出你的问题（正文即问句）；调用后本轮会暂停并等待用户回答，期间不要再输出任何内容。\n" +
+			"4. 用户回答后（会作为 ask_user 工具的结果返回给你），结合你的问题与用户的回答继续完成用户的原始请求：直接给出最终回答，或继续调用后续工具（如写操作确认后携带 confirm=true 执行），不要重复提问。\n")
 
 		// Agent 模式专用约束：写操作强制确认规范（仅 Agent 模式注入，问答模式不受影响）
 		instruction.WriteString("\n\n【工具使用规范 - 写操作强制确认】\n" +
@@ -2588,7 +2588,9 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			UserMsgID:         userMsgID,
 			DisabledTools:     disabledTools,
 		}, func(ev, data string) {
-			runtime.EventsEmit(a.ctx, ev, data)
+			// Agent 事件统一携带 streamGen（首参），与 stream-done/stream-error/agent-result
+			// 已有的 gen 参数形态一致：前端按代过滤，防止切换/并发流串扰
+			runtime.EventsEmit(a.ctx, ev, streamGen, data)
 		})
 
 		// 失败处理：经 ClassifyError 转中文提示（与 CallAIStream 错误分支一致）
@@ -2990,6 +2992,8 @@ func (a *App) CreateAISession() uint {
 // DeleteAISession 删除 AI 会话及所有消息
 func (a *App) DeleteAISession(id uint) error {
 	a.LogSvc.Logger.Debugw("DeleteAISession", fastlog.Uint("id", id))
+	// 释放该会话的 Agent 实例（取消等待中的反问 run），防止悬挂
+	a.AgentSvc.ReleaseSession(id)
 	if err := a.aiService.DeleteAISession(id); err != nil {
 		a.LogSvc.Logger.Errorw("DeleteAISession 失败", fastlog.Error(err))
 		return err
@@ -3079,12 +3083,23 @@ func (a *App) SaveAIMessages(sessionID uint, messages []services.Message) error 
 // ClearAISessionMessages 清空 AI 会话的所有消息（不删会话）
 func (a *App) ClearAISessionMessages(sessionID uint) error {
 	a.LogSvc.Logger.Debugw("ClearAISessionMessages", fastlog.Uint("sessionID", sessionID))
+	// 释放该会话的 Agent 实例（取消等待中的反问 run），防止悬挂
+	a.AgentSvc.ReleaseSession(sessionID)
 	if err := a.aiService.ClearAISessionMessages(sessionID); err != nil {
 		a.LogSvc.Logger.Errorw("ClearAISessionMessages 失败", fastlog.Error(err))
 		return err
 	}
 	a.LogSvc.Logger.Infow("ClearAISessionMessages 成功", fastlog.Uint("sessionID", sessionID))
 	return nil
+}
+
+// AnswerAskUser 投递用户对 Agent 反问（ask_user）的回答，恢复同一轮 ReAct 循环：
+// 答案作为工具结果返回给模型继续完成原始请求（同轮传输，不落库为新用户消息）。
+func (a *App) AnswerAskUser(sessionID uint, answer string) error {
+	if a.AgentSvc == nil {
+		return errors.New("agent 服务未就绪")
+	}
+	return a.AgentSvc.AnswerAskUser(sessionID, answer)
 }
 
 // UpdateAIMessageContent 更新指定 AI 消息的内容
@@ -3176,6 +3191,8 @@ func (a *App) LoadSessionConfig(sessionID uint) services.SessionConfig {
 // ClearAllAISessions 清空所有 AI 会话及消息
 func (a *App) ClearAllAISessions() error {
 	a.LogSvc.Logger.Debugw("ClearAllAISessions")
+	// 释放全部会话的 Agent 实例（取消等待中的反问 run），防止清空后僵尸 run 泄漏
+	a.AgentSvc.ReleaseAll()
 	if err := a.aiService.ClearAllAISessions(); err != nil {
 		a.LogSvc.Logger.Errorw("ClearAllAISessions 失败", fastlog.Error(err))
 		return err
@@ -4071,6 +4088,10 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	// 重建 AgentSvc：rebuildServices 重建了各服务（新 gorm.DB 连接），
 	// 必须同步用最新实例重新装配 AgentSvc，否则 Agent 工具（manage_todo / manage_notebook /
 	// manage_tag 等）仍持有旧服务指针，数据库重置或切换后操作的是旧连接。
+	// 先释放旧 AgentSvc 的全部会话实例（取消等待中的反问 run），避免重建后泄漏
+	if a.AgentSvc != nil {
+		a.AgentSvc.ReleaseAll()
+	}
 	a.AgentSvc = agent.NewAgentService(agent.Deps{
 		AI:             a.aiService,
 		Vector:         a.vectorService,

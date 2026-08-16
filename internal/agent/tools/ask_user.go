@@ -2,6 +2,9 @@ package tools
 
 // 本文件实现 ask_user 反向提问工具：模型在 ReAct 循环中调用它向用户发起
 // 一次结构化澄清提问（不执行业务操作），前端据此渲染问题卡片并等待用户回答。
+// 父包注入 AskWaiter 时（Agent 交互模式），工具在发射事件后阻塞等待用户回答，
+// ReAct 循环暂停（AI 消息不结束），答案经 AnswerAskUser 同轮投递回模型继续；
+// 未注入时保持原非阻塞行为（仅返回确认文本）。
 // 当用户意图不明确、缺少必要信息（如未指定搜索源/方案/范围/数量等），
 // 或需要在多个选项之间让用户做选择时调用；一次只能问一个问题，选项 2-6 个。
 // 本工具不执行业务，仅请求澄清，严格禁止用于闲聊或无意义的确认。
@@ -115,6 +118,30 @@ func (g *askUserTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 	sel := "single"
 	if args.Selection == "multiple" {
 		sel = "multiple"
+	}
+
+	// 同轮传输：父包注入 AskWaiter 时，先原子抢占反问名额（ClaimAsk），
+	// 再发射 ai:ask-user 事件并阻塞等待用户回答。ReAct 循环暂停（AI 消息不结束），
+	// 答案经 AnswerAskUser 投递到等待通道后作为本工具结果返回给模型继续完成
+	// 原始请求（不落库为新用户消息）。模型同条消息并行发出多条 ask_user 时，
+	// 仅第一条抢占成功并阻塞，其余 ClaimAsk 失败返回错误回填模型，避免整轮挂起。
+	// 未注入 AskWaiter（非交互场景/测试）时保持原行为：仅发射事件并返回确认文本。
+	if g.ctx.AskWaiter != nil {
+		if err := g.ctx.AskWaiter.ClaimAsk(); err != nil {
+			return "", err
+		}
+		// 发射 ai:ask-user 事件：前端渲染问题卡片的数据源（抢占成功后才发射，
+		// 保证面板展示的问题与真正阻塞等待的是同一条）
+		payload := map[string]any{"question": q, "options": opts, "selection": sel}
+		if b, err := json.Marshal(payload); err == nil {
+			g.ctx.Emit("ai:ask-user", string(b))
+		}
+		answer, err := g.ctx.AskWaiter.WaitForAnswer(ctx)
+		if err != nil {
+			// 用户取消/会话释放：错误文本回填模型，循环随 ctx 终止
+			return "", err
+		}
+		return fmt.Sprintf("用户已回答你的提问。用户的回答是：%s。请结合你的问题与用户的回答继续完成用户的原始请求，直接给出最终回答或继续调用后续工具，不要重复提问。", TruncateRunes(answer, maxToolShortText)), nil
 	}
 
 	// 发射 ai:ask-user 事件：前端渲染问题卡片的数据源

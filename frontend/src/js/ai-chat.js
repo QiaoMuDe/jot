@@ -139,6 +139,9 @@ let skillChips = null;           // #aiChatSkillChips
 let agentEnabled = false;        // 当前会话是否为 Agent 模式（后端 SessionConfig.agent_enabled）
 let agentModeQaBtn = null;       // #aiChatModeQa
 let agentModeAgentBtn = null;    // #aiChatModeAgent
+// Agent 反问等待状态：ai:ask-user 触发后置 true（AI 消息不结束、本轮暂停等待用户回答），
+// 用户提交答案（AnswerAskUser 同轮续答）或本轮结束/取消后置 false
+let agentAskWaiting = false;
 
 
 
@@ -382,6 +385,12 @@ function bindEvents() {
             const confirmed = await window.showConfirmDialog('确定清空当前对话吗？');
             if (!confirmed) return;
 
+            // 流式进行中（含 Agent 反问等待）：先取消当前 run，避免清空后悬挂
+            if (isStreaming) {
+                if (stopBtnEl) stopBtnEl.click();
+                else await window.go.main.App.CancelAIStream();
+            }
+
             try {
                 await window.go.main.App.ClearAISessionMessages(activeSessionId);
             } catch (_) { /* 静态失败 */ }
@@ -475,6 +484,8 @@ function bindEvents() {
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
             window.__aiStreaming = false;
+            agentAskWaiting = false; // 停止本轮（含反问等待中取消）：清除等待状态并收起面板
+            hideAskPanel();
             // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
             const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
             if (streamingBubble) {
@@ -2213,7 +2224,7 @@ async function onSend() {
 
     hideWelcome();
 
-    // 保存消息 → 渲染用户气泡 → 启动流式（公共发送逻辑，ask_user 反问面板也复用）
+    // 保存消息 → 渲染用户气泡 → 启动流式（公共发送逻辑）
     await sendUserText(text);
 
     // 发送后清空上传文件列表
@@ -2222,7 +2233,8 @@ async function onSend() {
 }
 
 /**
- * 发送用户消息（onSend 与 ask_user 反问面板共用）
+ * 发送用户消息（onSend 调用；Agent 反问面板的答案不走此函数，
+ * 而是经 AnswerAskUser 同轮投递，见 showAskPanel 的 doSend）
  * 保存消息到数据库 → 渲染用户气泡 → 启动流式。
  * onSend 已做过 ensureAIReady / createSession 时重复执行无害（幂等）。
  */
@@ -2298,7 +2310,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     let recallPendingDetail = '';   // 延迟切换等待中的错误详情
     let refinedKeywords = '';
 
-    // 新一轮输出开始：收起 Agent 反问面板（提交回答后由 sendUserText 触达此处）
+    // 新一轮输出开始：收起 Agent 反问面板、清除反问等待状态
+    //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
+    agentAskWaiting = false;
     hideAskPanel();
 
     const streamingEl = document.createElement('div');
@@ -2373,12 +2387,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     };
 
     const unsubThinking = window.runtime.EventsOn('ai:stream-thinking', (streamGen, chunk) => {
-        if (isAgentFlow) {
-            // Agent 模式：后端事件为单参数（data=thinking 增量文本）
-            appendThinkingChunk(streamGen);
-            return;
-        }
-        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃（问答/Agent 模式后端均携带 gen）
         appendThinkingChunk(chunk);
     });
     unsubs.push(unsubThinking);
@@ -2507,12 +2516,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     };
 
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
-        if (isAgentFlow) {
-            // Agent 模式：后端事件为单参数（data=纯文本 chunk），streamGen 位置即 chunk 文本
-            handleStreamChunk(streamGen);
-            return;
-        }
-        if (streamGen !== myGen) return; // 属于旧流, 丢弃
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃（问答/Agent 模式后端均携带 gen）
         handleStreamChunk(chunk);
     });
     unsubs.push(unsubChunk);
@@ -2634,8 +2638,9 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         scrollToBottom();
     };
 
-    const unsubToolStatus = window.runtime.EventsOn('ai:tool-status', (data) => {
+    const unsubToolStatus = window.runtime.EventsOn('ai:tool-status', (streamGen, data) => {
         if (!isAgentFlow) return; // 仅 Agent 流展示工具状态
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
         let payload = null;
         try {
             payload = typeof data === 'string' ? JSON.parse(data) : data;
@@ -2656,13 +2661,23 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // ── Agent 反向提问（ai:ask-user） ──
     // 模型调用 ask_user 工具时后端发射该事件（tool_start 之后），
-    // 负载为 JSON 字符串 {"question": "...", "options": [...], "selection": "single"|"multiple"}，
-    // 在输入区上方渲染反问面板，提交回答后作为新一轮用户消息发送
-    const unsubAskUser = window.runtime.EventsOn('ai:ask-user', (data) => {
+    // 负载为 JSON 字符串 {"question": "...", "options": [...], "selection": "single"|"multiple"}。
+    // 本轮 ReAct 循环在 ask_user 工具处阻塞等待：AI 消息不结束、气泡保持流式状态，
+    // 在输入区上方渲染反问面板；用户点击选择/输入答案后经 AnswerAskUser 同轮投递，
+    // 同一气泡继续流式输出直至最终回答（不落库为新用户消息、不开新流）。
+    const unsubAskUser = window.runtime.EventsOn('ai:ask-user', (streamGen, data) => {
         if (!isAgentFlow) return;
+        if (streamGen !== myGen) return; // 属于旧流, 丢弃
         let payload = null;
         try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
         if (!payload || !payload.question) return;
+        // 进入反问等待：本轮 AI 消息不结束，等待用户同轮回答
+        agentAskWaiting = true;
+        // 模型未在正文输出问句（正文为空）时，气泡内展示等待提示
+        if (!hasReceivedChunk) {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(createWaitingHint());
+        }
         showAskPanel(payload.question, Array.isArray(payload.options) ? payload.options : [], payload.selection);
     });
     unsubs.push(unsubAskUser);
@@ -2696,6 +2711,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
         window.__aiStreaming = false;
+        agentAskWaiting = false; // 本轮结束（含等待中取消），清除反问等待状态
+        hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
 
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
@@ -2707,6 +2724,11 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
         let finalContent = streamingContent || fullContent;
         renderMarkdown(contentDiv, finalContent);
+
+        // 后端是否真正保存了 assistant 消息：停止按钮/会话释放等取消路径不落库
+        //（assistantMsgID=0）。据此区分"取消"与"正常完成（含空回复）"，避免把
+        // 取消轮次的半截文本写入 chatHistory 造成幽灵条目/误弹历史记录。
+        const cancelled = !assistantMsgID;
 
         // 空回复：通知用户，不保存到数据库（用户主动取消不弹通知）
         const isEmptyMsg = !finalContent || !finalContent.trim();
@@ -2744,50 +2766,58 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             }
         }
 
-        chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
-        updateContextSize();
-        streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
-        bindMsgContextMenu(streamingEl, finalContent, 'assistant');
-
-        // 自动保存消息到数据库（由后端 done 回调统一处理）
-        if (isEmptyMsg) {
-            // 空回复不存库，回退 chatHistory，移除 DOM 气泡
-            chatHistory.pop();
+        if (cancelled) {
+            // 本轮被取消（停止/会话释放）：不写入 chatHistory（避免幽灵条目）、
+            // 不渲染完成态操作栏；气泡通常已由停止逻辑移除，兜底移除仍挂在
+            // DOM 中的流式气泡（如后端经 ReleaseSession 独立取消时）
             if (streamingEl && streamingEl.parentNode) {
                 streamingEl.parentNode.removeChild(streamingEl);
             }
-        }
+        } else {
+            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
+            updateContextSize();
+            streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
+            bindMsgContextMenu(streamingEl, finalContent, 'assistant');
 
-        // 展示搜索来源折叠面板
-        if (streamSearchSources && streamSearchSources.length > 0) {
-            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
-            if (actionsEl) {
-                renderSearchSources(streamingEl, streamSearchSources);
-                streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
-            } else {
-                renderSearchSources(streamingEl, streamSearchSources);
+            // 空回复：回退 chatHistory，移除 DOM 气泡
+            if (isEmptyMsg) {
+                chatHistory.pop();
+                if (streamingEl && streamingEl.parentNode) {
+                    streamingEl.parentNode.removeChild(streamingEl);
+                }
             }
-        }
 
-        // 展示卡片召回折叠面板
-        if (recallCards && recallCards.length > 0) {
-            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
-            if (actionsEl) {
-                renderRecallCards(streamingEl, recallCards);
-                streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
-            } else {
-                renderRecallCards(streamingEl, recallCards);
+            // 展示搜索来源折叠面板
+            if (streamSearchSources && streamSearchSources.length > 0) {
+                var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+                if (actionsEl) {
+                    renderSearchSources(streamingEl, streamSearchSources);
+                    streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
+                } else {
+                    renderSearchSources(streamingEl, streamSearchSources);
+                }
             }
-        }
 
-        // 工具调用链：移除上方实时工具条，折叠为正文下方附录（与来源/卡片一致插到 actions 前）
-        if (streamToolRecords.length > 0) {
-            if (toolStatusListEl && toolStatusListEl.parentNode) {
-                toolStatusListEl.parentNode.removeChild(toolStatusListEl);
+            // 展示卡片召回折叠面板
+            if (recallCards && recallCards.length > 0) {
+                var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+                if (actionsEl) {
+                    renderRecallCards(streamingEl, recallCards);
+                    streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
+                } else {
+                    renderRecallCards(streamingEl, recallCards);
+                }
             }
-            renderToolCalls(streamingEl, streamToolRecords);
-            var actionsEl = streamingEl.querySelector('.ai-msg-actions');
-            if (actionsEl) streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
+
+            // 工具调用链：移除上方实时工具条，折叠为正文下方附录（与来源/卡片一致插到 actions 前）
+            if (streamToolRecords.length > 0) {
+                if (toolStatusListEl && toolStatusListEl.parentNode) {
+                    toolStatusListEl.parentNode.removeChild(toolStatusListEl);
+                }
+                renderToolCalls(streamingEl, streamToolRecords);
+                var actionsEl = streamingEl.querySelector('.ai-msg-actions');
+                if (actionsEl) streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
+            }
         }
 
         scrollToBottom();
@@ -2809,6 +2839,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
         window.__aiStreaming = false;
+        agentAskWaiting = false; // 流错误：清除反问等待状态并收起面板
+        hideAskPanel();
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
@@ -3139,6 +3171,17 @@ function createTypingDots() {
 }
 
 /**
+ * 创建 Agent 反问等待提示：模型触发 ask_user 后、用户回答前，
+ * 在气泡正文区展示"等待你的回答…"（同轮续答期间 AI 消息不结束）。
+ */
+function createWaitingHint() {
+    const el = document.createElement('span');
+    el.className = 'ai-msg-waiting-hint';
+    el.innerHTML = '<span class="ai-msg-waiting-dot"></span>等待你的回答…';
+    return el;
+}
+
+/**
  * 来源名称映射
  */
 const sourceLabels = {
@@ -3301,6 +3344,7 @@ export function resetAIChatState() {
     _oldestMsgId = 0;
     _loadingMore = false;
     hideAskPanel(); // 重置状态时收起 Agent 反问面板
+    agentAskWaiting = false; // 重置反问等待状态
     if (messagesEl) {
         messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
         if (!messagesInnerEl) {
@@ -4090,14 +4134,16 @@ var getToolLabel = function(name) { return name || '工具'; };
  * 显示 Agent 反问面板（ai:ask-user）
  * 渲染在输入区上方：问句标题 + 选项（单选/多选）+ 输入行（输入框 + 唯一按钮）。
  * 单选：点击选项即发送；多选：勾选后点「确认提交」汇总发送（勾选 + 自定义输入可拼接）。
- * 输入行按钮文案单选「发送」/多选「确认提交」，Enter 与按钮走同一逻辑。提交后隐藏面板。
+ * 提交 = 同轮回答：经 AnswerAskUser 投递给后端等待中的 ask_user 工具，
+ * 本轮 ReAct 循环继续、同一 AI 气泡续答（不新建用户消息、不开新流）。
+ * 右上角关闭 = 取消本轮（与停止按钮一致），避免等待中的 run 悬挂。
  */
 function showAskPanel(question, options, selection) {
     if (!askPanelEl) return;
     askPanelEl.innerHTML = '';
     const isMultiple = selection === 'multiple'; // 非 "multiple" 一律按单选处理
 
-    // 问句标题行（标题 + 右上角关闭按钮，退出选择）
+    // 问句标题行（标题 + 右上角关闭按钮，关闭 = 取消本轮）
     const header = document.createElement('div');
     header.className = 'ai-ask-header';
     const title = document.createElement('div');
@@ -4106,9 +4152,13 @@ function showAskPanel(question, options, selection) {
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'ai-ask-close';
-    closeBtn.title = '关闭';
+    closeBtn.title = '取消本轮提问';
     closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', hideAskPanel);
+    closeBtn.addEventListener('click', () => {
+        // 复用停止按钮逻辑：收起面板、移除流式气泡、取消后端 run（防止悬挂）
+        if (stopBtnEl) stopBtnEl.click();
+        else hideAskPanel();
+    });
     header.appendChild(title);
     header.appendChild(closeBtn);
     askPanelEl.appendChild(header);
@@ -4126,8 +4176,21 @@ function showAskPanel(question, options, selection) {
         inp.classList.add('error');
         setTimeout(() => inp.classList.remove('error'), 600);
     };
-    // 发送成功才隐藏面板；失败（流未结束 / API 未配置）保留面板便于重试
-    const doSend = async (text) => { if (await sendUserText(text)) hideAskPanel(); };
+    // 同轮回答：投递答案给后端等待中的 ask_user 工具（AnswerAskUser），
+    // 成功才隐藏面板；失败（run 已结束/取消等）保留面板便于重试
+    let submitting = false; // 防重复提交（双重点击/快速 Enter）
+    const doSend = async (text) => {
+        if (submitting) return;
+        submitting = true;
+        try {
+            await window.go.main.App.AnswerAskUser(activeSessionId, text);
+            agentAskWaiting = false;
+            hideAskPanel();
+        } catch (e) {
+            window.showNotification?.('回答提交失败: ' + (e.message || e), 'error');
+            submitting = false; // 保留面板，允许重试
+        }
+    };
 
     let doPrimary; // 唯一按钮与 Enter 共用的提交逻辑
     if (isMultiple) {
@@ -4205,8 +4268,9 @@ function showAskPanel(question, options, selection) {
     row.appendChild(btn);
     askPanelEl.appendChild(row);
 
-    // 显示面板
+    // 显示面板；反问等待期间输入框改为"等待你的选择…"禁用态（面板收起时恢复）
     askPanelEl.style.display = '';
+    setAskInputWaiting(true);
 }
 
 /**
@@ -4216,6 +4280,33 @@ function hideAskPanel() {
     if (!askPanelEl) return;
     askPanelEl.innerHTML = '';
     askPanelEl.style.display = 'none';
+    // 面板收起（回答提交/取消本轮/结束）时恢复输入框可用态
+    setAskInputWaiting(false);
+}
+
+/**
+ * 反问等待期间切换输入框状态：
+ * 弹出反问面板时（agentAskWaiting=true）→ 输入框禁用 + 提示"等待你的选择…"，
+ * 面板收起后恢复（placeholder 还原、可输入）。
+ */
+function setAskInputWaiting(waiting) {
+    if (!inputEl) return;
+    const wrap = inputEl.closest('.ai-chat-input-wrap');
+    if (waiting) {
+        inputEl.disabled = true;
+        if (!inputEl.dataset.normalPlaceholder) {
+            inputEl.dataset.normalPlaceholder = inputEl.placeholder || '';
+        }
+        inputEl.placeholder = '等待你的选择…';
+        if (wrap) wrap.classList.add('is-ask-waiting');
+    } else {
+        inputEl.disabled = false;
+        if (inputEl.dataset.normalPlaceholder) {
+            inputEl.placeholder = inputEl.dataset.normalPlaceholder;
+            delete inputEl.dataset.normalPlaceholder;
+        }
+        if (wrap) wrap.classList.remove('is-ask-waiting');
+    }
 }
 
 /**
