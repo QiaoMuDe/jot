@@ -458,6 +458,27 @@
     border-bottom: 1px dashed var(--border);
 }
 
+/* 实时工具链（流式过程）：上限高度滚动，防止超长工具链撑爆气泡；完成态摘要不受影响。
+   淡出过渡：stream-done 折叠为底部摘要时 opacity 渐变（JS 添加 .exiting 触发） */
+.ai-tool-status-list-live {
+    max-height: 220px;
+    overflow-y: auto;
+    transition: opacity 0.18s ease;
+}
+
+.ai-tool-status-list-live.exiting {
+    opacity: 0;
+}
+
+/* 单次调用耗时：右对齐灰字等宽数字 */
+.ai-tool-status-time {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
 .ai-tool-status-item {
     display: flex;
     align-items: center;

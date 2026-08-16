@@ -610,10 +610,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			// 工具执行结果事件
 			name := mv.ToolName
 			var content string
+			var callID string
 			if mv.IsStreaming {
-				content = consumeToolStream(mv.MessageStream)
+				content, callID = consumeToolStream(mv.MessageStream)
 			} else if mv.Message != nil {
 				content = mv.Message.Content
+				callID = mv.Message.ToolCallID
 				if name == "" {
 					name = mv.Message.ToolName
 				}
@@ -624,10 +626,10 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						fastlog.String("tool", name),
 						fastlog.Int("result_len", len(content)))
 				}
-				emitToolResult(emit, &toolRecords, name, content)
+				emitToolResult(emit, &toolRecords, name, callID, content)
 				// 部分失败提示（如 web_search 部分来源失败）：工具内部经 ctx.AddPartial 登记，
 				// 此处统一在 tool_result 之后发射 tool_partial，前端展示 ⚠️ 警告；发射后清空防重复
-				toolCtx.DrainPartials(name)
+				toolCtx.DrainPartials(name, callID)
 			}
 		}
 	}
@@ -751,10 +753,11 @@ func consumeAssistantStream(stream *schema.StreamReader[*schema.Message], emit E
 	return full, roundThinking, nil
 }
 
-// consumeToolStream 消费工具结果流式消息，返回合并后的完整文本。
-func consumeToolStream(stream *schema.StreamReader[*schema.Message]) string {
+// consumeToolStream 消费工具结果流式消息，返回合并后的完整文本与 tool_call ID
+// （ID 取自合并消息的 ToolCallID，供前端按调用精确定位）。
+func consumeToolStream(stream *schema.StreamReader[*schema.Message]) (string, string) {
 	if stream == nil {
-		return ""
+		return "", ""
 	}
 	var chunks []*schema.Message
 	for {
@@ -763,20 +766,20 @@ func consumeToolStream(stream *schema.StreamReader[*schema.Message]) string {
 			break
 		}
 		if err != nil {
-			return ""
+			return "", ""
 		}
 		if chunk != nil {
 			chunks = append(chunks, chunk)
 		}
 	}
 	if len(chunks) == 0 {
-		return ""
+		return "", ""
 	}
 	full, err := schema.ConcatMessages(chunks)
 	if err != nil || full == nil {
-		return ""
+		return "", ""
 	}
-	return full.Content
+	return full.Content, full.ToolCallID
 }
 
 // emitToolStart 推送工具调用开始事件，并记录到工具调用摘要。
@@ -785,6 +788,7 @@ func emitToolStart(emit EmitFn, records *[]tools.Record, tc schema.ToolCall, too
 	rec := tools.Record{
 		Action: "tool_start",
 		Name:   tc.Function.Name,
+		CallID: tc.ID, // eino 原生 tool_call ID，供前端按调用精确定位（同轮多条同名调用）
 		Args:   tools.TruncateRunes(tc.Function.Arguments, tools.MaxResultLen),
 	}
 	if t, ok := toolByName[tc.Function.Name]; ok {
@@ -798,20 +802,38 @@ func emitToolStart(emit EmitFn, records *[]tools.Record, tc schema.ToolCall, too
 }
 
 // emitToolResult 推送工具返回事件，并记录到工具调用摘要。
-// 若该工具刚失败（已发射 tool_error），则跳过结果事件，保持失败态不被 ✓ 覆盖。
-func emitToolResult(emit EmitFn, records *[]tools.Record, name, result string) {
+// callID 为该次调用的 eino tool_call ID（来自 Tool 结果事件的 ToolCallID），
+// 与 emitToolStart 记录的 CallID 配对，保证同轮多条同名调用前端精确归属。
+// 若该次调用刚失败（已发射 tool_error），则跳过结果事件，保持失败态不被 ✓ 覆盖。
+func emitToolResult(emit EmitFn, records *[]tools.Record, name, callID, result string) {
+	// 反向查找与本次调用同 CallID 的记录（CallID 为空时退化为按工具名匹配，兼容旧数据）
+	matched := false
+	skip := false
 	for i := len(*records) - 1; i >= 0; i-- {
-		if (*records)[i].Name != name {
-			continue
+		rec := &(*records)[i]
+		if callID != "" {
+			if rec.CallID != callID {
+				continue
+			}
+			matched = true
+		} else {
+			if rec.Name != name {
+				continue
+			}
+			matched = true
 		}
-		if (*records)[i].Action == "tool_error" {
-			return
+		if rec.Action == "tool_error" {
+			skip = true
 		}
 		break
+	}
+	if matched && skip {
+		return
 	}
 	rec := tools.Record{
 		Action: "tool_result",
 		Name:   name,
+		CallID: callID,
 		Result: tools.TruncateRunes(result, tools.MaxResultLen),
 	}
 	*records = append(*records, rec)

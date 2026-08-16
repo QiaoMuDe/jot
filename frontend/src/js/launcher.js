@@ -159,6 +159,8 @@ function executeAction(action) {
                         localStorage.setItem('jot_sidebar_collapsed', 'false');
                         if (win.updateSidebarMenuItem) win.updateSidebarMenuItem();
                         if (win.updateNotebookSidebarToggleBtn) win.updateNotebookSidebarToggleBtn();
+                        // 此路径绕过 toggleSidebar，需手动刷新笔记本计数（否则展开后计数为旧值）
+                        if (win.loadNotebooks) win.loadNotebooks();
                     }
                 } else {
                     if (win.toggleSidebar) win.toggleSidebar();

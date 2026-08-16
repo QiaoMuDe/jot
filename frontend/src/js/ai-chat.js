@@ -2512,10 +2512,26 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             if (streamingThinking && _thinkingStartedAt > 0) {
                 stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
             }
-            // Agent 模式：ReAct 循环中工具调用均发生在正文输出前，首个正文 token 即
-            // 已全部终态，此时移除上方实时工具条（完成态折叠摘要仍在 stream-done 渲染）
+            // Agent 模式：ReAct 循环中工具调用均发生在正文输出前，首个正文 token 即已全部终态；
+            // 实时工具条在此淡出移除（工具阶段 → 正文输出阶段的自然过渡），
+            // stream-done 时工具摘要随来源/召回面板同一时刻插入，避免摘要"迟到"突兀
             if (isAgentFlow && toolStatusListEl && toolStatusListEl.parentNode) {
-                toolStatusListEl.parentNode.removeChild(toolStatusListEl);
+                var liveList = toolStatusListEl;
+                liveList.classList.add('exiting');
+                var liveRemoved = false;
+                var removeLiveList = function() {
+                    if (liveRemoved) return;
+                    liveRemoved = true;
+                    liveList.removeEventListener('transitionend', onLiveExitDone);
+                    if (liveList.parentNode) liveList.parentNode.removeChild(liveList);
+                    if (toolStatusListEl === liveList) toolStatusListEl = null; // 允许 ask_user 续答时重建
+                };
+                var onLiveExitDone = function(e) {
+                    if (e && e.target !== liveList) return;
+                    removeLiveList();
+                };
+                liveList.addEventListener('transitionend', onLiveExitDone, { once: true });
+                setTimeout(removeLiveList, 250); // 兜底：过渡未触发时强制移除
             }
         }
         streamingContent += chunk;
@@ -2532,109 +2548,137 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     // ── Agent 模式工具调用过程展示（ai:tool-status） ──
     // 工具状态条渲染在消息气泡正文（contentDiv）上方，样式与搜索/召回指示器保持一致观感
     let toolStatusListEl = null;   // 工具状态容器
-    let toolStatusItems = {};      // { [name]: {itemEl, iconEl, textEl} }
+    let toolStatusItems = {};      // { [name]: {el, iconEl, nameEl, textEl, timeEl, startTime} } — 每个工具一行，重复调用同记录覆盖累加
+    let toolNameSeq = {};          // { [name]: 已调用次数 } — 同名重复调用自增序号（「第N次调用」前缀）
     let streamToolRecords = [];    // 本轮流的工具调用记录（落库 tool_calls，历史回放）
 
     /** 创建工具状态容器（懒创建，插入到正文 contentDiv 上方） */
     const ensureToolStatusList = () => {
         if (toolStatusListEl) return toolStatusListEl;
         toolStatusListEl = document.createElement('div');
-        toolStatusListEl.className = 'ai-tool-status-list';
+        toolStatusListEl.className = 'ai-tool-status-list ai-tool-status-list-live';
         streamingEl.insertBefore(toolStatusListEl, contentDiv);
         return toolStatusListEl;
     };
 
-    /** 展示工具调用开始状态（tool_start） */
+    /** 展示工具调用开始状态（tool_start）— 每个工具仅一行：首次显示「工具名：动作」，
+        重复调用在同一记录上覆盖累加，改为「第N次调用 工具名：动作」 */
     const showToolStatusStart = (payload) => {
         const name = payload.name || 'tool';
-        let action = payload.action_text || '执行';
-        let label = '调用「' + getToolLabel(name) + '」工具：' + action;
+        const seq = (toolNameSeq[name] || 0) + 1;
+        toolNameSeq[name] = seq;
+        const action = payload.action_text || '执行';
+        const list = ensureToolStatusList();
         let item = toolStatusItems[name];
         if (!item) {
-            const list = ensureToolStatusList();
-            item = { el: null, iconEl: null, textEl: null };
+            item = { el: null, iconEl: null, nameEl: null, textEl: null, timeEl: null, startTime: 0 };
             item.el = document.createElement('div');
             item.el.className = 'ai-tool-status-item';
             item.el.dataset.name = name;
             item.iconEl = document.createElement('span');
             item.iconEl.className = 'ai-tool-status-icon';
             item.iconEl.innerHTML = svgIcon('search');
+            item.nameEl = document.createElement('span');
+            item.nameEl.className = 'ai-tool-status-name';
             item.textEl = document.createElement('span');
             item.textEl.className = 'ai-tool-status-text';
+            item.timeEl = document.createElement('span');
+            item.timeEl.className = 'ai-tool-status-time';
             item.el.appendChild(item.iconEl);
+            item.el.appendChild(item.nameEl);
             item.el.appendChild(item.textEl);
+            item.el.appendChild(item.timeEl);
             list.appendChild(item.el);
             toolStatusItems[name] = item;
         }
-        item.el.classList.remove('is-done');
-        item.el.classList.remove('is-error');
-        item.el.classList.remove('is-warning');
+        // 首次调用不显示序号；从第 2 次起显示「第N次调用」，结果在后续事件覆盖累加
+        item.nameEl.textContent = (seq > 1 ? '第' + seq + '次调用 ' : '') + getToolLabel(name);
+        item.textEl.textContent = '：' + action;
+        item.startTime = Date.now();
+        item.timeEl.textContent = '';
         item.el.classList.add('is-active');
+        item.el.classList.remove('is-done', 'is-error', 'is-warning');
         item.iconEl.innerHTML = svgIcon('search');
-        item.textEl.textContent = label;
+        list.scrollTop = list.scrollHeight; // 超长链自动滚到最新行
         scrollToBottom();
     };
 
-    /** 展示工具调用完成状态（tool_result） */
+    /** 计算单次调用耗时并写入行右侧（tool_start 起算，前端计时） */
+    const setToolElapsed = (item) => {
+        if (!item || !item.timeEl || !item.startTime) return;
+        item.timeEl.textContent = ((Date.now() - item.startTime) / 1000).toFixed(1) + 's';
+    };
+
+    /** 展示工具调用完成状态（tool_result）— 直接更新该工具的唯一记录行 */
     const showToolStatusDone = (payload) => {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
-        const label = '「' + getToolLabel(name) + '」：已完成';
         item.el.classList.add('is-done');
         item.el.classList.remove('is-active');
         item.el.classList.remove('is-error');
         item.el.classList.remove('is-warning');
         item.iconEl.innerHTML = svgIcon('check');
-        item.textEl.textContent = label;
+        item.textEl.textContent = '：已完成';
+        setToolElapsed(item);
         scrollToBottom();
     };
 
-    /** 展示工具调用失败状态（tool_error） */
+    /** 展示工具调用失败状态（tool_error）— 直接更新该工具的唯一记录行 */
     const showToolStatusError = (payload) => {
         const name = payload.name || 'tool';
         let item = toolStatusItems[name];
         if (!item) {
+            // 防御：无活动行时按序号新建一行（结构与 start 行一致）
+            const seq = (toolNameSeq[name] || 0) + 1;
+            toolNameSeq[name] = seq;
             const list = ensureToolStatusList();
-            item = { el: null, iconEl: null, textEl: null };
+            item = { el: null, iconEl: null, nameEl: null, textEl: null, timeEl: null, startTime: Date.now() };
             item.el = document.createElement('div');
             item.el.className = 'ai-tool-status-item';
             item.el.dataset.name = name;
             item.iconEl = document.createElement('span');
             item.iconEl.className = 'ai-tool-status-icon';
+            item.nameEl = document.createElement('span');
+            item.nameEl.className = 'ai-tool-status-name';
+            item.nameEl.textContent = (seq > 1 ? '第' + seq + '次调用 ' : '') + getToolLabel(name);
             item.textEl = document.createElement('span');
             item.textEl.className = 'ai-tool-status-text';
+            item.timeEl = document.createElement('span');
+            item.timeEl.className = 'ai-tool-status-time';
             item.el.appendChild(item.iconEl);
+            item.el.appendChild(item.nameEl);
             item.el.appendChild(item.textEl);
+            item.el.appendChild(item.timeEl);
             list.appendChild(item.el);
             toolStatusItems[name] = item;
         }
-        const label = '「' + getToolLabel(name) + '」：失败';
         const reason = payload.result ? String(payload.result) : '';
-        const fullLabel = reason ? label + '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason) : label;
+        const fullLabel = '：失败' + (reason ? '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason) : '');
         item.el.classList.remove('is-done');
         item.el.classList.add('is-error');
         item.el.classList.remove('is-active');
         item.el.classList.remove('is-warning');
         item.iconEl.innerHTML = svgIcon('x');
         item.textEl.textContent = fullLabel;
+        setToolElapsed(item);
         scrollToBottom();
     };
 
-    /** 展示部分来源失败状态（tool_partial，仅 web_search：成功但部分来源失败） */
+    /** 展示部分来源失败状态（tool_partial，仅 web_search：成功但部分来源失败）— 更新该工具的唯一记录行 */
     const showToolStatusPartial = (payload) => {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
-        const label = '「' + getToolLabel(name) + '」：部分来源失败';
         const parts = payload.result ? String(payload.result) : '';
-        const fullLabel = parts ? label + '：' + parts : label;
+        const fullLabel = '：部分来源失败' + (parts ? '：' + parts : '');
         item.el.classList.remove('is-done');
         item.el.classList.remove('is-error');
         item.el.classList.add('is-warning');
         item.el.classList.remove('is-active');
         item.iconEl.innerHTML = svgIcon('alert');
         item.textEl.textContent = fullLabel;
+        setToolElapsed(item);
         scrollToBottom();
     };
 
@@ -2806,7 +2850,8 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
                 }
             }
 
-            // 工具调用链：移除上方实时工具条，折叠为正文下方附录（与来源/卡片一致插到 actions 前）
+            // 工具调用链：与来源/召回面板同一时刻渲染（实时工具条已在正文开始时淡出）；
+            // 兜底：若实时条仍挂载（如无正文输出），此处直接移除
             if (streamToolRecords.length > 0) {
                 if (toolStatusListEl && toolStatusListEl.parentNode) {
                     toolStatusListEl.parentNode.removeChild(toolStatusListEl);
@@ -4291,24 +4336,45 @@ function setAskInputWaiting(waiting) {
 
 /**
  * 渲染 Agent 工具调用链（历史消息回放 / 实时完成态）。
- * 统一为默认折叠的工具摘要组件：一行「已调用 N 个工具」（+失败/部分失败徽标），
- * 点击展开明细（每个工具一条最终态记录，✓/❌/⚠️ + 文案），追加到消息末尾（正文下方证据区）。
+ * 统一为默认折叠的工具摘要组件：一行「已调用 N 次 · M 个工具」（+失败/部分失败徽标），
+ * 点击展开明细（每个工具一行：调用次数 ×N + 最差结果状态，✓/❌/⚠️ + 文案），追加到消息末尾。
  * toolCalls: [{ action: 'tool_start'|'tool_result', name, args, result }]
  */
 function renderToolCalls(el, toolCalls) {
     if (!toolCalls || toolCalls.length === 0) return;
 
-    // 失败/部分失败名集合（存原因文本）：tool_error、tool_partial 记录优先渲染对应状态
-    var failedDetails = {};
-    var partialDetails = {};
+    // 按工具名聚合（与实时链一致）：每个工具一行，显示调用次数与最差结果状态；
+    // 同名多次调用时只要一次失败，整行即标失败（不再逐调用逐行渲染）
+    var byName = {};       // { [name]: {count, status, reason} } status: 'ok' | 'partial' | 'error'
+    var nameOrder = [];    // 工具首次出现顺序
+    var distinctNames = {}; // 工具种类去重（header 显示「N 次 · M 个工具」）
     var total = 0;
+    var failCallCount = 0;
+    var partialCallCount = 0;
     for (var i = 0; i < toolCalls.length; i++) {
-        if (toolCalls[i].action === 'tool_start') {
+        var rec = toolCalls[i];
+        if (rec.action === 'tool_start' && rec.name) {
             total++;
-        } else if (toolCalls[i].action === 'tool_error' && toolCalls[i].name) {
-            failedDetails[toolCalls[i].name] = toolCalls[i].result ? String(toolCalls[i].result) : '';
-        } else if (toolCalls[i].action === 'tool_partial' && toolCalls[i].name) {
-            partialDetails[toolCalls[i].name] = toolCalls[i].result ? String(toolCalls[i].result) : '';
+            distinctNames[rec.name] = true;
+            if (!byName[rec.name]) {
+                byName[rec.name] = { count: 0, status: 'ok', reason: '' };
+                nameOrder.push(rec.name);
+            }
+            byName[rec.name].count++;
+        } else if (rec.action === 'tool_error' && rec.name && byName[rec.name]) {
+            failCallCount++;
+            byName[rec.name].status = 'error';
+            if (!byName[rec.name].reason) {
+                byName[rec.name].reason = rec.result ? String(rec.result) : '';
+            }
+        } else if (rec.action === 'tool_partial' && rec.name && byName[rec.name]) {
+            partialCallCount++;
+            if (byName[rec.name].status !== 'error') {
+                byName[rec.name].status = 'partial';
+                if (!byName[rec.name].reason) {
+                    byName[rec.name].reason = rec.result ? String(rec.result) : '';
+                }
+            }
         }
     }
     if (total === 0) return;
@@ -4316,37 +4382,37 @@ function renderToolCalls(el, toolCalls) {
     var list = document.createElement('div');
     list.className = 'ai-tool-status-list';
 
-    for (var i = 0; i < toolCalls.length; i++) {
-        var rec = toolCalls[i];
-        if (rec.action !== 'tool_start') continue; // 只渲染工具开始记录（结果已并入最终态）
-        var name = rec.name || 'tool';
+    var detail = function(text) {
+        if (!text) return '';
+        return text.length > 40 ? text.slice(0, 40) + '…' : text;
+    };
+
+    // 每个工具一行：工具名 + 调用次数 ×N + 最差结果状态（与实时链合并语义一致）
+    for (var i = 0; i < nameOrder.length; i++) {
+        var name = nameOrder[i];
+        var g = byName[name];
 
         var item = document.createElement('div');
         var iconEl = document.createElement('span');
         iconEl.className = 'ai-tool-status-icon';
         var nameEl = document.createElement('span');
         nameEl.className = 'ai-tool-status-name';
-        nameEl.textContent = '「' + getToolLabel(name) + '」';
+        nameEl.textContent = getToolLabel(name) + ' ×' + g.count;
         var textEl = document.createElement('span');
         textEl.className = 'ai-tool-status-text';
 
-        var detail = function(text) {
-            if (!text) return '';
-            return text.length > 40 ? text.slice(0, 40) + '…' : text;
-        };
-
-        if (failedDetails.hasOwnProperty(name)) {
-            // 失败态：❌ + 工具名 + 失败原因（截断 40 字符）
+        if (g.status === 'error') {
+            // 失败态：❌ + 工具名×次数 + 失败原因（截断 40 字符）
             item.className = 'ai-tool-status-item is-error';
             iconEl.innerHTML = svgIcon('x');
-            textEl.textContent = '：失败' + (failedDetails[name] ? '：' + detail(failedDetails[name]) : '');
-        } else if (partialDetails.hasOwnProperty(name)) {
+            textEl.textContent = '：失败' + (g.reason ? '：' + detail(g.reason) : '');
+        } else if (g.status === 'partial') {
             // 部分失败态：⚠️（仅 web_search 可能）
             item.className = 'ai-tool-status-item is-warning';
             iconEl.innerHTML = svgIcon('alert');
-            textEl.textContent = '：部分来源失败' + (partialDetails[name] ? '：' + detail(partialDetails[name]) : '');
+            textEl.textContent = '：部分来源失败' + (g.reason ? '：' + detail(g.reason) : '');
         } else {
-            // 完成态：✓ + 工具名 + 已完成
+            // 完成态：✓ + 工具名×次数 + 已完成
             item.className = 'ai-tool-status-item is-done';
             iconEl.innerHTML = svgIcon('check');
             textEl.textContent = '：已完成';
@@ -4376,11 +4442,12 @@ function renderToolCalls(el, toolCalls) {
 
     var textSpan = document.createElement('span');
     textSpan.className = 'ai-tool-summary-header-text';
-    textSpan.textContent = '已调用 ' + total + ' 个工具';
+    // 次数与工具种类分开表述，避免「5 个工具」把调用次数当种类数
+    textSpan.textContent = '已调用 ' + total + ' 次 · ' + Object.keys(distinctNames).length + ' 个工具';
     header.appendChild(textSpan);
 
-    var failCount = Object.keys(failedDetails).length;
-    var partialCount = Object.keys(partialDetails).length;
+    var failCount = failCallCount;
+    var partialCount = partialCallCount;
     if (failCount > 0) {
         var failBadge = document.createElement('span');
         failBadge.className = 'ai-tool-summary-status is-error';

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
 	"gitee.com/MM-Q/fastlog"
@@ -47,6 +48,7 @@ type EmitFn func(event string, data string)
 type Record struct {
 	Action     string `json:"action"`                // "tool_start" / "tool_result" / "tool_error" / "tool_partial"
 	Name       string `json:"name"`                  // 工具名
+	CallID     string `json:"call_id,omitempty"`     // eino 原生 tool_call ID（同轮多条同名调用时前端精确配对的关键）
 	Args       string `json:"args,omitempty"`        // 工具调用参数（JSON，截断后）
 	Result     string `json:"result,omitempty"`      // 工具返回结果摘要（截断后）
 	ActionText string `json:"action_text,omitempty"` // tool_start 的动作中文文案（由工具 ActionTextProvider 提供）
@@ -97,13 +99,14 @@ func (c *Context) AddPartial(msg string) {
 }
 
 // DrainPartials 把工具登记的部分失败提示以 tool_partial 事件逐条发射并清空。
-// 由父包在工具返回（tool_result）之后调用，name 为工具名。
-func (c *Context) DrainPartials(name string) {
+// 由父包在工具返回（tool_result）之后调用；callID 为该次调用的 eino tool_call ID，
+// 使前端能把部分失败提示精确定位到对应的调用行。
+func (c *Context) DrainPartials(name, callID string) {
 	if c == nil || len(c.partials) == 0 {
 		return
 	}
 	for _, p := range c.partials {
-		rec := Record{Action: "tool_partial", Name: name, Result: p}
+		rec := Record{Action: "tool_partial", Name: name, CallID: callID, Result: p}
 		*c.Records = append(*c.Records, rec)
 		if b, err := json.Marshal(rec); err == nil {
 			c.Emit("ai:tool-status", string(b))
@@ -162,6 +165,9 @@ func (w *wrappedTool) fail(c context.Context, err error) string {
 	rec := Record{
 		Action: "tool_error",
 		Name:   w.name,
+		// eino 工具执行 ctx 内注入当前 tool_call ID（compose.GetToolCallID），
+		// 使前端能把失败精确定位到对应的调用行（同轮多条同名调用时关键）
+		CallID: compose.GetToolCallID(c),
 		Result: TruncateRunes(err.Error(), MaxResultLen),
 	}
 	*w.ctx.Records = append(*w.ctx.Records, rec)

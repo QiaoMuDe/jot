@@ -53,6 +53,7 @@
   padding: 0 0 0 14px;
   flex-shrink: 0;
   height: 36px;
+  overflow: hidden; /* 防止子元素（新增笔记本按钮）溢出 header 区域 */
   background: var(--card-bg);
   border-bottom: 1px solid var(--border);
 }
@@ -217,7 +218,7 @@
 /* 侧栏头部新建笔记本按钮 — 简洁加号 */
 .sidebar-header-add-btn {
   width: 44px;
-  height: 44px;
+  height: 36px; /* 与 36px 高的 header 对齐，避免选中背景上下溢出窗口范围 */
   border: none;
   border-radius: 0;
   background: transparent;
@@ -233,9 +234,15 @@
   line-height: 1;
 }
 
+/* 与顶栏窗口按钮（最小化/最大化）hover 一致：中性 --hover-bg */
 .sidebar-header-add-btn:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.sidebar-header-add-btn:active {
+  background: color-mix(in srgb, var(--hover-bg) 65%, var(--border));
+  color: var(--text-primary);
 }
 
 /* 笔记本右键菜单 */

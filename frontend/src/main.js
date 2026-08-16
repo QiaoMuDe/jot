@@ -6040,6 +6040,8 @@ function initEventListeners() {
                         localStorage.setItem('jot_sidebar_collapsed', 'false');
                         updateSidebarMenuItem();
                         updateNotebookSidebarToggleBtn();
+                        // 此路径绕过 toggleSidebar，需手动刷新笔记本计数（否则展开后计数为旧值）
+                        loadNotebooks();
                     }
                 } else {
                     toggleSidebar();

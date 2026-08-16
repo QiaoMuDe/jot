@@ -109,12 +109,7 @@ button :only-child:is(svg) {
   font-weight: 600;
 }
 
-#newNoteBtn:hover,
-#moreMenuBtn:hover,
-#batchModeBtn:hover {
-  border-color: var(--accent-light);
-  background: var(--hover-bg);
-}
+/* 更多菜单 hover 不设专属样式 — 由 .topbar-btn:hover 统一提供，与最小化/最大化一致 */
 
 /* 更多菜单按钮打开态 — 使用 hover-bg + accent 色图标高亮 */
 #moreMenuBtn.active {
@@ -145,6 +140,18 @@ button :only-child:is(svg) {
 
 .topbar-actions .topbar-btn.window-close:hover {
   background: #E81123;
+  color: #FFFFFF;
+}
+
+/* 按下态 — 与 hover 明确区分（置于全部 hover/active 规则之后，同特异性后写者胜） */
+.topbar-btn:active {
+  background: color-mix(in srgb, var(--hover-bg) 65%, var(--border));
+  color: var(--text-primary);
+  transition: background 0.05s ease-out, box-shadow 0.05s ease-out, color 0.05s ease-out;
+}
+
+.topbar-actions .topbar-btn.window-close:active {
+  background: #C42B1C; /* 更深红，Windows 11 关闭键按压色 */
   color: #FFFFFF;
 }
 
