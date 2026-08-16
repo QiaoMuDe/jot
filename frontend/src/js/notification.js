@@ -186,9 +186,6 @@ window.showActionNotification = (msg, type, actions, duration) => {
 
 /* ===== 模拟数据（后端未绑定时使用） ===== */
 
-// Mock 数据的可变副本，确保修改可持久化
-let mockNotes = null;
-
 export function getMockNotes() {
     return [
         {

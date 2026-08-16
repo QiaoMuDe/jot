@@ -2,7 +2,6 @@
  * AI 对话模块 — 持久化多会话支持
  */
 import hljs from 'highlight.js';
-import { applyAIHighlightTheme } from './hljs-themes.js';
 import { marked } from 'marked';
 
 let messagesEl = null;        // #aiChatMessages
@@ -73,7 +72,6 @@ let referencedNotes = [];       // { id, title, notebook_name }
 
 // 角色扮演状态
 let roleplayNotes = [];         // { id, title, notebook_name } — 角色档案笔记
-let roleplayCacheContext = '';  // 角色档案缓存内容
 
 // 追问引用
 let followUpRef = '';           // 被追问的 AI 回复完整内容
@@ -139,10 +137,6 @@ let skillChips = null;           // #aiChatSkillChips
 let agentEnabled = false;        // 当前会话是否为 Agent 模式（后端 SessionConfig.agent_enabled）
 let agentModeQaBtn = null;       // #aiChatModeQa
 let agentModeAgentBtn = null;    // #aiChatModeAgent
-// Agent 反问等待状态：ai:ask-user 触发后置 true（AI 消息不结束、本轮暂停等待用户回答），
-// 用户提交答案（AnswerAskUser 同轮续答）或本轮结束/取消后置 false
-let agentAskWaiting = false;
-
 
 
 // 优化表达提示词（输入框内嵌按钮专用，与下拉菜单的「文本润色」技能区分）
@@ -361,17 +355,6 @@ async function updateContextSize() {
 }
 
 /**
- * 格式化文件大小为人类可读字符串
- * @param {number} bytes - 文件字节数
- * @returns {string}
- */
-function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-/**
  * 绑定所有事件
  */
 function bindEvents() {
@@ -484,7 +467,6 @@ function bindEvents() {
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
             window.__aiStreaming = false;
-            agentAskWaiting = false; // 停止本轮（含反问等待中取消）：清除等待状态并收起面板
             hideAskPanel();
             // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
             const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
@@ -1160,7 +1142,6 @@ function bindEvents() {
             if (!item) return;
             const action = item.dataset.action;
             const content = _contextMsgContent;
-            const role = _contextMsgRole;
             const msgEl = _contextMsgEl;
 
             closeAiMsgContextMenu();
@@ -1532,7 +1513,6 @@ async function switchSession(id) {
 
     // 切换会话时清空笔记引用和技能
     referencedNotes = [];
-    cachedRefContext = '';
     updateRefChips();
     activeSkills = {};
     renderSkillChips();
@@ -1587,10 +1567,8 @@ async function switchSession(id) {
                 // 重置菜单内容，下次打开时重新加载
                 if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
                 referencedNotes = JSON.parse(config.referenced_notes || '[]');
-                cachedRefContext = '';
                 updateRefChips();
                 roleplayNotes = JSON.parse(config.roleplay_notes || '[]');
-                roleplayCacheContext = '';
                 // renderSkillChips() 会在后面被调用，不需要单独 updateRoleplaySelector
                 activeSkills = JSON.parse(config.enabled_skills || '{}');
                 // 兼容旧格式：translate.direction → translate.source + translate.target
@@ -1789,10 +1767,8 @@ async function createSession() {
             // 重置菜单内容，下次打开时重新加载
             if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
             referencedNotes = JSON.parse(defaultCfg.referenced_notes || '[]');
-            cachedRefContext = '';
             updateRefChips();
             roleplayNotes = JSON.parse(defaultCfg.roleplay_notes || '[]');
-            roleplayCacheContext = '';
             // renderSkillChips() 会在后面被调用，不需要单独 updateRoleplaySelector
             activeSkills = JSON.parse(defaultCfg.enabled_skills || '{}');
             // 兼容旧格式：translate.direction → translate.source + translate.target
@@ -2072,7 +2048,6 @@ function getLanguageDisplayName(code) {
  */
 function clearRoleplayNotes() {
     roleplayNotes = [];
-    roleplayCacheContext = '';
 }
 
 /**
@@ -2106,7 +2081,6 @@ function openRoleplaySelector() {
             const selectedIds = Object.keys(_refTempSelected);
             if (selectedIds.length === 0) {
                 roleplayNotes = [];
-                roleplayCacheContext = '';
                 closeNoteRefModal();
                 renderSkillChips();
                 await saveCurrentSessionConfig();
@@ -2125,7 +2099,6 @@ function openRoleplaySelector() {
                 const notes = await getSelectedNotesInfo(ids);
                 if (notes && notes.length > 0) {
                     roleplayNotes = notes;
-                    roleplayCacheContext = '';
                 }
             } catch (_) {}
             
@@ -2312,7 +2285,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
 
     // 新一轮输出开始：收起 Agent 反问面板、清除反问等待状态
     //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
-    agentAskWaiting = false;
     hideAskPanel();
 
     const streamingEl = document.createElement('div');
@@ -2536,14 +2508,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         return toolStatusListEl;
     };
 
-    /** 解析可能为 JSON 字符串的字段（args / result） */
-    const parseField = (val) => {
-        if (typeof val === 'string') {
-            try { return JSON.parse(val); } catch (_) { return null; }
-        }
-        return val || null;
-    };
-
     /** 展示工具调用开始状态（tool_start） */
     const showToolStatusStart = (payload) => {
         const name = payload.name || 'tool';
@@ -2671,8 +2635,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         let payload = null;
         try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
         if (!payload || !payload.question) return;
-        // 进入反问等待：本轮 AI 消息不结束，等待用户同轮回答
-        agentAskWaiting = true;
         // 模型未在正文输出问句（正文为空）时，气泡内展示等待提示
         if (!hasReceivedChunk) {
             contentDiv.innerHTML = '';
@@ -2711,7 +2673,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
         window.__aiStreaming = false;
-        agentAskWaiting = false; // 本轮结束（含等待中取消），清除反问等待状态
         hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
 
         // 恢复发送按钮, 隐藏停止按钮
@@ -2839,7 +2800,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
         window.__aiStreaming = false;
-        agentAskWaiting = false; // 流错误：清除反问等待状态并收起面板
         hideAskPanel();
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
@@ -3209,17 +3169,6 @@ function createRecallIndicator() {
 }
 
 /**
- * 简易搜索指示器：地球图标 + 文字（无下拉多源详情）
- * @param {string} text - 显示文字，如 "正在优化输入..."、"正在联网搜索..."
- */
-function createSimpleSearchIndicator(text) {
-    const el = document.createElement('span');
-    el.className = 'ai-simple-search-indicator';
-    el.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="ai-search-indicator-text">' + text + '</span>';
-    return el;
-}
-
-/**
  * 创建联网搜索状态指示器（带关键词下拉菜单）
  * @param {'refining'|'searching'} status - 搜索阶段
  * @param {string} [keywords=''] - 精炼后的搜索关键词
@@ -3307,17 +3256,6 @@ function createSearchIndicator(status, keywords) {
 }
 
 /**
- * 显示错误消息
- */
-function addErrorMessage(msg) {
-    const el = document.createElement('div');
-    el.className = 'ai-msg-error';
-    el.textContent = msg;
-    messagesInnerEl.appendChild(el);
-    scrollToBottom();
-}
-
-/**
  * 滚动到底部（临时禁用 smooth scroll 避免动画）
  */
 function scrollToBottom() {
@@ -3344,7 +3282,6 @@ export function resetAIChatState() {
     _oldestMsgId = 0;
     _loadingMore = false;
     hideAskPanel(); // 重置状态时收起 Agent 反问面板
-    agentAskWaiting = false; // 重置反问等待状态
     if (messagesEl) {
         messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
         if (!messagesInnerEl) {
@@ -3823,7 +3760,6 @@ function stopTypewriter() {
 /* ── SVG 图标 ── */
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const REGEN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
-const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 const RESEND_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
 const EDIT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
 const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
@@ -4184,7 +4120,6 @@ function showAskPanel(question, options, selection) {
         submitting = true;
         try {
             await window.go.main.App.AnswerAskUser(activeSessionId, text);
-            agentAskWaiting = false;
             hideAskPanel();
         } catch (e) {
             window.showNotification?.('回答提交失败: ' + (e.message || e), 'error');
@@ -4286,7 +4221,7 @@ function hideAskPanel() {
 
 /**
  * 反问等待期间切换输入框状态：
- * 弹出反问面板时（agentAskWaiting=true）→ 输入框禁用 + 提示"等待你的选择…"，
+ * 弹出反问面板时 → 输入框禁用 + 提示"等待你的选择…"，
  * 面板收起后恢复（placeholder 还原、可输入）。
  */
 function setAskInputWaiting(waiting) {
@@ -4643,17 +4578,6 @@ async function handleDeleteMsg(msgEl) {
     scrollToBottom();
 }
 
-function handleCopy(text, btn) {
-    navigator.clipboard.writeText(text).then(() => {
-        btn.classList.add('copied');
-        btn.innerHTML = CHECK_ICON;
-        setTimeout(() => {
-            btn.classList.remove('copied');
-            btn.innerHTML = COPY_ICON;
-        }, 500);
-    }).catch(() => {});
-}
-
 async function handleRegenerate(msgEl) {
     if (!msgEl || !msgEl.parentNode || isStreaming) return;
 
@@ -4760,8 +4684,6 @@ async function handleResend(msgEl) {
 
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */
 
-/** 缓存的引用上下文 (后端已拼装好)  */
-let cachedRefContext = '';
 const DOC_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
 const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
@@ -5317,7 +5239,6 @@ async function confirmNoteSelection() {
         const newIds = new Set(ids);
         const keepNotes = referencedNotes.filter(n => !newIds.has(n.id));
         referencedNotes = [...keepNotes, ...refContext.notes];
-        cachedRefContext = refContext.context;
     } catch (e) {
         console.error('confirmNoteSelection 失败:', e);
         return;
@@ -5380,11 +5301,9 @@ function updateRefChips() {
     if (removeAllBtn) {
         removeAllBtn.addEventListener('click', () => {
             referencedNotes = [];
-            cachedRefContext = '';
             // 同步清理角色档案
             if (roleplayNotes.length > 0) {
                 roleplayNotes = [];
-                roleplayCacheContext = '';
                 renderSkillChips();
             }
             updateRefChips();
@@ -5399,12 +5318,10 @@ function updateRefChips() {
  */
 function removeRefNote(id) {
     referencedNotes = referencedNotes.filter(n => String(n.id) !== String(id));
-    cachedRefContext = ''; // 清除缓存
     // 同步清理角色档案中相同 ID 的笔记
     const oldLen = roleplayNotes.length;
     roleplayNotes = roleplayNotes.filter(n => String(n.id) !== String(id));
     if (roleplayNotes.length !== oldLen) {
-        roleplayCacheContext = '';
         renderSkillChips();
     }
     updateRefChips();
@@ -5620,49 +5537,6 @@ function showAIChatResults(results) {
 };
 
 /**
- * 获取笔记引用上下文 (直接使用后端拼装好的结果) 
- * @returns {Promise<string>} 拼装后的上下文内容, 无引用时返回空字符串
- */
-async function getNoteContext() {
-    if (referencedNotes.length === 0) return '';
-
-    if (cachedRefContext) return cachedRefContext;
-
-    // 缓存不存在 (如之前清除过) , 重新从后端获取
-    const ids = referencedNotes.map(n => n.id);
-    try {
-        const refContext = await window.go.main.App.GetNoteRefContext(ids);
-        referencedNotes = refContext.notes;
-        cachedRefContext = refContext.context;
-        updateRefChips();
-        return refContext.context;
-    } catch (_) {
-        return '';
-    }
-}
-
-/**
- * 获取角色扮演上下文（从后端获取笔记内容，包装为人物设定格式）
- * @returns {Promise<string>}
- */
-async function getRoleplayContext() {
-    if (roleplayNotes.length === 0) return '';
-    if (roleplayCacheContext) return roleplayCacheContext;
-    
-    try {
-        const ids = roleplayNotes.map(n => n.id);
-        const refContext = await window.go.main.App.GetNoteRefContext(ids);
-        if (!refContext || !refContext.context) return '';
-        
-        // 缓存并返回
-        roleplayCacheContext = refContext.context;
-        return refContext.context;
-    } catch (_) {
-        return '';
-    }
-}
-
-/**
  * HTML table 元素转 Markdown 表格文本
  * @param {HTMLTableElement} tableEl
  * @returns {string}
@@ -5830,7 +5704,6 @@ window.__syncRecallNotebooks = async function (isActive) {
  * 语言选择浮层实例
  */
 let langPickerEl = null;
-let langPickerSide = null;
 
 /**
  * 打开语言选择浮层
@@ -5840,8 +5713,6 @@ let langPickerSide = null;
 function openLangPicker(anchorEl, side) {
     // 移除已有浮层
     closeLangPicker();
-
-    langPickerSide = side;
 
     // 创建浮层
     const picker = document.createElement('div');
@@ -5931,21 +5802,6 @@ function closeLangPicker() {
         langPickerEl.remove();
         langPickerEl = null;
     }
-    langPickerSide = null;
     document.removeEventListener('click', closeLangPickerHandler, true);
-}
-
-/**
- * 清理技能状态（切换会话时调用）
- */
-function clearSkillsState() {
-    activeSkills = {};
-    if (skillBar) skillBar.style.display = 'none';
-    if (skillChips) skillChips.innerHTML = '';
-    if (skillsBtn) {
-        skillsBtn.disabled = false;
-        skillsBtn.classList.remove('is-disabled');
-    }
-    closeLangPicker();
 }
 

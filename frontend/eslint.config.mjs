@@ -25,8 +25,6 @@ export default [
                 exportNote: 'readonly',
                 initEditorActionsMenu: 'readonly',
                 switchEditorMode: 'readonly',
-                // 历史遗留：main.js 直接引用但无声明/无 window 挂载（疑似死代码，见检查报告）
-                mockNotes: 'readonly',
             },
         },
         rules: {

@@ -9,7 +9,7 @@ let trashNotebooks = [];
  * 加载回收站中的笔记和笔记本
  */
 export async function loadTrashNotes() {
-    const { els, nm } = window;
+    const { els } = window;
     // 每次进入回收站页面，将主内容区滚动到顶部
     if (els.mainContent) els.mainContent.scrollTop = 0;
     try {

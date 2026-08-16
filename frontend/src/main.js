@@ -346,6 +346,8 @@ let totalNotes = 0;
 let isLoadingMore = false;
 let hasMoreNotes = true;
 let pageSize = 18;
+// 模拟笔记数据（后端未绑定时使用，见 loadNotes 降级分支）
+let mockNotes = null;
 
 /* ===== DOM 引用 ===== */
 const $ = (id) => document.getElementById(id);
@@ -882,7 +884,6 @@ async function loadAllRemainingNotes() {
         pageSize = savedPageSize;
 
         // 计算剩余页数，逐一加载
-        const loadedCount = state.notes.length;
         let totalPages = Math.ceil(totalNotes / pageSize);
         // 如果 total 未知（降级场景），直接取当前数据判断
         if (totalNotes === 0 && state.notes.length === 0) return;
@@ -1961,11 +1962,6 @@ async function initSortSettings() {
 
 // ── 全局 AI 辅助函数 ──
 
-// 各服务商对应的默认 API 地址（仅用于 UI 初始提示，实际默认值由后端 DB 管理）
-const AI_DEFAULT_URLS = {
-    openai: 'https://api.openai.com/v1',
-};
-
 /**
  * 重置 API Key 输入框为隐藏状态（进入设置页时调用，对话/量化共用）
  * @param {HTMLInputElement} input - Key 输入框
@@ -2237,7 +2233,6 @@ function initApiConnectionModule(m) {
     // 保存当前模块配置（未填完不保存），并刷新对应预设列表
     const saveModuleConfig = async () => {
         const url = m.baseURL.value.trim();
-        const key = m.apiKey.value.trim();
         const model = m.modelLabel.textContent;
         // URL 必填
         if (!url) return;
@@ -3550,14 +3545,6 @@ function addModelDropdownItem(model, active) {
     }
 }
 
-// 辅助函数: 设置状态提示
-function setAIStatus(elId, msg, type) {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'ai-status ' + type;
-    el.style.display = '';
-}
 
 
 
@@ -8121,10 +8108,6 @@ function renderDateFilterDropdownSelection() {
     });
 }
 
-function closeSearchModalDatePicker() {
-    // 日历已移除，无需操作
-}
-
 /**
  * 渲染排序过滤器下拉选项
  */
@@ -10391,34 +10374,6 @@ function updateTodoStats(todos) {
     if (activeBtn) activeBtn.textContent = pending > 0 ? `待办 ${pending}` : '待办';
     if (doneBtn) doneBtn.textContent = done > 0 ? `已完成 ${done}` : '已完成';
     if (allBtn) allBtn.textContent = total > 0 ? `全部 ${total}` : '全部';
-}
-
-/**
- * 更新进度条和统计标签
- * @param {Array} todos
- */
-function updateTodoProgress(todos) {
-    const total = todos.length;
-    const done = todos.filter(t => t.done).length;
-    const pending = total - done;
-    const pct = total > 0 ? (done / total) * 100 : 0;
-
-    if (els.todoStatsLabel) els.todoStatsLabel.textContent = '待办 ';
-    if (els.todoStatsCount) els.todoStatsCount.textContent = pending;
-    if (els.todoStatsTotal) els.todoStatsTotal.textContent = total;
-
-    // 进度条动画：平滑过渡
-    if (els.todoProgressFill) {
-        els.todoProgressFill.style.width = pct + '%';
-        // 完成度颜色语义
-        els.todoProgressFill.style.background = pct >= 100
-            ? 'var(--success)'
-            : pct > 50
-                ? 'var(--accent)'
-                : 'var(--text-muted)';
-    }
-
-    updateTodoStats(todos);
 }
 
 /**
