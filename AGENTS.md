@@ -623,19 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：ask_user 反问面板重设计（方案B：输入区上方 #aiAskPanel + selection 单选/多选 + 完成任务后隐藏）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 用户评估第一版"气泡内嵌问题卡片"（仅单选即发、随消息滚动易被忽略）后否决，重设计为**方案 B：输入区上方反问面板**：① **后端 selection 协议**（[ask_user.go](internal/agent/tools/ask_user.go)）——Schema 新增 `selection`（string，"single"\|"multiple"，缺省 single），`ai:ask-user` 事件负载扩展为 `{question, options, selection}`；Desc 补充多选决策场景说明。② **前端面板迁移**——[index.html](frontend/index.html) 在 `#aiChatInputArea` 内顶部（追问引用栏之前）新增静态容器 `#aiAskPanel`；[ai-chat.js](frontend/src/js/ai-chat.js) **移除 `renderAskCard`**，新增 `showAskPanel(question, options, selection)` 与 `hideAskPanel()`；`ai:ask-user` 监听回调改调 `showAskPanel`（位置与 unsubs 机制不变）。③ **交互**——单选点选项即发 `sendUserText(opt)`；多选 Set 勾选，条目**左侧常显 checkbox 方框**（勾选后整行高亮 + 方框填充对勾），唯一按钮「确认提交」汇总发送 `我选择：A、B`（勾选 + 自定义输入并存时拼接为 `我选择：A、B。补充说明：xxx`）；两种模式统一布局「输入框 + 唯一按钮」同排一行（单选「发送」/ 多选「确认提交」），Enter 与按钮走同一逻辑，未勾选且无输入时输入框加 `.error` 抖动提示不发送。选项以垂直列表一行一个展示。④ **面板形态迭代**——**悬浮浮层**：`.ai-ask-panel` 改 `position:absolute`（`#aiChatInputArea` 加 `position:relative` 作定位上下文），`bottom:calc(100%+8px)` 悬浮于输入区上方（覆盖消息列表、不占文档流），`z-index:50` + 悬浮阴影；**右上角 × 关闭按钮**（`.ai-ask-close`，点击 `hideAskPanel` 退出选择）；**宽度自适应**：`width:fit-content`（= 最长选项宽度）+ `min-width:280px`（短选项兜底）+ `max-width:100%`（超长满宽且文本换行）。⑤ **面板生命周期（重要）**——回答后隐藏；`startStreaming` 开头、`switchSession`、清空会话、`resetAIChatState` 4 处挂钩 `hideAskPanel()`；新问题到达替换旧内容。⑥ **历史回放不变**——agent.go pendingQuestion 兜底保证 assistant 正文为问句，面板不重现。 |
-| **缺陷修复（2026-08-11 审查后）** | ① **问句落库兜底增强**：pendingQuestion 改为"正文优先、参数兜底"——模型正文为空（未遵守"正文写问句"约束）时，经新增 `askUserQuestionFromArgs` 解析 ask_user 工具参数的 `question` 兜底（流式/非流式两分支同步处理），避免问句整轮丢失（否则 finalContent 为空 → 前端判 `isEmptyMsg` 移除气泡且不落库）。② **发送链路健壮性**：`sendUserText` 改为返回布尔结果（false = 未发送）；`doSend` 改为**发送成功才 `hideAskPanel()`**——流未结束（isStreaming）时提示"请等待当前回复完成后再选择"并保留面板，未配置 AI 服务时 `ensureAIReady` 弹 warning 且面板保留便于重试；`onSend`/`handleResend` 等既有调用点忽略返回值行为不变。③ **CSS 清理**：删除 `.ai-ask-panel` 冗余 `margin-bottom:10px`（absolute 定位下无布局作用且参与 bottom 偏移，使悬浮间距由 8px 变 18px）。 |
-| **selection 协议要点** | 事件负载向后兼容（旧前端忽略 selection 即默认单选）；规范化：非 "multiple" 一律 "single"。多选发送格式 `我选择：A、B`（顿号分隔），单选/自定义直接发原文本。 |
-| **面板生命周期规则（重要）** | 面板是"临时交互态"而非消息流组件：必须在 `startStreaming` 开头（防用户绕答直接发消息导致残留）、`switchSession`、清空会话、`resetAIChatState` 四处挂钩 `hideAskPanel()`，否则跨会话残留挂起问题面板。回答**发送成功**才隐藏；发送失败（流未结束 / 未配置 API）保留面板；右上角 × 关闭按钮随时隐藏退出选择。 |
-| **涉及文件** | [internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（selection 字段 + 事件负载 + Desc）、[internal/agent/agent.go](internal/agent/agent.go)（pendingQuestion 正文优先/参数兜底 + 新增 `askUserQuestionFromArgs` + strings import）、[frontend/index.html](frontend/index.html)（#aiAskPanel 容器）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（移除 renderAskCard + showAskPanel/hideAskPanel（含 × 关闭按钮）+ ai:ask-user 回调 + 4 处生命周期挂钩 + sendUserText 返回 bool + doSend 成功才隐藏 + askPanelEl 引用）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-ask-panel 悬浮浮层 + 宽度自适应 + 关闭按钮 + 垂直列表 + 多选左侧常显 checkbox + error 抖动 + prefers-reduced-motion；`.ai-chat-input-area` 加 position:relative）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 面板交互 + selection 语义 + 生命周期 + 落库兜底说明） |
-
----
-
-## 记忆点 2：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
+## 记忆点 1：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 2：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,7 +648,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 3：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +659,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 4：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +670,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 5：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -693,7 +681,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 6：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -704,7 +692,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 7：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -715,7 +703,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 8：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -728,7 +716,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 9：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -737,6 +725,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端同轮交互** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `agentAskWaiting` 状态：`ai:ask-user` 到达时气泡保持流式（不结束）、正文为空显示"等待你的回答…"（`createWaitingHint`）；**主输入框禁用并提示"等待你的选择…"**（`setAskInputWaiting`：placeholder 保存/恢复 + `.ai-ask-waiting` 遮罩，CSS 见 [ai-chat.css](frontend/src/css/components/ai-chat.css)）；面板提交改走 `AnswerAskUser`（`submitting` 防重入、成功才隐藏，不再走 `sendUserText`），**× 关闭=取消本轮**（复用停止逻辑防悬挂）；停止/错误/完成/清空/重置各路径统一清理面板与等待态；`stream-done` 用 `assistantMsgID`（取消路径=0）区分取消与正常完成——**取消不写 chatHistory**（避免幽灵条目/误弹历史记录）。 |
 | **新工具与窗口调整** | 新增 **json 三件套**（[json_tools.go](internal/agent/tools/json_tools.go)：json_validate/json_format/json_extract，`utils.InferTool` 结构体反射风格，**gjson v1.18.0 提取**——升级为直接依赖，原为传递依赖 v1.14.2；`normalizeGJSONPath` 归一化模型 JSONPath 写法：`$` 前缀、`[n]`→`.n`、`#` 通配符透传；对象/数组返回 `res.Raw` 保留源键序）与 **summarize_text**（[summarize_text.go](internal/agent/tools/summarize_text.go)：复用 `AIService.CallAI` 非流式，text≤20000/instructions≤500，失败降级返回原文）；注册 [registry.go](internal/agent/registry.go) + [meta.go](internal/agent/tools/meta.go) 文案（前端开关自动生效零改动）。**上下文窗口默认 20→40**：`GetContextWindowSize` 兜底 + [db.go](internal/database/db.go) 种子 + **旧库值 20→40 幂等迁移**（InitDefaultSettings 迁移区，该键无 UI 暴露、旧值即种子默认直接升级）。 |
 | **涉及文件** | [internal/agent/agent.go](internal/agent/agent.go)（会话注册表/agentSession/ClaimAsk/drainAsk/ReleaseSession/ReleaseAll/streamedContent/runCtx）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（AskWaiter 接口）、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（ClaimAsk→emit→WaitForAnswer）、[internal/agent/tools/json_tools.go](internal/agent/tools/json_tools.go)（新增 json 三件套 + normalizeGJSONPath）、[internal/agent/tools/summarize_text.go](internal/agent/tools/summarize_text.go)（新增）、[internal/agent/tools/json_tools_test.go](internal/agent/tools/json_tools_test.go) 与 [internal/agent/tools/summarize_text_test.go](internal/agent/tools/summarize_text_test.go)（新增测试）、[internal/agent/session_test.go](internal/agent/session_test.go)（同轮/并行/排空/全量释放测试）、[internal/agent/registry.go](internal/agent/registry.go) 与 [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（注册+文案）、[internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 同轮传输说明）、[app.go](app.go)（AnswerAskUser 绑定 + ReleaseSession/ReleaseAll 挂钩 + 事件 gen 化 + ask_user 规范文案更新 + wailsjs 手工补绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（agentAskWaiting/等待提示/输入框等待态/同轮提交/cancelled 分支）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-msg-waiting-hint / .ai-ask-waiting）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) 与 [frontend/wailsjs/go/main/App.d.ts](frontend/wailsjs/go/main/App.d.ts)（AnswerAskUser）、[internal/services/ai_service.go](internal/services/ai_service.go)（GetContextWindowSize 默认 40）、[internal/database/db.go](internal/database/db.go)（种子 40 + 旧库迁移）、[go.mod](go.mod)（gjson v1.18.0 直接依赖） |
+
+---
+
+## 记忆点 10：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组互不相关的改动：① **笔记「创建副本」**——右键菜单新增 `duplicate` 动作（[index.html](frontend/index.html) #contextMenu 首项「创建副本」），后端新增 `App.DuplicateNote(id)`（[app.go](app.go)）：`GetByID`（Preload Tags）读原笔记 → `NextDuplicateTitle` 生成「原标题 副本」标题（同名冲突自动递增「副本 2」「副本 3」…，超长只截断 base 前缀保留「副本」后缀、≤200 rune，空标题回退「未命名」，DB 精确查重未删除笔记）→ `CreateWithNotebook` 复制正文/后缀/所属笔记本（notebook_id=0 归默认笔记本 id=1）→ 逐个 `AddTagToNote` 复制标签（单个失败仅 Warnw 不阻断）；置顶不复制。前端 `window.duplicateNote`：成功 toast「已创建副本「标题」」+ `loadNotes()` 刷新；未绑定 mock 降级（头部插入模拟副本）。wailsjs 手工补 `DuplicateNote` 绑定（App.js/App.d.ts）。配套：`NoteService.NextDuplicateTitle` + 纯函数 `nextDuplicateTitle`/`truncateTitleRunes`（[note_service.go](internal/services/note_service.go)）+ 单测 `TestNextDuplicateTitle`/`TestTruncateTitleRunes`（[note_service_test.go](internal/services/note_service_test.go)）。② **前端 ESLint 91 warnings 清零**（fclint 检查暴露，0 errors 91 warnings）——**no-undef（~70，真实隐患）**：[cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) langMap 引用了约 70 个 legacy-modes 语言但文件头从未 import（打开 .apl/.asn1/.bf 等冷门扩展名会抛 ReferenceError），补齐 52 条 import（逐模块核对导出名：commonlisp→commonLisp、livescript→liveScript、rpm→rpmSpec、mscgen 模块导出 mscgen/msgenny/xu、coffeescript 模块导出 coffeeScript 用别名 `coffeeScript as coffeescript` 保持 langMap 引用不变）；**no-unused-vars（~21，纯死代码）**：[ai-chat.js](frontend/src/js/ai-chat.js) 删 1 条未用 import + 7 个未调用函数（formatFileSize/createSimpleSearchIndicator/addErrorMessage/handleCopy/getNoteContext/getRoleplayContext/clearSkillsState）+ 2 个闭包未用局部变量（role/parseField）+ 只写不读状态（agentAskWaiting 声明+8 处赋值、langPickerSide 声明+2 赋值）+ 连锁清理（CHECK_ICON 仅 handleCopy 用、缓存变量 cachedRefContext/roleplayCacheContext 仅被删的两个 getContext 函数读写）；[main.js](frontend/src/main.js) 删 loadedCount/AI_DEFAULT_URLS/key/setAIStatus/closeSearchModalDatePicker/updateTodoProgress；[notification.js](frontend/src/js/notification.js) 删死变量 mockNotes；[trash-page.js](frontend/src/js/trash-page.js) 解构去掉未用 nm。③ **AI 输入框长度限制**——前端 [ai-chat.js](frontend/src/js/ai-chat.js) `MAX_AI_INPUT_CHARS=20000`（与 Agent 工具 maxToolLongText 对齐）：输入事件拦截（超限截断到上限+光标置末+toast「内容过长，已截断至 20000 字符」）、`onSend` 发送前兜底校验（超限截断+提示+不发送）、Agent 反问面板输入同上限；后端 [app.go](app.go) `SaveAIMessage` 加 `maxAIMessageChars=20000` 校验（仅 user 角色走此绑定，AI 回复经 aiService.SaveAIMessage 内部方法不受影响）。 |
+| **副本标题查重（重要）** | `NextDuplicateTitle` 通过 DB 精确匹配未删除笔记判断重名（`title = ? AND deleted_at IS NULL`），查重失败保守视为已存在避免重名；`nextDuplicateTitle` 纯函数注入 `titleExists` 闭包便于单测（map 模拟不触达 DB）；超长标题**只截断 base 前缀、保留「副本」后缀**（`truncateTitleRunes` 按 rune 计，203 runes → 前 200），与"从头截断砍掉后缀"的实现坑不同（曾误实现为截 candidate 导致后缀丢失，测试暴露后修正）。 |
+| **ESLint 清零方法论（重要）** | ① 删除前**全库 grep 残留引用**（含 index.html onclick 字符串——eslint 检查不到的引用方式）；② **连锁依赖检查**——删函数前确认其内部引用的变量/常量是否还有别处使用（CHECK_ICON 仅 handleCopy 用则连删；cachedRefContext/roleplayCacheContext 仅 getNoteContext/getRoleplayContext 读写则连删），避免删出新的 unused；③ 删除后重跑 lint 看是否新增 warning；④ 复用函数验证行为等价（handleCopy 是右键菜单内联 clipboard 实现的重复封装、getNoteContext/getRoleplayContext 是 GetNoteRefContext 的重复缓存封装）。教训：**纯删死代码也要验证"删了行为不变"而非"删了能跑"**。 |
+| **明确暂缓（未实施）** | 评估过但用户决定暂缓的扩展：N1 笔记版本历史（NoteRevision 表 + UpdateNote 埋点 + 60s 同内容版本合并 + 对比/还原 UI）、A2 存为笔记确认（SaveAIMessageAsNote 加 title/notebookID 参数 + 前端预览确认弹窗）——设计已讨论，代码未写，后续可随时启动。 |
+| **涉及文件** | [app.go](app.go)（DuplicateNote + SaveAIMessage 校验 + maxAIMessageChars）、[internal/services/note_service.go](internal/services/note_service.go)（NextDuplicateTitle/nextDuplicateTitle/truncateTitleRunes/noteTitleMaxRunes）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（TestNextDuplicateTitle/TestTruncateTitleRunes）、[frontend/index.html](frontend/index.html)（#contextMenu「创建副本」项）、[frontend/src/main.js](frontend/src/main.js)（handleContextAction duplicate 分支 + window.duplicateNote + 死代码清理 + let mockNotes 声明）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_AI_INPUT_CHARS/truncateAIInput/输入拦截/onSend 校验/反问面板上限 + 死代码清理）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（+52 条 legacy-modes import）、[frontend/src/js/notification.js](frontend/src/js/notification.js)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)（移除 mockNotes 全局豁免）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) 与 [frontend/wailsjs/go/main/App.d.ts](frontend/wailsjs/go/main/App.d.ts)（DuplicateNote） |
 
 ---
 
