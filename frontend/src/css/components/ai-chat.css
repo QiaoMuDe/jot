@@ -96,6 +96,13 @@
     line-height: 1.6;
 }
 
+/* 用户消息为纯文本 div（textContent 写入），默认 white-space:normal 会折叠换行；
+   用 pre-wrap 保留粘贴文本的换行与缩进结构，长行仍自动折行 */
+.ai-msg-user .msg-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
 /* AI 回复内 Markdown 样式 ── 沿用笔记渲染体系 */
 .ai-msg-assistant h1,
 .ai-msg-assistant h2,
