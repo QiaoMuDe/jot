@@ -18,6 +18,7 @@ require (
 	github.com/hekmon/tavily v1.3.0
 	github.com/mark3labs/mcp-go v0.43.0
 	github.com/meguminnnnnnnnn/go-openai v0.1.2
+	github.com/tidwall/gjson v1.18.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	gorm.io/gorm v1.31.1
 	modernc.org/sqlite v1.51.0
@@ -98,6 +99,8 @@ require (
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

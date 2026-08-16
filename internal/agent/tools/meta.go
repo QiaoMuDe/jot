@@ -13,10 +13,14 @@ type ToolMeta struct {
 func BuiltinTools() []ToolMeta {
 	return []ToolMeta{
 		{Name: "refine_search_query", Label: "优化搜索关键词，提升搜索准确率（联网搜索的辅助）"},
+		{Name: "summarize_text", Label: "长文本摘要压缩，提取要点（处理长网页/长笔记）"},
 		{Name: "web_search", Label: "联网搜索（多来源），获取实时信息"},
 		{Name: "read_url", Label: "读取网页链接内容"},
 		{Name: "recall_notes", Label: "召回本地笔记，基于向量相似度检索"},
 		{Name: "get_current_time", Label: "获取当前时间/日期/星期"},
+		{Name: "json_validate", Label: "校验 JSON 合法性并定位错误位置"},
+		{Name: "json_format", Label: "美化格式化 JSON 文本"},
+		{Name: "json_extract", Label: "按路径从 JSON 提取字段"},
 		{Name: "manage_todo", Label: "管理待办（创建/查看/修改/勾选等）"},
 		{Name: "manage_notebook", Label: "管理笔记本（创建/重命名/查看等）"},
 		{Name: "manage_tag", Label: "管理标签（创建/查看/重命名/改色等）"},
