@@ -62,6 +62,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	// 清理 api_profiles 历史遗留孤儿列（is_default/is_builtin 已从代码模型移除）
+	if err := dropAPIProfileOrphanColumns(db); err != nil {
+		return nil, fmt.Errorf("清理 api_profiles 遗留列失败: %w", err)
+	}
+
 	// 初始化内置技能提示词
 	if err := InitBuiltinPrompts(db); err != nil {
 		return nil, fmt.Errorf("初始化内置提示词失败: %w", err)
@@ -97,6 +102,24 @@ func EnsureBackupDir() error {
 		return err
 	}
 	return os.MkdirAll(dir, 0755)
+}
+
+// dropAPIProfileOrphanColumns 检查并删除 api_profiles 表中的历史遗留孤儿列：
+//   - is_default：IsDefault→IsBuiltin 字段改名前的旧列（改名时未删除，SQLite 保留为孤儿列）
+//   - is_builtin：is_builtin 字段移除后 AutoMigrate 为存量表新增的列（同样不再被代码引用）
+//
+// 使存量库表结构与代码模型一致。幂等：HasColumn 为 false（列不存在或全新库）时跳过，
+// 无需迁移标记；DropColumn 失败返回 error 由 InitDB 中止启动，避免结构不一致被静默掩盖。
+func dropAPIProfileOrphanColumns(db *gorm.DB) error {
+	m := db.Migrator()
+	for _, col := range []string{"is_default", "is_builtin"} {
+		if m.HasColumn(&models.APIProfile{}, col) {
+			if err := m.DropColumn(&models.APIProfile{}, col); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // InitBuiltinPrompts 增量插入内置技能提示词 (仅插入缺失的 key)
