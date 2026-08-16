@@ -64,13 +64,17 @@ func (r *refineSearchQueryTool) InvokableRun(ctx context.Context, argumentsInJSO
 		return "", err
 	}
 
-	refined, err := services.RefineSearchQuery(ctx, args.Query, r.ai)
+	// 辅助 LLM 调用包超时（maxToolLLMTimeout=60s），防止模型 API 在传输层挂起时无限阻塞 ReAct 循环；
+	// 超时触发 RefineSearchQuery 返回错误 → 外层 ctx 未取消 → 走下方降级返回原词
+	callCtx, cancel := context.WithTimeout(ctx, maxToolLLMTimeout)
+	defer cancel()
+	refined, err := services.RefineSearchQuery(callCtx, args.Query, r.ai)
 	if err != nil {
 		// 用户停止：返回取消错误，终止 Agent 循环
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		// 精炼失败：降级返回原词，模型仍可继续搜索
+		// 精炼失败（含超时）：降级返回原词，模型仍可继续搜索
 		return args.Query, nil
 	}
 	refined = strings.TrimSpace(refined)

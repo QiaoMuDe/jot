@@ -158,6 +158,10 @@ export function DeleteTodo(arg1) {
   return window['go']['main']['App']['DeleteTodo'](arg1);
 }
 
+export function DuplicateNote(arg1) {
+  return window['go']['main']['App']['DuplicateNote'](arg1);
+}
+
 export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
 }

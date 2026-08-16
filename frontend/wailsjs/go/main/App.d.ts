@@ -83,6 +83,8 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function DeleteTodo(arg1:number):Promise<void>;
 
+export function DuplicateNote(arg1:number):Promise<models.Note>;
+
 export function EmptyTrash():Promise<void>;
 
 export function EmptyTrashNotebooks():Promise<void>;

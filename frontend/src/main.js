@@ -1071,6 +1071,41 @@ async function deleteNote(id) {
 }
 
 /**
+ * 创建笔记副本：基于原笔记创建一篇新笔记（正文/后缀/所属笔记本/标签复制，
+ * 标题自动生成"原标题 副本"，同名冲突递增序号；置顶状态不复制）。
+ */
+window.duplicateNote = async function (id) {
+    const note = state.notes.find((n) => n.id === id);
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.DuplicateNote) {
+            const dup = await window.go.main.App.DuplicateNote(id);
+            if (!dup || !dup.id) throw new Error('返回的副本笔记无效');
+            nm.show(`已创建副本「${dup.title}」`, 'success');
+        } else {
+            console.warn('DuplicateNote 未绑定，模拟创建副本');
+            if (!note) return;
+            state.notes.unshift({
+                id: Date.now(),
+                title: (note.title || '未命名') + ' 副本',
+                content: note.content || '',
+                file_ext: note.file_ext || 'md',
+                notebook_id: note.notebook_id,
+                pinned: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                tags: note.tags ? note.tags.slice() : [],
+            });
+            nm.show('已创建副本', 'success');
+        }
+    } catch (err) {
+        console.error('创建副本失败:', err);
+        nm.show('创建副本失败', 'error');
+        return;
+    }
+    await loadNotes();
+};
+
+/**
  * 复制笔记正文到剪贴板
  * 列表查询仅返回截断的前 200 字符，需按 id 获取完整正文再复制（仅复制正文，不含标题）
  */
@@ -5383,6 +5418,9 @@ window.handleContextAction = function (action) {
             break;
         case 'delete':
             window.deleteNote(id);
+            break;
+        case 'duplicate':
+            window.duplicateNote(id);
             break;
         case 'copy':
             copyNote(id);

@@ -483,6 +483,40 @@ func (a *App) CreateNote(title, content, fileExt string, notebookID uint) (*mode
 	return note, nil
 }
 
+// DuplicateNote 基于指定笔记创建副本：完整正文、文件后缀、所属笔记本与标签复制，
+// 标题自动生成"原标题 副本"（同名冲突时递增序号）；置顶状态不复制（新笔记默认不置顶）。
+// 原笔记 notebook_id 为 0（历史遗留无归属笔记）时副本归入默认笔记本 id=1；
+// 标签复制单个失败仅记日志不阻断（与前端 createNote 的标签循环容错语义一致）。
+func (a *App) DuplicateNote(id uint) (*models.Note, error) {
+	a.LogSvc.Logger.Debugw("DuplicateNote", fastlog.Uint("id", id))
+	orig, err := a.noteService.GetByID(id)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("DuplicateNote 读取原笔记失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return nil, err
+	}
+	title, err := a.noteService.NextDuplicateTitle(orig.Title)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("DuplicateNote 生成副本标题失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return nil, err
+	}
+	notebookID := orig.NotebookID
+	if notebookID == 0 {
+		notebookID = 1 // 归入默认笔记本，避免副本落在无归属状态
+	}
+	dup, err := a.noteService.CreateWithNotebook(title, orig.Content, orig.FileExt, notebookID)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("DuplicateNote 创建副本失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return nil, err
+	}
+	for _, tag := range orig.Tags {
+		if err := a.tagService.AddTagToNote(dup.ID, tag.ID); err != nil {
+			a.LogSvc.Logger.Warnw("DuplicateNote 复制标签失败", fastlog.Uint("noteID", dup.ID), fastlog.Uint("tagID", tag.ID), fastlog.Error(err))
+		}
+	}
+	a.LogSvc.Logger.Infow("DuplicateNote 成功", fastlog.Uint("id", id), fastlog.Uint("dupID", dup.ID))
+	return dup, nil
+}
+
 // UpdateNote 更新指定笔记的标题和内容
 func (a *App) UpdateNote(id uint, title, content, fileExt string) (*models.Note, error) {
 	a.LogSvc.Logger.Debugw("UpdateNote", fastlog.Uint("id", id))

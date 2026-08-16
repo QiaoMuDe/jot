@@ -765,6 +765,57 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 	return &note, nil
 }
 
+// noteTitleMaxRunes 笔记标题上限（models.Note.Title 为 size:200 的 VARCHAR，按 rune 计保护多字节标题）。
+const noteTitleMaxRunes = 200
+
+// nextDuplicateTitle 生成"标题 副本"形式的副本标题：先试 base+" 副本"，
+// 若 titleExists 判定已存在则依次递增序号（"副本 2"、"副本 3"…）取第一个不冲突的；
+// 超长时只截断 base 前缀、保留"副本"后缀（总长按 rune 不超过 noteTitleMaxRunes）。
+// titleExists 由调用方注入（DB 查询或测试闭包），本函数不触达存储。
+func nextDuplicateTitle(base string, titleExists func(string) bool) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = "未命名"
+	}
+	for n := 0; ; n++ {
+		suffix := " 副本"
+		if n > 0 {
+			suffix = fmt.Sprintf(" 副本 %d", n+1) // 副本 2 / 副本 3 …
+		}
+		// 只截断 base 前缀，保证" 副本"后缀完整保留
+		baseTrunc := truncateTitleRunes(base, noteTitleMaxRunes-len([]rune(suffix)))
+		candidate := baseTrunc + suffix
+		if !titleExists(candidate) {
+			return candidate
+		}
+	}
+}
+
+// truncateTitleRunes 将标题截断到 maxRunes 个 rune（从末尾截断，保留前缀；不产生孤立代理对）。
+func truncateTitleRunes(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes])
+}
+
+// NextDuplicateTitle 为原标题生成不冲突的"副本"标题（供创建副本使用）。
+// titleExists 通过 DB 精确匹配未删除笔记判断；原标题为空时回退"未命名"。
+func (s *NoteService) NextDuplicateTitle(origTitle string) (string, error) {
+	exists := func(title string) bool {
+		var count int64
+		if err := s.db.Model(&models.Note{}).
+			Where("title = ? AND deleted_at IS NULL", title).
+			Count(&count).Error; err != nil {
+			s.logger.Errorw("NoteService.NextDuplicateTitle 查重失败", fastlog.Error(err))
+			return true // 查询失败时保守视为已存在，避免重名
+		}
+		return count > 0
+	}
+	return nextDuplicateTitle(origTitle, exists), nil
+}
+
 // GetByDate 按创建日期查询非删除笔记，使用 noteThinSelect 避免加载大文本内容
 func (s *NoteService) GetByDate(date string) ([]models.Note, error) {
 	var notes []models.Note

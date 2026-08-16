@@ -88,9 +88,23 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", err
 	}
 
-	// 2. 构建 loader：默认 HTML 解析器提取正文；自定义超时与浏览器 UA（规避 403）
+	// 2. 构建 loader：默认 HTML 解析器提取正文；自定义超时与浏览器 UA（规避 403）。
+	//    CheckRedirect 复用 isPrivateHost 校验每个重定向目标：Go 默认跟随重定向，
+	//    若不拦截，公网 URL 可 302 跳转到 127.0.0.1 / 169.254.169.254 等内网地址被读取
+	//    （SSRF 绕过），与初始 URL 的 isPrivateHost 防护一致。
 	loader, err := urlLoader.NewLoader(ctx, &urlLoader.LoaderConfig{
-		Client: &http.Client{Timeout: readURLTimeout},
+		Client: &http.Client{
+			Timeout: readURLTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return errors.New("重定向次数过多（超过 10 次）")
+				}
+				if isPrivateHost(req.URL.Host) {
+					return fmt.Errorf("拒绝跟随重定向到内网/本机地址 %s", req.URL.Host)
+				}
+				return nil
+			},
+		},
 		RequestBuilder: func(ctx context.Context, src document.Source, _ ...document.LoaderOption) (*http.Request, error) {
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URI, nil)
 			if err != nil {

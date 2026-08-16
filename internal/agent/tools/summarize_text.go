@@ -95,6 +95,11 @@ func (s *summarizeTextTool) InvokableRun(ctx context.Context, argumentsInJSON st
 		return "", ctx.Err()
 	}
 
+	// 辅助 LLM 调用包超时（maxToolLLMTimeout=60s），防止模型 API 在传输层挂起时无限阻塞 ReAct 循环；
+	// 超时触发 CallAI 返回错误 → 外层 ctx 未取消 → 走下方降级返回原文
+	callCtx, cancel := context.WithTimeout(ctx, maxToolLLMTimeout)
+	defer cancel()
+
 	// 组装摘要请求：system 摘要提示词 + user 原文（附摘要要求）
 	messages := []services.Message{
 		{Role: "system", Content: summarizeTextPrompt},
@@ -104,13 +109,13 @@ func (s *summarizeTextTool) InvokableRun(ctx context.Context, argumentsInJSON st
 		messages[1].Content = text + "\n\n【摘要要求】" + instructions
 	}
 
-	summary, err := s.ai.CallAI(ctx, messages)
+	summary, err := s.ai.CallAI(callCtx, messages)
 	if err != nil {
 		// 用户停止：返回取消错误，终止 Agent 循环
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
-		// 摘要失败：降级返回原文，模型仍可继续
+		// 摘要失败（含超时）：降级返回原文，模型仍可继续
 		return text, nil
 	}
 	summary = strings.TrimSpace(summary)

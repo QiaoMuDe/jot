@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -18,6 +19,10 @@ import (
 
 // MaxResultLen 工具调用参数 / 结果摘要截断长度（用于事件与落库，避免超长）。
 const MaxResultLen = 500
+
+// maxToolLLMTimeout 工具内辅助 LLM 调用（精炼/摘要等）的超时上限：
+// 与主模型调用超时（agent.go 的 60s）一致，防止模型 API 在传输层挂起时无限阻塞 ReAct 循环。
+const maxToolLLMTimeout = 60 * time.Second
 
 // 文本字段长度上限：防止模型传入超长文本浪费 token 或触发 DB 字段越界报错。
 const (
