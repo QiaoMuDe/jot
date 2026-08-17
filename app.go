@@ -1442,8 +1442,39 @@ func (a *App) IndexNotesByIDs(ids []uint) error {
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// GetVectorIndexStatus 返回向量索引统计信息：已量化笔记数、片段总数、占用字节
-// VectorIndexStatus 向量索引统计结果（Wails 绑定需单值返回，多返回值只保留第一个）
+// IndexNotesUnindexed 仅量化未量化过的笔记（非软删且无向量记录），异步执行，进度与结果通过事件推送
+func (a *App) IndexNotesUnindexed() error {
+	a.LogSvc.Logger.Debugw("IndexNotesUnindexed")
+	ids, err := a.vectorService.GetUnindexedNoteIDs()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("IndexNotesUnindexed 获取未量化笔记失败", fastlog.Error(err))
+		return err
+	}
+	if len(ids) == 0 {
+		return errors.New("所有笔记都已量化")
+	}
+	a.LogSvc.Logger.Debugw("IndexNotesUnindexed 待量化", fastlog.Int("note_count", len(ids)))
+	return a.startVectorIndex(context.Background(), ids)
+}
+
+// IndexNotesStale 仅重新量化内容已变化的笔记（已量化但当前内容与量化时不一致），异步执行
+func (a *App) IndexNotesStale() error {
+	a.LogSvc.Logger.Debugw("IndexNotesStale")
+	ids, err := a.vectorService.GetStaleNoteIDs()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("IndexNotesStale 获取需重新量化笔记失败", fastlog.Error(err))
+		return err
+	}
+	if len(ids) == 0 {
+		return errors.New("没有需要重新量化的笔记")
+	}
+	a.LogSvc.Logger.Debugw("IndexNotesStale 待量化", fastlog.Int("note_count", len(ids)))
+	return a.startVectorIndex(context.Background(), ids)
+}
+
+// GetVectorIndexStatus 返回向量索引全局统计（轻量：COUNT/SUM 聚合，不含逐笔记内容比对），
+// 供数据管理页概览（信笺统计）使用；量化弹窗的完整状态走 GetVectorIndexOverview
+// VectorIndexStatus 向量索引全局统计结果（Wails 绑定需单值返回，多返回值只保留第一个）
 type VectorIndexStatus struct {
 	NoteCount  int   `json:"noteCount"`
 	ChunkCount int   `json:"chunkCount"`
@@ -1458,6 +1489,54 @@ func (a *App) GetVectorIndexStatus() (*VectorIndexStatus, error) {
 	}
 	a.LogSvc.Logger.Debugw("GetVectorIndexStatus 结果", fastlog.Int("noteCount", noteCount), fastlog.Int("chunkCount", chunkCount), fastlog.Int64("sizeBytes", sizeBytes))
 	return &VectorIndexStatus{NoteCount: noteCount, ChunkCount: chunkCount, SizeBytes: sizeBytes}, nil
+}
+
+// GetVectorIndexOverview 返回量化弹窗所需的完整状态：
+//   - noteCount/chunkCount/sizeBytes：全局存储口径（GetIndexStatus，含回收站残留向量）
+//   - totalNotes/unindexedNotes/staleNotes/upToDateNotes：非软删笔记的量化状态口径
+//     （staleNotes = 已量化但内容已变化、需重新量化的笔记数）
+//
+// 注意：该接口需逐笔记重新切块比对（classifyVectorNotes），成本显著高于 GetVectorIndexStatus，
+// 仅供量化弹窗调用，勿用于高频路径（如数据管理页概览）
+// VectorIndexOverview 向量索引完整状态结果（量化弹窗专用）
+type VectorIndexOverview struct {
+	NoteCount      int   `json:"noteCount"`
+	ChunkCount     int   `json:"chunkCount"`
+	SizeBytes      int64 `json:"sizeBytes"`
+	TotalNotes     int   `json:"totalNotes"`
+	UnindexedNotes int   `json:"unindexedNotes"`
+	StaleNotes     int   `json:"staleNotes"`
+	UpToDateNotes  int   `json:"upToDateNotes"`
+}
+
+func (a *App) GetVectorIndexOverview() (*VectorIndexOverview, error) {
+	noteCount, chunkCount, sizeBytes, err := a.vectorService.GetIndexStatus()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 失败", fastlog.Error(err))
+		return nil, err
+	}
+	totalNotes, unindexedNotes, staleNotes, upToDateNotes, err := a.vectorService.GetVectorNoteOverview()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 量化状态统计失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Debugw("GetVectorIndexOverview 结果",
+		fastlog.Int("noteCount", noteCount),
+		fastlog.Int("chunkCount", chunkCount),
+		fastlog.Int64("sizeBytes", sizeBytes),
+		fastlog.Int("totalNotes", totalNotes),
+		fastlog.Int("unindexedNotes", unindexedNotes),
+		fastlog.Int("staleNotes", staleNotes),
+		fastlog.Int("upToDateNotes", upToDateNotes))
+	return &VectorIndexOverview{
+		NoteCount:      noteCount,
+		ChunkCount:     chunkCount,
+		SizeBytes:      sizeBytes,
+		TotalNotes:     totalNotes,
+		UnindexedNotes: unindexedNotes,
+		StaleNotes:     staleNotes,
+		UpToDateNotes:  upToDateNotes,
+	}, nil
 }
 
 // DeleteAllVectors 删除全部向量索引内容

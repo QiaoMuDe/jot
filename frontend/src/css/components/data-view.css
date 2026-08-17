@@ -737,7 +737,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: center;        /* 内容不超高时垂直居中 */
+  justify-content: safe center;   /* 内容超高（极小窗口）时回退为起始对齐，避免居中裁剪无法滚动 */
+  overflow-y: auto;               /* 6 卡片 + 模式控件在极小窗口下的兜底滚动 */
   gap: 14px;
 }
 
@@ -775,6 +777,30 @@
   font-size: 0.813rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+/* 占用空间数字小号变体（值如 "16.16 MB" 较长，缩小字号防溢出） */
+.vector-index-all-card-num-sm {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+/* 「全部笔记」范围量化模式选择：复用设置页排序方式的分段滑块组件样式
+   （.segmented-control / .segmented-indicator / .segmented-btn 基础样式来自 settings-panel.css） */
+.segmented-control.vector-index-all-mode {
+  width: 320px;
+  height: 34px;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.vector-index-all-mode .segmented-indicator {
+  width: calc(33.33% - 2px);
+}
+
+.vector-index-all-mode .segmented-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .vector-index-picker-toolbar {

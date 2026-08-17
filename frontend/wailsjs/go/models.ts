@@ -145,6 +145,30 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class VectorIndexOverview {
+	    noteCount: number;
+	    chunkCount: number;
+	    sizeBytes: number;
+	    totalNotes: number;
+	    unindexedNotes: number;
+	    staleNotes: number;
+	    upToDateNotes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VectorIndexOverview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.noteCount = source["noteCount"];
+	        this.chunkCount = source["chunkCount"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.totalNotes = source["totalNotes"];
+	        this.unindexedNotes = source["unindexedNotes"];
+	        this.staleNotes = source["staleNotes"];
+	        this.upToDateNotes = source["upToDateNotes"];
+	    }
+	}
 	export class VectorIndexStatus {
 	    noteCount: number;
 	    chunkCount: number;

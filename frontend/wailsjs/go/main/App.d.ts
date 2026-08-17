@@ -159,6 +159,8 @@ export function GetTrashNotebooks(arg1:number,arg2:number):Promise<services.Pagi
 
 export function GetTrashNotes(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
+export function GetVectorIndexOverview():Promise<main.VectorIndexOverview>;
+
 export function GetVectorIndexStatus():Promise<main.VectorIndexStatus>;
 
 export function GetVersion():Promise<string>;
@@ -172,6 +174,10 @@ export function IndexNotesByAll():Promise<void>;
 export function IndexNotesByIDs(arg1:Array<number>):Promise<void>;
 
 export function IndexNotesByNotebooks(arg1:Array<number>):Promise<void>;
+
+export function IndexNotesStale():Promise<void>;
+
+export function IndexNotesUnindexed():Promise<void>;
 
 export function ListTodos():Promise<Array<models.Todo>>;
 

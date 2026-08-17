@@ -310,6 +310,10 @@ export function GetTrashNotes(arg1, arg2) {
   return window['go']['main']['App']['GetTrashNotes'](arg1, arg2);
 }
 
+export function GetVectorIndexOverview() {
+  return window['go']['main']['App']['GetVectorIndexOverview']();
+}
+
 export function GetVectorIndexStatus() {
   return window['go']['main']['App']['GetVectorIndexStatus']();
 }
@@ -336,6 +340,14 @@ export function IndexNotesByIDs(arg1) {
 
 export function IndexNotesByNotebooks(arg1) {
   return window['go']['main']['App']['IndexNotesByNotebooks'](arg1);
+}
+
+export function IndexNotesStale() {
+  return window['go']['main']['App']['IndexNotesStale']();
+}
+
+export function IndexNotesUnindexed() {
+  return window['go']['main']['App']['IndexNotesUnindexed']();
 }
 
 export function ListTodos() {

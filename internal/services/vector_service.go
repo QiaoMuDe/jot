@@ -41,6 +41,10 @@ const chunkCandidateMultiplier = 5
 // maxChunksPerNote 每个命中笔记最多保留的命中块数，防止单篇笔记命中块过多挤占其他笔记的卡片槽位
 const maxChunksPerNote = 4
 
+// chunkMaxRunes 笔记切块单块 rune 上限（IndexNotes 写路径与 classifyVectorNotes 状态比对共用，
+// 两处必须一致，否则内容未变也会被判为"需重新量化"）
+const chunkMaxRunes = 600
+
 // ===== GSE 中文分词器（懒加载，EMBED 嵌入式词典） =====
 
 // 停用词表，过滤分词结果中的高频无意义单字
@@ -170,6 +174,9 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 		for _, tag := range note.Tags {
 			tagNames = append(tagNames, tag.Name)
 		}
+		// 标签排序保证确定性：与 classifyVectorNotes 状态比对口径一致，
+		// 避免 GORM Preload 顺序变化导致内容未变却误判"需重新量化"
+		sort.Strings(tagNames)
 		meta := ChunkMeta{
 			Title:     note.Title,
 			Tags:      tagNames,
@@ -177,7 +184,7 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 		}
 
 		// 切块：单块上限 600 rune（含元数据前缀）；正文为空或切不出块时跳过本篇
-		chunks := ChunkContent(note.Content, 600, meta)
+		chunks := ChunkContent(note.Content, chunkMaxRunes, meta)
 		if len(chunks) == 0 {
 			continue
 		}
@@ -291,6 +298,140 @@ func (s *VectorService) CountVectorsByModel(model string) (int64, error) {
 // DeleteAllVectors 清空 note_vectors 表（物理删除所有向量记录）
 func (s *VectorService) DeleteAllVectors() error {
 	return s.db.Where("1 = 1").Delete(&models.NoteVector{}).Error
+}
+
+// ===== 量化状态分类（未量化 / 需重新量化 / 已最新） =====
+
+// vectorNoteStatus 量化状态分类结果：按笔记 ID 集合分类，供状态统计与定向量化入口共用
+type vectorNoteStatus struct {
+	TotalNotes   int
+	IndexedNotes int
+	UnindexedIDs []uint // 未量化（无向量记录）的非软删笔记
+	StaleIDs     []uint // 已量化但当前内容与量化时不一致，需重新量化
+	UpToDateIDs  []uint // 已量化且当前内容与量化时一致
+}
+
+// classifyVectorNotes 对全部非软删笔记做量化状态分类（一次计算，多个调用方复用）：
+//  1. 未量化 = 无任何向量记录的非软删笔记
+//  2. 需重新量化 = 已有向量记录，但用当前内容（标题/标签/创建时间/正文）重新切块后
+//     与 note_vectors 中存储的块文本不一致（块数不同或任一文本不同）
+//  3. 已最新 = 重新切块结果与存储块完全一致
+//
+// 复用 IndexNotes 同一套 ChunkContent 切块口径（maxRunes=600）；标签名排序保证与写路径一致，
+// 存量旧块若因标签顺序不同被误判为需重新量化，重新量化一次后即稳定（自愈）
+func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteStatus, error) {
+	status := &vectorNoteStatus{}
+
+	// 1. 全部非软删笔记 id（软删/回收站笔记不参与统计与定向量化）
+	var allIDs []uint
+	if err := s.db.WithContext(ctx).Model(&models.Note{}).
+		Where("deleted_at IS NULL").Pluck("id", &allIDs).Error; err != nil {
+		s.logger.Errorw("VectorService.classifyVectorNotes 查询笔记失败", fastlog.Error(err))
+		return nil, fmt.Errorf("查询笔记失败: %w", err)
+	}
+	status.TotalNotes = len(allIDs)
+
+	// 2. 已有向量的非软删笔记：note_id -> 按 chunk_index 升序的存储块文本
+	var rows []struct {
+		NoteID    uint
+		ChunkText string
+	}
+	if err := s.db.WithContext(ctx).Raw(
+		"SELECT nv.note_id, nv.chunk_text FROM note_vectors nv " +
+			"JOIN notes n ON n.id = nv.note_id AND n.deleted_at IS NULL " +
+			"ORDER BY nv.note_id, nv.chunk_index").Scan(&rows).Error; err != nil {
+		s.logger.Errorw("VectorService.classifyVectorNotes 查询向量失败", fastlog.Error(err))
+		return nil, fmt.Errorf("查询向量记录失败: %w", err)
+	}
+	byNote := make(map[uint][]string)
+	indexedSet := make(map[uint]bool)
+	for _, r := range rows {
+		byNote[r.NoteID] = append(byNote[r.NoteID], r.ChunkText)
+		indexedSet[r.NoteID] = true
+	}
+	status.IndexedNotes = len(indexedSet)
+
+	// 3. 未量化：无向量记录的非软删笔记
+	for _, id := range allIDs {
+		if !indexedSet[id] {
+			status.UnindexedIDs = append(status.UnindexedIDs, id)
+		}
+	}
+
+	// 4. 对已量化笔记做内容比对：重新切块 vs 存储块
+	if len(indexedSet) > 0 {
+		indexedIDs := make([]uint, 0, len(indexedSet))
+		for id := range indexedSet {
+			indexedIDs = append(indexedIDs, id)
+		}
+		// GORM 自动追加 deleted_at IS NULL 过滤（索引集中的笔记本就非软删，双保险）
+		var notes []models.Note
+		if err := s.db.WithContext(ctx).Preload("Tags").Where("id IN ?", indexedIDs).Find(&notes).Error; err != nil {
+			s.logger.Errorw("VectorService.classifyVectorNotes 查询笔记内容失败", fastlog.Error(err))
+			return nil, fmt.Errorf("查询笔记内容失败: %w", err)
+		}
+		for _, note := range notes {
+			// 与 IndexNotes 一致的标签排序，保证切块口径确定
+			tagNames := make([]string, 0, len(note.Tags))
+			for _, tag := range note.Tags {
+				tagNames = append(tagNames, tag.Name)
+			}
+			sort.Strings(tagNames)
+			meta := ChunkMeta{
+				Title:     note.Title,
+				Tags:      tagNames,
+				CreatedAt: note.CreatedAt,
+			}
+			current := ChunkContent(note.Content, chunkMaxRunes, meta)
+			if chunksEqual(current, byNote[note.ID]) {
+				status.UpToDateIDs = append(status.UpToDateIDs, note.ID)
+			} else {
+				status.StaleIDs = append(status.StaleIDs, note.ID)
+			}
+		}
+	}
+
+	return status, nil
+}
+
+// chunksEqual 比较重新切块结果与存储块文本是否完全一致（块数 + 逐块文本）
+func chunksEqual(current, stored []string) bool {
+	if len(current) != len(stored) {
+		return false
+	}
+	for i := range current {
+		if current[i] != stored[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// GetVectorNoteOverview 返回量化状态统计：总笔记数 / 未量化 / 需重新量化 / 已最新（均为非软删笔记口径）
+func (s *VectorService) GetVectorNoteOverview() (totalNotes, unindexedNotes, staleNotes, upToDateNotes int, err error) {
+	status, err := s.classifyVectorNotes(context.Background())
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return status.TotalNotes, len(status.UnindexedIDs), len(status.StaleIDs), len(status.UpToDateIDs), nil
+}
+
+// GetUnindexedNoteIDs 返回未量化的非软删笔记 ID 列表（供"仅量化未量化笔记"入口使用）
+func (s *VectorService) GetUnindexedNoteIDs() ([]uint, error) {
+	status, err := s.classifyVectorNotes(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return status.UnindexedIDs, nil
+}
+
+// GetStaleNoteIDs 返回需重新量化（内容已变化）的非软删笔记 ID 列表
+func (s *VectorService) GetStaleNoteIDs() ([]uint, error) {
+	status, err := s.classifyVectorNotes(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return status.StaleIDs, nil
 }
 
 // ===== 关键词检索 + 混合召回 =====

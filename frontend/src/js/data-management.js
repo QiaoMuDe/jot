@@ -516,6 +516,7 @@ export async function restoreFromDir() {
 
 // 量化弹窗状态（模块级）
 let vectorIndexScope = 'all';        // 当前量化范围：all / notebooks / notes
+let vectorIndexAllMode = 'all';      // 「全部笔记」范围量化模式：all（全部）/ unindexed（仅未量化）/ stale（仅需重新量化）
 let vectorIndexSelected = new Set(); // 当前选中的 ID 集合（笔记本 ID 或笔记 ID）
 let vectorIndexNotebooks = [];       // 笔记本列表缓存（含 noteCount）
 let vectorIndexNotes = [];           // 笔记列表缓存（{ id, title }）
@@ -617,7 +618,9 @@ export async function openVectorIndexModal() {
 
     // 复位弹窗状态
     vectorIndexScope = 'all';
+    vectorIndexAllMode = 'all';
     vectorIndexSelected = new Set();
+    vectorIndexStatus = null; // 清空上次会话残留的状态，避免首次渲染显示过期计数
     vectorIndexRunning = false;
     setVectorIndexView('select');
     document.querySelectorAll('#vectorIndexScopeSeg .vector-index-scope-btn').forEach(btn => {
@@ -659,16 +662,18 @@ export async function openVectorIndexModal() {
     // 弹窗布局稳定后定位分段指示条
     repositionVectorIndexScopeIndicator();
 
-    // 并行加载笔记本、笔记列表与已量化统计
+    // 并行加载笔记本、笔记列表（弹窗交互所需）；量化状态（含逐笔记内容比对）改为异步填充，
+    // 不阻塞弹窗打开——先渲染信息卡片（状态未就绪时计数为 0），状态返回后自动刷新
     await Promise.all([
         loadVectorIndexNotebooks(),
         loadVectorIndexNotes(),
-        loadVectorIndexStatus(),
     ]);
     // 初始范围为「全部笔记」：渲染并显示信息卡片
     renderVectorIndexAllInfo();
     const allInfoEl = document.getElementById('vectorIndexAllInfo');
     if (allInfoEl) allInfoEl.style.display = '';
+    // 异步加载量化状态并在就绪后刷新卡片（失败静默，卡片维持 0 计数）
+    loadVectorIndexStatus().then(renderVectorIndexAllInfo);
 }
 
 /**
@@ -798,6 +803,8 @@ function animateVectorIndexPicker(showEl, hideEl) {
  */
 function switchVectorIndexScope(scope) {
     vectorIndexScope = scope;
+    // 切换范围时复位「全部笔记」量化模式（默认量化全部）
+    vectorIndexAllMode = 'all';
     // 更新范围按钮高亮
     document.querySelectorAll('#vectorIndexScopeSeg .vector-index-scope-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.scope === scope);
@@ -929,18 +936,23 @@ async function loadVectorIndexNotes() {
 }
 
 /**
- * 获取已量化索引统计（GetVectorIndexStatus），供「全部笔记」信息卡片使用
+ * 获取量化弹窗完整状态（GetVectorIndexOverview：全局统计 + 未量化/需重新量化/已最新分类），
+ * 供「全部笔记」信息卡片使用；注意该接口含逐笔记内容比对，仅弹窗调用
  */
 async function loadVectorIndexStatus() {
     vectorIndexStatus = null;
     try {
-        if (window.go?.main?.App?.GetVectorIndexStatus) {
-            const v = await window.go.main.App.GetVectorIndexStatus();
+        if (window.go?.main?.App?.GetVectorIndexOverview) {
+            const v = await window.go.main.App.GetVectorIndexOverview();
             if (v) {
                 vectorIndexStatus = {
                     noteCount: v.noteCount || 0,
                     chunkCount: v.chunkCount || 0,
                     sizeBytes: v.sizeBytes || 0,
+                    totalNotes: v.totalNotes || 0,
+                    unindexedNotes: v.unindexedNotes || 0,
+                    staleNotes: v.staleNotes || 0,
+                    upToDateNotes: v.upToDateNotes || 0,
                 };
             }
         }
@@ -948,15 +960,34 @@ async function loadVectorIndexStatus() {
 }
 
 /**
- * 渲染「全部笔记」信息卡片（待量化 / 已量化 / 涉及笔记本 + 说明文案）
+ * 定位「全部笔记」模式分段滑块的滑动指示条（复刻设置页排序方式控件的算法）
+ * segW = (容器宽 - 8) / 按钮数，指示条 translateX(2 + index * segW)，宽度 = segW
+ */
+function repositionVectorIndexAllModeIndicator() {
+    const seg = document.getElementById('vectorIndexAllModeSeg');
+    const indicator = document.getElementById('vectorIndexAllModeIndicator');
+    if (!seg || !indicator) return;
+    const btns = Array.from(seg.querySelectorAll('.segmented-btn'));
+    const active = btns.find(b => b.classList.contains('active'));
+    if (!active) return;
+    const cw = seg.offsetWidth;
+    if (cw === 0) return; // 容器尚未布局（如初次打开时 display:none 刚切换），跳过由 rAF 重试
+    const segW = (cw - 8) / btns.length;
+    indicator.style.transform = `translateX(${2 + btns.indexOf(active) * segW}px)`;
+    indicator.style.width = `${segW}px`;
+}
+
+/**
+ * 渲染「全部笔记」信息卡片（未量化 / 需重新量化 / 已量化最新 / 总笔记 / 片段 / 占用 + 量化模式分段滑块）
+ * 「需重新量化」= 已量化但内容（标题/正文/标签/创建时间参与切块的全部输入）与量化时不一致
  */
 function renderVectorIndexAllInfo() {
     const el = document.getElementById('vectorIndexAllInfo');
     if (!el) return;
-    const total = vectorIndexNotes.length;
-    const indexed = vectorIndexStatus?.noteCount || 0;
-    const pending = Math.max(0, total - indexed);
-    const notebooks = vectorIndexNotebooks.length;
+    const total = vectorIndexStatus?.totalNotes ?? vectorIndexNotes.length;
+    const unindexed = vectorIndexStatus?.unindexedNotes || 0;
+    const stale = vectorIndexStatus?.staleNotes || 0;
+    const upToDate = vectorIndexStatus?.upToDateNotes || 0;
     const chunks = vectorIndexStatus?.chunkCount || 0;
     const sizeMB = ((vectorIndexStatus?.sizeBytes || 0) / 1048576).toFixed(2);
     if (total === 0) {
@@ -966,19 +997,47 @@ function renderVectorIndexAllInfo() {
     el.innerHTML = `
         <div class="vector-index-all-cards">
             <div class="vector-index-all-card">
-                <div class="vector-index-all-card-num">${pending}</div>
-                <div class="vector-index-all-card-label">待量化</div>
+                <div class="vector-index-all-card-num">${unindexed}</div>
+                <div class="vector-index-all-card-label">未量化</div>
             </div>
             <div class="vector-index-all-card">
-                <div class="vector-index-all-card-num">${indexed}</div>
-                <div class="vector-index-all-card-label">已量化 ${chunks} 片段</div>
+                <div class="vector-index-all-card-num">${stale}</div>
+                <div class="vector-index-all-card-label" title="已量化但内容（标题/正文/标签等）已编辑变化的笔记">需重新量化</div>
             </div>
             <div class="vector-index-all-card">
-                <div class="vector-index-all-card-num">${notebooks}</div>
-                <div class="vector-index-all-card-label">涉及笔记本</div>
+                <div class="vector-index-all-card-num">${upToDate}</div>
+                <div class="vector-index-all-card-label">已量化（最新）</div>
+            </div>
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num">${total}</div>
+                <div class="vector-index-all-card-label">总笔记数</div>
+            </div>
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num">${chunks}</div>
+                <div class="vector-index-all-card-label">片段数</div>
+            </div>
+            <div class="vector-index-all-card">
+                <div class="vector-index-all-card-num vector-index-all-card-num-sm">${sizeMB} MB</div>
+                <div class="vector-index-all-card-label">占用空间</div>
             </div>
         </div>
-        <p class="vector-index-all-note">将量化全部 ${total} 篇笔记，无需选择。已量化占用 ${sizeMB} MB。</p>`;
+        <div class="segmented-control vector-index-all-mode" id="vectorIndexAllModeSeg">
+            <div class="segmented-indicator" id="vectorIndexAllModeIndicator"></div>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'all' ? ' active' : ''}" data-mode="all">量化全部</button>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'unindexed' ? ' active' : ''}" data-mode="unindexed"${unindexed === 0 ? ' disabled title="没有未量化的笔记"' : ''}>仅未量化</button>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'stale' ? ' active' : ''}" data-mode="stale"${stale === 0 ? ' disabled title="没有需要重新量化的笔记"' : ''}>仅需重新量化</button>
+        </div>`;
+    // 模式切换：更新 active 态并滑动指示条（数量为 0 的选项已 disabled，无需额外校验）
+    el.querySelectorAll('#vectorIndexAllModeSeg .segmented-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.disabled) return;
+            vectorIndexAllMode = btn.dataset.mode;
+            el.querySelectorAll('#vectorIndexAllModeSeg .segmented-btn').forEach(b => b.classList.toggle('active', b === btn));
+            repositionVectorIndexAllModeIndicator();
+        });
+    });
+    // 初次渲染时容器可能刚从 display:none 变为可见，rAF 内布局完成后再定位指示条
+    requestAnimationFrame(repositionVectorIndexAllModeIndicator);
 }
 
 /**
@@ -1097,8 +1156,25 @@ async function startVectorIndex() {
     let fn = null;
     let args = [];
     if (vectorIndexScope === 'all') {
-        fn = app.IndexNotesByAll;
-        args = [];
+        // 「全部笔记」范围：按所选量化模式分发（全部 / 仅未量化 / 仅需重新量化）
+        if (vectorIndexAllMode === 'unindexed') {
+            if ((vectorIndexStatus?.unindexedNotes || 0) === 0) {
+                nm.show('所有笔记都已量化，无需处理', 'info');
+                return;
+            }
+            fn = app.IndexNotesUnindexed;
+            args = [];
+        } else if (vectorIndexAllMode === 'stale') {
+            if ((vectorIndexStatus?.staleNotes || 0) === 0) {
+                nm.show('没有需要重新量化的笔记', 'info');
+                return;
+            }
+            fn = app.IndexNotesStale;
+            args = [];
+        } else {
+            fn = app.IndexNotesByAll;
+            args = [];
+        }
     } else if (vectorIndexScope === 'notebooks') {
         if (vectorIndexSelected.size === 0) {
             nm.show('请先选择至少一个笔记本', 'warning');
