@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"jot/internal/models"
 
@@ -837,8 +838,10 @@ func (s *NoteService) GetByDate(date string) ([]models.Note, error) {
 
 // GetMonthCounts 按月统计某月每天创建的非删除笔记数量，返回 map[int]int（key 为日期数字 1-31）
 func (s *NoteService) GetMonthCounts(year, month int) (map[int]int, error) {
-	yearStr := fmt.Sprintf("%04d", year)
-	monthStr := fmt.Sprintf("%02d", month)
+	// 使用范围查询（月初 → 下月初）替代 strftime 函数过滤，命中 idx_notes_created 索引，
+	// 避免大库下每次进日历/启动渲染当月时的全表扫描
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
+	end := start.AddDate(0, 1, 0)
 
 	type dayCount struct {
 		Day   int `gorm:"column:day"`
@@ -847,7 +850,7 @@ func (s *NoteService) GetMonthCounts(year, month int) (map[int]int, error) {
 	var results []dayCount
 	if err := s.db.Model(&models.Note{}).
 		Select("strftime('%d', created_at) as day, COUNT(*) as count").
-		Where("strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ? AND deleted_at IS NULL", yearStr, monthStr).
+		Where("created_at >= ? AND created_at < ? AND deleted_at IS NULL", start, end).
 		Group("strftime('%d', created_at)").
 		Find(&results).Error; err != nil {
 		s.logger.Errorw("NoteService.GetMonthCounts 失败", fastlog.Error(err))

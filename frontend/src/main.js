@@ -400,7 +400,6 @@ const els = {
     editorPanel: $('editorPanel'),
 
     cardGrid: $('cardGrid'),
-    skeletonGrid: $('skeletonGrid'),
     emptyNotes: $('emptyNotes'),
 
     // 编辑器
@@ -758,10 +757,10 @@ function switchView(view) {
  * 加载笔记列表（第 1 页，重置分页）
  */
 async function loadNotes() {
-    // 显示骨架屏加载状态
-    if (els.skeletonGrid) els.skeletonGrid.style.display = '';
+    // 加载前是否已有卡片：首次加载（无卡片）保留全量入场动画；刷新（有卡片）原地替换避免闪烁
+    const hadCards = state.notes.length > 0;
+    // 隐藏空状态；不再清空/隐藏卡片网格：已有卡片保持可见，数据到达后整体替换，避免"消失→重来"闪烁
     if (els.emptyNotes) els.emptyNotes.style.display = 'none';
-    if (els.cardGrid) { els.cardGrid.style.display = 'none'; els.cardGrid.innerHTML = ''; }
 
     try {
         // 获取当前排序方式
@@ -810,7 +809,8 @@ async function loadNotes() {
         state.totalAllNotes = totalNotes;
         hasMoreNotes = false;
     }
-    renderCardGrid();
+    // 首次加载（无旧卡片）保留全量入场动画；刷新时已有卡片保持可见，无动画原地替换避免"从 opacity:0 重放"闪感
+    renderCardGrid(hadCards ? 'none' : undefined);
 
 }
 
@@ -3616,9 +3616,6 @@ function renderCardGrid(animateMode, prevCount) {
     // 先清理旧 footer，确保空数据时也能正确移除
     const oldFooter = els.viewGrid.querySelector('.notes-footer');
     if (oldFooter) oldFooter.remove();
-
-    // 隐藏骨架屏
-    if (els.skeletonGrid) els.skeletonGrid.style.display = 'none';
 
     if (sorted.length === 0) {
         // 隐藏卡片网格，显示空状态
@@ -8349,19 +8346,18 @@ async function init() {
     });
 
     state.selectedTags = [];
-    await loadSettings();
+    // 并行加载设置与笔记本列表（互不依赖），缩短首屏空白窗口；各自内部已有 try/catch，外层再兜底防止 reject 中断 init
+    await Promise.all([loadSettings().catch(() => {}), loadNotebooks().catch(() => {})]);
     await initSortSettings();
     initAISettings();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
-    // 加载笔记本列表（会设置默认选中）
-    await loadNotebooks();
     // 确保 activeNotebookId 有值（默认为 1）
     if (!state.activeNotebookId && state.notebooks.length > 0) {
         state.activeNotebookId = state.notebooks[0].id;
     }
-    await loadNotes();
-    await loadTags();
+    // 笔记与标签并行加载（互不依赖）
+    await Promise.all([loadNotes(), loadTags()]);
     // 初始化预览渲染 Worker
     initPreviewWorker();
     // 初始化 TOC 侧栏展开/折叠按钮
