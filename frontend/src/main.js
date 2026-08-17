@@ -3047,8 +3047,8 @@ async function initAISettings() {
             renderPresetMgrList();
         }
     });
-    // 量化连接的新增/管理按钮（预设为共享表，仅初始值来源不同；管理列表按所在行插入）
-    document.getElementById('aiEmbedPresetAddBtn')?.addEventListener('click', () => openAddProfileModal(true));
+    // 量化连接的新增/管理按钮（预设为共享表；新增弹窗统一纯净打开不预填当前连接，管理列表按所在行插入）
+    document.getElementById('aiEmbedPresetAddBtn')?.addEventListener('click', openAddProfileModal);
     document.getElementById('aiEmbedPresetMgrBtn')?.addEventListener('click', (e) => {
         if (presetMgrExpanded) {
             closePresetMgrList();
@@ -3212,15 +3212,14 @@ async function switchProfileEmbed(id, silent) {
     }
 }
 
-// 打开新增预设弹窗
-// embed 为 true 时以量化连接表单值为初始值（预设为共享表，仅初始值来源不同）
-function openAddProfileModal(embed = false) {
+// 打开新增预设弹窗：每次打开都是纯净的空表单，不预填当前连接表单值
+function openAddProfileModal() {
     editingProfileId = null;
     document.getElementById('presetModalTitle').textContent = '新增配置';
     document.getElementById('presetModalName').value = '';
-    document.getElementById('presetModalURL').value = (embed ? els.aiEmbedBaseURL.value : els.aiBaseURL.value) || '';
+    document.getElementById('presetModalURL').value = '';
     document.getElementById('presetModalURL').classList.remove('input-error');
-    document.getElementById('presetModalKey').value = (embed ? els.aiEmbedAPIKey.value : els.aiAPIKey.value) || '';
+    document.getElementById('presetModalKey').value = '';
     // 重置 Key 为隐藏状态
     var keyInput = document.getElementById('presetModalKey');
     var eye = document.querySelector('#presetModalKeyToggle .toggle-eye');
