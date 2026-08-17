@@ -61,6 +61,20 @@ marked.use(alert());
 let cmEditor = null;
 let cmReadOnlyCompartment = null;
 
+/**
+ * 编辑器打开/关闭操作代际计数器：
+ * 每次 openEditor / closeEditor 递增，openEditor 的异步续体据此判断自己是否已被
+ * 更新的打开/关闭操作取代，避免旧笔记内容覆盖新笔记（切换笔记时的内容闪烁）。
+ */
+let editorOpSeq = 0;
+
+/**
+ * 预览渲染请求代际计数器：
+ * 每次 updatePreview 递增并随 Worker 消息携带，主线程据此丢弃过期渲染结果，
+ * 避免旧笔记的预览渲染结果晚到覆盖新笔记。
+ */
+let previewRenderSeq = 0;
+
 /** 当前代码高亮主题名称 */
 let codeHighlightTheme = 'monokai-dimmed';
 
@@ -991,7 +1005,10 @@ async function createNote() {
         console.error('创建笔记失败:', err);
     }
     nm.show('笔记已创建', 'success');
-    closeEditor();
+    // 保存期间用户可能已切换到其他笔记：仅当仍处于"新建"状态时才关闭编辑器
+    if (state.editingNoteId === null) {
+        closeEditor();
+    }
     await loadNotes();
     await loadNotebooks();
 }
@@ -1006,6 +1023,8 @@ async function updateNote(id) {
         nm.show('标题不能为空，请输入标题后再保存', 'warning');
         return;
     }
+    // 保存前捕获当前编辑的笔记：保存完成时若用户已切换到其他笔记则不关闭编辑器
+    const editingIdAtStart = state.editingNoteId;
 
     // 脏检测：有快照且内容无变更 → 跳过保存直接关闭
     const snapshot = state._editSnapshot;
@@ -1046,7 +1065,10 @@ async function updateNote(id) {
         console.error('更新笔记失败:', err);
     }
     nm.show('笔记已更新', 'success');
-    closeEditor();
+    // 保存期间用户可能已切换到其他笔记：仅当仍编辑本笔记时才关闭编辑器
+    if (state.editingNoteId === editingIdAtStart) {
+        closeEditor();
+    }
     await loadNotes();
     await loadNotebooks();
 }
@@ -3960,6 +3982,8 @@ async function toggleFileExt() {
  * @param {boolean} [hideEditBtn] - 是否隐藏"编辑"按钮（从召回卡片打开时用）
  */
 async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
+    // 捕获本次打开的操作代际：若阶段二异步加载期间发生了新的打开/关闭，本次续体将被放弃
+    const mySeq = ++editorOpSeq;
     state.editingNoteId = noteId || null;
     state.selectedTags = [];
 
@@ -3975,6 +3999,11 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         if (noteData) {
             els.editorNoteTitle.value = noteData.title || '';
             state.selectedTags = (noteData.tags || []).map((t) => t.id);
+        } else {
+            // noteId 存在但不在缓存（如从搜索/召回/其他笔记本打开）：
+            // 清空上一笔记残留的标题与标签，等待阶段二从后端加载后再填充
+            els.editorNoteTitle.value = '';
+            state.selectedTags = [];
         }
     } else {
         const now = new Date();
@@ -4011,6 +4040,11 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
 
     els.editorOverlay.dataset.mode = 'edit';
 
+    // ★ 清空上一笔记的预览残留：无论本次是哪种模式，先清掉 mdRendered 与预览哈希缓存，
+    //   防止 closeEditor 清理被跳过（<200ms 内重新打开）时旧笔记的预览内容短暂显示
+    els.mdRendered.innerHTML = '';
+    _lastPreviewContent = '';
+
     // 查看模式：预览状态显示（数据在阶段二填充）
     if (isReadOnly && noteData) {
         els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
@@ -4033,14 +4067,17 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         switchEditorMode('edit');
     }
 
-    // 标题输入监听
+    // 标题输入监听（先移除再按需添加：closeEditor 清理被跳过时防止监听器重复绑定导致 onEditorInput 双调）
+    els.editorNoteTitle.removeEventListener('input', onEditorInput);
     if (!isReadOnly) {
         els.editorNoteTitle.addEventListener('input', onEditorInput);
         state._titleInputListenerAttached = true;
     } else {
-        els.editorNoteTitle.removeEventListener('input', onEditorInput);
         state._titleInputListenerAttached = false;
     }
+
+    // 每次 openEditor 均为"新打开"：重置从查看模式进入编辑的标志（closeEditor 清理被跳过时避免残留旧值）
+    state.enteredFromViewMode = false;
 
     // ── 立即显示面板 + 骨架屏（不等数据加载） ──
     els.mainContent.style.overflow = 'hidden';
@@ -4117,8 +4154,12 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
                             const fetchedNote = await window.go.main.App.GetNote(noteId);
                             if (fetchedNote) {
                                 noteData = fetchedNote;
-                                els.editorNoteTitle.value = fetchedNote.title || '';
-                                state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
+                                // ★ 竞态保护：本次打开已被更新的 open/close 取代时，
+                                //   不再污染标题/标签（否则旧笔记续体会覆盖新打开的笔记界面）
+                                if (mySeq === editorOpSeq) {
+                                    els.editorNoteTitle.value = fetchedNote.title || '';
+                                    state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
+                                }
                                 try {
                                     if (window.go.main.App.GetNoteContent)
                                         fullContent = await window.go.main.App.GetNoteContent(noteId) || '';
@@ -4145,6 +4186,10 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     } catch (err) {
         console.error('编辑器数据加载失败:', err);
     }
+
+    // ★ 竞态保护：本次打开已被更新的 open/close 操作取代 → 放弃后续初始化，
+    //   防止旧笔记内容（initCodeMirror / 预览渲染）覆盖新打开的笔记
+    if (mySeq !== editorOpSeq) return;
 
     // 校正：从后端加载的笔记（不在缓存中），更新阶段一无法获取的信息
     if (noteData) {
@@ -4238,7 +4283,13 @@ function initPreviewWorker() {
             { type: 'module' }
         );
         _previewWorker.onmessage = function (e) {
-            const { html, error, headings } = e.data;
+            const { html, error, headings, seq } = e.data;
+            // ★ 竞态保护：丢弃过期渲染结果（属于更早一次 updatePreview 请求），仅释放 loading 标志，
+            //   防止旧笔记的预览渲染结果晚到覆盖当前笔记（切换笔记时预览区闪烁）
+            if (seq !== undefined && seq !== previewRenderSeq) {
+                _previewWorkerLoading = false;
+                return;
+            }
             if (error) {
                 console.error('Preview Worker:', error);
                 els.mdRendered.innerHTML = '<p class="md-error">渲染失败</p>';
@@ -4834,6 +4885,7 @@ function _applyPreviewFadeIn() {
 function updatePreview(content) {
     if (content === undefined) content = getEditorContent();
     if (!content.trim()) {
+        previewRenderSeq++;   // 使在途 Worker 渲染结果失效，防止其覆盖"暂无内容"
         els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
         _lastPreviewContent = '';
         _setPreviewLayout(false);
@@ -4856,11 +4908,13 @@ function updatePreview(content) {
         _previewWorkerLoading = true;
         // 显示加载状态
         els.mdRendered.innerHTML = '<div class="md-rendered-loading">加载中…</div>';
-        _previewWorker.postMessage(content);
+        previewRenderSeq++;
+        _previewWorker.postMessage({ content, seq: previewRenderSeq });
         return;
     }
 
     // 无 Worker 或 Worker 正忙时回退到主线程同步渲染
+    previewRenderSeq++;   // 使在途 Worker 渲染结果失效，防止其稍后到达覆盖本次同步渲染结果
     els.mdRendered.innerHTML = marked.parse(content);
     _applyPreviewDOMHelpers();
     renderMermaidBlocks(els.mdRendered);
@@ -5161,6 +5215,8 @@ async function handleAppExit() {
 }
 
 function closeEditor() {
+    // 递增操作代际：使所有仍在异步加载中的 openEditor 续体失效（其初始化将被放弃）
+    const mySeq = ++editorOpSeq;
     const overlay = els.editorOverlay;
     const panel = els.editorPanel;
     const body = panel.querySelector('.editor-body');
@@ -5171,6 +5227,9 @@ function closeEditor() {
 
     // 动画完成后执行清理
     setTimeout(() => {
+        // ★ 竞态保护：延迟清理期间发生了新的 open/close → 跳过本次清理
+        //   （新 openEditor 已接管面板/CM6/状态，清理会误关其面板、误毁其 CM6）
+        if (mySeq !== editorOpSeq) return;
         // 重置动画
         overlay.style.animation = '';
         panel.style.animation = '';
@@ -5219,6 +5278,8 @@ function closeEditor() {
         _setPreviewLayout(false);
         _closeToc();
         if (els.tocBody) els.tocBody.innerHTML = '';
+        // 使在途预览 Worker 渲染结果失效（防止面板关闭后旧结果写入 mdRendered，残留上次笔记内容）
+        previewRenderSeq++;
     }, 200);
 }
 

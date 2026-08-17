@@ -36,14 +36,14 @@ function extractHeadings(content) {
     }
 }
 
-// 监听主线程消息
+// 监听主线程消息（content: 待渲染 Markdown；seq: 渲染请求代际标识，原样回传供主线程丢弃过期结果）
 self.onmessage = function (e) {
-    const content = e.data;
+    const { content, seq } = e.data;
     try {
         const html = marked.parse(content);
         const headings = extractHeadings(content);
-        self.postMessage({ html, headings });
+        self.postMessage({ html, headings, seq });
     } catch (err) {
-        self.postMessage({ error: err.message });
+        self.postMessage({ error: err.message, seq });
     }
 };

@@ -540,21 +540,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **笔记首页加载优化（移除骨架屏 + notes 表索引 + 加载逻辑调优）**：大库下启动"骨架屏→闪烁→笔记重来"根因三重：① notes 表默认排序 `pinned DESC, updated_at DESC` **无索引** → SQLite 全表 temp 排序（排序记录携带大 content 列）→ GetNotes 变慢、骨架屏被拉长；② `loadNotes` 每次"先清空 cardGrid + 全量 cardEnter 从 opacity:0 重放" → 视觉闪烁；③ 启动链 `loadSettings→loadNotebooks→loadNotes→loadTags` 全串行 → 首屏空白窗口长。修复：[note.go](internal/models/note.go) 加 3 个命名索引（`idx_notes_sort(pinned,updated_at)` 覆盖默认排序 / `idx_notes_notebook_deleted(deleted_at,notebook_id)` 覆盖分页过滤与 `GetNotebookNoteCounts` 全表统计 / `idx_notes_created` 覆盖日历，GORM `priority` 小者在前、AutoMigrate 重启自动补建）；[note_service.go](internal/services/note_service.go) `GetMonthCounts` 由 `strftime` 函数过滤改 `[月初,下月初)` 范围查询走索引（**时区边界**：原按存储字符串匹配月份，新按本地时区，跨时区/改系统时区后统计可能偏移一天）；[main.js](frontend/src/main.js) 移除骨架屏、`loadNotes` 改为**不清空重载** + `renderCardGrid(hadCards ? 'none' : undefined)`（`hadCards = state.notes.length > 0`：首次保留全量入场动画 / 刷新原地替换防闪烁）、`init()` 启动链 `Promise.all` 并行化（loadSettings/loadNotebooks、loadNotes/loadTags，loadNotes 仍严格在 activeNotebookId 兜底之后）；[index.html](frontend/index.html)/[main-content.css](frontend/src/css/components/main-content.css) 删首页骨架屏（编辑器 `editor-skeleton`、AI 引用浮层骨架屏类名独立保留）。
 
----
-
-## 记忆点 1：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | Agent 模式新增调用外部 MCP 服务器的能力，**来源为配置文件而非数据库**（测试阶段用户拍板不做 CRUD UI/建表）。配置文件 `mcp-servers.json`（默认 `~/.jot/mcp/mcp-servers.json`，路径经 `internal/config` 统一解析，可经 `Deps.MCPServerConfigPath` 覆盖），编写规范见 [MCP_CONFIG.md](MCP_CONFIG.md)。新增 [internal/mcpserver](internal/mcpserver) 包：`config.go`（Server/Config 结构 + `Load`/`LoadDefault` 解析校验 + `EnabledServers`）、`client.go`（按 stdio/sse/http 三种传输用 mark3labs/mcp-go 构建客户端 + Start + Initialize 握手）、`tools.go`（基于 eino-ext components/tool/mcp 把服务器工具转 eino `tool.BaseTool`，统一改名 `mcp_{服务器}_{工具}` 防命名冲突 + ActionTextProvider 提供"调用 {服务器} 的 {工具}"文案 + Session/OpenSession/Close 生命周期）。[agent.go](internal/agent/agent.go) `Run()` 在 toolByName 索引构建前并入 MCP 工具，全部经 `WrapWithError` 包装（失败回填模型 + tool_error 事件，不中断 ReAct 循环），单服务器连接失败仅 Warn 跳过，会话随本轮 Run defer 关闭。eino 版本保持 v0.9.13（eino-ext mcp 要求 eino >=v0.6.0，兼容）。 |
-| **配置校验与日志（重要）** | `Load` 整体性错误（文件缺失/JSON 语法错误）返回 error 跳过全部 MCP 装配（Debug 日志）；**单条服务器校验失败仅跳过该条**，错误收集到 `Config.LoadErrors`（错误信息带 `server[i]` 索引定位），其余合法服务器正常装配，agent.go 逐条 Warn 告警（此前实现是"一条非法全盘跳过"的坑，已修）。每台服务器装配成功打 Info 日志（`MCP 服务器工具已上线 server=xxx count=N tools=...`，tools 为改名后名称）便于排查。`enabled` 默认 false（安全考量）：stdio 可执行任意命令、sse/http 可执行远程工具操作，env 密钥明文在配置文件。 |
-| **测试服务器** | [playground/mcp-math](playground/mcp-math)（add/multiply/sqrt）与 [playground/mcp-text](playground/mcp-text)（to_uppercase/to_lowercase/word_count）两个独立 Go module（mark3labs/mcp-go stdio 传输），已编译 exe 并写入 `mcp-servers.json` 启用；参数解析兼容 map / JSON 字符串 / RawMessage 三种客户端传参形态。单测覆盖：config_test.go（合法/非法/混合跳过）+ tools_test.go（内存 SSE 服务器全链路：握手→工具发现→前缀改名→真实调用→关闭）。 |
-| **设计决策** | 测试阶段确定**不做 CRUD UI/数据库表**（用户权衡：文件配置成本低、改完即生效、可版本控制），正式发布如需 UI 可把 mcp-servers.json 作为导入源平滑迁移（非互斥）。连接生命周期采用**每轮对话重连**（非长连接缓存）：实现简单、无残留连接、工具列表每轮刷新，stdio 子进程启动开销可接受；后续如需优化可升级为连接缓存。 |
-| **涉及文件** | [internal/mcpserver/config.go](internal/mcpserver/config.go)、[internal/mcpserver/client.go](internal/mcpserver/client.go)、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)、[internal/mcpserver/config_test.go](internal/mcpserver/config_test.go)、[internal/mcpserver/tools_test.go](internal/mcpserver/tools_test.go)、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerConfigPath + 装配/日志）、[internal/config/config.go](internal/config/config.go)（~/.jot 统一路径解析）、[mcp-servers.json](mcp-servers.json)（保留作格式示例，不再被默认读取）、[MCP_CONFIG.md](MCP_CONFIG.md)（配置规范）、[playground/mcp-math](playground/mcp-math)、[playground/mcp-text](playground/mcp-text) |
+34. **编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）**："打开笔记 A 后关闭，再打开笔记 B 先显示 A 内容再变 B"（md 无闪烁、非 md 有闪烁；"标题和内容都是 A"）。根因：openEditor 阶段二 `Promise.all([GetNoteContent, GetAllTags])` 异步续体竞态（**瓶颈常在 GetAllTags IPC，每次打开都触发，与笔记大小无关**）+ closeEditor 200ms 延迟清理无取消（误关新面板/误毁新 CM6）+ 标题/mdRendered 残留（B 不在缓存时不清空标题、清理被跳过时预览残留）+ 预览 Worker 结果无请求标识。修复（[main.js](frontend/src/main.js) + [preview-worker.js](frontend/src/js/preview-worker.js)）：模块级 `editorOpSeq` 代际（openEditor/closeEditor 每次递增，异步续体与 200ms 清理回调校验代际不匹配则放弃/跳过）；阶段一无条件清空 mdRendered/标题/`_lastPreviewContent`；GetNote 分支 DOM 修改加代际检查；updateNote/createNote 保存后仅当仍是本笔记才 closeEditor；预览 `previewRenderSeq` 随 Worker 消息传递、过期结果丢弃。Edge CDP 真实 wails dev + 隔离空库验证 20 轮 txt→txt 切换零残留；localStorage 不含编辑器内容。
 
 ---
 
-## 记忆点 2：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 1：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -565,7 +555,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 2：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -576,7 +566,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 3：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +577,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 4：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 5：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 6：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +612,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 7：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -634,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 8：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -646,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 9：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,6 +645,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **loadNotes 不清空重载 + 首次/刷新动画区分（重要）** | [main.js](frontend/src/main.js) `loadNotes` 不再 `cardGrid.style.display='none'` + `innerHTML=''`（已有卡片保持可见，数据到达后 `renderCardGrid` 整体替换）；渲染改 `renderCardGrid(hadCards ? 'none' : undefined)`，其中 `hadCards = state.notes.length > 0`——**首次加载（无卡片）走全量分支保留 cardEnter 交错淡入**（首屏入场动画不变），**刷新/切笔记本/返回首页走 'none' 原地替换**（无"从 opacity:0 重放"闪感，这是修闪烁的核心）。骨架屏整体移除：[index.html](frontend/index.html) 删 `#skeletonGrid` 块、[main-content.css](frontend/src/css/components/main-content.css) 删 `.skeleton-*`/`shimmer` 样式（编辑器 `editor-skeleton`、AI 笔记引用浮层骨架屏类名独立、保留不动）。 |
 | **启动链并行化** | `init()` 改 `await Promise.all([loadSettings().catch(() => {}), loadNotebooks().catch(() => {})])`（两者互不依赖、各自内部已有 try/catch，外层 `.catch` 兜底防止任一 reject 中断 init）+ `await Promise.all([loadNotes(), loadTags()])`（loadTags 不依赖 notes）；`loadNotes` 仍严格在 `activeNotebookId` 兜底（`if (!state.activeNotebookId && state.notebooks.length > 0)`）之后执行。`loadMoreNotes` 的 `'append'` 追加动画、`togglePin` 的 `'none'`、空状态「暂无笔记」逻辑均未改动。 |
 | **涉及文件** | [internal/models/note.go](internal/models/note.go)（3 个命名索引）、[internal/services/note_service.go](internal/services/note_service.go)（GetMonthCounts 范围查询 + `time` 导入）、[frontend/index.html](frontend/index.html)（删 #skeletonGrid）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（删骨架屏样式块）、[frontend/src/main.js](frontend/src/main.js)（els.skeletonGrid 移除、loadNotes hadCards 逻辑、renderCardGrid 删骨架屏隐藏、init 并行化） |
+
+---
+
+## 记忆点 10：笔记切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复"打开笔记 A 后关闭，再打开笔记 B 时先显示 A 内容再变成 B"的闪烁（用户报告 **md 笔记无闪烁、非 md 有闪烁**；表现为"标题和内容都是 A，然后整体变成 B"）。根因四类：① **openEditor 阶段二异步续体竞态**——阶段二 `Promise.all([GetNoteContent, GetAllTags])` 异步加载期间（**瓶颈常在 `loadTagsForEditor` 的 GetAllTags IPC，每次打开编辑器都触发，与笔记大小无关**），旧 openEditor(A) 的续体在 B 打开后完成 `initCodeMirror(A)` 覆盖 B；② **closeEditor 延迟清理无取消**——清理在 `setTimeout(200)` 中，与新 openEditor 竞态（误关新面板/误毁新 CM6/editingNoteId 重置为 null）；③ **标题/预览残留**——B 不在 state.notes 缓存时阶段一不清空标题（残留 A 标题），closeEditor 清理被跳过时 mdRendered 残留 A 预览（md 查看走预览区、非 md 走 CM6，故用户观察"md 无闪烁、非 md 有闪烁"）；④ **预览 Worker 渲染结果无请求标识**——旧笔记渲染结果晚到覆盖新笔记预览。 |
+| **代际计数器（核心）** | [main.js](frontend/src/main.js) 新增模块级 `editorOpSeq`（每次 openEditor/closeEditor 递增）：openEditor 阶段二 `await Promise.all` 后检查 `if (mySeq !== editorOpSeq) return`（**放弃过期续体，不初始化 CM6**，防旧笔记内容覆盖新笔记）；closeEditor 的 200ms 清理回调同样检查 `if (mySeq !== editorOpSeq) return`（**期间有新 open/close 则跳过清理**，防误关新面板/误毁新 CM6）；GetNote 分支（noteId 不在缓存）的标题/标签 DOM 修改也加 `mySeq === editorOpSeq` 检查（该分支在 contentPromise 内部、绕过续体保护，是标题污染的独立通道）。 |
+| **残留清理（重要）** | openEditor 阶段一无条件清空 `mdRendered.innerHTML` 与 `_lastPreviewContent`（防 closeEditor 清理被跳过时旧预览短暂显示）；noteId 存在但不在缓存时清空标题/标签（原残留上一笔记标题，GetNote 异步完成后才填充）；标题 input 监听器**先 removeEventListener 再按需 addEventListener**（防跳过清理时重复绑定导致 onEditorInput 双调）；`enteredFromViewMode` 每次 openEditor 重置。 |
+| **保存误关修复** | `updateNote`/`createNote` 保存完成后仅当 `state.editingNoteId` 仍是本次笔记（保存前捕获 `editingIdAtStart`/新建模式为 null）才 `closeEditor()`——防保存期间用户切换到新笔记时被误关（旧实现无条件 closeEditor，会使新 openEditor 的续体被代际递增误杀，新笔记打不开）。 |
+| **预览 Worker 请求标识** | [preview-worker.js](frontend/src/js/preview-worker.js) 消息协议改 `{content, seq}` 并原样回传；[main.js](frontend/src/main.js) `previewRenderSeq` 每次 updatePreview 递增，onmessage 校验 `seq !== previewRenderSeq` 则**丢弃过期结果**（仅释放 `_previewWorkerLoading` 防后续永远走同步路径）；worker 忙时主线程同步渲染路径同样递增 seq 防在途结果覆盖；closeEditor 清理末尾递增使在途结果失效。 |
+| **验证与排查教训（重要）** | Edge CDP 自动化验证：vite dev + 注入 IPC 延迟 stub（**mock 降级同步路径无法复现——GetNoteContent 抛错同步 fallback，必须注入延迟模拟 Wails IPC**）；真实 `wails dev -browser` + 隔离空库（**测试前必须备份替换 ~/.jot/data/jot.db，沙箱限制下备份到 workspace，测完恢复**）+ 真实后端 IPC 验证 txt→md / md→txt / 20 轮 txt→txt 快速切换零残留。排查线索：**"标题也是 A"是区分内容竞态与界面残留的关键**（openEditor 阶段一同步设置标题，标题残留说明是界面状态未清理而非数据竞态）；localStorage 仅存主题/侧栏折叠，**不含编辑器内容**（用户怀疑的持久化可排除）。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（editorOpSeq/previewRenderSeq 代际 + openEditor/closeEditor 竞态保护 + 残留清理 + updateNote/createNote 保存校验 + updatePreview/onmessage seq）、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)（消息协议携带 seq） |
 
 ---
 
