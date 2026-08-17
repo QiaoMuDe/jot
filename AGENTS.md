@@ -538,22 +538,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 32. **API 预设调整：移除自动生成默认配置 → 字段改名 is_builtin → 最终移除 is_builtin + 孤儿列清理**：① **移除"无预设时自动创建『默认配置』预设"逻辑**（app.go 启动迁移块 / SaveAllSettings / SaveAIConfig 三处 `CreateProfile("默认配置", ...)` 全删；内置服务商预设 [builtin_profiles.go](internal/database/builtin_profiles.go) 保留照常插入；`profile_service.go` 的 `SetActive` 死代码一并删除）。② **`IsDefault` 字段曾改名为 `IsBuiltin`**（gorm 列 `is_default`→`is_builtin`、JSON tag 同步），`DeleteProfile` 一度加"内置不可删除"拒删、前端按 `p.is_builtin` 隐藏删除按钮、存量库按 Name 补标。③ **最终决定移除 `is_builtin` 字段及全部内置/用户区分逻辑**（用户权衡：判断内置/用户记录无意义，反正重启会重新插入内置服务商）：[api_profile.go](internal/models/api_profile.go) 删 `IsBuiltin` 字段、[profile_service.go](internal/services/profile_service.go) `CreateProfile` 恢复固定三参 + `DeleteProfile` 移除拒删、[builtin_profiles.go](internal/database/builtin_profiles.go) 删补标循环（12 条内置服务商启动插入保留）、[main.js](frontend/src/main.js) 所有预设统一显示删除按钮、[models.ts](frontend/wailsjs/go/models.ts) 删 `is_builtin`。④ **孤儿列清理**（[db.go](internal/database/db.go) `dropAPIProfileOrphanColumns`，AutoMigrate 后、InitBuiltinProfiles 前调用）：`HasColumn` 检查 `is_default`（改名前的旧列）与 `is_builtin`（字段移除后 AutoMigrate 新增列），存在则 `DropColumn`；**幂等无需迁移标记**、失败中止启动。存量 `api_profiles` 8 列 → 6 列（id/name/base_url/api_key/is_active/created_at）。技能提示词（AIPrompt）的 `IsBuiltin` 是另一表功能不受影响。详见 [api_profile.go](internal/models/api_profile.go)、[profile_service.go](internal/services/profile_service.go)、[builtin_profiles.go](internal/database/builtin_profiles.go)、[db.go](internal/database/db.go)、[app.go](app.go)
 
----
-
-## 记忆点 1：AI 会话侧栏顶天立地重构 + 标题栏按钮固定 + 双击标题重命名 + HTML div 配平修复 + 前端检查工具链
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 四组前端改动：① **AI 会话侧栏顶天立地重构**——侧栏不再"在标题栏里模拟边框"，`.ai-session-sidebar` 位于 `#viewAiChat .ai-chat-layout` 内，从 topbar 下缘一直顶天立地到底部，左边框连续无断层；删除侧栏头部"会话"标题层，搜索框 `.ai-session-search-wrap` 直接顶到侧栏最上面。② **标题栏按钮固定**——标题栏恒为三列 grid（`1fr auto 1fr`：左 `.view-header-left` / 中 `#aiChatTitle` / 右 `.view-controls`），标题始终居中；左侧固定「折叠/展开 + 新建」两个 32×32 按钮（`.ai-tool-btn`，图标 `stroke-width: 2.5`），返回按钮已删除；折叠图标固定面板样式（无方向箭头），折叠走 `classList.toggle('collapsed')` + localStorage 持久化 + Ctrl+J 触发，按钮不随折叠迁移。③ **双击标题重命名**——`#aiChatTitle` 双击从"新建会话"改为"重命名当前会话"（无 activeSessionId 忽略），复用 `startInlineEdit`（contenteditable + 全选 + Enter/失焦保存 `RenameAISession` + Escape 取消），保存后 `renderSessionList()` 同步侧栏标题；编辑态 `#aiChatTitle[contenteditable="true"]` 加 `min-width: 220px` + input-bg 圆角背景。④ **HTML div 配平修复 + 检查工具链配置**。 |
-| **HTML div 配平修复（重要）** | `#aiNoteRefModal` 正常闭合后多出一个 `</div>`（原 L1399），导致 `.main-content-area` 被提前闭合、`<main>` 误报未闭合、其后的 viewMdRef 等视图脱离主内容区。用标签栈脚本 + html-validate 定位并删除该行。教训：HTML 嵌套改动后**不能靠缩进判断配平**，必须跑 `npm run validate:html` 兜底（与待办页 div 配平问题同类）。 |
-| **前端检查工具链** | 新增 devDeps：eslint@10 + html-validate@11 + prettier@3 + eslint-config-prettier + globals + @eslint/js。配置：[eslint.config.mjs](frontend/eslint.config.mjs)（flat config；ignores：dist/node_modules/hljs-themes-data.js；`no-undef`/`no-unused-vars` 降 warn 防存量噪音；项目隐式 window 全局声明 readonly globals：nm/SVGS/getMockNotes/exportNote/initEditorActionsMenu/switchEditorMode/mockNotes）、[.prettierrc.json](frontend/.prettierrc.json)（tabWidth 4/singleQuote/printWidth 120）、[.prettierignore](frontend/.prettierignore)（dist/node_modules/wailsjs/hljs-themes-data.js）、[.htmlvalidate.json](frontend/.htmlvalidate.json)（关闭风格噪音：button type/void-style/text-content/landmark 等，保留 close-order 结构校验）。package.json scripts：`lint`/`format`/`format:check`/`validate:html`。当前 lint 0 errors/90 warnings、validate:html 0 errors。 |
-| **工具链暴露的存量风险** | `mockNotes` 在 [main.js](frontend/src/main.js) 直接引用但无声明/无 window 挂载（定义在 [notification.js](frontend/src/js/notification.js) 内且未导出）——疑似死代码分支；多个已定义未使用的函数（setAIStatus/updateTodoProgress/closeSearchModalDatePicker 等）；项目大量"`window.xxx = ...` 后裸标识符调用"隐式全局（运行正常，但建议逐步改 `window.` 前缀或 import）。 |
-| **搜索框方案演进** | 曾尝试：放大镜图标（left 14px→17px 反复微调后移除）、方案 C 平面样式+列表顶分隔线（用户撤回，恢复凹陷 bg-secondary 样式）。最终保持原始凹陷搜索框样式不变。教训：纯视觉微调尽量一次到位，避免逐像素拉扯。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（侧栏结构 + view-header 三列 grid + 双击标题 + 删除多余 div）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（折叠逻辑/图标切换/双击重命名/startInlineEdit 补 renderSessionList）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（侧栏顶天立地 + 标题栏 grid + 按钮/编辑态样式）、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)、[frontend/.prettierrc.json](frontend/.prettierrc.json)、[frontend/.prettierignore](frontend/.prettierignore)、[frontend/.htmlvalidate.json](frontend/.htmlvalidate.json)、[frontend/package.json](frontend/package.json) |
+33. **笔记首页加载优化（移除骨架屏 + notes 表索引 + 加载逻辑调优）**：大库下启动"骨架屏→闪烁→笔记重来"根因三重：① notes 表默认排序 `pinned DESC, updated_at DESC` **无索引** → SQLite 全表 temp 排序（排序记录携带大 content 列）→ GetNotes 变慢、骨架屏被拉长；② `loadNotes` 每次"先清空 cardGrid + 全量 cardEnter 从 opacity:0 重放" → 视觉闪烁；③ 启动链 `loadSettings→loadNotebooks→loadNotes→loadTags` 全串行 → 首屏空白窗口长。修复：[note.go](internal/models/note.go) 加 3 个命名索引（`idx_notes_sort(pinned,updated_at)` 覆盖默认排序 / `idx_notes_notebook_deleted(deleted_at,notebook_id)` 覆盖分页过滤与 `GetNotebookNoteCounts` 全表统计 / `idx_notes_created` 覆盖日历，GORM `priority` 小者在前、AutoMigrate 重启自动补建）；[note_service.go](internal/services/note_service.go) `GetMonthCounts` 由 `strftime` 函数过滤改 `[月初,下月初)` 范围查询走索引（**时区边界**：原按存储字符串匹配月份，新按本地时区，跨时区/改系统时区后统计可能偏移一天）；[main.js](frontend/src/main.js) 移除骨架屏、`loadNotes` 改为**不清空重载** + `renderCardGrid(hadCards ? 'none' : undefined)`（`hadCards = state.notes.length > 0`：首次保留全量入场动画 / 刷新原地替换防闪烁）、`init()` 启动链 `Promise.all` 并行化（loadSettings/loadNotebooks、loadNotes/loadTags，loadNotes 仍严格在 activeNotebookId 兜底之后）；[index.html](frontend/index.html)/[main-content.css](frontend/src/css/components/main-content.css) 删首页骨架屏（编辑器 `editor-skeleton`、AI 引用浮层骨架屏类名独立保留）。
 
 ---
 
-## 记忆点 2：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
+## 记忆点 1：Agent 外部 MCP 服务器接入（配置文件驱动 + 工具前缀改名 + 逐条校验跳过）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -565,7 +554,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
+## 记忆点 2：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -576,7 +565,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 3：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 4：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,18 +587,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 5：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | Agent 全部 12 个工具实施分层防御加固（用户拍板"全部加固"）：**P0 崩溃级**——[context.go](internal/agent/tools/context.go) `WrapWithError.InvokableRun` 改命名返回值 + defer recover（panic 转 fail 回填模型不中断 ReAct 循环，用户取消分支逐字保持）；[web_search.go](internal/agent/tools/web_search.go) 单源 goroutine 加 recover（panic 转错误进结果通道按部分失败跳过）。**P1 稳健级**——各工具补 `ctx.Err()` 取消检查；[read_note_section.go](internal/agent/tools/read_note_section.go) offset/length 整数校验（math.Trunc 防浮点截断）；[manage_tag.go](internal/agent/tools/manage_tag.go) action TrimSpace；统一文本长度上限（[context.go](internal/agent/tools/context.go) `validateTextLen` 按 rune 计：`maxToolShortText`=500 / `maxToolFindLen`=2000 / `maxToolLongText`=20000，覆盖全部文本参数）。**P2 加固级**——[read_url.go](internal/agent/tools/read_url.go) `isPrivateHost` SSRF 防护（拒绝 loopback/私网/链路本地（含 169.254.169.254）/未指定/组播 IP 及 localhost/.local/.internal 主机名，**不做 DNS 解析**防解析绕过）；[manage_note.go](internal/agent/tools/manage_note.go) `normalizeNoteFileExt`（纯字母数字 1-10 位，create 空→.md、update 空→保持原值）。 |
 | **写操作强制确认（重要）** | manage_note 的 update/edit/pin/move/add_tag/remove_tag 六动作：schema 新增 `confirm` 布尔参数，**未携带 `confirm=true` 一律拒绝执行**并返回正常结果（非 error、前端不显示失败态）的引导文本"该操作需要用户确认……调用 ask_user 向用户确认，用户明确同意后携带 confirm=true 重新调用"；Desc 写明缺省拒绝。app.go【写操作确认】规范升级为**强制**三步：正文说明 + ask_user 提问 → 用户同意后带 confirm=true 执行 → 拒绝不得执行。设计边界：create 视为用户明确要求的创建指令不强制确认；工具层只能保证"无 confirm=true 不执行"，模型未问用户就传 confirm=true 的漏洞靠 Desc + 系统提示词强约束压制（纯工具层无法 100% 拦截自主模型首次调用参数，完整封死需跨轮会话状态机，已确认不采用）。 |
-| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 9）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
+| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 6）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
 | **涉及文件** | [internal/agent/tools/context.go](internal/agent/tools/context.go)（recover + fail + validateTextLen + 上限常量）、[internal/agent/tools/web_search.go](internal/agent/tools/web_search.go)、[internal/agent/tools/recall_notes.go](internal/agent/tools/recall_notes.go)、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)、[internal/agent/tools/refine_query.go](internal/agent/tools/refine_query.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)、[internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（confirm + normalizeNoteFileExt）、[app.go](app.go)（写操作强制确认规范 + ask_user 强制调用规范） |
 
 ---
 
-## 记忆点 7：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 6：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -620,11 +609,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 7：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`，见记忆点 5）**迁移到数据库**，并在设置页落地完整管理 UI，取代记忆点 4 所述"配置文件驱动 + 无 CRUD 页面"的旧方案：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
+| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`，见记忆点 1）**迁移到数据库**，并在设置页落地完整管理 UI，取代记忆点 1 所述"配置文件驱动 + 无 CRUD 页面"的旧方案：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
 | **存储迁移与依赖约束（重要）** | `services` 包**不得反向 import `mcpserver`**（依赖链已是 mcpserver → agent/tools → services，反向即循环依赖），因此 **MCPServerService.Save 的校验规则是 mcpserver 包 validate 的复制实现，两处必须同步维护**。`LoadFromDB` 语义与原文件版 Load 一致：非法条目跳过不阻断装配（LoadErrors 逐条告警）、整体查询失败返回 error、空库返回空 Servers 且 err=nil。agent.go 装配流程不变：`LoadFromDB` → `EnabledServers()` → 每台服务器 goroutine 并行 `OpenSession`，单台失败仅 Warn 跳过、会话随本轮 defer 关闭。 |
 | **Save 校验与字段治理** | 校验（失败返回中文错误直接展示）：Name 非空 + transport 合法性（stdio/sse/http）+ 按传输必填（stdio 需 Command / sse、http 需 URL）+ **Name 不能含空白字符**（直接拼入工具名会破坏工具名）+ **Env/Headers 的 KEY 不能含空白或等号**（= 是 KEY=VALUE 分隔符）+ Name 全库唯一（更新排除自身）。**按传输类型清零非相关字段**（stdio 清 URL/Headers，sse/http 清 Command/Args/Env），避免切换传输后旧字段残留脏数据。写入：ID==0 走 `Create`，更新走 `Omit("created_at").Save`（防 Save 全字段更新把 created_at 覆写为零值，前端表单不带该字段）。 |
 | **测试连接 + 设置页交互要点** | `TestMCPServer(id)`：`MCPServerService.Get` 查配置（区分"记录不存在/查询失败"两种错误）→ `toMCPServerConfig` 字段映射 → `OpenSession`（连接+握手+工具发现，各带 ConnectTimeout 超时兜底）→ 返回 `TestMCPServerResult{ok, tool_num, message}`；无论是否启用均可测试。前端：条目操作区 = 启用开关（**乐观更新失败回滚**）+ 测试 + 编辑 + 删除（走确认框）；表单含防重复提交（`mcpFormSaving`）+ 未保存修改关闭确认 + 输入校验；**测试按钮点击转加载态并记录开始时间，无论测试多快强制保持 ≥600ms 加载动画**（本地毫秒级连接也能看到 spinner 反馈）；成功提示「连接成功，发现 N 个工具」，失败直接透传后端文案（已含服务器名如「MCP 服务器 xxx 连接失败: …」，前端**不再重复拼前缀**）。 |
@@ -633,11 +622,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 8：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | Agent 反问从**"新 user 消息续流"升级为"同轮续答"**（记忆点 1 所述方案被取代）：① **会话级实例注册表**——[agent.go](internal/agent/agent.go) `AgentService` 新增 `sessions map[uint]*agentSession`（按 AI 会话 ID 保持实例，LRU 上限 `MaxCachedSessions=32`）；`agentSession` 持 askCh（容量 1 反问答案通道）/askPending/runMu（同会话 run 串行化）/runCancel（会话释放独立取消）/ChatModel 缓存（BaseURL/Key/Model/思考指纹 `chatFP` 不变即复用）。② **AskWaiter 同轮机制**——[context.go](internal/agent/tools/context.go) 新增 `tools.AskWaiter` 接口（`ClaimAsk` 抢占 + `WaitForAnswer` 阻塞）；[ask_user.go](internal/agent/tools/ask_user.go) 注入后改为 **ClaimAsk 成功 → 发射 `ai:ask-user` → 阻塞等待**，答案经新绑定 `AnswerAskUser(sessionID, answer)`（[app.go](app.go)）投递通道 → 工具返回答案文本 → **同一轮 ReAct 循环继续**（AI 消息不结束、答案不落库为新 user 消息）。③ **整轮落库**——`streamedContent` 累计本轮全部流式正文，反问轮以整轮文本（问句+续答）作为 `result.Content` 落库，与前端同一气泡展示一致。④ **Agent 事件统一 gen 化**——`CallAIAgentStream` 的 emit 包装统一携带 streamGen（`ai:stream-chunk/thinking/tool-status/ask-user`），前端按代过滤防串流。 |
+| **变更概览** | Agent 反问从**"新 user 消息续流"升级为"同轮续答"**（最初"新消息续流"方案被取代）：① **会话级实例注册表**——[agent.go](internal/agent/agent.go) `AgentService` 新增 `sessions map[uint]*agentSession`（按 AI 会话 ID 保持实例，LRU 上限 `MaxCachedSessions=32`）；`agentSession` 持 askCh（容量 1 反问答案通道）/askPending/runMu（同会话 run 串行化）/runCancel（会话释放独立取消）/ChatModel 缓存（BaseURL/Key/Model/思考指纹 `chatFP` 不变即复用）。② **AskWaiter 同轮机制**——[context.go](internal/agent/tools/context.go) 新增 `tools.AskWaiter` 接口（`ClaimAsk` 抢占 + `WaitForAnswer` 阻塞）；[ask_user.go](internal/agent/tools/ask_user.go) 注入后改为 **ClaimAsk 成功 → 发射 `ai:ask-user` → 阻塞等待**，答案经新绑定 `AnswerAskUser(sessionID, answer)`（[app.go](app.go)）投递通道 → 工具返回答案文本 → **同一轮 ReAct 循环继续**（AI 消息不结束、答案不落库为新 user 消息）。③ **整轮落库**——`streamedContent` 累计本轮全部流式正文，反问轮以整轮文本（问句+续答）作为 `result.Content` 落库，与前端同一气泡展示一致。④ **Agent 事件统一 gen 化**——`CallAIAgentStream` 的 emit 包装统一携带 streamGen（`ai:stream-chunk/thinking/tool-status/ask-user`），前端按代过滤防串流。 |
 | **并发/竞态防御与生命周期（重要）** | ① `ClaimAsk` 原子抢占——模型同条消息并行发多条 ask_user 时仅第一条阻塞，其余返回错误回填模型（工具在抢占**成功后**才发射事件，保证面板问题与真正等待的是同一条），防多重阻塞挂起；② `drainAsk` 排空通道——提交答案同时取消（工具 select 抢到 ctx.Done 而非通道）残留的陈旧答案，防污染下一轮反问（Run 的 defer 与 ReleaseSession 均排空）；③ `ReleaseSession`/`ReleaseAll`——清空/删除会话（`ClearAISessionMessages`/`DeleteAISession`/`ClearAllAISessions`）与 `rebuildServices` 工厂重置时取消等待中 run 并清注册表，防僵尸 run 泄漏；④ run 使用从调用方 ctx 派生的 runCtx，`ReleaseSession` 可独立取消；⑤ 锁序 `s.mu → runMu/askMu/cancelMu` 无环，通道永不 close。 |
 | **前端同轮交互** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `agentAskWaiting` 状态：`ai:ask-user` 到达时气泡保持流式（不结束）、正文为空显示"等待你的回答…"（`createWaitingHint`）；**主输入框禁用并提示"等待你的选择…"**（`setAskInputWaiting`：placeholder 保存/恢复 + `.ai-ask-waiting` 遮罩，CSS 见 [ai-chat.css](frontend/src/css/components/ai-chat.css)）；面板提交改走 `AnswerAskUser`（`submitting` 防重入、成功才隐藏，不再走 `sendUserText`），**× 关闭=取消本轮**（复用停止逻辑防悬挂）；停止/错误/完成/清空/重置各路径统一清理面板与等待态；`stream-done` 用 `assistantMsgID`（取消路径=0）区分取消与正常完成——**取消不写 chatHistory**（避免幽灵条目/误弹历史记录）。 |
 | **新工具与窗口调整** | 新增 **json 三件套**（[json_tools.go](internal/agent/tools/json_tools.go)：json_validate/json_format/json_extract，`utils.InferTool` 结构体反射风格，**gjson v1.18.0 提取**——升级为直接依赖，原为传递依赖 v1.14.2；`normalizeGJSONPath` 归一化模型 JSONPath 写法：`$` 前缀、`[n]`→`.n`、`#` 通配符透传；对象/数组返回 `res.Raw` 保留源键序）与 **summarize_text**（[summarize_text.go](internal/agent/tools/summarize_text.go)：复用 `AIService.CallAI` 非流式，text≤20000/instructions≤500，失败降级返回原文）；注册 [registry.go](internal/agent/registry.go) + [meta.go](internal/agent/tools/meta.go) 文案（前端开关自动生效零改动）。**上下文窗口默认 20→40**：`GetContextWindowSize` 兜底 + [db.go](internal/database/db.go) 种子 + **旧库值 20→40 幂等迁移**（InitDefaultSettings 迁移区，该键无 UI 暴露、旧值即种子默认直接升级）。 |
@@ -645,7 +634,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 9：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,6 +643,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **ESLint 清零方法论（重要）** | ① 删除前**全库 grep 残留引用**（含 index.html onclick 字符串——eslint 检查不到的引用方式）；② **连锁依赖检查**——删函数前确认其内部引用的变量/常量是否还有别处使用（CHECK_ICON 仅 handleCopy 用则连删；cachedRefContext/roleplayCacheContext 仅 getNoteContext/getRoleplayContext 读写则连删），避免删出新的 unused；③ 删除后重跑 lint 看是否新增 warning；④ 复用函数验证行为等价（handleCopy 是右键菜单内联 clipboard 实现的重复封装、getNoteContext/getRoleplayContext 是 GetNoteRefContext 的重复缓存封装）。教训：**纯删死代码也要验证"删了行为不变"而非"删了能跑"**。 |
 | **明确暂缓（未实施）** | 评估过但用户决定暂缓的扩展：N1 笔记版本历史（NoteRevision 表 + UpdateNote 埋点 + 60s 同内容版本合并 + 对比/还原 UI）、A2 存为笔记确认（SaveAIMessageAsNote 加 title/notebookID 参数 + 前端预览确认弹窗）——设计已讨论，代码未写，后续可随时启动。 |
 | **涉及文件** | [app.go](app.go)（DuplicateNote + SaveAIMessage 校验 + maxAIMessageChars）、[internal/services/note_service.go](internal/services/note_service.go)（NextDuplicateTitle/nextDuplicateTitle/truncateTitleRunes/noteTitleMaxRunes）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（TestNextDuplicateTitle/TestTruncateTitleRunes）、[frontend/index.html](frontend/index.html)（#contextMenu「创建副本」项）、[frontend/src/main.js](frontend/src/main.js)（handleContextAction duplicate 分支 + window.duplicateNote + 死代码清理 + let mockNotes 声明）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_AI_INPUT_CHARS/truncateAIInput/输入拦截/onSend 校验/反问面板上限 + 死代码清理）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（+52 条 legacy-modes import）、[frontend/src/js/notification.js](frontend/src/js/notification.js)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)（移除 mockNotes 全局豁免）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) 与 [frontend/wailsjs/go/main/App.d.ts](frontend/wailsjs/go/main/App.d.ts)（DuplicateNote） |
+
+---
+
+## 记忆点 10：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复大库下启动"骨架屏→闪烁→笔记重来"的三重根因：① **排序无索引**——默认排序 `ORDER BY pinned DESC, updated_at DESC`（[note_service.go](internal/services/note_service.go) `buildSortOrder`）在 notes 表无索引 → SQLite 全表读取 + temp B-tree 排序且排序记录携带大 content 列 → GetNotes 变慢、骨架屏显示被拉长；② **每次加载"先清空再重建"**——`loadNotes` 固定 `cardGrid.innerHTML=''` + 全量 `cardEnter` 从 opacity:0 重放 → 视觉闪烁；③ **启动链全串行**——`init()` 中 `loadSettings→loadNotebooks→loadNotes→loadTags` 依次 await，首屏空白窗口长。修复三管齐下（详见下行）。 |
+| **数据库索引（重要）** | [note.go](internal/models/note.go) 新增 3 个命名索引（GORM `priority` 小者在前，AutoMigrate 重启自动补建，旧单列索引保留不清理）：`idx_notes_sort(pinned,updated_at)` 覆盖默认排序；`idx_notes_notebook_deleted(deleted_at,notebook_id)` 同时覆盖首页分页过滤（`WHERE deleted_at IS NULL AND notebook_id=?`）与 `GetNotebookNoteCounts` 的 `WHERE deleted_at IS NULL GROUP BY notebook_id` 全表统计（启动时被 `loadNotebooks` + `renderNotebookList` IIFE 各调一次，索引后均为毫秒级）；`idx_notes_created` 覆盖日历 `GetMonthCounts`/`GetByDate`。[note_service.go](internal/services/note_service.go) `GetMonthCounts` 由 `strftime('%Y'/'%m')` 函数过滤改为 `[月初, 下月初)` 范围查询（传 `time.Time` 走索引）——**时区边界**：原按存储字符串匹配月份，新按本地时区，跨时区/修改系统时区后历史记录统计可能偏移一天（单机场景风险极低，属已知取舍）。 |
+| **loadNotes 不清空重载 + 首次/刷新动画区分（重要）** | [main.js](frontend/src/main.js) `loadNotes` 不再 `cardGrid.style.display='none'` + `innerHTML=''`（已有卡片保持可见，数据到达后 `renderCardGrid` 整体替换）；渲染改 `renderCardGrid(hadCards ? 'none' : undefined)`，其中 `hadCards = state.notes.length > 0`——**首次加载（无卡片）走全量分支保留 cardEnter 交错淡入**（首屏入场动画不变），**刷新/切笔记本/返回首页走 'none' 原地替换**（无"从 opacity:0 重放"闪感，这是修闪烁的核心）。骨架屏整体移除：[index.html](frontend/index.html) 删 `#skeletonGrid` 块、[main-content.css](frontend/src/css/components/main-content.css) 删 `.skeleton-*`/`shimmer` 样式（编辑器 `editor-skeleton`、AI 笔记引用浮层骨架屏类名独立、保留不动）。 |
+| **启动链并行化** | `init()` 改 `await Promise.all([loadSettings().catch(() => {}), loadNotebooks().catch(() => {})])`（两者互不依赖、各自内部已有 try/catch，外层 `.catch` 兜底防止任一 reject 中断 init）+ `await Promise.all([loadNotes(), loadTags()])`（loadTags 不依赖 notes）；`loadNotes` 仍严格在 `activeNotebookId` 兜底（`if (!state.activeNotebookId && state.notebooks.length > 0)`）之后执行。`loadMoreNotes` 的 `'append'` 追加动画、`togglePin` 的 `'none'`、空状态「暂无笔记」逻辑均未改动。 |
+| **涉及文件** | [internal/models/note.go](internal/models/note.go)（3 个命名索引）、[internal/services/note_service.go](internal/services/note_service.go)（GetMonthCounts 范围查询 + `time` 导入）、[frontend/index.html](frontend/index.html)（删 #skeletonGrid）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（删骨架屏样式块）、[frontend/src/main.js](frontend/src/main.js)（els.skeletonGrid 移除、loadNotes hadCards 逻辑、renderCardGrid 删骨架屏隐藏、init 并行化） |
 
 ---
 
