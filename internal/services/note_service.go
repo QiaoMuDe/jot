@@ -413,23 +413,47 @@ func (s *NoteService) GetTrash(page, pageSize int) ([]models.Note, int64, error)
 	return notes, total, nil
 }
 
-// RestoreAll 批量恢复回收站中所有已软删除的笔记
+// RestoreAll 批量恢复回收站中所有已软删除的笔记。
+// 按笔记所属笔记本的状态分三种场景处理:
+//  1. 父笔记本在回收站（软删除）→ 先恢复该笔记本, 笔记回到原 notebook_id
+//  2. 父笔记本存活 → 笔记直接回到原 notebook_id
+//  3. 父笔记本已被永久删除/不存在 → 笔记迁到默认笔记本 (id=1) 后恢复
+//
+// 默认笔记本 (id=1) 因 Delete/DeleteWithNotes/RestoreFromTrash 都有 id==1 守卫,
+// 永远不会被软删除, 因此不在恢复范围。
 func (s *NoteService) RestoreAll() error {
-	// 先将 notebook_id 对应笔记本已不存在的笔记迁移到默认笔记本
-	if err := s.db.Unscoped().Model(&models.Note{}).
-		Where("deleted_at IS NOT NULL").
-		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
-		Update("notebook_id", 1).Error; err != nil {
-		s.logger.Errorw("NoteService.RestoreAll 失败", fastlog.Error(err))
+	// Stage 1: 恢复回收站笔记引用的、且本身在回收站的非默认笔记本
+	if err := s.db.Unscoped().Exec(`
+		UPDATE notebooks
+		SET deleted_at = NULL
+		WHERE deleted_at IS NOT NULL
+		  AND id IN (
+		      SELECT DISTINCT notebook_id
+		      FROM notes
+		      WHERE deleted_at IS NOT NULL
+		        AND notebook_id != 0
+		        AND notebook_id != 1
+		  )
+	`).Error; err != nil {
+		s.logger.Errorw("NoteService.RestoreAll 失败(恢复关联笔记本)", fastlog.Error(err))
 		return err
 	}
 
-	result := s.db.Unscoped().Model(&models.Note{}).
+	// Stage 2: 父笔记本已永久删除或不存在 → 迁到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("deleted_at IS NOT NULL AND notebook_id != 1").
+		Where("notebook_id NOT IN (SELECT id FROM notebooks)").
+		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NoteService.RestoreAll 失败(迁默认笔记本)", fastlog.Error(err))
+		return err
+	}
+
+	// Stage 3: 取消所有回收站笔记的 deleted_at
+	if err := s.db.Unscoped().Model(&models.Note{}).
 		Where("deleted_at IS NOT NULL").
-		Update("deleted_at", nil)
-	if result.Error != nil {
-		s.logger.Errorw("NoteService.RestoreAll 失败", fastlog.Error(result.Error))
-		return result.Error
+		Update("deleted_at", nil).Error; err != nil {
+		s.logger.Errorw("NoteService.RestoreAll 失败(恢复笔记)", fastlog.Error(err))
+		return err
 	}
 	return nil
 }
@@ -504,25 +528,54 @@ func (s *NoteService) BatchDelete(ids []uint) error {
 	return err
 }
 
-// BatchRestore 批量从回收站恢复指定 ID 数组的笔记
+// BatchRestore 批量从回收站恢复指定 ID 数组的笔记。
+// 对每条笔记按所属笔记本状态分三场景处理:
+//  1. 父笔记本在回收站（软删除）→ 先恢复该笔记本, 笔记回到原 notebook_id
+//  2. 父笔记本存活 → 笔记直接回到原 notebook_id
+//  3. 父笔记本已被永久删除/不存在 → 笔记迁到默认笔记本 (id=1) 后恢复
 func (s *NoteService) BatchRestore(ids []uint) error {
-	// 先将 notebook_id 对应笔记本已不存在的笔记迁移到默认笔记本
-	if err := s.db.Unscoped().Model(&models.Note{}).
-		Where("id IN ?", ids).
-		Where("NOT EXISTS (SELECT 1 FROM notebooks WHERE notebooks.id = notes.notebook_id AND notebooks.deleted_at IS NULL)").
-		Update("notebook_id", 1).Error; err != nil {
-		s.logger.Errorw("NoteService.BatchRestore 失败", fastlog.Error(err))
+	// Stage 1: 恢复这些笔记引用的、且本身在回收站的非默认笔记本
+	if err := s.db.Unscoped().Exec(`
+		UPDATE notebooks
+		SET deleted_at = NULL
+		WHERE deleted_at IS NOT NULL
+		  AND id IN (
+		      SELECT DISTINCT notebook_id
+		      FROM notes
+		      WHERE id IN ?
+		        AND deleted_at IS NOT NULL
+		        AND notebook_id != 0
+		        AND notebook_id != 1
+		  )
+	`, ids).Error; err != nil {
+		s.logger.Errorw("NoteService.BatchRestore 失败(恢复关联笔记本)", fastlog.Error(err))
 		return err
 	}
 
-	err := s.db.Unscoped().Model(&models.Note{}).Where("id IN ?", ids).Update("deleted_at", nil).Error
-	if err != nil {
-		s.logger.Errorw("NoteService.BatchRestore 失败", fastlog.Error(err))
+	// Stage 2: 父笔记本已永久删除或不存在 → 迁到默认笔记本
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("id IN ? AND deleted_at IS NOT NULL AND notebook_id != 1", ids).
+		Where("notebook_id NOT IN (SELECT id FROM notebooks)").
+		Update("notebook_id", 1).Error; err != nil {
+		s.logger.Errorw("NoteService.BatchRestore 失败(迁默认笔记本)", fastlog.Error(err))
+		return err
 	}
-	return err
+
+	// Stage 3: 取消这些笔记的 deleted_at
+	if err := s.db.Unscoped().Model(&models.Note{}).
+		Where("id IN ? AND deleted_at IS NOT NULL", ids).
+		Update("deleted_at", nil).Error; err != nil {
+		s.logger.Errorw("NoteService.BatchRestore 失败(恢复笔记)", fastlog.Error(err))
+		return err
+	}
+	return nil
 }
 
-// Restore 从回收站恢复指定 ID 的笔记（取消软删除）
+// Restore 从回收站恢复指定 ID 的笔记（取消软删除）。
+// 按笔记所属笔记本状态分三场景处理:
+//  1. 父笔记本在回收站（软删除）→ 先恢复该笔记本, 笔记回到原 notebook_id
+//  2. 父笔记本存活 → 笔记直接回到原 notebook_id
+//  3. 父笔记本已被永久删除/不存在 → 笔记迁到默认笔记本 (id=1) 后恢复
 func (s *NoteService) Restore(id uint) error {
 	// 先获取笔记信息（含软删除）
 	var note models.Note
@@ -534,14 +587,28 @@ func (s *NoteService) Restore(id uint) error {
 		return err
 	}
 
-	// 检查笔记本是否存在（未软删除）
-	var notebook models.Notebook
-	if err := s.db.Where("deleted_at IS NULL").First(&notebook, note.NotebookID).Error; err != nil {
-		// 笔记本不存在或已删除，迁移到默认笔记本（id=1）
-		if err := s.db.Unscoped().Model(&note).Update("notebook_id", 1).Error; err != nil {
+	// 笔记本 id=0 (历史脏数据) 或 id=1 (默认, 永不在 trash) 无需处理
+	if note.NotebookID != 0 && note.NotebookID != 1 {
+		// Unscoped 查询以包含软删除记录, 然后按状态分支处理
+		var notebook models.Notebook
+		err := s.db.Unscoped().First(&notebook, note.NotebookID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 笔记本已被永久删除/不存在 → 迁到默认笔记本
+			if err := s.db.Unscoped().Model(&note).Update("notebook_id", 1).Error; err != nil {
+				s.logger.Errorw("NoteService.Restore 失败(迁默认)", fastlog.Error(err))
+				return err
+			}
+		} else if err != nil {
 			s.logger.Errorw("NoteService.Restore 失败", fastlog.Error(err))
 			return err
+		} else if notebook.DeletedAt.Valid {
+			// 笔记本在回收站 (软删除) → 恢复笔记本, 笔记保持原 notebook_id
+			if err := s.db.Unscoped().Model(&notebook).Update("deleted_at", nil).Error; err != nil {
+				s.logger.Errorw("NoteService.Restore 失败(恢复笔记本)", fastlog.Error(err))
+				return err
+			}
 		}
+		// 笔记本存活时: 无需任何处理, 笔记保持原 notebook_id
 	}
 
 	// 恢复笔记
