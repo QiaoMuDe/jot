@@ -180,15 +180,14 @@ async function restoreAllNotes() {
     const confirmed = await window.showConfirmDialog('确定要恢复回收站中的所有笔记和笔记本吗？');
     if (!confirmed) return;
 
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    const restorePromises = Array.from(items).map((item, index) => {
-        return new Promise(resolve => {
-            item.style.animation = `restoreOut 0.3s ease-out forwards`;
-            item.style.animationDelay = `${index * 40}ms`;
-            item.addEventListener('animationend', resolve, { once: true });
-        });
+    // 触发淡出动画 (longhand 避免 shorthand 重置 animationDelay), 不阻塞后端调用
+    els.trashListInner.querySelectorAll('.trash-item').forEach((item, index) => {
+        item.style.animationName = 'restoreOut';
+        item.style.animationDuration = '0.3s';
+        item.style.animationTimingFunction = 'ease-out';
+        item.style.animationFillMode = 'forwards';
+        item.style.animationDelay = `${index * 40}ms`;
     });
-    await Promise.all(restorePromises);
 
     try {
         // 恢复所有笔记
@@ -224,15 +223,14 @@ async function emptyTrash() {
     const confirmed = await window.showConfirmDialog('确定要永久清空回收站中的所有笔记和笔记本吗？此操作不可撤销。');
     if (!confirmed) return;
 
-    const items = els.trashListInner.querySelectorAll('.trash-item');
-    const emptyPromises = Array.from(items).map((item, index) => {
-        return new Promise(resolve => {
-            item.style.animation = `deleteOut 0.45s ease-out forwards`;
-            item.style.animationDelay = `${index * 50}ms`;
-            item.addEventListener('animationend', resolve, { once: true });
-        });
+    // 触发淡出动画 (longhand 避免 shorthand 重置 animationDelay), 不阻塞后端调用
+    els.trashListInner.querySelectorAll('.trash-item').forEach((item, index) => {
+        item.style.animationName = 'deleteOut';
+        item.style.animationDuration = '0.45s';
+        item.style.animationTimingFunction = 'ease-out';
+        item.style.animationFillMode = 'forwards';
+        item.style.animationDelay = `${index * 50}ms`;
     });
-    await Promise.all(emptyPromises);
 
     try {
         // 清空笔记

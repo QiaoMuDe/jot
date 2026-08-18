@@ -558,9 +558,10 @@
 }
 
 .btn-restore {
-  background: var(--accent-lighter);
+  /* 用 color-mix 从 --accent 算出 15% 透明度的底色, 14 个主题都能与 --bg 拉开对比度 */
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent-dark);
-  border: 1px solid var(--accent-light);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: var(--radius-md);
   padding: 6px 14px;
   font-size: 0.75rem;
@@ -573,13 +574,26 @@
 }
 
 .btn-restore:hover {
-  background: var(--accent-light);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
 .btn-restore:active {
   transform: scale(0.93);
+}
+
+/* 暖笺(ysgrifennwr)主题特殊处理: --accent 与 --danger 同为 #C7474B, 恢复按钮改用 success 绿做色源, 与清空按钮形成红绿区分 */
+[data-theme="ysgrifennwr"] .btn-restore {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success-text);
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+
+[data-theme="ysgrifennwr"] .btn-restore:hover {
+  background: color-mix(in srgb, var(--success) 25%, transparent);
+  border-color: color-mix(in srgb, var(--success) 55%, transparent);
 }
 
 .btn-perm-delete {
