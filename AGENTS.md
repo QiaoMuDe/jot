@@ -544,18 +544,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：MCP 配置迁移至 ~/.jot + 统一路径配置包（internal/config）+ 连接超时 / typed-nil panic 修复 + Agent 迭代统一常量
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 四组改动：① **MCP 配置迁移家目录 + 统一路径配置包**——新建 [internal/config/config.go](internal/config/config.go)：`JotHomeDir()`（`~/.jot`，全项目唯一 `os.UserHomeDir()` 调用点）+ `SubDir(name)` + `DirData/DirBackup/DirImages/DirLogs/DirMCP` 常量；[database/db.go](internal/database/db.go) `DefaultDBPath()`/`BackupDir()`、[app.go](app.go) logs/images 全部收敛为 `config.SubDir(...)` 引用；MCP 配置默认路径从项目根迁移至 `~/.jot/mcp/mcp-servers.json`（[mcpserver/config.go](internal/mcpserver/config.go) `DefaultConfigPath()`/`LoadDefault`，[agent.go](internal/agent/agent.go) `Deps.MCPServerConfigPath` 为空时回退 `LoadDefault`，注入覆盖机制保留）。② **启动自动初始化 MCP 配置**——`EnsureConfig()`/`EnsureConfigFileAt(path)`（目录 `MkdirAll`、文件不存在写入空 servers 默认配置、已存在不覆盖），app.go startup 调用；**默认路径下 LoadDefault 失败时**：`DefaultConfigPath()` 再次解析失败（家目录不可用=系统级异常）→ 直接 return 报错退出；仅配置不可用（路径可解析）→ 回填路径 Debug 跳过不阻断对话。③ **单服务器连接超时 10s**——[client.go](internal/mcpserver/client.go) `ConnectTimeout=10s`，`Connect` 内 `context.WithTimeout` 包裹 Start/Initialize，超时走既有"连接失败跳过"分支（文案提示"连接超时"），`wrapConnectError` 附带服务器名；上线/失败日志补 `duration_ms` 耗时字段；会话关闭失败 Warn。④ **Agent 最大迭代统一常量**——[agent.go](internal/agent/agent.go) `const maxIterations=8` → 导出 `MaxIterations=20`，eino ChatModelAgent 与日志同源引用；playground/agent-demo（独立 module 受 internal 规则限制无法 import）数值同步 + 注释对齐。 |
-| **typed-nil 接口 panic（重要教训）** | 测试暴露 **stdio 命令不存在时应用 panic 崩溃**：`NewStdioMCPClient` 失败返回 `(*Client)(nil)`，赋给接口后 `cli != nil` 误判为真，`Close()` 对 nil 指针 panic。修复：stdio 分支先判错再赋接口 + `safeClose`（reflect 校验底层指针）防御兜底。**凡是构造函数可能返回 nil 指针的，赋接口前必须显式判 err**；接口判空 ≠ 指针判空。 |
-| **装配小优化** | ① for 循环内 defer 改为收集 `mcpSessions` 末尾统一关闭（可读性 + 提前 return 不延迟关闭）；② `mcpTool.Info` 缓存改名结果（消除装配/框架多次调用重复 JSON deepcopy），返回浅拷贝副本防共享污染（测试验证修改返回值不影响缓存）；③ 单工具 Info 失败跳过计数进 `Session.Skipped` + Warn 日志；④ golangci-lint govet inline 检查：`reflect.Ptr` 弃用别名 → `reflect.Pointer`。 |
-| **涉及文件** | [internal/config/config.go](internal/config/config.go)（新建，统一路径）、[internal/database/db.go](internal/database/db.go)（DefaultDBPath/BackupDir 收敛）、[app.go](app.go)（logs/images 收敛 + startup EnsureConfig + 回退 LoadDefault）、[main.go](main.go)（logs 收敛）、[internal/mcpserver/config.go](internal/mcpserver/config.go)（DefaultConfigPath/LoadDefault/EnsureConfig + config_test.go）、[internal/mcpserver/client.go](internal/mcpserver/client.go)（ConnectTimeout + wrapConnectError + safeClose）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（Info 缓存 + Skipped 统计）、[internal/agent/agent.go](internal/agent/agent.go)（回退 LoadDefault + 报错退出 + MaxIterations + 统一关闭 + duration_ms）、[playground/agent-demo/main.go](playground/agent-demo/main.go)（MaxIterations=20 同步）、[internal/mcpserver/MCP_CONFIG.md](internal/mcpserver/MCP_CONFIG.md)（自动初始化说明）、[internal/agent/doc.go](internal/agent/doc.go) |
-
----
-
-## 记忆点 2：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
+## 记忆点 1：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -566,7 +555,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 2：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -577,7 +566,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 3：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -588,7 +577,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 4：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,11 +588,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 5：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`，见记忆点 1）**迁移到数据库**，并在设置页落地完整管理 UI，取代记忆点 1 所述"配置文件驱动 + 无 CRUD 页面"的旧方案：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
+| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`）**迁移到数据库**，并在设置页落地完整管理 UI，取代**历史 MCP 文件配置方案**：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
 | **存储迁移与依赖约束（重要）** | `services` 包**不得反向 import `mcpserver`**（依赖链已是 mcpserver → agent/tools → services，反向即循环依赖），因此 **MCPServerService.Save 的校验规则是 mcpserver 包 validate 的复制实现，两处必须同步维护**。`LoadFromDB` 语义与原文件版 Load 一致：非法条目跳过不阻断装配（LoadErrors 逐条告警）、整体查询失败返回 error、空库返回空 Servers 且 err=nil。agent.go 装配流程不变：`LoadFromDB` → `EnabledServers()` → 每台服务器 goroutine 并行 `OpenSession`，单台失败仅 Warn 跳过、会话随本轮 defer 关闭。 |
 | **Save 校验与字段治理** | 校验（失败返回中文错误直接展示）：Name 非空 + transport 合法性（stdio/sse/http）+ 按传输必填（stdio 需 Command / sse、http 需 URL）+ **Name 不能含空白字符**（直接拼入工具名会破坏工具名）+ **Env/Headers 的 KEY 不能含空白或等号**（= 是 KEY=VALUE 分隔符）+ Name 全库唯一（更新排除自身）。**按传输类型清零非相关字段**（stdio 清 URL/Headers，sse/http 清 Command/Args/Env），避免切换传输后旧字段残留脏数据。写入：ID==0 走 `Create`，更新走 `Omit("created_at").Save`（防 Save 全字段更新把 created_at 覆写为零值，前端表单不带该字段）。 |
 | **测试连接 + 设置页交互要点** | `TestMCPServer(id)`：`MCPServerService.Get` 查配置（区分"记录不存在/查询失败"两种错误）→ `toMCPServerConfig` 字段映射 → `OpenSession`（连接+握手+工具发现，各带 ConnectTimeout 超时兜底）→ 返回 `TestMCPServerResult{ok, tool_num, message}`；无论是否启用均可测试。前端：条目操作区 = 启用开关（**乐观更新失败回滚**）+ 测试 + 编辑 + 删除（走确认框）；表单含防重复提交（`mcpFormSaving`）+ 未保存修改关闭确认 + 输入校验；**测试按钮点击转加载态并记录开始时间，无论测试多快强制保持 ≥600ms 加载动画**（本地毫秒级连接也能看到 spinner 反馈）；成功提示「连接成功，发现 N 个工具」，失败直接透传后端文案（已含服务器名如「MCP 服务器 xxx 连接失败: …」，前端**不再重复拼前缀**）。 |
@@ -612,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 6：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -624,7 +613,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 7：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 8：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：笔记切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 9：笔记切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -659,6 +648,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **预览 Worker 请求标识** | [preview-worker.js](frontend/src/js/preview-worker.js) 消息协议改 `{content, seq}` 并原样回传；[main.js](frontend/src/main.js) `previewRenderSeq` 每次 updatePreview 递增，onmessage 校验 `seq !== previewRenderSeq` 则**丢弃过期结果**（仅释放 `_previewWorkerLoading` 防后续永远走同步路径）；worker 忙时主线程同步渲染路径同样递增 seq 防在途结果覆盖；closeEditor 清理末尾递增使在途结果失效。 |
 | **验证与排查教训（重要）** | Edge CDP 自动化验证：vite dev + 注入 IPC 延迟 stub（**mock 降级同步路径无法复现——GetNoteContent 抛错同步 fallback，必须注入延迟模拟 Wails IPC**）；真实 `wails dev -browser` + 隔离空库（**测试前必须备份替换 ~/.jot/data/jot.db，沙箱限制下备份到 workspace，测完恢复**）+ 真实后端 IPC 验证 txt→md / md→txt / 20 轮 txt→txt 快速切换零残留。排查线索：**"标题也是 A"是区分内容竞态与界面残留的关键**（openEditor 阶段一同步设置标题，标题残留说明是界面状态未清理而非数据竞态）；localStorage 仅存主题/侧栏折叠，**不含编辑器内容**（用户怀疑的持久化可排除）。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（editorOpSeq/previewRenderSeq 代际 + openEditor/closeEditor 竞态保护 + 残留清理 + updateNote/createNote 保存校验 + updatePreview/onmessage seq）、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)（消息协议携带 seq） |
+
+---
+
+## 记忆点 10：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 四组相关改动：① **回收站「全部清空/恢复」Promise.all 死锁**——[trash-page.js](frontend/src/js/trash-page.js) `emptyTrash`/`restoreAllNotes` 用 `Promise.all(items.map(...))` 等待每个 `.trash-item` 的 `animationend` 才调用后端，**`animationend` 永远不触发**（shorthand `style.animation = ...` 后再 `style.animationDelay = ...` 顺序问题 + `prefers-reduced-motion: reduce` 把 `animation-duration: 0.001ms !important` 与 delay 叠加）→ 后端 `EmptyTrash` / `RestoreAllNotes` 永远不被调用，"点完按钮毫无反应"。修复：`items.forEach` 同步设 longhand 动画属性（fire-and-forget），**不等动画立刻调用后端** + `loadTrashNotes()` 刷新（DOM 替换天然截断动画）。② **恢复笔记 3 阶段处理**——[note_service.go](internal/services/note_service.go) `RestoreAll` 原逻辑统一 UPDATE `deleted_at = NULL` 不分场景，导致父笔记本在回收站时笔记被错误保留到原 notebook_id（指向软删除笔记本）。改为 3 阶段：Stage 1 先恢复这些笔记引用的、且本身在回收站的非默认笔记本；Stage 2 父笔记本已永久删除/不存在 → 迁 `notebook_id = 1`（默认）；Stage 3 再 `UPDATE notes SET deleted_at = NULL`。③ **同 bug 模式扩展**——`BatchRestore`（[note_service.go](internal/services/note_service.go) 批量 ID 恢复）和 `Restore`（[note_service.go](internal/services/note_service.go) 单条恢复）有相同的 `NOT EXISTS` / `deleted_at IS NULL` 过滤漏判，一并改为 3 阶段处理（BatchRestore 用子查询限定到用户选中的 ID，Restore 改 `Unscoped().First` 探测 + `notebook.DeletedAt.Valid` 分支）。④ **配套 UI 调整**——新建笔记本对话框取消/创建按钮 `justify-content: flex-end` → `center`（[sidebar.css](frontend/src/css/components/sidebar.css) `.new-notebook-actions`）；导入笔记多文件失败**聚合成单条 toast**（[main.js](frontend/src/main.js) `showImportResults` 改为单条 `nm.show`+"详情见应用日志"末尾提示，不再每文件发 toast，**`console.warn` 在生产构建不可见故删除**——后端 `processImportFile` ([app.go](app.go)) 每个失败分支已带 `path` 打日志，是唯一权威源）；通知容器 `max-width: 380px` → `460px`（[modals.css](frontend/src/css/components/modals.css) `.notification-container`）给多行内容更多横向空间。 |
+| **`animationend` 死锁的根因（重要教训）** | ① **CSS shorthand 后设 longhand 顺序**——`style.animation = 'deleteOut 0.45s ease-out forwards'`（shorthand 会重置 `animation-delay` 为 0），紧接 `style.animationDelay = '...ms'`——某些 Chromium 渲染对长后赋值不重启动画，listener 永远等不到 `animationend`；`prefers-reduced-motion: reduce` 媒体查询（[animations.css](frontend/src/css/animations.css)）把 `animation-duration: 0.001ms !important` 叠加到延迟上，**0.001ms 动画 + 几十 ms delay 组合下浏览器不触发 `animationend`**（已知行为）。② **正确解法不是修动画，而是别等动画**——破坏性操作（清空/恢复/删除）"快比优雅重要"，animation 作为 fire-and-forget 视觉反馈，列表刷新（DOM 替换）天然截断动画。**`await Promise.all(items.map(waitForAnimation))` 是反模式**——尤其在 CSS 媒体查询可能压缩 duration 的项目中；要么改 `Promise.race([animation, timeout])` 兜底，要么直接不等。 |
+| **恢复 3 阶段设计的边界（重要）** | 父笔记本状态决定笔记去向：① **父笔记本在回收站（软删除）**——必须先恢复父笔记本（否则笔记指向软删除笔记本会变孤儿），然后笔记保持原 `notebook_id`；② **父笔记本存活**——笔记直接 `UPDATE deleted_at = NULL` 即可；③ **父笔记本已永久删除/不存在**——笔记本被 `PermanentDelete` 后行已不存在，必须先迁 `notebook_id = 1`（默认笔记本，`EnsureDefaultNotebook` 保证存在且永不软删除）再恢复。**`notebook_id IN (0, 1)` 特殊场景跳过**——`notebook_id = 0` 是历史脏数据，删除级联不影响；`notebook_id = 1` 是默认笔记本，永不在回收站。**Stage 1 子查询必须限定 `id IN ?` 范围**（批量恢复时只处理用户选中的笔记引用的笔记本，不全表扫描）。**Stage 2 必须加 `notebook_id != 1`** 防误把已在默认的笔记改写（虽然语义上同值但白做工）。 |
+| **同 bug 模式的排查方法** | 凡是涉及父子关联（笔记-笔记本、笔记-标签、用户-权限）的恢复/合并/迁移逻辑，先问三个问题：① 父/关联表是软删除还是硬删除？② 父/关联表是否在批量操作的 ID 集合范围内？③ 父/关联表若不存在，子表应该去哪？三阶段（先恢复父 → 迁孤儿 → 改子状态）模式可复用。`note_service.go` 的 RestoreAll / BatchRestore / Restore 现在都按此模式实现，新增类似操作时直接复用。 |
+| **暖笺主题 `.btn-restore` 单独配色** | ysgrifennwr 主题下 `--accent` 与 `--danger` 色相相近（都是红系），导致"恢复"（accent）与"清空"（danger）按钮视觉无法区分。修复仅在 `[data-theme="ysgrifennwr"]` 选择器下覆盖 `.btn-restore`：背景用 `color-mix(in srgb, var(--success) 15%, transparent)`、文字 `var(--success-text)`、边框 `color-mix(in srgb, var(--success) 35%, transparent)`，**13 个其他主题完全不受影响**（--success 借用积极动作语义）。不通过新增 `--success-border` 变量是因为 13 个其他主题都靠 `--accent` 工作正常；新增主题变量会污染所有主题。 |
+| **涉及文件** | [frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)（`emptyTrash`/`restoreAllNotes` 改为 forEach + 立即调后端）、[internal/services/note_service.go](internal/services/note_service.go)（RestoreAll/BatchRestore/Restore 三函数 3 阶段处理）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.new-notebook-actions` 居中）、[frontend/src/main.js](frontend/src/main.js)（`showImportResults` 聚合 toast）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.notification-container` 宽度 380→460）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.btn-restore` 主题变量与 ysgrifennwr 单独覆盖） |
 
 ---
 

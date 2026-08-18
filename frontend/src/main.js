@@ -8847,29 +8847,25 @@ function flashNoteCards(noteIds) {
 // 展示导入结果通知（成功/失败详情），并刷新 UI
 function showImportResults(results) {
     let successCount = 0;
-    let failCount = 0;
+    const failItems = [];
     const importedNoteIds = [];
 
     for (const result of results) {
         const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
-        if (result.error && result.error.includes('文件夹')) {
-            failCount++;
-            nm.show(`${label} ${result.error}`, 'warning');
-        } else if (result.success) {
+        if (result.success) {
             successCount++;
             importedNoteIds.push(result.note_id);
         } else {
-            failCount++;
-            nm.show(`"${label}" ${result.error || '导入失败'}`, 'warning');
+            failItems.push({ label, error: result.error || '导入失败' });
         }
     }
 
-    if (successCount > 0) {
-        const msg = failCount > 0
-            ? `${successCount} 个文件导入成功，${failCount} 个失败`
-            : `${successCount} 个文件导入成功`;
-        nm.show(msg, 'success');
+    const failCount = failItems.length;
+    let msg = `导入完成: 成功 ${successCount} 个${failCount > 0 ? `, 失败 ${failCount} 个\n\n详情见应用日志` : ''}`;
 
+    nm.show(msg, failCount > 0 ? 'warning' : 'success', failCount > 0 ? 8000 : 3000);
+
+    if (successCount > 0) {
         loadNotes().then(() => {
             loadNotebooks();
             flashNoteCards(importedNoteIds);
