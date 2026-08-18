@@ -134,6 +134,7 @@
   opacity: 1; /* 直接可见，无入场动画 */
   display: flex;
   flex-direction: column;
+  height: 165px; /* 固定高度，使所有卡片统一：可容纳 1 行标题 + 3 行正文的最极端内容（~165px），避免裁剪 */
 }
 
 .note-card:hover {
@@ -165,10 +166,9 @@
   margin-bottom: 6px;
   line-height: 1.4;
   letter-spacing: -0.01em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap; /* 单行不换行 */
   overflow: hidden;
+  text-overflow: ellipsis; /* 截断处显示省略号（单行截断用 text-overflow，比 line-clamp 可靠） */
   font-family: var(--font-family);
 }
 
@@ -179,6 +179,7 @@
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3; /* 标准属性，向后兼容现代浏览器 */
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin-bottom: 14px;
