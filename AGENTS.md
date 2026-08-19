@@ -542,20 +542,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 34. **编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）**："打开笔记 A 后关闭，再打开笔记 B 先显示 A 内容再变 B"（md 无闪烁、非 md 有闪烁；"标题和内容都是 A"）。根因：openEditor 阶段二 `Promise.all([GetNoteContent, GetAllTags])` 异步续体竞态（**瓶颈常在 GetAllTags IPC，每次打开都触发，与笔记大小无关**）+ closeEditor 200ms 延迟清理无取消（误关新面板/误毁新 CM6）+ 标题/mdRendered 残留（B 不在缓存时不清空标题、清理被跳过时预览残留）+ 预览 Worker 结果无请求标识。修复（[main.js](frontend/src/main.js) + [preview-worker.js](frontend/src/js/preview-worker.js)）：模块级 `editorOpSeq` 代际（openEditor/closeEditor 每次递增，异步续体与 200ms 清理回调校验代际不匹配则放弃/跳过）；阶段一无条件清空 mdRendered/标题/`_lastPreviewContent`；GetNote 分支 DOM 修改加代际检查；updateNote/createNote 保存后仅当仍是本笔记才 closeEditor；预览 `previewRenderSeq` 随 Worker 消息传递、过期结果丢弃。Edge CDP 真实 wails dev + 隔离空库验证 20 轮 txt→txt 切换零残留；localStorage 不含编辑器内容。
 
----
-
-## 记忆点 1：Agent 内置工具开关配置（设置页下拉多选 + 注册级过滤 + 关闭汇总提示 + Rnx fclint 任务）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增 Agent 内置工具启用配置，控制注册给 Agent 的工具集（默认全部注册）：① **存储**——Setting KV `ai_agent_tools_disabled`（**黑名单**语义，JSON 数组字符串，默认空 = 全启用；未来新增内置工具自动默认可用），[db.go](internal/database/db.go) `InitDefaultSettings` 补默认值，[types.go](internal/services/types.go) `SettingsConfig` 新增字段 + Get/Save 映射；② **后端**——[tools/meta.go](internal/agent/tools/meta.go) 新增 `BuiltinTools()` 返回 10 个工具英文名 + 中文说明（单一事实来源），[registry.go](internal/agent/registry.go) `buildTools` 按禁用集合过滤（**注册级**：被禁工具不进模型工具列表、不会误调），[types.go](internal/agent/types.go) `Request.DisabledTools` + `agent.ToolMeta`，[app.go](app.go) `CallAIAgentStream` 读设置解析传入（解析失败按空=全启用静默降级）+ 新增 `GetAgentTools()` 绑定供前端渲染（含启用状态）；③ **前端**——[index.html](frontend/index.html)「对话与搜索」面板尾部新增「Agent 工具」设置项 + 下拉浮层（checkbox + 英文工具名 + 中文说明，默认全选），[main.js](frontend/src/main.js) 浮层渲染/开合（点击外部/ESC/切换设置面板自动关闭）、勾选即时保存、按钮显示「已启用 N/10」、**关闭浮层时汇总 toast**（`agentToolsChanges` 记录净变更：`工具配置已保存：禁用 2 个工具，启用 1 个工具`）、打开时 `scrollTop=0`、aria-expanded 同步；[settings-panel.css](frontend/src/css/components/settings-panel.css) 浮层**向上弹出**（`bottom: calc(100%+8px)`）+ 460px 宽（max-width:100% 防溢出）+ 描述 ellipsis 截断 + hover/active/打开态动效（弹性回弹 `cubic-bezier(0.34,1.56,0.64,1)`，按下 `scale(0.93)`）。 |
-| **类名冲突踩坑（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) 全局规则 `.ai-chat-toggle-switch { display: none; }`（工具栏开关改按钮式时加的，隐藏迷你 switch）会**连坐设置页复用同类名的开关**——设置页深度思考/卡片召回/知乎/Tavily/全网搜索 5 个开关全部隐身。设置页复用公共类必须在 [settings-panel.css](frontend/src/css/components/settings-panel.css) 显式恢复 `display: inline-block` 并补齐基础样式（28×16 圆角胶囊 + 12px 圆点 knob 位移 left 14px），否则开关对用户不可见。 |
-| **Rnx fclint 任务** | [Rnx.toml](Rnx.toml) 新增独立任务 `fclint`（`cd frontend && npm run lint` + `cd frontend && npm run validate:html`），挂 frontend 的 **run_after**（构建完成后执行检查，非前置依赖），可单独 `rnx -r fclint` 或随 build/run/release 自动执行；lint 当前 0 errors/90 warnings（warning 为配置降级，不阻塞任务）。 |
-| **涉及文件** | [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（新增）、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/types.go](internal/agent/types.go)、[internal/services/types.go](internal/services/types.go)、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[Rnx.toml](Rnx.toml) |
+35. **AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）**：AIMessage 新增 `Meta` TEXT 字段（JSON 数组，与既有 `SearchSources/RecallCards/ToolCalls` 同模式），存储 `[{type:'ref'|'file'|'skill', id, title/name/label, notebook?, truncated?}]`；用户消息气泡末尾渲染 inline chip（图标+标签+截断角标），assistant/系统侧 LLM 仍只看到纯 `Content`（meta 走独立字段 → 零污染）。**关键 bug 教训**：`addMessage` 是纯 DOM 渲染，调用方需手动 push 到 `chatHistory` buffer——`sendUserText`/`handleResend` 漏掉会导致取消编辑时 `chatHistory.find(m=>m.id===msgId)` 返 undefined、chip 消失且需切会话才恢复。8 项代码审查修复（详见 记忆点 10）：flex `1→0` 修 chip 换行、`.ai-msg-chip-tag` 新增、`createChipElement` 空 label 跳过、`applyEdit` 重复渲染改 `exitEditModeWithoutRerender`、cancelEdit warn 日志、`userMsgId<=0` 编辑守卫、`parseInt→+msgId||0`、`bindMsgContextMenu._ctxMenuBound` 去重。详见 [ai_message.go](internal/models/ai_message.go)、[ai_service.go](internal/services/ai_service.go)、[app.go](app.go)（`SaveAIMessage` 加 meta 参数 + `UpdateAIMessageMeta` 新绑定）、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)
 
 ---
 
-## 记忆点 2：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
+## 记忆点 1：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -566,18 +557,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 2：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | Agent 全部 12 个工具实施分层防御加固（用户拍板"全部加固"）：**P0 崩溃级**——[context.go](internal/agent/tools/context.go) `WrapWithError.InvokableRun` 改命名返回值 + defer recover（panic 转 fail 回填模型不中断 ReAct 循环，用户取消分支逐字保持）；[web_search.go](internal/agent/tools/web_search.go) 单源 goroutine 加 recover（panic 转错误进结果通道按部分失败跳过）。**P1 稳健级**——各工具补 `ctx.Err()` 取消检查；[read_note_section.go](internal/agent/tools/read_note_section.go) offset/length 整数校验（math.Trunc 防浮点截断）；[manage_tag.go](internal/agent/tools/manage_tag.go) action TrimSpace；统一文本长度上限（[context.go](internal/agent/tools/context.go) `validateTextLen` 按 rune 计：`maxToolShortText`=500 / `maxToolFindLen`=2000 / `maxToolLongText`=20000，覆盖全部文本参数）。**P2 加固级**——[read_url.go](internal/agent/tools/read_url.go) `isPrivateHost` SSRF 防护（拒绝 loopback/私网/链路本地（含 169.254.169.254）/未指定/组播 IP 及 localhost/.local/.internal 主机名，**不做 DNS 解析**防解析绕过）；[manage_note.go](internal/agent/tools/manage_note.go) `normalizeNoteFileExt`（纯字母数字 1-10 位，create 空→.md、update 空→保持原值）。 |
 | **写操作强制确认（重要）** | manage_note 的 update/edit/pin/move/add_tag/remove_tag 六动作：schema 新增 `confirm` 布尔参数，**未携带 `confirm=true` 一律拒绝执行**并返回正常结果（非 error、前端不显示失败态）的引导文本"该操作需要用户确认……调用 ask_user 向用户确认，用户明确同意后携带 confirm=true 重新调用"；Desc 写明缺省拒绝。app.go【写操作确认】规范升级为**强制**三步：正文说明 + ask_user 提问 → 用户同意后带 confirm=true 执行 → 拒绝不得执行。设计边界：create 视为用户明确要求的创建指令不强制确认；工具层只能保证"无 confirm=true 不执行"，模型未问用户就传 confirm=true 的漏洞靠 Desc + 系统提示词强约束压制（纯工具层无法 100% 拦截自主模型首次调用参数，完整封死需跨轮会话状态机，已确认不采用）。 |
-| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 6）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
+| **ask_user 强制调用规范（重要）** | 三类场景**必须调用** ask_user 不得省略或绕过：① 信息模糊/参数不明确/需求不具体（未指明操作对象/数量/范围/目标/方案）；② 需用户在多个选项或方案中做选择；③ 需进一步确认或补充关键信息（含写操作确认）。双通道约束：app.go 系统提示词【工具使用规范 - ask_user 反向提问（强制调用）】+ ask_user 工具 Desc 同步强制语气。另：前置意图感知（记忆点 3）在写操作/模糊意图时再注入强化提示，形成"感知→提示→工具层拦截"三层闭环。 |
 | **涉及文件** | [internal/agent/tools/context.go](internal/agent/tools/context.go)（recover + fail + validateTextLen + 上限常量）、[internal/agent/tools/web_search.go](internal/agent/tools/web_search.go)、[internal/agent/tools/recall_notes.go](internal/agent/tools/recall_notes.go)、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)、[internal/agent/tools/manage_tag.go](internal/agent/tools/manage_tag.go)、[internal/agent/tools/manage_todo.go](internal/agent/tools/manage_todo.go)、[internal/agent/tools/manage_notebook.go](internal/agent/tools/manage_notebook.go)、[internal/agent/tools/refine_query.go](internal/agent/tools/refine_query.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)、[internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（confirm + normalizeNoteFileExt）、[app.go](app.go)（写操作强制确认规范 + ask_user 强制调用规范） |
 
 ---
 
-## 记忆点 4：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 3：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -588,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 4：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -613,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 6：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 7：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 8：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 9：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,6 +652,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **同 bug 模式的排查方法** | 凡是涉及父子关联（笔记-笔记本、笔记-标签、用户-权限）的恢复/合并/迁移逻辑，先问三个问题：① 父/关联表是软删除还是硬删除？② 父/关联表是否在批量操作的 ID 集合范围内？③ 父/关联表若不存在，子表应该去哪？三阶段（先恢复父 → 迁孤儿 → 改子状态）模式可复用。`note_service.go` 的 RestoreAll / BatchRestore / Restore 现在都按此模式实现，新增类似操作时直接复用。 |
 | **暖笺主题 `.btn-restore` 单独配色** | ysgrifennwr 主题下 `--accent` 与 `--danger` 色相相近（都是红系），导致"恢复"（accent）与"清空"（danger）按钮视觉无法区分。修复仅在 `[data-theme="ysgrifennwr"]` 选择器下覆盖 `.btn-restore`：背景用 `color-mix(in srgb, var(--success) 15%, transparent)`、文字 `var(--success-text)`、边框 `color-mix(in srgb, var(--success) 35%, transparent)`，**13 个其他主题完全不受影响**（--success 借用积极动作语义）。不通过新增 `--success-border` 变量是因为 13 个其他主题都靠 `--accent` 工作正常；新增主题变量会污染所有主题。 |
 | **涉及文件** | [frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)（`emptyTrash`/`restoreAllNotes` 改为 forEach + 立即调后端）、[internal/services/note_service.go](internal/services/note_service.go)（RestoreAll/BatchRestore/Restore 三函数 3 阶段处理）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.new-notebook-actions` 居中）、[frontend/src/main.js](frontend/src/main.js)（`showImportResults` 聚合 toast）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.notification-container` 宽度 380→460）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.btn-restore` 主题变量与 ysgrifennwr 单独覆盖） |
+
+---
+
+## 记忆点 10：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 用户消息气泡末尾追加 inline chip，可视化展示"引用了哪些笔记/上传了哪些文件/激活了哪些技能"，类似 Trae 的"添加到输入框"效果。**核心决策**：**AIMessage 新增 `Meta` TEXT 字段（JSON 数组）** 存 `[{type:'ref'/'file'/'skill', id, title/name/label, notebook?, truncated?}]`，与既有 `SearchSources/RecallCards/ToolCalls` 单字段 JSON 模式保持一致；**`Content` 永远纯文本 → LLM 零污染**（meta 走独立字段不混入，重新生成/继续对话/历史多轮 LLM 上下文全部干净）。前端 `addMessage` 用户分支从 `textContent` 改为 `renderUserMessageWithChips`：文本段用 `createTextNode`（XSS 安全），chip 段从 `CHIP_ICON_SVG` 常量表按 `type` 查图标 + label/title 字段截断（>20 字 + `…`）+ `user-select: text`；`buildUserMessageMeta` 派生时聚合 `referencedNotes/uploadedFiles/activeSkills/roleplayNotes` 4 个工具栏状态。 |
+| **后端 5 处贯通（重要）** | ① [ai_message.go](internal/models/ai_message.go) `AIMessage` 加 `Meta string \`gorm:"type:text" json:"meta"\``，GORM AutoMigrate 自动加列（NULL 默认，零迁移）；② [ai_service.go](internal/services/ai_service.go) `Message` 透传字段 + `SaveAIMessage`/3 处历史加载（`LoadAISessionMessages`/`LoadAISessionMessagesPaginated`/`ReplaceAISessionMessages`）补全 `Meta` 字段防丢；③ [app.go](app.go) `App.SaveAIMessage` Wails 绑定**新增第 4 参数 `meta string`**（前端必须同步传）；④ 新增 `App.UpdateAIMessageMeta(msgID, meta string)` 单独绑定（编辑保存/重新生成/重发时局部更新 meta，不动 content），`Where("id = ? AND role = ?", msgID, "user")` 防止误改非用户消息、`RowsAffected=0` 写 Warn 日志；⑤ AIMessage/AISession 已有 `services.Message` 转换点全部需要补 Meta 字段（**典型遗漏点**：3 处历史加载函数）。 |
+| **chatHistory buffer 同步 bug（重要教训）** | **`addMessage` 是纯 DOM 渲染，不维护 `chatHistory` 缓冲区**。调用方需手动 push：`sendUserText`（[ai-chat.js](frontend/src/js/ai-chat.js) L2376 后）和 `handleResend`（L5041 后）漏掉会导致 `cancelEdit`/`applyEdit` 的 `chatHistory.find(m => m.id === msgId)` 返 undefined → **取消编辑后 chip 消失，且需切换会话才能恢复**（切会话触发 `chatHistory = msgs.map(...)` 从 DB 重建）。该 bug 是用户实测后报告的——现象"取消编辑后引用内容就不显示了，还得切换会话后才显示"。**普遍教训**：DOM 渲染与 buffer 同步是**两件事**，抽象成函数时不要把 buffer 维护塞到 render 函数里（容易破坏纯函数假设）。同样模式要检查：`loadAISessionMessages` → `chatHistory = msgs.map(...)` 走全量路径已带 meta；**增量路径**（sendUserText/handleResend 新消息）必须手动补。 |
+| **编辑/重新生成/重发的 meta 同步（重要）** | 三类操作共用同一规则：**从工具栏状态派生新 meta，写回 DB，同步 `chatHistory[idx].meta`，重渲染 DOM**。① **编辑保存**（`applyEdit`）：`buildUserMessageMeta()` 派生新 meta → `UpdateAIMessageMeta` 写库 → `chatHistory[idx].meta = newMeta` → `rerenderUserMessageChips` 重渲染气泡。② **重新生成**（`handleRegenerate`）：同前流程（user 消息 meta 跟随工具栏更新，AI 回复自然重新生成）。③ **重发**（`handleResend`）：同前（重发新 user 消息继承当前工具栏）。**编辑/重发后旧的 assistant + 后续消息都被截断删除**（`TruncateAISessionAfterMessage`），所以更新 meta 不会污染后续历史。**取消编辑**走相反语义：从 `chatHistory[idx].meta` 取原值重渲染，**忽略工具栏当前状态**（用户在编辑期间对工具栏的修改不应用到这条消息）。 |
+| **8 项代码审查修复（小但关键）** | ① **M4** `.ai-msg-text` `flex: 1 1 auto` → `0 1 auto`（1 行 CSS，**修 chip 错位**——text 抢满第一行导致 chip 永远换行）；② **S2** 新增 `.ai-msg-chip-tag` CSS（11 行，截断角标半透明黄底，`file.truncated=true` 时显示）；③ **S1** `createChipElement` 开头加 `if (!text) return null;` + 调用方 `if (!chip) continue;`（空 label 跳过，避免"只有图标的空 chip"）；④ **M1** `applyEdit` 不再调 `cancelEdit`（避免 rerenderUserMessageChips + cancelEdit 两次渲染），新增 `exitEditModeWithoutRerender(msgEl)` 仅清理编辑态 DOM（textarea 移除、actions 恢复）；⑤ **M3** `cancelEdit` 找不到时 `console.warn('[AI Chat] cancelEdit: chatHistory 未找到 msgId', msgId)`；⑥ **R4** 编辑入口守卫 `if (_editMsgId <= 0) { showNotification('该消息尚未完整保存，无法编辑', 'warn'); return; }`（`userMsgId=0` 即 `SaveAIMessage` 失败时编辑按钮形同虚设，给用户明确反馈）；⑦ **R1** 6 处 `parseInt(msgEl.dataset.msgId)` 统一改为 `+msgEl.dataset.msgId \|\| 0`（更稳，NaN 兜 0，调用方 `if (!msgId)` 一致拦截）；⑧ **R3** `bindMsgContextMenu` 去重守卫 `if (!msgEl \|\| msgEl._ctxMenuBound) return; msgEl._ctxMenuBound = true;`（元素级属性标记防重复绑定）。 |
+| **XSS / 主题 / 旧消息兼容** | ① **XSS 防护**——文本 `createTextNode`（自动转义）、label `textContent`（无 HTML 解析）、icon `innerHTML = CHIP_ICON_SVG[item.type]`（图标来自常量表，非用户输入，type 缺失/异常回退 default 圆圈）；② **主题适配**——chip 半透明白色背景 `rgba(255,255,255,0.16~0.22)` 在 14 主题的 accent 底上保持高对比（无需主题切换），`ref` 加深、`file` 虚线边框、`skill` 加粗边框 + 较深背景三档微调；③ **旧消息兼容**——存量 `Meta=NULL/""` 经 `JSON.parse('')` 抛错 → catch 后 warn + 早返回只渲染文本段，**不报错不破坏**（用户实测试过升级前消息正常显示）；④ **空 meta 数组** `"[]"` → `Array.isArray(items) && items.length === 0` 早返回零 chip，**行为完全等同未加 feature 前的状态**（无视觉差异）。 |
+| **涉及文件** | [internal/models/ai_message.go](internal/models/ai_message.go)（新增 Meta 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（Message 透传 + 3 处历史加载补 Meta）、[app.go](app.go)（`SaveAIMessage` 签名加 meta 参数 + 新增 `UpdateAIMessageMeta` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（CHIP_ICON_SVG / getSkillLabel / buildUserMessageMeta / createChipElement / renderUserMessageWithChips / rerenderUserMessageChips / sendUserText+handleResend 加 chatHistory push / 8 项审查修复）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-msg-user` 容器 flex + `.ai-msg-chip*` 类型微调 + `.ai-msg-chip-tag` 新增）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) + [App.d.ts](frontend/wailsjs/go/main/App.d.ts)（`SaveAIMessage` 4 参 + `UpdateAIMessageMeta` 绑定） |
 
 ---
 
