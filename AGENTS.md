@@ -542,22 +542,13 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 34. **编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）**："打开笔记 A 后关闭，再打开笔记 B 先显示 A 内容再变 B"（md 无闪烁、非 md 有闪烁；"标题和内容都是 A"）。根因：openEditor 阶段二 `Promise.all([GetNoteContent, GetAllTags])` 异步续体竞态（**瓶颈常在 GetAllTags IPC，每次打开都触发，与笔记大小无关**）+ closeEditor 200ms 延迟清理无取消（误关新面板/误毁新 CM6）+ 标题/mdRendered 残留（B 不在缓存时不清空标题、清理被跳过时预览残留）+ 预览 Worker 结果无请求标识。修复（[main.js](frontend/src/main.js) + [preview-worker.js](frontend/src/js/preview-worker.js)）：模块级 `editorOpSeq` 代际（openEditor/closeEditor 每次递增，异步续体与 200ms 清理回调校验代际不匹配则放弃/跳过）；阶段一无条件清空 mdRendered/标题/`_lastPreviewContent`；GetNote 分支 DOM 修改加代际检查；updateNote/createNote 保存后仅当仍是本笔记才 closeEditor；预览 `previewRenderSeq` 随 Worker 消息传递、过期结果丢弃。Edge CDP 真实 wails dev + 隔离空库验证 20 轮 txt→txt 切换零残留；localStorage 不含编辑器内容。
 
-35. **AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）**：AIMessage 新增 `Meta` TEXT 字段（JSON 数组，与既有 `SearchSources/RecallCards/ToolCalls` 同模式），存储 `[{type:'ref'|'file'|'skill', id, title/name/label, notebook?, truncated?}]`；用户消息气泡末尾渲染 inline chip（图标+标签+截断角标），assistant/系统侧 LLM 仍只看到纯 `Content`（meta 走独立字段 → 零污染）。**关键 bug 教训**：`addMessage` 是纯 DOM 渲染，调用方需手动 push 到 `chatHistory` buffer——`sendUserText`/`handleResend` 漏掉会导致取消编辑时 `chatHistory.find(m=>m.id===msgId)` 返 undefined、chip 消失且需切会话才恢复。8 项代码审查修复（详见 记忆点 10）：flex `1→0` 修 chip 换行、`.ai-msg-chip-tag` 新增、`createChipElement` 空 label 跳过、`applyEdit` 重复渲染改 `exitEditModeWithoutRerender`、cancelEdit warn 日志、`userMsgId<=0` 编辑守卫、`parseInt→+msgId||0`、`bindMsgContextMenu._ctxMenuBound` 去重。详见 [ai_message.go](internal/models/ai_message.go)、[ai_service.go](internal/services/ai_service.go)、[app.go](app.go)（`SaveAIMessage` 加 meta 参数 + `UpdateAIMessageMeta` 新绑定）、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)
+35. **AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）**：AIMessage 新增 `Meta` TEXT 字段（JSON 数组，与既有 `SearchSources/RecallCards/ToolCalls` 同模式），存储 `[{type:'ref'|'file'|'skill', id, title/name/label, notebook?, truncated?}]`；用户消息气泡末尾渲染 inline chip（图标+标签+截断角标），assistant/系统侧 LLM 仍只看到纯 `Content`（meta 走独立字段 → 零污染）。**关键 bug 教训**：`addMessage` 是纯 DOM 渲染，调用方需手动 push 到 `chatHistory` buffer——`sendUserText`/`handleResend` 漏掉会导致取消编辑时 `chatHistory.find(m=>m.id===msgId)` 返 undefined、chip 消失且需切会话才恢复。8 项代码审查修复：flex `1→0` 修 chip 换行、`.ai-msg-chip-tag` 新增、`createChipElement` 空 label 跳过、`applyEdit` 重复渲染改 `exitEditModeWithoutRerender`、cancelEdit warn 日志、`userMsgId<=0` 编辑守卫、`parseInt→+msgId||0`、`bindMsgContextMenu._ctxMenuBound` 去重。详见 [ai_message.go](internal/models/ai_message.go)、[ai_service.go](internal/services/ai_service.go)、[app.go](app.go)（`SaveAIMessage` 加 meta 参数 + `UpdateAIMessageMeta` 新绑定）、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)
+
+36. **笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复**：Ctrl+F 搜索弹窗按相关性打分排序（[note_service.go](internal/services/note_service.go) `buildSearchSortOrder`：完全相等 50 > 前缀 40 > 标题+内容 30 > 仅标题 25 > 仅内容 10，空关键词回退常规排序；标签/笔记本/时间筛选仅过滤不参与排序）。**关键 bug 教训（GORM v1.31.1）**：`Order()` 的 switch 只处理 `clause.OrderBy`/`clause.OrderByColumn`/`string` 三种类型，传 `gorm.Expr` 会被**静默丢弃**导致查询完全没有 ORDER BY（用户实测"搜『日志』标题命中不排前"的根因）——必须返回 `clause.OrderBy{Expression: clause.Expr{...}}`。**测试假阳性教训**：断言顺序必须打乱插入顺序，否则"按插入顺序返回"也能通过。**通配符转义**：`escapeLike` 转义 `\ % _` + `LIKE ? ESCAPE '\'`，4 处搜索查询统一。另修复搜索弹窗筛选下拉被 `.search-modal-content` `overflow:hidden` 裁剪（改 visible）、placeholder 误导文案（只搜标题/内容改"搜索笔记(标题/内容)..."）。详见 [note_service.go](internal/services/note_service.go)、[note_service_test.go](internal/services/note_service_test.go)、[search-modal.css](frontend/src/css/components/search-modal.css)
 
 ---
 
-## 记忆点 1：manage_note 双模式扩展（update / edit / append）+ 新工具 read_url / read_note_section + meta.go 工具描述修正
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动补齐 Agent 工具能力：① **manage_note 扩展**（[manage_note.go](internal/agent/tools/manage_note.go)）——新增 `update`（更新标题/扩展名，id + title/file_ext 至少其一，非空才更新对应字段、不碰正文）、`edit`（编辑正文，**四模式互斥**：content 非空→整篇替换；content 空 + find 非空→片段替换（把第 count 次出现的 find 替换为 replace，replace 缺省空串即删除该片段，find 优先精确匹配、空白差异自动归一化兜底，replace_all=true 全部替换且与 count>1 互斥，未找到报错引导重新 view 获取精确原文）；content 与 find 均空 + append_content 非空→追加模式（正文末尾拼接，无需先读全文）；line_start 非 0→行级替换（line_start+line_end 区间整行替换为 replace，空串删行区间，行号来自 view/read_note_section 的 line_numbers=true 输出））、file_ext 扩展名校验（create 缺省 .md）。② **新增 read_url 工具**（[read_url.go](internal/agent/tools/read_url.go)）——基于 eino-ext URL Document Loader 抓取网页提取正文，按 `ai_web_search_max_chars` 设置截断返回；仅放行 http/https（防 file:// 本地读取）、15s 超时、模拟浏览器 UA（多数站点非浏览器 UA 返回 403）；实现 ActionTextProvider（展示被读链接截断防超长）。③ **新增 read_note_section 工具**（[read_note_section.go](internal/agent/tools/read_note_section.go)）——分段续读大笔记：id/offset/length 参数，返回指定区间正文；view 动作内容超过 `ai_large_file_preview_threshold` 截断时给出该工具续读指引（id/offset 参数），避免模型一次拿不到全文；line_numbers=true 时输出「行 N: 」全局行号前缀（按 offset 前换行数推算），与 view 的 line_numbers=true 行号连续。 |
-| **meta.go 描述一致性教训（重要）** | [meta.go](internal/agent/tools/meta.go) 工具 Label 曾声称 manage_note 有"删除"能力而实际未实现，已修正。**工具描述必须与实际实现严格一致**（虚假能力会诱导模型误调、误导用户预期）；[tools/doc.go](internal/agent/tools/doc.go) 与 [registry.go](internal/agent/registry.go) 是工具清单权威来源，新增/改名/删除工具时 meta.go 与 doc.go 需同步。 |
-| **edit 模式边界** | 四模式互斥判定：content 非空优先 → find 非空 → append_content → line_start；片段替换是**字面匹配**（非正则），find 优先精确匹配、因空白/换行/缩进差异未命中时自动做**空白归一化匹配兜底**（`whitespaceFold` 折叠连续空白为单空格、\r\n→\n、去首尾空白，`findNormalized` 用折叠偏移表映射回原文字节区间）；count 指定第几次出现（缺省 1），replace_all=true 替换全部出现（与 count>1 互斥，先精确 ReplaceAll 再归一化逐个补漏）；行级模式 line_start（必填）+ line_end（缺省等于 line_start）替换整行区间，replace 空串即删除区间行（`replaceLines`，行号越界报错并给出总行数）；view/read_note_section 的 **line_numbers=true** 输出「行 N: 」前缀（1-based，read_note_section 按 offset 前换行数推算全局行号），行号仅作行级编辑寻址坐标、**不属于正文**（复制片段用于 find 时必须去掉行号）；append 模式刻意"无需先读全文"，与 view 超大截断形成互补。 |
-| **涉及文件** | [internal/agent/tools/manage_note.go](internal/agent/tools/manage_note.go)（update/edit/append + file_ext）、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)（新增）、[internal/agent/tools/read_note_section.go](internal/agent/tools/read_note_section.go)（新增）、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)（Label 修正）、[internal/agent/registry.go](internal/agent/registry.go)（注册 read_url/read_note_section）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具边界说明） |
-
----
-
-## 记忆点 2：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
+## 记忆点 1：Agent 工具防御加固（P0/P1/P2）+ 写操作强制确认（confirm）+ ask_user 强制调用规范
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -568,7 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
+## 记忆点 2：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 3：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 4：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 5：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +607,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 6：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +619,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 7：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 8：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +646,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 9：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,6 +657,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **8 项代码审查修复（小但关键）** | ① **M4** `.ai-msg-text` `flex: 1 1 auto` → `0 1 auto`（1 行 CSS，**修 chip 错位**——text 抢满第一行导致 chip 永远换行）；② **S2** 新增 `.ai-msg-chip-tag` CSS（11 行，截断角标半透明黄底，`file.truncated=true` 时显示）；③ **S1** `createChipElement` 开头加 `if (!text) return null;` + 调用方 `if (!chip) continue;`（空 label 跳过，避免"只有图标的空 chip"）；④ **M1** `applyEdit` 不再调 `cancelEdit`（避免 rerenderUserMessageChips + cancelEdit 两次渲染），新增 `exitEditModeWithoutRerender(msgEl)` 仅清理编辑态 DOM（textarea 移除、actions 恢复）；⑤ **M3** `cancelEdit` 找不到时 `console.warn('[AI Chat] cancelEdit: chatHistory 未找到 msgId', msgId)`；⑥ **R4** 编辑入口守卫 `if (_editMsgId <= 0) { showNotification('该消息尚未完整保存，无法编辑', 'warn'); return; }`（`userMsgId=0` 即 `SaveAIMessage` 失败时编辑按钮形同虚设，给用户明确反馈）；⑦ **R1** 6 处 `parseInt(msgEl.dataset.msgId)` 统一改为 `+msgEl.dataset.msgId \|\| 0`（更稳，NaN 兜 0，调用方 `if (!msgId)` 一致拦截）；⑧ **R3** `bindMsgContextMenu` 去重守卫 `if (!msgEl \|\| msgEl._ctxMenuBound) return; msgEl._ctxMenuBound = true;`（元素级属性标记防重复绑定）。 |
 | **XSS / 主题 / 旧消息兼容** | ① **XSS 防护**——文本 `createTextNode`（自动转义）、label `textContent`（无 HTML 解析）、icon `innerHTML = CHIP_ICON_SVG[item.type]`（图标来自常量表，非用户输入，type 缺失/异常回退 default 圆圈）；② **主题适配**——chip 半透明白色背景 `rgba(255,255,255,0.16~0.22)` 在 14 主题的 accent 底上保持高对比（无需主题切换），`ref` 加深、`file` 虚线边框、`skill` 加粗边框 + 较深背景三档微调；③ **旧消息兼容**——存量 `Meta=NULL/""` 经 `JSON.parse('')` 抛错 → catch 后 warn + 早返回只渲染文本段，**不报错不破坏**（用户实测试过升级前消息正常显示）；④ **空 meta 数组** `"[]"` → `Array.isArray(items) && items.length === 0` 早返回零 chip，**行为完全等同未加 feature 前的状态**（无视觉差异）。 |
 | **涉及文件** | [internal/models/ai_message.go](internal/models/ai_message.go)（新增 Meta 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（Message 透传 + 3 处历史加载补 Meta）、[app.go](app.go)（`SaveAIMessage` 签名加 meta 参数 + 新增 `UpdateAIMessageMeta` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（CHIP_ICON_SVG / getSkillLabel / buildUserMessageMeta / createChipElement / renderUserMessageWithChips / rerenderUserMessageChips / sendUserText+handleResend 加 chatHistory push / 8 项审查修复）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-msg-user` 容器 flex + `.ai-msg-chip*` 类型微调 + `.ai-msg-chip-tag` 新增）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) + [App.d.ts](frontend/wailsjs/go/main/App.d.ts)（`SaveAIMessage` 4 参 + `UpdateAIMessageMeta` 绑定） |
+
+---
+
+## 记忆点 10：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三组改动：① **搜索打分排序**——[note_service.go](internal/services/note_service.go) 新增 `buildSearchSortOrder`：有关键词时返回 `clause.OrderBy{Expression: clause.Expr{SQL: CASE WHEN ... END DESC, pinned DESC, updated_at DESC}}` 打分排序（完全相等 50 > 前缀 40 > 标题+内容 30 > 仅标题 25 > 仅内容 10，空关键词回退常规排序）；标签/笔记本/时间筛选**仅过滤不参与排序**。② **LIKE 通配符转义**——新增 `escapeLike` 函数（转义 `\ % _`），4 处搜索查询（Search/SearchByNotebook/SearchNoteIDs/SearchNoteIDsByNotebook）统一 `LIKE ? ESCAPE '\'`。③ **搜索弹窗 CSS/文案修复**——[search-modal.css](frontend/src/css/components/search-modal.css) `.search-modal-content` `overflow: hidden` → `visible`（修复筛选下拉菜单被裁剪）；[index.html](frontend/index.html) placeholder 改"搜索笔记(标题/内容)..."、空状态描述改"输入关键字搜索标题或内容"；[main.js](frontend/src/main.js) `searchModalEmptyDesc` 文案同步。 |
+| **GORM v1.31.1 `Order()` 静默丢弃（关键 bug）** | `gorm.DB.Order()` 内部 switch 只处理 `clause.OrderBy` / `clause.OrderByColumn` / `string` 三种类型，传入 `gorm.Expr` **不在 switch 分支内会被静默丢弃**，导致查询完全没有 ORDER BY 子句。用户实测"搜『日志』标题命中不排前"的根因即此——`buildSearchSortOrder` 返回 `gorm.Expr` 后被 `Order()` 丢弃，所有结果按主键/插入顺序返回。修复：返回值改为 `clause.OrderBy{Expression: clause.Expr{SQL: ..., Vars: ...}}`。**教训**：GORM 的 `Order()` 并非万能接收任意 `Clause` 表达式，使用自定义 SQL 表达式排序时必须用 `clause.OrderBy` 包裹。已加注释标记此坑。 |
+| **测试假阳性教训** | `TestSearchRelevanceOrdering` 原实现中笔记插入顺序恰好与期望排序一致（完全50→前缀40→都中30→仅标题25→仅内容10），即使 ORDER BY 完全丢失，按插入顺序返回也能通过断言。修复：**打乱插入顺序**（内容10→完全50→仅标题25→前缀40→都中30），确保排序逻辑真正生效。`TestSearchByNotebookRelevanceOrdering` 和 `TestSearchRelevanceOrderingWithTagFilter` 同理打乱。**普遍教训**：排序测试的插入顺序必须与期望顺序不同，否则测试是假阳性。 |
+| **通配符转义** | `escapeLike(s)` 用 `strings.NewReplacer` 转义 `\` → `\\`、`%` → `\%`、`_` → `\_`，配合 `LIKE ? ESCAPE '\'` 使用。4 处搜索查询统一应用（原实现未转义，用户输入 `100%` 会匹配所有含 `100` 后任意字符的笔记）。`TestEscapeLike` + `TestSearchWildcardEscaping` 覆盖。 |
+| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`buildSearchSortOrder` 返回 `clause.OrderBy` + `escapeLike` + 4 处搜索查询 `ESCAPE '\'`）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`TestBuildSearchSortOrder` 类型断言改为 `clause.OrderBy` + `TestSearchRelevanceOrdering`/`TestSearchRelevanceOrderingWithTagFilter`/`TestSearchByNotebookRelevanceOrdering` 打乱插入顺序 + `TestEscapeLike` + `TestSearchWildcardEscaping`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（`overflow: visible`）、[frontend/index.html](frontend/index.html)（placeholder + 空状态文案）、[frontend/src/main.js](frontend/src/main.js)（`searchModalEmptyDesc`） |
 
 ---
 

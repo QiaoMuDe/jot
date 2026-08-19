@@ -52,7 +52,7 @@
     box-shadow: var(--shadow-xl);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible; /* 允许筛选下拉菜单溢出显示,避免被内容盒裁剪 */
     border-top: 2px solid var(--accent);
     transform: scale(0.96) translateY(-8px);
     opacity: 0;

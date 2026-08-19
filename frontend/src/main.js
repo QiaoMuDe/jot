@@ -7776,7 +7776,7 @@ function openSearchModal() {
     updateSearchModalFilterBtnActive();
     // 重置空状态文案
     if (els.searchModalEmptyTitle) els.searchModalEmptyTitle.textContent = '开始搜索你的笔记';
-    if (els.searchModalEmptyDesc) els.searchModalEmptyDesc.textContent = '输入关键字搜索标题、内容或标签';
+    if (els.searchModalEmptyDesc) els.searchModalEmptyDesc.textContent = '输入关键字搜索标题或内容';
     // 渲染过滤器下拉内容
     renderNotebookFilterDropdown();
     renderTagFilterDropdown();

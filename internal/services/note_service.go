@@ -10,6 +10,7 @@ import (
 
 	"gitee.com/MM-Q/fastlog"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // NoteService 封装笔记相关的业务逻辑操作
@@ -181,6 +182,45 @@ func buildSortOrder(sortBy string) string {
 	}
 }
 
+// escapeLike 转义 LIKE 模式中的特殊字符 % _ \，须配合 ESCAPE '\' 使用，
+// 保证关键词按字面匹配而不是被当作通配符
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// buildSearchSortOrder 构建搜索时的排序规则
+// 有关键词时采用相关性打分:标题完全相等 > 标题前缀命中 > 标题+内容都命中 > 仅标题命中 > 仅内容命中,同分按 pinned DESC, updated_at DESC 兜底
+// 无关键词时(纯筛选场景)回退到 buildSortOrder(sortBy) 的常规排序
+// 注意:必须返回 clause.OrderBy 而非 gorm.Expr——GORM v1.31.1 的 Order() 只处理
+// clause.OrderBy / clause.OrderByColumn / string 三种类型,gorm.Expr 会被静默丢弃导致 ORDER BY 丢失
+func buildSearchSortOrder(keyword string, sortBy string) interface{} {
+	if strings.TrimSpace(keyword) == "" {
+		return buildSortOrder(sortBy)
+	}
+	// LIKE 不带通配符时等价于不区分大小写的完全相等(SQLite 对 ASCII 不区分大小写)
+	esc := escapeLike(keyword)
+	return clause.OrderBy{
+		Expression: clause.Expr{
+			SQL: `CASE
+			WHEN title LIKE ? ESCAPE '\' THEN 50
+			WHEN title LIKE ? ESCAPE '\' THEN 40
+			WHEN title LIKE ? ESCAPE '\' AND content LIKE ? ESCAPE '\' THEN 30
+			WHEN title LIKE ? ESCAPE '\' THEN 25
+			WHEN content LIKE ? ESCAPE '\' THEN 10
+			ELSE 0
+		END DESC, pinned DESC, updated_at DESC`,
+			Vars: []interface{}{
+				esc,
+				esc + "%",
+				"%" + esc + "%",
+				"%" + esc + "%",
+				"%" + esc + "%",
+				"%" + esc + "%",
+			},
+		},
+	}
+}
+
 // noteThinSelect 列表/搜索查询时使用的 Select，排除全量 Content，替换为前 200 字符用于卡片预览
 const noteThinSelect = "id, title, SUBSTR(content, 1, 200) AS content, file_ext, pinned, notebook_id, created_at, updated_at"
 
@@ -235,11 +275,11 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 	var notes []models.Note
 	var total int64
 
-	likePattern := "%" + keyword + "%"
+	likePattern := "%" + escapeLike(keyword) + "%"
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL").
-		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+		Where("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'", likePattern, likePattern)
 
 	// 日期范围过滤
 	if startDate != "" && endDate != "" {
@@ -264,7 +304,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 
 	offset := (page - 1) * pageSize
 	if err := query.Select(noteThinSelect).
-		Order(buildSortOrder(sortBy)).
+		Order(buildSearchSortOrder(keyword, sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -281,11 +321,11 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	var notes []models.Note
 	var total int64
 
-	likePattern := "%" + keyword + "%"
+	likePattern := "%" + escapeLike(keyword) + "%"
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
-		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+		Where("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'", likePattern, likePattern)
 
 	if startDate != "" && endDate != "" {
 		query = query.Where("updated_at BETWEEN ? AND ?",
@@ -309,7 +349,7 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 
 	offset := (page - 1) * pageSize
 	if err := query.Select(noteThinSelect).
-		Order(buildSortOrder(sortBy)).
+		Order(buildSearchSortOrder(keyword, sortBy)).
 		Preload("Tags").
 		Offset(offset).
 		Limit(pageSize).
@@ -325,11 +365,11 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 func (s *NoteService) SearchNoteIDs(keyword string, tagIDs []uint) ([]uint, error) {
 	var ids []uint
 
-	likePattern := "%" + keyword + "%"
+	likePattern := "%" + escapeLike(keyword) + "%"
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL").
-		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+		Where("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'", likePattern, likePattern)
 
 	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
 	if len(tagIDs) > 0 {
@@ -352,11 +392,11 @@ func (s *NoteService) SearchNoteIDs(keyword string, tagIDs []uint) ([]uint, erro
 func (s *NoteService) SearchNoteIDsByNotebook(keyword string, notebookID uint, tagIDs []uint) ([]uint, error) {
 	var ids []uint
 
-	likePattern := "%" + keyword + "%"
+	likePattern := "%" + escapeLike(keyword) + "%"
 
 	query := s.db.Model(&models.Note{}).
 		Where("deleted_at IS NULL AND notebook_id = ?", notebookID).
-		Where("title LIKE ? OR content LIKE ?", likePattern, likePattern)
+		Where("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'", likePattern, likePattern)
 
 	// 标签 AND 过滤：使用子查询，确保笔记包含所有选中标签
 	if len(tagIDs) > 0 {
