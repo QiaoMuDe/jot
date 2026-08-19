@@ -225,7 +225,7 @@ export function RestoreTrashNotebook(arg1:number):Promise<void>;
 
 export function SaveAIConfig(arg1:services.AIConfig):Promise<void>;
 
-export function SaveAIMessage(arg1:number,arg2:string,arg3:string):Promise<main.SaveAIMessageResult>;
+export function SaveAIMessage(arg1:number,arg2:string,arg3:string,arg4:string):Promise<main.SaveAIMessageResult>;
 
 export function SaveAIMessageAsNote(arg1:string):Promise<models.Note>;
 
@@ -284,6 +284,8 @@ export function TruncateAISessionAfterMessage(arg1:number,arg2:number):Promise<v
 export function TruncateAISessionAtMessage(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateAIMessageContent(arg1:number,arg2:string):Promise<void>;
+
+export function UpdateAIMessageMeta(arg1:number,arg2:string):Promise<void>;
 
 export function UpdateLastUserMessageTokens(arg1:number,arg2:number):Promise<void>;
 

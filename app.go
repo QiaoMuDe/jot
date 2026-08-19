@@ -3187,8 +3187,10 @@ const maxAIMessageChars = 20000
 
 // SaveAIMessage 保存一条 AI 会话消息（前端仅以 user 角色调用；AI 回复由后端直接
 // 经 aiService.SaveAIMessage 落库，不经本绑定，故校验只作用于用户消息）。
-func (a *App) SaveAIMessage(sessionID uint, content string, role string) (SaveAIMessageResult, error) {
-	a.LogSvc.Logger.Debugw("SaveAIMessage", fastlog.Uint("sessionID", sessionID), fastlog.String("role", role))
+// meta 为用户消息附加上下文 JSON（引用笔记 / 上传文件 / 激活技能等），存于 ai_messages.meta 列，
+// 不参与 LLM 输入；空字符串 / "[]" 均表示无附加上下文。
+func (a *App) SaveAIMessage(sessionID uint, content string, role string, meta string) (SaveAIMessageResult, error) {
+	a.LogSvc.Logger.Debugw("SaveAIMessage", fastlog.Uint("sessionID", sessionID), fastlog.String("role", role), fastlog.Int("meta_len", len(meta)))
 	if len([]rune(content)) > maxAIMessageChars {
 		return SaveAIMessageResult{}, fmt.Errorf("消息内容过长（上限 %d 字符，当前 %d 字符）", maxAIMessageChars, len([]rune(content)))
 	}
@@ -3197,13 +3199,14 @@ func (a *App) SaveAIMessage(sessionID uint, content string, role string) (SaveAI
 		Role:    role,
 		Content: content,
 		Tokens:  tokens,
+		Meta:    meta,
 	}
 	msgID, err := a.aiService.SaveAIMessage(sessionID, msg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("SaveAIMessage 失败", fastlog.Error(err))
 		return SaveAIMessageResult{}, err
 	}
-	a.LogSvc.Logger.Infow("SaveAIMessage 成功", fastlog.Uint("msgID", msgID), fastlog.Uint("sessionID", sessionID))
+	a.LogSvc.Logger.Infow("SaveAIMessage 成功", fastlog.Uint("msgID", msgID), fastlog.Uint("sessionID", sessionID), fastlog.Int("meta_len", len(meta)))
 	return SaveAIMessageResult{MsgID: msgID, Tokens: tokens}, nil
 }
 
@@ -3215,6 +3218,27 @@ func (a *App) DeleteAIMessage(id uint) error {
 		return err
 	}
 	a.LogSvc.Logger.Infow("DeleteAIMessage 成功", fastlog.Uint("id", id))
+	return nil
+}
+
+// UpdateAIMessageMeta 更新指定用户消息的 meta 字段（仅作用于 role=user 的消息）
+// 用于"编辑消息"或"重新生成"时同步最新工具栏上下文；assistant 消息不在更新范围内
+// meta 为 JSON 字符串（引用笔记 / 上传文件 / 技能等），空字符串表示清空附加上下文
+// 返回 error 当且仅当 msgID 不存在或对应消息非 user 角色（避免误改 assistant 消息）
+func (a *App) UpdateAIMessageMeta(msgID uint, meta string) error {
+	a.LogSvc.Logger.Debugw("UpdateAIMessageMeta", fastlog.Uint("msgID", msgID), fastlog.Int("meta_len", len(meta)))
+	res := a.db.Model(&models.AIMessage{}).
+		Where("id = ? AND role = ?", msgID, "user").
+		Update("meta", meta)
+	if err := res.Error; err != nil {
+		a.LogSvc.Logger.Errorw("UpdateAIMessageMeta 失败", fastlog.Error(err))
+		return fmt.Errorf("更新用户消息附加上下文失败: %w", err)
+	}
+	if res.RowsAffected == 0 {
+		a.LogSvc.Logger.Warnw("UpdateAIMessageMeta 未命中", fastlog.Uint("msgID", msgID))
+		return fmt.Errorf("未找到对应的用户消息（msgID=%d 可能不存在或不是用户消息）", msgID)
+	}
+	a.LogSvc.Logger.Infow("UpdateAIMessageMeta 成功", fastlog.Uint("msgID", msgID), fastlog.Int("meta_len", len(meta)))
 	return nil
 }
 

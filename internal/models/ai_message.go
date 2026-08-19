@@ -17,5 +17,6 @@ type AIMessage struct {
 	SearchSources    string    `gorm:"type:text" json:"search_sources"`
 	RecallCards      string    `gorm:"type:text" json:"recall_cards"`
 	ToolCalls        string    `gorm:"type:text" json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
+	Meta             string    `gorm:"type:text" json:"meta"`       // 用户消息附加上下文 JSON（引用笔记/上传文件/技能等，不流向 LLM）
 	CreatedAt        time.Time `json:"created_at"`
 }

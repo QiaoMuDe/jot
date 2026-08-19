@@ -580,6 +580,7 @@ export namespace services {
 	    search_sources: string;
 	    recall_cards: string;
 	    tool_calls: string;
+	    meta: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -597,6 +598,7 @@ export namespace services {
 	        this.search_sources = source["search_sources"];
 	        this.recall_cards = source["recall_cards"];
 	        this.tool_calls = source["tool_calls"];
+	        this.meta = source["meta"];
 	    }
 	}
 	export class NoteRefInfo {

@@ -1194,7 +1194,15 @@ function bindEvents() {
                 handleRegenerate(msgEl);
             } else if (action === 'edit') {
                 if (isStreaming) return;
-                if (msgEl) enterEditMode(msgEl, content);
+                if (!msgEl) return;
+                const _editMsgId = +msgEl.dataset.msgId || 0;
+                if (_editMsgId <= 0) {
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification('该消息尚未完整保存，无法编辑', 'warn');
+                    }
+                    return;
+                }
+                enterEditMode(msgEl, content);
             } else if (action === 'resend') {
                 if (isStreaming) return;
                 if (msgEl) handleResend(msgEl);
@@ -1611,7 +1619,7 @@ async function switchSession(id) {
         } catch (_) {}
 
         // 重建 chatHistory (仅渲染缓冲区)
-        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null })) : [];
+        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })) : [];
         // 记录最旧消息 ID 用于分页加载
         _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
@@ -1637,7 +1645,7 @@ async function switchSession(id) {
             const chunk = msgs.slice(i, i + 5);
             for (const msg of chunk) {
                 if (msg.role === 'user') {
-                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true);
+                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true, msg.meta || '');
                     const userMsgEl = messagesInnerEl.lastElementChild;
                     if (userMsgEl) {
                         userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
@@ -1688,7 +1696,7 @@ async function switchSession(id) {
                 // 渲染新消息（addMessage 会追加到末尾）
                 for (const msg of olderMsgs) {
                     if (msg.role === 'user') {
-                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true);
+                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true, msg.meta || '');
                         const userMsgEl = messagesInnerEl.lastElementChild;
                         if (userMsgEl) {
                             userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
@@ -1711,7 +1719,7 @@ async function switchSession(id) {
                 messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
                 messagesEl.style.scrollBehavior = '';
                 // 更新 chatHistory 缓冲区
-                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null })));
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
             } catch (_) { /* 静默 */ }
             _loadingMore = false;
         };
@@ -2242,6 +2250,109 @@ async function onSend() {
 }
 
 /**
+ * 用户消息 Meta Chip 图标常量（SVG 字符串，参考 renderSkillChips 的风格）
+ * 按 chip type 分配；未命中时回退到 default。
+ */
+const CHIP_ICON_SVG = {
+    ref: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+    file: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+    skill: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    roleplay: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+    default: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
+};
+
+/**
+ * 根据 skill id 推导中文标签（与 renderSkillChips 的 switch 保持一致；找不到时回退到 id）。
+ * @param {string} skillId
+ * @param {object} [config] - activeSkills[id] 的值；可能为 true/对象
+ * @returns {string}
+ */
+function getSkillLabel(skillId, config) {
+    const cfg = (config && typeof config === 'object') ? config : {};
+    switch (skillId) {
+        case 'translate': {
+            const src = getLanguageDisplayName(cfg.source || 'english');
+            const tgt = getLanguageDisplayName(cfg.target || 'chinese');
+            return `翻译 ${src}→${tgt}`;
+        }
+        case 'coding': return '编程开发';
+        case 'writing': return '创意写作';
+        case 'tutor': return '解题答疑';
+        case 'reqspec': return '需求规格';
+        case 'polish': return '文本润色';
+        case 'summary': return '内容摘要';
+        case 'copywriting': return '文案生成';
+        case 'report': return '工作总结';
+        case 'promptgen': return '提示词生成';
+        case 'character': return '人物档案';
+        case 'roleplay': {
+            // roleplay 类型也可作为独立 chip 出现（与 skill id 复用），附带笔记数提示
+            const count = Array.isArray(roleplayNotes) ? roleplayNotes.length : 0;
+            return count > 0 ? `角色扮演 · ${count} 篇` : '角色扮演';
+        }
+        default: return skillId;
+    }
+}
+
+/**
+ * 拼装用户消息的 Meta JSON 字符串
+ * 从当前工具栏状态（referencedNotes / uploadedFiles / activeSkills / roleplayNotes）派生。
+ * 空时返回 "[]"，不会污染 Content 字段。
+ * @returns {string} JSON 字符串，可直接传给后端 SaveAIMessage / UpdateAIMessageMeta
+ */
+function buildUserMessageMeta() {
+    const meta = [];
+    // 引用笔记（ref 类型）
+    if (Array.isArray(referencedNotes)) {
+        for (const n of referencedNotes) {
+            if (!n) continue;
+            meta.push({
+                type: 'ref',
+                id: n.id,
+                title: n.title || '',
+                notebook: n.notebook_name || n.notebookName || '',
+            });
+        }
+    }
+    // 上传文件（file 类型；truncated 角标用）
+    if (Array.isArray(uploadedFiles)) {
+        for (const f of uploadedFiles) {
+            if (!f) continue;
+            meta.push({
+                type: 'file',
+                name: f.name || '',
+                truncated: !!f.truncated,
+            });
+        }
+    }
+    // 激活技能（skill 类型）
+    if (activeSkills && typeof activeSkills === 'object') {
+        for (const k of Object.keys(activeSkills)) {
+            if (!activeSkills[k]) continue;
+            const cfg = (typeof activeSkills[k] === 'object') ? activeSkills[k] : {};
+            meta.push({
+                type: 'skill',
+                id: k,
+                label: getSkillLabel(k, cfg),
+            });
+        }
+    }
+    // 角色档案笔记（roleplay 类型，可选；某些构建中可能未定义 roleplayNotes）
+    if (typeof roleplayNotes !== 'undefined' && Array.isArray(roleplayNotes)) {
+        for (const n of roleplayNotes) {
+            if (!n) continue;
+            meta.push({
+                type: 'roleplay',
+                id: n.id,
+                title: n.title || '',
+                notebook: n.notebook_name || '',
+            });
+        }
+    }
+    return JSON.stringify(meta);
+}
+
+/**
  * 发送用户消息（onSend 调用；Agent 反问面板的答案不走此函数，
  * 而是经 AnswerAskUser 同轮投递，见 showAskPanel 的 doSend）
  * 保存消息到数据库 → 渲染用户气泡 → 启动流式。
@@ -2262,17 +2373,23 @@ async function sendUserText(text) {
     // 先保存用户消息到数据库，确保前端能立即拿到 msgId 和 token 数
     let userMsgId = 0;
     let userTokens = 0;
+    // 从工具栏状态派生本次消息的 Meta（引用笔记 / 上传文件 / 激活技能 / 角色档案）
+    const userMeta = buildUserMessageMeta();
     try {
-        const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user');
+        const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user', userMeta);
         userMsgId = result?.msgID || 0;
         userTokens = result?.tokens || 0;
     } catch (_) { /* 静默失败，后续流程继续 */ }
 
-    addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined);
+    addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined, undefined, undefined, undefined, false, false, userMeta);
     const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, userTokens));
         bindMsgContextMenu(userMsgEl, text, 'user');
+    }
+    // 同步 push 到 chatHistory（否则 cancelEdit / applyEdit 找不到 meta，chip 不显示）
+    if (userMsgId) {
+        chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '' });
     }
     startStreaming(text, false, userMsgId);
     return true;
@@ -3110,14 +3227,116 @@ function svgIcon(name, size = 14) {
 }
 
 /**
- * 添加消息气泡 (不含操作按钮, 调用方自行添加) 
+ * 创建单个 Meta chip 元素（图标 + 标签 + 可选截断角标）
+ * 仅生成 DOM，不挂到任何容器上。
+ * @param {object} item - meta 数组项，字段遵循 spec.md Schema
+ * @returns {HTMLSpanElement}
+ */
+function createChipElement(item) {
+    // 标签取值优先级：title > name > label > id > 空；空 label 跳过避免出现"只有图标的空 chip"
+    const text = item.title || item.name || item.label || item.id || '';
+    if (!text) return null;
+    const chip = document.createElement('span');
+    chip.className = 'ai-msg-chip ai-msg-chip-' + (item.type || 'unknown');
+
+    const icon = document.createElement('span');
+    icon.className = 'ai-msg-chip-icon';
+    // 图标内容来自常量表，type 缺失时回退 default；innerHTML 写入固定 SVG 字符串无 XSS 风险
+    icon.innerHTML = CHIP_ICON_SVG[item.type] || CHIP_ICON_SVG.default;
+    chip.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'ai-msg-chip-label';
+    label.textContent = text.length > 20 ? text.slice(0, 20) + '…' : text;
+    label.title = text; // 鼠标悬停查看完整文本
+    chip.appendChild(label);
+
+    // 截断角标：仅 file 类型且 truncated=true 时显示"截断"提示
+    if (item.type === 'file' && item.truncated) {
+        const tag = document.createElement('span');
+        tag.className = 'ai-msg-chip-tag';
+        tag.textContent = '截断';
+        chip.appendChild(tag);
+    }
+
+    return chip;
+}
+
+/**
+ * 渲染用户消息气泡的文本段 + meta chip 段
+ * - 文本段包在 .ai-msg-text 元素内（保留 pre-wrap 换行）
+ * - meta 段解析为 chip 元素，追加到文本之后
+ * - meta 解析失败时降级为只渲染文本段，记录 warn 不中断
+ * @param {HTMLElement} contentEl - .msg-content 容器
+ * @param {string} content - 用户输入纯文本
+ * @param {string} metaJson - 后端 Meta 字段的 JSON 字符串（可能为空/null）
+ */
+function renderUserMessageWithChips(contentEl, content, metaJson) {
+    if (!contentEl) return;
+    // 清空容器（外部可能已 appendChild 了一些节点）
+    contentEl.textContent = '';
+
+    // 文本段：使用 createTextNode 写入，自动转义避免 XSS
+    const textEl = document.createElement('div');
+    textEl.className = 'ai-msg-text';
+    textEl.appendChild(document.createTextNode(content || ''));
+    contentEl.appendChild(textEl);
+
+    // meta 段：解析 JSON，逐项追加 chip
+    if (!metaJson) return;
+    let items = null;
+    try {
+        items = JSON.parse(metaJson);
+    } catch (e) {
+        console.warn('renderUserMessageWithChips meta parse fail', e);
+        return;
+    }
+    if (!Array.isArray(items) || items.length === 0) return;
+    for (const it of items) {
+        if (!it || typeof it !== 'object') continue;
+        const chip = createChipElement(it);
+        if (!chip) continue;  // 空 label 跳过
+        contentEl.appendChild(chip);
+    }
+}
+
+/**
+ * 在工具栏状态变化（重新生成 / 编辑保存 / 重发）后，定位已有用户消息 DOM 并重渲染 chip
+ * 避免切走切回才看到 chip 变化。
+ * @param {number|string} msgId - 用户消息 ID
+ * @param {string} newMeta - 新的 Meta JSON 字符串
+ */
+function rerenderUserMessageChips(msgId, newMeta) {
+    if (!msgId) return;
+    // 兼容历史元素上可能的多种 id 属性名
+    let msgEl = document.querySelector('[data-msg-id="' + msgId + '"]');
+    if (!msgEl) msgEl = document.querySelector('[data-message-id="' + msgId + '"]');
+    if (!msgEl) return;
+    const contentEl = msgEl.querySelector('.msg-content');
+    if (!contentEl) return;
+    // 复用现存的 .ai-msg-text 文本，若不存在则从 textContent 兜底
+    const textEl = contentEl.querySelector('.ai-msg-text');
+    const content = textEl ? textEl.textContent : (contentEl.textContent || '');
+    renderUserMessageWithChips(contentEl, content, newMeta || '');
+}
+
+/**
+ * 添加消息气泡 (不含操作按钮, 调用方自行添加)
  * @param {string} content - 消息内容
  * @param {'user'|'assistant'} role - 角色
- * @param {string} [reasoningContent] - 思维链内容 (可选) 
+ * @param {string} [reasoningContent] - 思维链内容 (可选)
  * @param {number} [thinkingElapsed] - 思考耗时
  * @param {number} [totalElapsed] - 总耗时
+ * @param {number} [tokens] - token 数
+ * @param {number|string} [msgId] - 消息 ID
+ * @param {Array|object|string} [searchSources] - 搜索来源
+ * @param {Array|object|string} [recallCards] - 召回卡片
+ * @param {Array|object|string} [toolCalls] - 工具调用
+ * @param {boolean} [skipScroll] - 跳过滚动与入场动画
+ * @param {boolean} [deferHighlight] - 延迟高亮
+ * @param {string} [meta] - 用户消息的 Meta JSON 字符串（仅 user 分支使用）
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, toolCalls, skipScroll = false, deferHighlight = false) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     // 仅流式消息播放入场动画，切换历史会话时跳过
@@ -3149,7 +3368,8 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     if (role === 'assistant') {
         renderMarkdown(contentEl, content, deferHighlight);
     } else {
-        contentEl.textContent = content;
+        // 用户消息：文本段 + meta chip 段；旧消息（meta 为空/null）走纯文本降级路径
+        renderUserMessageWithChips(contentEl, content, meta || '');
     }
     el.appendChild(contentEl);
 
@@ -3709,6 +3929,8 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
  * 为消息气泡绑定右键菜单事件
  */
 function bindMsgContextMenu(msgEl, content, role) {
+    if (!msgEl || msgEl._ctxMenuBound) return;
+    msgEl._ctxMenuBound = true;
     msgEl.addEventListener('contextmenu', (e) => {
         showAiMsgContextMenu(e, content, role, msgEl);
     });
@@ -4562,9 +4784,39 @@ function cancelEdit(msgEl) {
     const textarea = contentDiv.querySelector('.ai-msg-edit-textarea');
     if (textarea) textarea.remove();
 
-    // 恢复原始内容 (用户消息使用 textContent)
-    contentDiv.textContent = msgEl.dataset.originalContent || '';
+    // 恢复原始内容（用户消息需保留 text + chip 结构，dataset.originalContent 仅存文本）
+    // 这里只重置 text 部分，chip 部分由调用方决定是否在编辑保存路径里同步刷新
+    const original = msgEl.dataset.originalContent || '';
+    const msgId = +msgEl.dataset.msgId || 0;
+    // 优先尝试按当前 chatHistory 内该消息的 meta 重新渲染
+    let metaJson = '';
+    if (msgId) {
+        const found = chatHistory.find(m => m.id === msgId);
+        if (found) metaJson = found.meta || '';
+        else console.warn('[AI Chat] cancelEdit: chatHistory 未找到 msgId', msgId);
+    }
+    renderUserMessageWithChips(contentDiv, original, metaJson);
 
+    const editActions = msgEl.querySelector('.ai-msg-edit-actions');
+    if (editActions) editActions.remove();
+
+    const moreBtn = msgEl.querySelector('.more-btn');
+    if (moreBtn) moreBtn.style.display = '';
+
+    const tokensEl = msgEl.querySelector('.user-tokens');
+    if (tokensEl) tokensEl.style.display = '';
+}
+
+/**
+ * 退出编辑态但不复用 cancelEdit 的渲染路径
+ * 用于 applyEdit 流程：rerenderUserMessageChips 已完成新内容渲染，此处只清理编辑态 DOM
+ */
+function exitEditModeWithoutRerender(msgEl) {
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (contentDiv) {
+        const textarea = contentDiv.querySelector('.ai-msg-edit-textarea');
+        if (textarea) textarea.remove();
+    }
     const editActions = msgEl.querySelector('.ai-msg-edit-actions');
     if (editActions) editActions.remove();
 
@@ -4605,14 +4857,25 @@ function confirmEdit(msgEl) {
 async function applyEdit(msgEl, newContent) {
     const contentDiv = msgEl.querySelector('.msg-content');
     if (contentDiv) {
-        contentDiv.textContent = newContent;
+        // 编辑后内容直接写入 .ai-msg-text 段（保留 chip 区段；新内容不再附带旧 chip）
+        // 真实 chip 列表由后端 UpdateAIMessageMeta 之后立即 rerender
+        const textEl = contentDiv.querySelector('.ai-msg-text');
+        if (textEl) {
+            textEl.textContent = newContent;
+        } else {
+            // 兜底：旧消息没 .ai-msg-text 结构时直接重渲染
+            renderUserMessageWithChips(contentDiv, newContent, '');
+        }
     }
 
     _contextMsgContent = newContent;
 
     // 从元素获取 msgId
-    const msgId = parseInt(msgEl.dataset.msgId);
-    if (!msgId) return;
+    const msgId = +msgEl.dataset.msgId || 0;
+    if (!msgId) {
+        console.warn('[AI Chat] applyEdit: 消息 msgId 无效，跳过保存', msgEl.dataset.msgId);
+        return;
+    }
 
     // 删除后续所有消息 DOM
     let nextEl = msgEl.nextElementSibling;
@@ -4634,16 +4897,30 @@ async function applyEdit(msgEl, newContent) {
         } catch (_) { /* 静默失败 */ }
     }
 
+    // 编辑保存时按当前工具栏状态派生新 Meta，写回 DB；当前工具栏为空 → meta 清空
+    let newMeta = '';
+    try {
+        newMeta = buildUserMessageMeta();
+        await window.go.main.App.UpdateAIMessageMeta(msgId, newMeta);
+    } catch (e) {
+        console.warn('UpdateAIMessageMeta 失败，不影响 LLM 调用', e);
+    }
+
     // 截断 chatHistory 缓冲区
     const idx = chatHistory.findIndex(m => m.id === msgId);
     if (idx >= 0) {
         chatHistory = chatHistory.slice(0, idx + 1);
         chatHistory[chatHistory.length - 1].content = newContent;
+        chatHistory[chatHistory.length - 1].meta = newMeta;
     }
+
+    // 同步重渲染该消息 DOM（让 chip 立即反映工具栏当前状态，不等切走切回）
+    rerenderUserMessageChips(msgId, newMeta);
 
     // 更新 dataset 后再 cancelEdit, 避免 cancelEdit 从 dataset 恢复旧内容
     msgEl.dataset.originalContent = newContent;
-    cancelEdit(msgEl);
+    // 不调 cancelEdit（会再渲染一次）；仅清理编辑态 DOM，DOM 渲染已由 rerenderUserMessageChips 完成
+    exitEditModeWithoutRerender(msgEl);
     // 生成期间隐藏旧 token 数，待 stream-done 后更新时再显示
     const oldTokensEl = msgEl.querySelector('.user-tokens');
     if (oldTokensEl) oldTokensEl.style.display = 'none';
@@ -4664,7 +4941,7 @@ async function handleDeleteMsg(msgEl) {
     const confirmed = await window.showConfirmDialog('确定要删除这条消息吗？');
     if (!confirmed) return;
 
-    const msgId = parseInt(msgEl.dataset.msgId);
+    const msgId = +msgEl.dataset.msgId || 0;
     if (!msgId) return;
 
     // 仅移除本条消息（DOM）
@@ -4699,7 +4976,7 @@ async function handleRegenerate(msgEl) {
     // 找到前一条消息（用户消息）
     const prevEl = msgEl.previousElementSibling;
     if (!prevEl || !prevEl.classList.contains('ai-msg')) return;
-    const prevMsgId = parseInt(prevEl.dataset.msgId);
+    const prevMsgId = +prevEl.dataset.msgId || 0;
     if (!prevMsgId) return;
 
     // 移除该 AI 消息及之后的所有后续消息（DOM）
@@ -4725,6 +5002,19 @@ async function handleRegenerate(msgEl) {
         chatHistory = chatHistory.slice(0, idx);
     }
 
+    // 同步前一条用户消息的 Meta：从当前工具栏状态派生后写回 DB，避免旧 chip 与新行为脱节
+    // 失败仅 warn，不阻塞 LLM 调用
+    try {
+        const newMeta = buildUserMessageMeta();
+        await window.go.main.App.UpdateAIMessageMeta(prevMsgId, newMeta);
+        rerenderUserMessageChips(prevMsgId, newMeta);
+        // 同步 chatHistory 缓冲区内该消息的 meta 字段
+        const prevIdx = chatHistory.findIndex(m => m.id === prevMsgId);
+        if (prevIdx >= 0) chatHistory[prevIdx].meta = newMeta;
+    } catch (e) {
+        console.warn('UpdateAIMessageMeta 失败，不影响 LLM 调用', e);
+    }
+
     // 再生（regenerate 不新建用户消息，userMsgID 传 0）
     if (!(await ensureAIReady('重新生成'))) return;
     await startStreaming('', true, 0);
@@ -4737,12 +5027,14 @@ async function handleRegenerate(msgEl) {
 async function handleResend(msgEl) {
     if (!msgEl || !msgEl.parentNode || isStreaming) return;
 
-    const msgId = parseInt(msgEl.dataset.msgId);
+    const msgId = +msgEl.dataset.msgId || 0;
     if (!msgId) return;
 
     const contentDiv = msgEl.querySelector('.msg-content');
     if (!contentDiv) return;
-    const content = contentDiv.textContent || '';
+    // 用户消息文本包在 .ai-msg-text 内，contentDiv.textContent 还会包含 chip 标签，需要排除
+    const textEl = contentDiv.querySelector('.ai-msg-text');
+    const content = textEl ? textEl.textContent : (contentDiv.textContent || '');
 
     // 移除该消息及之后的所有后续消息（DOM）
     let nextEl = msgEl;
@@ -4769,23 +5061,30 @@ async function handleResend(msgEl) {
         chatHistory = chatHistory.slice(0, idx);
     }
 
+    // 从当前工具栏状态派生本次重发消息的 Meta（与 sendUserText 一致）
+    const resendMeta = buildUserMessageMeta();
+
     // 先保存用户消息到数据库，拿到 msgId 和 token 数
     let newUserMsgId = 0;
     let resendTokens = 0;
     if (activeSessionId !== null) {
         try {
-            const result = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user');
+            const result = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user', resendMeta);
             newUserMsgId = result?.msgID || 0;
             resendTokens = result?.tokens || 0;
         } catch (_) { /* 静默 */ }
     }
 
-    // 重新添加用户消息气泡（带上 msgId 和 token）
-    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined);
+    // 重新添加用户消息气泡（带上 msgId、token 和 meta）
+    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined, undefined, undefined, undefined, false, false, resendMeta);
     const newUserMsgEl = messagesInnerEl.lastElementChild;
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, resendTokens));
         bindMsgContextMenu(newUserMsgEl, content, 'user');
+    }
+    // 同步 push 到 chatHistory（修复取消编辑/重新生成时 chip 丢失）
+    if (newUserMsgId) {
+        chatHistory.push({ id: newUserMsgId, role: 'user', content: content, tokens: resendTokens, meta: resendMeta || '' });
     }
 
     // 重新发送

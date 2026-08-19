@@ -30,6 +30,7 @@ type Message struct {
 	SearchSources    string  `json:"search_sources"`
 	RecallCards      string  `json:"recall_cards"`
 	ToolCalls        string  `json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
+	Meta             string  `json:"meta"`       // 用户消息附加上下文 JSON（引用笔记/上传文件/技能等，不流向 LLM）
 }
 
 // AIConfig 表示 AI 服务配置
@@ -561,7 +562,7 @@ func (a *AIService) LoadAISessionMessages(id uint) []Message {
 
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls}
+		result[i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls, Meta: m.Meta}
 	}
 	return result
 }
@@ -579,7 +580,7 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 	// 反转为 ASC 顺序
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls}
+		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls, Meta: m.Meta}
 	}
 
 	// 截断 RecallCards 和 SearchSources 的 Content 字段，减小 Wails 桥传输量
@@ -721,6 +722,7 @@ func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
 		SearchSources:    msg.SearchSources,
 		RecallCards:      msg.RecallCards,
 		ToolCalls:        msg.ToolCalls,
+		Meta:             msg.Meta,
 		CreatedAt:        now,
 	}
 	if err := a.db.Create(&m).Error; err != nil {
@@ -768,6 +770,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 			SearchSources:    msg.SearchSources,
 			RecallCards:      msg.RecallCards,
 			ToolCalls:        msg.ToolCalls,
+			Meta:             msg.Meta,
 			CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 		}
 		if err := a.db.Create(&m).Error; err != nil {
@@ -831,6 +834,7 @@ func (a *AIService) ReplaceAISessionMessages(sessionID uint, messages []Message)
 				SearchSources:    msg.SearchSources,
 				RecallCards:      msg.RecallCards,
 				ToolCalls:        msg.ToolCalls,
+				Meta:             msg.Meta,
 				CreatedAt:        now.Add(time.Duration(i) * time.Millisecond),
 			}
 			if err := tx.Create(&m).Error; err != nil {

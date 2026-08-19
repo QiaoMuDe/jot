@@ -96,11 +96,76 @@
     line-height: 1.6;
 }
 
-/* 用户消息为纯文本 div（textContent 写入），默认 white-space:normal 会折叠换行；
-   用 pre-wrap 保留粘贴文本的换行与缩进结构，长行仍自动折行 */
+/* 用户消息混排：原文本段包在 .ai-msg-text 内保留 pre-wrap 换行，
+   容器改为 flex 允许文本与 chip 同行/折行排列；chip 由 JS 渲染时按需追加 */
 .ai-msg-user .msg-content {
-    white-space: pre-wrap;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 6px;
     line-height: 1.6;
+}
+.ai-msg-user .msg-content .ai-msg-text {
+    white-space: pre-wrap;
+    flex: 0 1 auto;
+    min-width: 0;
+    line-height: 1.6;
+}
+
+/* ── 用户消息 Meta Chip（半透明白色背景，主题 accent 颜色变化时仍保持高对比，无需主题切换） ── */
+.ai-msg-user .ai-msg-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-size: 0.85em;
+    line-height: 1.4;
+    vertical-align: baseline;
+    max-width: 100%;
+    user-select: text;
+}
+.ai-msg-user .ai-msg-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+.ai-msg-user .ai-msg-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+/* ── Chip 类型微调：通过背景/边框区分 ref / file / skill ── */
+.ai-msg-user .ai-msg-chip-ref {
+    /* 引用笔记 */
+    background: rgba(255, 255, 255, 0.20);
+}
+.ai-msg-user .ai-msg-chip-file {
+    /* 上传文件 */
+    background: rgba(255, 255, 255, 0.14);
+    border-style: dashed;
+}
+.ai-msg-user .ai-msg-chip-skill {
+    /* 激活技能 */
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+.ai-msg-user .ai-msg-chip-tag {
+    /* 截断角标（仅 file 类型 truncated=true 时显示） */
+    margin-left: 4px;
+    padding: 0 5px;
+    background: rgba(255, 200, 0, 0.32);
+    border: 1px solid rgba(255, 200, 0, 0.55);
+    border-radius: 3px;
+    font-size: 0.72em;
+    color: #fff;
+    opacity: 0.92;
 }
 
 /* AI 回复内 Markdown 样式 ── 沿用笔记渲染体系 */
