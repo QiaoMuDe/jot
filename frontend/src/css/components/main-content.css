@@ -661,7 +661,7 @@
   font-size: 0.813rem;
   cursor: pointer;
   color: var(--text-primary);
-  transition: background 0.1s;
+  transition: background 0.1s, transform 0.18s var(--anim-easing-spring);
   font-family: inherit;
   border: none;
   background: none;
@@ -680,6 +680,21 @@
 .context-menu-item.danger:hover {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.context-menu-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.context-menu-item.disabled:hover {
+  background: none;
+}
+
+/* 点击回弹反馈：按下快速缩小，松开经 spring 缓动弹回（与菜单关闭并行，动作零延迟） */
+.context-menu-item.pressed {
+  transform: scale(0.94);
+  transition: transform 0.06s ease-out;
 }
 
 .context-menu-divider {

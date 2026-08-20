@@ -277,7 +277,7 @@
   font-size: 0.813rem;
   cursor: pointer;
   color: var(--text-primary);
-  transition: background 0.08s ease;
+  transition: background 0.08s ease, transform 0.18s var(--anim-easing-spring);
   font-family: inherit;
   border: none;
   background: none;
@@ -287,6 +287,12 @@
 
 .notebook-context-item:hover {
   background: var(--hover-bg);
+}
+
+/* 按下回弹反馈：按下快速缩小，松开经 spring 缓动弹回 */
+.notebook-context-item.pressed {
+  transform: scale(0.94);
+  transition: transform 0.06s ease-out;
 }
 
 .notebook-context-item.danger {

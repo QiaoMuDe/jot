@@ -327,6 +327,16 @@ export async function initAIChat() {
     sessionMoreMenu.className = 'ai-session-more-menu';
     document.body.appendChild(sessionMoreMenu);
 
+    // 会话菜单按下回弹反馈（容器级事件委托，菜单项每次重建也不受影响）
+    sessionMoreMenu.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // 仅左键触发按压反馈
+        const item = e.target.closest('.ai-session-more-menu-item');
+        if (item) item.classList.add('pressed');
+    });
+    sessionMoreMenu.addEventListener('mouseleave', () => {
+        sessionMoreMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+    });
+
     bindEvents();
 
     // 一次性初始化 Marked 选项 (高亮在 renderMarkdown 中用 hljs.highlightElement 后处理) 
@@ -1152,8 +1162,7 @@ function bindEvents() {
     // Escape 关闭右键菜单 & 笔记引用浮层
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (sessionMoreMenu) sessionMoreMenu.classList.remove('active');
-            sessionMoreMenuTarget = null;
+            if (sessionMoreMenu) closeSessionMenu();
             closeAiMsgContextMenu();
             if (refModal && refModal.style.display !== 'none') {
                 closeNoteRefModal();
@@ -1167,6 +1176,7 @@ function bindEvents() {
         aiMsgContextMenu.addEventListener('click', (e) => {
             const item = e.target.closest('.context-menu-item');
             if (!item) return;
+            e.stopPropagation(); // 阻止冒泡到 document，避免外部点击监听重复关闭菜单
             const action = item.dataset.action;
             const content = _contextMsgContent;
             const msgEl = _contextMsgEl;
@@ -1223,6 +1233,18 @@ function bindEvents() {
                 } catch (_) {}
             }
         });
+
+        // 按下回弹反馈：mousedown 缩小，鼠标移出清理（动作零延迟，与菜单关闭并行）
+        aiMsgContextMenu.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return; // 仅左键触发按压反馈
+            const item = e.target.closest('.context-menu-item');
+            if (item && !item.classList.contains('disabled')) {
+                item.classList.add('pressed');
+            }
+        });
+        aiMsgContextMenu.addEventListener('mouseleave', () => {
+            aiMsgContextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+        });
     }
 
     // ── 笔记引用浮层标签筛选 ──
@@ -1262,8 +1284,7 @@ function bindEvents() {
     // 点击下拉菜单外部关闭
     document.addEventListener('click', (e) => {
         if (sessionMoreMenu && !sessionMoreMenu.contains(e.target)) {
-            sessionMoreMenu.classList.remove('active');
-            sessionMoreMenuTarget = null;
+            closeSessionMenu();
         }
     });
 
@@ -1493,8 +1514,7 @@ function renderSessionList() {
             if (isStreaming) return;
             // 如果菜单已打开且是同一个会话条目，则关闭
             if (sessionMoreMenu.classList.contains('active') && sessionMoreMenuTarget === item) {
-                sessionMoreMenu.classList.remove('active');
-                sessionMoreMenuTarget = null;
+                closeSessionMenu();
                 return;
             }
             // 定位到按钮旁边
@@ -3701,6 +3721,33 @@ function showEmptyState() {
 }
 
 /**
+ * 取消会话菜单的退场清理定时器并清除退场动画/指针禁用（打开新菜单前调用）
+ */
+function resetSessionMenuClose() {
+    if (!sessionMoreMenu) return;
+    if (sessionMoreMenu._closeTimer) { clearTimeout(sessionMoreMenu._closeTimer); sessionMoreMenu._closeTimer = null; }
+    sessionMoreMenu.style.animation = '';
+    sessionMoreMenu.style.pointerEvents = '';
+}
+
+/**
+ * 关闭会话菜单：先淡出再隐藏，给回弹留出可见时间（防重复关闭/淡出期间误点）
+ */
+function closeSessionMenu() {
+    if (!sessionMoreMenu || !sessionMoreMenu.classList.contains('active')) return;
+    sessionMoreMenuTarget = null;
+    if (sessionMoreMenu._closeTimer) { clearTimeout(sessionMoreMenu._closeTimer); sessionMoreMenu._closeTimer = null; }
+    sessionMoreMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+    sessionMoreMenu.style.pointerEvents = 'none'; // 淡出期间禁止再点击
+    sessionMoreMenu.style.animation = 'modalExit 0.1s ease-in forwards';
+    sessionMoreMenu._closeTimer = setTimeout(() => {
+        sessionMoreMenu.classList.remove('active');
+        sessionMoreMenu.style.animation = '';
+        sessionMoreMenu.style.pointerEvents = '';
+    }, 110);
+}
+
+/**
  * 构建并显示统一的会话操作菜单（右击/更多按钮共用）
  * @param {Object} s - 会话对象
  * @param {HTMLElement} item - 会话条目元素
@@ -3708,8 +3755,9 @@ function showEmptyState() {
  * @param {number} top - 菜单位置 top
  */
 function showSessionMenu(s, item, left, top) {
-    // 关闭其他菜单
+    // 关闭其他菜单（即时关闭，不播退场动画）
     if (sessionMoreMenuTarget && sessionMoreMenuTarget !== item) {
+        resetSessionMenuClose();
         sessionMoreMenu.classList.remove('active');
     }
 
@@ -3753,8 +3801,7 @@ function showSessionMenu(s, item, left, top) {
     // 菜单项点击事件
     pinItem.addEventListener('click', async (pe) => {
         pe.stopPropagation();
-        sessionMoreMenu.classList.remove('active');
-        sessionMoreMenuTarget = null;
+        closeSessionMenu();
         try {
             await window.go.main.App.TogglePinAISession(s.id);
         } catch (_) { /* 忽略 */ }
@@ -3763,8 +3810,7 @@ function showSessionMenu(s, item, left, top) {
 
     renameItem.addEventListener('click', (re) => {
         re.stopPropagation();
-        sessionMoreMenu.classList.remove('active');
-        sessionMoreMenuTarget = null;
+        closeSessionMenu();
         // 关闭菜单后触发该会话标题的内联编辑
         const titleEl = item.querySelector('.ai-session-item-title');
         if (titleEl) startInlineEdit(titleEl, s.id);
@@ -3772,8 +3818,7 @@ function showSessionMenu(s, item, left, top) {
 
     exportItem.addEventListener('click', async (ex) => {
         ex.stopPropagation();
-        sessionMoreMenu.classList.remove('active');
-        sessionMoreMenuTarget = null;
+        closeSessionMenu();
         try {
             const result = await window.go.main.App.ExportAISessionAsMarkdown(s.id);
             if (result && result !== '已取消') {
@@ -3786,8 +3831,7 @@ function showSessionMenu(s, item, left, top) {
 
     delItem.addEventListener('click', async (de) => {
         de.stopPropagation();
-        sessionMoreMenu.classList.remove('active');
-        sessionMoreMenuTarget = null;
+        closeSessionMenu();
         if (isStreaming) return;
         const confirmed = await window.showConfirmDialog('确定删除此会话吗？');
         if (!confirmed) return;
@@ -3827,6 +3871,7 @@ function showSessionMenu(s, item, left, top) {
     sessionMoreMenu.style.left = left + 'px';
     sessionMoreMenu.style.top = top + 'px';
 
+    resetSessionMenuClose(); // 清除可能残留的退场动画/指针禁用，确保入场动画正常
     sessionMoreMenu.classList.add('active');
     sessionMoreMenuTarget = item;
 }
@@ -3837,7 +3882,14 @@ function showSessionMenu(s, item, left, top) {
 function closeAiMsgContextMenu() {
     if (aiMsgContextMenu) {
         aiMsgContextMenu.classList.remove('active');
-        aiMsgContextMenu.innerHTML = '';
+        if (aiMsgContextMenu._closeTimer) { clearTimeout(aiMsgContextMenu._closeTimer); aiMsgContextMenu._closeTimer = null; }
+        aiMsgContextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+        // 退场动画：0.1s 淡出后再清空内容，给回弹留出可见时间（active 已移除，指针事件自动失效）
+        aiMsgContextMenu.style.animation = 'modalExit 0.1s ease-in forwards';
+        aiMsgContextMenu._closeTimer = setTimeout(() => {
+            aiMsgContextMenu.style.animation = '';
+            aiMsgContextMenu.innerHTML = '';
+        }, 110);
     }
     _contextMsgContent = '';
     _contextMsgRole = '';
@@ -3854,6 +3906,9 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
 
     // 先关闭之前的菜单
     closeAiMsgContextMenu();
+    // 取消退场清理定时器并清除退场动画，避免影响新菜单
+    if (aiMsgContextMenu._closeTimer) { clearTimeout(aiMsgContextMenu._closeTimer); aiMsgContextMenu._closeTimer = null; }
+    aiMsgContextMenu.style.animation = '';
 
     // 保存上下文
     _contextMsgContent = content;

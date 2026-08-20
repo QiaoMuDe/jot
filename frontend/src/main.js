@@ -5371,11 +5371,16 @@ let contextMenuNoteId = null;
 function hideContextMenu() {
     const menu = els.contextMenu;
     if (!menu.classList.contains('active')) return;
+    // 清理按下态，避免残留
+    menu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
     menu.style.animation = 'modalExit 0.1s ease-in forwards';
-    const onEnd = () => {
+    const onEnd = (ev) => {
+        // 先移除监听再校验动画名：若隐藏期间菜单被重新打开（menuEnter 取代 modalExit），
+        // 旧监听不得在 menuEnter 结束时误关新菜单
+        menu.removeEventListener('animationend', onEnd);
+        if (ev.animationName !== 'modalExit') return;
         menu.classList.remove('active');
         menu.style.animation = '';
-        menu.removeEventListener('animationend', onEnd);
     };
     menu.addEventListener('animationend', onEnd);
     contextMenuNoteId = null;
@@ -5410,6 +5415,21 @@ window.showContextMenu = function (event, noteId) {
     const pinItem = menu.querySelector('[data-action="pin"]');
     if (pinItem && note) {
         pinItem.textContent = note.pinned ? '取消置顶' : '置顶';
+    }
+
+    // 更新标签菜单项可用性：已有 3 个标签时不可再添加；无标签时不可移除
+    if (note) {
+        const tagCount = (note.tags || []).length;
+        const addTagItem = menu.querySelector('[data-action="add-tag"]');
+        const removeTagItem = menu.querySelector('[data-action="remove-tag"]');
+        if (addTagItem) {
+            addTagItem.classList.toggle('disabled', tagCount >= 3);
+            addTagItem.title = tagCount >= 3 ? '该笔记标签已达上限（3 个）' : '';
+        }
+        if (removeTagItem) {
+            removeTagItem.classList.toggle('disabled', tagCount === 0);
+            removeTagItem.title = tagCount === 0 ? '该笔记暂无标签' : '';
+        }
     }
 
     // 计算 transform-origin：靠近左上角还是右下角
@@ -5470,6 +5490,12 @@ window.handleContextAction = function (action) {
             break;
         case 'move':
             openMoveDialog([id]);
+            break;
+        case 'add-tag':
+            openBatchTagPicker('add', [id]);
+            break;
+        case 'remove-tag':
+            openBatchTagPicker('remove', [id]);
             break;
     }
 };
@@ -5741,14 +5767,17 @@ async function batchPinSelected() {
 /* ===== 批量标签操作 ===== */
 
 let batchTagAction = null; // 'add' | 'remove'
+let batchTagNoteIds = null; // 右键菜单单笔记模式：显式笔记 ID 数组；null = 批量模式使用 selectedNoteIds
+let batchTagAddLimit = null; // 单笔记添加模式：可再添加的标签数上限（3 - 笔记已有标签数）
 
 /**
- * 收集选中笔记中已包含的标签 ID 集合
+ * 收集指定笔记中已包含的标签 ID 集合
  */
-function getTagIdsInSelectedNotes() {
+function getTagIdsInNotes(noteIds) {
     const ids = new Set();
+    const idSet = new Set(noteIds);
     for (const note of state.notes) {
-        if (state.selectedNoteIds.has(note.id) && note.tags) {
+        if (idSet.has(note.id) && note.tags) {
             note.tags.forEach(t => ids.add(t.id));
         }
     }
@@ -5757,22 +5786,61 @@ function getTagIdsInSelectedNotes() {
 
 /**
  * 打开批量标签选择弹窗
+ * @param {string} action - 'add' | 'remove'
+ * @param {number[]} [noteIds] - 可选。右键菜单单笔记模式传入的笔记 ID 数组；缺省时使用批量选中的笔记
  */
-function openBatchTagPicker(action) {
-    if (state.selectedNoteIds.size === 0) {
-        nm.show('请先选择笔记', 'warning');
-        return;
-    }
+function openBatchTagPicker(action, noteIds = null) {
     batchTagAction = action;
-    const isAdd = action === 'add';
-    els.batchTagTitle.textContent = isAdd ? '批量添加标签' : '批量移除标签';
-
-    // 移除模式：先检查选中笔记是否包含标签
-    if (!isAdd) {
-        const tagIdsInNotes = getTagIdsInSelectedNotes();
-        if (tagIdsInNotes.size === 0) {
-            nm.show('当前选中的笔记中没有可移除的标签', 'info');
+    batchTagNoteIds = noteIds ? [...noteIds] : null;
+    if (!batchTagNoteIds) {
+        if (state.selectedNoteIds.size === 0) {
+            nm.show('请先选择笔记', 'warning');
             batchTagAction = null;
+            return;
+        }
+    }
+    const isAdd = action === 'add';
+    // 单笔记模式标题更明确
+    els.batchTagTitle.textContent = batchTagNoteIds && batchTagNoteIds.length === 1
+        ? (isAdd ? '添加标签' : '移除标签')
+        : (isAdd ? '批量添加标签' : '批量移除标签');
+
+    // 单笔记添加模式：计算可再添加的标签数上限（最多 3 个）
+    batchTagAddLimit = null;
+    if (isAdd && batchTagNoteIds && batchTagNoteIds.length === 1) {
+        const note = state.notes.find(n => n.id === batchTagNoteIds[0]);
+        const existing = (note && note.tags) ? note.tags.length : 0;
+        if (existing >= 3) {
+            nm.show('该笔记标签已达上限（3 个）', 'info');
+            batchTagAction = null;
+            batchTagNoteIds = null;
+            return;
+        }
+        batchTagAddLimit = 3 - existing;
+    } else if (isAdd && !batchTagNoteIds) {
+        // 批量添加模式：按所有选中笔记的最小剩余额度收紧，避免部分笔记超过 3 个标签
+        let minRemaining = 3;
+        for (const id of state.selectedNoteIds) {
+            const note = state.notes.find(n => n.id === id);
+            const existing = (note && note.tags) ? note.tags.length : 0;
+            minRemaining = Math.min(minRemaining, 3 - existing);
+            if (minRemaining <= 0) break;
+        }
+        if (minRemaining <= 0) {
+            nm.show('所选笔记中有笔记已达 3 个标签上限', 'info');
+            batchTagAction = null;
+            return;
+        }
+        batchTagAddLimit = minRemaining;
+    }
+
+    // 移除模式：先检查笔记是否包含标签
+    if (!isAdd) {
+        const ids = batchTagNoteIds || Array.from(state.selectedNoteIds);
+        if (getTagIdsInNotes(ids).size === 0) {
+            nm.show(batchTagNoteIds ? '该笔记暂无标签' : '当前选中的笔记中没有可移除的标签', 'info');
+            batchTagAction = null;
+            batchTagNoteIds = null;
             return;
         }
     }
@@ -5796,6 +5864,8 @@ function closeBatchTagPicker() {
     els.batchTagOverlay.style.opacity = '';
     els.batchTagFooter.style.display = 'none';
     batchTagAction = null;
+    batchTagNoteIds = null;
+    batchTagAddLimit = null;
 }
 
 /**
@@ -5809,14 +5879,26 @@ function renderBatchTagList() {
     }
 
     const isRemove = batchTagAction === 'remove';
-    const tagIdsInNotes = isRemove ? getTagIdsInSelectedNotes() : new Set();
+    const isAdd = batchTagAction === 'add';
+    const tagIdsInNotes = isRemove ? getTagIdsInNotes(batchTagNoteIds || Array.from(state.selectedNoteIds)) : new Set();
+    // 单笔记添加模式：该笔记已有的标签不可重复添加（禁用 + 提示，避免重复添加/白占可选项额度）
+    const existingTagIds = (isAdd && batchTagNoteIds && batchTagNoteIds.length === 1)
+        ? getTagIdsInNotes(batchTagNoteIds)
+        : new Set();
+
+    // 单笔记添加模式防御：剩余额度为 0（正常情况下在打开弹窗时已被拦截）
+    if (isAdd && batchTagAddLimit !== null && batchTagAddLimit <= 0) {
+        list.innerHTML = '<div class="batch-tag-empty">该笔记标签已满（最多 3 个）</div>';
+        return;
+    }
 
     list.innerHTML = state.tags
         .map(tag => {
-            // 移除模式：不在选中笔记中的标签不可选
-            const disabled = isRemove && !tagIdsInNotes.has(tag.id);
+            // 移除模式：不在笔记中的标签不可选；单笔记添加模式：已有标签不可选
+            const disabled = (isRemove && !tagIdsInNotes.has(tag.id)) || existingTagIds.has(tag.id);
+            const title = existingTagIds.has(tag.id) ? ' title="该笔记已有此标签"' : '';
             const cls = `batch-tag-chip${disabled ? ' disabled' : ''}`;
-            return `<div class="${cls}" data-tag-id="${tag.id}" data-tag-color="${tag.color || '#6B7280'}" style="--tag-color:${tag.color || '#6B7280'}">${escapeHtml(tag.name)}</div>`;
+            return `<div class="${cls}"${title} data-tag-id="${tag.id}" data-tag-color="${tag.color || '#6B7280'}" style="--tag-color:${tag.color || '#6B7280'}">${escapeHtml(tag.name)}</div>`;
         })
         .join('');
 
@@ -5828,14 +5910,15 @@ function renderBatchTagList() {
 
 /**
  * 点击批量标签芯片：切换选中态，更新确认按钮计数
- * 追加模式下最多选择 3 个标签
+ * 追加模式下最多选择 3 个标签（单笔记模式按剩余额度收紧）
  */
 function onBatchTagClick(el) {
     const isAdd = batchTagAction === 'add';
-    // 追加模式下，如果芯片当前未选中且已选 ≥ 3，拒绝
+    const limit = batchTagAddLimit !== null ? batchTagAddLimit : 3;
+    // 追加模式下，如果芯片当前未选中且已选 ≥ 上限，拒绝
     if (isAdd && !el.classList.contains('selected')) {
         const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
-        if (count >= 3) {
+        if (count >= limit) {
             window.showNotification('一篇笔记最多选择 3 个标签', 'warning');
             return;
         }
@@ -5856,7 +5939,7 @@ async function confirmBatchTagAction() {
         return;
     }
     const isAdd = batchTagAction === 'add';
-    const ids = Array.from(state.selectedNoteIds);
+    const ids = batchTagNoteIds ? [...batchTagNoteIds] : Array.from(state.selectedNoteIds);
     const tagNames = [];
     try {
         for (const chip of selectedChips) {
@@ -6316,13 +6399,31 @@ function initEventListeners() {
     // 右键菜单：点击其他区域关闭
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('click', () => closeMoreMenu(els.moreMenu));
-    // 右键菜单项点击
+    // 右键菜单项点击：动作立即执行，回弹效果由 mousedown/mouseleave 提供，互不阻塞
     els.contextMenu.addEventListener('click', (e) => {
         const item = e.target.closest('.context-menu-item');
         if (item && item.dataset.action) {
             e.stopPropagation();
+            // 置灰项不执行动作，仅提示原因
+            if (item.classList.contains('disabled')) {
+                if (item.dataset.action === 'add-tag') nm.show('该笔记标签已达上限（3 个）', 'info');
+                else if (item.dataset.action === 'remove-tag') nm.show('该笔记暂无标签', 'info');
+                return;
+            }
             window.handleContextAction(item.dataset.action);
         }
+    });
+    // 右键菜单项按下反馈：按下瞬间缩小（0.06s），松开时经 spring 缓动弹回（0.18s）
+    els.contextMenu.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // 仅左键触发按压反馈
+        const item = e.target.closest('.context-menu-item');
+        if (item && !item.classList.contains('disabled')) {
+            item.classList.add('pressed');
+        }
+    });
+    // 鼠标移出菜单时清理按下态（如按下后拖到菜单外松开）
+    els.contextMenu.addEventListener('mouseleave', () => {
+        els.contextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
     });
     // 右键菜单内阻止冒泡，避免触发 document.click 关闭
     els.contextMenu.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -7487,12 +7588,36 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
     `;
     document.body.appendChild(menu);
 
+    // 按下回弹反馈：mousedown 缩小，鼠标移出清理（动作零延迟）
+    menu.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // 仅左键触发按压反馈
+        const item = e.target.closest('.notebook-context-item');
+        if (item && !item.classList.contains('disabled')) {
+            item.classList.add('pressed');
+        }
+    });
+    menu.addEventListener('mouseleave', () => {
+        menu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+    });
+
     // 点击其他地方关闭
     const closeMenu = (e2) => {
         if (!menu.contains(e2.target)) {
+            closeNotebookMenu();
+        }
+    };
+
+    // 关闭笔记本右键菜单：先淡出再移除，给回弹留出可见时间（防重复关闭）
+    const closeNotebookMenu = () => {
+        if (menu._closing) return;
+        menu._closing = true;
+        menu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+        menu.style.pointerEvents = 'none'; // 淡出期间禁止再点击，防重复触发动作
+        menu.style.opacity = '0';
+        setTimeout(() => {
             menu.remove();
             document.removeEventListener('click', closeMenu);
-        }
+        }, 130);
     };
 
     // 点击菜单项
@@ -7500,8 +7625,7 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
         const item = e.target.closest('.notebook-context-item');
         if (!item || item.classList.contains('disabled')) return;
         const action = item.dataset.action;
-        document.removeEventListener('click', closeMenu);
-        menu.remove();
+        closeNotebookMenu();
 
         if (action === 'rename') {
             startInlineRename(notebookId, notebookName);
