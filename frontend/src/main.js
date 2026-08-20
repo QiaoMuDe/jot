@@ -257,7 +257,7 @@ function switchEditorReadOnly(readOnly) {
         els.editorActionsBtn.style.display = readOnly ? 'none' : '';
     }
     els.editorEditBtn.style.display = readOnly ? '' : 'none';
-    els.editorViewBtn.style.display = (!readOnly && state.enteredFromViewMode) ? '' : 'none';
+    els.editorViewBtn.style.display = (!readOnly && state.editingNoteId != null) ? '' : 'none';
     els.editorFileExt.classList.toggle('file-ext-readonly', readOnly);
     // 切换标签选择器只读
     renderTagSelector(readOnly);
@@ -4023,7 +4023,7 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     if (els.editorActionsBtn)
         els.editorActionsBtn.style.display = isReadOnly ? 'none' : '';
     els.editorEditBtn.style.display = (isReadOnly && !hideEditBtn) ? '' : 'none';
-    els.editorViewBtn.style.display = (!isReadOnly && state.enteredFromViewMode) ? '' : 'none';
+    els.editorViewBtn.style.display = (!isReadOnly && state.editingNoteId != null) ? '' : 'none';
     els.editorFileExt.classList.toggle('file-ext-readonly', !!isReadOnly);
 
     // 文件后缀和模式切换
