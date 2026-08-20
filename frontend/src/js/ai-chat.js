@@ -3880,7 +3880,9 @@ function showSessionMenu(s, item, left, top) {
  * 关闭 AI 消息右键菜单
  */
 function closeAiMsgContextMenu() {
-    if (aiMsgContextMenu) {
+    // 仅当菜单确实打开过才播退场动画；未打开时跳过，避免每次点击
+    // （含标签弹窗内点击）都让隐藏的空菜单元素以 modalExit 的 opacity:1 闪现
+    if (aiMsgContextMenu && aiMsgContextMenu.classList.contains('active')) {
         aiMsgContextMenu.classList.remove('active');
         if (aiMsgContextMenu._closeTimer) { clearTimeout(aiMsgContextMenu._closeTimer); aiMsgContextMenu._closeTimer = null; }
         aiMsgContextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
