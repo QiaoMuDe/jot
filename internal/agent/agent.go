@@ -255,7 +255,7 @@ func (s *AgentService) ReleaseAll() {
 // Run 执行一轮 Agent 对话：
 //  1. 从现有 AI 配置（aiService.GetConfig）读取 BaseURL/APIKey/Model，构建 OpenAI 兼容 ChatModel；
 //  2. 以 req.Instruction 作为系统提示词（Agent Instruction），历史消息转 schema.Message；
-//  3. 注册 web_search / recall_notes 工具（notebook 过滤绑定 req.RecallNotebookIDs）；
+//  3. 注册 recall_notes 等内置工具（notebook 过滤绑定 req.RecallNotebookIDs）；
 //  4. runner.Run 消费事件流，流式文本与工具状态通过 emit 推送，最后汇总回答与工具摘要。
 //
 // ctx 支持取消：调用方传入带 cancel 的 ctx（停止按钮），Agent 循环随 ctx 终止，返回 ctx.Err()。
@@ -624,7 +624,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						fastlog.Int("result_len", len(content)))
 				}
 				emitToolResult(emit, &toolRecords, name, callID, content)
-				// 部分失败提示（如 web_search 部分来源失败）：工具内部经 ctx.AddPartial 登记，
+				// 部分失败提示（如多来源搜索部分来源失败）：工具内部经 ctx.AddPartial 登记，
 				// 此处统一在 tool_result 之后发射 tool_partial，前端展示 ⚠️ 警告；发射后清空防重复
 				toolCtx.DrainPartials(name, callID)
 			}

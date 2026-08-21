@@ -1,7 +1,7 @@
 # Agent 工具开发与维护指南
 
 > 本指南面向 `internal/agent` 模块的后续维护者：如何**新增**、**维护**、**注册**和**编写** Agent 工具，以及必须遵守的规范。
-> 适用对象：`web_search` / `recall_notes` / `refine_search_query` / `manage_note` / `get_stats` 等 ReAct 循环中模型可调用的工具（完整清单见 §6）。
+> 适用对象：`recall_notes` / `read_url` / `manage_note` / `get_stats` / `ask_user` 等 ReAct 循环中模型可调用的工具（完整清单见 §6）。
 
 ---
 
@@ -38,7 +38,7 @@ frontend/src/css/components/ai-chat.css    状态条与折叠摘要样式
 
 - 工具只负责：**解析参数 → 执行 → 返回纯文本**（及可选的**结构化收集**）。
 - 所有事件发射、调用记录、失败回填都由共享上下文与父包统一处理，工具内部**不直接 emit 事件**（**唯一例外**：`ask_user` 反向提问工具直接 `ctx.Emit("ai:ask-user", ...)` 发射问题卡片数据——这是向用户展示交互卡片的专用通道，见 §7.1）。
-- 前端通过 `ai:tool-status` 事件实时展示工具状态条，事件负载为 `tools.Record` 的 JSON。状态条与历史明细**直接展示英文工具名**（web_search 等），前端不维护中文映射。
+- 前端通过 `ai:tool-status` 事件实时展示工具状态条，事件负载为 `tools.Record` 的 JSON。状态条与历史明细**直接展示英文工具名**（recall_notes 等），前端不维护中文映射。
 
 ---
 
@@ -70,7 +70,7 @@ Go 包文档是工具清单的**唯一权威来源**，各补一行：
 
 ### 第 5 步：按需在工具实现内维护动作文案（可选）
 
-工具状态条与历史明细直接展示英文工具名（web_search 等），无需维护中文名映射；若要在开始调用时展示具体动作（如"创建待办"），让工具实现可选接口 `ActionTextProvider`（`ActionText(argumentsInJSON string) string`），父包在 `tool_start` 时自动生成 `action_text` 下发前端，无需修改前端（见 §8）。此步可跳过。
+工具状态条与历史明细直接展示英文工具名（recall_notes 等），无需维护中文名映射；若要在开始调用时展示具体动作（如"创建待办"），让工具实现可选接口 `ActionTextProvider`（`ActionText(argumentsInJSON string) string`），父包在 `tool_start` 时自动生成 `action_text` 下发前端，无需修改前端（见 §8）。此步可跳过。
 
 ### 第 6 步：验证
 
@@ -200,7 +200,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 | 项目 | 规范 | 示例 |
 |---|---|---|
-| 工具名 | snake_case，动词 + 对象，全局唯一 | `get_current_time` / `web_search` |
+| 工具名 | snake_case，动词 + 对象，全局唯一 | `get_current_time` / `read_url` |
 | 结构体 | 工具名 + `Tool` 后缀（小写，包内私有） | `currentTimeTool` |
 | 文件 | 工具名 + `.go`，一文件一工具 | `current_time.go` |
 | 构造器 | `New` + 工具名（导出的 CamelCase） | `NewGetCurrentTime` |
@@ -209,7 +209,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 ### 4.4 `Info()` 编写要求
 
-- **`Desc` 是模型选择工具的唯一依据**：写清"何时调用 / 何时不要调用 / 参数含义"，可参考 [web_search.go 的 Desc](internal/agent/tools/web_search.go#L52)。
+- **`Desc` 是模型选择工具的唯一依据**：写清"何时调用 / 何时不要调用 / 参数含义"，可参考 [read_url.go 的 Desc](internal/agent/tools/read_url.go#L63)。
 - 参数 Schema 用 `schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{...})`，支持的字段：
 
 ```go
@@ -241,11 +241,11 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 | 能力 | 用法 | 说明 |
 |---|---|---|
-| 日志 | `ctx.Logger.Debugw(...)` / `Warnw(...)` | fastlog 结构化日志，见 [web_search.go](internal/agent/tools/web_search.go#L99-L104) |
+| 日志 | `ctx.Logger.Debugw(...)` / `Warnw(...)` | fastlog 结构化日志，见 [read_url.go](internal/agent/tools/read_url.go#L153-L158) |
 | 部分失败登记 | `ctx.AddPartial(msg)` | 父包在 `tool_result` 后统一以 `tool_partial` 事件发射，前端显示 ⚠️ |
-| 结构化收集 | `ctx.Collector.Sources` / `ctx.Collector.Cards` | 供 `Result.SearchSources` / `Result.RecallCards` 落库，格式与问答模式一致 |
+| 结构化收集 | `ctx.Collector.Cards`（召回卡片）；`ctx.Collector.Sources` 字段保留但内置搜索已移除、当前无工具写入（MCP 搜索以文本返回） | 供 `Result.RecallCards`（`Result.SearchSources` 恒空）落库 |
 
-**收集规则**：结构化数据（搜索来源 `services.SearchSource` / 召回卡片 `services.RecallCard`）追加到 `ctx.Collector`，不要塞进返回文本的 JSON。父包在 [agent.go 汇总段](internal/agent/agent.go#L259-L264) 统一序列化落库。
+**收集规则**：结构化数据（召回卡片 `services.RecallCard`；搜索来源 `services.SearchSource` 类型保留但当前无工具收集）追加到 `ctx.Collector`，不要塞进返回文本的 JSON。父包在 [agent.go 汇总段](internal/agent/agent.go#L259-L264) 统一序列化落库。
 
 ### 4.7 约束与红线
 
@@ -325,7 +325,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 ## 8. 前端工具状态提示（动作文案在工具实现内维护）
 
-Agent 工具的前端状态提示集中在 `frontend/src/js/ai-chat.js`。**工具名直接展示后端下发的英文名**（web_search / recall_notes / ...），前端不维护中文名映射，新增工具无需改动前端展示名。
+Agent 工具的前端状态提示集中在 `frontend/src/js/ai-chat.js`。**工具名直接展示后端下发的英文名**（recall_notes / read_url / ...），前端不维护中文名映射，新增工具无需改动前端展示名。
 
 ### 8.1 展示名规则
 
@@ -352,7 +352,7 @@ var getToolLabel = function(name) { return name || '工具'; };
 
 ### 8.3 在工具实现内维护动作文案
 
-若要在开始调用时展示具体动作（如 manage_note 的"创建笔记"、web_search 的"搜索 {query}"），让工具在自己的 .go 文件里实现可选接口 `ActionTextProvider`：
+若要在开始调用时展示具体动作（如 manage_note 的"创建笔记"、recall_notes 的"检索本地笔记"），让工具在自己的 .go 文件里实现可选接口 `ActionTextProvider`：
 
 ```go
 // ActionTextProvider 可选接口：提供开始调用时的中文动作文案。
@@ -364,7 +364,7 @@ type ActionTextProvider interface {
 
 实现要点：
 
-- 工具在自己的 .go 文件实现 `ActionText(argumentsInJSON string) string`：解析 arguments JSON 中的 action / 关键参数，返回中文文案（如 manage_note 的 create → "创建笔记"、web_search 的 query 非空 → "搜索 {query}"）。
+- 工具在自己的 .go 文件实现 `ActionText(argumentsInJSON string) string`：解析 arguments JSON 中的 action / 关键参数，返回中文文案（如 manage_note 的 create → "创建笔记"、recall_notes → "检索本地笔记"）。
 - **解析失败返回 ""**：前端回退显示"执行"。
 - **action 未命中返回 "执行"**：给出明确的兜底文案。
 - 父包在 `tool_start` 时按工具名自动调用 `ActionText`，把结果放进 `Record.ActionText`（json 字段 `action_text`）随 `ai:tool-status` 下发，**无需改动前端**。
@@ -374,9 +374,9 @@ type ActionTextProvider interface {
 
 [renderToolCalls](frontend/src/js/ai-chat.js#L4068-L4130) 只渲染 `tool_start` 记录，每条 = 图标 + 加粗工具名 `「X」`（`.ai-tool-status-name`）+ 状态文本：
 
-- 完成：`「web_search」：已完成`
-- 失败：`「web_search」：失败：{原因前40字}`（原因取自 `tool_error` 记录 `result`）
-- 部分失败：`「web_search」：部分来源失败：{说明前40字}`（取自 `tool_partial` 记录 `result`）
+- 完成：`「recall_notes」：已完成`
+- 失败：`「recall_notes」：失败：{原因前40字}`（原因取自 `tool_error` 记录 `result`）
+- 部分失败：`「recall_notes」：部分来源失败：{说明前40字}`（取自 `tool_partial` 记录 `result`）
 
 ### 8.5 前端维护自查
 

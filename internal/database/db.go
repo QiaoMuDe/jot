@@ -158,9 +158,9 @@ func cleanupOrphanedData(db *gorm.DB) error {
 	// ── 孤儿设置键清单：已从种子/模型移除的键 ──
 	orphanSettingKeys := []string{
 		// 内置搜索（Tavily/知乎/全网）整体移除（含更早的旧键 ai_web_search_enabled，
-		// 它曾迁移到 tavily_search_enabled，目标键亦已移除）。
-		// 注：删除 ai_web_search_max_chars 后，read_url 工具读取该键将回退默认值 5000
-		//（与全新安装行为一致，设置项已无 UI 入口）。
+		// 它曾迁移到 tavily_search_enabled，目标键亦已移除；
+		// ai_web_search_max_chars 是 read_url 截断键改名前的旧键，现由 ai_read_url_max_chars 取代，
+		// 后者已在 InitDefaultSettings 种子初始化，无前端 UI）。
 		"tavily_api_key", "zhihu_access_secret", "zhihu_search_enabled",
 		"zhihu_global_search_enabled", "tavily_search_enabled",
 		"ai_web_search_max_chars", "ai_search_result_limit", "ai_web_search_enabled",
@@ -583,12 +583,6 @@ func InitDefaultSettings(db *gorm.DB) error {
 		existing[k] = true
 	}
 
-	// 迁移旧默认值: ai_context_window_size 旧默认 20 → 40
-	// 该设置项无前端 UI 暴露，旧值 20 即种子默认，非用户显式配置，直接升级
-	db.Model(&models.Setting{}).
-		Where("key = ? AND value = ?", "ai_context_window_size", "20").
-		Update("value", "40")
-
 	defaults := []models.Setting{
 		{Key: "theme", Value: "default"},
 		{Key: "font_family", Value: ""},
@@ -608,6 +602,8 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_card_recall_limit", Value: "5"},
 		{Key: "max_file_size", Value: "1"},
 		{Key: "ai_large_file_preview_threshold", Value: "10000"},
+		// read_url 工具网页正文截断上限（无前端 UI，仅初始化默认值，由 read_url 直接读取）
+		{Key: "ai_read_url_max_chars", Value: "5000"},
 		{Key: "ai_agent_tools_disabled", Value: ""},
 		{Key: "ai_agent_max_iterations", Value: "20"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},

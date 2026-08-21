@@ -5,7 +5,7 @@ package tools
 // 压缩为要点摘要，再基于压缩结果继续处理——节省输出 token、回答更聚焦、
 // 多来源整合时先各自压缩再综合。
 //
-// 实现复用 services.AIService.CallAI（非流式单次调用，与 refine_search_query 同款路径），
+// 实现复用 services.AIService.CallAI（非流式单次调用，与 Agent 其他辅助 LLM 调用同款路径），
 // 摘要走当前配置的 AI 模型（BaseURL/Key/Model）。失败/无变化时降级返回原文，
 // 不中断 ReAct 循环；用户取消时返回取消错误终止循环。
 //

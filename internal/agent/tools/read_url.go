@@ -2,7 +2,7 @@ package tools
 
 // 本文件实现 read_url 网页链接读取工具：模型在 ReAct 循环中发现用户消息
 // 包含链接或要求阅读网页时调用，内部基于 eino-ext 官方 URL Document Loader
-// 抓取网页并提取正文（默认 HTML 解析器，取 body 内容），按 ai_web_search_max_chars
+// 抓取网页并提取正文（默认 HTML 解析器，取 body 内容），按 ai_read_url_max_chars
 // 设置截断后返回给模型。仅放行 http/https，避免 file:// 等本地路径读取。
 
 import (
@@ -34,7 +34,7 @@ const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 // readURLTool 网页链接读取工具。
 type readURLTool struct {
-	setting *services.SettingService // 读取输出最大字符数设置（复用 ai_web_search_max_chars）
+	setting *services.SettingService // 读取输出最大字符数设置（复用 ai_read_url_max_chars）
 	ctx     *Context                 // 事件发射、日志
 }
 
@@ -60,7 +60,7 @@ func (r *readURLTool) ActionText(argumentsInJSON string) string {
 func (r *readURLTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "read_url",
-		Desc: "读取网页链接（URL）的内容并返回正文。当用户消息中包含链接、或要求阅读/总结/提取某个网页的内容时调用；也可在 web_search 结果不够深入时进一步打开搜索结果中的链接。注意：仅支持 http/https 链接；动态渲染（JS）的页面可能只能拿到部分内容。",
+		Desc: "读取网页链接（URL）的内容并返回正文。当用户消息中包含链接、或要求阅读/总结/提取某个网页的内容时调用；也可在搜索工具返回结果不够深入时进一步打开搜索结果中的链接。注意：仅支持 http/https 链接；动态渲染（JS）的页面可能只能拿到部分内容。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
@@ -128,7 +128,7 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", fmt.Errorf("读取链接失败: %w", err)
 	}
 
-	maxChars := getIntSetting(r.setting, "ai_web_search_max_chars", 5000, 50000)
+	maxChars := getIntSetting(r.setting, "ai_read_url_max_chars", 5000, 50000)
 	var b strings.Builder
 	for _, d := range docs {
 		if d == nil || strings.TrimSpace(d.Content) == "" {
