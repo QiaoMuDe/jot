@@ -61,6 +61,8 @@ type Deps struct {
 	// MCPServerDB 外部 MCP 服务器配置的数据来源（数据库驱动）；
 	// 为 nil 时跳过 MCP 工具装配。
 	MCPServerDB *gorm.DB
+	// MCPPool 全局 MCP 连接池（http/sse/stdio 预热复用）；为 nil 时跳过 MCP 工具装配。
+	MCPPool *mcpserver.Pool
 	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }
@@ -78,9 +80,10 @@ type AgentService struct {
 
 // agentSession 一个 AI 会话对应的 Agent 交互实例。
 // 说明：eino 的 ChatModelAgent 图/runner 与工具链按消息重建——系统提示词
-// （Instruction）逐消息组装（技能/引用/意图裁剪不同），MCP 连接按 run 建立，
-// 因此会话级实例持有的是跨消息可复用的部分：ask_user 等待通道、run 取消源、
-// ChatModel 客户端（指纹不变即复用）。真正支撑"同轮续答"的是 askCh/askPending：
+// （Instruction）逐消息组装（技能/引用/意图裁剪不同），因此会话级实例持有的是
+// 跨消息可复用的部分：ask_user 等待通道、run 取消源、ChatModel 客户端
+// （指纹不变即复用）。MCP 连接由全局预热池（Deps.MCPPool）持有，跨会话复用，
+// 不在会话级实例中管理。真正支撑"同轮续答"的是 askCh/askPending：
 // ask_user 工具在 ReAct 循环内阻塞等待，AnswerAskUser 把用户答案投递到通道，
 // 循环恢复继续完成原始请求（答案不落库为新用户消息）。
 type agentSession struct {
@@ -340,10 +343,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools)
 
-	// 追加外部 MCP 服务器工具（数据库驱动）：从数据库读取 MCP 服务器配置，
-	// 对每个 enabled 服务器连接并发现工具，改名后并入 toolList（须在 toolByName 索引构建之前）；
+	// 追加外部 MCP 服务器工具（数据库驱动 + 全局预热池）：
+	// 从数据库读取 MCP 服务器配置，全部传输（http/sse/stdio）统一优先复用预热池连接
+	// （Pool.Session 零网络开销），池中未命中（预热失败/从未预热）时现场连接一次并缓存
+	// 入池（WarmupOne 兜底）；连接由池持有常驻，跨会话跨消息复用。
 	// 查询失败 / 空库仅记录日志跳过，不中断内置工具与整体 Agent 运行
-	if s.deps.MCPServerDB != nil {
+	if s.deps.MCPServerDB != nil && s.deps.MCPPool != nil {
 		mcpCfg, err := mcpserver.LoadFromDB(s.deps.MCPServerDB)
 		if err != nil {
 			// 查询失败（数据库异常）仅记录日志，跳过 MCP 装配不阻断对话
@@ -369,21 +374,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				s.deps.Logger.Debugw("MCP 配置无启用的服务器，跳过 MCP 工具装配")
 			}
 
-			// 会话统一收集，待本轮 Run 结束后统一关闭（避免 for 循环内 defer 可读性隐患，
-			// 且覆盖其后所有 return 路径）；关闭失败记 Warn 便于发现连接清理异常
-			var mcpSessions []*mcpserver.Session
-			defer func() {
-				for _, sess := range mcpSessions {
-					if err := sess.Close(); err != nil && s.deps.Logger != nil {
-						s.deps.Logger.Warnw("MCP 会话关闭失败",
-							fastlog.String("server", sess.ServerName),
-							fastlog.Error(err))
-					}
-				}
-			}()
-
-			// 并行连接 + 工具发现，串行处理结果（保持工具顺序与日志顺序稳定）：
-			// goroutine 并发 OpenSession，最多同时 3 台（stdio 为本地子进程，限制并发拉起进程数）；
+			// 并行取/建会话，串行处理结果（保持工具顺序与日志顺序稳定）：
+			// 未命中池时现场建连（WarmupOne），goroutine 并发最多 3 台
+			// （stdio 为本地子进程，限制并发拉起进程数）；
 			// 每台内部已有 10s 连接 + 10s 工具发现超时兜底，goroutine 不会永久挂起。
 			type mcpResult struct {
 				server   mcpserver.Server
@@ -401,7 +394,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					sem <- struct{}{} // 获取并发槽位
 					defer func() { <-sem }()
 					connStart := time.Now()
-					mcpSess, err := mcpserver.OpenSession(runCtx, server)
+					// 优先复用预热池；未命中则现场连接并入池（兜底）
+					mcpSess := s.deps.MCPPool.Session(server.Name)
+					var err error
+					if mcpSess == nil {
+						mcpSess, err = s.deps.MCPPool.WarmupOne(runCtx, server)
+					}
 					results[i] = mcpResult{server: server, sess: mcpSess, err: err, duration: time.Since(connStart)}
 				}(i, server)
 			}
@@ -419,7 +417,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					}
 					continue
 				}
-				mcpSessions = append(mcpSessions, r.sess)
+				// 连接由池持有常驻，本轮不关闭
 				if r.sess.Skipped > 0 && s.deps.Logger != nil {
 					s.deps.Logger.Warnw("部分 MCP 工具因 Info 解析失败被跳过",
 						fastlog.String("server", r.server.Name),
@@ -443,8 +441,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					toolNames = append(toolNames, mcpToolName)
 					toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
 				}
-				// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与连接耗时，
-				// 便于排查工具是否生效及定位慢服务器
+				// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与取/建会话耗时，
+				// 便于排查工具是否生效及定位慢服务器（池复用场景耗时接近 0）
 				if s.deps.Logger != nil {
 					s.deps.Logger.Infow("MCP 服务器工具已上线",
 						fastlog.String("server", r.server.Name),

@@ -66,11 +66,11 @@ func TestSSEServerPingHandling(t *testing.T) {
 		sseFlusher = fl
 		sseMu.Unlock()
 
-		// 首个事件：endpoint，告知客户端 POST 地址
-		if _, err := fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", r.URL.Path+"/message"); err != nil {
-			return
-		}
+		// 首个事件：endpoint，告知客户端 POST 地址（flush 与 writeSSE 共用 sseMu 保护）
+		sseMu.Lock()
+		_, _ = fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", r.URL.Path+"/message")
 		fl.Flush()
+		sseMu.Unlock()
 
 		// 模拟知乎：连接后服务端持续主动发 ping（JSON-RPC 请求）
 		go func() {

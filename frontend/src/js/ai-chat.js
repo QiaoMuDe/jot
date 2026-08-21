@@ -26,6 +26,9 @@ let addDropdown = null;       // #aiChatAddDropdown
 let fileBar = null;           // #aiChatFileBar
 let fileChips = null;         // #aiChatFileChips
 
+// MCP 预热标志：首次进入 AI 助手模块时预热一次全局 MCP 连接池（幂等，后续进入不再重复）
+let mcpWarmupDone = false;
+
 // 状态
 let chatHistory = []; // 仅渲染缓冲区，不再发送给后端 
 let activeSessionId = null;    // null = 新会话尚未保存
@@ -3041,6 +3044,13 @@ export async function onAIChatViewActivated() {
 
     // 从 DOM 重新同步工具栏状态变量（用户可能在设置页更改了这些开关）
     syncToolbarState();
+
+    // 首次进入：预热全局 MCP 连接池（启用的 http/sse/stdio 服务器），成功/失败由后端汇总结果通知；
+    // 非阻塞（不 await），不延迟会话加载；重复进入不重复预热
+    if (!mcpWarmupDone && typeof window.warmupMCPServers === 'function') {
+        mcpWarmupDone = true;
+        window.warmupMCPServers();
+    }
 
     try {
         const cfg = await window.go.main.App.GetAIConfig();

@@ -4,6 +4,7 @@ import {services} from '../models';
 import {main} from '../models';
 import {models} from '../models';
 import {agent} from '../models';
+import {mcpserver} from '../models';
 
 export function AITextOperationStream(arg1:number,arg2:string,arg3:string):Promise<void>;
 
@@ -292,3 +293,5 @@ export function ValidateCardRecall():Promise<main.CardRecallCheckResult>;
 export function ValidateVectorIndexConfig():Promise<main.CardRecallCheckResult>;
 
 export function VerifyScreenLockPassword(arg1:string):Promise<boolean>;
+
+export function WarmupMCPServers():Promise<mcpserver.WarmupResult>;

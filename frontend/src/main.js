@@ -9394,6 +9394,8 @@ async function toggleMCPServer(srv, toggleEl) {
     try {
         await window.go.main.App.SaveMCPServer({ ...target, enabled: newEnabled });
         nm.show(newEnabled ? `已启用「${target.name}」` : `已停用「${target.name}」`, 'success');
+        // 同步预热池：启用→预热该服务器，停用→关闭该服务器连接
+        await warmupMCPServers();
     } catch (e) {
         // 失败回滚 UI 状态
         target.enabled = !newEnabled;
@@ -9445,6 +9447,8 @@ async function deleteMCPServer(srv) {
         await window.go.main.App.DeleteMCPServer(srv.id);
         await loadMCPServers();
         nm.show(`已删除「${srv.name}」`, 'success');
+        // 同步预热池：删除后关闭该服务器连接
+        await warmupMCPServers();
     } catch (e) {
         nm.show(`删除失败：${mcpErrMsg(e)}`, 'error');
     }
@@ -9725,6 +9729,8 @@ async function saveMCPServerForm() {
         closeMCPServerForm(true); // 保存成功后跳过未保存修改确认
         await loadMCPServers();
         nm.show(mcpFormMode === 'create' ? 'MCP 服务器已添加' : 'MCP 服务器已更新', 'success');
+        // 同步预热池：新增/编辑后预热（配置变更自动重连）
+        await warmupMCPServers();
     } catch (e) {
         // 后端校验/存储错误（Wails 以异常形式返回）
         nm.show(mcpErrMsg(e), 'error');
@@ -9732,6 +9738,31 @@ async function saveMCPServerForm() {
         mcpFormSaving = false;
     }
 }
+
+/**
+ * 预热/同步全局 MCP 连接池（后端 Reconcile：关闭已停用/删除的，预热启用的服务器）。
+ * 首次进入 AI 助手、设置页启用/停用/增删改 MCP 服务器后调用；后端幂等。
+ * 结果汇总为一条通知展示；无启用服务器时不打扰。
+ * 暴露到 window 供 ai-chat.js 首次进入 AI 助手时调用。
+ */
+async function warmupMCPServers() {
+    try {
+        const res = await window.go.main.App.WarmupMCPServers();
+        if (!res || !res.total) return; // 无启用的服务器，静默
+        const usable = (res.warmed || 0) + (res.reused || 0);
+        if (!res.failed) {
+            const reuseText = res.reused > 0 ? `（复用 ${res.reused} 台）` : '';
+            nm.show(`MCP 服务器已就绪：${usable} 台连接${reuseText}，共 ${res.tool_total} 个工具`, 'success');
+        } else {
+            const detail = (res.failed_msgs || []).join('；');
+            const type = usable === 0 ? 'error' : 'warning';
+            nm.show(`MCP 服务器预热：${usable} 台可用，${res.failed} 台失败${detail ? `（${detail}）` : ''}`, type, 6000);
+        }
+    } catch (e) {
+        nm.show(`MCP 服务器预热失败：${mcpErrMsg(e)}`, 'error');
+    }
+}
+window.warmupMCPServers = warmupMCPServers;
 
 /**
  * 初始化 MCP 服务器设置面板交互（事件绑定）

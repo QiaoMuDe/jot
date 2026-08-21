@@ -188,6 +188,35 @@ export namespace main {
 
 }
 
+export namespace mcpserver {
+	
+	export class WarmupResult {
+	    total: number;
+	    warmed: number;
+	    reused: number;
+	    closed: number;
+	    failed: number;
+	    failed_msgs: string[];
+	    tool_total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WarmupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.warmed = source["warmed"];
+	        this.reused = source["reused"];
+	        this.closed = source["closed"];
+	        this.failed = source["failed"];
+	        this.failed_msgs = source["failed_msgs"];
+	        this.tool_total = source["tool_total"];
+	    }
+	}
+
+}
+
 export namespace models {
 	
 	export class APIProfile {

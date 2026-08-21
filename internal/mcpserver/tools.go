@@ -3,8 +3,10 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -15,14 +17,17 @@ import (
 )
 
 // Session 一次 MCP 服务器会话：持有客户端连接与发现包装后的工具列表。
-// 由调用方（agent.Run）在每轮对话结束时调用 Close 释放连接。
+// 由调用方（agent.Run / Pool）负责生命周期：Pool 中常驻跨轮复用，Run 兜底路径本轮用完即关。
 // Skipped 记录因工具定义异常（空名）被跳过的工具数，供调用方日志告警。
 type Session struct {
 	ServerName string
 	Tools      []tool.BaseTool
 	Skipped    int
+	srv        Server     // 服务器配置快照，供断线重连
+	mu         sync.Mutex // 保护 cli/cancel/closed（重连与关闭并发）
 	cli        *mcp.ClientSession
 	cancel     func()
+	closed     bool // Close 后置位，拒绝重连
 }
 
 // OpenSession 连接 MCP 服务器并发现包装工具：
@@ -43,7 +48,7 @@ func OpenSession(ctx context.Context, s Server) (*Session, error) {
 		return nil, fmt.Errorf("MCP 服务器 %s 工具发现失败: %w", s.Name, err)
 	}
 
-	sess := &Session{ServerName: s.Name, cli: cli, cancel: cancel}
+	sess := &Session{ServerName: s.Name, srv: s, cli: cli, cancel: cancel}
 	sess.Tools = make([]tool.BaseTool, 0, len(listResult.Tools))
 	for _, td := range listResult.Tools {
 		if td == nil || td.Name == "" {
@@ -52,7 +57,7 @@ func OpenSession(ctx context.Context, s Server) (*Session, error) {
 		}
 		sess.Tools = append(sess.Tools, &mcpTool{
 			serverName:   s.Name,
-			cli:          cli,
+			sess:         sess,
 			toolDef:      td,
 			originalName: td.Name,
 		})
@@ -60,27 +65,96 @@ func OpenSession(ctx context.Context, s Server) (*Session, error) {
 	return sess, nil
 }
 
-// Close 关闭 MCP 客户端连接并取消会话 ctx；cli 为 nil 时安全返回。
+// Close 关闭 MCP 客户端连接并取消会话 ctx；幂等，Close 后拒绝重连。
 func (sess *Session) Close() error {
 	if sess == nil {
 		return nil
 	}
-	if sess.cancel != nil {
-		sess.cancel()
-		sess.cancel = nil
-	}
-	if sess.cli == nil {
+	sess.mu.Lock()
+	if sess.closed {
+		sess.mu.Unlock()
 		return nil
 	}
-	return sess.cli.Close()
+	sess.closed = true
+	cancel := sess.cancel
+	sess.cancel = nil
+	cli := sess.cli
+	sess.cli = nil
+	sess.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if cli == nil {
+		return nil
+	}
+	return cli.Close()
+}
+
+// callTool 调用 MCP 服务器工具，连接断开（连接类错误）时自动重连一次并重试。
+// 重连失败或非连接类错误原样返回；会话已 Close 或 ctx 已取消时不重连。
+// 重连使用 OpenSession 时的服务器配置快照（srv），成功后替换 cli 供后续调用使用。
+func (sess *Session) callTool(ctx context.Context, name string, args any) (*mcp.CallToolResult, error) {
+	sess.mu.Lock()
+	closed := sess.closed
+	cli := sess.cli
+	sess.mu.Unlock()
+	if closed || cli == nil {
+		return nil, errors.New("MCP 会话已关闭")
+	}
+
+	result, err := cli.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if err == nil {
+		return result, nil
+	}
+	// 非连接类错误或上下文已取消：不重连，原样返回
+	if !isConnError(err) || ctx.Err() != nil {
+		return nil, err
+	}
+
+	// 自动重连一次：重建连接（握手+版本协商），替换 cli
+	sess.mu.Lock()
+	if sess.closed {
+		sess.mu.Unlock()
+		return nil, err
+	}
+	sess.mu.Unlock()
+	newCli, newCancel, cerr := Connect(ctx, sess.srv)
+	if cerr != nil {
+		return nil, err // 重连失败：返回原始错误
+	}
+	sess.mu.Lock()
+	if sess.closed {
+		sess.mu.Unlock()
+		newCancel()
+		_ = newCli.Close()
+		return nil, err
+	}
+	oldCli := sess.cli
+	sess.cli = newCli
+	sess.cancel = newCancel
+	sess.mu.Unlock()
+	if oldCli != nil {
+		_ = oldCli.Close()
+	}
+	return newCli.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+}
+
+// isConnError 判断错误是否为连接类错误（连接关闭/会话缺失/EOF 等），用于触发自动重连。
+func isConnError(err error) bool {
+	if errors.Is(err, mcp.ErrConnectionClosed) || errors.Is(err, mcp.ErrSessionMissing) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "EOF") || strings.Contains(msg, "connection closed") || strings.Contains(msg, "session not found")
 }
 
 // mcpTool 改名包装器：把 MCP 工具重命名为 mcp_{服务器名}_{原始工具名}，
-// 避免与内置工具或跨服务器工具重名冲突；执行委托 go-sdk ClientSession.CallTool。
+// 避免与内置工具或跨服务器工具重名冲突；执行委托 Session.callTool（含断线自动重连）。
 // 实现 ActionTextProvider，使父包经 tools.WrapWithError 包装后仍能断言到友好动作文案。
 type mcpTool struct {
 	serverName   string
-	cli          *mcp.ClientSession
+	sess         *Session
 	toolDef      *mcp.Tool
 	originalName string
 	// cachedInfo 首次 Info 构建后的改名工具信息缓存。工具定义在本轮会话内不变，
@@ -126,10 +200,7 @@ func (m *mcpTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts
 		}
 		args = argMap
 	}
-	result, err := m.cli.CallTool(ctx, &mcp.CallToolParams{
-		Name:      m.originalName,
-		Arguments: args,
-	})
+	result, err := m.sess.callTool(ctx, m.originalName, args)
 	if err != nil {
 		return "", fmt.Errorf("MCP 工具 %s 调用失败: %w", m.originalName, err)
 	}

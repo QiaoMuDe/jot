@@ -577,3 +577,7 @@ export function ValidateVectorIndexConfig() {
 export function VerifyScreenLockPassword(arg1) {
   return window['go']['main']['App']['VerifyScreenLockPassword'](arg1);
 }
+
+export function WarmupMCPServers() {
+  return window['go']['main']['App']['WarmupMCPServers']();
+}

@@ -107,6 +107,7 @@ type App struct {
 	aiStreamCancel   context.CancelFunc
 	aiEditorCancel   context.CancelFunc // 编辑器 AI 写作流式操作的取消源（独立于聊天流，避免误杀后台对话）
 	AgentSvc         *agent.AgentService
+	mcpPool          *mcpserver.Pool // 全局 MCP 连接池（http/sse/stdio 预热复用），shutdown/rebuildServices 时关闭
 	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
 	vectorIndexRunning bool
@@ -195,6 +196,9 @@ func NewApp() *App {
 		LogSvc:           logSvc,
 	}
 	// Agent 服务：复用 AI/向量/设置服务与量化连接配置，供 CallAIAgentStream 使用
+	// MCP 连接池全局持有（http/sse/stdio 预热复用），注入 Agent 装配
+	app.mcpPool = mcpserver.NewPool()
+	app.mcpPool.SetLogger(logSvc.Logger)
 	app.AgentSvc = agent.NewAgentService(agent.Deps{
 		AI:             aiService,
 		Vector:         vectorService,
@@ -206,6 +210,7 @@ func NewApp() *App {
 		Stats:          statsService,
 		Logger:         logSvc.Logger,
 		MCPServerDB:    db,
+		MCPPool:        app.mcpPool,
 		GetEmbedConfig: app.GetEmbedConfig,
 	})
 	return app
@@ -236,6 +241,10 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is closing.
 func (a *App) shutdown(ctx context.Context) {
+	// 关闭全局 MCP 连接池（http/sse/stdio 常驻连接），幂等
+	if a.mcpPool != nil {
+		a.mcpPool.CloseAll()
+	}
 	if a.LogSvc != nil {
 		a.LogSvc.Close()
 	}
@@ -2312,6 +2321,22 @@ func (a *App) TestMCPServer(id uint) TestMCPServerResult {
 	return TestMCPServerResult{OK: true, ToolNum: len(sess.Tools), Message: "连接成功"}
 }
 
+// WarmupMCPServers 预热/同步全局 MCP 连接池（内部 Reconcile）：
+// 关闭池中已停用/删除的服务器连接，预热启用的服务器（新增/变更/复用）。
+// 首次进入 AI 助手模块、设置页任何 MCP 操作后调用；幂等（已预热且配置未变时零网络开销）。
+// 返回汇总结果供前端一条通知展示；池为 nil（未初始化）时返回空结果。
+func (a *App) WarmupMCPServers() mcpserver.WarmupResult {
+	if a.mcpPool == nil {
+		return mcpserver.WarmupResult{}
+	}
+	cfg, err := mcpserver.LoadFromDB(a.db)
+	if err != nil {
+		a.LogSvc.Logger.Warnw("MCP 服务器配置读取失败，跳过预热", fastlog.Error(err))
+		return mcpserver.WarmupResult{Failed: 1, FailedMsgs: []string{"MCP 服务器配置读取失败"}}
+	}
+	return a.mcpPool.Reconcile(context.Background(), cfg.Servers)
+}
+
 // aiTextOpSystemPrompt 根据 operation 构造 AI 写作操作的 system prompt
 func aiTextOpSystemPrompt(operation string) (string, error) {
 	// 所有操作统一追加分段约束：避免模型输出超长无换行的单段文本
@@ -3566,6 +3591,13 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	if a.AgentSvc != nil {
 		a.AgentSvc.ReleaseAll()
 	}
+	// MCP 连接池：旧池连接指向旧库配置（可能含已删除服务器的连接），重建 AgentSvc 前
+	// 关闭旧池全部连接；新池注入新 AgentSvc（预热在下次进入 AI 助手/设置页操作时触发）
+	if a.mcpPool != nil {
+		a.mcpPool.CloseAll()
+	}
+	a.mcpPool = mcpserver.NewPool()
+	a.mcpPool.SetLogger(a.LogSvc.Logger)
 	a.AgentSvc = agent.NewAgentService(agent.Deps{
 		AI:             a.aiService,
 		Vector:         a.vectorService,
@@ -3577,6 +3609,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 		Stats:          a.statsService,
 		Logger:         a.LogSvc.Logger,
 		MCPServerDB:    db,
+		MCPPool:        a.mcpPool,
 		GetEmbedConfig: a.GetEmbedConfig,
 	})
 }
