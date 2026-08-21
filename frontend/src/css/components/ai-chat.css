@@ -962,7 +962,8 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     user-select: none;
-    transition: all 0.15s;
+    /* transform 用 spring 缓动：按下回弹效果（见工具栏按钮 :active 规则） */
+    transition: background 0.15s, color 0.15s, transform 0.18s var(--anim-easing-spring);
     flex-shrink: 0;
 }
 
@@ -1437,19 +1438,21 @@
     background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
-/* trigger 按钮 */
+/* trigger 按钮：联网搜索/卡片召回移除后工具栏空间宽裕，加宽以完整展示模型名 */
 .ai-chat-model-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    font-size: 0.78rem;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
     user-select: none;
-    transition: all 0.15s;
-    max-width: 140px;
+    /* transform 用 spring 缓动：按下回弹效果（见工具栏按钮 :active 规则） */
+    transition: background 0.15s, color 0.15s, transform 0.18s var(--anim-easing-spring);
+    max-width: 240px;
+    flex: 0 1 auto;
     overflow: hidden;
 }
 
@@ -2342,7 +2345,8 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     user-select: none;
-    transition: all 0.15s;
+    /* transform 用 spring 缓动：按下回弹效果（见下方 :active 规则） */
+    transition: background 0.15s, color 0.15s, transform 0.18s var(--anim-easing-spring);
     font-family: inherit;
     line-height: 1.4;
 }
@@ -2354,6 +2358,20 @@
 
 .ai-chat-toolbar-btn svg {
     flex-shrink: 0;
+}
+
+/* 工具栏按钮按下回弹：按下快速缩小（0.06s），松开经 spring 缓动弹回（与右键菜单反馈一致） */
+.ai-chat-toolbar-btn:active,
+.ai-chat-model-trigger:active,
+.ai-chat-search-toggle:active {
+    transform: scale(0.94);
+    transition: transform 0.06s ease-out, background 0.15s, color 0.15s;
+}
+
+/* 添加内容按钮为纯图标按钮：无文字内容，原 padding 下 hover 背景明显小于带文字的
+   其他按钮（模型选择/深度思考/更多技能）；单独加大 padding 使热区尺寸协调 */
+#aiChatAddBtn {
+    padding: 6px 8px;
 }
 
 .ai-chat-toolbar-btn.has-ref {
