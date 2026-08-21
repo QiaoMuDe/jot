@@ -12,9 +12,7 @@ type ToolMeta struct {
 // BuiltinTools 返回全部内置工具元信息，顺序即展示顺序。
 func BuiltinTools() []ToolMeta {
 	return []ToolMeta{
-		{Name: "refine_search_query", Label: "优化搜索关键词，提升搜索准确率（联网搜索的辅助）"},
 		{Name: "summarize_text", Label: "长文本摘要压缩，提取要点（处理长网页/长笔记）"},
-		{Name: "web_search", Label: "联网搜索（多来源），获取实时信息"},
 		{Name: "read_url", Label: "读取网页链接内容"},
 		{Name: "recall_notes", Label: "召回本地笔记，基于向量相似度检索"},
 		{Name: "get_current_time", Label: "获取当前时间/日期/星期"},

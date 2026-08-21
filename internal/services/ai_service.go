@@ -35,26 +35,19 @@ type Message struct {
 
 // AIConfig 表示 AI 服务配置
 type AIConfig struct {
-	BaseURL           string `json:"base_url"`
-	APIKey            string `json:"api_key"`
-	Model             string `json:"model"`
-	TavilyAPIKey      string `json:"tavily_api_key"`
-	ZhihuAccessSecret string `json:"zhihu_access_secret"`
+	BaseURL string `json:"base_url"`
+	APIKey  string `json:"api_key"`
+	Model   string `json:"model"`
 }
 
 // SessionConfig 表示 AI 会话的操作栏配置，用于前端交互
 type SessionConfig struct {
-	ModelName                string `json:"model_name"`
-	EnableThinking           bool   `json:"enable_thinking"`
-	ZhihuSearchEnabled       bool   `json:"zhihu_search_enabled"`
-	ZhihuGlobalSearchEnabled bool   `json:"zhihu_global_search_enabled"`
-	TavilySearchEnabled      bool   `json:"tavily_search_enabled"`
-	EnableCardRecall         bool   `json:"enable_card_recall"`
-	ReferencedNotes          string `json:"referenced_notes"`
-	EnabledSkills            string `json:"enabled_skills"`
-	RoleplayNotes            string `json:"roleplay_notes"`
-	RecallNotebookIDs        string `json:"recall_notebook_ids"`
-	AgentEnabled             bool   `json:"agent_enabled"`
+	ModelName         string `json:"model_name"`
+	EnableThinking    bool   `json:"enable_thinking"`
+	ReferencedNotes   string `json:"referenced_notes"`
+	EnabledSkills     string `json:"enabled_skills"`
+	RoleplayNotes     string `json:"roleplay_notes"`
+	RecallNotebookIDs string `json:"recall_notebook_ids"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -109,15 +102,11 @@ func (s *AIService) GetSkillPrompts(skillIds []string, translateArgs map[string]
 func (a *AIService) GetConfig() AIConfig {
 	svc := NewSettingService(a.db)
 	cfg := AIConfig{
-		BaseURL:           svc.Get("ai_base_url"),
-		APIKey:            svc.Get("ai_api_key"),
-		Model:             svc.Get("ai_model"),
-		TavilyAPIKey:      svc.Get("tavily_api_key"),
-		ZhihuAccessSecret: svc.Get("zhihu_access_secret"),
+		BaseURL: svc.Get("ai_base_url"),
+		APIKey:  svc.Get("ai_api_key"),
+		Model:   svc.Get("ai_model"),
 	}
 	cfg.APIKey = DecodeB64(cfg.APIKey)
-	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
-	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
 	return cfg
 }
 
@@ -183,14 +172,6 @@ func (a *AIService) SaveConfig(cfg AIConfig) error {
 		return err
 	}
 	if err := svc.Set("ai_model", cfg.Model); err != nil {
-		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
-		return err
-	}
-	if err := svc.Set("tavily_api_key", EncodeB64(cfg.TavilyAPIKey)); err != nil {
-		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
-		return err
-	}
-	if err := svc.Set("zhihu_access_secret", EncodeB64(cfg.ZhihuAccessSecret)); err != nil {
 		a.logger.Errorw("AIService.SaveConfig 失败", fastlog.Error(err))
 		return err
 	}
@@ -396,31 +377,21 @@ func (a *AIService) CreateAISession() uint {
 func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 	svc := NewSettingService(a.db)
 	cfg := SessionConfig{
-		ModelName:                svc.Get("ai_model"),
-		EnableThinking:           parseBoolSetting(svc.Get("ai_thinking_enabled")),
-		ZhihuSearchEnabled:       parseBoolSetting(svc.Get("zhihu_search_enabled")),
-		ZhihuGlobalSearchEnabled: parseBoolSetting(svc.Get("zhihu_global_search_enabled")),
-		TavilySearchEnabled:      parseBoolSetting(svc.Get("tavily_search_enabled")),
-		EnableCardRecall:         parseBoolSetting(svc.Get("ai_card_recall_enabled")),
-		ReferencedNotes:          "[]",
-		EnabledSkills:            "{}",
-		RoleplayNotes:            "[]",
-		RecallNotebookIDs:        "[]",
-		AgentEnabled:             false, // 默认问答模式
+		ModelName:         svc.Get("ai_model"),
+		EnableThinking:    parseBoolSetting(svc.Get("ai_thinking_enabled")),
+		ReferencedNotes:   "[]",
+		EnabledSkills:     "{}",
+		RoleplayNotes:     "[]",
+		RecallNotebookIDs: "[]",
 	}
 	record := models.AISessionConfig{
-		SessionID:                sessionID,
-		ModelName:                cfg.ModelName,
-		EnableThinking:           cfg.EnableThinking,
-		ZhihuSearchEnabled:       cfg.ZhihuSearchEnabled,
-		ZhihuGlobalSearchEnabled: cfg.ZhihuGlobalSearchEnabled,
-		TavilySearchEnabled:      cfg.TavilySearchEnabled,
-		EnableCardRecall:         cfg.EnableCardRecall,
-		ReferencedNotes:          cfg.ReferencedNotes,
-		EnabledSkills:            cfg.EnabledSkills,
-		RoleplayNotes:            cfg.RoleplayNotes,
-		RecallNotebookIDs:        cfg.RecallNotebookIDs,
-		AgentEnabled:             cfg.AgentEnabled,
+		SessionID:         sessionID,
+		ModelName:         cfg.ModelName,
+		EnableThinking:    cfg.EnableThinking,
+		ReferencedNotes:   cfg.ReferencedNotes,
+		EnabledSkills:     cfg.EnabledSkills,
+		RoleplayNotes:     cfg.RoleplayNotes,
+		RecallNotebookIDs: cfg.RecallNotebookIDs,
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -432,17 +403,12 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 // SaveSessionConfig 保存会话配置
 func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 	err := a.db.Where("session_id = ?", sessionID).Assign(map[string]interface{}{
-		"model_name":                  cfg.ModelName,
-		"enable_thinking":             cfg.EnableThinking,
-		"zhihu_search_enabled":        cfg.ZhihuSearchEnabled,
-		"zhihu_global_search_enabled": cfg.ZhihuGlobalSearchEnabled,
-		"tavily_search_enabled":       cfg.TavilySearchEnabled,
-		"enable_card_recall":          cfg.EnableCardRecall,
-		"referenced_notes":            cfg.ReferencedNotes,
-		"enabled_skills":              cfg.EnabledSkills,
-		"roleplay_notes":              cfg.RoleplayNotes,
-		"recall_notebook_ids":         cfg.RecallNotebookIDs,
-		"agent_enabled":               cfg.AgentEnabled,
+		"model_name":          cfg.ModelName,
+		"enable_thinking":     cfg.EnableThinking,
+		"referenced_notes":    cfg.ReferencedNotes,
+		"enabled_skills":      cfg.EnabledSkills,
+		"roleplay_notes":      cfg.RoleplayNotes,
+		"recall_notebook_ids": cfg.RecallNotebookIDs,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
@@ -465,22 +431,16 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 				EnabledSkills:     "{}",
 				RoleplayNotes:     "[]",
 				RecallNotebookIDs: "[]",
-				AgentEnabled:      false,
 			}
 		}
 	}
 	return SessionConfig{
-		ModelName:                record.ModelName,
-		EnableThinking:           record.EnableThinking,
-		ZhihuSearchEnabled:       record.ZhihuSearchEnabled,
-		ZhihuGlobalSearchEnabled: record.ZhihuGlobalSearchEnabled,
-		TavilySearchEnabled:      record.TavilySearchEnabled,
-		EnableCardRecall:         record.EnableCardRecall,
-		ReferencedNotes:          record.ReferencedNotes,
-		EnabledSkills:            record.EnabledSkills,
-		RoleplayNotes:            record.RoleplayNotes,
-		RecallNotebookIDs:        record.RecallNotebookIDs,
-		AgentEnabled:             record.AgentEnabled,
+		ModelName:         record.ModelName,
+		EnableThinking:    record.EnableThinking,
+		ReferencedNotes:   record.ReferencedNotes,
+		EnabledSkills:     record.EnabledSkills,
+		RoleplayNotes:     record.RoleplayNotes,
+		RecallNotebookIDs: record.RecallNotebookIDs,
 	}
 }
 
@@ -583,23 +543,16 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls, Meta: m.Meta}
 	}
 
-	// 截断 RecallCards 和 SearchSources 的 Content 字段，减小 Wails 桥传输量
+	// 截断 RecallCards 的 Content 字段，减小 Wails 桥传输量；
+	// SearchSources（搜索来源）前端展示已移除，不再向前端传输（历史数据保留在 DB）
 	for i := range result {
+		result[i].SearchSources = ""
 		if result[i].RecallCards != "" {
 			var cards []RecallCard
 			if err := json.Unmarshal([]byte(result[i].RecallCards), &cards); err == nil {
 				cards = TruncateRecallCardsPreview(cards, 200)
 				if b, err := json.Marshal(cards); err == nil {
 					result[i].RecallCards = string(b)
-				}
-			}
-		}
-		if result[i].SearchSources != "" {
-			var sources []SearchSource
-			if err := json.Unmarshal([]byte(result[i].SearchSources), &sources); err == nil {
-				sources = TruncateSearchSourcesPreview(sources, 200)
-				if b, err := json.Marshal(sources); err == nil {
-					result[i].SearchSources = string(b)
 				}
 			}
 		}

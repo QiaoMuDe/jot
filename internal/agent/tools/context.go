@@ -1,13 +1,14 @@
 package tools
 
 // 本文件定义 tools 子包的共享上下文类型与工具包装器。
-// 工具实现（web_search / recall_notes / refine_search_query）只依赖本文件声明的类型，
+// 工具实现（recall_notes / read_url / manage_* 等）只依赖本文件声明的类型，
 // 不感知父包 agent 的事件循环细节；父包通过 registry.go 统一装配与注册工具。
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -40,6 +41,23 @@ func validateTextLen(field, s string, maxLen int) error {
 	return nil
 }
 
+// getIntSetting 读取 int 类型设置，解析失败或越界时回退默认值（越上限取上限）。
+// 供 read_url 等工具复用同一设置项读取逻辑（原定义于已移除的 web_search.go）。
+func getIntSetting(setting *services.SettingService, key string, def, max int) int {
+	if setting == nil {
+		return def
+	}
+	val := setting.Get(key)
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 1 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
 // EmitFn 事件回调，由调用方注入（内部封装 runtime.EventsEmit）。
 // event 为事件名（如 "ai:stream-chunk" / "ai:tool-status"），data 为事件负载。
 type EmitFn func(event string, data string)
@@ -61,7 +79,7 @@ type ActionTextProvider interface {
 }
 
 // Collector 收集一轮 Agent 对话中工具执行产生的结构化结果：
-// web_search 的来源列表与 recall_notes 的召回卡片，供父包 Run 结束时汇总进 Result。
+// 搜索来源与 recall_notes 的召回卡片，供父包 Run 结束时汇总进 Result。
 type Collector struct {
 	Sources []services.SearchSource
 	Cards   []services.RecallCard
@@ -92,7 +110,7 @@ type Context struct {
 	partials []string // 工具登记的部分失败提示（父包 DrainPartials 消费后清空）
 }
 
-// AddPartial 登记一条部分失败提示（如 web_search 部分来源失败），
+// AddPartial 登记一条部分失败提示（如多来源搜索部分来源失败），
 // 父包会在 tool_result 事件之后以 tool_partial 事件统一发射，保证事件顺序。
 func (c *Context) AddPartial(msg string) {
 	c.partials = append(c.partials, msg)

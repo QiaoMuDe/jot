@@ -24,9 +24,7 @@ func buildTools(p BuildParams, disabled map[string]bool) []tool.BaseTool {
 	}
 	// 先收集「名字 + 已包装工具」的中间结构，再按 disabled[name] 跳过被禁工具
 	all := []namedTool{
-		{"refine_search_query", tools.WrapWithError("refine_search_query", tools.NewRefineSearchQuery(p.deps.AI), p.ctx)},
 		{"summarize_text", tools.WrapWithError("summarize_text", tools.NewSummarizeText(p.deps.AI), p.ctx)},
-		{"web_search", tools.WrapWithError("web_search", tools.NewWebSearch(p.deps.AI, p.deps.Setting, p.ctx), p.ctx)},
 		{"read_url", tools.WrapWithError("read_url", tools.NewReadURL(p.deps.Setting, p.ctx), p.ctx)},
 		{"recall_notes", tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting, p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx)},
 		{"get_current_time", tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx)},

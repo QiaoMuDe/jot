@@ -34,6 +34,7 @@
 .search-modal-filter-dropdown::-webkit-scrollbar-button,
 .ai-chat-messages::-webkit-scrollbar-button,
 .preset-mgr-list::-webkit-scrollbar-button,
+.agent-tools-mgr-list::-webkit-scrollbar-button,
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-button {
     width: 0 !important;
     height: 0 !important;
@@ -46,7 +47,8 @@
 .data-panels::-webkit-scrollbar-thumb,
 .search-results::-webkit-scrollbar-thumb,
 .ai-chat-messages::-webkit-scrollbar-thumb,
-.preset-mgr-list::-webkit-scrollbar-thumb {
+.preset-mgr-list::-webkit-scrollbar-thumb,
+.agent-tools-mgr-list::-webkit-scrollbar-thumb {
     background: transparent;
     transition: background 0.4s ease;
 }
@@ -56,7 +58,8 @@
 .data-panels.scrolling::-webkit-scrollbar-thumb,
 .search-results.scrolling::-webkit-scrollbar-thumb,
 .ai-chat-messages.scrolling::-webkit-scrollbar-thumb,
-.preset-mgr-list.scrolling::-webkit-scrollbar-thumb {
+.preset-mgr-list.scrolling::-webkit-scrollbar-thumb,
+.agent-tools-mgr-list.scrolling::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
 }
 
@@ -65,7 +68,8 @@
 .data-panels:hover::-webkit-scrollbar-thumb,
 .search-results:hover::-webkit-scrollbar-thumb,
 .ai-chat-messages:hover::-webkit-scrollbar-thumb,
-.preset-mgr-list:hover::-webkit-scrollbar-thumb {
+.preset-mgr-list:hover::-webkit-scrollbar-thumb,
+.agent-tools-mgr-list:hover::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-hover);
 }
 
@@ -85,6 +89,7 @@
 .search-results::-webkit-scrollbar-track,
 .ai-chat-messages::-webkit-scrollbar-track,
 .preset-mgr-list::-webkit-scrollbar-track,
+.agent-tools-mgr-list::-webkit-scrollbar-track,
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-track {
     background: transparent;
 }
@@ -95,7 +100,7 @@
 .data-panels,
 .search-results,
 .ai-chat-messages,
-.preset-mgr-list {
+.preset-mgr-list, .agent-tools-mgr-list {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
 }
@@ -105,6 +110,6 @@
 .data-panels.scrolling,
 .search-results.scrolling,
 .ai-chat-messages.scrolling,
-.preset-mgr-list.scrolling {
+.preset-mgr-list, .agent-tools-mgr-list.scrolling {
     scrollbar-color: var(--scrollbar-thumb) transparent;
 }

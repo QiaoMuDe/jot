@@ -1,5 +1,14 @@
 package services
 
+// SearchSource 单条搜索来源，用于前端展示（原定义于已移除的 search_service.go，
+// 仍被历史消息 search_sources 字段解析与截断使用）
+type SearchSource struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	Content     string `json:"content"`
+	SourceLabel string `json:"source_label"`
+}
+
 // RecallCard 单条召回卡片，用于前端展示
 type RecallCard struct {
 	ID        uint   `json:"id"`
@@ -44,23 +53,6 @@ func TruncateRecallCardsPreview(cards []RecallCard, maxLen int) []RecallCard {
 			card.Content = string(runes[:maxLen])
 		}
 		result[i] = card
-	}
-	return result
-}
-
-// TruncateSearchSourcesPreview 截断搜索来源列表的 Content 字段用于前端预览
-// 对每条 source 的 Content 按 maxLen 截断（rune 安全），不修改原切片，返回新切片
-func TruncateSearchSourcesPreview(sources []SearchSource, maxLen int) []SearchSource {
-	if maxLen <= 0 {
-		return sources
-	}
-	result := make([]SearchSource, len(sources))
-	for i, src := range sources {
-		runes := []rune(src.Content)
-		if len(runes) > maxLen {
-			src.Content = string(runes[:maxLen])
-		}
-		result[i] = src
 	}
 	return result
 }

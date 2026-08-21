@@ -70,9 +70,10 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	// 清理 api_profiles 历史遗留孤儿列（is_default/is_builtin 已从代码模型移除）
-	if err := dropAPIProfileOrphanColumns(db); err != nil {
-		return nil, fmt.Errorf("清理 api_profiles 遗留列失败: %w", err)
+	// 统一清理历史遗留孤儿列与残留设置键
+	//（后续新增"列/键移除"只需在 cleanupOrphanedData 内的清单追加条目）
+	if err := cleanupOrphanedData(db); err != nil {
+		return nil, fmt.Errorf("清理历史遗留数据失败: %w", err)
 	}
 
 	// 初始化内置技能提示词
@@ -112,20 +113,62 @@ func EnsureBackupDir() error {
 	return os.MkdirAll(dir, 0755)
 }
 
-// dropAPIProfileOrphanColumns 检查并删除 api_profiles 表中的历史遗留孤儿列：
-//   - is_default：IsDefault→IsBuiltin 字段改名前的旧列（改名时未删除，SQLite 保留为孤儿列）
-//   - is_builtin：is_builtin 字段移除后 AutoMigrate 为存量表新增的列（同样不再被代码引用）
+// cleanupOrphanedData 统一清理数据库中的历史遗留数据：
+//   - 孤儿列：已从代码模型移除的字段对应的列（GORM AutoMigrate 只增不删，存量表会残留旧列）
+//   - 孤儿设置键：已从种子/模型移除的设置项（InitDefaultSettings 只插缺失键，存量键残留）
 //
-// 使存量库表结构与代码模型一致。幂等：HasColumn 为 false（列不存在或全新库）时跳过，
-// 无需迁移标记；DropColumn 失败返回 error 由 InitDB 中止启动，避免结构不一致被静默掩盖。
-func dropAPIProfileOrphanColumns(db *gorm.DB) error {
+// 后续新增"移除列 / 移除设置键"的改动时，只需在本函数对应的清单
+// （orphanColumnSpecs 的 cols、orphanSettingKeys）追加条目，无需新增函数。
+//
+// 幂等：HasColumn 为 false（列不存在或全新库）或 DELETE 未命中时无副作用，无需迁移标记；
+// 失败返回 error 由 InitDB 中止启动，避免结构不一致被静默掩盖。
+func cleanupOrphanedData(db *gorm.DB) error {
+	// ── 孤儿列清单：{模型, 已移除字段对应的历史列名} ──
+	type columnSpec struct {
+		model interface{}
+		cols  []string
+	}
+	orphanColumnSpecs := []columnSpec{
+		// api_profiles：
+		//   is_default —— IsDefault→IsBuiltin 字段改名前的旧列（改名时未删除，SQLite 保留为孤儿列）
+		//   is_builtin —— is_builtin 字段移除后 AutoMigrate 为存量表新增的列（同样不再被代码引用）
+		{model: &models.APIProfile{}, cols: []string{"is_default", "is_builtin"}},
+		// ai_session_config：
+		//   zhihu_search_enabled / zhihu_global_search_enabled / tavily_search_enabled ——
+		//     内置搜索（Tavily/知乎/全网）整体移除（MCP 迁移）时从代码模型删除
+		//   agent_enabled —— Agent 成为唯一对话模式（Chat 问答模式移除）后不再需要模式标记
+		//   enable_card_recall —— 卡片召回开关移除（是否召回由 Agent 自主判断）
+		// 注：AIMessage.search_sources 列保留（存量历史消息数据，仅前端不再展示）
+		{model: &models.AISessionConfig{}, cols: []string{
+			"zhihu_search_enabled", "zhihu_global_search_enabled", "tavily_search_enabled",
+			"agent_enabled", "enable_card_recall",
+		}},
+	}
 	m := db.Migrator()
-	for _, col := range []string{"is_default", "is_builtin"} {
-		if m.HasColumn(&models.APIProfile{}, col) {
-			if err := m.DropColumn(&models.APIProfile{}, col); err != nil {
-				return err
+	for _, spec := range orphanColumnSpecs {
+		for _, col := range spec.cols {
+			if m.HasColumn(spec.model, col) {
+				if err := m.DropColumn(spec.model, col); err != nil {
+					return err
+				}
 			}
 		}
+	}
+
+	// ── 孤儿设置键清单：已从种子/模型移除的键 ──
+	orphanSettingKeys := []string{
+		// 内置搜索（Tavily/知乎/全网）整体移除（含更早的旧键 ai_web_search_enabled，
+		// 它曾迁移到 tavily_search_enabled，目标键亦已移除）。
+		// 注：删除 ai_web_search_max_chars 后，read_url 工具读取该键将回退默认值 5000
+		//（与全新安装行为一致，设置项已无 UI 入口）。
+		"tavily_api_key", "zhihu_access_secret", "zhihu_search_enabled",
+		"zhihu_global_search_enabled", "tavily_search_enabled",
+		"ai_web_search_max_chars", "ai_search_result_limit", "ai_web_search_enabled",
+		// 卡片召回开关移除（是否召回由 Agent 自主判断）
+		"ai_card_recall_enabled",
+	}
+	if err := db.Where("key IN ?", orphanSettingKeys).Delete(&models.Setting{}).Error; err != nil {
+		return err
 	}
 	return nil
 }
@@ -540,15 +583,6 @@ func InitDefaultSettings(db *gorm.DB) error {
 		existing[k] = true
 	}
 
-	// 迁移旧设置: ai_web_search_enabled → tavily_search_enabled
-	if existing["ai_web_search_enabled"] && !existing["tavily_search_enabled"] {
-		var oldVal models.Setting
-		if err := db.Where("key = ?", "ai_web_search_enabled").First(&oldVal).Error; err == nil {
-			db.Model(&models.Setting{}).Where("key = ?", "tavily_search_enabled").Update("value", oldVal.Value)
-			// 可选：删除旧 key，但保留以兼容旧版本
-		}
-	}
-
 	// 迁移旧默认值: ai_context_window_size 旧默认 20 → 40
 	// 该设置项无前端 UI 暴露，旧值 20 即种子默认，非用户显式配置，直接升级
 	db.Model(&models.Setting{}).
@@ -571,17 +605,9 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_embed_api_key", Value: ""},
 		{Key: "ai_embed_model", Value: ""},
 		{Key: "ai_thinking_enabled", Value: "false"},
-		{Key: "tavily_api_key", Value: ""},
-		{Key: "zhihu_access_secret", Value: ""},
-		{Key: "zhihu_search_enabled", Value: "false"},
-		{Key: "zhihu_global_search_enabled", Value: "false"},
-		{Key: "tavily_search_enabled", Value: "false"},
-		{Key: "ai_card_recall_enabled", Value: "false"},
 		{Key: "ai_card_recall_limit", Value: "5"},
 		{Key: "max_file_size", Value: "1"},
-		{Key: "ai_web_search_max_chars", Value: "5000"},
 		{Key: "ai_large_file_preview_threshold", Value: "10000"},
-		{Key: "ai_search_result_limit", Value: "5"},
 		{Key: "ai_agent_tools_disabled", Value: ""},
 		{Key: "ai_agent_max_iterations", Value: "20"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},

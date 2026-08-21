@@ -50,14 +50,6 @@ export function CallAIAgentStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8
   return window['go']['main']['App']['CallAIAgentStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11);
 }
 
-export function CallAIStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13) {
-  return window['go']['main']['App']['CallAIStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13);
-}
-
-export function CallAIStreamRegenerate(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11) {
-  return window['go']['main']['App']['CallAIStreamRegenerate'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11);
-}
-
 export function CancelAIEditorOperation() {
   return window['go']['main']['App']['CancelAIEditorOperation']();
 }
@@ -186,16 +178,8 @@ export function FetchAIModels(arg1, arg2) {
   return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
 }
 
-export function GetAICardRecallLimit() {
-  return window['go']['main']['App']['GetAICardRecallLimit']();
-}
-
 export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
-}
-
-export function GetAISearchResultLimit() {
-  return window['go']['main']['App']['GetAISearchResultLimit']();
 }
 
 export function GetAISessions() {
@@ -486,14 +470,6 @@ export function SelectAIChatFiles() {
   return window['go']['main']['App']['SelectAIChatFiles']();
 }
 
-export function SetAICardRecallLimit(arg1) {
-  return window['go']['main']['App']['SetAICardRecallLimit'](arg1);
-}
-
-export function SetAISearchResultLimit(arg1) {
-  return window['go']['main']['App']['SetAISearchResultLimit'](arg1);
-}
-
 export function SetPageSize(arg1) {
   return window['go']['main']['App']['SetPageSize'](arg1);
 }
@@ -526,16 +502,8 @@ export function TestMCPServer(arg1) {
   return window['go']['main']['App']['TestMCPServer'](arg1);
 }
 
-export function TestTavilyConnection(arg1) {
-  return window['go']['main']['App']['TestTavilyConnection'](arg1);
-}
-
 export function TestVectorIndexConnection() {
   return window['go']['main']['App']['TestVectorIndexConnection']();
-}
-
-export function TestZhihuConnection(arg1) {
-  return window['go']['main']['App']['TestZhihuConnection'](arg1);
 }
 
 export function TogglePinAISession(arg1) {

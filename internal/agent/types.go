@@ -2,7 +2,7 @@ package agent
 
 // 本文件定义 internal/agent 模块对外暴露的数据契约。
 // 模块职责：基于 cloudwego/eino 的 ChatModelAgent（ReAct 循环）实现 Agent 对话链路，
-// 内置 web_search（多源联网搜索）与 recall_notes（本地笔记向量召回）两个只读工具，
+// 内置本地笔记召回（recall_notes）、读取、管理与交互等工具（联网搜索由 MCP 服务器工具提供），
 // 通过事件回调把流式文本与工具状态实时推给调用方（app.go 包装 runtime.EventsEmit）。
 // 工具实现在 tools 子包，本文件通过类型别名复用其 EmitFn / Record / Collector 契约。
 
@@ -40,8 +40,8 @@ type HistoryMessage struct {
 }
 
 // Result 一轮 Agent 对话的结果，供调用方落库（写入 ai_messages 表）。
-// SearchSources / RecallCards 分别为 web_search、recall_notes 工具执行时经 tools.Collector
-// 收集的结构化来源与召回卡片（与问答模式存 search_sources / recall_cards 的格式一致），
+// SearchSources / RecallCards 分别为搜索类工具、recall_notes 工具执行时经 tools.Collector
+// 收集的结构化来源与召回卡片（与历史 chat 消息存 search_sources / recall_cards 的格式一致），
 // ToolCalls 为完整工具调用链摘要（tools.Record 序列化：action/name/args/result）。
 type Result struct {
 	Content          string  // 最终回答全文

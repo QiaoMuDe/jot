@@ -6,7 +6,6 @@ require (
 	gitee.com/MM-Q/fastlog v1.6.2
 	gitee.com/MM-Q/go-kit v0.0.24
 	gitee.com/MM-Q/verman v0.0.19
-	gitee.com/MM-Q/zhihu-go v1.0.0
 	github.com/cloudwego/eino v0.9.13
 	github.com/cloudwego/eino-ext/components/document/loader/url v0.0.0-20260811022947-b9cfa8f1c5c6
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
@@ -15,7 +14,6 @@ require (
 	github.com/conductor-oss/markitdown v0.0.1
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-ego/gse v1.0.2
-	github.com/hekmon/tavily v1.3.0
 	github.com/mark3labs/mcp-go v0.43.0
 	github.com/meguminnnnnnnnn/go-openai v0.1.2
 	github.com/tidwall/gjson v1.18.0
@@ -57,7 +55,6 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
@@ -122,7 +119,6 @@ require (
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-	golang.org/x/time v0.11.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

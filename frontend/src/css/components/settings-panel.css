@@ -91,16 +91,13 @@
 #presetModalKey::-ms-reveal,
 #presetModalKey::-ms-clear,
 #aiAPIKey::-ms-reveal,
-#aiAPIKey::-ms-clear,
-#aiTavilyApiKey::-ms-reveal,
-#aiTavilyApiKey::-ms-clear {
+#aiAPIKey::-ms-clear {
   display: none !important;
 }
 
 /* 隐藏 WebView2/Edge 自动填充按钮 */
 #presetModalKey::-webkit-credentials-auto-fill-button,
-#aiAPIKey::-webkit-credentials-auto-fill-button,
-#aiTavilyApiKey::-webkit-credentials-auto-fill-button {
+#aiAPIKey::-webkit-credentials-auto-fill-button {
   visibility: hidden;
   pointer-events: none;
   display: none !important;
@@ -1558,15 +1555,10 @@
 }
 
 /* ==========================================================================
-   Agent 工具设置浮层（对话与搜索面板）
+   Agent 工具管理面板（对话与搜索面板，仿「配置预设管理」行内展开）
    ========================================================================== */
 
-/* 设置项作为浮层的定位上下文（仅该设置项，不影响其它布局） */
-#aiAgentToolsSettingItem {
-  position: relative;
-}
-
-/* 按钮内下拉箭头：浮层打开时旋转 180° */
+/* 按钮内下拉箭头：面板展开时旋转 180° */
 #aiAgentToolsBtn svg {
   transition: transform 0.2s ease;
 }
@@ -1605,37 +1597,48 @@
   transform: rotate(180deg);
 }
 
-.ai-agent-tools-popover {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
-  width: 460px;
-  max-width: 100%;
-  box-sizing: border-box;
-  z-index: 100;
-  background: var(--card-bg);
+/* ── Agent 工具管理面板（行内展开，插入到设置项下方） ── */
+.agent-tools-mgr-list {
+  margin-top: 8px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: 6px;
-  max-height: 320px;
+  background: var(--input-bg);
+  max-height: 360px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
-
-/* 浮层有 display 规则，需单独覆盖 hidden 属性的默认显隐 */
-.ai-agent-tools-popover[hidden] {
-  display: none;
+/* 面板专用入场动画：max-height 终点与面板上限 360px 一致，
+   避免共用 mgrSlideDown(500px) 动画结束后回落 360px 造成的内容截断跳变 */
+.agent-tools-mgr-list.open {
+  animation: agentToolsSlideDown 250ms ease-out both;
 }
 
-.ai-agent-tools-popover::-webkit-scrollbar {
-  width: 6px;
+@keyframes agentToolsSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 360px;
+  }
 }
 
-.ai-agent-tools-popover::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 3px;
+.agent-tools-mgr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.agent-tools-mgr-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .ai-agent-tools-item {

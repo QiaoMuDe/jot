@@ -2487,284 +2487,38 @@ async function initAISettings() {
         });
     }
 
-    // ── Tavily 注册链接（通过系统浏览器打开） ──
-    const tavilyLink = document.querySelector('.tavily-link');
-    if (tavilyLink) {
-        tavilyLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.runtime.BrowserOpenURL('https://tavily.com');
-        });
-    }
 
-    // ── Tavily API Key 显示/隐藏切换 ──
-    const tavilyToggleBtn = document.getElementById('aiTavilyToggleBtn');
-    const tavilyKeyInput = document.getElementById('aiTavilyApiKey');
-    if (tavilyToggleBtn && tavilyKeyInput) {
-        tavilyToggleBtn.addEventListener('click', () => {
-            const eye = tavilyToggleBtn.querySelector('.toggle-eye');
-            const eyeOff = tavilyToggleBtn.querySelector('.toggle-eye-off');
-            if (tavilyKeyInput.type === 'password') {
-                tavilyKeyInput.type = 'text';
-                eye.style.display = 'none';
-                eyeOff.style.display = '';
-            } else {
-                tavilyKeyInput.type = 'password';
-                eye.style.display = '';
-                eyeOff.style.display = 'none';
-            }
-        });
-    }
-
-    // ── Tavily API Key 自动保存 ──
-    const tavilyKey = document.getElementById('aiTavilyApiKey');
-    if (tavilyKey) {
-        tavilyKey.addEventListener('change', async () => {
-            if (!tavilyKey.value.trim()) {
-                // 清空 Key → 禁用 Tavily 搜索开关
-                const toggle = document.getElementById('aiSettingTavilySearchToggle');
-                if (toggle) toggle.classList.remove('active');
-                const cb = document.getElementById('aiChatTavilySearch');
-                if (cb) {
-                    cb.disabled = true;
-                    cb.checked = false;
-                    const label = cb.closest('.ai-chat-search-source-item');
-                    if (label) label.classList.add('disabled');
-                }
-            } else {
-                // 填入 Key → 恢复 Tavily 搜索开关
-                const cb = document.getElementById('aiChatTavilySearch');
-                if (cb) {
-                    cb.disabled = false;
-                    const label = cb.closest('.ai-chat-search-source-item');
-                    if (label) label.classList.remove('disabled');
-                }
-            }
-            await saveSettings();
-            nm.show(tavilyKey.value.trim() ? 'Tavily API Key 已保存' : 'Tavily API Key 已清除', 'success');
-        });
-    }
-
-    // ── Tavily 测试连接 ──
-    const testBtn = document.getElementById('aiTestTavilyBtn');
-    if (testBtn) {
-        testBtn.addEventListener('click', async () => {
-            const key = document.getElementById('aiTavilyApiKey').value.trim();
-            if (!key) {
-                nm.show('请先输入 Tavily API Key', 'warning');
-                return;
-            }
-            setBtnLoading(testBtn, true, '测试中…');
-            try {
-                const ok = await window.go.main.App.TestTavilyConnection(key);
-                if (ok) {
-                    nm.show('Tavily API Key 验证成功，搜索服务可用', 'success');
-                } else {
-                    nm.show('Tavily 连接失败，请检查 API Key 是否正确', 'warning');
-                }
-            } catch (e) {
-                nm.show('Tavily 连接失败: ' + (e.message || e), 'error');
-            } finally {
-                setBtnLoading(testBtn, false);
-            }
-        });
-    }
-
-    // ── 知乎注册链接（通过系统浏览器打开） ──
-    const zhihuLink = document.querySelector('.zhihu-link');
-    if (zhihuLink) {
-        zhihuLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            window.runtime.BrowserOpenURL('https://developer.zhihu.com/');
-        });
-    }
-
-    // ── 知乎 Access Secret 显示/隐藏切换 ──
-    const zhihuToggleBtn = document.getElementById('aiZhihuToggleBtn');
-    const zhihuSecretInput = document.getElementById('aiZhihuAccessSecret');
-    if (zhihuToggleBtn && zhihuSecretInput) {
-        zhihuToggleBtn.addEventListener('click', () => {
-            const isPassword = zhihuSecretInput.type === 'password';
-            zhihuSecretInput.type = isPassword ? 'text' : 'password';
-            zhihuToggleBtn.querySelector('.toggle-eye').style.display = isPassword ? 'none' : '';
-            zhihuToggleBtn.querySelector('.toggle-eye-off').style.display = isPassword ? '' : 'none';
-        });
-    }
-
-    // ── 知乎 Access Secret 自动保存 ──
-    if (zhihuSecretInput) {
-        zhihuSecretInput.addEventListener('change', async () => {
-            if (!zhihuSecretInput.value.trim()) {
-                // 清空 Secret → 禁用知乎搜索和知乎全网搜索开关
-                ['aiSettingZhihuSearchToggle', 'aiSettingZhihuGlobalSearchToggle'].forEach(toggleId => {
-                    const toggle = document.getElementById(toggleId);
-                    if (toggle) toggle.classList.remove('active');
-                });
-                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch'].forEach(cbId => {
-                    const cb = document.getElementById(cbId);
-                    if (cb) {
-                        cb.disabled = true;
-                        cb.checked = false;
-                        const label = cb.closest('.ai-chat-search-source-item');
-                        if (label) label.classList.add('disabled');
-                    }
-                });
-            } else {
-                // 填入 Secret → 恢复知乎搜索和知乎全网搜索开关
-                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch'].forEach(cbId => {
-                    const cb = document.getElementById(cbId);
-                    if (cb) {
-                        cb.disabled = false;
-                        const label = cb.closest('.ai-chat-search-source-item');
-                        if (label) label.classList.remove('disabled');
-                    }
-                });
-            }
-            await saveSettings();
-            nm.show(zhihuSecretInput.value.trim() ? 'Access Secret 已保存' : 'Access Secret 已清除', 'success');
-        });
-    }
-
-    // ── 知乎测试连接 ──
-    const testZhihuBtn = document.getElementById('aiTestZhihuBtn');
-    if (testZhihuBtn && zhihuSecretInput) {
-        testZhihuBtn.addEventListener('click', async () => {
-            const secret = zhihuSecretInput.value.trim();
-            if (!secret) {
-                nm.show('请输入 Access Secret', 'warning');
-                return;
-            }
-            setBtnLoading(testZhihuBtn, true, '测试中…');
-            try {
-                const ok = await window.go.main.App.TestZhihuConnection(secret);
-                if (ok) {
-                    nm.show('知乎 Access Secret 验证成功，搜索服务可用', 'success');
-                } else {
-                    nm.show('知乎搜索连接失败，请检查 Access Secret 是否正确', 'warning');
-                }
-            } catch (e) {
-                nm.show(e.message || e, 'error');
-            } finally {
-                setBtnLoading(testZhihuBtn, false);
-            }
-        });
-    }
-
-    // ── 知乎搜索切换 ──
-    const settingZhihuSearchToggle = document.getElementById('aiSettingZhihuSearchToggle');
-    if (settingZhihuSearchToggle) {
-        settingZhihuSearchToggle.addEventListener('click', async () => {
-            const willBeActive = !settingZhihuSearchToggle.classList.contains('active');
-            // 尝试开启 → 检查是否有知乎 Access Secret
-            if (willBeActive) {
-                const secret = document.getElementById('aiZhihuAccessSecret')?.value || '';
-                if (!secret.trim()) {
-                    nm.show('请先在设置中配置知乎 Access Secret', 'warning');
-                    return;
-                }
-            }
-            settingZhihuSearchToggle.classList.toggle('active');
-            await saveSettings();
-            nm.show(willBeActive ? '知乎搜索已开启' : '知乎搜索已关闭', willBeActive ? 'success' : 'info');
-        });
-    }
-
-    // ── 知乎全网搜索切换 ──
-    const settingZhihuGlobalSearchToggle = document.getElementById('aiSettingZhihuGlobalSearchToggle');
-    if (settingZhihuGlobalSearchToggle) {
-        settingZhihuGlobalSearchToggle.addEventListener('click', async () => {
-            const willBeActive = !settingZhihuGlobalSearchToggle.classList.contains('active');
-            // 尝试开启 → 检查是否有知乎 Access Secret
-            if (willBeActive) {
-                const secret = document.getElementById('aiZhihuAccessSecret')?.value || '';
-                if (!secret.trim()) {
-                    nm.show('请先在设置中配置知乎 Access Secret', 'warning');
-                    return;
-                }
-            }
-            settingZhihuGlobalSearchToggle.classList.toggle('active');
-            await saveSettings();
-            nm.show(willBeActive ? '知乎全网搜索已开启' : '知乎全网搜索已关闭', willBeActive ? 'success' : 'info');
-        });
-    }
-
-    // ── Tavily 搜索切换 ──
-    const settingTavilySearchToggle = document.getElementById('aiSettingTavilySearchToggle');
-    if (settingTavilySearchToggle) {
-        settingTavilySearchToggle.addEventListener('click', async () => {
-            const willBeActive = !settingTavilySearchToggle.classList.contains('active');
-            // 尝试开启 → 检查是否有 Tavily API Key
-            if (willBeActive) {
-                const key = document.getElementById('aiTavilyApiKey')?.value || '';
-                if (!key.trim()) {
-                    nm.show('请先在设置中配置 Tavily API Key', 'warning');
-                    return;
-                }
-            }
-            settingTavilySearchToggle.classList.toggle('active');
-            await saveSettings();
-            nm.show(willBeActive ? 'Tavily 搜索已开启' : 'Tavily 搜索已关闭', willBeActive ? 'success' : 'info');
-        });
-    }
-
-    // ── Agent 工具设置浮层（展开/关闭交互） ──
+    // ── Agent 工具管理面板（仿「配置预设管理」行内展开：点击按钮在设置项下方展开列表） ──
     const agentToolsBtn = document.getElementById('aiAgentToolsBtn');
-    const agentToolsPopover = document.getElementById('aiAgentToolsPopover');
     const agentToolsSettingItem = document.getElementById('aiAgentToolsSettingItem');
-    if (agentToolsBtn && agentToolsPopover) {
+    if (agentToolsBtn) {
         agentToolsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const willOpen = agentToolsPopover.hidden;
-            agentToolsPopover.hidden = !willOpen;
-            agentToolsBtn.classList.toggle('open', willOpen);
-            agentToolsBtn.setAttribute('aria-expanded', String(willOpen));
-            // 每次展开时滚动到第一个条目（顶部）
-            if (willOpen) agentToolsPopover.scrollTop = 0;
+            if (agentToolsMgrExpanded) {
+                closeAgentToolsMgrList();
+            } else {
+                renderAgentToolsMgrList();
+            }
+            // 同步按钮 open 态（展开立即更新；收起由 closeAgentToolsMgrList 动画回调更新）
+            if (!agentToolsMgrExpanded) {
+                agentToolsBtn.classList.add('open');
+                agentToolsBtn.setAttribute('aria-expanded', 'true');
+            } else {
+                agentToolsBtn.classList.remove('open');
+                agentToolsBtn.setAttribute('aria-expanded', 'false');
+            }
         });
-        // 点击页面其它区域（排除按钮与浮层自身及设置项容器）关闭浮层
+        // 点击页面其它区域（排除按钮、设置项容器与管理面板自身）关闭面板
         document.addEventListener('click', (e) => {
-            if (agentToolsPopover.hidden) return;
+            if (!agentToolsMgrExpanded) return;
             if (agentToolsSettingItem && agentToolsSettingItem.contains(e.target)) return;
-            closeAgentToolsPopover();
+            if (agentToolsMgrContainer && agentToolsMgrContainer.contains(e.target)) return;
+            closeAgentToolsMgrList();
         });
-        // 按 ESC 关闭浮层
+        // 按 ESC 关闭面板
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !agentToolsPopover.hidden) {
-                closeAgentToolsPopover();
-            }
-        });
-    }
-
-    // ── 卡片召回切换 ──
-    const settingCardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
-    if (settingCardRecallToggle) {
-        settingCardRecallToggle.addEventListener('click', async () => {
-            const isActive = settingCardRecallToggle.classList.toggle('active');
-            // 开启前校验量化配置与量化表（仅开启方向需要）
-            if (isActive) {
-                try {
-                    const check = await window.go.main.App.ValidateCardRecall();
-                    if (!check.ok) {
-                        // 校验失败：回滚开关状态并提示
-                        settingCardRecallToggle.classList.toggle('active');
-                        nm.show(check.message || '卡片召回校验未通过', 'warning');
-                        return;
-                    }
-                } catch (e) {
-                    settingCardRecallToggle.classList.toggle('active');
-                    nm.show('卡片召回校验失败: ' + e, 'error');
-                    return;
-                }
-            }
-            await saveSettings();
-            nm.show(isActive ? '卡片召回已开启' : '卡片召回已关闭', isActive ? 'success' : 'info');
-            // 同步工具栏 toggle
-            const toolbarToggle = document.getElementById('aiChatCardRecallToggle');
-            if (toolbarToggle) {
-                toolbarToggle.classList.toggle('active', isActive);
-            }
-            // 同步笔记本选择菜单：开→全选，关→全取消
-            if (window.__syncRecallNotebooks) {
-                window.__syncRecallNotebooks(isActive);
+            if (e.key === 'Escape' && agentToolsMgrExpanded) {
+                closeAgentToolsMgrList();
             }
         });
     }
@@ -2958,26 +2712,6 @@ async function initAISettings() {
         });
     }
 
-    // ── 联网搜索结果截断自动保存 ──
-    const webSearchMaxChars = document.getElementById('aiWebSearchMaxChars');
-    if (webSearchMaxChars) {
-        webSearchMaxChars.addEventListener('change', async () => {
-            const val = parseInt(webSearchMaxChars.value);
-            if (isNaN(val) || val < 1) {
-                webSearchMaxChars.value = 5000;
-                nm.show('搜索结果截断字数必须大于 0，已重置为 5000', 'warning');
-                return;
-            }
-            if (val > 50000) {
-                webSearchMaxChars.value = 50000;
-                nm.show('搜索结果截断字数不能超过 50000，已重置为 50000', 'warning');
-                return;
-            }
-            await saveSettings();
-            nm.show('搜索结果截断字数已保存', 'success');
-        });
-    }
-
     // ── 大文件预览阈值自动保存 ──
     const largeFileThreshold = document.getElementById('aiLargeFilePreviewThreshold');
     if (largeFileThreshold) {
@@ -2995,26 +2729,6 @@ async function initAISettings() {
             }
             await saveSettings();
             nm.show('大文件预览阈值已保存', 'success');
-        });
-    }
-
-    // ── 联网搜索结果数自动保存 ──
-    const searchResultLimit = document.getElementById('aiSearchResultLimit');
-    if (searchResultLimit) {
-        searchResultLimit.addEventListener('change', async () => {
-            const val = parseInt(searchResultLimit.value);
-            if (isNaN(val) || val < 1) {
-                searchResultLimit.value = 5;
-                nm.show('搜索结果数必须大于 0，已重置为 5', 'warning');
-                return;
-            }
-            if (val > 30) {
-                searchResultLimit.value = 30;
-                nm.show('搜索结果数不能超过 30，已重置为 30', 'warning');
-                return;
-            }
-            await saveSettings();
-            nm.show('搜索结果数已保存', 'success');
         });
     }
 
@@ -9336,23 +9050,20 @@ function buildCodePreview(container, themeName) {
 /** 当前禁用的 Agent 工具名数组（对应设置键 ai_agent_tools_disabled，值为 JSON 数组字符串） */
 let agentToolsDisabled = [];
 
-/** 后端返回的完整 Agent 工具清单（[{Name, Label, Enabled}]），用于渲染浮层 */
+/** 后端返回的完整 Agent 工具清单（[{Name, Label, Enabled}]），用于渲染管理面板 */
 let agentToolsMeta = [];
-// 本次会话内工具启/停变更记录：关闭浮层后汇总提示一次（去重）
+// 本次会话内工具启/停变更记录：关闭面板后汇总提示一次（去重）
 let agentToolsChanges = { enabled: [], disabled: [] };
+// Agent 工具管理面板展开状态与容器（仿「配置预设管理」行内展开）
+let agentToolsMgrExpanded = false;
+let agentToolsMgrContainer = null;
 
 /**
- * 关闭设置页「Agent 工具」浮层
+ * 关闭设置页「Agent 工具」管理面板（收起动画结束后移除容器，返回 Promise）
  */
-function closeAgentToolsPopover() {
-    const popover = document.getElementById('aiAgentToolsPopover');
-    if (popover) popover.hidden = true;
-    const btn = document.getElementById('aiAgentToolsBtn');
-    if (btn) {
-        btn.classList.remove('open');
-        btn.setAttribute('aria-expanded', 'false');
-    }
-    // 关闭浮层时汇总本次会话的工具启停变更，提示一次
+function closeAgentToolsMgrList() {
+    agentToolsMgrExpanded = false;
+    // 关闭面板时汇总本次会话的工具启停变更，提示一次
     const enCount = agentToolsChanges.enabled.length;
     const deCount = agentToolsChanges.disabled.length;
     if (enCount > 0 || deCount > 0) {
@@ -9362,6 +9073,42 @@ function closeAgentToolsPopover() {
         nm.show(`工具配置已保存：${parts.join('，')}`, 'success');
         agentToolsChanges = { enabled: [], disabled: [] };
     }
+    if (!agentToolsMgrContainer) {
+        // 无容器时仍需复位按钮态
+        const btn = document.getElementById('aiAgentToolsBtn');
+        if (btn) {
+            btn.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+        return Promise.resolve();
+    }
+    const container = agentToolsMgrContainer;
+    container.classList.remove('open');
+    container.classList.remove('closing');
+    // 收起动画：只用合成属性（opacity/transform）+ 精确高度的 max-height 折叠，
+    // 避免 filter: blur（CPU 高斯模糊，14 行文本每帧模糊是卡顿主因）与 500px 假想高度造成的首帧跳变；
+    // 时长 200ms + 标准缓动，收尾利落不拖沓。
+    const startH = container.offsetHeight; // 实际显示高度（受 CSS max-height: 360px 限制）
+    const anim = container.animate([
+        { opacity: 1, transform: 'scaleY(1)', maxHeight: startH + 'px', paddingTop: '12px', paddingBottom: '12px' },
+        { opacity: 0, transform: 'scaleY(0.98)', maxHeight: '0px', paddingTop: '0px', paddingBottom: '0px' }
+    ], { duration: 200, easing: 'cubic-bezier(0.4, 0, 0.2, 1)', fill: 'both', transformOrigin: 'top center' });
+    return new Promise(resolve => {
+        anim.onfinish = () => {
+            if (container.parentNode) {
+                container.parentNode.removeChild(container);
+                if (agentToolsMgrContainer === container) {
+                    agentToolsMgrContainer = null;
+                }
+            }
+            const btn = document.getElementById('aiAgentToolsBtn');
+            if (btn) {
+                btn.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+            resolve();
+        };
+    });
 }
 
 /**
@@ -9378,66 +9125,110 @@ function updateAgentToolsButtonText() {
 }
 
 /**
- * 按 agentToolsMeta 渲染设置页「Agent 工具」浮层条目，并同步按钮文案
+ * 渲染设置页「Agent 工具」管理面板（插入到设置项下方，仿「配置预设管理」行内展开）
  * 勾选状态 = 不在 agentToolsDisabled 中；变化时立即保存
  */
-function renderAgentToolsSettings() {
-    const listEl = document.getElementById('aiAgentToolsList');
-    if (!listEl) return;
-
-    listEl.innerHTML = '';
-
-    agentToolsMeta.forEach((tool) => {
-        const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
-
-        const itemLabel = document.createElement('label');
-        itemLabel.className = 'ai-agent-tools-item';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = isEnabled;
-        checkbox.addEventListener('change', () => {
-            if (checkbox.checked) {
-                // 启用 → 从禁用列表移除
-                const idx = agentToolsDisabled.indexOf(tool.Name);
-                if (idx !== -1) agentToolsDisabled.splice(idx, 1);
-                // 记录变更（去重，与禁用记录互斥）
-                const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
-                if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
-                if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
-                    agentToolsChanges.enabled.push(tool.Name);
-                }
-            } else {
-                // 禁用 → 加入禁用列表
-                if (agentToolsDisabled.indexOf(tool.Name) === -1) {
-                    agentToolsDisabled.push(tool.Name);
-                }
-                // 记录变更（去重，与启用记录互斥）
-                const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
-                if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
-                if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
-                    agentToolsChanges.disabled.push(tool.Name);
-                }
-            }
-            updateAgentToolsButtonText();
-            saveSettings();
+function renderAgentToolsMgrList() {
+    const anchor = document.getElementById('aiAgentToolsSettingItem');
+    if (!anchor) return;
+    if (!agentToolsMgrContainer) {
+        agentToolsMgrContainer = document.createElement('div');
+        agentToolsMgrContainer.className = 'agent-tools-mgr-list';
+        // 滚动条自动显隐（仅第一次创建时绑定）
+        let timer = null;
+        agentToolsMgrContainer.addEventListener('scroll', (e) => {
+            if (e.target !== agentToolsMgrContainer) return;
+            agentToolsMgrContainer.classList.add('scrolling');
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                agentToolsMgrContainer.classList.remove('scrolling');
+            }, 1000);
         });
+        // 插入到设置项下方
+        anchor.after(agentToolsMgrContainer);
+        // 下一帧触发入场动画
+        requestAnimationFrame(() => {
+            agentToolsMgrContainer.classList.add('open');
+        });
+    }
+    agentToolsMgrContainer.innerHTML = '';
+    agentToolsMgrExpanded = true;
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'ai-agent-tools-name';
-        nameSpan.textContent = tool.Name;
+    // header：标题 + 关闭按钮
+    const header = document.createElement('div');
+    header.className = 'agent-tools-mgr-header';
+    const title = document.createElement('span');
+    title.className = 'agent-tools-mgr-title';
+    title.textContent = 'Agent 工具';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-sm btn-secondary';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', closeAgentToolsMgrList);
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    agentToolsMgrContainer.appendChild(header);
 
-        const descSpan = document.createElement('span');
-        descSpan.className = 'ai-agent-tools-desc';
-        descSpan.textContent = tool.Label || '';
-
-        itemLabel.appendChild(checkbox);
-        itemLabel.appendChild(nameSpan);
-        itemLabel.appendChild(descSpan);
-        listEl.appendChild(itemLabel);
+    // 工具行列表
+    agentToolsMeta.forEach((tool, index) => {
+        const row = createAgentToolRow(tool);
+        row.style.animationDelay = `${index * 30}ms`;
+        agentToolsMgrContainer.appendChild(row);
     });
 
     updateAgentToolsButtonText();
+}
+
+/**
+ * 创建单个 Agent 工具行（checkbox + 名称 + 说明）
+ */
+function createAgentToolRow(tool) {
+    const itemLabel = document.createElement('label');
+    itemLabel.className = 'ai-agent-tools-item';
+
+    const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isEnabled;
+    checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+            // 启用 → 从禁用列表移除
+            const idx = agentToolsDisabled.indexOf(tool.Name);
+            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
+            // 记录变更（去重，与禁用记录互斥）
+            const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
+            if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
+            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
+                agentToolsChanges.enabled.push(tool.Name);
+            }
+        } else {
+            // 禁用 → 加入禁用列表
+            if (agentToolsDisabled.indexOf(tool.Name) === -1) {
+                agentToolsDisabled.push(tool.Name);
+            }
+            // 记录变更（去重，与启用记录互斥）
+            const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
+            if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
+            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
+                agentToolsChanges.disabled.push(tool.Name);
+            }
+        }
+        updateAgentToolsButtonText();
+        saveSettings();
+    });
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'ai-agent-tools-name';
+    nameSpan.textContent = tool.Name;
+
+    const descSpan = document.createElement('span');
+    descSpan.className = 'ai-agent-tools-desc';
+    descSpan.textContent = tool.Label || '';
+
+    itemLabel.appendChild(checkbox);
+    itemLabel.appendChild(nameSpan);
+    itemLabel.appendChild(descSpan);
+    return itemLabel;
 }
 
 /* ===== MCP 服务器设置（设置页「MCP 服务器」面板） ===== */
@@ -10101,77 +9892,9 @@ async function loadSettings() {
             }
         }
 
-        // --- AI: Tavily API Key ---
-        const tavilyKey = document.getElementById('aiTavilyApiKey');
-        if (tavilyKey) {
-            tavilyKey.value = cfg.tavily_api_key || '';
-            // 每次加载设置时重置为隐藏状态（密码模式）
-            tavilyKey.type = 'password';
-        }
-        const tavilyToggleBtn = document.getElementById('aiTavilyToggleBtn');
-        if (tavilyToggleBtn) {
-            tavilyToggleBtn.querySelector('.toggle-eye').style.display = '';
-            tavilyToggleBtn.querySelector('.toggle-eye-off').style.display = 'none';
-        }
-
-        // --- AI: 知乎 Access Secret ---
-        const zhihuSecret = document.getElementById('aiZhihuAccessSecret');
-        if (zhihuSecret) {
-            zhihuSecret.value = cfg.zhihu_access_secret || '';
-            // 每次加载设置时重置为隐藏状态（密码模式）
-            zhihuSecret.type = 'password';
-        }
-        const zhihuToggleBtn = document.getElementById('aiZhihuToggleBtn');
-        if (zhihuToggleBtn) {
-            zhihuToggleBtn.querySelector('.toggle-eye').style.display = '';
-            zhihuToggleBtn.querySelector('.toggle-eye-off').style.display = 'none';
-        }
-
         // --- AI: 搜索源开关 ---
         const searchToggle = document.getElementById('aiSettingSearchToggle');
         if (searchToggle) searchToggle.classList.toggle('active', cfg.ai_thinking_enabled);
-
-        const zhihuSearchToggle = document.getElementById('aiSettingZhihuSearchToggle');
-        if (zhihuSearchToggle) zhihuSearchToggle.classList.toggle('active', cfg.zhihu_search_enabled);
-
-        const zhihuGlobalSearchToggle = document.getElementById('aiSettingZhihuGlobalSearchToggle');
-        if (zhihuGlobalSearchToggle) zhihuGlobalSearchToggle.classList.toggle('active', cfg.zhihu_global_search_enabled);
-
-        const tavilySearchToggle = document.getElementById('aiSettingTavilySearchToggle');
-        if (tavilySearchToggle) tavilySearchToggle.classList.toggle('active', cfg.tavily_search_enabled);
-
-        const cardRecallToggle = document.getElementById('aiSettingCardRecallToggle');
-        if (cardRecallToggle) cardRecallToggle.classList.toggle('active', cfg.ai_card_recall_enabled);
-
-        // --- 根据密钥配置禁用/强制关闭搜索开关 ---
-        const hasZhihuSecret = !!(cfg.zhihu_access_secret && cfg.zhihu_access_secret.trim());
-        const hasTavilyKey = !!(cfg.tavily_api_key && cfg.tavily_api_key.trim());
-        
-        const toggleZhihuSearchToggle = document.getElementById('aiSettingZhihuSearchToggle');
-        const toggleZhihuGlobalToggle = document.getElementById('aiSettingZhihuGlobalSearchToggle');
-        const toggleTavilyToggle = document.getElementById('aiSettingTavilySearchToggle');
-
-        [toggleZhihuSearchToggle, toggleZhihuGlobalToggle].forEach(el => {
-            if (el) {
-                if (!hasZhihuSecret) {
-                    el.classList.remove('active');
-                }
-            }
-        });
-        if (toggleTavilyToggle) {
-            if (!hasTavilyKey) {
-                toggleTavilyToggle.classList.remove('active');
-            }
-        }
-
-        // 强制关闭未配置密钥的搜索源（同步 cfg 值，使下面聊天栏同步也能生效）
-        if (!hasZhihuSecret) {
-            cfg.zhihu_search_enabled = false;
-            cfg.zhihu_global_search_enabled = false;
-        }
-        if (!hasTavilyKey) {
-            cfg.tavily_search_enabled = false;
-        }
 
         // --- Agent 工具开关（禁用清单 + 浮层渲染） ---
         try {
@@ -10185,24 +9908,18 @@ async function loadSettings() {
         } catch (e) {
             agentToolsMeta = [];
         }
-        renderAgentToolsSettings();
-        closeAgentToolsPopover();
+        updateAgentToolsButtonText();
+        closeAgentToolsMgrList();
 
         // --- AI: 限制输入 ---
         const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
         if (cardRecallLimit) cardRecallLimit.value = cfg.ai_card_recall_limit;
-
-        const webSearchMaxChars = document.getElementById('aiWebSearchMaxChars');
-        if (webSearchMaxChars) webSearchMaxChars.value = cfg.ai_web_search_max_chars;
 
         const largeFilePreviewThreshold = document.getElementById('aiLargeFilePreviewThreshold');
         if (largeFilePreviewThreshold) largeFilePreviewThreshold.value = cfg.ai_large_file_preview_threshold;
 
         const maxFileSize = document.getElementById('maxFileSize');
         if (maxFileSize) maxFileSize.value = cfg.max_file_size;
-
-        const searchResultLimit = document.getElementById('aiSearchResultLimit');
-        if (searchResultLimit) searchResultLimit.value = cfg.ai_search_result_limit;
 
         const agentMaxIterations = document.getElementById('aiAgentMaxIterations');
         if (agentMaxIterations) agentMaxIterations.value = cfg.ai_agent_max_iterations || 20;
@@ -10284,18 +10001,10 @@ async function saveSettings() {
                 const m = els.aiEmbedModelLabel?.textContent || '';
                 return m === '-- 请先获取模型列表 --' ? '' : m;
             })(),
-            tavily_api_key: document.getElementById('aiTavilyApiKey')?.value || '',
-            zhihu_access_secret: document.getElementById('aiZhihuAccessSecret')?.value || '',
-            zhihu_search_enabled: document.getElementById('aiSettingZhihuSearchToggle')?.classList.contains('active') || false,
-            zhihu_global_search_enabled: document.getElementById('aiSettingZhihuGlobalSearchToggle')?.classList.contains('active') || false,
-            tavily_search_enabled: document.getElementById('aiSettingTavilySearchToggle')?.classList.contains('active') || false,
             ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
-            ai_card_recall_enabled: document.getElementById('aiSettingCardRecallToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
-            ai_web_search_max_chars: parseInt(document.getElementById('aiWebSearchMaxChars')?.value) || 5000,
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
-            ai_search_result_limit: parseInt(document.getElementById('aiSearchResultLimit')?.value) || 5,
             ai_agent_max_iterations: parseInt(document.getElementById('aiAgentMaxIterations')?.value) || 20,
             ai_agent_tools_disabled: JSON.stringify(agentToolsDisabled || []),
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
@@ -10317,8 +10026,10 @@ let _settingsAnimating = false;
  * @param {string} panelName - data-panel 属性值，如 'appearance', 'editor' 等
  */
 function switchSettingsTab(panelName) {
-    // 切换面板时关闭「Agent 工具」浮层
-    closeAgentToolsPopover();
+    // 切换面板时关闭「Agent 工具」管理面板
+    closeAgentToolsMgrList();
+    // 切换面板时关闭预设管理列表（对话链接 / 量化链接两处共用同一容器）
+    closePresetMgrList();
     // 切换面板时关闭 MCP 服务器表单对话框
     closeMCPServerForm();
 

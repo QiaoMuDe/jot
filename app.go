@@ -249,7 +249,7 @@ func (a *App) shutdown(ctx context.Context) {
 // migrateSensitiveKeys 迁移存量明文密钥为 Base64 编码格式（(zk) 前缀）
 func (a *App) migrateSensitiveKeys() {
 	// 迁移 settings 表
-	keys := []string{"ai_api_key", "tavily_api_key", "zhihu_access_secret"}
+	keys := []string{"ai_api_key"}
 	for _, key := range keys {
 		var setting models.Setting
 		if err := a.db.Where("key = ?", key).First(&setting).Error; err != nil {
@@ -1273,76 +1273,6 @@ func (a *App) GetMaxFileSize() int64 {
 	return int64(n) * 1024 * 1024
 }
 
-// GetAISearchResultLimit 获取 AI 联网搜索结果数，空值时返回默认 5
-func (a *App) GetAISearchResultLimit() int {
-	a.LogSvc.Logger.Debugw("GetAISearchResultLimit")
-	val := a.settingService.Get("ai_search_result_limit")
-	n, err := strconv.Atoi(val)
-	if err != nil || n < 1 {
-		return 5
-	}
-	if n > 30 {
-		return 30
-	}
-	return n
-}
-
-// SetAISearchResultLimit 设置 AI 联网搜索结果数，含范围校验（1-20）
-func (a *App) SetAISearchResultLimit(limit int) error {
-	a.LogSvc.Logger.Debugw("SetAISearchResultLimit", fastlog.Int("limit", limit))
-	if limit < 1 {
-		err := fmt.Errorf("搜索结果数必须大于 0")
-		a.LogSvc.Logger.Errorw("SetAISearchResultLimit 失败", fastlog.Error(err))
-		return err
-	}
-	if limit > 30 {
-		err := fmt.Errorf("搜索结果数不能超过 30")
-		a.LogSvc.Logger.Errorw("SetAISearchResultLimit 失败", fastlog.Error(err))
-		return err
-	}
-	if err := a.settingService.Set("ai_search_result_limit", strconv.Itoa(limit)); err != nil {
-		a.LogSvc.Logger.Errorw("SetAISearchResultLimit 失败", fastlog.Error(err))
-		return err
-	}
-	a.LogSvc.Logger.Infow("SetAISearchResultLimit 成功")
-	return nil
-}
-
-// GetAICardRecallLimit 获取 AI 卡片召回条数，空值时返回默认 5
-func (a *App) GetAICardRecallLimit() int {
-	a.LogSvc.Logger.Debugw("GetAICardRecallLimit")
-	val := a.settingService.Get("ai_card_recall_limit")
-	n, err := strconv.Atoi(val)
-	if err != nil || n < 1 {
-		return 5
-	}
-	if n > 30 {
-		return 30
-	}
-	return n
-}
-
-// SetAICardRecallLimit 设置 AI 卡片召回条数，含范围校验（1-30）
-func (a *App) SetAICardRecallLimit(limit int) error {
-	a.LogSvc.Logger.Debugw("SetAICardRecallLimit", fastlog.Int("limit", limit))
-	if limit < 1 {
-		err := fmt.Errorf("卡片召回条数必须大于 0")
-		a.LogSvc.Logger.Errorw("SetAICardRecallLimit 失败", fastlog.Error(err))
-		return err
-	}
-	if limit > 30 {
-		err := fmt.Errorf("卡片召回条数不能超过 30")
-		a.LogSvc.Logger.Errorw("SetAICardRecallLimit 失败", fastlog.Error(err))
-		return err
-	}
-	if err := a.settingService.Set("ai_card_recall_limit", strconv.Itoa(limit)); err != nil {
-		a.LogSvc.Logger.Errorw("SetAICardRecallLimit 失败", fastlog.Error(err))
-		return err
-	}
-	a.LogSvc.Logger.Infow("SetAICardRecallLimit 成功")
-	return nil
-}
-
 // ==================== AI 相关绑定方法 ====================
 
 // GetAIConfig 获取 AI 服务配置
@@ -1680,7 +1610,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		Model:   model,
 	})
 
-	// 异步执行量化，避免阻塞 Wails 事件循环（参考 CallAIStream 的 goroutine 模式）
+	// 异步执行量化，避免阻塞 Wails 事件循环（参考 Agent 流的 goroutine 模式）
 	go func() {
 		defer release()
 		success, failed, err := a.vectorService.IndexNotes(ctx, client, noteIDs, func(done, total int, title, stage string, chunkDone, chunkTotal int, errMsg string) {
@@ -1752,54 +1682,6 @@ func (a *App) TestVectorIndexConnection() CardRecallCheckResult {
 		return CardRecallCheckResult{OK: false, Message: "量化服务连接失败，请检查服务是否已启动"}
 	}
 	return CardRecallCheckResult{OK: true, Message: ""}
-}
-
-// TestTavilyConnection 测试 Tavily API Key 是否有效
-func (a *App) TestTavilyConnection(apiKey string) (bool, error) {
-	a.LogSvc.Logger.Debugw("TestTavilyConnection", fastlog.String("key", "***"))
-	if apiKey == "" {
-		err := fmt.Errorf("API Key 不能为空")
-		a.LogSvc.Logger.Errorw("TestTavilyConnection 失败", fastlog.Error(err))
-		return false, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	result, err := services.SearchWeb(ctx, "test", apiKey, 1, 0)
-	if err != nil {
-		a.LogSvc.Logger.Errorw("TestTavilyConnection 失败", fastlog.Error(err))
-		return false, fmt.Errorf("连接失败: %v", err)
-	}
-	if result == nil {
-		err := fmt.Errorf("连接失败，请检查 API Key 是否正确")
-		a.LogSvc.Logger.Errorw("TestTavilyConnection 失败", fastlog.Error(err))
-		return false, err
-	}
-	a.LogSvc.Logger.Infow("TestTavilyConnection 成功")
-	return true, nil
-}
-
-// TestZhihuConnection 测试知乎 Access Secret 是否有效
-func (a *App) TestZhihuConnection(accessSecret string) (bool, error) {
-	a.LogSvc.Logger.Debugw("TestZhihuConnection", fastlog.String("key", "***"))
-	if accessSecret == "" {
-		err := fmt.Errorf("access Secret 不能为空")
-		a.LogSvc.Logger.Errorw("TestZhihuConnection 失败", fastlog.Error(err))
-		return false, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	result, err := services.SearchZhihuContent(ctx, "test", accessSecret, 1, 0)
-	if err != nil {
-		a.LogSvc.Logger.Errorw("TestZhihuConnection 失败", fastlog.Error(err))
-		return false, fmt.Errorf("连接失败: %v", err)
-	}
-	if result == nil {
-		err := fmt.Errorf("连接失败，请检查 Access Secret 是否正确")
-		a.LogSvc.Logger.Errorw("TestZhihuConnection 失败", fastlog.Error(err))
-		return false, err
-	}
-	a.LogSvc.Logger.Infow("TestZhihuConnection 成功")
-	return true, nil
 }
 
 // FetchAIModels 获取可用模型列表
@@ -1970,480 +1852,89 @@ func (a *App) CallAI(messages []services.Message) (string, error) {
 	return a.aiService.CallAI(ctx, messages)
 }
 
-// CallAIStream 流式调用 AI 对话接口（通过 EventsEmit 推送逐块内容）
-// 前端已先调用 SaveAIMessage 保存用户消息并拿到 userMsgID，此处直接使用
-func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, recallNotebookIDs []uint, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, userMsgID uint) {
-	ctx, cancel := context.WithCancel(context.Background())
-	a.aiStreamCancel = cancel
+// formatFileSize 将字节数转为人类可读的文件大小字符串
+func formatFileSize(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	} else if size < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(size)/1024)
+	} else {
+		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	}
+}
 
-	// userMsgID 由前端通过 SaveAIMessage 预先保存并传入，此处不再重复保存
+// estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致）
+func estimateTokens(text string) int {
+	chineseCount := 0
+	for _, r := range text {
+		if unicode.Is(unicode.Han, r) {
+			chineseCount++
+		}
+	}
+	runes := []rune(text)
+	otherCount := len(runes) - chineseCount
+	return int(math.Ceil(float64(chineseCount)/1.5 + float64(otherCount)/4))
+}
 
-	var fullThinking strings.Builder
-	var searchSourcesJSON, recallCardsJSON string
+// estimateUserTokens 计算会话中 system 消息与最后一条 user 消息的估算 token 数
+func estimateUserTokens(messages []services.Message) int {
+	tokens := 0
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			tokens += estimateTokens(msg.Content)
+		}
+	}
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			tokens += estimateTokens(messages[i].Content)
+			break
+		}
+	}
+	return tokens
+}
 
-	// 在主 goroutine 发射搜索状态事件，确保前端能立即收到
-	// 仅联网搜索进入搜索状态机；卡片召回走独立的 ai:recall-status 事件，避免误显示搜索动画
-	var searching bool
-	if len(searchSources) > 0 {
-		searching = true
-		runtime.EventsEmit(a.ctx, "ai:search-status", "refining")
-		a.LogSvc.Logger.Infow("AI 联网搜索启动", fastlog.Int("source_count", len(searchSources)))
+// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+// 同时记录 debug 日志便于调试观察截断效果
+func (a *App) truncateAIMessages(sessionID uint, logLabel string) []services.Message {
+	// 加载会话消息
+	messages := a.aiService.LoadAISessionMessages(sessionID)
+	nonSystemBefore := 0
+	for _, m := range messages {
+		if m.Role != "system" {
+			nonSystemBefore++
+		}
 	}
 
-	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-	messages := a.truncateAIMessages(sessionID, "AI 滑动窗口截断")
-
-	// 搜索 + 流式调用放进 goroutine，避免阻塞 Wails 事件循环
-	go func() {
-		// 注入基础身份提示词（始终注入规范边界层，无技能时额外注入身份层）
-		if len(skillIds) == 0 {
-			// 无技能：注入完整三层（身份层 + 规范边界层）
-			hasSystem := false
-			for i := range messages {
-				if messages[i].Role == "system" {
-					hasSystem = true
-					break
-				}
-			}
-			if !hasSystem {
-				messages = append([]services.Message{
-					{Role: "system", Content: baseSystemPrompt},
-				}, messages...)
-			}
-		} else {
-			// 有技能：仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
-			hasSystem := false
-			for i := range messages {
-				if messages[i].Role == "system" {
-					hasSystem = true
-					break
-				}
-			}
-			if !hasSystem {
-				messages = append([]services.Message{
-					{Role: "system", Content: baseNormsBoundaries},
-				}, messages...)
-			}
+	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
+	windowSize := a.aiService.GetContextWindowSize()
+	messages = services.TruncateMessagesForLLM(messages, windowSize)
+	nonSystemAfter := 0
+	for _, m := range messages {
+		if m.Role != "system" {
+			nonSystemAfter++
 		}
+	}
+	a.LogSvc.Logger.Debugw(logLabel,
+		fastlog.Int("window_size", windowSize),
+		fastlog.Int("non_system_before", nonSystemBefore),
+		fastlog.Int("non_system_after", nonSystemAfter),
+		fastlog.Int("total_after", len(messages)))
+	return messages
+}
 
-		// ── 步骤 2: 角色扮演上下文注入 ──
-		hasRoleplay := false
-		for _, sid := range skillIds {
-			if sid == "skill_roleplay" {
-				hasRoleplay = true
-				break
-			}
-		}
-		var roleplayContext string
-		if hasRoleplay && len(roleplayNoteIDs) > 0 {
-			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
-			if err == nil && refCtx != nil && refCtx.Context != "" {
-				roleplayContext = refCtx.Context
-				roleplayText := "以下是用户提供的人物设定笔记内容（来源：角色设定笔记），你在角色扮演中应严格遵循这些设定：\n\n" + refCtx.Context
-				messages = appendToSystemMessage(messages, roleplayText)
-			}
-		}
-
-		// ── 步骤 3: 笔记引用上下文注入 ──
-		if len(referencedNoteIDs) > 0 {
-			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
-			if err == nil && refCtx != nil && refCtx.Context != "" {
-				refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
-				messages = appendToSystemMessage(messages, refText)
-			}
-		}
-
-		// ── 步骤 4: 追问引用内容注入 ──
-		if followUpRefContent != "" {
-			refText := "用户正在追问以下内容：\n" + followUpRefContent
-			if len([]rune(followUpRefContent)) > 500 {
-				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
-			}
-			messages = appendToSystemMessage(messages, refText)
-		}
-
-		// ── 步骤 5: 上传文件内容注入 ──
-		if len(uploadedFiles) > 0 {
-			var b strings.Builder
-			b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
-			for _, f := range uploadedFiles {
-				if f.Error != "" || f.Content == "" {
-					continue
-				}
-				sizeStr := formatFileSize(f.Size)
-				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
-			}
-			if b.Len() > 0 {
-				messages = appendToSystemMessage(messages, b.String())
-			}
-		}
-
-		// ── 步骤 6: 搜索词精炼（仅联网搜索启用时执行）──
-		var refinedQuery string
-		if len(searchSources) > 0 && userText != "" {
-			refined, err := services.RefineSearchQuery(ctx, userText, a.aiService)
-			if err != nil {
-				if ctx.Err() != nil {
-					runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
-					return
-				}
-				var aiErr *aierrors.AIErrorWrapper
-				if errors.As(err, &aiErr) {
-					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.Err.ToJSON())
-				} else {
-					ae := aierrors.NewAIError(aierrors.CategoryUnknown, "搜索关键词精炼失败: "+err.Error())
-					runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, ae.ToJSON())
-				}
-				return
-			}
-			if refined != "" {
-				refinedQuery = refined
-			}
-			runtime.EventsEmit(a.ctx, "ai:refined-keywords", refinedQuery)
-
-			// 仅联网搜索启用时切换到搜索阶段
-			if len(searchSources) > 0 {
-				runtime.EventsEmit(a.ctx, "ai:search-status", "searching")
-			}
-		}
-
-		// 搜索源并行执行
-		if len(searchSources) > 0 {
-			cfg := a.aiService.GetConfig()
-
-			query := userText
-			if refinedQuery != "" {
-				query = refinedQuery
-			}
-
-			if query != "" {
-
-				// 为每个搜索源发射 searching 状态
-				for _, source := range searchSources {
-					sourceStatus := map[string]interface{}{
-						"source": source,
-						"status": "searching",
-					}
-					statusJSON, _ := json.Marshal(sourceStatus)
-					runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
-				}
-
-				searchResultLimit := a.GetAISearchResultLimit()
-				searchMaxChars := 5000
-				if a.settingService != nil {
-					if val := a.settingService.Get("ai_web_search_max_chars"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 50000 {
-							searchMaxChars = n
-						}
-					}
-				}
-				type searchResult struct {
-					source string
-					result *services.SearchWebResult
-					err    error
-				}
-				resultCh := make(chan searchResult, len(searchSources))
-
-				// 并行执行所有搜索源
-				for _, source := range searchSources {
-					go func(src string) {
-						var r searchResult
-						r.source = src
-						switch src {
-						case "tavily":
-							r.result, r.err = services.SearchWeb(ctx, query, cfg.TavilyAPIKey, searchResultLimit, searchMaxChars)
-						case "zhihu_search":
-							r.result, r.err = services.SearchZhihuContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
-						case "zhihu_global":
-							r.result, r.err = services.SearchGlobalContent(ctx, query, cfg.ZhihuAccessSecret, searchResultLimit, searchMaxChars)
-						default:
-							r.err = fmt.Errorf("未知搜索源: %s", src)
-						}
-						resultCh <- r
-					}(source)
-				}
-
-				// 收集结果
-				for i := 0; i < len(searchSources); i++ {
-					r := <-resultCh
-					if r.err != nil {
-						// 用户取消导致的错误跳过，不报通知
-						if ctx.Err() != nil {
-							continue
-						}
-						// 发射错误事件给前端
-						errEvent := map[string]interface{}{
-							"source": r.source,
-							"error":  r.err.Error(),
-						}
-						errJSON, _ := json.Marshal(errEvent)
-						runtime.EventsEmit(a.ctx, "ai:search-error", string(errJSON))
-					} else if r.result != nil {
-						// 注入搜索结果到 system message
-						messages = appendToSystemMessage(messages, r.result.FormattedText)
-
-						// 发射来源状态 success
-						sourceStatus := map[string]interface{}{
-							"source": r.source,
-							"status": "success",
-							"count":  len(r.result.Sources),
-						}
-						statusJSON, _ := json.Marshal(sourceStatus)
-						runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
-
-						// 累积所有来源数据
-						if len(r.result.Sources) > 0 {
-							if searchSourcesJSON == "" {
-								sJSON, _ := json.Marshal(r.result.Sources)
-								searchSourcesJSON = string(sJSON)
-							} else {
-								var existing []services.SearchSource
-								json.Unmarshal([]byte(searchSourcesJSON), &existing) //nolint:errcheck
-								existing = append(existing, r.result.Sources...)
-								sJSON, _ := json.Marshal(existing)
-								searchSourcesJSON = string(sJSON)
-							}
-						}
-					} else {
-						// 无结果但也没错误
-						sourceStatus := map[string]interface{}{
-							"source": r.source,
-							"status": "success",
-							"count":  0,
-						}
-						statusJSON, _ := json.Marshal(sourceStatus)
-						runtime.EventsEmit(a.ctx, "ai:search-source-status", string(statusJSON))
-					}
-				}
-				close(resultCh)
-			}
-		}
-
-		// 发射最终的 search-sources 事件（截断 Content 为前 200 字用于前端预览，DB 存储保持全量）
-		if searchSourcesJSON != "" {
-			var srcs []services.SearchSource
-			if err := json.Unmarshal([]byte(searchSourcesJSON), &srcs); err == nil {
-				truncated := services.TruncateSearchSourcesPreview(srcs, 200)
-				if displayJSON, err := json.Marshal(truncated); err == nil {
-					runtime.EventsEmit(a.ctx, "ai:search-sources", string(displayJSON))
-				}
-			}
-			a.LogSvc.Logger.Debugw("AI 搜索结果汇总", fastlog.Int("sources_count", len(searchSources)))
-		}
-
-		// 通知前端搜索完成，关闭搜索动画
-		if searching {
-			runtime.EventsEmit(a.ctx, "ai:search-status", "done")
-		}
-
-		// 卡片召回（受 cardRecallEnabled 开关门控，关闭时直接跳过，不注入 system message、不发射 ai:recall-cards 事件）
-		// 开启时执行向量召回：取末条 user 消息为查询、按 ai_card_recall_limit 限条数（默认 5，≤30）、
-		// 构建 embedding client 调用 VectorRecall，结果注入 system message 并发射 ai:recall-cards
-		// 召回状态走独立事件 ai:recall-status（searching/done/error），与联网搜索 ai:search-status 解耦
-		if cardRecallEnabled {
-			a.LogSvc.Logger.Debugw("AI 向量召回启动")
-			var vectorQuery string
-			for i := len(messages) - 1; i >= 0; i-- {
-				if messages[i].Role == "user" {
-					vectorQuery = messages[i].Content
-					break
-				}
-			}
-			// 未选择任何笔记本时跳过召回（全取消勾选即不限定范围），避免空集回退为全库召回
-			if vectorQuery == "" {
-				a.LogSvc.Logger.Debugw("AI 向量召回跳过：查询为空")
-			} else if len(recallNotebookIDs) == 0 {
-				a.LogSvc.Logger.Debugw("AI 向量召回跳过：未选择笔记本")
-			} else {
-				// 召回条数复用 ai_card_recall_limit 设置（默认 5）
-				vectorLimit := 5
-				if a.settingService != nil {
-					if val := a.settingService.Get("ai_card_recall_limit"); val != "" {
-						if n, err := strconv.Atoi(val); err == nil && n > 0 && n <= 30 {
-							vectorLimit = n
-						}
-					}
-				}
-
-				// 构建 embedding client（ai_embed_* 三键，apiKey 为 B64 存储需解码）
-				embedBaseURL, embedAPIKey, embedModel, _ := a.GetEmbedConfig()
-				embedClient := einocli.NewClient(einocli.Config{
-					BaseURL: embedBaseURL,
-					APIKey:  embedAPIKey,
-					Model:   embedModel,
-				})
-
-				// 召回开始：独立状态事件
-				runtime.EventsEmit(a.ctx, "ai:recall-status", "searching")
-				vectorResult, err := a.vectorService.VectorRecall(ctx, vectorQuery, vectorLimit, embedClient, recallNotebookIDs...)
-				if err != nil {
-					// 用户取消导致的召回中断不提示；其余意外错误（embedding/SQL/查询失败）发射错误事件
-					if ctx.Err() == nil {
-						a.LogSvc.Logger.Errorw("AI 向量召回失败", fastlog.Error(err))
-						runtime.EventsEmit(a.ctx, "ai:recall-status", "error", err.Error())
-					}
-				} else {
-					// 召回结束（含预期跳过无结果）
-					runtime.EventsEmit(a.ctx, "ai:recall-status", "done")
-					if vectorResult != nil {
-						// 注入格式化文本到 system role
-						messages = appendToSystemMessage(messages, vectorResult.FormattedText)
-
-						// 向量召回结果统一发射（前端 ai:recall-cards 为覆盖式事件）
-						if len(vectorResult.Cards) > 0 {
-							cardsJSON, _ := json.Marshal(vectorResult.Cards)
-							recallCardsJSON = string(cardsJSON) // 全量，用于 DB 存储
-
-							truncatedCards := services.TruncateRecallCardsPreview(vectorResult.Cards, 200)
-							if displayJSON, err := json.Marshal(truncatedCards); err == nil {
-								runtime.EventsEmit(a.ctx, "ai:recall-cards", string(displayJSON))
-							}
-							a.LogSvc.Logger.Debugw("AI 向量召回结果", fastlog.Int("cards_count", len(vectorResult.Cards)))
-						}
-					}
-				}
-			}
-		}
-
-		// 技能提示词注入（在搜索和卡片召回之后执行）
-		if len(skillIds) > 0 {
-			a.LogSvc.Logger.Infow("AI 技能注入启动", fastlog.Int("skill_count", len(skillIds)))
-			// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
-			translateArgs := make(map[string]string)
-			cleanSkillIds := make([]string, 0, len(skillIds))
-			for _, id := range skillIds {
-				if strings.HasPrefix(id, "skill_translate:") {
-					parts := strings.SplitN(id, ":", 3)
-					if len(parts) == 3 {
-						translateArgs["source"] = parts[1]
-						translateArgs["target"] = parts[2]
-					}
-					cleanSkillIds = append(cleanSkillIds, "skill_translate")
-				} else {
-					cleanSkillIds = append(cleanSkillIds, id)
-				}
-			}
-			skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
-			if err == nil && skillPrompt != "" {
-				// 替换角色扮演占位符
-				if hasRoleplay && roleplayContext != "" {
-					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
-				}
-				messages = appendToSystemMessage(messages, skillPrompt)
-			} else if err != nil {
-				a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
-			}
-		}
-
-		// 如果已被用户取消（停止按钮），不再继续调用 LLM，避免白调用
-		// 取消时用户消息已入库，需重算会话 token 缓存，确保右上角显示与 DB 实际一致
-		if ctx.Err() != nil {
-			if userMsgID > 0 {
-				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
-			}
-			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
-			return
-		}
-
-		a.LogSvc.Logger.Debugw("AI 流开始",
-			fastlog.Int("message_count", len(messages)),
-		)
-		a.aiService.CallAIStream(ctx, messages, thinkingEnabled,
-			func(chunk string) {
-				runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
-			},
-			func(thinking string) {
-				fullThinking.WriteString(thinking)
-				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, thinking)
-			},
-			func(content string, elapsedThinking, elapsedTotal float64) {
-				// 在后端统一计算 tokens
-				userTokens := estimateUserTokens(messages)
-				assistantTokens := estimateTokens(content)
-				// 如果开启了深度思考且存在思维链内容，也纳入 token 统计
-				if thinkingEnabled {
-					thinkingContent := fullThinking.String()
-					if thinkingContent != "" {
-						assistantTokens += estimateTokens(thinkingContent)
-					}
-				}
-				totalTokens := userTokens + assistantTokens
-
-				// 由后端保存 assistant 消息到数据库
-				assistantMsg := services.Message{
-					Role:    "assistant",
-					Content: content,
-					ReasoningContent: func() string {
-						if !thinkingEnabled {
-							return ""
-						}
-						return fullThinking.String()
-					}(),
-					ThinkingElapsed: func() float64 {
-						if !thinkingEnabled {
-							return 0
-						}
-						return elapsedThinking
-					}(),
-					TotalElapsed:  elapsedTotal,
-					Tokens:        assistantTokens,
-					SearchSources: searchSourcesJSON,
-					RecallCards:   recallCardsJSON,
-				}
-				assistantMsgID, err := a.aiService.SaveAIMessage(sessionID, assistantMsg)
-				if err != nil {
-					a.LogSvc.Logger.Errorw("保存 assistant 消息失败", fastlog.Error(err))
-				}
-
-				// 更新用户消息的 tokens 为完整上下文 token 数（含 system 上下文）
-				_ = a.aiService.UpdateAIMessageTokens(userMsgID, userTokens)
-				// 重新计算会话累计 token 并持久化
-				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-
-				// 通过 stream-done 一并返回 token 数据和消息 ID
-				a.LogSvc.Logger.Infow("AI 流完成",
-					fastlog.Int("total_tokens", totalTokens),
-					fastlog.Float64("elapsed_total", elapsedTotal),
-				)
-				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
-				if thinkingEnabled && fullThinking.Len() > 0 {
-					runtime.EventsEmit(a.ctx, "ai:stream-thinking-done", fullThinking.String())
-				}
-			},
-			func(err string) {
-				a.LogSvc.Logger.Errorw("AI 流错误",
-					fastlog.String("error", err),
-				)
-
-				// 出错时也更新用户消息 token 和会话 token，确保 DB 中 token 数与实际一致
-				userTokens := estimateUserTokens(messages)
-				_ = a.aiService.UpdateAIMessageTokens(userMsgID, userTokens)
-				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-
-				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, err, userTokens)
-			},
-		)
-		// 兜底：LLM 流中取消导致 OnDone/OnError 都没触发，补发完成事件确保前端清理气泡；
-		// 取消时用户消息已入库，需重算会话 token 缓存（与 OnError 分支一致），避免右上角显示过期累计值
-		if ctx.Err() != nil {
-			if userMsgID > 0 {
-				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
-			}
-			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
-		}
-	}()
+// CancelAIStream 取消当前正在进行的 AI 流式调用
+func (a *App) CancelAIStream() {
+	a.LogSvc.Logger.Debugw("CancelAIStream")
+	if a.aiStreamCancel != nil {
+		a.aiStreamCancel()
+		a.aiStreamCancel = nil
+	}
 }
 
 // CallAIAgentStream Agent 模式流式对话绑定方法（基于 internal/agent 模块）。
 // 深度思考通过 thinkingEnabled 传递（开启时 Agent 的 ChatModel 配置 reasoning_effort=high）；
-// 去掉 searchSources / cardRecallEnabled 两个开关：Agent 内部自带 web_search / recall_notes 工具，
-// 联网搜索与卡片召回由 Agent 自行执行，调用方仅负责组装 Instruction、截断历史、落库与事件收发。
+// 去掉 searchSources / cardRecallEnabled 两个开关：联网搜索由 MCP 服务器工具执行，
+// 本地卡片召回由 Agent 的 recall_notes 工具自行执行，调用方仅负责组装 Instruction、截断历史、落库与事件收发。
 func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, recallNotebookIDs []uint, userMsgID uint) {
 	// 创建可取消的 ctx 并存入 a.aiStreamCancel，供停止按钮（CancelAIStream）取消
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2454,7 +1945,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 
 	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
 	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与
-	// stream-done 回传（语义与 CallAIStreamRegenerate 一致）。
+	// stream-done 回传（语义与 Agent 再生一致）。
 	if userMsgID == 0 {
 		for i := len(messages) - 1; i >= 0; i-- {
 			if messages[i].Role == "user" {
@@ -2470,7 +1961,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		// 思考净时长由 agent.Run 按每轮 assistant 消息统计（排除工具执行时间）
 		startTime := time.Now()
 
-		// ── 组装 Instruction（系统提示词全文），内容与顺序对齐 CallAIStream ──
+		// ── 组装 Instruction（系统提示词全文），内容与顺序对齐 Agent 流上下文注入 ──
 		// 基础提示词：无技能时注入完整三层（身份层 + 规范边界层），
 		// 有技能时仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
 		var instruction strings.Builder
@@ -2593,7 +2084,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		}
 
 		// 如果已被用户取消（停止按钮），不再调用 Agent，避免白调用；
-		// 取消时用户消息已入库，需重算会话 token 缓存（与 CallAIStream 一致）
+		// 取消时用户消息已入库，需重算会话 token 缓存（与常规 Agent 流一致）
 		if ctx.Err() != nil {
 			if userMsgID > 0 {
 				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
@@ -2652,7 +2143,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			runtime.EventsEmit(a.ctx, ev, streamGen, data)
 		})
 
-		// 失败处理：经 ClassifyError 转中文提示（与 CallAIStream 错误分支一致）
+		// 失败处理：经 ClassifyError 转中文提示（与常规 Agent 流错误分支一致）
 		if err != nil {
 			// 用户取消导致的结束：补发完成事件确保前端清理气泡，并刷新 token 缓存
 			if ctx.Err() != nil {
@@ -2671,14 +2162,14 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 				return
 			}
-			// 与 CallAIStream 错误分支一致：附带 userTokens 供前端更新用户消息气泡 token 显示
+			// 与常规 Agent 流错误分支一致：附带 userTokens 供前端更新用户消息气泡 token 显示
 			runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.ToJSON(), estimateUserTokens(messages))
 			return
 		}
 
-		// 成功：保存 assistant 消息（与 CallAIStream 尾部一致）。
-		// SearchSources（联网搜索来源）/ RecallCards（召回卡片）/ ToolCalls（工具调用链）
-		// 分别写入 search_sources / recall_cards / tool_calls 字段。
+		// 成功：保存 assistant 消息。
+		// RecallCards（召回卡片）/ ToolCalls（工具调用链）
+		// 分别写入 recall_cards / tool_calls 字段。
 		// 思考净时长（agent.Run 内按轮统计，排除工具执行时间）与总耗时（调用开始到流结束）
 		elapsedThinking := result.ThinkingElapsed
 		elapsedTotal := time.Since(startTime).Seconds()
@@ -2688,7 +2179,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		// 仅当 provider 未返回 usage（两项均为 0）时回退现状估算，保持统计不为空
 		userTokens := estimateUserTokens(messages)
 		assistantTokens := estimateTokens(result.Content)
-		// 深度思考链计入 assistant token（与 CallAIStream 一致）
+		// 深度思考链计入 assistant token（与常规 Agent 流一致）
 		if thinkingEnabled && result.ReasoningContent != "" {
 			assistantTokens += estimateTokens(result.ReasoningContent)
 		}
@@ -2700,7 +2191,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		}
 		totalTokens := userTokens + assistantTokens
 
-		// 保存 assistant 消息到数据库（与 CallAIStream 一致）：
+		// 保存 assistant 消息到数据库（与常规 Agent 流一致）：
 		// 耗时与深度思考链一起落库，切换会话后历史消息仍展示 ⏱ 耗时与思考秒数
 		assistantMsg := services.Message{
 			Role:             "assistant",
@@ -2709,7 +2200,6 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			ThinkingElapsed:  elapsedThinking,
 			TotalElapsed:     elapsedTotal,
 			Tokens:           assistantTokens,
-			SearchSources:    result.SearchSources,
 			RecallCards:      result.RecallCards,
 			ToolCalls:        result.ToolCalls,
 		}
@@ -2724,14 +2214,14 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		accumulated, _ := a.aiService.SumSessionTokens(sessionID)
 		_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
 
-		// 通过 stream-done 一并返回 token 数据和消息 ID（与 CallAIStream 一致）
+		// 通过 stream-done 一并返回 token 数据和消息 ID（与常规 Agent 流一致）
 		a.LogSvc.Logger.Infow("AI Agent 流完成",
 			fastlog.Int("total_tokens", totalTokens),
 			fastlog.Float64("elapsed_total", elapsedTotal),
 		)
-		// agent-result 事件先于 stream-done 发送：把结构化结果（搜索来源/召回卡片/工具调用链/思考链）
+		// agent-result 事件先于 stream-done 发送：把结构化结果（召回卡片/工具调用链/思考链）
 		// 回传前端，供流式完成后立即渲染（无需切换会话），并供 chatHistory.push 落库前使用
-		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.SearchSources, result.RecallCards, result.ToolCalls, result.ReasoningContent)
+		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.RecallCards, result.ToolCalls, result.ReasoningContent)
 		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
 	}()
 }
@@ -2818,117 +2308,6 @@ func (a *App) TestMCPServer(id uint) TestMCPServerResult {
 		}
 	}()
 	return TestMCPServerResult{OK: true, ToolNum: len(sess.Tools), Message: "连接成功"}
-}
-
-// CallAIStreamRegenerate 重新生成 AI 回复（不加用户消息，复用末条用户消息）。
-// 提取后委托给 CallAIStream 执行完整流程。
-func (a *App) CallAIStreamRegenerate(streamGen int, sessionID uint, thinkingEnabled bool, searchSources []string, cardRecallEnabled bool, recallNotebookIDs []uint, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) {
-	// 加载消息获取最后一条用户消息
-	messages := a.truncateAIMessages(sessionID, "AI 滑动窗口截断（再生）")
-
-	var userText string
-	var userMsgID uint
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			userText = messages[i].Content
-			userMsgID = messages[i].ID
-			break
-		}
-	}
-
-	// 委托给 CallAIStream 执行完整的搜索/召回/流式调用流程
-	a.CallAIStream(streamGen, sessionID, userText, thinkingEnabled, searchSources, cardRecallEnabled, recallNotebookIDs, skillIds, referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, userMsgID)
-}
-
-// formatFileSize 将字节数转为人类可读的文件大小字符串
-func formatFileSize(size int64) string {
-	if size < 1024 {
-		return fmt.Sprintf("%d B", size)
-	} else if size < 1024*1024 {
-		return fmt.Sprintf("%.1f KB", float64(size)/1024)
-	} else {
-		return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
-	}
-}
-
-// estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致）
-func estimateTokens(text string) int {
-	chineseCount := 0
-	for _, r := range text {
-		if unicode.Is(unicode.Han, r) {
-			chineseCount++
-		}
-	}
-	runes := []rune(text)
-	otherCount := len(runes) - chineseCount
-	return int(math.Ceil(float64(chineseCount)/1.5 + float64(otherCount)/4))
-}
-
-// estimateUserTokens 计算会话中 system 消息与最后一条 user 消息的估算 token 数
-func estimateUserTokens(messages []services.Message) int {
-	tokens := 0
-	for _, msg := range messages {
-		if msg.Role == "system" {
-			tokens += estimateTokens(msg.Content)
-		}
-	}
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			tokens += estimateTokens(messages[i].Content)
-			break
-		}
-	}
-	return tokens
-}
-
-// appendToSystemMessage 往消息列表中的 system 角色消息追加内容。
-// 如果不存在 system 消息，则在头部插入一条新的 system 消息。
-func appendToSystemMessage(msgs []services.Message, content string) []services.Message {
-	for i := range msgs {
-		if msgs[i].Role == "system" {
-			msgs[i].Content = msgs[i].Content + "\n\n" + content
-			return msgs
-		}
-	}
-	return append([]services.Message{{Role: "system", Content: content}}, msgs...)
-}
-
-// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-// 同时记录 debug 日志便于调试观察截断效果
-func (a *App) truncateAIMessages(sessionID uint, logLabel string) []services.Message {
-	// 加载会话消息
-	messages := a.aiService.LoadAISessionMessages(sessionID)
-	nonSystemBefore := 0
-	for _, m := range messages {
-		if m.Role != "system" {
-			nonSystemBefore++
-		}
-	}
-
-	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
-	windowSize := a.aiService.GetContextWindowSize()
-	messages = services.TruncateMessagesForLLM(messages, windowSize)
-	nonSystemAfter := 0
-	for _, m := range messages {
-		if m.Role != "system" {
-			nonSystemAfter++
-		}
-	}
-	a.LogSvc.Logger.Debugw(logLabel,
-		fastlog.Int("window_size", windowSize),
-		fastlog.Int("non_system_before", nonSystemBefore),
-		fastlog.Int("non_system_after", nonSystemAfter),
-		fastlog.Int("total_after", len(messages)))
-	return messages
-}
-
-// CancelAIStream 取消当前正在进行的 AI 流式调用
-func (a *App) CancelAIStream() {
-	a.LogSvc.Logger.Debugw("CancelAIStream")
-	if a.aiStreamCancel != nil {
-		a.aiStreamCancel()
-		a.aiStreamCancel = nil
-	}
 }
 
 // aiTextOpSystemPrompt 根据 operation 构造 AI 写作操作的 system prompt
@@ -3179,7 +2558,7 @@ type SaveAIMessageResult struct {
 }
 
 // SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID 和 token 数
-// 由前端在调用 CallAIStream 前预先保存用户消息，确保前端能立即拿到 msgId 和 tokens
+// 由前端在发送前预先保存用户消息，确保前端能立即拿到 msgId 和 tokens
 // maxAIMessageChars AI 消息单条字符上限（按 rune 计）。
 // 与前端 MAX_AI_INPUT_CHARS、Agent 工具 maxToolLongText 的 20000 约定保持一致，
 // 防止海量内容（粘贴/脚本绕过前端拦截）撑爆 LLM 上下文窗口。

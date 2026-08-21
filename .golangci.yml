@@ -3,3 +3,6 @@ linters:
   exclusions:
     paths:
       - frontend/node_modules
+      - .npmcache/
+      - .gomodcache/
+      - .gocache/

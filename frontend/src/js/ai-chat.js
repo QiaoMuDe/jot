@@ -58,15 +58,6 @@ let modelList = [];
 let searchToggle = null;
 let enableThinking = false;
 
-// 多源搜索状态
-let searchSourcesBtn = null;
-let searchSourcesDropdown = null;
-let searchSources = new Set();
-
-// 卡片召回状态
-let cardRecallToggle = null;
-let enableCardRecall = false;
-
 // 笔记引用状态
 let referencedNotes = [];       // { id, title, notebook_name }
 
@@ -122,21 +113,14 @@ let _notebooksCache = null;     // 笔记本下拉选项缓存
 let _refTagIds = new Set();     // 已选标签 ID 集合
 let _tagsCache = null;          // 标签列表缓存
 
-// 卡片召回笔记本选择状态
+// 卡片召回笔记本选择状态（Agent 模式 recall_notes 工具按此过滤笔记本）
 let recallNotebookIds = new Set();  // 选中的笔记本 ID 集合
-let cardRecallDropdown = null;     // #aiChatRecallDropdown
-let recallWrap = null;             // .ai-chat-recall-wrap
 // 更多技能状态
 let activeSkills = {};           // 当前激活的技能 { skillId: { config } }
 let skillsBtn = null;            // #aiChatMoreSkillsBtn
 let skillsDropdown = null;       // #aiChatSkillsDropdown
 let skillBar = null;             // #aiChatSkillBar
 let skillChips = null;           // #aiChatSkillChips
-
-// 问答 / Agent 模式状态
-let agentEnabled = false;        // 当前会话是否为 Agent 模式（后端 SessionConfig.agent_enabled）
-let agentModeQaBtn = null;       // #aiChatModeQa
-let agentModeAgentBtn = null;    // #aiChatModeAgent
 
 
 // 优化表达提示词（输入框内嵌按钮专用，与下拉菜单的「文本润色」技能区分）
@@ -255,24 +239,13 @@ export async function initAIChat() {
     modelLabel = document.getElementById('aiChatModelLabel');
     modelList = [];
 
-    // 问答 / Agent 模式切换
-    agentModeQaBtn = document.getElementById('aiChatModeQa');
-    agentModeAgentBtn = document.getElementById('aiChatModeAgent');
-    agentEnabled = false;
+    // Agent 为唯一对话模式（Chat 问答模式已移除）
 
     // 深度思考
     searchToggle = document.getElementById('aiChatSearchToggle');
     enableThinking = searchToggle?.classList.contains('active') || false;
 
-    // 多源搜索
-    searchSourcesBtn = document.getElementById('aiChatSearchSourcesBtn');
-    searchSourcesDropdown = document.getElementById('aiChatSearchSourcesDropdown');
-
-    // 卡片召回
-    cardRecallToggle = document.getElementById('aiChatCardRecallToggle');
-    enableCardRecall = cardRecallToggle?.classList.contains('active') || false;
-    cardRecallDropdown = document.getElementById('aiChatRecallDropdown');
-    recallWrap = document.querySelector('.ai-chat-recall-wrap');
+    // 卡片召回笔记本选择（Agent 模式 recall_notes 工具过滤用）
     recallNotebookIds = new Set();
 
     // 笔记引用
@@ -794,13 +767,6 @@ function bindEvents() {
         }
     }
 
-    // ── 问答 / Agent 模式切换 ──
-    if (agentModeQaBtn) {
-        agentModeQaBtn.addEventListener('click', () => switchAgentMode(false));
-    }
-    if (agentModeAgentBtn) {
-        agentModeAgentBtn.addEventListener('click', () => switchAgentMode(true));
-    }
 
     // ── 深度思考切换 ──
     if (searchToggle) {
@@ -811,203 +777,6 @@ function bindEvents() {
         });
     }
 
-    // ── 多源搜索按钮：左 2/3=批量开关，右 1/3=搜索源菜单 ──
-    const sourceItemIds = ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'];
-    if (searchSourcesBtn && searchSourcesDropdown) {
-        const sourcesWrap = document.querySelector('.ai-chat-sources-wrap');
-        // 计算右侧菜单区宽度（至少 30px，按钮较窄时保证可点）
-        const menuZoneWidth = (el) => Math.max(30, el.getBoundingClientRect().width * 0.33);
-        const inMenuZone = (el, clientX) => {
-            const rect = el.getBoundingClientRect();
-            return (clientX - rect.left) >= rect.width - menuZoneWidth(el);
-        };
-
-        searchSourcesBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            // 右侧 1/3：展开/收起搜索源菜单
-            if (inMenuZone(searchSourcesBtn, e.clientX)) {
-                const open = searchSourcesDropdown.classList.toggle('open');
-                if (sourcesWrap) sourcesWrap.classList.toggle('menu-open', open);
-                return;
-            }
-            // 左侧 2/3：批量开启/关闭全部搜索源
-            const allChecked = sourceItemIds.every(id => {
-                const cb = document.getElementById(id);
-                return cb && cb.checked;
-            });
-            const newState = !allChecked;
-            sourceItemIds.forEach(id => {
-                const cb = document.getElementById(id);
-                if (cb && !cb.disabled) {
-                    cb.checked = newState;
-                    const source = cb.dataset.source;
-                    if (newState) {
-                        searchSources.add(source);
-                    } else {
-                        searchSources.delete(source);
-                    }
-                }
-            });
-            if (searchSourcesBtn) {
-                searchSourcesBtn.classList.toggle('active', newState);
-            }
-            // 开关时顺手收起菜单
-            searchSourcesDropdown.classList.remove('open');
-            if (sourcesWrap) sourcesWrap.classList.remove('menu-open');
-            await saveCurrentSessionConfig();
-        });
-
-        // 悬停右侧菜单区时箭头高亮提示（离开按钮时移除）
-        searchSourcesBtn.addEventListener('mousemove', (e) => {
-            searchSourcesBtn.classList.toggle('arrow-hover', inMenuZone(searchSourcesBtn, e.clientX));
-        });
-        searchSourcesBtn.addEventListener('mouseleave', () => {
-            searchSourcesBtn.classList.remove('arrow-hover');
-        });
-
-        // 点击外部关闭下拉菜单
-        document.addEventListener('click', () => {
-            if (searchSourcesDropdown) {
-                searchSourcesDropdown.classList.remove('open');
-                if (sourcesWrap) sourcesWrap.classList.remove('menu-open');
-            }
-        });
-
-        if (searchSourcesDropdown) {
-            searchSourcesDropdown.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-        }
-    }
-    
-    // ── 搜索源菜单项点击切换 ──
-    // 点击整个菜单项区域（不限于复选框）都能切换选中状态
-    const sourceItems = searchSourcesDropdown?.querySelectorAll('.ai-chat-search-source-item');
-    if (sourceItems) {
-        sourceItems.forEach(item => {
-            const checkbox = item.querySelector('input[type="checkbox"]');
-            if (!checkbox) return;
-            item.addEventListener('click', (e) => {
-                if (e.target.tagName === 'INPUT') return; // 让 checkbox 自身的 change 事件处理
-                checkbox.checked = !checkbox.checked;
-                checkbox.dispatchEvent(new Event('change'));
-            });
-        });
-    }
-    // 复选框 change 事件（处理复选框自身点击和程序化触发）
-    sourceItemIds.forEach(id => {
-        const checkbox = document.getElementById(id);
-        if (checkbox) {
-            checkbox.addEventListener('change', async () => {
-                if (checkbox.disabled) return;
-                const source = checkbox.dataset.source;
-                if (checkbox.checked) {
-                    searchSources.add(source);
-                } else {
-                    searchSources.delete(source);
-                }
-                // 更新按钮激活状态
-                if (searchSourcesBtn) {
-                    searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
-                }
-                await saveCurrentSessionConfig();
-            });
-        }
-    });
-
-    // ── 卡片召回按钮：左 2/3=批量开关，右 1/3=笔记本菜单 ──
-    if (cardRecallToggle) {
-        if (enableCardRecall) cardRecallToggle.classList.add('active');
-        // 计算右侧菜单区宽度（至少 30px，按钮较窄时保证可点）
-        const recallMenuZone = () => Math.max(30, cardRecallToggle.getBoundingClientRect().width * 0.33);
-        const recallInMenuZone = (clientX) => {
-            const rect = cardRecallToggle.getBoundingClientRect();
-            return (clientX - rect.left) >= rect.width - recallMenuZone();
-        };
-
-        cardRecallToggle.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            // 右侧 1/3：展开/收起笔记本菜单
-            if (recallInMenuZone(e.clientX)) {
-                const dropdown = cardRecallDropdown;
-                if (!dropdown) return;
-                const isCurrentlyOpen = dropdown.classList.contains('open');
-                if (isCurrentlyOpen) {
-                    // 关闭菜单
-                    dropdown.classList.remove('open');
-                    if (recallWrap) recallWrap.classList.remove('menu-open');
-                } else {
-                    // 打开菜单：先构建子项（隐藏态），再添加 .open 触发入场动画
-                    await loadRecallNotebookMenu();
-                    dropdown.classList.add('open');
-                    if (recallWrap) recallWrap.classList.add('menu-open');
-                    dropdown.scrollTop = 0;
-                    // 点击外部关闭菜单
-                    const closeHandler = (ev) => {
-                        if (!recallWrap || recallWrap.contains(ev.target)) return;
-                        dropdown.classList.remove('open');
-                        if (recallWrap) recallWrap.classList.remove('menu-open');
-                        document.removeEventListener('click', closeHandler);
-                    };
-                    setTimeout(() => document.addEventListener('click', closeHandler), 10);
-                }
-                return;
-            }
-            // 左侧 2/3：批量开启/关闭卡片召回（开→全选所有笔记本，关→全取消）
-            enableCardRecall = cardRecallToggle.classList.toggle('active');
-            if (enableCardRecall) {
-                // 开启前校验量化配置与量化表
-                try {
-                    const check = await window.go.main.App.ValidateCardRecall();
-                    if (!check.ok) {
-                        // 校验失败：回滚开关状态
-                        enableCardRecall = false;
-                        cardRecallToggle.classList.toggle('active');
-                        nm.show(check.message || '卡片召回校验未通过', 'warning');
-                        return;
-                    }
-                } catch (e) {
-                    enableCardRecall = false;
-                    cardRecallToggle.classList.toggle('active');
-                    nm.show('卡片召回校验失败: ' + e, 'error');
-                    return;
-                }
-                // 开→全选所有笔记本（加载菜单后勾选全部）
-                try {
-                    const notebooks = await window.go.main.App.GetAllNotebooks();
-                    if (notebooks) {
-                        notebooks.forEach(nb => recallNotebookIds.add(nb.id));
-                    }
-                } catch (_) {}
-                // 更新菜单复选框状态
-                if (cardRecallDropdown) {
-                    cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
-                        cb.checked = true;
-                    });
-                }
-            } else {
-                // 关→全取消
-                recallNotebookIds.clear();
-                if (cardRecallDropdown) {
-                    cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
-                        cb.checked = false;
-                    });
-                }
-            }
-            // 开关时顺手收起菜单
-            if (cardRecallDropdown) cardRecallDropdown.classList.remove('open');
-            if (recallWrap) recallWrap.classList.remove('menu-open');
-            await saveCurrentSessionConfig();
-        });
-
-        // 悬停右侧菜单区时箭头高亮提示（离开按钮时移除）
-        cardRecallToggle.addEventListener('mousemove', (e) => {
-            cardRecallToggle.classList.toggle('arrow-hover', recallInMenuZone(e.clientX));
-        });
-        cardRecallToggle.addEventListener('mouseleave', () => {
-            cardRecallToggle.classList.remove('arrow-hover');
-        });
-    }
 
     // ── 笔记引用浮层 ──
     if (refOverlay) {
@@ -1337,36 +1106,6 @@ function bindEvents() {
 
 }
 
-/* ── 问答 / Agent 模式 ── */
-
-/**
- * 切换问答 / Agent 模式（持久化到当前会话配置）
- * @param {boolean} enabled - true=Agent 模式, false=问答模式
- */
-async function switchAgentMode(enabled) {
-    if (isStreaming || agentEnabled === enabled) return;
-    agentEnabled = enabled;
-    updateAgentModeUI();
-    await saveCurrentSessionConfig();
-}
-
-/**
- * 根据当前会话的 Agent 模式状态刷新工具栏 UI：
- * - 高亮模式切换控件（问答 / Agent）
- * - Agent 模式隐藏 联网搜索 / 卡片召回 两个开关（深度思考开关保留可用；
- *   仅隐藏不修改开关值，切回时原值保留）
- */
-function updateAgentModeUI() {
-    if (agentModeQaBtn) agentModeQaBtn.classList.toggle('active', !agentEnabled);
-    if (agentModeAgentBtn) agentModeAgentBtn.classList.toggle('active', agentEnabled);
-    // 隐藏/显示问答模式专属开关容器（限定在 AI 对话工具栏内）
-    const toolbarEl = document.querySelector('.ai-chat-toolbar');
-    const sourcesWrapEl = toolbarEl?.querySelector('.ai-chat-sources-wrap');
-    const recallWrapEl = toolbarEl?.querySelector('.ai-chat-recall-wrap');
-    if (sourcesWrapEl) sourcesWrapEl.classList.toggle('ai-chat-mode-hidden', agentEnabled);
-    if (recallWrapEl) recallWrapEl.classList.toggle('ai-chat-mode-hidden', agentEnabled);
-}
-
 /* ── 会话侧栏管理 ── */
 
 /**
@@ -1582,45 +1321,14 @@ async function switchSession(id) {
             const config = await window.go.main.App.LoadSessionConfig(id);
             if (config) {
                 if (config.model_name && modelLabel) modelLabel.textContent = config.model_name;
-                // 恢复问答 / Agent 模式状态并刷新工具栏 UI
-                agentEnabled = !!config.agent_enabled;
-                updateAgentModeUI();
                 enableThinking = !!config.enable_thinking;
                 if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
-                // 恢复搜索源
-                searchSources = new Set();
-                ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(sid => {
-                    const cb = document.getElementById(sid);
-                    if (!cb || cb.disabled) return;
-                    const source = cb.dataset.source;
-                    let enabled = false;
-                    if (source === 'zhihu_search') enabled = !!config.zhihu_search_enabled;
-                    else if (source === 'zhihu_global') enabled = !!config.zhihu_global_search_enabled;
-                    else if (source === 'tavily') enabled = !!config.tavily_search_enabled;
-                    cb.checked = enabled;
-                    if (enabled) searchSources.add(source);
-                });
-                if (searchSourcesBtn) {
-                    searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
-                }
-                enableCardRecall = !!config.enable_card_recall;
-                if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
-                // 加载卡片召回笔记本选择
+                // 加载卡片召回笔记本选择（Agent 模式 recall_notes 工具过滤用；空=不限定笔记本）
                 recallNotebookIds = new Set();
                 const savedIds = JSON.parse(config.recall_notebook_ids || '[]');
                 if (savedIds.length > 0) {
                     savedIds.forEach(id => recallNotebookIds.add(id));
-                } else if (enableCardRecall) {
-                    // 旧数据/默认：卡片召回开启时默认全选
-                    try {
-                        const notebooks = await window.go.main.App.GetAllNotebooks();
-                        if (notebooks) {
-                            notebooks.forEach(nb => recallNotebookIds.add(nb.id));
-                        }
-                    } catch (_) {}
                 }
-                // 重置菜单内容，下次打开时重新加载
-                if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
                 referencedNotes = JSON.parse(config.referenced_notes || '[]');
                 updateRefChips();
                 roleplayNotes = JSON.parse(config.roleplay_notes || '[]');
@@ -1639,7 +1347,7 @@ async function switchSession(id) {
         } catch (_) {}
 
         // 重建 chatHistory (仅渲染缓冲区)
-        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })) : [];
+        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })) : [];
         // 记录最旧消息 ID 用于分页加载
         _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
@@ -1665,14 +1373,14 @@ async function switchSession(id) {
             const chunk = msgs.slice(i, i + 5);
             for (const msg of chunk) {
                 if (msg.role === 'user') {
-                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true, msg.meta || '');
+                    addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
                     const userMsgEl = messagesInnerEl.lastElementChild;
                     if (userMsgEl) {
                         userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     }
                 } else if (msg.role === 'assistant') {
-                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, msg.tool_calls, true, true);
+                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true);
                     el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                     bindMsgContextMenu(el, msg.content, 'assistant');
                 }
@@ -1716,14 +1424,14 @@ async function switchSession(id) {
                 // 渲染新消息（addMessage 会追加到末尾）
                 for (const msg of olderMsgs) {
                     if (msg.role === 'user') {
-                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, undefined, true, true, msg.meta || '');
+                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
                         const userMsgEl = messagesInnerEl.lastElementChild;
                         if (userMsgEl) {
                             userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
                         }
                     } else if (msg.role === 'assistant') {
-                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.search_sources, msg.recall_cards, msg.tool_calls, true, true);
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true);
                         el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                         bindMsgContextMenu(el, msg.content, 'assistant');
                     }
@@ -1739,7 +1447,7 @@ async function switchSession(id) {
                 messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
                 messagesEl.style.scrollBehavior = '';
                 // 更新 chatHistory 缓冲区
-                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, search_sources: msg.search_sources || null, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
             } catch (_) { /* 静默 */ }
             _loadingMore = false;
         };
@@ -1783,44 +1491,14 @@ async function createSession() {
         const defaultCfg = await window.go.main.App.LoadSessionConfig(id);
         if (defaultCfg) {
             if (defaultCfg.model_name) modelLabel.textContent = defaultCfg.model_name;
-            // 恢复问答 / Agent 模式状态并刷新工具栏 UI
-            agentEnabled = !!defaultCfg.agent_enabled;
-            updateAgentModeUI();
             enableThinking = !!defaultCfg.enable_thinking;
             if (searchToggle) searchToggle.classList.toggle('active', enableThinking);
-            searchSources = new Set();
-            ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(sid => {
-                const cb = document.getElementById(sid);
-                if (!cb || cb.disabled) return;
-                const source = cb.dataset.source;
-                let enabled = false;
-                if (source === 'zhihu_search') enabled = !!defaultCfg.zhihu_search_enabled;
-                else if (source === 'zhihu_global') enabled = !!defaultCfg.zhihu_global_search_enabled;
-                else if (source === 'tavily') enabled = !!defaultCfg.tavily_search_enabled;
-                cb.checked = enabled;
-                if (enabled) searchSources.add(source);
-            });
-            if (searchSourcesBtn) {
-                searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
-            }
-            enableCardRecall = !!defaultCfg.enable_card_recall;
-            if (cardRecallToggle) cardRecallToggle.classList.toggle('active', enableCardRecall);
-            // 加载卡片召回笔记本选择
+            // 加载卡片召回笔记本选择（Agent 模式 recall_notes 工具过滤用；空=不限定笔记本）
             recallNotebookIds = new Set();
             const savedIds = JSON.parse(defaultCfg.recall_notebook_ids || '[]');
             if (savedIds.length > 0) {
                 savedIds.forEach(id => recallNotebookIds.add(id));
-            } else if (enableCardRecall) {
-                // 旧数据/默认：卡片召回开启时默认全选
-                try {
-                    const notebooks = await window.go.main.App.GetAllNotebooks();
-                    if (notebooks) {
-                        notebooks.forEach(nb => recallNotebookIds.add(nb.id));
-                    }
-                } catch (_) {}
             }
-            // 重置菜单内容，下次打开时重新加载
-            if (cardRecallDropdown) cardRecallDropdown.innerHTML = '';
             referencedNotes = JSON.parse(defaultCfg.referenced_notes || '[]');
             updateRefChips();
             roleplayNotes = JSON.parse(defaultCfg.roleplay_notes || '[]');
@@ -2401,7 +2079,7 @@ async function sendUserText(text) {
         userTokens = result?.tokens || 0;
     } catch (_) { /* 静默失败，后续流程继续 */ }
 
-    addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined, undefined, undefined, undefined, false, false, userMeta);
+    addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined, undefined, undefined, false, false, userMeta);
     const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
         userMsgEl.appendChild(createMsgActions(text, 'user', undefined, userTokens));
@@ -2411,16 +2089,16 @@ async function sendUserText(text) {
     if (userMsgId) {
         chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '' });
     }
-    startStreaming(text, false, userMsgId);
+    startStreaming(text, userMsgId);
     return true;
 }
 
 /**
- * 启动流式输出
- * @param {boolean} isRegenerate - 是否再生
- * @param {number} userMsgID - 已保存的用户消息 ID（由 onSend 或 handleResend 提前获取）
+ * 启动流式输出（Agent 流；userMsgID=0 表示再生/编辑场景，由后端找回末条用户消息）
+ * @param {string} userText - 用户消息文本
+ * @param {number} userMsgID - 已保存的用户消息 ID（由 onSend 或 handleResend 提前获取；0=不新建用户消息）
  */
-async function startStreaming(userText, isRegenerate, userMsgID) {
+async function startStreaming(userText, userMsgID) {
     if (isStreaming) return;
     isStreaming = true;
     window.__aiStreaming = true;
@@ -2429,13 +2107,12 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     _aiStreamGen++;
     const myGen = _aiStreamGen;
 
-    // 记录发送时的模式快照：Agent 流的事件参数形态与问答流不同（chunk 为单参数），
-    // 用快照区分，避免发送过程中切换模式导致解析错乱
-    const isAgentFlow = agentEnabled;
+    // Agent 为唯一对话模式（Chat 问答模式已移除），流恒走 Agent 通道
+    const isAgentFlow = true;
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:search-status', 'ai:search-sources', 'ai:search-source-status', 'ai:search-error', 'ai:recall-cards', 'ai:recall-status', 'ai:refined-keywords', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2447,14 +2124,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     let streamingContent = '';
     let streamingThinking = '';
     let hasReceivedChunk = false;
-    let streamSearchSources = null;
-    let searchSourceStates = {};
     let recallCards = null;
-    let recallIndicatorStart = 0;   // 召回指示器开始展示的时间戳，用于保证最短展示时长
-    let recallSwapTimer = null;     // 召回指示器最小展示时长的延迟切换句柄（thinking 到达时立即打断）
-    let recallPendingStatus = '';   // 延迟切换等待中的收尾状态（'done'/'error'）
-    let recallPendingDetail = '';   // 延迟切换等待中的错误详情
-    let refinedKeywords = '';
 
     // 新一轮输出开始：收起 Agent 反问面板、清除反问等待状态
     //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
@@ -2497,17 +2167,10 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
         }
     }
 
-    /** 追加思维链分片：懒创建 thinkingDetails 折叠区并流式填充（问答/Agent 两模式共用） */
+    /** 追加思维链分片：懒创建 thinkingDetails 折叠区并流式填充（Agent 模式） */
     const appendThinkingChunk = (chunk) => {
         if (!enableThinking) return; // 深度思考关闭时跳过展示思维链
         if (!thinkingDetails) {
-            // 召回指示器若还在最小展示时长延迟中，立即完成收尾（切回打字点），
-            // 避免思考动画（thinkingDetails 插在 contentDiv 上方）与检索指示器上下重叠
-            if (recallSwapTimer) {
-                clearTimeout(recallSwapTimer);
-                recallSwapTimer = null;
-                finishRecallIndicator(recallPendingStatus, recallPendingDetail);
-            }
             _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
@@ -2537,109 +2200,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     });
     unsubs.push(unsubThinking);
 
-    // 多源搜索状态管理
-    searchSourceStates = {};
-
-    // 多源搜索状态：精炼阶段 → 搜索阶段 → 完成
-    const unsubSearch = window.runtime.EventsOn('ai:search-status', (status) => {
-        if (status === 'refining') {
-            contentDiv.innerHTML = '';
-            contentDiv.appendChild(createSearchIndicator('refining'));
-        } else if (status === 'searching') {
-            contentDiv.innerHTML = '';
-            contentDiv.appendChild(createSearchIndicator('searching', refinedKeywords));
-        } else if (status === 'done') {
-            // 仅在尚未收到 stream chunk 时替换为打字点
-            if (!hasReceivedChunk) {
-                contentDiv.innerHTML = '';
-                contentDiv.appendChild(createTypingDots());
-            }
-        }
-    });
-    unsubs.push(unsubSearch);
-
-    // 卡片召回状态：检索中/完成/失败（独立事件，与联网搜索 ai:search-status 解耦）
-    // 本地检索耗时可能极短，指示器保持最小展示时长避免闪烁
-    const MIN_RECALL_INDICATOR_MS = 800;
-    // 召回指示器收尾：恢复打字点（期间若已收到 chunk 则跳过），error 时弹提示
-    // 供召回 done/error 与 thinking 打断共用，保证错误通知不丢失
-    const finishRecallIndicator = (status, detail) => {
-        recallSwapTimer = null;
-        if (!hasReceivedChunk) {
-            contentDiv.innerHTML = '';
-            contentDiv.appendChild(createTypingDots());
-        }
-        if (status === 'error' && nm && typeof nm.show === 'function') {
-            nm.show('卡片召回失败: ' + (detail || '未知错误'), 'warning');
-        }
-    };
-    const unsubRecallStatus = window.runtime.EventsOn('ai:recall-status', (status, detail) => {
-        if (status === 'searching') {
-            // 仅当尚未收到 stream chunk 时替换为召回指示器
-            if (!hasReceivedChunk) {
-                recallIndicatorStart = Date.now();
-                contentDiv.innerHTML = '';
-                contentDiv.appendChild(createRecallIndicator());
-            }
-        } else if (status === 'done' || status === 'error') {
-            // 保证召回指示器至少展示 MIN_RECALL_INDICATOR_MS，避免本地检索过快导致闪烁；
-            // 延迟期间记录 pending 状态，thinking 到达时可立即打断并保留错误提示
-            const elapsed = Date.now() - recallIndicatorStart;
-            if (recallIndicatorStart > 0 && elapsed < MIN_RECALL_INDICATOR_MS) {
-                recallPendingStatus = status;
-                recallPendingDetail = detail || '';
-                recallSwapTimer = setTimeout(() => finishRecallIndicator(status, detail), MIN_RECALL_INDICATOR_MS - elapsed);
-            } else {
-                finishRecallIndicator(status, detail);
-            }
-        }
-    });
-    unsubs.push(unsubRecallStatus);
-
-    // 搜索源状态更新（仅记录状态，不更新 UI 动画）
-    const unsubSourceStatus = window.runtime.EventsOn('ai:search-source-status', (statusJSON) => {
-        try {
-            const data = typeof statusJSON === 'string' ? JSON.parse(statusJSON) : statusJSON;
-            searchSourceStates[data.source] = data;
-        } catch (_) {}
-    });
-    unsubs.push(unsubSourceStatus);
-
-    // 搜索源错误事件 → 弹通知
-    const unsubSearchError = window.runtime.EventsOn('ai:search-error', (errJSON) => {
-        try {
-            const data = typeof errJSON === 'string' ? JSON.parse(errJSON) : errJSON;
-            searchSourceStates[data.source] = { source: data.source, status: 'error', error: data.error };
-            // 流已停止（用户主动取消），不弹错误通知
-            if (!isStreaming) return;
-            window.showNotification?.('联网搜索失败 (' + (sourceLabels[data.source] || data.source) + '): ' + data.error, 'error', 5000);
-        } catch (_) {}
-    });
-    unsubs.push(unsubSearchError);
-
-    // 精炼后的搜索关键词
-    const unsubKeywords = window.runtime.EventsOn('ai:refined-keywords', (keywords) => {
-        refinedKeywords = keywords || '';
-    });
-    unsubs.push(unsubKeywords);
-
-    // 联网搜索来源数据（结构化来源列表，AI 回复结束后展示）
-    const unsubSources = window.runtime.EventsOn('ai:search-sources', (sourcesJSON) => {
-        try {
-            streamSearchSources = JSON.parse(sourcesJSON);
-        } catch (_) {}
-    });
-    unsubs.push(unsubSources);
-
-    // 卡片召回数据（结构化卡片列表，AI 回复结束后展示）
-    const unsubRecall = window.runtime.EventsOn('ai:recall-cards', (cardsJSON) => {
-        try {
-            recallCards = JSON.parse(cardsJSON);
-        } catch (_) {}
-    });
-    unsubs.push(unsubRecall);
-
-    /** 处理 AI 流式正文 chunk（问答 / Agent 模式共用） */
+    /** 处理 AI 流式正文 chunk（Agent 模式） */
     const handleStreamChunk = (chunk) => {
         if (!chunk) return;
         if (!hasReceivedChunk) {
@@ -2651,7 +2212,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             }
             // Agent 模式：ReAct 循环中工具调用均发生在正文输出前，首个正文 token 即已全部终态；
             // 实时工具条在此淡出移除（工具阶段 → 正文输出阶段的自然过渡），
-            // stream-done 时工具摘要随来源/召回面板同一时刻插入，避免摘要"迟到"突兀
+            // stream-done 时工具摘要随召回面板同一时刻插入，避免摘要"迟到"突兀
             if (isAgentFlow && toolStatusListEl && toolStatusListEl.parentNode) {
                 var liveList = toolStatusListEl;
                 liveList.classList.add('exiting');
@@ -2862,14 +2423,11 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
     unsubs.push(unsubAskUser);
 
     // ── Agent 模式结构化结果回传（ai:agent-result，先于 stream-done 到达） ──
-    // 后端在流结束后把搜索来源 / 召回卡片 / 工具调用链 / 思考链 一并回传，
-    // 填充 streamSearchSources / recallCards / streamToolRecords，
+    // 后端在流结束后把召回卡片 / 工具调用链 / 思考链 一并回传，
+    // 填充 recallCards / streamToolRecords，
     // 使 stream-done 的 chatHistory.push 与气泡渲染拿到与历史加载一致的数据。
-    const unsubAgentResult = window.runtime.EventsOn('ai:agent-result', (evtGen, searchSourcesJSON, recallCardsJSON, toolCallsJSON, reasoningContent) => {
+    const unsubAgentResult = window.runtime.EventsOn('ai:agent-result', (evtGen, recallCardsJSON, toolCallsJSON, reasoningContent) => {
         if (evtGen !== myGen) return; // 属于旧流, 丢弃
-        if (searchSourcesJSON) {
-            try { streamSearchSources = JSON.parse(searchSourcesJSON); } catch (_) {}
-        }
         if (recallCardsJSON) {
             try { recallCards = JSON.parse(recallCardsJSON); } catch (_) {}
         }
@@ -2952,7 +2510,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
                 streamingEl.parentNode.removeChild(streamingEl);
             }
         } else {
-            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, search_sources: streamSearchSources ? JSON.stringify(streamSearchSources) : null, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
+            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
             updateContextSize();
             streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
             bindMsgContextMenu(streamingEl, finalContent, 'assistant');
@@ -2962,17 +2520,6 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
                 chatHistory.pop();
                 if (streamingEl && streamingEl.parentNode) {
                     streamingEl.parentNode.removeChild(streamingEl);
-                }
-            }
-
-            // 展示搜索来源折叠面板
-            if (streamSearchSources && streamSearchSources.length > 0) {
-                var actionsEl = streamingEl.querySelector('.ai-msg-actions');
-                if (actionsEl) {
-                    renderSearchSources(streamingEl, streamSearchSources);
-                    streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
-                } else {
-                    renderSearchSources(streamingEl, streamSearchSources);
                 }
             }
 
@@ -2987,7 +2534,7 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
                 }
             }
 
-            // 工具调用链：与来源/召回面板同一时刻渲染（实时工具条已在正文开始时淡出）；
+            // 工具调用链：与召回面板同一时刻渲染（实时工具条已在正文开始时淡出）；
             // 兜底：若实时条仍挂载（如无正文输出），此处直接移除
             if (streamToolRecords.length > 0) {
                 if (toolStatusListEl && toolStatusListEl.parentNode) {
@@ -3064,19 +2611,13 @@ async function startStreaming(userText, isRegenerate, userMsgID) {
             }
             return 'skill_' + id;
         });
-        const searchSourcesArray = Array.from(searchSources);
         const refNoteIDs = referencedNotes.map(n => n.id);
         const roleNoteIDs = roleplayNotes.map(n => n.id);
-        if (isAgentFlow) {
-            // Agent 模式：调用 Agent 流式接口（联网搜索/卡片召回由 Agent 工具执行，无对应开关参数）
-            // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
-            // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, recallNotebookIDs, userMsgID
-            window.go.main.App.CallAIAgentStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, Array.from(recallNotebookIds), userMsgID);
-        } else if (isRegenerate) {
-            window.go.main.App.CallAIStreamRegenerate(myGen, activeSessionId, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles);
-        } else {
-            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, searchSourcesArray, enableCardRecall, Array.from(recallNotebookIds), skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
-        }
+        // Agent 为唯一对话模式：调用 Agent 流式接口（联网搜索由 MCP 工具执行、卡片召回由
+        // recall_notes 工具执行，均无前端开关参数）
+        // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
+        // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, recallNotebookIDs, userMsgID
+        window.go.main.App.CallAIAgentStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, Array.from(recallNotebookIds), userMsgID);
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -3349,14 +2890,13 @@ function rerenderUserMessageChips(msgId, newMeta) {
  * @param {number} [totalElapsed] - 总耗时
  * @param {number} [tokens] - token 数
  * @param {number|string} [msgId] - 消息 ID
- * @param {Array|object|string} [searchSources] - 搜索来源
  * @param {Array|object|string} [recallCards] - 召回卡片
  * @param {Array|object|string} [toolCalls] - 工具调用
  * @param {boolean} [skipScroll] - 跳过滚动与入场动画
  * @param {boolean} [deferHighlight] - 延迟高亮
  * @param {string} [meta] - 用户消息的 Meta JSON 字符串（仅 user 分支使用）
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, searchSources, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     // 仅流式消息播放入场动画，切换历史会话时跳过
@@ -3407,19 +2947,11 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     }
 
     // 解析 JSON 字符串参数
-    if (typeof searchSources === 'string') {
-        try { searchSources = JSON.parse(searchSources); } catch (_) { searchSources = null; }
-    }
     if (typeof recallCards === 'string') {
         try { recallCards = JSON.parse(recallCards); } catch (_) { recallCards = null; }
     }
     if (typeof toolCalls === 'string') {
         try { toolCalls = JSON.parse(toolCalls); } catch (_) { toolCalls = null; }
-    }
-
-    // 渲染搜索来源（单一来源→卡片，多个来源→折叠面板）
-    if (role === 'assistant' && searchSources && searchSources.length > 0) {
-        renderSearchSources(el, searchSources);
     }
 
     // 渲染召回卡片折叠面板
@@ -3459,120 +2991,6 @@ function createWaitingHint() {
     const el = document.createElement('span');
     el.className = 'ai-msg-waiting-hint';
     el.innerHTML = '<span class="ai-msg-waiting-dot"></span>等待你的回答…';
-    return el;
-}
-
-/**
- * 来源名称映射
- */
-const sourceLabels = {
-    'tavily': 'Tavily搜索',
-    'zhihu_search': '知乎搜索',
-    'zhihu_global': '全网搜索',
-};
-
-/**
- * 创建卡片召回状态指示器：放大镜图标 + 文案（复用搜索指示器布局，语义=检索本地笔记/知识库）
- * 放大镜不参与旋转动画（与联网搜索地球图标区分），见 ai-chat.css 中 data-status="recall" 覆盖规则
- * @returns {HTMLDivElement}
- */
-function createRecallIndicator() {
-    // 放大镜 SVG（Lucide Search 风格，静止展示不旋转）
-    var searchSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
-    var el = document.createElement('div');
-    el.className = 'ai-search-indicator';
-    el.dataset.status = 'recall';
-    var bar = document.createElement('div');
-    bar.className = 'ai-search-bar';
-    bar.innerHTML = searchSvg + '<span class="ai-search-text">正在检索本地笔记...</span>';
-    el.appendChild(bar);
-    return el;
-}
-
-/**
- * 创建联网搜索状态指示器（带关键词下拉菜单）
- * @param {'refining'|'searching'} status - 搜索阶段
- * @param {string} [keywords=''] - 精炼后的搜索关键词
- * @returns {HTMLDivElement}
- */
-function createSearchIndicator(status, keywords) {
-    // 地球 SVG（与简易版一致）
-    var earthSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-
-    // 下拉箭头 SVG
-    var arrowSvg = '<svg class="ai-search-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
-
-    var el = document.createElement('div');
-    el.className = 'ai-search-indicator';
-    el.dataset.status = status;
-
-    if (status === 'refining') {
-        // 精炼阶段：简洁展示，不可点击，无下拉
-        var bar = document.createElement('div');
-        bar.className = 'ai-search-bar';
-        bar.innerHTML = earthSvg + '<span class="ai-search-text">正在优化输入...</span>';
-        el.appendChild(bar);
-        return el;
-    }
-
-    // 搜索阶段：可点击 bar + 下拉菜单
-    el.dataset.open = 'false';
-
-    var bar = document.createElement('div');
-    bar.className = 'ai-search-bar';
-
-    bar.innerHTML = earthSvg + '<span class="ai-search-text">联网搜索中</span>' + arrowSvg;
-    el.appendChild(bar);
-
-    // 下拉菜单
-    var dropdown = document.createElement('div');
-    dropdown.className = 'ai-search-dropdown';
-
-    if (keywords) {
-        var kwList = keywords.split(/\s+/).filter(Boolean);
-        if (kwList.length > 0) {
-            var label = document.createElement('div');
-            label.className = 'ai-search-dropdown-label';
-            label.textContent = '精炼搜索词';
-            dropdown.appendChild(label);
-
-            var kwContainer = document.createElement('div');
-            kwContainer.className = 'ai-search-keywords';
-            kwList.forEach(function (kw) {
-                var tag = document.createElement('span');
-                tag.className = 'ai-search-keyword-tag';
-                tag.textContent = kw;
-                kwContainer.appendChild(tag);
-            });
-            dropdown.appendChild(kwContainer);
-        } else {
-            dropdown.innerHTML = '<div class="ai-search-empty-keywords">暂无精炼关键词</div>';
-        }
-    } else {
-        dropdown.innerHTML = '<div class="ai-search-empty-keywords">暂无精炼关键词</div>';
-    }
-
-    el.appendChild(dropdown);
-
-    // 点击 bar 切换展开/收起
-    bar.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var isOpen = el.dataset.open === 'true';
-        el.dataset.open = isOpen ? 'false' : 'true';
-    });
-
-    // 点击外部收起（自清理：元素脱离 DOM 后自动移除监听器）
-    var closeHandler = function (e) {
-        if (!el.isConnected) {
-            document.removeEventListener('click', closeHandler);
-            return;
-        }
-        if (!el.contains(e.target)) {
-            el.dataset.open = 'false';
-        }
-    };
-    document.addEventListener('click', closeHandler);
-
     return el;
 }
 
@@ -3662,41 +3080,6 @@ export async function onAIChatViewActivated() {
  */
 function syncToolbarState() {
     enableThinking = document.getElementById('aiChatSearchToggle')?.classList.contains('active') || false;
-    // 获取密钥配置状态（从设置页的 input 读取）
-    const zhihuSecret = document.getElementById('aiZhihuAccessSecret')?.value || '';
-    const tavilyKey = document.getElementById('aiTavilyApiKey')?.value || '';
-    const hasZhihuSecret = !!(zhihuSecret && zhihuSecret.trim());
-    const hasTavilyKey = !!(tavilyKey && tavilyKey.trim());
-    
-    // 从复选框读取搜索源状态
-    searchSources = new Set();
-    ['aiChatZhihuSearch', 'aiChatZhihuGlobalSearch', 'aiChatTavilySearch'].forEach(id => {
-        const cb = document.getElementById(id);
-        if (!cb) return;
-        const label = cb.closest('.ai-chat-search-source-item');
-        // 判断是否需要禁用
-        let needsDisabled = false;
-        if (cb.dataset.source === 'zhihu_search' || cb.dataset.source === 'zhihu_global') {
-            needsDisabled = !hasZhihuSecret;
-        } else if (cb.dataset.source === 'tavily') {
-            needsDisabled = !hasTavilyKey;
-        }
-        if (needsDisabled) {
-            cb.disabled = true;
-            if (label) label.classList.add('disabled');
-            cb.checked = false;
-        } else {
-            cb.disabled = false;
-            if (label) label.classList.remove('disabled');
-            if (cb.checked) {
-                searchSources.add(cb.dataset.source);
-            }
-        }
-    });
-    if (searchSourcesBtn) {
-        searchSourcesBtn.classList.toggle('active', searchSources.size > 0);
-    }
-    enableCardRecall = document.getElementById('aiChatCardRecallToggle')?.classList.contains('active') || false;
 }
 
 function showEmptyState() {
@@ -4126,12 +3509,6 @@ const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 const FOLLOWUP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 const DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
-// ── 搜索来源 SVG 图标 ──
-const SEARCH_SOURCE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 7v8"/><path d="M7 11h8"/></svg>';
-const SATELLITE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h10l-4 8"/><path d="M17 7l4 4"/><path d="M20 11l2 2"/></svg>';
-const BOOK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
-const GLOBE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
-const EXTERNAL_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
 const CHEVRON_RIGHT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
 // ── 召回笔记 SVG 图标 ──
@@ -4163,199 +3540,6 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
     }
 
     return container;
-}
-
-// ── 搜索来源渲染 ──
-
-/**
- * 搜索来源 SVG 图标映射
- */
-function getSourceIcon(label) {
-    switch (label) {
-        case 'tavily': return SATELLITE_ICON;
-        case 'zhihu_search': return BOOK_ICON;
-        case 'zhihu_global': return GLOBE_ICON;
-        default: return SEARCH_SOURCE_ICON;
-    }
-}
-
-/**
- * 来源标签显示名称映射
- */
-function getSourceLabel(label) {
-    switch (label) {
-        case 'tavily': return 'Tavily';
-        case 'zhihu_search': return '知乎搜索';
-        case 'zhihu_global': return '全网搜索';
-        default: return label;
-    }
-}
-
-/**
- * 来源分组排序（固定顺序）
- */
-var SOURCE_GROUP_ORDER = ['tavily', 'zhihu_search', 'zhihu_global'];
-
-/**
- * 从 URL 中提取域名 + 路径（短路径）用于展示
- */
-function extractDomain(urlStr) {
-    try {
-        var u = new URL(urlStr);
-        var path = u.pathname;
-        if (path === '/') path = '';
-        // 只保留前两段路径
-        var parts = path.split('/').filter(Boolean);
-        if (parts.length > 2) parts = parts.slice(0, 2);
-        var shortPath = parts.length > 0 ? '/' + parts.join('/') : '';
-        return u.hostname + shortPath;
-    } catch (_) {
-        return urlStr;
-    }
-}
-
-/**
- * 渲染搜索来源 — 统一使用折叠面板展示
- * @param {HTMLElement} el - 插入位置（AI 消息气泡容器）
- * @param {Array} sources - 搜索来源数组 [{title, url, content, source_label}]
- */
-function renderSearchSources(el, sources) {
-    if (!sources || sources.length === 0) return;
-    renderMultiSourcesPanel(el, sources);
-}
-
-/**
- * 多个来源 — 自定义折叠面板
- */
-function renderMultiSourcesPanel(el, sources) {
-    var panel = document.createElement('div');
-    panel.className = 'search-sources-panel';
-
-    var header = document.createElement('button');
-    header.className = 'search-sources-header';
-
-    var headerIcon = document.createElement('span');
-    headerIcon.className = 'search-sources-header-icon';
-    headerIcon.innerHTML = SEARCH_SOURCE_ICON;
-    header.appendChild(headerIcon);
-
-    var headerText = document.createElement('span');
-    headerText.className = 'search-sources-header-text';
-
-    // 计算来源类型数量
-    var typeSet = {};
-    sources.forEach(function (s) { typeSet[s.source_label || 'unknown'] = true; });
-    var typeCount = Object.keys(typeSet).length;
-    headerText.textContent = '\u6765\u81EA ' + typeCount + ' \u4E2A\u6765\u6E90\u00B7' + sources.length + ' \u6761\u7ED3\u679C';
-    header.appendChild(headerText);
-
-    var arrow = document.createElement('span');
-    arrow.className = 'search-sources-header-arrow';
-    arrow.innerHTML = CHEVRON_RIGHT_ICON;
-    header.appendChild(arrow);
-
-    panel.appendChild(header);
-
-    var body = document.createElement('div');
-    body.className = 'search-sources-body';
-
-    // 按 source_label 分组
-    var groups = {};
-    sources.forEach(function (src) {
-        var label = src.source_label || 'unknown';
-        if (!groups[label]) groups[label] = [];
-        groups[label].push(src);
-    });
-
-    var globalIndex = 0;
-    SOURCE_GROUP_ORDER.forEach(function (labelKey) {
-        var items = groups[labelKey];
-        if (!items || items.length === 0) return;
-
-        var group = document.createElement('div');
-        group.className = 'search-sources-group';
-
-        var groupHeader = document.createElement('div');
-        groupHeader.className = 'search-sources-group-header';
-
-        var groupIcon = document.createElement('span');
-        groupIcon.className = 'search-sources-group-icon';
-        groupIcon.innerHTML = getSourceIcon(labelKey);
-        groupHeader.appendChild(groupIcon);
-
-        var groupLabel = document.createElement('span');
-        groupLabel.className = 'search-sources-group-label';
-        groupLabel.textContent = getSourceLabel(labelKey);
-        groupHeader.appendChild(groupLabel);
-
-        var groupCount = document.createElement('span');
-        groupCount.className = 'search-sources-group-count';
-        groupCount.textContent = items.length + ' \u6761';
-        groupHeader.appendChild(groupCount);
-
-        group.appendChild(groupHeader);
-
-        var itemList = document.createElement('div');
-        itemList.className = 'search-sources-group-items';
-
-        items.forEach(function (src) {
-            globalIndex++;
-            var item = document.createElement('div');
-            item.className = 'search-source-group-item';
-            item.addEventListener('click', function () {
-                window.runtime.BrowserOpenURL(src.url);
-            });
-
-            var num = document.createElement('span');
-            num.className = 'search-source-item-num';
-            num.textContent = globalIndex + '.';
-            item.appendChild(num);
-
-            var bodyWrap = document.createElement('div');
-            bodyWrap.className = 'search-source-item-body';
-
-            var top = document.createElement('div');
-            top.className = 'search-source-item-top';
-
-            var itemTitle = document.createElement('span');
-            itemTitle.className = 'search-source-item-title';
-            itemTitle.textContent = src.title;
-            top.appendChild(itemTitle);
-
-            var itemDomain = document.createElement('span');
-            itemDomain.className = 'search-source-item-domain';
-            itemDomain.textContent = extractDomain(src.url);
-            top.appendChild(itemDomain);
-
-            var itemLink = document.createElement('span');
-            itemLink.className = 'search-source-item-link';
-            itemLink.innerHTML = EXTERNAL_ICON;
-            top.appendChild(itemLink);
-
-            bodyWrap.appendChild(top);
-
-            if (src.content) {
-                var snippet = document.createElement('div');
-                snippet.className = 'search-source-item-snippet';
-                snippet.textContent = src.content;
-                bodyWrap.appendChild(snippet);
-            }
-
-            item.appendChild(bodyWrap);
-            itemList.appendChild(item);
-        });
-
-        group.appendChild(itemList);
-        body.appendChild(group);
-    });
-
-    panel.appendChild(body);
-    el.appendChild(panel);
-
-    // 点击 header 切换展开/收起
-    header.addEventListener('click', function () {
-        panel.classList.toggle('open');
-    });
 }
 
 /**
@@ -4702,7 +3886,7 @@ function renderToolCalls(el, toolCalls) {
         list.appendChild(item);
     }
 
-    // 折叠摘要组件：结构与样式与来源/卡片面板一致（icon | 文本 | 徽标 | 箭头），
+    // 折叠摘要组件：结构与样式与卡片面板一致（icon | 文本 | 徽标 | 箭头），
     // 追加到消息末尾（正文下方证据区）
     var uid = 'ai-tool-detail-' + Date.now();
     var summary = document.createElement('div');
@@ -4753,7 +3937,7 @@ function renderToolCalls(el, toolCalls) {
     summary.appendChild(header);
     summary.appendChild(body);
 
-    // 与来源/卡片面板一致：点击 header 切换面板 .open（aria-expanded 同步）
+    // 与卡片面板一致：点击 header 切换面板 .open（aria-expanded 同步）
     header.addEventListener('click', function() {
         var isOpen = summary.classList.toggle('open');
         header.setAttribute('aria-expanded', isOpen);
@@ -4984,7 +4168,7 @@ async function applyEdit(msgEl, newContent) {
 
     if (!isStreaming) {
         if (!(await ensureAIReady('开始对话'))) return;
-        await startStreaming(newContent, true, 0);
+        await startStreaming(newContent, 0);
         scrollToBottom();
     }
 }
@@ -5074,7 +4258,7 @@ async function handleRegenerate(msgEl) {
 
     // 再生（regenerate 不新建用户消息，userMsgID 传 0）
     if (!(await ensureAIReady('重新生成'))) return;
-    await startStreaming('', true, 0);
+    await startStreaming('', 0);
     scrollToBottom();
 }
 
@@ -5133,7 +4317,7 @@ async function handleResend(msgEl) {
     }
 
     // 重新添加用户消息气泡（带上 msgId、token 和 meta）
-    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined, undefined, undefined, undefined, false, false, resendMeta);
+    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined, undefined, undefined, false, false, resendMeta);
     const newUserMsgEl = messagesInnerEl.lastElementChild;
     if (newUserMsgEl) {
         newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, resendTokens));
@@ -5146,7 +4330,7 @@ async function handleResend(msgEl) {
 
     // 重新发送
     if (!(await ensureAIReady('重新发送'))) return;
-    await startStreaming(content, false, newUserMsgId);
+    await startStreaming(content, newUserMsgId);
     scrollToBottom();
 }
 
@@ -6052,12 +5236,7 @@ async function saveCurrentSessionConfig() {
     try {
         await window.go.main.App.SaveSessionConfig(activeSessionId, {
             model_name: modelLabel?.textContent || '',
-            agent_enabled: agentEnabled,
             enable_thinking: enableThinking,
-            zhihu_search_enabled: searchSources.has('zhihu_search'),
-            zhihu_global_search_enabled: searchSources.has('zhihu_global'),
-            tavily_search_enabled: searchSources.has('tavily'),
-            enable_card_recall: enableCardRecall,
             referenced_notes: JSON.stringify(referencedNotes),
             roleplay_notes: JSON.stringify(roleplayNotes),
             enabled_skills: JSON.stringify(activeSkills),
@@ -6065,108 +5244,6 @@ async function saveCurrentSessionConfig() {
         });
     } catch (_) {}
 }
-
-/**
- * 每次打开菜单时重新获取最新笔记本列表
- */
-async function loadRecallNotebookMenu() {
-    if (!cardRecallDropdown) return;
-    try {
-        const notebooks = await window.go.main.App.GetAllNotebooks();
-        if (!notebooks || notebooks.length === 0) return;
-        cardRecallDropdown.innerHTML = '';
-        notebooks.forEach(nb => {
-            const item = document.createElement('div');
-            item.className = 'ai-chat-recall-item';
-            item.dataset.id = nb.id;
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.id = 'aiRecallNb_' + nb.id;
-            cb.checked = recallNotebookIds.has(nb.id);
-            const label = document.createElement('span');
-            label.textContent = nb.name;
-            item.appendChild(cb);
-            item.appendChild(label);
-            // 点击整个 item 切换 checkbox
-            item.addEventListener('click', (e) => {
-                if (e.target.tagName === 'INPUT') return;
-                cb.checked = !cb.checked;
-                cb.dispatchEvent(new Event('change'));
-            });
-            // checkbox change 事件
-            cb.addEventListener('change', async () => {
-                const wasEnabled = enableCardRecall;         // 操作前召回开关状态
-                const wasEmpty = recallNotebookIds.size === 0; // 操作前是否未选任何笔记本
-                if (cb.checked) {
-                    recallNotebookIds.add(nb.id);
-                } else {
-                    recallNotebookIds.delete(nb.id);
-                }
-                // 勾选导致召回从关闭变为开启：先校验量化配置与量化表
-                if (cb.checked && wasEmpty && !wasEnabled) {
-                    try {
-                        const check = await window.go.main.App.ValidateCardRecall();
-                        if (!check.ok) {
-                            // 校验失败：回滚复选框与开关状态
-                            cb.checked = false;
-                            recallNotebookIds.delete(nb.id);
-                            enableCardRecall = false;
-                            if (cardRecallToggle) cardRecallToggle.classList.remove('active');
-                            nm.show(check.message || '卡片召回校验未通过', 'warning');
-                            return;
-                        }
-                    } catch (e) {
-                        cb.checked = false;
-                        recallNotebookIds.delete(nb.id);
-                        enableCardRecall = false;
-                        if (cardRecallToggle) cardRecallToggle.classList.remove('active');
-                        nm.show('卡片召回校验失败: ' + e, 'error');
-                        return;
-                    }
-                }
-                // 如果全不选，卡片召回设为关闭；如果全选或有选，设为开启
-                if (recallNotebookIds.size === 0) {
-                    enableCardRecall = false;
-                    if (cardRecallToggle) cardRecallToggle.classList.remove('active');
-                } else {
-                    enableCardRecall = true;
-                    if (cardRecallToggle) cardRecallToggle.classList.add('active');
-                }
-                await saveCurrentSessionConfig();
-            });
-            cardRecallDropdown.appendChild(item);
-        });
-        // 每次打开菜单时，将滚动条重置到顶部
-        cardRecallDropdown.scrollTop = 0;
-    } catch (_) {}
-}
-
-/**
- * 暴露给 main.js 设置页用的全局同步方法：开→全选，关→全取消
- */
-window.__syncRecallNotebooks = async function (isActive) {
-    recallNotebookIds.clear();
-    if (isActive) {
-        try {
-            const notebooks = await window.go.main.App.GetAllNotebooks();
-            if (notebooks) {
-                notebooks.forEach(nb => recallNotebookIds.add(nb.id));
-            }
-        } catch (_) {}
-    }
-    // 更新菜单复选框状态
-    if (cardRecallDropdown) {
-        cardRecallDropdown.querySelectorAll('.ai-chat-recall-item input[type="checkbox"]').forEach(cb => {
-            cb.checked = isActive;
-        });
-    }
-    // 同步工具栏 toggle
-    if (cardRecallToggle) {
-        cardRecallToggle.classList.toggle('active', isActive);
-    }
-    enableCardRecall = isActive;
-    await saveCurrentSessionConfig();
-};
 
 /**
  * 语言选择浮层实例

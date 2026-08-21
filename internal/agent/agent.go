@@ -48,9 +48,6 @@ const DefaultMaxIterations = 20
 const MaxCachedSessions = 32
 
 // Deps AgentService 依赖注入。
-// 注意：搜索功能在现有代码中是 services 包级函数（services.SearchWeb / SearchZhihuContent /
-// SearchGlobalContent），不存在 *services.SearchService 类型，故此处不注入 Search，
-// 由 web_search 工具内部直接调用包级函数。
 type Deps struct {
 	AI       *services.AIService
 	Vector   *services.VectorService

@@ -100,11 +100,11 @@ func ClassifyIntent(userText string) IntentResult {
 		}
 	}
 
-	// 6. 联网搜索需求：注入 web_search 提示（不裁剪）
+	// 6. 联网搜索需求：注入 MCP 搜索工具提示（不裁剪）
 	if isSearchQuery(text) {
 		return IntentResult{
 			Intent: IntentSearch,
-			Prompt: "【本请求意图识别】本条请求为联网搜索类需求，可直接调用 web_search（必要时先用 refine_search_query 精炼关键词）；是否先检索本地笔记由【本地知识优先】规范决定。",
+			Prompt: "【本请求意图识别】本条请求为联网搜索类需求，可直接调用 MCP 服务器提供的搜索工具获取实时信息；是否先检索本地笔记由【本地知识优先】规范决定。",
 		}
 	}
 

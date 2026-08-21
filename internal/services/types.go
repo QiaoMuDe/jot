@@ -71,18 +71,10 @@ type SettingsConfig struct {
 	AIEmbedBaseURL              string `json:"ai_embed_base_url"`
 	AIEmbedAPIKey               string `json:"ai_embed_api_key"`
 	AIEmbedModel                string `json:"ai_embed_model"`
-	TavilyAPIKey                string `json:"tavily_api_key"`
 	AIThinkingEnabled           bool   `json:"ai_thinking_enabled"`
-	ZhihuAccessSecret           string `json:"zhihu_access_secret"`
-	ZhihuSearchEnabled          bool   `json:"zhihu_search_enabled"`
-	ZhihuGlobalSearchEnabled    bool   `json:"zhihu_global_search_enabled"`
-	TavilySearchEnabled         bool   `json:"tavily_search_enabled"`
-	AICardRecallEnabled         bool   `json:"ai_card_recall_enabled"`
 	AICardRecallLimit           int    `json:"ai_card_recall_limit"`
 	MaxFileSize                 int    `json:"max_file_size"`
-	AIWebSearchMaxChars         int    `json:"ai_web_search_max_chars"`
 	AILargeFilePreviewThreshold int    `json:"ai_large_file_preview_threshold"`
-	AISearchResultLimit         int    `json:"ai_search_result_limit"`
 	AIAgentToolsDisabled        string `json:"ai_agent_tools_disabled"`
 	AIAgentMaxIterations        int    `json:"ai_agent_max_iterations"`
 	TrashCleanupRetentionDays   int    `json:"trash_cleanup_retention_days"`
@@ -109,18 +101,10 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AIEmbedBaseURL:              s.Get("ai_embed_base_url"),
 		AIEmbedAPIKey:               s.Get("ai_embed_api_key"),
 		AIEmbedModel:                s.Get("ai_embed_model"),
-		TavilyAPIKey:                s.Get("tavily_api_key"),
 		AIThinkingEnabled:           parseBoolSetting(s.Get("ai_thinking_enabled")),
-		ZhihuAccessSecret:           s.Get("zhihu_access_secret"),
-		ZhihuSearchEnabled:          parseBoolSetting(s.Get("zhihu_search_enabled")),
-		ZhihuGlobalSearchEnabled:    parseBoolSetting(s.Get("zhihu_global_search_enabled")),
-		TavilySearchEnabled:         parseBoolSetting(s.Get("tavily_search_enabled")),
-		AICardRecallEnabled:         parseBoolSetting(s.Get("ai_card_recall_enabled")),
 		AICardRecallLimit:           parseIntSetting(s.Get("ai_card_recall_limit"), 5),
 		MaxFileSize:                 parseIntSetting(s.Get("max_file_size"), 1),
-		AIWebSearchMaxChars:         parseIntSetting(s.Get("ai_web_search_max_chars"), 5000),
 		AILargeFilePreviewThreshold: parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
-		AISearchResultLimit:         parseIntSetting(s.Get("ai_search_result_limit"), 5),
 		AIAgentToolsDisabled:        s.Get("ai_agent_tools_disabled"),
 		AIAgentMaxIterations:        parseIntSetting(s.Get("ai_agent_max_iterations"), 20),
 		TrashCleanupRetentionDays:   parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
@@ -131,8 +115,6 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.AIEmbedAPIKey = DecodeB64(cfg.AIEmbedAPIKey)
-	cfg.TavilyAPIKey = DecodeB64(cfg.TavilyAPIKey)
-	cfg.ZhihuAccessSecret = DecodeB64(cfg.ZhihuAccessSecret)
 	return cfg
 }
 
@@ -153,11 +135,6 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.AICardRecallLimit > 30 {
 		cfg.AICardRecallLimit = 30
 	}
-	if cfg.AIWebSearchMaxChars < 1 {
-		cfg.AIWebSearchMaxChars = 5000
-	} else if cfg.AIWebSearchMaxChars > 50000 {
-		cfg.AIWebSearchMaxChars = 50000
-	}
 	if cfg.AILargeFilePreviewThreshold < 1 {
 		cfg.AILargeFilePreviewThreshold = 10000
 	} else if cfg.AILargeFilePreviewThreshold > 100000 {
@@ -167,11 +144,6 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		cfg.MaxFileSize = 1
 	} else if cfg.MaxFileSize > 100 {
 		cfg.MaxFileSize = 100
-	}
-	if cfg.AISearchResultLimit < 1 {
-		cfg.AISearchResultLimit = 5
-	} else if cfg.AISearchResultLimit > 30 {
-		cfg.AISearchResultLimit = 30
 	}
 	if cfg.TrashCleanupRetentionDays < 1 {
 		cfg.TrashCleanupRetentionDays = 30
@@ -191,8 +163,6 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
 	cfg.AIEmbedAPIKey = EncodeB64(cfg.AIEmbedAPIKey)
-	cfg.TavilyAPIKey = EncodeB64(cfg.TavilyAPIKey)
-	cfg.ZhihuAccessSecret = EncodeB64(cfg.ZhihuAccessSecret)
 
 	// 处理锁屏密码：非空则 SHA-256 哈希后存储，空则从数据库读取旧值保留
 	// 如果锁屏被关闭，清空密码
@@ -221,18 +191,10 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_embed_base_url":               cfg.AIEmbedBaseURL,
 		"ai_embed_api_key":                cfg.AIEmbedAPIKey,
 		"ai_embed_model":                  cfg.AIEmbedModel,
-		"tavily_api_key":                  cfg.TavilyAPIKey,
 		"ai_thinking_enabled":             strconv.FormatBool(cfg.AIThinkingEnabled),
-		"zhihu_access_secret":             cfg.ZhihuAccessSecret,
-		"zhihu_search_enabled":            strconv.FormatBool(cfg.ZhihuSearchEnabled),
-		"zhihu_global_search_enabled":     strconv.FormatBool(cfg.ZhihuGlobalSearchEnabled),
-		"tavily_search_enabled":           strconv.FormatBool(cfg.TavilySearchEnabled),
-		"ai_card_recall_enabled":          strconv.FormatBool(cfg.AICardRecallEnabled),
 		"ai_card_recall_limit":            strconv.Itoa(cfg.AICardRecallLimit),
 		"max_file_size":                   strconv.Itoa(cfg.MaxFileSize),
-		"ai_web_search_max_chars":         strconv.Itoa(cfg.AIWebSearchMaxChars),
 		"ai_large_file_preview_threshold": strconv.Itoa(cfg.AILargeFilePreviewThreshold),
-		"ai_search_result_limit":          strconv.Itoa(cfg.AISearchResultLimit),
 		"ai_agent_tools_disabled":         cfg.AIAgentToolsDisabled,
 		"ai_agent_max_iterations":         strconv.Itoa(cfg.AIAgentMaxIterations),
 		"trash_cleanup_retention_days":    strconv.Itoa(cfg.TrashCleanupRetentionDays),
