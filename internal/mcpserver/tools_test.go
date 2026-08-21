@@ -3,55 +3,60 @@ package mcpserver_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"jot/internal/agent/tools"
 	"jot/internal/mcpserver"
 )
 
 // TestOpenSessionOverSSE 验证 OpenSession 全链路：
-// 内存 SSE MCP 服务器 → Connect 握手 → GetTools 发现工具 → 改名包装 → 调用执行 → 关闭会话。
+// 内存 SSE MCP 服务器 → Connect 握手 → ListTools 发现工具 → 改名包装 → 调用执行 → 关闭会话。
 func TestOpenSessionOverSSE(t *testing.T) {
 	// 超时保护：覆盖握手 / 工具发现 / 工具调用等所有网络操作，防止测试挂死
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// 1. 起内存 MCP 服务器并注册两个工具：add（两数求和）与 get_current_time（只读）
-	mcpSrv := server.NewMCPServer("test-math-server", "1.0.0")
-	mcpSrv.AddTool(mcp.NewTool("add",
-		mcp.WithDescription("两数相加"),
-		mcp.WithNumber("a", mcp.Required()),
-		mcp.WithNumber("b", mcp.Required()),
-	), func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// req.Params.Arguments 为 any，先序列化再反序列化为具名结构
-		raw, err := json.Marshal(req.Params.Arguments)
-		if err != nil {
-			return nil, err
-		}
-		var args struct {
-			A float64 `json:"a"`
-			B float64 `json:"b"`
-		}
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, err
-		}
-		return mcp.NewToolResultText(strconv.FormatFloat(args.A+args.B, 'f', -1, 64)), nil
+	srv := mcp.NewServer(&mcp.Implementation{Name: "test-math-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "add",
+		Description: "两数相加",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"a": map[string]any{"type": "number"},
+				"b": map[string]any{"type": "number"},
+			},
+			"required": []string{"a", "b"},
+		},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, args map[string]any) (*mcp.CallToolResult, any, error) {
+		a, _ := args["a"].(float64)
+		b, _ := args["b"].(float64)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: strconv.FormatFloat(a+b, 'f', -1, 64)}},
+		}, nil, nil
 	})
-	mcpSrv.AddTool(mcp.NewTool("get_current_time",
-		mcp.WithDescription("只读：返回当前时间"),
-	), func(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return mcp.NewToolResultText("2026-08-11 12:00:00"), nil
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "get_current_time",
+		Description: "只读：返回当前时间",
+		InputSchema: map[string]any{"type": "object"},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "2026-08-11 12:00:00"}},
+		}, nil, nil
 	})
 
-	// 2. 内存 SSE 传输：NewTestServer 基于 httptest 起随机端口的内存服务器，无端口冲突
-	ts := server.NewTestServer(mcpSrv)
+	// 2. 内存 SSE 传输：httptest 起随机端口的内存服务器，无端口冲突
+	handler := mcp.NewSSEHandler(func(*http.Request) *mcp.Server { return srv }, nil)
+	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
 	// 3. 构造 MCP 服务器配置（SSE 端点默认 /sse）
@@ -62,7 +67,7 @@ func TestOpenSessionOverSSE(t *testing.T) {
 		Enabled:   true,
 	}
 
-	// 4. OpenSession：Connect 握手 → GetTools 发现 → 改名包装
+	// 4. OpenSession：Connect 握手 → ListTools 发现 → 改名包装
 	sess, err := mcpserver.OpenSession(ctx, ms)
 	if err != nil {
 		t.Fatalf("OpenSession 失败: %v", err)
@@ -140,7 +145,7 @@ func findTool(t *testing.T, ctx context.Context, list []tool.BaseTool, suffix st
 	return nil
 }
 
-// toolResultText 解析 eino mcp 组件 InvokableRun 返回的 JSON（CallToolResult 序列化），
+// toolResultText 解析 InvokableRun 返回的 JSON（CallToolResult 序列化），
 // 提取 content[0].text 文本内容。
 func toolResultText(t *testing.T, out string) string {
 	t.Helper()

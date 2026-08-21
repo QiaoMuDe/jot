@@ -13,7 +13,7 @@ import (
 func TestConnectWithCanceledCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 已取消：即使进程能启动，Initialize 也会立即失败
-	cli, err := mcpserver.Connect(ctx, mcpserver.Server{
+	cli, _, err := mcpserver.Connect(ctx, mcpserver.Server{
 		Name:      "gone-server",
 		Transport: "stdio",
 		Command:   "definitely-not-exist-cmd-jot-test",

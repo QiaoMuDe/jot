@@ -3,9 +3,10 @@
 // 职责：
 //   - 从数据库读取与校验 MCP 服务器配置（stdio / sse / http 三种传输）：
 //     config.go 定义 Server / Config 结构与 LoadFromDB。
-//   - 基于 mark3labs/mcp-go 按传输类型构建客户端并完成握手（Start + Initialize）：
+//   - 基于 modelcontextprotocol/go-sdk 按传输类型构建客户端并完成握手
+//     （协议版本自动协商，含降级到 2024-11-05）：
 //     client.go 的 Connect。
-//   - 基于 eino-ext mcp 组件将服务器工具转为 eino tool.BaseTool，
+//   - 基于 go-sdk 的 ListTools / CallTool 将服务器工具转为 eino tool.BaseTool，
 //     统一加 mcp_{服务器名}_{工具名} 前缀防命名冲突，并提供 ActionText 文案：
 //     tools.go 的 Session / OpenSession。
 //

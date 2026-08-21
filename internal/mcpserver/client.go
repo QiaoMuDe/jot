@@ -4,92 +4,104 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+	"net/http"
+	"os"
+	"os/exec"
+	"sync/atomic"
 	"time"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// ConnectTimeout 单台 MCP 服务器连接 + 握手（Start + Initialize）的超时上限。
+// ConnectTimeout 单台 MCP 服务器连接 + 握手（Connect + Initialize）的超时上限。
 // 调用方 ctx 通常无超时（仅可取消），若无此限制，远程服务器不可达（DNS/TCP/TLS 挂起）
 // 时串行装配会无限阻塞后续服务器与整轮对话；超时走现有「连接失败跳过」分支。
 const ConnectTimeout = 10 * time.Second
 
-// Connect 按服务器传输类型构建 MCP 客户端并完成握手（Start + Initialize）。
-// stdio 客户端构造时已自动启动 transport，无需手动 Start；sse / http 需手动 cli.Start(ctx)。
-// 连接 / 握手失败统一包装为含服务器名的错误（Connect 内部负责清理已创建但未就绪的客户端）；
-// 连接成功后由调用方（Session）负责最终 cli.Close()。
-// 每台服务器连接包一层 ConnectTimeout 超时，超时错误文案明确提示。
-func Connect(ctx context.Context, s Server) (client.MCPClient, error) {
-	// 独立超时：限制单台服务器连接 + 握手总耗时，避免远程挂起阻塞装配
-	connCtx, cancel := context.WithTimeout(ctx, ConnectTimeout)
-	defer cancel()
+// Connect 按服务器传输类型构建 MCP 客户端并完成握手（Connect + Initialize）。
+// go-sdk 的 Client.Connect 内部完成传输连接、协议版本自动协商（含降级到 2024-11-05）
+// 与 initialize 握手，无需手动 Start / Initialize。
+// 连接 / 握手失败统一包装为含服务器名的错误（Connect 内部负责清理已创建但未就绪的会话）；
+// 连接成功后返回会话与 cancel 函数——cancel 必须由调用方在会话不再需要时调用
+// （Session.Close 负责），它终止底层传输（SSE/HTTP 的长连接依赖传入 ctx 的生命周期，
+// 若在 Connect 返回后立即取消会断开会话）。
+// Headers 鉴权：go-sdk transport 无 Headers 字段，通过自定义 http.Client（RoundTripper
+// 注入请求头）实现，SSE 的 GET 与 POST 请求均生效。
+func Connect(ctx context.Context, s Server) (*mcp.ClientSession, func(), error) {
+	// 会话生命周期 ctx：继承调用方可取消语义，成功握手后不取消（由调用方 Close 时取消）。
+	// 独立计时器实现握手超时：超时即取消 ctx（连接与未完成握手一并终止）。
+	connCtx, cancel := context.WithCancel(ctx)
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(ConnectTimeout, func() {
+		timedOut.Store(true)
+		cancel()
+	})
 
-	var cli client.MCPClient
-	var err error
+	cli := mcp.NewClient(&mcp.Implementation{Name: "jot", Version: "0.0.1"}, nil)
+
+	var tr mcp.Transport
 	switch s.Transport {
 	case "stdio":
-		// 注意：NewStdioMCPClient 失败时返回 (*Client)(nil)，直接赋给接口 cli 会让
-		// cli != nil 误判为真（typed-nil 陷阱），后续 Close 将 panic。因此先判错再赋接口。
-		c, cerr := client.NewStdioMCPClient(s.Command, envSlice(s.Env), s.Args...)
-		if cerr != nil {
-			return nil, wrapConnectError(s.Name, cerr)
+		cmd := exec.Command(s.Command, s.Args...)
+		if len(s.Env) > 0 {
+			cmd.Env = append(os.Environ(), envSlice(s.Env)...)
 		}
-		cli = c
+		tr = &mcp.CommandTransport{Command: cmd}
 	case "sse":
-		var c *client.Client
-		var opts []transport.ClientOption
-		if len(s.Headers) > 0 {
-			opts = append(opts, client.WithHeaders(s.Headers))
-		}
-		if c, err = client.NewSSEMCPClient(s.URL, opts...); err == nil {
-			err = c.Start(connCtx)
-			cli = c
+		tr = &mcp.SSEClientTransport{
+			Endpoint:   s.URL,
+			HTTPClient: httpClientWithHeaders(s.Headers),
 		}
 	case "http":
-		var c *client.Client
-		var opts []transport.StreamableHTTPCOption
-		if len(s.Headers) > 0 {
-			opts = append(opts, transport.WithHTTPHeaders(s.Headers))
-		}
-		if c, err = client.NewStreamableHttpClient(s.URL, opts...); err == nil {
-			err = c.Start(connCtx)
-			cli = c
+		tr = &mcp.StreamableClientTransport{
+			Endpoint:   s.URL,
+			HTTPClient: httpClientWithHeaders(s.Headers),
 		}
 	default:
-		return nil, fmt.Errorf("MCP 服务器 %s 连接失败: 不支持的传输类型 %q", s.Name, s.Transport)
-	}
-	if err != nil {
-		safeClose(cli)
-		return nil, wrapConnectError(s.Name, err)
+		timer.Stop()
+		cancel()
+		return nil, nil, fmt.Errorf("MCP 服务器 %s 连接失败: 不支持的传输类型 %q", s.Name, s.Transport)
 	}
 
-	// 标准握手：Initialize（ClientInfo 标识 jot）
-	if _, err := cli.Initialize(connCtx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
-			ClientInfo:      mcp.Implementation{Name: "jot", Version: "0.0.1"},
-		},
-	}); err != nil {
-		safeClose(cli)
-		return nil, wrapConnectError(s.Name, err)
+	cs, err := cli.Connect(connCtx, tr, nil)
+	timer.Stop()
+	if err != nil {
+		cancel()
+		if timedOut.Load() {
+			return nil, nil, fmt.Errorf("MCP 服务器 %s 连接超时（%s 内未完成连接握手）: %w", s.Name, ConnectTimeout, err)
+		}
+		return nil, nil, wrapConnectError(s.Name, err)
 	}
-	return cli, nil
+	return cs, cancel, nil
 }
 
-// safeClose 关闭 MCP 客户端。接口变量可能装包 typed-nil 指针（如 (*Client)(nil)），
-// 此时 cli != nil 但直接调用 Close 会 panic；先校验接口底层指针非 nil 再关闭，防御兜底。
-func safeClose(cli client.MCPClient) {
-	if cli == nil {
-		return
+// httpClientWithHeaders 返回注入自定义请求头的 http.Client。
+// Headers 为空时返回 nil，transport 使用默认 http.DefaultClient。
+func httpClientWithHeaders(headers map[string]string) *http.Client {
+	if len(headers) == 0 {
+		return nil
 	}
-	v := reflect.ValueOf(cli)
-	if v.Kind() == reflect.Pointer && v.IsNil() {
-		return
+	return &http.Client{
+		Transport: &headerRoundTripper{
+			base:    http.DefaultTransport,
+			headers: headers,
+		},
 	}
-	_ = cli.Close()
+}
+
+// headerRoundTripper 包装 http.RoundTripper，为每个请求注入配置的 Headers。
+// 克隆请求避免污染共享请求对象（连接复用场景安全）。
+type headerRoundTripper struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (h *headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	for k, v := range h.headers {
+		cloned.Header.Set(k, v)
+	}
+	return h.base.RoundTrip(cloned)
 }
 
 // wrapConnectError 包装连接/握手错误：超时（含调用方取消触发的 deadline）明确提示，
@@ -101,7 +113,7 @@ func wrapConnectError(name string, err error) error {
 	return fmt.Errorf("MCP 服务器 %s 连接失败: %w", name, err)
 }
 
-// envSlice 将配置的 Env map 转为 mcp-go stdio 客户端要求的 "KEY=VALUE" 字符串切片。
+// envSlice 将配置的 Env map 转为 exec.Cmd.Env 追加所需的 "KEY=VALUE" 字符串切片。
 func envSlice(env map[string]string) []string {
 	if len(env) == 0 {
 		return nil
