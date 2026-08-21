@@ -132,7 +132,7 @@
     padding: 10px 18px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; /* 强制单行：超宽时按钮内部省略，不再换行 */
     background: var(--input-bg);
 }
 .search-modal-filter {
@@ -140,16 +140,22 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    flex: 0 1 auto;   /* 内容自适应宽，但允许收缩（超宽时压缩按钮） */
+    min-width: 0;     /* 允许收缩，配合按钮省略（flex 子项默认 min-width:auto 会阻止收缩） */
 }
 .search-modal-filter-label {
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
+    flex-shrink: 0;  /* 标签文字不收缩 */
 }
 .search-modal-filter-btn {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    flex: 0 1 auto;   /* 允许按比例收缩（超宽时按钮内部省略而非整体换行） */
+    min-width: 0;     /* 收缩到省略号所需最小宽度 */
+    max-width: 160px;
     padding: 4px 8px;
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -159,6 +165,13 @@
     cursor: pointer;
     font-family: inherit;
     transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+/* 选中值 label 超长单行省略（flex 子项需 min-width: 0 才允许收缩） */
+.search-modal-filter-btn > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .search-modal-filter-btn:hover {
     background: var(--hover-bg);
@@ -186,7 +199,8 @@
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    min-width: 160px;
+    width: 220px;
+    max-width: 220px;
     max-height: 240px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -228,6 +242,16 @@
     cursor: pointer;
     transition: background 0.1s, color 0.1s;
     user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* 超长选项文本单行省略（flex 子项需 min-width: 0 才允许收缩） */
+.search-modal-filter-option > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .search-modal-filter-option:hover {
     background: var(--accent-light);

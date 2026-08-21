@@ -7910,7 +7910,7 @@ function updateTagFilterLabel() {
     } else if (state.searchModalTagIds.size === 1) {
         const id = Array.from(state.searchModalTagIds)[0];
         const t = (state.tags || []).find(x => x.id === id);
-        els.searchModalTagLabel.textContent = '#' + (t ? t.name : '');
+        els.searchModalTagLabel.textContent = (t && t.name) || '';
     } else {
         els.searchModalTagLabel.textContent = `${state.searchModalTagIds.size} 个标签`;
     }
@@ -8109,7 +8109,7 @@ function renderTagFilterDropdown() {
     dd.appendChild(allOpt);
     state.tags.forEach(tag => {
         const tagOpt = _createFilterOption({
-            text: '#' + (tag.name || ''),
+            text: tag.name || '',
             selected: state.searchModalTagIds.has(tag.id),
             onClick: (e) => {
                 e.stopPropagation();
