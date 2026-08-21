@@ -96,6 +96,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("初始化内置 API 预设失败: %w", err)
 	}
 
+	// 初始化内置 MCP 服务器（仅插入不存在的，默认禁用待用户填密钥后启用）
+	if err := InitBuiltinMCPServers(db); err != nil {
+		return nil, fmt.Errorf("初始化内置 MCP 服务器失败: %w", err)
+	}
+
 	return db, nil
 }
 
