@@ -23,10 +23,6 @@ func InitBuiltinProfiles(db *gorm.DB) error {
 			BaseURL: "https://api.deepseek.com",
 		},
 		{
-			Name:    "VIP 中转",
-			BaseURL: "https://vip.j3gb.com/v1",
-		},
-		{
 			Name:    "OpenRouter",
 			BaseURL: "https://openrouter.ai/api/v1",
 		},
