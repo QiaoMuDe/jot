@@ -535,18 +535,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：前置意图感知阶段 1（intent.go 规则分类器）+ 启动迁移清理（migrateProviderRemoval 移除）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增循环前规则意图分类层（补上"输入处理前无行为感知"的空档，定位为**感知与信号强化层**，最终决策权仍在循环内模型）：① **[intent.go](internal/agent/intent.go)**——纯本地关键词正则分类，零 API 成本、确定性可单测，7 类意图：`chitchat`/`time`/`search`/`stats`/`note_write`/`vague`/`query`（默认），分类顺序：纯时间→纯闲聊→写操作→模糊→统计→搜索→默认；简单实体提取 + **软信号/硬约束分级**（高置信硬约束=工具裁剪，弱信号仅注入提示）。② **app.go `CallAIAgentStream` 接入**——读设置取 disabledTools 后、Run 前调用 `agent.ClassifyIntent(userText)`：注入【本请求意图识别】强化提示（note_write→confirm 流程、vague→ask_user 强制反问、stats→get_stats、search→web_search）+ 裁剪合并进既有黑名单（**追加语义不覆盖用户配置**）+ Debugw 日志（intent + 裁剪列表）。③ **裁剪策略（保守）**——仅纯时间查询保留 get_current_time；**闲聊不裁剪**（判定不可靠，"应声+正题"如"好的，把今天的安排发我一下"易误判，误裁导致功能受限是重要教训）；工具名列表复用 `tools.BuiltinTools()` 防硬编码漂移；agent.go 零改动、问答模式（CallAIStream）不受影响。 |
-| **意图层与工具层分工（重要）** | **不做"每工具一个规则分类器"**——工具间语义重叠（如"查笔记"该归 recall_notes 还是 manage_note list 由模型按上下文选）规则必误判；工具细粒度选择留给模型（它看全部 schema），工具防御由工具层自身机制承担（confirm/参数校验/文本上限/action 白名单），意图层只做粗粒度决策。工具级推荐留待阶段 2（L2 模型层结构化输出 recommended_tools，而非堆关键词）。演进：阶段 1 已实施；阶段 2 = 规则低置信时按需触发轻量 LLM 意图解析；阶段 3 = 解析结果回传前端展示可解释性。 |
-| **启动迁移清理** | 移除已过时的 `migrateProviderRemoval`（[app.go](app.go)）：provider 概念已多版本前移除，函数完全幂等但每次启动产生 DROP COLUMN 报错噪音；删除收益≈0、风险是破坏老版本升级（需确认无 provider 时代部署）。`migrateSensitiveKeys`（密钥 Base64 编码迁移）保留。判断"迁移代码能否删除"的依据：幂等性 + 是否还有老版本部署 + 启动噪音。 |
-| **涉及文件** | [internal/agent/intent.go](internal/agent/intent.go)（新增）、[app.go](app.go)（ClassifyIntent 接入 + 意图日志 + 移除迁移）、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)（BuiltinTools 复用） |
-
----
-
-## 记忆点 2：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
+## 记忆点 1：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -559,7 +548,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 2：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -571,7 +560,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 3：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -583,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 4：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 5：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 6：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 7：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 8：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 9：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -659,6 +648,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **Agent 装配 + 前端联动** | agent.go `Deps.MCPPool`：Run 装配 MCP 工具时全部传输统一 `Pool.Session(name)` 命中秒回（零网络），未命中 `WarmupOne` 兜底；**移除每轮 OpenSession + defer Close**（连接由池持有跨会话跨消息常驻）。app.go 新增绑定 `WarmupMCPServers()`（内部 Reconcile）；`shutdown`/`rebuildServices` 关闭旧池并重建新池注入新 AgentSvc。前端 [main.js](frontend/src/main.js) `warmupMCPServers()`：**汇总一条通知**（全成功 success「已就绪：N 台连接（复用 M 台）共 K 个工具」/ 有失败 warning/error「N 台可用，M 台失败（原因）」），无 enabled 服务器静默；[ai-chat.js](frontend/src/js/ai-chat.js) `onAIChatViewActivated` 首次进入预热（`mcpWarmupDone` 标志防重复）；设置页 toggle/新增/编辑/删除后同步调用。 |
 | **测试与验证教训** | 新增 [pool_internal_test.go](internal/mcpserver/pool_internal_test.go)（复用幂等/指纹重连/并发/CloseAll/失败不缓存/nil 安全）、[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)（**预热进行中 WarmupOne 等待而非重复建连**——用户关心"刚进 AI 助手预热中发消息是否冲突"，in-flight 信号保证 open 仅 1 次）、[reconnect_test.go](internal/mcpserver/reconnect_test.go)（服务端主动断开后 callTool 自动重连同 URL 重试/Close 后不重连/Close 幂等）。**httptest 挂起教训**：SSE GET 长连接使 `ts.Close()` 阻塞，须先 `CloseClientConnections()`；GET handler 需同时监听 `r.Context().Done()` 与断开信号；`sync.Mutex` 不可重入（测试内锁套锁死锁）。 |
 | **涉及文件** | [internal/mcpserver/client.go](internal/mcpserver/client.go)（go-sdk 三传输 + headerRoundTripper + 会话生命周期 cancel）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（ListTools/CallTool + callTool 重连 + InputSchema 转换）、[internal/mcpserver/pool.go](internal/mcpserver/pool.go)（新增 Pool/Warmup/Reconcile/WarmupOne/getOrCreate/in-flight）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPPool + 装配改走池）、[app.go](app.go)（WarmupMCPServers 绑定 + shutdown/rebuildServices 池生命周期）、[frontend/src/main.js](frontend/src/main.js)（warmupMCPServers 汇总通知 + 设置页联动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（首次进入预热）、[frontend/wailsjs/](frontend/wailsjs/)（WarmupMCPServers + WarmupResult 手动同步）、[go.mod](go.mod)（go-sdk v1.7.0，移除 mark3labs/eino-ext mcp）、[ping_test.go](internal/mcpserver/ping_test.go)/[pool_internal_test.go](internal/mcpserver/pool_internal_test.go)/[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)/[reconnect_test.go](internal/mcpserver/reconnect_test.go)（新增测试） |
+
+---
+
+## 记忆点 10：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为 MCP 服务器提供工具级别的启用/禁用开关，取代"服务器一启用，所有工具全量注册"的粗粒度控制。**禁用名单复用** `ai_agent_tools_disabled` 设置键（JSON 数组），与内置工具共用同一套机制，不改 schema。**数据流**：设置页打开时 `GetAgentTools()` 从 MCP 池（`Pool`）读取已预热会话的快照，追加 MCP 工具到内置工具列表后返回；MCP 工具名格式为 `mcp_{serverName}_{toolName}`，前端直接混入内置工具列表渲染（`ToolMeta` 通用渲染零改动）；预热前池为空时不显示 MCP 工具（自然降级），预热完成后 `refreshAgentToolsMeta()` 自动刷新。**禁用状态持久化**：用户开关 MCP 工具后写入 `ai_agent_tools_disabled`，重启后从数据库加载，预热后自动恢复显示禁用状态，不会自动恢复成启用。 |
+| **后端改动（重要）** | ① **[pool.go](internal/mcpserver/pool.go)**——新增 `SessionToolMeta{ServerName, FullName}` 结构体和 `ListToolMetas()` 方法：遍历池中已预热会话的 `Tools`，调用 `t.Info(context.Background())` 取改名后工具名，未预热服务器不返回（零阻塞）。② **[app.go](app.go) `GetAgentTools()`**——在原有内置工具列表后追加 MCP 工具：`mcpPool.ListToolMetas()` → `strings.TrimPrefix` 取 `originalName` → Label 格式 `"{serverName} 的 {originalName}"` → `Enabled = !disabledSet[FullName]`。③ **[agent.go](internal/agent/agent.go)**——MCP 工具装配循环（第 427-442 行）在 `toolNames = append` 前增加 `if disabledTools[mcpToolName] { continue }`，被禁工具跳过注册，模型不可见也不可调用。 |
+| **前端联动** | **[main.js](frontend/src/main.js)**——新增 `refreshAgentToolsMeta()` 函数：重新调用 `GetAgentTools()` 刷新 `agentToolsMeta` 后更新按钮文字，若工具管理面板已展开则重新渲染；`warmupMCPServers()` 末尾自动调用。`renderAgentToolsMgrList()` 和 `createAgentToolRow()` 通用渲染零改动，MCP 工具直接混入内置工具列表显示。 |
+| **行为边界** | ① 预热前：MCP 工具不显示，按钮文字只计内置工具（如"已启用 14/14"）。② 预热后：MCP 工具出现，按钮文字含 MCP 工具（如"已启用 17/18"）。③ 禁用状态持久化：重启后预热前不显示，预热后自动恢复禁用状态，不会自动启用。④ 服务器开关/新增/删除后：预热自动刷新工具列表。⑤ 支持 `ai_agent_tools_disabled` 中混存内置工具名和 MCP 工具名，互不冲突。 |
+| **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
 
 ---
 

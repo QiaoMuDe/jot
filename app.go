@@ -2237,7 +2237,8 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 	}()
 }
 
-// GetAgentTools 返回 Agent 内置工具清单（含中文说明与当前启用状态），供前端工具开关配置使用。
+// GetAgentTools 返回 Agent 工具清单（含内置工具与已预热 MCP 服务器的工具），
+// 含中文说明与当前启用状态，供前端工具开关配置使用。
 // 禁用集合读取设置 ai_agent_tools_disabled（JSON 数组字符串），解析失败按空处理（默认全部启用）。
 func (a *App) GetAgentTools() []agent.ToolMeta {
 	var disabled []string
@@ -2254,6 +2255,18 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 	result := make([]agent.ToolMeta, 0, len(metas))
 	for _, m := range metas {
 		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name]})
+	}
+	// 追加已预热 MCP 服务器的工具（未预热时不显示，不阻塞等待）
+	if a.mcpPool != nil {
+		mcpTools := a.mcpPool.ListToolMetas()
+		for _, mt := range mcpTools {
+			label := mt.ServerName + " 的 " + strings.TrimPrefix(mt.FullName, "mcp_"+mt.ServerName+"_")
+			result = append(result, agent.ToolMeta{
+				Name:    mt.FullName,
+				Label:   label,
+				Enabled: !disabledSet[mt.FullName],
+			})
+		}
 	}
 	return result
 }

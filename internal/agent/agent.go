@@ -438,6 +438,10 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					if info, err := t.Info(runCtx); err == nil && info != nil {
 						mcpToolName = info.Name
 					}
+					// 检查是否在禁用名单中：被禁工具跳过注册，模型不可见也不可调用
+					if disabledTools[mcpToolName] {
+						continue
+					}
 					toolNames = append(toolNames, mcpToolName)
 					toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
 				}

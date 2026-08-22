@@ -36,6 +36,12 @@ type poolEntry struct {
 	sess *Session // 已预热的会话（含 Tools）
 }
 
+// SessionToolMeta 单条 MCP 工具元信息（供设置页展示与开关控制）。
+type SessionToolMeta struct {
+	ServerName string // 服务器名
+	FullName   string // 完整工具名，格式 mcp_{serverName}_{toolName}
+}
+
 // WarmupResult 预热/同步结果汇总，供前端一条通知展示。
 type WarmupResult struct {
 	Total      int      `json:"total"`       // 本次处理的 enabled 服务器数
@@ -316,6 +322,33 @@ func (p *Pool) Count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.entries)
+}
+
+// ListToolMetas 返回池中所有已预热会话的工具元信息。
+// 未预热的服务器不在此列；调用方（GetAgentTools）据此展示，不阻塞等待。
+func (p *Pool) ListToolMetas() []SessionToolMeta {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var metas []SessionToolMeta
+	for _, entry := range p.entries {
+		if entry.sess == nil {
+			continue
+		}
+		for _, t := range entry.sess.Tools {
+			info, err := t.Info(context.Background())
+			if err != nil || info == nil {
+				continue
+			}
+			metas = append(metas, SessionToolMeta{
+				ServerName: entry.sess.ServerName,
+				FullName:   info.Name,
+			})
+		}
+	}
+	return metas
 }
 
 // serverFingerprint 计算服务器配置指纹：json.Marshal 稳定序列化（map 按键排序），

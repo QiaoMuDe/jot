@@ -9761,8 +9761,27 @@ async function warmupMCPServers() {
     } catch (e) {
         nm.show(`MCP 服务器预热失败：${mcpErrMsg(e)}`, 'error');
     }
+    // 预热完成后刷新 Agent 工具列表（MCP 工具可能已变化）
+    await refreshAgentToolsMeta();
 }
 window.warmupMCPServers = warmupMCPServers;
+
+/**
+ * 重新加载 Agent 工具元信息（内置 + MCP 工具），刷新开关列表显示。
+ * 通常在 MCP 服务器预热/变更后调用，使工具开关列表与池状态同步。
+ */
+async function refreshAgentToolsMeta() {
+    try {
+        agentToolsMeta = (await window.go.main.App.GetAgentTools()) || [];
+    } catch (e) {
+        agentToolsMeta = [];
+    }
+    updateAgentToolsButtonText();
+    // 如果工具管理面板已展开，重新渲染
+    if (agentToolsMgrExpanded) {
+        renderAgentToolsMgrList();
+    }
+}
 
 /**
  * 初始化 MCP 服务器设置面板交互（事件绑定）
