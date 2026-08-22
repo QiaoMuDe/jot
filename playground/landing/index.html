@@ -56,7 +56,7 @@
       <h1>卡片式笔记<br><span>桌面应用</span></h1>
       <p class="hero-sub">
         Jot 是一款轻量级的卡片式笔记桌面应用，采用 Go + 原生 Web 技术栈构建，
-        界面清爽、交互流畅、数据完全本地存储。内置 AI 助手（Chat / Agent 双模式）与本地语义检索，让笔记不仅能记，更能被理解。
+        界面清爽、交互流畅、数据完全本地存储。内置 Agent 智能体与本地语义检索，让笔记不仅能记，更能被理解。
       </p>
       <div class="hero-actions">
         <a href="#features" class="btn btn-primary">
@@ -111,7 +111,7 @@
           </svg>
         </div>
         <h3>AI 智能助手</h3>
-        <p>支持 OpenAI 兼容端点（DeepSeek、通义千问等），Chat / Agent 双模式，流式输出 + 深度思考 + 12 项技能，Agent 内置 10 个工具（管理笔记 / 待办 / 标签 / 笔记本 / 统计 / 搜索 / 召回），可反问确认、接入外部 MCP 工具。</p>
+        <p>支持 OpenAI 兼容端点（DeepSeek、通义千问等），纯 Agent 模式自动调度工具，流式输出 + 深度思考 + 12 项技能，14 个内置工具（管理笔记 / 待办 / 标签 / 笔记本 / 统计 / 召回 / JSON 处理 / 网页读取 / 长文本摘要），可反问确认、接入外部 MCP 工具。</p>
       </div>
 
       <div class="feature-card reveal" style="transition-delay: 0.15s;">
@@ -156,7 +156,7 @@
           </svg>
         </div>
         <h3>联网搜索</h3>
-        <p>支持 Tavily 通用搜索、知乎搜索、全网搜索三个独立来源，可同时开启，AI 自动精化搜索词，获取最新信息。</p>
+        <p>内置 Tavily、知乎搜索等 MCP 服务器，配置自己的 API Key 即可使用，AI 自动精化搜索词，获取最新信息。</p>
       </div>
 
       <div class="feature-card reveal" style="transition-delay: 0.35s;">
@@ -335,18 +335,22 @@
     <div class="section-header reveal">
       <span class="section-label">Agent Mode</span>
       <h2 class="section-title">Agent 智能体</h2>
-      <p class="section-desc">Chat / Agent 双模式：问答交给 Chat，复杂任务交给 Agent 自动调度工具完成</p>
+      <p class="section-desc">纯 Agent 模式：由 AI 自动调度内置工具与外部 MCP 工具，完成复杂任务</p>
     </div>
 
     <div class="format-badges reveal">
-      <span class="format-badge">refine_search_query</span>
-      <span class="format-badge">web_search</span>
+      <span class="format-badge">summarize_text</span>
+      <span class="format-badge">read_url</span>
       <span class="format-badge">recall_notes</span>
       <span class="format-badge">get_current_time</span>
+      <span class="format-badge">json_validate</span>
+      <span class="format-badge">json_format</span>
+      <span class="format-badge">json_extract</span>
       <span class="format-badge">manage_todo</span>
       <span class="format-badge">manage_notebook</span>
       <span class="format-badge">manage_tag</span>
       <span class="format-badge">manage_note</span>
+      <span class="format-badge">read_note_section</span>
       <span class="format-badge">get_stats</span>
       <span class="format-badge">ask_user</span>
     </div>
@@ -359,8 +363,8 @@
           </svg>
         </div>
         <div>
-          <h4>10 个内置工具</h4>
-          <p>管理笔记 / 待办 / 标签 / 笔记本、联网搜索、笔记召回、数据统计，Agent 按任务自动调度</p>
+          <h4>14 个内置工具</h4>
+          <p>管理笔记 / 待办 / 标签 / 笔记本、笔记召回、数据统计、JSON 处理、网页读取、长文本摘要，Agent 按任务自动调度</p>
         </div>
       </div>
       <div class="import-point reveal" style="transition-delay: 0.1s;">
@@ -372,7 +376,7 @@
         </div>
         <div>
           <h4>外部 MCP 扩展</h4>
-          <p>接入任意 MCP 工具服务器（stdio / SSE / HTTP），Agent 能力边界无限延伸</p>
+          <p>设置页完整管理（CRUD + 开关 + 测试连接），全局连接池预热复用，断线自动重连，stdio / SSE / HTTP 三种传输</p>
         </div>
       </div>
       <div class="import-point reveal" style="transition-delay: 0.15s;">
@@ -384,6 +388,18 @@
         <div>
           <h4>主动反问确认</h4>
           <p>信息不足时向用户提问（单选 / 多选 / 自定义），按你的选择继续执行，关键操作可控</p>
+        </div>
+      </div>
+      <div class="import-point reveal" style="transition-delay: 0.2s;">
+        <div class="import-point-icon orange">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+        </div>
+        <div>
+          <h4>工具精细化控制</h4>
+          <p>每个内置工具和 MCP 工具均可单独启用/禁用，设置页一键管理，精细化控制 Agent 能力范围</p>
         </div>
       </div>
     </div>
@@ -653,7 +669,7 @@
               <span class="tech-badge">sqlite-vec</span>
               <span class="tech-badge">eino</span>
               <span class="tech-badge">einocli</span>
-              <span class="tech-badge">Tavily</span>
+              <span class="tech-badge">MCP</span>
               <span class="tech-badge">fastlog</span>
               <span class="tech-badge">verman</span>
             </div>
@@ -665,7 +681,7 @@
               <span class="tech-badge">sqlite-vec</span>
               <span class="tech-badge">eino</span>
               <span class="tech-badge">einocli</span>
-              <span class="tech-badge">Tavily</span>
+              <span class="tech-badge">MCP</span>
               <span class="tech-badge">fastlog</span>
               <span class="tech-badge">verman</span>
             </div>
