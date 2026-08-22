@@ -126,14 +126,14 @@ export const jotTheme = EditorView.theme({
     },
     '.cm-scroller': {
         fontFamily: 'var(--font-family)',
-        lineHeight: '1.7',
+        lineHeight: '1.85',
         overflow: 'auto',
     },
     '.cm-content': {
         caretColor: 'var(--accent)',
-        padding: '0',
+        padding: '20px 24px 40vh 0',
         fontFamily: 'var(--font-family)',
-        fontSize: '0.938rem',
+        fontSize: '1rem',
     },
     '.cm-cursor': {
         borderLeftColor: 'var(--accent)',
@@ -144,7 +144,7 @@ export const jotTheme = EditorView.theme({
         backgroundColor: 'var(--selection-bg, var(--accent-light)) !important',
     },
     '.cm-activeLine': {
-        backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
+        backgroundColor: 'rgba(var(--accent-rgb), 0.1)',
     },
     '.cm-gutters': {
         backgroundColor: 'var(--card-bg)',
@@ -154,7 +154,7 @@ export const jotTheme = EditorView.theme({
         color: 'var(--text-muted)',
         fontSize: '0.75rem',
         lineHeight: '2.13',
-        padding: '0 2px 0 4px',
+        padding: '0 6px 0 8px',
     },
     '.cm-foldGutter .cm-gutterElement': {
         color: 'var(--text-muted)',

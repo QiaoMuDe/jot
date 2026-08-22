@@ -28,7 +28,7 @@
 .editor-panel {
   background: var(--card-bg);
   border-radius: var(--radius-2xl);
-  width: 560px;
+  width: 680px;
   max-width: 90vw;
   height: 85vh;
   max-height: 85vh;
@@ -289,6 +289,17 @@
   display: none !important;
 }
 
+/* 切换模式时的淡入动画（仅对新显示的面板生效） */
+.editor-overlay[data-mode="edit"] .editor-textarea,
+.editor-overlay[data-mode="preview"] .md-rendered {
+  animation: modeFadeIn 0.2s ease-out;
+}
+
+@keyframes modeFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 .editor-input {
   width: 100%;
   padding: 2px 20px;
@@ -299,7 +310,7 @@
   color: var(--text-primary);
   outline: none;
   font-family: var(--font-family);
-  margin-bottom: 16px;
+  margin-bottom: 4px;
   transition: var(--transition);
   background: transparent;
 }
@@ -1145,8 +1156,8 @@
   position: relative;
   scroll-padding-top: 0.75rem;
   padding: 0.5em 8% 1rem;
-  font-size: 0.938rem;
-  line-height: 1.7;
+  font-size: 1rem;
+  line-height: 1.85;
   color: var(--text-primary);
   /* 默认透明隐藏，hover 时显示 */
   scrollbar-width: thin;
