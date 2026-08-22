@@ -270,15 +270,6 @@
   display: block !important;
 }
 
-/* 预览模式下压缩标签与正文之间的间距 */
-.editor-overlay[data-mode="preview"] .editor-section {
-  margin-bottom: 2px;
-}
-
-.editor-overlay[data-mode="preview"] .md-rendered {
-  padding-top: 0.1em;
-}
-
 /* 预览模式下隐藏编辑器操作按钮 */
 .editor-overlay[data-mode="preview"] #editorActionsBtn {
   display: none !important;
@@ -425,6 +416,7 @@
 }
 
 .editor-section {
+  display: none;
   margin: 2px 0 12px;
   padding: 0 20px;
 }
@@ -1160,6 +1152,11 @@
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
   transition: scrollbar-color 0.3s ease;
+}
+
+/* 预览模式下压缩标题与正文之间的间距 */
+.editor-overlay[data-mode="preview"] .md-rendered {
+  padding-top: 0;
 }
 
 /* 交叉淡入覆盖层：Worker 返回后从 loading → 内容的平滑过渡 */
