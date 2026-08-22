@@ -25,7 +25,7 @@
 .ai-chat-messages-inner {
     max-width: clamp(800px, min(92vw, 100%), 1600px);
     margin: 0 auto;
-    padding: 16px 15px 96px 18px;
+    padding: 16px 15px 0 18px;
     display: flex;
     flex-direction: column;
     gap: 40px;
@@ -105,11 +105,50 @@
     gap: 4px 6px;
     line-height: 1.6;
 }
+/* 编辑模式临时改为 block 布局，确保 textarea 宽度 100% 正确填充 */
+.ai-msg-user .msg-content[data-edit-mode] {
+    display: block;
+    width: 100%;
+}
 .ai-msg-user .msg-content .ai-msg-text {
     white-space: pre-wrap;
     flex: 0 1 auto;
     min-width: 0;
     line-height: 1.6;
+}
+/* 用户消息截断折叠：超过 MAX_COLLAPSE_CHARS 时默认只显示 3 行，底部渐变淡出 */
+.ai-msg-user .msg-content .ai-msg-text.collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+}
+/* 截断包裹容器 — block 布局，让文本和按钮自然上下排列，独立于父级 flex */
+.ai-msg-user .msg-content .ai-msg-collapse-wrap {
+    flex: 1 1 100%;
+}
+/* 展开/收起按钮 — 半透明白色风格，适配所有主题色背景 */
+.ai-msg-user .msg-content .ai-msg-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    margin-top: 2px;
+    font-size: 0.82em;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+.ai-msg-user .msg-content .ai-msg-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.35);
 }
 
 /* ── 用户消息 Meta Chip（半透明白色背景，主题 accent 颜色变化时仍保持高对比，无需主题切换） ── */
@@ -791,9 +830,34 @@
 
 
 
-/* ── 输入区：背景与消息列表一致（--bg），无独立色块 ── */
+/* ── 引用/技能/文件栏：独立于输入区，透明无背景，位于输入区上方 ── */
+.ai-chat-bars-area {
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 0 24px 8px;
+    width: 100%;
+    max-width: clamp(800px, min(94vw, 100%), 1800px);
+    box-sizing: border-box;
+    pointer-events: none;
+}
+.ai-chat-bars-area > * {
+    pointer-events: auto;
+}
+
+/* ── 输入区：绝对定位浮在消息列表之上，背景独立，z-index 高于 actions ── */
 .ai-chat-input-area {
-    position: relative; /* 反问面板 absolute 浮层的定位上下文 */
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -1365,21 +1429,10 @@
     color: var(--accent);
 }
 
-/* 技能指示条 */
-.ai-chat-skill-bar {
-    display: flex;
-    align-items: flex-start;
-    padding: 0;
-    gap: 6px;
-    flex-wrap: wrap;
-    min-height: 0;
-}
-
 .ai-chat-skill-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    width: 100%;
 }
 
 .ai-chat-skill-chip {
@@ -1387,7 +1440,7 @@
     align-items: center;
     gap: 5px;
     padding: 4px 8px 4px 7px;
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
     border-radius: 6px;
     font-size: 0.78rem;
@@ -1398,7 +1451,7 @@
 }
 
 .ai-chat-skill-chip:hover {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg));
 }
 
 .ai-chat-skill-chip-icon {
@@ -2431,21 +2484,10 @@
     color: var(--error, #e53e3e);
 }
 
-/* ── 引用笔记 chips 栏 ── */
-.ai-chat-ref-bar {
-    display: flex;
-    align-items: flex-start;
-    padding: 0;
-    gap: 6px;
-    flex-wrap: wrap;
-    min-height: 0;
-}
-
 .ai-chat-ref-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    width: 100%;
 }
 
 .ai-chat-ref-chip {
@@ -2453,7 +2495,7 @@
     align-items: center;
     gap: 5px;
     padding: 4px 8px 4px 7px;
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
     border-radius: 6px;
     font-size: 0.78rem;
@@ -2465,7 +2507,7 @@
 }
 
 .ai-chat-ref-chip:hover {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg));
 }
 
 @keyframes chip-enter {
@@ -2534,9 +2576,9 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    border: 1px dashed var(--error, #e74c3c);
+    border: 1px solid color-mix(in srgb, var(--error, #e74c3c) 30%, transparent);
     border-radius: var(--radius-md);
-    background: transparent;
+    background: color-mix(in srgb, var(--error, #e74c3c) 8%, var(--bg));
     color: var(--error, #e74c3c);
     font-size: 0.72rem;
     cursor: pointer;
@@ -2554,21 +2596,10 @@
     flex-shrink: 0;
 }
 
-/* ── 上传文件 chips 栏 ── */
-.ai-chat-file-bar {
-    display: flex;
-    align-items: flex-start;
-    padding: 0;
-    gap: 6px;
-    flex-wrap: wrap;
-    min-height: 0;
-}
-
 .ai-chat-file-chips {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    width: 100%;
 }
 
 .ai-chat-file-chip {
@@ -2576,7 +2607,7 @@
     align-items: center;
     gap: 5px;
     padding: 4px 8px 4px 7px;
-    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
     border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
     border-radius: 6px;
     font-size: 0.78rem;
@@ -2588,7 +2619,7 @@
 }
 
 .ai-chat-file-chip:hover {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg));
 }
 
 .ai-chat-file-chip-icon {
@@ -3256,7 +3287,7 @@
 .ai-msg-edit-textarea {
     width: 100%;
     min-height: 60px;
-    max-height: 200px;
+    max-height: none;
     padding: 8px 10px;
     font-family: inherit;
     font-size: 0.875rem;
@@ -3265,7 +3296,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    resize: vertical;
+    resize: none;
     outline: none;
     box-sizing: border-box;
     transition: border-color 0.15s, box-shadow 0.15s;
@@ -3285,6 +3316,11 @@
     0%, 100% { transform: translateX(0); }
     25% { transform: translateX(-4px); }
     75% { transform: translateX(4px); }
+}
+
+/* 消息气泡抖动（用于编辑冲突提示） */
+.ai-msg-user.ai-msg-edit-shake {
+    animation: ai-msg-edit-shake 0.4s ease;
 }
 
 .ai-msg-edit-actions {

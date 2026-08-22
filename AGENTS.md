@@ -537,19 +537,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | Agent 反问从**"新 user 消息续流"升级为"同轮续答"**（最初"新消息续流"方案被取代）：① **会话级实例注册表**——[agent.go](internal/agent/agent.go) `AgentService` 新增 `sessions map[uint]*agentSession`（按 AI 会话 ID 保持实例，LRU 上限 `MaxCachedSessions=32`）；`agentSession` 持 askCh（容量 1 反问答案通道）/askPending/runMu（同会话 run 串行化）/runCancel（会话释放独立取消）/ChatModel 缓存（BaseURL/Key/Model/思考指纹 `chatFP` 不变即复用）。② **AskWaiter 同轮机制**——[context.go](internal/agent/tools/context.go) 新增 `tools.AskWaiter` 接口（`ClaimAsk` 抢占 + `WaitForAnswer` 阻塞）；[ask_user.go](internal/agent/tools/ask_user.go) 注入后改为 **ClaimAsk 成功 → 发射 `ai:ask-user` → 阻塞等待**，答案经新绑定 `AnswerAskUser(sessionID, answer)`（[app.go](app.go)）投递通道 → 工具返回答案文本 → **同一轮 ReAct 循环继续**（AI 消息不结束、答案不落库为新 user 消息）。③ **整轮落库**——`streamedContent` 累计本轮全部流式正文，反问轮以整轮文本（问句+续答）作为 `result.Content` 落库，与前端同一气泡展示一致。④ **Agent 事件统一 gen 化**——`CallAIAgentStream` 的 emit 包装统一携带 streamGen（`ai:stream-chunk/thinking/tool-status/ask-user`），前端按代过滤防串流。 |
-| **并发/竞态防御与生命周期（重要）** | ① `ClaimAsk` 原子抢占——模型同条消息并行发多条 ask_user 时仅第一条阻塞，其余返回错误回填模型（工具在抢占**成功后**才发射事件，保证面板问题与真正等待的是同一条），防多重阻塞挂起；② `drainAsk` 排空通道——提交答案同时取消（工具 select 抢到 ctx.Done 而非通道）残留的陈旧答案，防污染下一轮反问（Run 的 defer 与 ReleaseSession 均排空）；③ `ReleaseSession`/`ReleaseAll`——清空/删除会话（`ClearAISessionMessages`/`DeleteAISession`/`ClearAllAISessions`）与 `rebuildServices` 工厂重置时取消等待中 run 并清注册表，防僵尸 run 泄漏；④ run 使用从调用方 ctx 派生的 runCtx，`ReleaseSession` 可独立取消；⑤ 锁序 `s.mu → runMu/askMu/cancelMu` 无环，通道永不 close。 |
-| **前端同轮交互** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `agentAskWaiting` 状态：`ai:ask-user` 到达时气泡保持流式（不结束）、正文为空显示"等待你的回答…"（`createWaitingHint`）；**主输入框禁用并提示"等待你的选择…"**（`setAskInputWaiting`：placeholder 保存/恢复 + `.ai-ask-waiting` 遮罩，CSS 见 [ai-chat.css](frontend/src/css/components/ai-chat.css)）；面板提交改走 `AnswerAskUser`（`submitting` 防重入、成功才隐藏，不再走 `sendUserText`），**× 关闭=取消本轮**（复用停止逻辑防悬挂）；停止/错误/完成/清空/重置各路径统一清理面板与等待态；`stream-done` 用 `assistantMsgID`（取消路径=0）区分取消与正常完成——**取消不写 chatHistory**（避免幽灵条目/误弹历史记录）。 |
-| **新工具与窗口调整** | 新增 **json 三件套**（[json_tools.go](internal/agent/tools/json_tools.go)：json_validate/json_format/json_extract，`utils.InferTool` 结构体反射风格，**gjson v1.18.0 提取**——升级为直接依赖，原为传递依赖 v1.14.2；`normalizeGJSONPath` 归一化模型 JSONPath 写法：`$` 前缀、`[n]`→`.n`、`#` 通配符透传；对象/数组返回 `res.Raw` 保留源键序）与 **summarize_text**（[summarize_text.go](internal/agent/tools/summarize_text.go)：复用 `AIService.CallAI` 非流式，text≤20000/instructions≤500，失败降级返回原文）；注册 [registry.go](internal/agent/registry.go) + [meta.go](internal/agent/tools/meta.go) 文案（前端开关自动生效零改动）。**上下文窗口默认 20→40**：`GetContextWindowSize` 兜底 + [db.go](internal/database/db.go) 种子 + **旧库值 20→40 幂等迁移**（InitDefaultSettings 迁移区，该键无 UI 暴露、旧值即种子默认直接升级）。 |
-| **涉及文件** | [internal/agent/agent.go](internal/agent/agent.go)（会话注册表/agentSession/ClaimAsk/drainAsk/ReleaseSession/ReleaseAll/streamedContent/runCtx）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（AskWaiter 接口）、[internal/agent/tools/ask_user.go](internal/agent/tools/ask_user.go)（ClaimAsk→emit→WaitForAnswer）、[internal/agent/tools/json_tools.go](internal/agent/tools/json_tools.go)（新增 json 三件套 + normalizeGJSONPath）、[internal/agent/tools/summarize_text.go](internal/agent/tools/summarize_text.go)（新增）、[internal/agent/tools/json_tools_test.go](internal/agent/tools/json_tools_test.go) 与 [internal/agent/tools/summarize_text_test.go](internal/agent/tools/summarize_text_test.go)（新增测试）、[internal/agent/session_test.go](internal/agent/session_test.go)（同轮/并行/排空/全量释放测试）、[internal/agent/registry.go](internal/agent/registry.go) 与 [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（注册+文案）、[internal/agent/tools/doc.go](internal/agent/tools/doc.go)（工具清单）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.1 同轮传输说明）、[app.go](app.go)（AnswerAskUser 绑定 + ReleaseSession/ReleaseAll 挂钩 + 事件 gen 化 + ask_user 规范文案更新 + wailsjs 手工补绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（agentAskWaiting/等待提示/输入框等待态/同轮提交/cancelled 分支）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-msg-waiting-hint / .ai-ask-waiting）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) 与 [frontend/wailsjs/go/main/App.d.ts](frontend/wailsjs/go/main/App.d.ts)（AnswerAskUser）、[internal/services/ai_service.go](internal/services/ai_service.go)（GetContextWindowSize 默认 40）、[internal/database/db.go](internal/database/db.go)（种子 40 + 旧库迁移）、[go.mod](go.mod)（gjson v1.18.0 直接依赖） |
-
----
-
-## 记忆点 2：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 1：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -561,7 +549,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 2：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -573,7 +561,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 3：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +575,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 4：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +588,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 5：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 6：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 7：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 8：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 9：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,6 +650,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **摘要提示词优化** | 每条消息截断到 500 字（`[]rune` 按字符截断，非字节），防止 AI 长回复主导摘要内容。提示词明确要求"每条消息用 1~2 句话概括，不要大段复制原文"，双重约束保证摘要简洁。 |
 | **前端状态条** | 新增 `ai:summary-status` 事件监听（`EventsOn`），`generating` 状态时在输入框上方显示"正在生成对话摘要…"（带 spinner 旋转动画），`done` 后自动消失。`summaryGenerating` 状态变量控制显示，取消流时重置。CSS 样式在 [ai-chat.css](frontend/src/css/components/ai-chat.css) 中 `.ai-summary-status` 类。 |
 | **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
+
+---
+
+## 记忆点 10：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手消息区与输入区四项前端重构（全在 [ai-chat.js](frontend/src/js/ai-chat.js) + [ai-chat.css](frontend/src/css/components/ai-chat.css) + [index.html](frontend/index.html)）：① **用户大消息截断折叠**——超长消息默认显示摘要 + 折叠效果，点击「展开全文」显示全部，切换会话自动重置折叠；② **编辑框自适应**——textarea 初始高度/宽度同步消息内容 + 多消息编辑冲突锁；③ **引用/技能/文件三栏合并为一栏** + 输入区绝对定位，消息列表可滚动到引用栏/输入区下方；④ **批量移除按钮语义区分**（移除笔记 / 移除上传文件）。 |
+| **大消息截断折叠（重要）** | `MAX_COLLAPSE_CHARS = 100`：用户消息 `content.length > 100` 时默认折叠。渲染逻辑在 `renderUserMessageWithChips`：用 `.ai-msg-collapse-wrap` 包裹 `.ai-msg-text`（`.collapsed` 类：`-webkit-line-clamp: 3` + `mask-image` 底部渐变淡出）+ 「展开全文」按钮，点击切换 `collapsed` 类显示全部。**切换会话天然重置**——折叠由渲染时按字符数判断，无需持久化状态。**布局要点**：① `.ai-msg-collapse-wrap` 保证按钮位置稳定不随文本换行漂移；② 按钮配色用 `rgba(255,255,255,...)` 半透明白适配 14 主题——**首次用 `var(--accent)` 在 accent 背景上不可见是坑**；③ 展开按钮与文本同处 flex 容器，`.ai-msg-text` `flex: 0 1 auto` 防按钮被挤换行。 |
+| **编辑框自适应 + 冲突锁（重要）** | **初始尺寸自适应**：先 `appendChild` 挂载 DOM 再 `autoResize()`（**scrollHeight 依赖布局，挂载前计算为 0**——这是"初始高度太小"的根因）；宽度同样先读消息宽度再设 textarea/`savedWidth`，编辑态锁定 `msgEl.style.width`（**flex shrink-to-fit 容器清空内容后宽度会丢失**）；`resize: none` 不做自由拖拽、`max-height: none` 不二次截断。**冲突锁**：全局 `_editingMsgEl`——消息 A 编辑中点击消息 B 的编辑 → 抖动动画 + `showNotification('请先完成当前编辑操作', 'warning')`；**注意通知类型必须是 `'warning'`**（`'warn'` 无颜色无图标）；`cancelEdit`/`exitEditModeWithoutRerender` 各路径统一清理 `_editingMsgEl = null` + 宽度复位。 |
+| **输入区绝对定位 + 三栏合并（核心）** | **布局**：输入区 `position: absolute; bottom: 0; z-index: 5`（**原 `z-index: 1` 时 `.ai-msg-actions`（token/耗时行）`z-index: 2` 会穿透显示到输入区**），背景 `var(--bg)` 实色；引用栏 `position: absolute` 浮于输入区上方（`bottom = inputArea.offsetHeight`），`z-index: 3`，`pointer-events: none` 透明穿透、子元素 `pointer-events: auto` 恢复交互；**z-index 层级：actions(2) < bars(3) < input-area(5)**。**ResizeObserver** 监听 barsArea + inputAreaEl + messagesInnerEl，动态更新 `messagesInnerEl.style.paddingBottom = barsArea.offsetHeight + inputAreaEl.offsetHeight + 60`（+60 补偿 `.ai-msg-actions` `top: 100%` 的高度），消息列表可滚动到输入区/引用栏下方。**三栏合并**：HTML 删除 `#aiChatRefBar/SkillBar/FileBar` 三个包装层，chips 容器直接作为 `#aiChatBarsArea` 子元素（`flex-direction: row` + `flex-wrap: wrap` 超行换行）；新增 `updateBarsAreaVisibility()` 按三个 chips 容器 `children.length` 统一控制显隐（任一有内容显示、全空隐藏），`hideEmptyState/showWelcome` 也接上该判断。 |
+| **三栏合并的坑（关键教训）** | ① **空分支必须清空容器 innerHTML**——三个渲染函数（`updateRefChips`/`renderSkillChips`/`renderFileChips`）空分支曾提前 return 不清空，导致旧 chips DOM 残留、`children.length > 0` 恒为真、barsArea 永不隐藏，"批量移除点击没反应"的根因；② **switchSession/createSession 必须清空 `uploadedFiles` 并调 `renderFileChips()`**——曾只清空引用/技能，上一会话的上传文件 chips 残留到下一会话；③ **chip 不透明背景**——容器透明、每个 chip 用 `background: color-mix(in srgb, var(--accent) 8%, var(--bg))`（hover 14%），既透明不遮罩消息又保持可识别。 |
+| **批量移除按钮区分** | ≥3 项时显示批量移除标签，两个按钮语义类名分离：`ai-chat-remove-all-ref`（垃圾桶图标 + 「移除全部 N 篇引用」）/ `ai-chat-remove-all-file`（文档叉图标 + 「移除全部 N 个文件」），**事件绑定选择器与渲染类名必须一致**（曾共用 `.ai-chat-ref-chip-remove-all` 导致无法区分）；背景 `color-mix(in srgb, var(--error, #e74c3c) 8%, var(--bg))` 不透明（与 chips 同方案、error 色系贴合删除语义）+ **实线边框**（用户明确不要虚线）+ hover error 实色填充。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
 
 ---
 

@@ -23,8 +23,8 @@ let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch �
 
 let addBtn = null;            // #aiChatAddBtn
 let addDropdown = null;       // #aiChatAddDropdown
-let fileBar = null;           // #aiChatFileBar
 let fileChips = null;         // #aiChatFileChips
+let barsArea = null;          // #aiChatBarsArea（引用/技能/文件栏容器）
 
 // MCP 预热标志：首次进入 AI 助手模块时预热一次全局 MCP 连接池（幂等，后续进入不再重复）
 let mcpWarmupDone = false;
@@ -46,6 +46,7 @@ let _aiStreamGen = 0;          // 流式 generation 计数器, 跨流防串扰
 let _loadingMore = false;      // 加载更多消息防重复
 let _oldestMsgId = 0;          // 当前已加载的最旧消息 ID（用于分页）
 let _scrollHandler = null;     // 滚动加载更多句柄，避免 switchSession 累积重复绑定
+let _editingMsgEl = null;      // 当前正在编辑的消息元素，防止同时编辑多条
 
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
@@ -79,7 +80,6 @@ let aiChatContent = null;       // .ai-chat-content
 let aiChatDropOverlay = null;   // #aiChatDropOverlay
 
 // 笔记引用选择浮层 DOM
-let refBar = null;              // #aiChatRefBar
 let refChips = null;            // #aiChatRefChips
 let refModal = null;            // #aiNoteRefModal
 let refOverlay = null;          // #aiNoteRefOverlay
@@ -122,7 +122,6 @@ let recallNotebookIds = new Set();  // 选中的笔记本 ID 集合
 let activeSkills = {};           // 当前激活的技能 { skillId: { config } }
 let skillsBtn = null;            // #aiChatMoreSkillsBtn
 let skillsDropdown = null;       // #aiChatSkillsDropdown
-let skillBar = null;             // #aiChatSkillBar
 let skillChips = null;           // #aiChatSkillChips
 
 
@@ -133,6 +132,7 @@ const OPTIMIZE_EXPRESSION_PROMPT = `你是专业的文本表达优化师，负�
 // AI 输入框单条消息字符上限（按 rune 计，与后端 SaveAIMessage 校验、Agent 工具
 // maxToolLongText 的 20000 约定保持一致；防止粘贴海量内容撑爆 LLM 上下文窗口）
 const MAX_AI_INPUT_CHARS = 20000;
+const MAX_COLLAPSE_CHARS = 100;   // 用户消息超过此字符数时折叠显示
 
 /**
  * 将文本按 rune 截断到上限字符数（保留前缀），超限返回截断结果与 true。
@@ -280,6 +280,21 @@ export async function initAIChat() {
     emptyEl = document.getElementById('aiChatEmpty');
     welcomeEl = document.getElementById('aiChatWelcome');
     inputAreaEl = document.getElementById('aiChatInputArea');
+    barsArea = document.getElementById('aiChatBarsArea');
+    // 底部栏和输入区共同决定消息列表底部留白，确保最后一条消息不被遮挡
+    // +60px 补偿 .ai-msg-actions（position:absolute; top:100%）的高度
+    if (barsArea && inputAreaEl && messagesInnerEl) {
+        const updatePadding = () => {
+            const totalHeight = barsArea.offsetHeight + inputAreaEl.offsetHeight;
+            messagesInnerEl.style.paddingBottom = (totalHeight + 60) + 'px';
+            // 引用栏浮在输入区上方
+            barsArea.style.bottom = inputAreaEl.offsetHeight + 'px';
+        };
+        const ro = new ResizeObserver(updatePadding);
+        ro.observe(barsArea);
+        ro.observe(inputAreaEl);
+        updatePadding();
+    }
     clearBtnEl = document.getElementById('aiChatClearBtn');
     stopBtnEl = document.getElementById('aiChatStopBtn');
     askPanelEl = document.getElementById('aiAskPanel');
@@ -305,7 +320,6 @@ export async function initAIChat() {
     recallNotebookIds = new Set();
 
     // 笔记引用
-    refBar = document.getElementById('aiChatRefBar');
     refChips = document.getElementById('aiChatRefChips');
     refModal = document.getElementById('aiNoteRefModal');
     refOverlay = document.getElementById('aiNoteRefOverlay');
@@ -332,7 +346,6 @@ export async function initAIChat() {
     // 更多技能
     skillsBtn = document.getElementById('aiChatMoreSkillsBtn');
     skillsDropdown = document.getElementById('aiChatSkillsDropdown');
-    skillBar = document.getElementById('aiChatSkillBar');
     skillChips = document.getElementById('aiChatSkillChips');
 
     // 角色档案选择器
@@ -340,7 +353,6 @@ export async function initAIChat() {
     // 添加菜单
     addBtn = document.getElementById('aiChatAddBtn');
     addDropdown = document.getElementById('aiChatAddDropdown');
-    fileBar = document.getElementById('aiChatFileBar');
     fileChips = document.getElementById('aiChatFileChips');
 
     // 拖拽遮罩
@@ -1372,11 +1384,13 @@ async function switchSession(id) {
     // 切换会话时收起 Agent 反问面板
     hideAskPanel();
 
-    // 切换会话时清空笔记引用和技能
+    // 切换会话时清空笔记引用、技能和上传文件
     referencedNotes = [];
     updateRefChips();
     activeSkills = {};
     renderSkillChips();
+    uploadedFiles = [];
+    renderFileChips();
 
     try {
         activeSessionId = id;
@@ -1552,6 +1566,9 @@ async function createSession() {
 
     // 清空当前状态
     activeSessionId = id;
+    // 上传文件不随会话持久化，新建会话时清空
+    uploadedFiles = [];
+    renderFileChips();
 
     // 加载默认会话配置
     try {
@@ -1643,7 +1660,7 @@ function autoResizeInput() {
  * 渲染技能 chip 指示器
  */
 function renderSkillChips() {
-    if (!skillBar || !skillChips) return;
+    if (!skillChips) return;
 
     // 如果取消了角色扮演技能，清空 roleplayNotes（必须在 keys 为空提前返回之前执行）
     if (!activeSkills.roleplay) {
@@ -1652,14 +1669,14 @@ function renderSkillChips() {
 
     const keys = Object.keys(activeSkills);
     if (keys.length === 0) {
-        skillBar.style.display = 'none';
         if (skillsBtn) {
             skillsBtn.disabled = false;
             skillsBtn.classList.remove('is-disabled');
         }
+        skillChips.innerHTML = '';
+        updateBarsAreaVisibility();
         return;
     }
-    skillBar.style.display = '';
     if (skillsBtn) {
         skillsBtn.disabled = true;
         skillsBtn.classList.add('is-disabled');
@@ -1792,6 +1809,8 @@ function renderSkillChips() {
             openRoleplaySelector();
         });
     }
+
+    updateBarsAreaVisibility();
 }
 
 /**
@@ -2910,6 +2929,25 @@ function renderUserMessageWithChips(contentEl, content, metaJson) {
     textEl.appendChild(document.createTextNode(content || ''));
     contentEl.appendChild(textEl);
 
+    // 超过阈值时折叠显示，添加展开/收起按钮
+    // 按钮和文本包裹在 block 容器中，确保按钮始终在文本下方
+    if (content && content.length > MAX_COLLAPSE_CHARS) {
+        textEl.classList.add('collapsed');
+        const collapseWrapper = document.createElement('div');
+        collapseWrapper.className = 'ai-msg-collapse-wrap';
+        // 将 textEl 移入 wrapper
+        contentEl.insertBefore(collapseWrapper, textEl);
+        collapseWrapper.appendChild(textEl);
+        const btn = document.createElement('button');
+        btn.className = 'ai-msg-expand-btn';
+        btn.textContent = '展开全文';
+        btn.addEventListener('click', function () {
+            const isCollapsed = textEl.classList.toggle('collapsed');
+            btn.textContent = isCollapsed ? '展开全文' : '收起';
+        });
+        collapseWrapper.appendChild(btn);
+    }
+
     // meta 段：解析 JSON，逐项追加 chip
     if (!metaJson) return;
     let items = null;
@@ -3161,6 +3199,7 @@ function showEmptyState() {
     emptyEl.style.display = '';
     if (messagesEl) messagesEl.style.display = 'none';
     if (inputAreaEl) inputAreaEl.style.display = 'none';
+    if (barsArea) barsArea.style.display = 'none';
     if (clearBtnEl) clearBtnEl.style.display = 'none';
     // 侧栏仍可见但禁用操作
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = 'none';
@@ -3455,6 +3494,7 @@ function hideEmptyState() {
     emptyEl.style.display = 'none';
     if (messagesEl) messagesEl.style.display = '';
     if (inputAreaEl) inputAreaEl.style.display = '';
+    updateBarsAreaVisibility();
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = '';
     hideWelcome();
 }
@@ -3484,6 +3524,7 @@ function showWelcome() {
     welcomeEl.style.display = '';
     if (messagesEl) messagesEl.style.display = 'none';
     if (inputAreaEl) inputAreaEl.style.display = '';
+    updateBarsAreaVisibility();
     updateChatTitle();
     startTypewriter();
 }
@@ -4024,17 +4065,40 @@ function renderToolCalls(el, toolCalls) {
  * 进入编辑模式 — 将消息文本替换为 textarea
  */
 function enterEditMode(msgEl, originalContent) {
+    // 已有消息在编辑中，不允许同时编辑多条
+    if (_editingMsgEl) {
+        msgEl.classList.add('ai-msg-edit-shake');
+        setTimeout(() => msgEl.classList.remove('ai-msg-edit-shake'), 400);
+        window.showNotification?.('请先完成当前编辑操作', 'warning');
+        return;
+    }
+
     const contentDiv = msgEl.querySelector('.msg-content');
     if (!contentDiv) return;
 
     msgEl.dataset.originalContent = originalContent;
+    _editingMsgEl = msgEl;
 
+    // 保存当前宽度并锁定（flex shrink-to-fit 容器清空内容后宽度会丢失）
+    const savedWidth = msgEl.offsetWidth;
     // 用户消息的内容直接挂载在 textContent 上, 清除以便插入 textarea
     contentDiv.textContent = '';
+    msgEl.style.width = savedWidth + 'px';
+    // 临时将 flex 容器改为 block 布局，确保 textarea 宽度 100% 正确填充
+    contentDiv.dataset.editMode = 'true';
 
     const textarea = document.createElement('textarea');
     textarea.className = 'ai-msg-edit-textarea';
     textarea.value = originalContent;
+    contentDiv.appendChild(textarea);
+
+    // 自动撑高适配内容高度（必须在 textarea 入 DOM 后调用，否则 scrollHeight 不准确）
+    const autoResize = () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    };
+    autoResize();
+    textarea.addEventListener('input', autoResize);
     textarea.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -4046,7 +4110,6 @@ function enterEditMode(msgEl, originalContent) {
             cancelEdit(msgEl);
         }
     });
-    contentDiv.appendChild(textarea);
 
     setTimeout(() => {
         textarea.focus();
@@ -4111,6 +4174,9 @@ function cancelEdit(msgEl) {
         else console.warn('[AI Chat] cancelEdit: chatHistory 未找到 msgId', msgId);
     }
     renderUserMessageWithChips(contentDiv, original, metaJson);
+    delete contentDiv.dataset.editMode;
+    msgEl.style.width = '';
+    _editingMsgEl = null;
 
     const editActions = msgEl.querySelector('.ai-msg-edit-actions');
     if (editActions) editActions.remove();
@@ -4131,7 +4197,10 @@ function exitEditModeWithoutRerender(msgEl) {
     if (contentDiv) {
         const textarea = contentDiv.querySelector('.ai-msg-edit-textarea');
         if (textarea) textarea.remove();
+        delete contentDiv.dataset.editMode;
     }
+    msgEl.style.width = '';
+    _editingMsgEl = null;
     const editActions = msgEl.querySelector('.ai-msg-edit-actions');
     if (editActions) editActions.remove();
 
@@ -4976,18 +5045,30 @@ async function confirmNoteSelection() {
 }
 
 /**
+ * 更新统一底部栏（引用/技能/文件）的显示/隐藏
+ * 任一 chips 容器有内容时显示，全部为空时隐藏
+ */
+function updateBarsAreaVisibility() {
+    if (!barsArea) return;
+    const hasAny = (refChips && refChips.children.length > 0) ||
+                   (skillChips && skillChips.children.length > 0) ||
+                   (fileChips && fileChips.children.length > 0);
+    barsArea.style.display = hasAny ? '' : 'none';
+}
+
+/**
  * 更新引用笔记 chips 显示
  */
 function updateRefChips() {
-    if (!refChips || !refBar) return;
+    if (!refChips) return;
 
     if (referencedNotes.length === 0) {
-        refBar.style.display = 'none';
         if (addBtn) addBtn.classList.remove('has-ref');
+        refChips.innerHTML = '';
+        updateBarsAreaVisibility();
         return;
     }
 
-    refBar.style.display = '';
     if (addBtn) addBtn.classList.add('has-ref');
 
     // 渲染单个笔记 chips
@@ -5006,9 +5087,9 @@ function updateRefChips() {
 
     // 3 篇以上时追加批量移除标签
     if (referencedNotes.length >= 3) {
-        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all" title="一键移除全部引用">
+        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all ai-chat-remove-all-ref" title="一键移除全部引用">
             <svg class="ai-chat-ref-chip-remove-all-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            <span>移除全部 ${referencedNotes.length} 篇</span>
+            <span>移除全部 ${referencedNotes.length} 篇引用</span>
         </div>`;
     }
 
@@ -5023,7 +5104,7 @@ function updateRefChips() {
     });
 
     // 绑定批量移除事件
-    const removeAllBtn = refChips.querySelector('.ai-chat-ref-chip-remove-all');
+    const removeAllBtn = refChips.querySelector('.ai-chat-remove-all-ref');
     if (removeAllBtn) {
         removeAllBtn.addEventListener('click', () => {
             referencedNotes = [];
@@ -5036,6 +5117,8 @@ function updateRefChips() {
             saveCurrentSessionConfig();
         });
     }
+
+    updateBarsAreaVisibility();
 }
 
 /**
@@ -5058,17 +5141,16 @@ function removeRefNote(id) {
  * 渲染上传文件 chips
  */
 function renderFileChips() {
-    if (!fileChips || !fileBar) return;
+    if (!fileChips) return;
 
     // 有上传文件时高亮按钮，与引用笔记按钮行为一致
     if (addBtn) addBtn.classList.toggle('has-ref', uploadedFiles.length > 0);
 
     if (uploadedFiles.length === 0) {
-        fileBar.style.display = 'none';
+        fileChips.innerHTML = '';
+        updateBarsAreaVisibility();
         return;
     }
-
-    fileBar.style.display = '';
 
     // 渲染单个文件 chips
     let html = uploadedFiles.map((f, idx) => {
@@ -5085,9 +5167,9 @@ function renderFileChips() {
 
     // 3 个文件以上时追加批量清除按钮
     if (uploadedFiles.length >= 3) {
-        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all" title="一键移除全部文件">
-            <svg class="ai-chat-ref-chip-remove-all-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            <span>移除全部 ${uploadedFiles.length} 个</span>
+        html += `<div class="ai-chat-ref-chip ai-chat-ref-chip-remove-all ai-chat-remove-all-file" title="一键移除全部文件">
+            <svg class="ai-chat-ref-chip-remove-all-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9.5 12.5l5 5"/><path d="M14.5 12.5l-5 5"/></svg>
+            <span>移除全部 ${uploadedFiles.length} 个文件</span>
         </div>`;
     }
 
@@ -5106,7 +5188,7 @@ function renderFileChips() {
     });
 
     // 绑定批量清除事件
-    const removeAllBtn = fileChips.querySelector('.ai-chat-ref-chip-remove-all');
+    const removeAllBtn = fileChips.querySelector('.ai-chat-remove-all-file');
     if (removeAllBtn) {
         removeAllBtn.addEventListener('click', () => {
             uploadedFiles = [];
@@ -5114,6 +5196,7 @@ function renderFileChips() {
         });
     }
 
+    updateBarsAreaVisibility();
 }
 
 /**

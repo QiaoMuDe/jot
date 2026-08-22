@@ -1116,7 +1116,13 @@
                     <div id="aiChatWelcome" class="ai-chat-welcome" style="display:none;">
                         <p class="ai-chat-welcome-text"></p>
                     </div>
-                    <!-- 输入区 -->
+                    <!-- 底部栏（引用/技能/文件，统一在同一行排列） -->
+                    <div id="aiChatBarsArea" class="ai-chat-bars-area" style="display:none;">
+                        <div id="aiChatRefChips" class="ai-chat-ref-chips"></div>
+                        <div id="aiChatSkillChips" class="ai-chat-skill-chips"></div>
+                        <div id="aiChatFileChips" class="ai-chat-file-chips"></div>
+                    </div>
+                    <!-- 输入区（仅含追问面板 + 输入框，背景独立） -->
                     <div id="aiChatInputArea" class="ai-chat-input-area" style="display:none;">
                         <!-- Agent 反问面板（AskUser） -->
                         <div id="aiAskPanel" class="ai-ask-panel" style="display:none;"></div>
@@ -1124,18 +1130,6 @@
                         <div id="aiChatFollowUpBar" class="ai-chat-followup-bar" style="display:none;">
                             <span id="aiChatFollowUpText" class="ai-chat-followup-text"></span>
                             <button id="aiChatFollowUpClose" class="ai-chat-followup-close" title="取消追问">&times;</button>
-                        </div>
-                        <!-- 已引用笔记 chips 栏 -->
-                        <div id="aiChatRefBar" class="ai-chat-ref-bar" style="display:none;">
-                            <div id="aiChatRefChips" class="ai-chat-ref-chips"></div>
-                        </div>
-                        <!-- 技能指示条 -->
-                        <div id="aiChatSkillBar" class="ai-chat-skill-bar" style="display:none;">
-                            <div id="aiChatSkillChips" class="ai-chat-skill-chips"></div>
-                        </div>
-                        <!-- 上传文件 chips 栏 -->
-                        <div id="aiChatFileBar" class="ai-chat-file-bar" style="display:none;">
-                            <div id="aiChatFileChips" class="ai-chat-file-chips"></div>
                         </div>
 
                         <!-- 一体式输入坞：文本输入区 + 内嵌工具行 + 右侧圆形操作按钮 -->
