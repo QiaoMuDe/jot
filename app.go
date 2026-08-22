@@ -1903,9 +1903,10 @@ func estimateUserTokens(messages []services.Message) int {
 	return tokens
 }
 
-// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-// 同时记录 debug 日志便于调试观察截断效果
-func (a *App) truncateAIMessages(sessionID uint, logLabel string) []services.Message {
+// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息，
+// 需要更新摘要时同步生成并向前端发送状态事件，新摘要当前轮即可注入。
+// ctx 传入 AI 流的取消上下文，用户取消时摘要生成也随之取消。
+func (a *App) truncateAIMessages(ctx context.Context, sessionID uint, logLabel string) []services.Message {
 	// 加载会话消息
 	messages := a.aiService.LoadAISessionMessages(sessionID)
 	nonSystemBefore := 0
@@ -1915,20 +1916,74 @@ func (a *App) truncateAIMessages(sessionID uint, logLabel string) []services.Mes
 		}
 	}
 
-	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
 	windowSize := a.aiService.GetContextWindowSize()
+
+	// 需要更新摘要时同步生成，阻塞当前对话，但前端能看到状态条反馈
+	if nonSystemBefore > windowSize {
+		// 先检查是否真的需要更新（diff >= windowSize），避免每次发空事件
+		var checkSession models.AISession
+		needUpdate := false
+		if err := a.db.First(&checkSession, sessionID).Error; err == nil {
+			needUpdate = nonSystemBefore-checkSession.SummaryMsgCount >= windowSize
+		}
+
+		if needUpdate {
+			runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
+				"status":     "generating",
+				"session_id": sessionID,
+			})
+		}
+
+		updated := a.aiService.UpdateSessionSummary(ctx, sessionID, windowSize)
+
+		if needUpdate {
+			status := "done"
+			if !updated {
+				status = "skipped"
+			}
+			runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
+				"status":     status,
+				"session_id": sessionID,
+			})
+		}
+	}
+
+	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
 	messages = services.TruncateMessagesForLLM(messages, windowSize)
+
+	// 读取已有会话摘要，注入到 system 消息之后、tail 消息之前
+	var session models.AISession
+	if err := a.db.First(&session, sessionID).Error; err == nil && session.SummaryContent != "" {
+		summaryMsg := services.Message{
+			Role:    "system",
+			Content: "【历史对话摘要】\n" + session.SummaryContent,
+		}
+		insertIdx := 0
+		for i, m := range messages {
+			if m.Role == "system" {
+				insertIdx = i + 1
+			} else {
+				break
+			}
+		}
+		messages = append(messages[:insertIdx], append([]services.Message{summaryMsg}, messages[insertIdx:]...)...)
+	}
+
 	nonSystemAfter := 0
+	hasSummary := false
 	for _, m := range messages {
 		if m.Role != "system" {
 			nonSystemAfter++
+		} else if strings.Contains(m.Content, "【历史对话摘要】") {
+			hasSummary = true
 		}
 	}
 	a.LogSvc.Logger.Debugw(logLabel,
 		fastlog.Int("window_size", windowSize),
 		fastlog.Int("non_system_before", nonSystemBefore),
 		fastlog.Int("non_system_after", nonSystemAfter),
-		fastlog.Int("total_after", len(messages)))
+		fastlog.Int("total_after", len(messages)),
+		fastlog.Bool("has_summary", hasSummary))
 	return messages
 }
 
@@ -1951,7 +2006,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 	a.aiStreamCancel = cancel
 
 	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-	messages := a.truncateAIMessages(sessionID, "AI Agent 滑动窗口截断")
+	messages := a.truncateAIMessages(ctx, sessionID, "AI Agent 滑动窗口截断")
 
 	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
 	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与

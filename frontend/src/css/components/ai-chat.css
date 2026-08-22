@@ -3598,6 +3598,43 @@
     transform: scale(0.97);
 }
 
+/* ── 会话摘要生成状态条 ── */
+.ai-summary-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    margin: 4px 12px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.2s ease, max-height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+}
+
+.ai-summary-status.active {
+    opacity: 1;
+    max-height: 40px;
+}
+
+.ai-summary-status::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: summarySpin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes summarySpin {
+    to { transform: rotate(360deg); }
+}
+
 
 
 

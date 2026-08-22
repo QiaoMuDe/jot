@@ -216,6 +216,59 @@ async function switchModel(model) {
     } catch (_) {}
 }
 
+/* ===== 会话摘要生成状态 ===== */
+
+/** 会话摘要生成状态标志 */
+let summaryGenerating = false;
+
+// 监听摘要状态事件（启动时注册一次，生命周期内持续生效）
+// 摘要生成在后台异步执行，不阻塞当前对话
+window.runtime?.EventsOn('ai:summary-status', function(data) {
+    if (!data || data.session_id !== activeSessionId) return;
+
+    if (data.status === 'generating') {
+        summaryGenerating = true;
+        showSummaryStatus('正在生成对话摘要…');
+    } else {
+        summaryGenerating = false;
+        hideSummaryStatus();
+    }
+});
+
+/**
+ * 在输入框上方显示摘要生成状态条
+ */
+function showSummaryStatus(text) {
+    let el = document.getElementById('aiSummaryStatus');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'aiSummaryStatus';
+        el.className = 'ai-summary-status';
+        // 插入到输入框上方
+        const inputArea = document.querySelector('#aiChatInputArea');
+        if (inputArea) {
+            inputArea.parentNode.insertBefore(el, inputArea);
+        }
+    }
+    el.textContent = text;
+    el.classList.add('active');
+}
+
+/**
+ * 隐藏摘要生成状态条（动画结束后移除 DOM）
+ */
+function hideSummaryStatus() {
+    const el = document.getElementById('aiSummaryStatus');
+    if (el) {
+        el.classList.remove('active');
+        setTimeout(function() {
+            if (el && el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        }, 300);
+    }
+}
+
 /**
  * 初始化 AI 对话页面
  */
@@ -329,7 +382,18 @@ export async function initAIChat() {
 
 /** 格式化 token 数为可读字符串 */
 function formatTokens(count) {
-    if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+    if (count >= 1000000) {
+        // ≥ 1M: 显示 M 单位，1 位小数，如 1.5M
+        return (count / 1000000).toFixed(1) + 'M';
+    }
+    if (count >= 1000) {
+        // ≥ 1K: 显示 K 单位
+        // ≥ 100K 时不显示小数（如 100K），< 100K 时显示 1 位小数（如 1.5K）
+        if (count >= 100000) {
+            return Math.round(count / 1000) + 'K';
+        }
+        return (count / 1000).toFixed(1) + 'K';
+    }
     return String(count);
 }
 

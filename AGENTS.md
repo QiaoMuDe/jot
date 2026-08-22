@@ -533,22 +533,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 31. **搜索弹窗筛选下拉超长截断 + 标签去井号**：Ctrl+F 搜索弹窗四个筛选下拉（笔记本/标签/时间/排序）选择超长内容换行问题（用户实测选长标签名时排序按钮挤到第二行）。根因：`.search-modal-filters` 内四个 `.search-modal-filter` 默认 `min-width: auto`（flex 子项不可收缩到内容以下）+ `flex-wrap: wrap` → 总宽超弹窗 560px 时换行。修复（[search-modal.css](frontend/src/css/components/search-modal.css)）：filters 改 `flex-wrap: nowrap` 强制单行；`.search-modal-filter`/`.search-modal-filter-btn` 加 `min-width: 0` + `flex: 0 1 auto` 允许收缩（**flex 子项省略号生效关键**），按钮 `max-width: 200→160px`；label `flex-shrink: 0` 不收缩；按钮/选项内部 span `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`（`min-width: 0` 是必须的，否则 ellipsis 不生效）；下拉容器固定 `width: 220px`。另标签下拉选项与选中按钮 label 去掉 `#` 前缀（[main.js](frontend/src/main.js) `renderTagFilterDropdown`/`updateTagFilterLabel`，搜索结果项标签 chip 与 AI 引用面板标签保留 `#`）。**验证教训**：前端 CSS/JS 改动必须 `npm run build` 或 wails dev 才生效，直接看旧 dist 产物改什么都没用（用户两次反馈"没用"均为未构建）。
 
----
-
-## 记忆点 1：MCP 服务器配置从配置文件迁移到数据库 + 设置页完整管理（CRUD/开关/测试/三态配色）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将 MCP 服务器存储从配置文件（`~/.jot/mcp/mcp-servers.json`）**迁移到数据库**，并在设置页落地完整管理 UI，取代**历史 MCP 文件配置方案**：① **数据模型**——新增 [internal/models/mcp_server.go](internal/models/mcp_server.go) `models.MCPServer`：Name（uniqueIndex，工具名前缀 `mcp_{name}_{tool}`）/Transport（stdio\|sse\|http）/Command/Args（GORM json 序列化）/Env（json）/URL/Headers（json）/Enabled/SortOrder，注册进 [internal/database/models.go](internal/database/models.go) `AllModels`（建表/重置出厂唯一注册点）。② **后端**——[internal/mcpserver/config.go](internal/mcpserver/config.go) 改 `LoadFromDB(db)` 从库读取（文件版 Load/LoadDefault/EnsureConfig/DefaultConfigPath 全部移除），逐条 validate 非法条目跳过记入 `Config.LoadErrors`；新增 [internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（List/Get/Save/Delete）；[app.go](app.go) 新增 4 个绑定 `GetMCPServers/SaveMCPServer/DeleteMCPServer/TestMCPServer`；[internal/agent/agent.go](internal/agent/agent.go) `Deps.MCPServerDB` 改从库装配 MCP 工具。③ **前端**——设置页新增「MCP 服务器」面板（[frontend/index.html](frontend/index.html)）：列表条目（启用开关 + 测试/编辑/删除）+ 添加/编辑表单对话框（传输方式下拉联动显示 stdio 组或 url 组）+ 空态引导；[frontend/src/main.js](frontend/src/main.js) 实现 `loadMCPServers`/`renderMCPServerList`/`buildMCPServerItem`/`toggleMCPServer`/`openMCPServerForm`/`saveMCPServer`/`deleteMCPServer`/`testMCPServer`。 |
-| **存储迁移与依赖约束（重要）** | `services` 包**不得反向 import `mcpserver`**（依赖链已是 mcpserver → agent/tools → services，反向即循环依赖），因此 **MCPServerService.Save 的校验规则是 mcpserver 包 validate 的复制实现，两处必须同步维护**。`LoadFromDB` 语义与原文件版 Load 一致：非法条目跳过不阻断装配（LoadErrors 逐条告警）、整体查询失败返回 error、空库返回空 Servers 且 err=nil。**装配流程已随全局连接池演进（见记忆点 10）**：`LoadFromDB` → `EnabledServers()` → 每台服务器优先复用池会话（`Pool.Session` 零网络），未命中 `WarmupOne` 兜底并入池；连接由池持有常驻，单台失败仅 Warn 跳过。 |
-| **Save 校验与字段治理** | 校验（失败返回中文错误直接展示）：Name 非空 + transport 合法性（stdio/sse/http）+ 按传输必填（stdio 需 Command / sse、http 需 URL）+ **Name 不能含空白字符**（直接拼入工具名会破坏工具名）+ **Env/Headers 的 KEY 不能含空白或等号**（= 是 KEY=VALUE 分隔符）+ Name 全库唯一（更新排除自身）。**按传输类型清零非相关字段**（stdio 清 URL/Headers，sse/http 清 Command/Args/Env），避免切换传输后旧字段残留脏数据。写入：ID==0 走 `Create`，更新走 `Omit("created_at").Save`（防 Save 全字段更新把 created_at 覆写为零值，前端表单不带该字段）。 |
-| **测试连接 + 设置页交互要点** | `TestMCPServer(id)`：`MCPServerService.Get` 查配置（区分"记录不存在/查询失败"两种错误）→ `toMCPServerConfig` 字段映射 → `OpenSession`（连接+握手+工具发现，各带 ConnectTimeout 超时兜底）→ 返回 `TestMCPServerResult{ok, tool_num, message}`；无论是否启用均可测试。前端：条目操作区 = 启用开关（**乐观更新失败回滚**）+ 测试 + 编辑 + 删除（走确认框）；表单含防重复提交（`mcpFormSaving`）+ 未保存修改关闭确认 + 输入校验；**测试按钮点击转加载态并记录开始时间，无论测试多快强制保持 ≥600ms 加载动画**（本地毫秒级连接也能看到 spinner 反馈）；成功提示「连接成功，发现 N 个工具」，失败直接透传后端文案（已含服务器名如「MCP 服务器 xxx 连接失败: …」，前端**不再重复拼前缀**）。 |
-| **按钮配色与固定宽度加载态不跳宽（重要）** | 测试/编辑统一主题色实心（`--accent` 底白字，悬浮 `--accent-dark`），删除警告红三态（常态浅红描边→悬浮实心红+阴影→按压深红），基于 `--accent`/`--danger` 语义变量随 14 套主题自适应。**固定宽度按钮加载态会跳宽**：项目全局 `box-sizing: border-box`，按钮固定 `width:52px` 时减边框（2px）+ `.btn-sm` 左右 padding（14px×2）后内容区仅约 22px，而 12px 字号两个 CJK 字 ≈ 24px 放不下导致文字偏位；且 `.btn-loading` 会把按钮转 `inline-flex` 用 14px spinner 替换文字，无固定宽度时常态与加载态宽度跳变。解决：宽度 **56px**（内容区 ≥26px 放得下文字）+ 常态即 `display:inline-flex; align-items:center; justify-content:center`（文字与 spinner 恒水平垂直居中），加载态除 spinner 与呼吸动画外零布局变化。 |
-| **涉及文件** | [internal/models/mcp_server.go](internal/models/mcp_server.go)（新增）、[internal/database/models.go](internal/database/models.go)（AllModels 注册）、[internal/mcpserver/config.go](internal/mcpserver/config.go)（LoadFromDB，移除文件版 Load/LoadDefault/EnsureConfig）、[internal/mcpserver/client.go](internal/mcpserver/client.go) 与 [internal/mcpserver/tools.go](internal/mcpserver/tools.go)（连接/发现复用）、[internal/services/mcp_server_service.go](internal/services/mcp_server_service.go)（新增 List/Get/Save/Delete）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPServerDB 从库装配）、[app.go](app.go)（4 个绑定 + toMCPServerConfig + TestMCPServerResult）、[frontend/index.html](frontend/index.html)（MCP 设置面板 + 表单对话框）、[frontend/src/main.js](frontend/src/main.js)（列表/表单/开关/删除/测试）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（mcp-server-* 样式 + mcp-server-accent-btn / mcp-server-del-btn） |
+32. **AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）**：将纯滑动窗口截断（简单丢弃 40 条外消息）升级为**持久化对话摘要**方案。AISession 新增 `SummaryContent`（text）/ `SummaryMsgCount`（int），数据库持久化（[ai_session.go](internal/models/ai_session.go)）。**触发规则**：`diff = 当前总消息数 - SummaryMsgCount`，`diff ≥ 20` 时触发。首次生成（消息 21）取前 1 条，增量更新（消息 41/61...）取上次摘要终点到当前尾部 20 条之前的 20 条消息，合并旧摘要生成新摘要，`SummaryMsgCount` 更新为当前总消息数。**同步阻塞**：摘要在 `truncateAIMessages` 中同步生成（非 goroutine），确保当前轮对话就能用到新摘要，发 `ai:summary-status:generating/done` 事件给前端状态条。**提示词优化**：每条消息截断到 500 字，提示词要求"每条消息 1~2 句话概括，不要大段复制原文"。详见 [ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构）、[ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听）
 
 ---
 
-## 记忆点 2：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
+## 记忆点 1：Agent 会话级实例 + ask_user 同轮续答（取代"新消息续流"）+ 新工具 json/summarize + 上下文窗口 20→40
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -560,7 +549,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
+## 记忆点 2：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 6：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 7：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +626,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 8：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -651,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 9：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -660,6 +649,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端联动** | **[main.js](frontend/src/main.js)**——新增 `refreshAgentToolsMeta()` 函数：重新调用 `GetAgentTools()` 刷新 `agentToolsMeta` 后更新按钮文字，若工具管理面板已展开则重新渲染；`warmupMCPServers()` 末尾自动调用。`renderAgentToolsMgrList()` 和 `createAgentToolRow()` 通用渲染零改动，MCP 工具直接混入内置工具列表显示。 |
 | **行为边界** | ① 预热前：MCP 工具不显示，按钮文字只计内置工具（如"已启用 14/14"）。② 预热后：MCP 工具出现，按钮文字含 MCP 工具（如"已启用 17/18"）。③ 禁用状态持久化：重启后预热前不显示，预热后自动恢复禁用状态，不会自动启用。④ 服务器开关/新增/删除后：预热自动刷新工具列表。⑤ 支持 `ai_agent_tools_disabled` 中混存内置工具名和 MCP 工具名，互不冲突。 |
 | **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
+
+---
+
+## 记忆点 10：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 将纯滑动窗口截断（简单丢弃 40 条外消息）升级为**持久化对话摘要**方案：超出窗口大小（20 条）的消息不再直接丢弃，而是由 AI 定期压缩为结构化要点摘要持久化到数据库，每次对话时注入到模型上下文中，让模型拥有"记忆"。 |
+| **核心逻辑** | ① **AISession 新增字段**——[internal/models/ai_session.go](internal/models/ai_session.go) 新增 `SummaryContent`（text，摘要文本）和 `SummaryMsgCount`（int，上次摘要时的总消息数，默认 0），不新建表。② **触发时机**——`diff = 当前总消息数 - SummaryMsgCount`，`diff ≥ 20` 时触发更新（`windowSize` 可配置，默认 20）。③ **首次生成（消息 21）**——`keepTail = 20`，取前 1 条消息生成摘要（`SummaryMsgCount = 21`），模型看到 `[摘要_1] + 消息 1~20`。④ **增量更新（消息 41/61/...）**——`keepTail = 20`，取 `[SummaryMsgCount - keepTail]` 到 `[summarizeUpTo]` 的 20 条消息，增量合并旧摘要生成新摘要（`SummaryMsgCount` 更新为当前总消息数）。⑤ **上下文组装**——`TruncateMessagesForLLM` 保留最后 20 条完整消息，摘要作为 system 消息注入在前。 |
+| **同步阻塞设计** | 摘要生成在 `truncateAIMessages` 中**同步阻塞执行**（非 goroutine 异步），确保当前轮对话就能用到新摘要：先发 `ai:summary-status:generating` 事件 → 同步调用 `GenerateSessionSummary`（超时 30s，使用 AI 流上下文）→ 存库 → 发 `done` 事件 → 截断注入新摘要 → 发给模型。用户取消 AI 流时摘要生成也随之取消，状态条即时消失。 |
+| **摘要提示词优化** | 每条消息截断到 500 字（`[]rune` 按字符截断，非字节），防止 AI 长回复主导摘要内容。提示词明确要求"每条消息用 1~2 句话概括，不要大段复制原文"，双重约束保证摘要简洁。 |
+| **前端状态条** | 新增 `ai:summary-status` 事件监听（`EventsOn`），`generating` 状态时在输入框上方显示"正在生成对话摘要…"（带 spinner 旋转动画），`done` 后自动消失。`summaryGenerating` 状态变量控制显示，取消流时重置。CSS 样式在 [ai-chat.css](frontend/src/css/components/ai-chat.css) 中 `.ai-summary-status` 类。 |
+| **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
 
 ---
 
