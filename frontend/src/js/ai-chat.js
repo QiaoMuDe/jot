@@ -2304,6 +2304,13 @@ async function startStreaming(userText, userMsgID) {
             // 实时工具条在此淡出移除（工具阶段 → 正文输出阶段的自然过渡），
             // stream-done 时工具摘要随召回面板同一时刻插入，避免摘要"迟到"突兀
             if (isAgentFlow && toolStatusListEl && toolStatusListEl.parentNode) {
+                // 清除所有工具的实时计时器
+                Object.keys(toolStatusItems).forEach(function(k) {
+                    if (toolStatusItems[k] && toolStatusItems[k].timerId) {
+                        clearInterval(toolStatusItems[k].timerId);
+                        toolStatusItems[k].timerId = null;
+                    }
+                });
                 var liveList = toolStatusListEl;
                 liveList.classList.add('exiting');
                 var liveRemoved = false;
@@ -2390,11 +2397,21 @@ async function startStreaming(userText, userMsgID) {
         // 首次调用不显示序号；从第 2 次起显示「第N次调用」，结果在后续事件覆盖累加
         item.nameEl.textContent = (seq > 1 ? '第' + seq + '次调用 ' : '') + getToolLabel(name);
         item.textEl.textContent = '：' + action;
+        // 同名工具重复调用时，清除旧的实时计时器
+        if (toolStatusItems[name] && toolStatusItems[name].timerId) {
+            clearInterval(toolStatusItems[name].timerId);
+        }
         item.startTime = Date.now();
         item.timeEl.textContent = '';
         item.el.classList.add('is-active');
         item.el.classList.remove('is-done', 'is-error', 'is-warning');
         item.iconEl.innerHTML = svgIcon('search');
+        // 启动实时计时：每 200ms 更新耗时显示
+        item.timerId = setInterval(() => {
+            if (item.timeEl) {
+                item.timeEl.textContent = ((Date.now() - item.startTime) / 1000).toFixed(1) + 's';
+            }
+        }, 200);
         list.scrollTop = list.scrollHeight; // 超长链自动滚到最新行
         scrollToBottom();
     };
@@ -2410,6 +2427,7 @@ async function startStreaming(userText, userMsgID) {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
+        if (item.timerId) { clearInterval(item.timerId); item.timerId = null; }
         item.el.classList.add('is-done');
         item.el.classList.remove('is-active');
         item.el.classList.remove('is-error');
@@ -2449,6 +2467,7 @@ async function startStreaming(userText, userMsgID) {
             list.appendChild(item.el);
             toolStatusItems[name] = item;
         }
+        if (item.timerId) { clearInterval(item.timerId); item.timerId = null; }
         const reason = payload.result ? String(payload.result) : '';
         const fullLabel = '：失败' + (reason ? '：' + (reason.length > 40 ? reason.slice(0, 40) + '…' : reason) : '');
         item.el.classList.remove('is-done');
@@ -2466,6 +2485,7 @@ async function startStreaming(userText, userMsgID) {
         const name = payload.name || 'tool';
         const item = toolStatusItems[name];
         if (!item) return; // 未展示过开始状态，忽略
+        if (item.timerId) { clearInterval(item.timerId); item.timerId = null; }
         const parts = payload.result ? String(payload.result) : '';
         const fullLabel = '：部分来源失败' + (parts ? '：' + parts : '');
         item.el.classList.remove('is-done');
@@ -3433,8 +3453,8 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     if (aiMsgContextMenu._closeTimer) { clearTimeout(aiMsgContextMenu._closeTimer); aiMsgContextMenu._closeTimer = null; }
     aiMsgContextMenu.style.animation = '';
 
-    // 保存上下文
-    _contextMsgContent = content;
+    // 保存上下文：优先从 DOM 实时读取（修复编辑后闭包内容过期的问题）
+    _contextMsgContent = (msgEl && msgEl.querySelector('.ai-msg-text')) ? msgEl.querySelector('.ai-msg-text').textContent : content;
     _contextMsgRole = role;
     _contextMsgEl = msgEl;
 
