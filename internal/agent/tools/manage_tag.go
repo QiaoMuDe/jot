@@ -63,7 +63,7 @@ var tagColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 func (m *manageTagTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_tag",
-		Desc: "管理标签。当用户要求创建标签、查看标签列表或更新标签时调用。通过 action 参数区分动作：create=创建标签（需提供 name 标签名称，可提供 color 颜色，格式 #RRGGBB，缺省 #3b82f6）；list=列出全部标签（无额外参数）；update=更新标签（需提供 id 标签编号，可提供 name 新名称或 color 新颜色，至少其一）。返回标签列表或操作结果，列表中的编号 [数字] 可用于后续笔记标签操作或 update。",
+		Desc: "管理标签（标签是笔记的附属属性，用于分类筛选笔记）。当用户要求创建标签、查看标签列表或更新标签时调用。边界：manage_tag 管理标签本身（创建/重命名/改色），manage_note 的 add_tag/remove_tag 动作管理笔记与标签的关联；给笔记打标签用 manage_note（action=add_tag），管理标签定义用本工具。通过 action 参数区分动作：create=创建标签（需提供 name 标签名称，可提供 color 颜色，格式 #RRGGBB，缺省 #3b82f6）；list=列出全部标签（无额外参数）；update=更新标签（需提供 id 标签编号，可提供 name 新名称或 color 新颜色，至少其一）。返回标签列表或操作结果，列表中的编号 [数字] 可用于后续笔记标签操作或 update。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

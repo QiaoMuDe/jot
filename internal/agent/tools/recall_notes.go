@@ -44,7 +44,7 @@ func (r *recallNotesTool) ActionText(_ string) string {
 func (r *recallNotesTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "recall_notes",
-		Desc: "从用户本地笔记库中检索与问题相关的笔记片段（向量 + 关键词混合检索）。当问题涉及用户自己的笔记、文档、知识库内容时调用，优先于联网搜索。",
+		Desc: "从用户本地笔记库中检索与问题相关的笔记片段（向量 + 关键词混合检索）。当用户询问知识类问题、需要查找笔记中的信息、或问题涉及用户自己的笔记/文档/知识库内容时调用。边界：recall_notes 用于语义检索回答问题（只读），manage_note 用于结构化操作笔记库（创建/编辑/删除等）；用户要找笔记内容用 recall_notes，要操作笔记（创建/编辑/删除/移动等）用 manage_note。优先于联网搜索（用户本地已有内容时不需要联网）。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,

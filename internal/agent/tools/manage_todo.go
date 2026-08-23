@@ -64,7 +64,7 @@ func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
 func (m *manageTodoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_todo",
-		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办或修改待办文本时调用。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update。",
+		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办或修改待办文本时调用。边界：待办（todo）用于管理任务清单，笔记（note）用于管理知识内容；用户要记待办/任务用 manage_todo，要记笔记/知识点用 manage_note。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

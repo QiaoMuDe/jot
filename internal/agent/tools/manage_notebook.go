@@ -59,7 +59,7 @@ func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
 func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_notebook",
-		Desc: "管理笔记本。当用户要求创建笔记本、重命名笔记本或查看笔记本列表时调用。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename。",
+		Desc: "管理笔记本（笔记本是笔记的容器，用于组织分类笔记）。当用户要求创建笔记本、重命名笔记本或查看笔记本列表时调用。边界：manage_notebook 管理笔记本本身（创建/重命名/列出），manage_note 的 move 动作将笔记移动到目标笔记本；用户要新建/重命名文件夹用 manage_notebook，要移动笔记到文件夹用 manage_note（action=move）。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

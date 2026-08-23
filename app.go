@@ -2163,22 +2163,6 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			}
 		}
 
-		// 前置意图感知（阶段 1 规则层）：对当前输入分类意图，
-		// 注入针对性强化提示 + 高置信工具裁剪（仅纯时间查询裁剪，其余仅注入提示）
-		ir := agent.ClassifyIntent(userText)
-		if ir.Prompt != "" {
-			instruction.WriteString("\n\n" + ir.Prompt)
-		}
-		if len(ir.Disable) > 0 {
-			disabledTools = append(disabledTools, ir.Disable...)
-			a.LogSvc.Logger.Debugw("Agent 意图感知：按意图裁剪工具",
-				fastlog.String("intent", ir.Intent.String()),
-				fastlog.String("disabled", strings.Join(ir.Disable, ",")))
-		} else if a.LogSvc.Logger != nil {
-			a.LogSvc.Logger.Debugw("Agent 意图感知",
-				fastlog.String("intent", ir.Intent.String()))
-		}
-
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
 		a.LogSvc.Logger.Debugw("AI Agent 流开始",
 			fastlog.Int("history_count", len(history)),
