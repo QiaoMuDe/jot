@@ -212,16 +212,19 @@ func (p *Pool) getOrCreate(ctx context.Context, s Server) (*Session, bool, bool,
 	return sess, false, replaced, nil
 }
 
-// Reconcile 同步池与服务器配置：先关闭池中不在 servers 列表里的条目（停用/删除），
+// Reconcile 同步池与服务器配置：先关闭池中不在 keep 集合的条目（停用/删除/禁用的服务器），
 // 再预热传入列表中的 enabled 服务器（新增/变更/复用）。
 // 设置页任何 MCP 操作后调用，保证池与数据库一致。
 func (p *Pool) Reconcile(ctx context.Context, servers []Server) WarmupResult {
 	if p == nil {
 		return WarmupResult{}
 	}
+	// 只保留启用的服务器：禁用的服务器不在 keep 中，其池条目会被关闭
 	keep := make(map[string]bool, len(servers))
 	for _, s := range servers {
-		keep[s.Name] = true
+		if s.Enabled {
+			keep[s.Name] = true
+		}
 	}
 
 	// 收集需关闭的条目（不在传入列表中的）

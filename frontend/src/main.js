@@ -9748,20 +9748,21 @@ async function saveMCPServerForm() {
 async function warmupMCPServers() {
     try {
         const res = await window.go.main.App.WarmupMCPServers();
-        if (!res || !res.total) return; // 无启用的服务器，静默
-        const usable = (res.warmed || 0) + (res.reused || 0);
-        if (!res.failed) {
-            const reuseText = res.reused > 0 ? `（复用 ${res.reused} 台）` : '';
-            nm.show(`MCP 服务器已就绪：${usable} 台连接${reuseText}，共 ${res.tool_total} 个工具`, 'success');
-        } else {
-            const detail = (res.failed_msgs || []).join('；');
-            const type = usable === 0 ? 'error' : 'warning';
-            nm.show(`MCP 服务器预热：${usable} 台可用，${res.failed} 台失败${detail ? `（${detail}）` : ''}`, type, 6000);
+        if (res && res.total) {
+            const usable = (res.warmed || 0) + (res.reused || 0);
+            if (!res.failed) {
+                const reuseText = res.reused > 0 ? `（复用 ${res.reused} 台）` : '';
+                nm.show(`MCP 服务器已就绪：${usable} 台连接${reuseText}，共 ${res.tool_total} 个工具`, 'success');
+            } else {
+                const detail = (res.failed_msgs || []).join('；');
+                const type = usable === 0 ? 'error' : 'warning';
+                nm.show(`MCP 服务器预热：${usable} 台可用，${res.failed} 台失败${detail ? `（${detail}）` : ''}`, type, 6000);
+            }
         }
     } catch (e) {
         nm.show(`MCP 服务器预热失败：${mcpErrMsg(e)}`, 'error');
     }
-    // 预热完成后刷新 Agent 工具列表（MCP 工具可能已变化）
+    // 无论预热结果如何，都刷新 Agent 工具列表（禁用/启用服务器后工具列表需同步）
     await refreshAgentToolsMeta();
 }
 window.warmupMCPServers = warmupMCPServers;

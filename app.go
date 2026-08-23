@@ -2049,8 +2049,6 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
 			if err == nil && refCtx != nil && refCtx.Context != "" {
 				roleplayContext = refCtx.Context
-				roleplayText := "以下是用户提供的人物设定笔记内容（来源：角色设定笔记），你在角色扮演中应严格遵循这些设定：\n\n" + refCtx.Context
-				instruction.WriteString("\n\n" + roleplayText)
 			}
 		}
 
@@ -2151,13 +2149,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 
 		// 如果已被用户取消（停止按钮），不再调用 Agent，避免白调用；
 		// 取消时用户消息已入库，需重算会话 token 缓存（与常规 Agent 流一致）
-		if ctx.Err() != nil {
-			if userMsgID > 0 {
-				_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
-			}
-			accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-			_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-			runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+		if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
 			return
 		}
 
@@ -2212,13 +2204,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		// 失败处理：经 ClassifyError 转中文提示（与常规 Agent 流错误分支一致）
 		if err != nil {
 			// 用户取消导致的结束：补发完成事件确保前端清理气泡，并刷新 token 缓存
-			if ctx.Err() != nil {
-				if userMsgID > 0 {
-					_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
-				}
-				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
-				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+			if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
 				return
 			}
 			a.LogSvc.Logger.Errorw("AI Agent 流错误", fastlog.Error(err))
@@ -2290,6 +2276,22 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.RecallCards, result.ToolCalls, result.ReasoningContent)
 		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
 	}()
+}
+
+// handleAICancelled 处理用户取消 AI 流的收尾工作：刷新用户消息 token 缓存、
+// 重算会话累计 token、补发 stream-done 事件确保前端清理气泡。
+// 供 CallAIAgentStream 中 Agent 调用前后的两处取消检查复用。
+func (a *App) handleAICancelled(ctx context.Context, sessionID, userMsgID uint, messages []services.Message, streamGen int) bool {
+	if ctx.Err() == nil {
+		return false
+	}
+	if userMsgID > 0 {
+		_ = a.aiService.UpdateAIMessageTokens(userMsgID, estimateUserTokens(messages))
+	}
+	accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+	_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+	runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
+	return true
 }
 
 // GetAgentTools 返回 Agent 工具清单（含内置工具与已预热 MCP 服务器的工具），

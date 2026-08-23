@@ -2286,6 +2286,10 @@ async function startStreaming(userText, userMsgID) {
     });
     unsubs.push(unsubThinking);
 
+    // 流式渲染节流：缓冲 chunk，每 50ms 批量渲染一次，减少 DOM 操作次数
+    let _streamRenderTimer = null;
+    let _pendingStreamChunks = '';
+
     /** 处理 AI 流式正文 chunk（Agent 模式） */
     const handleStreamChunk = (chunk) => {
         if (!chunk) return;
@@ -2318,9 +2322,17 @@ async function startStreaming(userText, userMsgID) {
                 setTimeout(removeLiveList, 250); // 兜底：过渡未触发时强制移除
             }
         }
-        streamingContent += chunk;
-        contentDiv.innerHTML = marked.parse(streamingContent);
-        scrollToBottom();
+        // 缓冲 chunk，定时批量渲染（50ms 间隔，减少全量 Markdown 解析 + DOM 替换次数）
+        _pendingStreamChunks += chunk;
+        if (!_streamRenderTimer) {
+            _streamRenderTimer = setTimeout(() => {
+                _streamRenderTimer = null;
+                streamingContent += _pendingStreamChunks;
+                _pendingStreamChunks = '';
+                contentDiv.innerHTML = marked.parse(streamingContent);
+                scrollToBottom();
+            }, 50);
+        }
     };
 
     const unsubChunk = window.runtime.EventsOn('ai:stream-chunk', (streamGen, chunk) => {
@@ -2532,6 +2544,13 @@ async function startStreaming(userText, userMsgID) {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
+        // 清理流式渲染节流定时器，flush 残留 chunk 到 streamingContent（供后续引用）
+        if (_streamRenderTimer) {
+            clearTimeout(_streamRenderTimer);
+            _streamRenderTimer = null;
+            streamingContent += _pendingStreamChunks;
+            _pendingStreamChunks = '';
+        }
         isStreaming = false;
         window.__aiStreaming = false;
         hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
@@ -2649,6 +2668,12 @@ async function startStreaming(userText, userMsgID) {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器
         unsubs.forEach(fn => fn());
+        // 清理流式渲染节流定时器（错误路径移除气泡，不需要 flush）
+        if (_streamRenderTimer) {
+            clearTimeout(_streamRenderTimer);
+            _streamRenderTimer = null;
+            _pendingStreamChunks = '';
+        }
         isStreaming = false;
         window.__aiStreaming = false;
         hideAskPanel();
