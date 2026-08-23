@@ -3501,7 +3501,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
             aiMsgContextMenu.appendChild(divider);
         } else {
             const menuItem = document.createElement('div');
-            menuItem.className = 'context-menu-item';
+            menuItem.className = 'context-menu-item' + (item.action === 'delete' ? ' danger' : '');
             menuItem.dataset.action = item.action;
             menuItem.innerHTML = `<span class="ctx-item-icon">${actionIcons[item.action] || ''}</span><span class="ctx-item-label">${item.label}</span>`;
             aiMsgContextMenu.appendChild(menuItem);

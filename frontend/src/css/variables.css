@@ -80,7 +80,7 @@
 
     /* 主题系统变量 */
     --accent-rgb: 217, 119, 6;
-    --danger-bg: #FEE2E2;
+    --danger-bg: #FDE2E2;
     --danger-border: #fecaca;
     --success-bg: #ecfdf5;
     --success-border: #a7f3d0;
@@ -141,7 +141,7 @@
     --overlay-bg: rgba(0, 0, 0, 0.25);
     --toast-bg: #1A1A1A;
     --toast-text: #FFFFFF;
-    --danger-bg: #FEE2E2;
+    --danger-bg: #FDE2E2;
     --danger-border: #FECACA;
     --success-bg: #F0FDF4;
     --success-border: #BBF7D0;
@@ -257,7 +257,7 @@
     --overlay-bg: rgba(46, 52, 64, 0.4);
     --toast-bg: #2E3440;
     --toast-text: #ECEFF4;
-    --danger-bg: #FEE2E2;
+    --danger-bg: #FDE2E2;
     --danger-border: #FECACA;
     --success-bg: #ECFDF5;
     --success-border: #A7F3D0;
@@ -373,7 +373,7 @@
     --overlay-bg: rgba(56, 74, 62, 0.30);
     --toast-bg: #384A3E;
     --toast-text: #E4ECD9;
-    --danger-bg: #FEE2E2;
+    --danger-bg: #FDE2E2;
     --danger-border: #FECACA;
     --success-bg: #F0FDF4;
     --success-border: #BBF7D0;
@@ -426,7 +426,7 @@
   --toast-bg: #504C60;
   --toast-text: #F8F2EF;
   --danger: #D20F39;
-  --danger-bg: #FEF2F2;
+  --danger-bg: #FDE2E2;
   --danger-border: #FECACA;
   --success-bg: #F0FDF4;
   --success-border: #BBF7D0;
@@ -479,8 +479,8 @@
   --toast-bg: #3C3836;
   --toast-text: #FBF1C7;
   --danger: #CC241D;
-  --danger-bg: #FEF2F2;
-  --danger-border: #FECACA;
+  --danger-bg: #F8DADA;
+  --danger-border: #F5C6C6;
   --success-bg: #F0FDF4;
   --success-border: #BBF7D0;
   --success-text: #166534;
