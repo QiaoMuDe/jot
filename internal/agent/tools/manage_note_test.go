@@ -246,7 +246,7 @@ func TestEditNoteModeValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := m.editNote(1, c.find, "R", 0, false, c.lineStart, 0)
+			_, err := m.editNote([]float64{1}, c.find, "R", 0, false, c.lineStart, 0)
 			if !c.wantModeErr {
 				t.Fatal("该用例应报错")
 			}
@@ -257,7 +257,7 @@ func TestEditNoteModeValidation(t *testing.T) {
 	}
 	// replace_all 与 count>1 冲突（片段模式专属校验）
 	t.Run("replace_all 与 count>1 冲突", func(t *testing.T) {
-		_, err := m.editNote(1, "x", "R", 2, true, 0, 0)
+		_, err := m.editNote([]float64{1}, "x", "R", 2, true, 0, 0)
 		if err == nil {
 			t.Error("应返回 replace_all 与 count>1 互斥错误")
 		}
