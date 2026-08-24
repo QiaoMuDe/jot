@@ -1235,6 +1235,17 @@ function showConfirmDialog(msg, okText = '确定', cancelText = '取消') {
     });
 }
 
+// 确认框 ESC 关闭（全局单次绑定，不重复）
+if (els.confirmDialog && !els.confirmDialog._escBound) {
+    els.confirmDialog._escBound = true;
+    els.confirmDialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && els.confirmDialog.classList.contains('visible')) {
+            e.stopPropagation();
+            els.confirmCancelBtn.click();
+        }
+    });
+}
+
 /** 笔记本侧栏键盘导航当前聚焦的索引（-1 表示无聚焦） */
 let notebookFocusIndex = -1;
 
@@ -6549,7 +6560,7 @@ async function handleKeyboardNavigation(e) {
             closeTodoInputPanel();
             return;
         }
-        // 确认框打开时（如预设弹窗"未保存修改"确认）忽略 ESC，避免重复触发确认逻辑
+        // 确认框打开时忽略 ESC，避免破坏 Promise 链
         if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
             return;
         }
@@ -7171,6 +7182,15 @@ function renderListContent(noteCounts) {
             if (id === state.activeNotebookId) return;
             switchNotebook(id);
         });
+        // 双击重命名
+        const nameEl = item.querySelector('.notebook-name');
+        if (nameEl) {
+            nameEl.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                const id = parseInt(item.dataset.notebookId);
+                showRenameNotebookDialog(id, item.dataset.notebookName);
+            });
+        }
         // 右键菜单
         item.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -7213,10 +7233,11 @@ function showNewNotebookDialog() {
     // 创建模态框 DOM
     const overlay = document.createElement('div');
     overlay.className = 'new-notebook-overlay';
+    overlay.tabIndex = -1;
     overlay.innerHTML = `
         <div class="new-notebook-dialog">
             <div class="new-notebook-title">新建笔记本</div>
-            <input type="text" class="new-notebook-input" id="newNotebookInput" placeholder="输入笔记本名称..." maxlength="50" autofocus>
+            <input type="text" class="new-notebook-input" id="newNotebookInput" placeholder="输入笔记本名称..." autofocus>
             <div class="new-notebook-actions">
                 <button class="btn btn-cancel" id="newNotebookCancelBtn">取消</button>
                 <button class="btn btn-save" id="newNotebookConfirmBtn">创建</button>
@@ -7235,8 +7256,12 @@ function showNewNotebookDialog() {
         input.focus();
     });
 
-    /** 关闭弹窗并清理 */
-    const close = () => {
+    /** 关闭弹窗并清理（async，有未保存内容时弹确认） */
+    const close = async (force) => {
+        if (!force && input.value.trim()) {
+            const confirmed = await showConfirmDialog('内容尚未保存，确定关闭？', '关闭', '继续编辑');
+            if (!confirmed) { overlay.focus(); return; }
+        }
         overlay.classList.remove('visible');
         setTimeout(() => overlay.remove(), 200);
     };
@@ -7245,6 +7270,8 @@ function showNewNotebookDialog() {
     const doCreate = async () => {
         const name = input.value.trim();
         if (!name) {
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
             nm.show('请输入笔记本名称', 'warning');
             return;
         }
@@ -7252,9 +7279,8 @@ function showNewNotebookDialog() {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.CreateNotebook) {
                 const notebook = await window.go.main.App.CreateNotebook(name);
                 if (notebook) {
-                    close();
+                    close(true);
                     await loadNotebooks();
-                    // 自动切换到新笔记本
                     state.activeNotebookId = notebook.id;
                     resetPagination();
                     await loadNotes();
@@ -7263,7 +7289,7 @@ function showNewNotebookDialog() {
                 }
             } else {
                 console.warn('CreateNotebook 未绑定');
-                close();
+                close(true);
             }
         } catch (err) {
             const msg = (typeof err === 'string' ? err : err?.message || '创建笔记本失败');
@@ -7272,12 +7298,23 @@ function showNewNotebookDialog() {
         }
     };
 
+    input.addEventListener('input', () => {
+        const runes = [...input.value];
+        if (runes.length > 50) {
+            input.value = runes.slice(0, 50).join('');
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
+            nm.show('名称不能超过50个字符', 'warning');
+        }
+    });
     confirmBtn.addEventListener('click', doCreate);
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') doCreate();
-        if (e.key === 'Escape') close();
     });
-    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    });
+    cancelBtn.addEventListener('click', () => close());
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) close();
     });
@@ -7342,7 +7379,7 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
         closeNotebookMenu();
 
         if (action === 'rename') {
-            startInlineRename(notebookId, notebookName);
+            showRenameNotebookDialog(notebookId, notebookName);
         } else if (action === 'delete') {
             showDeleteNotebookDialog(notebookId, notebookName);
         }
@@ -7352,59 +7389,74 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
 }
 
 /**
- * 内联重命名笔记本
+ * 弹出对话框重命名笔记本
  */
-function startInlineRename(notebookId, currentName) {
-    const items = els.notebookList.querySelectorAll('.notebook-item');
-    let targetItem = null;
-    items.forEach(item => {
-        if (parseInt(item.dataset.notebookId) === notebookId) {
-            targetItem = item;
-        }
+let _renameNotebookDialog = null;
+
+function closeRenameDialog() {
+    if (_renameNotebookDialog) {
+        _renameNotebookDialog.classList.remove('visible');
+        const el = _renameNotebookDialog;
+        setTimeout(() => el.remove(), 200);
+        _renameNotebookDialog = null;
+    }
+}
+
+function showRenameNotebookDialog(notebookId, currentName) {
+    closeRenameDialog();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'new-notebook-overlay';
+    overlay.tabIndex = -1;
+    overlay.innerHTML = `
+        <div class="new-notebook-dialog">
+            <div class="new-notebook-title">重命名笔记本</div>
+            <input type="text" class="new-notebook-input" id="renameNotebookInput" value="${escapeHtml(currentName)}" autofocus>
+            <div class="new-notebook-actions">
+                <button class="btn btn-cancel" id="renameNotebookCancelBtn">取消</button>
+                <button class="btn btn-save" id="renameNotebookConfirmBtn">确认</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    _renameNotebookDialog = overlay;
+
+    const input = overlay.querySelector('#renameNotebookInput');
+    const confirmBtn = overlay.querySelector('#renameNotebookConfirmBtn');
+    const cancelBtn = overlay.querySelector('#renameNotebookCancelBtn');
+
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        input.focus();
+        input.select();
     });
-    if (!targetItem) return;
 
-    const nameEl = targetItem.querySelector('.notebook-name');
-    const originalName = currentName || nameEl.textContent;
-
-    // 替换为输入框
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'notebook-rename-input';
-    input.value = originalName;
-    input.maxLength = 50;
-    nameEl.replaceWith(input);
-    input.focus();
-    input.select();
-
-    let renaming = false; // 防止 Enter + blur 重复执行
-
-    /** 完成重命名 */
-    const finishRename = async (save) => {
-        if (renaming) return; // 已处理过，忽略重复触发
-        renaming = true;
-
-        if (!save) {
-            // 取消：恢复原样
-            const span = document.createElement('span');
-            span.className = 'notebook-name';
-            span.textContent = originalName;
-            input.replaceWith(span);
-            return;
+    const close = async (force) => {
+        if (!force && input.value.trim() !== currentName.trim()) {
+            const confirmed = await showConfirmDialog('内容尚未保存，确定关闭？', '关闭', '继续编辑');
+            if (!confirmed) { overlay.focus(); return; }
         }
+        _renameNotebookDialog = null;
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 200);
+    };
 
+    const doRename = async () => {
         const newName = input.value.trim();
-        if (!newName || newName === originalName) {
-            const span = document.createElement('span');
-            span.className = 'notebook-name';
-            span.textContent = originalName;
-            input.replaceWith(span);
+        if (!newName) {
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
+            nm.show('请输入笔记本名称', 'warning');
             return;
         }
-
+        if (newName === currentName) {
+            close(true);
+            return;
+        }
         try {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.RenameNotebook) {
                 await window.go.main.App.RenameNotebook(notebookId, newName);
+                close(true);
                 await loadNotebooks();
                 nm.show('笔记本已重命名', 'success');
             }
@@ -7412,18 +7464,29 @@ function startInlineRename(notebookId, currentName) {
             const msg = (typeof err === 'string' ? err : err?.message || '重命名失败');
             console.error('重命名失败:', msg);
             nm.show(msg, 'error');
-            const span = document.createElement('span');
-            span.className = 'notebook-name';
-            span.textContent = originalName;
-            input.replaceWith(span);
         }
     };
 
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') finishRename(true);
-        if (e.key === 'Escape') finishRename(false);
+    input.addEventListener('input', () => {
+        const runes = [...input.value];
+        if (runes.length > 50) {
+            input.value = runes.slice(0, 50).join('');
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
+            nm.show('名称不能超过50个字符', 'warning');
+        }
     });
-    input.addEventListener('blur', () => finishRename(true));
+    confirmBtn.addEventListener('click', doRename);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doRename();
+    });
+    overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    });
+    cancelBtn.addEventListener('click', () => close());
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
 }
 
 /**

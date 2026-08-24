@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"jot/internal/aierrors"
 	"jot/internal/einocli"
@@ -630,6 +631,10 @@ func (a *AIService) DeleteOrphanMessages() int64 {
 
 // RenameAISession 重命名会话
 func (a *AIService) RenameAISession(id uint, title string) error {
+	// 标题长度校验（最多50字符）
+	if utf8.RuneCountInString(title) > 50 {
+		return fmt.Errorf("会话标题不能超过50个字符")
+	}
 	err := a.db.Model(&models.AISession{}).Where("id = ?", id).Update("title", title).Error
 	if err != nil {
 		a.logger.Errorw("AIService.RenameAISession 失败", fastlog.Error(err))
@@ -833,14 +838,13 @@ func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
 		a.logger.Errorw("AIService.SaveAIMessage 更新会话时间失败", fastlog.Error(err))
 	}
 
-	// 首轮对话自动生成标题（取第一条用户消息前 30 字）
+	// 首轮对话自动生成标题（取第一条用户消息前 50 字）
 	if msg.Role == "user" {
 		var session models.AISession
 		if err := a.db.First(&session, sessionID).Error; err == nil && session.Title == "新对话" {
-			runes := []rune(msg.Content)
 			title := msg.Content
-			if len(runes) > 30 {
-				title = string(runes[:30]) + "..."
+			if runes := []rune(title); len(runes) > 50 {
+				title = string(runes[:50]) + "..."
 			}
 			if err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
 				a.logger.Errorw("AIService.SaveAIMessage 自动标题失败", fastlog.Error(err))
@@ -882,7 +886,7 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 	a.db.First(&s, sessionID)
 	a.db.Model(&s).Update("updated_at", time.Now())
 
-	// 如果是首轮对话，自动生成标题（取第一条 user 消息前 30 字）
+	// 如果是首轮对话，自动生成标题（取第一条 user 消息前 50 字）
 	var session models.AISession
 	if err := a.db.First(&session, sessionID).Error; err != nil {
 		a.logger.Errorw("AIService.SaveAIMessages 失败", fastlog.Error(err))
@@ -892,9 +896,8 @@ func (a *AIService) SaveAIMessages(sessionID uint, messages []Message) error {
 		for _, msg := range messages {
 			if msg.Role == "user" {
 				title := msg.Content
-				runes := []rune(title)
-				if len(runes) > 30 {
-					title = string(runes[:30]) + "..."
+				if runes := []rune(title); len(runes) > 50 {
+					title = string(runes[:50]) + "..."
 				}
 				if err := a.db.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
 					a.logger.Errorw("AIService.SaveAIMessages 失败", fastlog.Error(err))
@@ -957,9 +960,8 @@ func (a *AIService) ReplaceAISessionMessages(sessionID uint, messages []Message)
 			for _, msg := range messages {
 				if msg.Role == "user" {
 					title := msg.Content
-					runes := []rune(title)
-					if len(runes) > 30 {
-						title = string(runes[:30]) + "..."
+					if runes := []rune(title); len(runes) > 50 {
+						title = string(runes[:50]) + "..."
 					}
 					if err := tx.Model(&models.AISession{}).Where("id = ?", sessionID).Update("title", title).Error; err != nil {
 						a.logger.Errorw("AIService.ReplaceAISessionMessages 自动标题失败", fastlog.Error(err))

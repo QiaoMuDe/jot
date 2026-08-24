@@ -67,6 +67,15 @@ func InitBuiltinMCPServers(db *gorm.DB) error {
 			Enabled:   false,
 			SortOrder: 5,
 		},
+		// Context7 MCP（HTTP + Bearer 鉴权；占位符 <your-api-key> 需替换为真实 Key）
+		{
+			Name:      "context7",
+			Transport: "http",
+			URL:       "https://mcp.context7.com/mcp",
+			Headers:   map[string]string{"Authorization": "Bearer <your-api-key>", "Accept": "application/json, text/event-stream"},
+			Enabled:   false,
+			SortOrder: 6,
+		},
 		// ↓ 用户可在下面继续添加更多内置 MCP 服务器 ↓
 	}
 

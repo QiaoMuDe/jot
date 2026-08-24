@@ -2147,12 +2147,12 @@
 }
 
 .ai-session-item:hover {
-    background: var(--hover-bg);
+    background: color-mix(in srgb, var(--accent) 10%, var(--hover-bg));
 }
 
 .ai-session-item.active {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
     overflow: hidden;
 }
 
@@ -2177,11 +2177,9 @@
     line-height: 1.4;
 }
 
-.ai-session-item-title:focus {
-    outline: none;
-    background: var(--input-bg);
-    border-radius: 3px;
-    padding: 0 4px;
+/* AI 会话重命名对话框 — 替换笔记本图标为聊天气泡 */
+.ai-rename-dialog .new-notebook-title::before {
+  content: '💬';
 }
 
 .ai-session-item-delete {
@@ -2231,7 +2229,7 @@
 }
 .ai-session-item-more:hover {
     color: var(--text-primary);
-    background: var(--hover-bg);
+    background: color-mix(in srgb, var(--accent) 30%, var(--hover-bg));
 }
 
 /* ─── 下拉菜单 ─── */
@@ -2291,14 +2289,14 @@
 
 /* ─── 置顶项样式 ─── */
 .ai-session-item.pinned {
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .ai-session-item.pinned:hover {
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .ai-session-item.pinned.active {
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .ai-session-item-pin-icon {

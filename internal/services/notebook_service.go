@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"jot/internal/models"
 
@@ -39,6 +40,11 @@ func (s *NotebookService) isNameTaken(name string, excludeID uint) (bool, error)
 
 // Create 创建一个新笔记本，返回创建后的笔记本对象
 func (s *NotebookService) Create(name string) (*models.Notebook, error) {
+	// 名称长度校验（最多50字符）
+	if utf8.RuneCountInString(name) > 50 {
+		return nil, errors.New("笔记本名称不能超过50个字符")
+	}
+
 	// 检查名称是否已存在
 	taken, err := s.isNameTaken(name, 0)
 	if err != nil {
@@ -63,6 +69,10 @@ func (s *NotebookService) Create(name string) (*models.Notebook, error) {
 func (s *NotebookService) Update(id uint, name string) (*models.Notebook, error) {
 	if id == 1 {
 		return nil, errors.New("默认笔记本不可重命名")
+	}
+	// 名称长度校验（最多50字符）
+	if utf8.RuneCountInString(name) > 50 {
+		return nil, errors.New("笔记本名称不能超过50个字符")
 	}
 
 	var notebook models.Notebook

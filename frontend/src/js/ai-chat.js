@@ -478,7 +478,8 @@ function bindEvents() {
         aiChatTitleEl.addEventListener('dblclick', () => {
             if (activeSessionId === null) return;
             triggerPulseFeedback(aiChatTitleEl);
-            startInlineEdit(aiChatTitleEl, activeSessionId);
+            const curSession = sessions.find(s => s.id === activeSessionId);
+            showAISessionRenameDialog(activeSessionId, curSession ? curSession.title : aiChatTitleEl.textContent);
         });
     }
 
@@ -1202,55 +1203,108 @@ async function loadSessionList() {
     renderSessionList();
 }
 
-/**
- * 启动会话标题内联编辑
- * @param {HTMLElement} titleEl - 标题元素
- * @param {number} sessionId - 会话 ID
- */
-function startInlineEdit(titleEl, sessionId) {
-    if (isStreaming) return;
-    if (!titleEl) return;
-    const orig = titleEl.textContent;
-    titleEl.contentEditable = 'true';
-    titleEl.focus();
-    // 全选
-    const range = document.createRange();
-    range.selectNodeContents(titleEl);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+let _aiSessionRenameDialog = null;
 
-    const finish = async () => {
-        titleEl.contentEditable = 'false';
-        const newTitle = titleEl.textContent.trim();
-        if (newTitle && newTitle !== orig) {
-            try {
-                await window.go.main.App.RenameAISession(sessionId, newTitle);
-                // 也更新本地 sessions 数组中的标题
-                const s = sessions.find(s => s.id === sessionId);
-                if (s) s.title = newTitle;
-                titleEl.title = newTitle;
-                updateChatTitle();
-                renderSessionList();
-            } catch (_) {
-                titleEl.textContent = orig;
-            }
-        } else {
-            titleEl.textContent = orig;
+function closeAISessionRenameDialog() {
+    if (_aiSessionRenameDialog) {
+        _aiSessionRenameDialog.classList.remove('visible');
+        const el = _aiSessionRenameDialog;
+        setTimeout(() => el.remove(), 200);
+        _aiSessionRenameDialog = null;
+    }
+}
+
+/**
+ * 弹出对话框重命名 AI 会话
+ * @param {number} sessionId - 会话 ID
+ * @param {string} currentTitle - 当前标题
+ */
+function showAISessionRenameDialog(sessionId, currentTitle) {
+    if (isStreaming) return;
+    closeAISessionRenameDialog();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'new-notebook-overlay';
+    overlay.tabIndex = -1;
+    overlay.innerHTML = `
+        <div class="new-notebook-dialog ai-rename-dialog">
+            <div class="new-notebook-title">重命名会话</div>
+            <input type="text" class="new-notebook-input" id="renameAISessionInput" autofocus>
+            <div class="new-notebook-actions">
+                <button class="btn btn-cancel" id="renameAISessionCancelBtn">取消</button>
+                <button class="btn btn-save" id="renameAISessionConfirmBtn">确认</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    _aiSessionRenameDialog = overlay;
+
+    const input = overlay.querySelector('#renameAISessionInput');
+    input.value = currentTitle || '';
+    const confirmBtn = overlay.querySelector('#renameAISessionConfirmBtn');
+    const cancelBtn = overlay.querySelector('#renameAISessionCancelBtn');
+
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        input.focus();
+        input.select();
+    });
+
+    const close = async (force) => {
+        if (!force && input.value.trim() !== (currentTitle || '').trim()) {
+            const confirmed = await window.showConfirmDialog('内容尚未保存，确定关闭？', '关闭', '继续编辑');
+            if (!confirmed) { overlay.focus(); return; }
+        }
+        _aiSessionRenameDialog = null;
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    const doRename = async () => {
+        const newTitle = input.value.trim();
+        if (!newTitle) {
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
+            window.nm?.show('请输入会话名称', 'warning');
+            return;
+        }
+        if (newTitle === currentTitle) {
+            close(true);
+            return;
+        }
+        try {
+            await window.go.main.App.RenameAISession(sessionId, newTitle);
+            const s = sessions.find(s => s.id === sessionId);
+            if (s) s.title = newTitle;
+            updateChatTitle();
+            renderSessionList();
+            close(true);
+            window.nm?.show('会话已重命名', 'success');
+        } catch (_) {
+            // 忽略错误
         }
     };
 
-    titleEl.addEventListener('blur', finish, { once: true });
-    titleEl.addEventListener('keydown', (ke) => {
-        if (ke.key === 'Enter') {
-            ke.preventDefault();
-            titleEl.blur();
+    input.addEventListener('input', () => {
+        const runes = [...input.value];
+        if (runes.length > 50) {
+            input.value = runes.slice(0, 50).join('');
+            input.classList.add('shake');
+            setTimeout(() => input.classList.remove('shake'), 400);
+            window.nm?.show('名称不能超过50个字符', 'warning');
         }
-        if (ke.key === 'Escape') {
-            titleEl.textContent = orig;
-            titleEl.contentEditable = 'false';
-        }
-    }, { once: true });
+    });
+    confirmBtn.addEventListener('click', doRename);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doRename();
+    });
+    overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    });
+    cancelBtn.addEventListener('click', () => close());
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
 }
 
 /**
@@ -1323,8 +1377,8 @@ function renderSessionList() {
             switchSession(s.id);
         });
 
-        // 双击内联编辑
-        title.addEventListener('dblclick', () => startInlineEdit(title, s.id));
+        // 双击重命名
+        title.addEventListener('dblclick', () => showAISessionRenameDialog(s.id, s.title));
 
         // 更多按钮点击 - 切换统一下拉菜单（已打开则关闭）
         moreBtn.addEventListener('click', (e) => {
@@ -3352,9 +3406,7 @@ function showSessionMenu(s, item, left, top) {
     renameItem.addEventListener('click', (re) => {
         re.stopPropagation();
         closeSessionMenu();
-        // 关闭菜单后触发该会话标题的内联编辑
-        const titleEl = item.querySelector('.ai-session-item-title');
-        if (titleEl) startInlineEdit(titleEl, s.id);
+        showAISessionRenameDialog(s.id, s.title);
     });
 
     exportItem.addEventListener('click', async (ex) => {

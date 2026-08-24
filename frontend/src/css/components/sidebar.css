@@ -134,7 +134,7 @@
 
 /* 激活态 — 书签条全着色 + 丰富背景 + 左侧轻微内陷感 */
 .notebook-item.active {
-  background: color-mix(in srgb, var(--accent) 12%, var(--card-bg));
+  background: color-mix(in srgb, var(--accent) 30%, var(--card-bg));
   font-weight: 600;
   transform: translateX(0);
   box-shadow:
@@ -314,21 +314,7 @@
   background: transparent;
 }
 
-/* 内联重命名输入框 */
-.notebook-rename-input {
-  flex: 1;
-  padding: 2px 8px;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.813rem;
-  font-family: inherit;
-  color: var(--text-primary);
-  background: var(--input-bg);
-  outline: none;
-  min-width: 0;
-  line-height: 1.5;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
-}
+
 
 /* 新建笔记本模态框 */
 .new-notebook-overlay {
@@ -399,6 +385,18 @@
 .new-notebook-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.new-notebook-input.shake {
+  animation: input-shake 0.4s ease;
+}
+
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
 }
 
 .new-notebook-actions {
