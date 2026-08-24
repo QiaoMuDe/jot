@@ -9120,6 +9120,7 @@ let agentToolsChanges = { enabled: [], disabled: [] };
 // Agent 工具管理面板展开状态与容器（仿「配置预设管理」行内展开）
 let agentToolsMgrExpanded = false;
 let agentToolsMgrContainer = null;
+let agentToolsSelectAllCheckbox = null;
 
 /**
  * 关闭设置页「Agent 工具」管理面板（收起动画结束后移除容器，返回 Promise）
@@ -9162,6 +9163,7 @@ function closeAgentToolsMgrList() {
                 container.parentNode.removeChild(container);
                 if (agentToolsMgrContainer === container) {
                     agentToolsMgrContainer = null;
+                    agentToolsSelectAllCheckbox = null; // 重置全选 checkbox 引用
                 }
             }
             const btn = document.getElementById('aiAgentToolsBtn');
@@ -9185,6 +9187,80 @@ function updateAgentToolsButtonText() {
         if (agentToolsDisabled.indexOf(tool.Name) === -1) enabledCount++;
     });
     btnText.textContent = `已启用 ${enabledCount}/${agentToolsMeta.length}`;
+}
+
+/**
+ * 同步全选 checkbox 的状态（checked / unchecked / indeterminate）
+ */
+function updateSelectAllCheckboxState() {
+    if (!agentToolsSelectAllCheckbox) return;
+    // 空数组时显示 unchecked 状态
+    if (agentToolsMeta.length === 0) {
+        agentToolsSelectAllCheckbox.checked = false;
+        agentToolsSelectAllCheckbox.indeterminate = false;
+        return;
+    }
+    const enabledCount = agentToolsMeta.filter(tool =>
+        agentToolsDisabled.indexOf(tool.Name) === -1
+    ).length;
+    if (enabledCount === agentToolsMeta.length) {
+        agentToolsSelectAllCheckbox.checked = true;
+        agentToolsSelectAllCheckbox.indeterminate = false;
+    } else if (enabledCount === 0) {
+        agentToolsSelectAllCheckbox.checked = false;
+        agentToolsSelectAllCheckbox.indeterminate = false;
+    } else {
+        agentToolsSelectAllCheckbox.indeterminate = true;
+        agentToolsSelectAllCheckbox.checked = false;
+    }
+}
+
+/**
+ * 批量启用/禁用所有 Agent 工具
+ */
+function toggleSelectAllTools() {
+    // 注意：change 事件在状态切换后触发，所以 checked 已是新状态
+    // checked（且非 indeterminate）→ 启用全部；unchecked 或 indeterminate → 禁用全部
+    const shouldEnable = agentToolsSelectAllCheckbox.checked && !agentToolsSelectAllCheckbox.indeterminate;
+
+    agentToolsMeta.forEach(tool => {
+        const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
+        if (isEnabled === shouldEnable) return; // 状态未变，跳过
+
+        if (shouldEnable) {
+            // 启用：从禁用列表移除
+            const idx = agentToolsDisabled.indexOf(tool.Name);
+            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
+            // 记录变更
+            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
+                agentToolsChanges.enabled.push(tool.Name);
+            }
+            // 清除相反方向的变更记录
+            const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
+            if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
+        } else {
+            // 禁用：加入禁用列表
+            if (agentToolsDisabled.indexOf(tool.Name) === -1) {
+                agentToolsDisabled.push(tool.Name);
+            }
+            // 记录变更
+            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
+                agentToolsChanges.disabled.push(tool.Name);
+            }
+            // 清除相反方向的变更记录
+            const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
+            if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
+        }
+    });
+
+    // 更新所有子 checkbox 的 UI 状态
+    document.querySelectorAll('.ai-agent-tools-item input[type="checkbox"]').forEach(cb => {
+        cb.checked = shouldEnable;
+    });
+
+    updateAgentToolsButtonText();
+    updateSelectAllCheckboxState();
+    saveSettings();
 }
 
 /**
@@ -9217,17 +9293,33 @@ function renderAgentToolsMgrList() {
     agentToolsMgrContainer.innerHTML = '';
     agentToolsMgrExpanded = true;
 
-    // header：标题 + 关闭按钮
+    // header：全选 checkbox + 标题 + 关闭按钮
     const header = document.createElement('div');
     header.className = 'agent-tools-mgr-header';
+
+    // 左侧容器：全选 checkbox + 标题
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'agent-tools-mgr-header-left';
+
+    // 全选 checkbox
+    agentToolsSelectAllCheckbox = document.createElement('input');
+    agentToolsSelectAllCheckbox.type = 'checkbox';
+    agentToolsSelectAllCheckbox.className = 'agent-tools-mgr-select-all';
+    agentToolsSelectAllCheckbox.addEventListener('change', toggleSelectAllTools);
+    updateSelectAllCheckboxState(); // 初始化状态
+
     const title = document.createElement('span');
     title.className = 'agent-tools-mgr-title';
     title.textContent = 'Agent 工具';
+
+    headerLeft.appendChild(agentToolsSelectAllCheckbox);
+    headerLeft.appendChild(title);
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn btn-sm btn-secondary';
     closeBtn.textContent = '关闭';
     closeBtn.addEventListener('click', closeAgentToolsMgrList);
-    header.appendChild(title);
+    header.appendChild(headerLeft);
     header.appendChild(closeBtn);
     agentToolsMgrContainer.appendChild(header);
 
@@ -9277,6 +9369,7 @@ function createAgentToolRow(tool) {
             }
         }
         updateAgentToolsButtonText();
+        updateSelectAllCheckboxState();
         saveSettings();
     });
 

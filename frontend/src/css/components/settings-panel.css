@@ -1633,12 +1633,25 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  gap: 8px;
+}
+
+.agent-tools-mgr-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .agent-tools-mgr-title {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.agent-tools-mgr-select-all {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .ai-agent-tools-item {
