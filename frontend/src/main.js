@@ -7822,9 +7822,9 @@ function renderSearchModalResults(notes, append) {
         const titleText = note.title !== undefined ? note.title : (note.Title || '');
         titleEl.innerHTML = highlightModalMatch(titleText || '(无标题)', kw);
         item.appendChild(titleEl);
-        // 摘要(从内容截前 100 字)
+        // 摘要(后端已围绕关键词智能截取约200字符，仅做空白归一化)
         const content = note.content !== undefined ? note.content : (note.Content || '');
-        const snippet = String(content || '').slice(0, 100).replace(/\s+/g, ' ').trim();
+        const snippet = String(content || '').replace(/\s+/g, ' ').trim();
         const snippetEl = document.createElement('div');
         snippetEl.className = 'search-modal-item-snippet';
         snippetEl.innerHTML = highlightModalMatch(snippet, kw);

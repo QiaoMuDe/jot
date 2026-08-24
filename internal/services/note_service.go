@@ -221,8 +221,19 @@ func buildSearchSortOrder(keyword string, sortBy string) interface{} {
 	}
 }
 
-// noteThinSelect 列表/搜索查询时使用的 Select，排除全量 Content，替换为前 200 字符用于卡片预览
-const noteThinSelect = "id, title, SUBSTR(content, 1, 200) AS content, file_ext, pinned, notebook_id, created_at, updated_at"
+// noteThinSelect 列表/搜索查询时使用的 Select，排除全量 Content，替换为约 80 字符用于卡片预览
+// 有 keyword 时围绕关键词首次出现位置截取，无 keyword 时取前 200 字符
+func noteThinSelect(keyword ...string) string {
+	const base = "id, title, %s AS content, file_ext, pinned, notebook_id, created_at, updated_at"
+	if len(keyword) > 0 && keyword[0] != "" {
+		// 围绕关键词首次出现位置截取约 80 字符：关键词前 40 + 后 40
+		// INSTR 返回 1-based 位置；MAX(1, pos-40) 确保起始位置不越界
+		escaped := strings.ReplaceAll(keyword[0], "'", "''")
+		return fmt.Sprintf(base,
+			fmt.Sprintf("COALESCE(SUBSTR(content, MAX(1, INSTR(content, '%s') - 40), 80), SUBSTR(content, 1, 80))", escaped))
+	}
+	return fmt.Sprintf(base, "SUBSTR(content, 1, 200)")
+}
 
 // GetAll 分页获取未删除的笔记列表（不过滤 notebook_id），按指定排序方式排列，返回列表与总数
 func (s *NoteService) GetAll(page, pageSize int, sortBy string) ([]models.Note, int64, error) {
@@ -245,7 +256,7 @@ func (s *NoteService) GetAllByNotebook(page, pageSize int, sortBy string, notebo
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Select(noteThinSelect).
+	if err := query.Select(noteThinSelect()).
 		Order(buildSortOrder(sortBy)).
 		Preload("Tags").
 		Offset(offset).
@@ -303,7 +314,7 @@ func (s *NoteService) Search(keyword string, page, pageSize int, sortBy string, 
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Select(noteThinSelect).
+	if err := query.Select(noteThinSelect(keyword)).
 		Order(buildSearchSortOrder(keyword, sortBy)).
 		Preload("Tags").
 		Offset(offset).
@@ -348,7 +359,7 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	}
 
 	offset := (page - 1) * pageSize
-	if err := query.Select(noteThinSelect).
+	if err := query.Select(noteThinSelect(keyword)).
 		Order(buildSearchSortOrder(keyword, sortBy)).
 		Preload("Tags").
 		Offset(offset).
@@ -932,7 +943,7 @@ func (s *NoteService) GetByDate(date string) ([]models.Note, error) {
 	if err := s.db.Model(&models.Note{}).
 		Where("created_at BETWEEN ? AND ?", start, end).
 		Where("deleted_at IS NULL").
-		Select(noteThinSelect).
+		Select(noteThinSelect()).
 		Order("created_at DESC").
 		Preload("Tags").
 		Preload("Notebook").
