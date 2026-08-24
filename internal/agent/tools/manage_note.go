@@ -18,14 +18,13 @@ package tools
 //     时输出带「行 N: 」行号前缀，作为行级编辑（edit 的 line_start/line_end）的寻址坐标）；
 //   - update：更新笔记标题/扩展名（id 必填、正整数；title / file_ext 至少提供一个，
 //     非空才更新对应字段，不碰正文）；
-//   - edit：编辑笔记正文（id 必填、正整数；四模式互斥——content 非空为整篇替换；
-//     content 为空、find 非空为片段替换，把第 count 次（缺省 1）出现的 find 片段
-//     替换为 replace（缺省空字符串即删除该片段），find 优先精确匹配、因空白/换行
-//     差异未命中时自动按空白归一化匹配兜底，replace_all=true 时替换全部出现（与
-//     count 互斥）；content 与 find 均为空、append_content 非空为追加模式，在正文
-//     末尾拼接文本，无需先读全文；line_start 非 0 为行级替换模式，把第 line_start
-//     行到第 line_end 行（缺省等于 line_start）的区间替换为 replace，replace 为空
-//     字符串即删除该区间行，行号来自 view/read_note_section 的 line_numbers=true 输出）；
+//   - edit：编辑笔记正文（id 必填、正整数；双模式互斥——find 非空为片段替换，
+//     把第 count 次（缺省 1）出现的 find 片段替换为 replace（缺省空字符串即删除
+//     该片段），find 优先精确匹配、因空白/换行差异未命中时自动按空白归一化匹配兜底，
+//     replace_all=true 时替换全部出现（与 count 互斥）；line_start 非 0 为行级
+//     替换模式，把第 line_start 行到第 line_end 行（缺省等于 line_start）的区间
+//     替换为 replace，replace 为空字符串即删除该区间行，行号来自 view/read_note_section
+//     的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义）；
 //   - pin：置顶/取消置顶笔记（id 必填、正整数，切换置顶状态）；
 //   - move：移动笔记到目标笔记本（id 必填、正整数，notebook_id 必填目标笔记本）；
 //   - add_tag / remove_tag：给笔记添加/移除标签（id 必填、正整数，tag_id 必填、正整数）。
@@ -148,7 +147,7 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_note",
-		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 id 笔记编号；内容过长时会截断并可要求分段查看；如需按行编辑正文，请传 line_numbers=true，输出将带「行 N: 」行号前缀，行号即 edit 行级替换的寻址坐标，注意行号前缀不属于正文，复制片段用于 find 时不要包含行号）；update=更新笔记标题/扩展名（需提供 id 笔记编号与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 id 笔记编号；四种方式互斥：①整篇替换提供 content 新正文；②片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；③行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 view/read_note_section 的 line_numbers=true 输出；④末尾追加提供 append_content，无需先读全文。长笔记建议用 find+replace 或行级替换避免回传全文）；pin=置顶/取消置顶笔记（需提供 id 笔记编号）；move=移动笔记到目标笔记本（需提供 id 笔记编号与 notebook_id 目标笔记本）；add_tag=给笔记添加标签（需提供 id 笔记编号与 tag_id 标签编号）；remove_tag=从笔记移除标签（需提供 id 笔记编号与 tag_id 标签编号）。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
+		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 id 笔记编号；内容过长时会截断并可要求分段查看；如需按行编辑正文，请传 line_numbers=true，输出将带「行 N: 」行号前缀，行号即 edit 行级替换的寻址坐标，注意行号前缀不属于正文，复制片段用于 find 时不要包含行号）；update=更新笔记标题/扩展名（需提供 id 笔记编号与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 id 笔记编号；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 view/read_note_section 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 id 笔记编号）；move=移动笔记到目标笔记本（需提供 id 笔记编号与 notebook_id 目标笔记本）；add_tag=给笔记添加标签（需提供 id 笔记编号与 tag_id 标签编号）；remove_tag=从笔记移除标签（需提供 id 笔记编号与 tag_id 标签编号）。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -163,7 +162,7 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"content": {
 				Type:     schema.String,
-				Desc:     "笔记内容，action=create 时必填；action=edit 时非空即整篇替换正文（与 find、append_content、line_start 互斥）",
+				Desc:     "笔记内容，action=create 时必填",
 				Required: false,
 			},
 			"file_ext": {
@@ -173,7 +172,7 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"find": {
 				Type:     schema.String,
-				Desc:     "片段替换的原文片段，仅 action=edit 片段替换时使用；优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致）",
+				Desc:     "片段替换的原文片段，仅 action=edit 片段替换时使用（与 line_start 互斥）；优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致）",
 				Required: false,
 			},
 			"replace": {
@@ -193,7 +192,7 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"line_start": {
 				Type:     schema.Number,
-				Desc:     "行级替换的起始行号（从 1 开始，行号须来自 view/read_note_section 的 line_numbers=true 输出），仅 action=edit 行级替换时使用（与 content、find、append_content 互斥）",
+				Desc:     "行级替换的起始行号（从 1 开始，行号须来自 view/read_note_section 的 line_numbers=true 输出），仅 action=edit 行级替换时使用（与 find 互斥）；大于笔记总行数时为末尾追加语义",
 				Required: false,
 			},
 			"line_end": {
@@ -204,11 +203,6 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			"line_numbers": {
 				Type:     schema.Boolean,
 				Desc:     "是否在 view/read_note_section 输出中带「行 N: 」行号前缀（作为行级编辑的寻址坐标），缺省 false（不带行号，便于直接复制原文片段用于 find）",
-				Required: false,
-			},
-			"append_content": {
-				Type:     schema.String,
-				Desc:     "追加到笔记末尾的文本，仅 action=edit 且需追加内容时使用（与 content、find、line_start 互斥），无需先获取全文",
 				Required: false,
 			},
 			"notebook_id": {
@@ -275,29 +269,28 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 // InvokableRun 执行工具：解析参数 → 校验 action → 按动作分发到 Create / Search / View / Update / Edit / Pin / Move / Tag 操作。
 func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	var args struct {
-		Action        string    `json:"action"`
-		Title         string    `json:"title"`
-		Content       string    `json:"content"`
-		FileExt       string    `json:"file_ext"`
-		Find          string    `json:"find"`
-		Replace       string    `json:"replace"`
-		Count         float64   `json:"count"`
-		ReplaceAll    bool      `json:"replace_all"`
-		LineStart     float64   `json:"line_start"`
-		LineEnd       float64   `json:"line_end"`
-		LineNumbers   bool      `json:"line_numbers"`
-		AppendContent string    `json:"append_content"`
-		NotebookID    float64   `json:"notebook_id"`
-		TagIDs        []float64 `json:"tag_ids"`
-		Keyword       string    `json:"keyword"`
-		StartDate     string    `json:"start_date"`
-		EndDate       string    `json:"end_date"`
-		SortBy        string    `json:"sort_by"`
-		Page          float64   `json:"page"`
-		PageSize      float64   `json:"pageSize"`
-		ID            float64   `json:"id"`
-		TagID         float64   `json:"tag_id"`
-		Confirm       bool      `json:"confirm"`
+		Action      string    `json:"action"`
+		Title       string    `json:"title"`
+		Content     string    `json:"content"`
+		FileExt     string    `json:"file_ext"`
+		Find        string    `json:"find"`
+		Replace     string    `json:"replace"`
+		Count       float64   `json:"count"`
+		ReplaceAll  bool      `json:"replace_all"`
+		LineStart   float64   `json:"line_start"`
+		LineEnd     float64   `json:"line_end"`
+		LineNumbers bool      `json:"line_numbers"`
+		NotebookID  float64   `json:"notebook_id"`
+		TagIDs      []float64 `json:"tag_ids"`
+		Keyword     string    `json:"keyword"`
+		StartDate   string    `json:"start_date"`
+		EndDate     string    `json:"end_date"`
+		SortBy      string    `json:"sort_by"`
+		Page        float64   `json:"page"`
+		PageSize    float64   `json:"pageSize"`
+		ID          float64   `json:"id"`
+		TagID       float64   `json:"tag_id"`
+		Confirm     bool      `json:"confirm"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 manage_note 参数失败: %w", err)
@@ -348,7 +341,7 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	case "update":
 		return m.updateNote(args.ID, args.Title, args.FileExt)
 	case "edit":
-		return m.editNote(args.ID, args.Content, args.Find, args.Replace, args.AppendContent, args.Count, args.ReplaceAll, args.LineStart, args.LineEnd)
+		return m.editNote(args.ID, args.Find, args.Replace, args.Count, args.ReplaceAll, args.LineStart, args.LineEnd)
 	case "pin":
 		return m.pinNote(args.ID)
 	case "move":
@@ -522,18 +515,24 @@ func (m *manageNoteTool) viewNote(id float64, lineNumbers bool) (string, error) 
 	}
 
 	total := len([]rune(content))
+	totalLines := len(splitNoteLines(content))
 	threshold := notePreviewThreshold(m.setting)
 	truncated := false
 	if total > threshold {
 		content = TruncateRunes(content, threshold)
 		truncated = true
 	}
+	displayedLines := totalLines
 	if lineNumbers {
 		content = numberLines(content, 1)
+		if truncated {
+			// 从行号化后的内容提取已显示行数（最后一个「行 N:」前缀）
+			displayedLines = extractLastLineNum(content)
+		}
 	}
 	if truncated {
-		content += fmt.Sprintf("\n\n（内容共 %d 字符，已显示前 %d。如需继续阅读，可调用 read_note_section 工具，参数 id=%d, offset=%d；如需按行编辑，可让 read_note_section 带 line_numbers=true 获取全局行号）",
-			total, threshold, uint(id), threshold)
+		content += fmt.Sprintf("\n\n（内容共 %d 字符 / %d 行，已显示前 %d 字符 / %d 行。如需继续阅读，可调用 read_note_section 工具，参数 id=%d, offset=%d；如需按行编辑，可让 read_note_section 带 line_numbers=true 获取全局行号）",
+			total, totalLines, threshold, displayedLines, uint(id), threshold)
 	}
 	return fmt.Sprintf("笔记 #%d 内容：\n%s", uint(id), content), nil
 }
@@ -576,73 +575,35 @@ func (m *manageNoteTool) updateNote(id float64, title, fileExt string) (string, 
 	return fmt.Sprintf("笔记 #%d：%s（扩展名 %s）已更新", note.ID, note.Title, note.FileExt), nil
 }
 
-// editNote 编辑笔记正文：id 必填、正整数。四种模式互斥——
-//   - 全量模式：content 非空时整篇替换正文；
-//   - 片段模式：content 为空、find 非空时，定位第 count 次（缺省 1）出现的 find 片段，
+// editNote 编辑笔记正文：id 必填、正整数。双模式互斥——
+//   - 片段模式：find 非空时，定位第 count 次（缺省 1）出现的 find 片段，
 //     替换为 replace（缺省空字符串即删除该片段）；find 优先精确匹配，因空白/换行差异
 //     未命中时自动按空白归一化匹配兜底；replace_all=true 时替换全部出现（与 count 互斥）；
-//   - 追加模式：content 与 find 均为空、append_content 非空时，在正文末尾拼接文本（无需先读全文）；
 //   - 行级模式：line_start 非 0 时，把第 line_start 行到第 line_end 行（缺省等于 line_start）
 //     的区间替换为 replace（空字符串即删除该区间行），行号来自 view/read_note_section
-//     的 line_numbers=true 输出。
-func (m *manageNoteTool) editNote(id float64, content, find, replace, appendContent string, count float64, replaceAll bool, lineStart, lineEnd float64) (string, error) {
+//     的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义。
+//
+// 只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段
+// 定位时用行级替换。
+func (m *manageNoteTool) editNote(id float64, find, replace string, count float64, replaceAll bool, lineStart, lineEnd float64) (string, error) {
 	if id <= 0 {
 		return "", errors.New("manage_note 编辑笔记缺少有效的 id")
 	}
-	content = strings.TrimSpace(content)
 	find = strings.TrimSpace(find)
-	appendContent = strings.TrimSpace(appendContent)
-	// 模式判定：四选一互斥
-	modes := 0
-	if content != "" {
-		modes++
+	// 模式判定：二选一互斥（find 片段替换 / line_start 行级替换）
+	if find != "" && lineStart > 0 {
+		return "", errors.New("manage_note 编辑笔记多种模式不可混用：find+replace（片段替换）与 line_start（行级替换）请二选一")
 	}
-	if find != "" {
-		modes++
-	}
-	if appendContent != "" {
-		modes++
-	}
-	if lineStart > 0 {
-		modes++
-	}
-	if modes > 1 {
-		return "", errors.New("manage_note 编辑笔记多种模式不可混用：content / find+replace / append_content / line_start 请四选一")
-	}
-	if modes == 0 {
-		return "", errors.New("manage_note 编辑笔记无可更新内容：请提供 content（整篇替换）、find+replace（片段替换）、append_content（追加）或 line_start（行级替换）")
+	if find == "" && lineStart <= 0 {
+		return "", errors.New("manage_note 编辑笔记无可更新内容：请提供 find+replace（片段替换）或 line_start（行级替换，含末尾追加）")
 	}
 	// 片段模式专属参数校验（replace_all 与 count>1 互斥），须在触达 DB 前完成
 	if find != "" && replaceAll && count > 1 {
 		return "", errors.New("manage_note 片段替换的 replace_all 与 count>1 互斥，不可同时使用（replace_all 时 count 只接受缺省 1）")
 	}
 
-	// 全量模式：整篇替换正文（file_ext 传空保持原值）
-	if content != "" {
-		if _, err := m.note.Update(uint(id), "", content, ""); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("笔记 #%d 正文已整篇更新", uint(id)), nil
-	}
-
-	// 追加模式：将 append_content 拼接到正文末尾（无需先读全文）
-	if appendContent != "" {
-		current, err := m.note.GetNoteContent(uint(id))
-		if err != nil {
-			return "", err
-		}
-		newContent := current
-		if strings.TrimSpace(current) != "" {
-			newContent += "\n\n"
-		}
-		newContent += appendContent
-		if _, err := m.note.Update(uint(id), "", newContent, ""); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("笔记 #%d 已在末尾追加内容", uint(id)), nil
-	}
-
 	// 行级模式：把第 line_start 行到第 line_end 行替换为 replace（空即删除该区间）
+	// line_start 大于总行数时为末尾追加语义
 	if lineStart > 0 {
 		start := int(lineStart)
 		end := int(lineEnd)
@@ -653,6 +614,20 @@ func (m *manageNoteTool) editNote(id float64, content, find, replace, appendCont
 		if err != nil {
 			return "", err
 		}
+		lines := splitNoteLines(current)
+		total := len(lines)
+		// 末尾追加：start > total 时，在末尾追加 replace 内容
+		if start > total {
+			newContent := current
+			if strings.TrimSpace(current) != "" {
+				newContent += "\n\n"
+			}
+			newContent += replace
+			if _, err := m.note.Update(uint(id), "", newContent, ""); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("笔记 #%d 已在末尾追加内容", uint(id)), nil
+		}
 		newContent, replaced, total, err := replaceLines(current, start, end, replace)
 		if err != nil {
 			return "", err
@@ -660,10 +635,19 @@ func (m *manageNoteTool) editNote(id float64, content, find, replace, appendCont
 		if _, err := m.note.Update(uint(id), "", newContent, ""); err != nil {
 			return "", err
 		}
+		newTotal := len(splitNoteLines(newContent))
+		// 构建反馈：基本信息 + 行数变化 + 替换区域上下文预览
+		var fb string
 		if replaced == 1 {
-			return fmt.Sprintf("笔记 #%d 已替换第 %d 行（原共 %d 行）", uint(id), start, total), nil
+			fb = fmt.Sprintf("笔记 #%d 已替换第 %d 行（原 %d 行 → 现 %d 行）", uint(id), start, total, newTotal)
+		} else {
+			fb = fmt.Sprintf("笔记 #%d 已替换第 %d-%d 行（原 %d 行 → 现 %d 行）", uint(id), start, end, total, newTotal)
 		}
-		return fmt.Sprintf("笔记 #%d 已替换第 %d-%d 行（原共 %d 行）", uint(id), start, end, total), nil
+		// 附带替换区域上下文预览（前 1 行 + 替换内容 + 后 1 行，限 300 字符）
+		if preview := lineEditPreview(newContent, start, newTotal); preview != "" {
+			fb += "：\n" + preview
+		}
+		return fb, nil
 	}
 
 	// 片段模式：定位第 n 次出现的 find 片段并替换为 replace
@@ -675,12 +659,17 @@ func (m *manageNoteTool) editNote(id float64, content, find, replace, appendCont
 	if replaceAll {
 		newContent, n := replaceAllFragments(current, find, replace)
 		if n == 0 {
-			return "", fmt.Errorf("未在笔记 #%d 中找到片段「%s」（已尝试空白归一化匹配），请重新调用 view 获取精确原文后重试", uint(id), find)
+			return buildNotFoundHint(uint(id), find, current)
 		}
 		if _, err := m.note.Update(uint(id), "", newContent, ""); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("笔记 #%d 正文片段已全部替换（共 %d 处）", uint(id), n), nil
+		fb := fmt.Sprintf("笔记 #%d 正文片段已全部替换（共 %d 处）", uint(id), n)
+		// 展示第一处 diff 摘要
+		if pos := indexNth(current, find, 1); pos >= 0 {
+			fb += fmt.Sprintf("：\n-旧: %q\n+新: %q", truncateSnippet(current[pos:pos+len(find)], 80), truncateSnippet(replace, 80))
+		}
+		return fb, nil
 	}
 
 	n := int(count)
@@ -699,16 +688,15 @@ func (m *manageNoteTool) editNote(id float64, content, find, replace, appendCont
 		}
 	}
 	if pos < 0 {
-		if n > 1 {
-			return "", fmt.Errorf("未在笔记 #%d 中找到第 %d 次出现的片段（已尝试空白归一化匹配），请重新调用 view 获取精确原文后重试", uint(id), n)
-		}
-		return "", fmt.Errorf("未在笔记 #%d 中找到该片段（已尝试空白归一化匹配），请重新调用 view 获取精确原文后重试", uint(id))
+		return buildNotFoundHint(uint(id), find, current)
 	}
 	newContent := current[:pos] + replace + current[pos+matchedLen:]
 	if _, err := m.note.Update(uint(id), "", newContent, ""); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("笔记 #%d 正文片段已替换（第 %d 处，%s匹配）", uint(id), n, matchedKind), nil
+	fb := fmt.Sprintf("笔记 #%d 正文片段已替换（第 %d 处，%s匹配）", uint(id), n, matchedKind)
+	fb += fmt.Sprintf("：\n-旧: %q\n+新: %q", truncateSnippet(current[pos:pos+matchedLen], 80), truncateSnippet(replace, 80))
+	return fb, nil
 }
 
 // indexNth 返回 s 中第 nth（从 1 开始）次出现 sub 的起始下标；不存在返回 -1。
@@ -858,6 +846,166 @@ func replaceAllFragments(current, find, replace string) (string, int) {
 		}
 	}
 	return out, count
+}
+
+// extractLastLineNum 从行号化文本（"行 N: ..."）中提取最后一个行号。
+// 用于 viewNote 截断时推算已显示行数。
+func extractLastLineNum(numbered string) int {
+	// 从末尾向前找最后一个「行 」前缀
+	idx := strings.LastIndex(numbered, "行 ")
+	if idx < 0 {
+		return 0
+	}
+	// 提取数字部分
+	numStr := ""
+	for i := idx + len("行 "); i < len(numbered); i++ {
+		ch := numbered[i]
+		if ch >= '0' && ch <= '9' {
+			numStr += string(ch)
+		} else {
+			break
+		}
+	}
+	n := 0
+	for _, ch := range numStr {
+		n = n*10 + int(ch-'0')
+	}
+	return n
+}
+
+// lineEditPreview 从 newContent 中提取替换区域的上下文预览（前 1 行 + 替换区域 + 后 1 行），
+// 用行号格式化，总长限 maxPreviewLen 字符。无内容时返回空串。
+func lineEditPreview(newContent string, replacedLine, newTotal int) string {
+	const maxPreviewLen = 300
+	lines := splitNoteLines(newContent)
+	if len(lines) == 0 {
+		return ""
+	}
+	// 确定预览范围：[start, end)，1-based
+	start := replacedLine - 1 // 替换区域起始（0-based）
+	if start < 0 {
+		start = 0
+	}
+	end := replacedLine // 替换区域结束（0-based，不含）
+	if end > len(lines) {
+		end = len(lines)
+	}
+	// 扩展：前 1 行 + 后 1 行
+	previewStart := start - 1
+	if previewStart < 0 {
+		previewStart = 0
+	}
+	previewEnd := end + 1
+	if previewEnd > len(lines) {
+		previewEnd = len(lines)
+	}
+	previewLines := lines[previewStart:previewEnd]
+	preview := numberLines(strings.Join(previewLines, "\n"), previewStart+1)
+	if len([]rune(preview)) > maxPreviewLen {
+		preview = string([]rune(preview)[:maxPreviewLen]) + "..."
+	}
+	return preview
+}
+
+// truncateSnippet 截取片段摘要，限 maxLen 字符，超出时加 ...。
+func truncateSnippet(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
+}
+
+// buildNotFoundHint 构建"片段未找到"的错误信息，附带笔记中最相似的片段提示。
+func buildNotFoundHint(id uint, find, current string) (string, error) {
+	similar, lineNum := findMostSimilar(current, find)
+	hint := fmt.Sprintf("未在笔记 #%d 中找到片段「%s」（已尝试空白归一化匹配）", id, truncateSnippet(find, 60))
+	if similar != "" {
+		similar = truncateSnippet(similar, 100)
+		if lineNum > 0 {
+			hint += fmt.Sprintf("。笔记中最接近的内容（第 %d 行附近）：\n「%s」", lineNum, similar)
+		} else {
+			hint += fmt.Sprintf("。笔记中最接近的内容：\n「%s」", similar)
+		}
+	}
+	hint += "\n请确认片段是否正确，或调用 view 获取精确原文后重试"
+	return "", errors.New(hint)
+}
+
+// findMostSimilar 在 content 中用滑动窗口查找与 find 最相似的子串，
+// 返回最相似片段及其大致行号（通过计数 \n 得到）。未找到时返回 ("", 0)。
+func findMostSimilar(content, find string) (string, int) {
+	if content == "" || find == "" {
+		return "", 0
+	}
+	findRunes := []rune(find)
+	fLen := len(findRunes)
+	if fLen == 0 {
+		return "", 0
+	}
+	// 窗口大小 = fLen ± 50%
+	minWin := fLen * 50 / 100
+	if minWin < 1 {
+		minWin = 1
+	}
+	maxWin := fLen + fLen/2
+	contentRunes := []rune(content)
+	cLen := len(contentRunes)
+
+	bestScore := -1.0
+	bestStart := 0
+	bestEnd := 0
+
+	for winSize := minWin; winSize <= maxWin; winSize++ {
+		if winSize > cLen {
+			break
+		}
+		for i := 0; i <= cLen-winSize; i++ {
+			window := contentRunes[i : i+winSize]
+			score := runeOverlap(findRunes, window)
+			if score > bestScore {
+				bestScore = score
+				bestStart = i
+				bestEnd = i + winSize
+			}
+		}
+	}
+
+	if bestScore <= 0 {
+		return "", 0
+	}
+
+	// 计算大致行号
+	lineNum := 1
+	for i := 0; i < bestStart; i++ {
+		if contentRunes[i] == '\n' {
+			lineNum++
+		}
+	}
+
+	return string(contentRunes[bestStart:bestEnd]), lineNum
+}
+
+// runeOverlap 计算两个 rune 切片的字符重叠率（0.0 ~ 1.0）。
+func runeOverlap(a, b []rune) float64 {
+	set := make(map[rune]struct{}, len(a))
+	for _, r := range a {
+		set[r] = struct{}{}
+	}
+	common := 0
+	for _, r := range b {
+		if _, ok := set[r]; ok {
+			common++
+		}
+	}
+	maxLen := len(a)
+	if len(b) > maxLen {
+		maxLen = len(b)
+	}
+	if maxLen == 0 {
+		return 0
+	}
+	return float64(common) / float64(maxLen)
 }
 
 // splitNoteLines 按 \n 拆分正文为行（保留每行内容；行尾 \r 属于上一行内容的一部分，

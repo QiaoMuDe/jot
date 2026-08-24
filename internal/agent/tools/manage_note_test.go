@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -230,33 +231,22 @@ func TestIndexNth(t *testing.T) {
 	}
 }
 
-// TestEditNoteModeValidation 验证 editNote 的模式互斥拒绝分支（modes>1 与 modes==0
-// 在触达 DB 前即返回，nil 服务安全）。
+// TestEditNoteModeValidation 验证 editNote 的模式互斥拒绝分支（find+line 混用与
+// 全空在触达 DB 前即返回，nil 服务安全）。
 func TestEditNoteModeValidation(t *testing.T) {
 	m := &manageNoteTool{}
 	cases := []struct {
 		name        string
-		content     string
 		find        string
-		appendC     string
 		lineStart   float64
 		wantModeErr bool
 	}{
-		{"content+find 混用", "x", "y", "", 0, true},
-		{"find+line 混用", "", "y", "", 2, true},
-		{"content+append 混用", "x", "", "z", 0, true},
-		{"append+line 混用", "", "", "z", 2, true},
-		{"全空", "", "", "", 0, true},
-		{"replace_all 与 count>1 冲突", "", "x", "", 0, true},
+		{"find+line 混用", "y", 2, true},
+		{"全空", "", 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			var err error
-			if c.name == "replace_all 与 count>1 冲突" {
-				_, err = m.editNote(1, c.content, c.find, "R", c.appendC, 2, true, c.lineStart, 0)
-			} else {
-				_, err = m.editNote(1, c.content, c.find, "R", c.appendC, 0, false, c.lineStart, 0)
-			}
+			_, err := m.editNote(1, c.find, "R", 0, false, c.lineStart, 0)
 			if !c.wantModeErr {
 				t.Fatal("该用例应报错")
 			}
@@ -265,4 +255,149 @@ func TestEditNoteModeValidation(t *testing.T) {
 			}
 		})
 	}
+	// replace_all 与 count>1 冲突（片段模式专属校验）
+	t.Run("replace_all 与 count>1 冲突", func(t *testing.T) {
+		_, err := m.editNote(1, "x", "R", 2, true, 0, 0)
+		if err == nil {
+			t.Error("应返回 replace_all 与 count>1 互斥错误")
+		}
+	})
+}
+
+// TestExtractLastLineNum 验证从行号化文本提取最后一个行号。
+func TestExtractLastLineNum(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{"空串", "", 0},
+		{"单行", "行 1: hello", 1},
+		{"多行", "行 1: a\n行 2: b\n行 3: c", 3},
+		{"无行号", "hello world", 0},
+		{"大行号", "行 999: text", 999},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := extractLastLineNum(c.input)
+			if got != c.want {
+				t.Errorf("extractLastLineNum(%q) = %d, want %d", c.input, got, c.want)
+			}
+		})
+	}
+}
+
+// TestLineEditPreview 验证行级替换的上下文预览。
+func TestLineEditPreview(t *testing.T) {
+	content := "第一行\n第二行\n第三行\n第四行\n第五行"
+	t.Run("中间替换", func(t *testing.T) {
+		preview := lineEditPreview(content, 3, 5) // 替换第 3 行
+		if preview == "" {
+			t.Error("预览不应为空")
+		}
+		if !strings.Contains(preview, "行 2:") || !strings.Contains(preview, "行 3:") || !strings.Contains(preview, "行 4:") {
+			t.Errorf("预览应包含行 2-4 上下文，实际: %s", preview)
+		}
+	})
+	t.Run("首行替换", func(t *testing.T) {
+		preview := lineEditPreview(content, 1, 5)
+		if preview == "" {
+			t.Error("预览不应为空")
+		}
+		if !strings.Contains(preview, "行 1:") {
+			t.Errorf("预览应包含行 1，实际: %s", preview)
+		}
+	})
+	t.Run("空内容", func(t *testing.T) {
+		preview := lineEditPreview("", 1, 0)
+		if preview != "" {
+			t.Errorf("空内容预览应为空，实际: %s", preview)
+		}
+	})
+}
+
+// TestFindMostSimilar 验证最相似片段查找。
+func TestFindMostSimilar(t *testing.T) {
+	content := "这是一段测试文字\n包含一些常见词汇\n第三行内容"
+	t.Run("精确匹配附近", func(t *testing.T) {
+		similar, line := findMostSimilar(content, "测试文字")
+		if similar == "" {
+			t.Fatal("应找到相似片段")
+		}
+		if !strings.Contains(similar, "测试文字") {
+			t.Errorf("应包含'测试文字'，实际: %s", similar)
+		}
+		if line < 1 || line > 3 {
+			t.Errorf("行号应在 1-3 范围内，实际: %d", line)
+		}
+	})
+	t.Run("空输入", func(t *testing.T) {
+		similar, _ := findMostSimilar("", "test")
+		if similar != "" {
+			t.Errorf("空内容应返回空，实际: %s", similar)
+		}
+	})
+	t.Run("空查找串", func(t *testing.T) {
+		similar, _ := findMostSimilar("content", "")
+		if similar != "" {
+			t.Errorf("空查找串应返回空，实际: %s", similar)
+		}
+	})
+}
+
+// TestRuneOverlap 验证字符重叠率计算。
+func TestRuneOverlap(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b []rune
+		min  float64
+		max  float64
+	}{
+		{"完全相同", []rune("abc"), []rune("abc"), 1.0, 1.0},
+		{"无重叠", []rune("abc"), []rune("xyz"), 0.0, 0.0},
+		{"部分重叠", []rune("abcd"), []rune("bcde"), 0.7, 0.8},
+		{"空切片", []rune(""), []rune("abc"), 0.0, 0.0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			score := runeOverlap(c.a, c.b)
+			if score < c.min || score > c.max {
+				t.Errorf("runeOverlap(%q, %q) = %f, want [%f, %f]", c.a, c.b, score, c.min, c.max)
+			}
+		})
+	}
+}
+
+// TestBuildNotFoundHint 验证未找到片段的提示信息格式。
+func TestBuildNotFoundHint(t *testing.T) {
+	t.Run("有相似片段", func(t *testing.T) {
+		_, err := buildNotFoundHint(42, "测试文字xyz", "这是一段测试文字内容")
+		if err == nil {
+			t.Fatal("应返回错误")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "笔记 #42") {
+			t.Error("应包含笔记编号")
+		}
+		if !strings.Contains(msg, "测试文字xyz") {
+			t.Error("应包含查找的片段")
+		}
+		if !strings.Contains(msg, "最接近") {
+			t.Error("应包含最接近的片段提示")
+		}
+	})
+	t.Run("无相似片段", func(t *testing.T) {
+		_, err := buildNotFoundHint(1, "xyz", "hello world")
+		if err == nil {
+			t.Fatal("应返回错误")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "笔记 #1") {
+			t.Error("应包含笔记编号")
+		}
+		// 无重叠时提示中不含「最接近」但仍应包含重试建议
+		if !strings.Contains(msg, "调用 view") {
+			t.Error("应包含重试建议")
+		}
+	})
 }

@@ -30,7 +30,7 @@ const maxToolLLMTimeout = 60 * time.Second
 const (
 	maxToolShortText = 500   // 短文本字段上限：标题/名称/关键字/搜索词/URL/问句/颜色等
 	maxToolFindLen   = 2000  // edit 片段替换 find 原文片段上限
-	maxToolLongText  = 20000 // 正文级字段上限：content / replace / append_content
+	maxToolLongText  = 20000 // 正文级字段上限：content / replace
 )
 
 // validateTextLen 校验文本字段长度（按 rune 计），超长返回描述性错误供回填模型。
