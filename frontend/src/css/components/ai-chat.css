@@ -854,14 +854,14 @@
 /* ── 输入区：绝对定位浮在消息列表之上，背景独立，z-index 高于 actions ── */
 .ai-chat-input-area {
     position: absolute;
-    bottom: 0;
+    bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 5;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 8px 24px 8px;
+    padding: 8px 8px 4px;
     width: 100%;
     max-width: clamp(800px, min(94vw, 100%), 1800px);
     box-sizing: border-box;
@@ -873,7 +873,7 @@
     display: flex;
     align-items: flex-end;
     gap: 10px;
-    padding: 12px 12px 10px 14px;
+    padding: 12px 12px 12px 14px;
     border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
     border-radius: 16px;
     background: var(--card-bg);

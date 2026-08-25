@@ -679,6 +679,11 @@ function switchView(view) {
         // 添加 active 类，通过 CSS 规则 .view.active 显示
         targetView.classList.add('active');
 
+        // 切换到首页时重置滚动位置到顶部
+        if (view === 'grid' && els.mainContent) {
+            els.mainContent.scrollTop = 0;
+        }
+
         // 加载对应视图的数据（异步，在动画期间并行加载）
         switch (view) {
             case 'settings':
@@ -5888,10 +5893,15 @@ function initEventListeners() {
         if (item && item.dataset.action) {
             closeMoreMenu(els.moreMenu);
             if (item.dataset.action === 'home') {
-                state.searchKeyword = '';
-                switchView('grid');
-                resetPagination();
-                loadNotes();
+                if (state.currentView === 'grid' && !state.searchKeyword) {
+                    // 已在首页且无搜索：只平滑滚动到顶部，避免重建 DOM 引起闪烁
+                    els.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    state.searchKeyword = '';
+                    switchView('grid');
+                    resetPagination();
+                    loadNotes();
+                }
             } else if (item.dataset.action === 'sidebar-toggle') {
                 if (state.currentView !== 'grid') {
                     // 先跳转到笔记首页，再展开侧栏

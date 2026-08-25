@@ -61,8 +61,8 @@ func main() {
 	// Create application with options
 	err = wails.Run(&options.App{
 		Title:            "jot",
-		Width:            1080,
-		Height:           768,
+		Width:            1280,
+		Height:           800,
 		Frameless:        true,
 		CSSDragProperty:  "--wails-draggable",
 		CSSDragValue:     "drag",
