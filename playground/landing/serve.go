@@ -101,7 +101,7 @@ func gzipMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Accept-Encoding")
 			w.Header().Del("Content-Length") // gzip 后长度变化，删除避免不匹配
 			gz := gzip.NewWriter(w)
-			defer gz.Close()
+			defer func() { _ = gz.Close() }()
 			next.ServeHTTP(&gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
 		default:
 			// 图片/视频等已压缩格式：不压缩
