@@ -160,7 +160,7 @@
 
 /* ---- Card Title (大标题粗体) ---- */
 .card-title {
-  font-size: 1rem;
+  font-size: 1.125rem; /* 18px — 更醒目 */
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 6px;
