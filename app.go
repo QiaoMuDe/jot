@@ -2137,6 +2137,13 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"2. 只有用户明确同意后，才能携带 confirm=true 参数调用对应写操作工具执行；用户确认前不要调用写操作工具，也不要直接传 confirm=true。若先调用了写操作工具被拒绝（工具返回“该操作需要用户确认”提示），按上述流程补一次 ask_user 提问，用户同意后再携带 confirm=true 执行。\n" +
 			"3. 用户明确拒绝或撤回指令时，不得执行对应写操作。create（创建笔记）是用户明确要求的创建指令，无需确认。\n")
 
+		// Agent 模式专用约束：当前时间工具强制调用规范
+		instruction.WriteString("\n\n【工具使用规范 - get_current_time 时间工具（强制调用）】\n" +
+			"1. 你无法获知真实的当前日期和时间，模型训练数据中的时间知识不可用于回答用户的实时时间问题。任何涉及当前时间/日期的问题，回答前必须先调用 get_current_time 工具获取真实时间，严禁凭模型自身知识猜测或编造。\n" +
+			"2. 以下场景必须先调用 get_current_time：①用户询问现在几点、今天几号/星期几、今年是哪年；②用户提问中包含\u201c今天\u201d\u201c明天\u201d\u201c昨天\u201d\u201c这周\u201d\u201c本月\u201d\u201c今年\u201d\u201c现在\u201d等时间词，且回答依赖准确的当前时间才能正确（如安排日程、查询今日待办、回答时效性问题）；③需要计算与当前日期相关的衍生信息（如\u201c距今还有几天\u201d\u201c上周做了什么\u201d）。\n" +
+			"3. 调用时机：在回答开始时就调用，获取时间后将其作为回答的事实依据，不要在回答末尾才调用。\n" +
+			"4. 如果 get_current_time 调用失败，如实告知用户\u201c我无法获取当前时间\u201d，不要用模型知识替代。\n")
+
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
 		history := make([]agent.HistoryMessage, 0, len(messages))

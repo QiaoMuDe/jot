@@ -32,7 +32,7 @@ func (c *currentTimeTool) ActionText(_ string) string {
 func (c *currentTimeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name:        "get_current_time",
-		Desc:        "获取当前日期与时间（年份、日期、星期、时分秒）。当用户询问现在几点、今天几号/星期几、今年是哪年，或问题需要以当前时间作为背景时调用。无参数。",
+		Desc:        "获取当前准确日期与时间（年份、日期、星期、时分秒）。禁止凭模型自身知识回答任何涉及当前时间/日期的问题，必须先调用本工具获取真实时间。强制调用场景包括但不限于：用户询问现在几点、今天几号/星期几、今年是哪年、昨天/明天/后天是几号、当前月份/季度、问题中出现\"今天/明天/昨天/这周/这周/本月/今年/现在\"等时间词需要以当前时间为背景才能准确回答时。无参数。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }
