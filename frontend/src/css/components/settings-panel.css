@@ -1850,19 +1850,19 @@
   left: 14px;
 }
 
-/* 条目删除按钮：警告红（常态浅红描边 → 悬浮实心红 → 按压深红） */
+/* 条目删除按钮：警告红（常态实心红 → 悬浮深红 → 按压深红） */
 .mcp-server-del-btn {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
 }
 
 .mcp-server-del-btn:hover {
   background: var(--danger);
   color: #fff;
   border-color: var(--danger);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 35%, transparent);
+  filter: brightness(1.05);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
 .mcp-server-del-btn:active {
