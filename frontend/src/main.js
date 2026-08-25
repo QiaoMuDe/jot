@@ -10,7 +10,7 @@ import { codeHighlightThemePairing, isDarkTheme, themeLabels } from './js/theme-
 // CodeMirror 6 导入
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { javascript } from '@codemirror/lang-javascript';
+import { json } from '@codemirror/lang-json';
 import { bracketMatching, foldGutter, foldKeymap, indentOnInput } from '@codemirror/language';
 import { SearchQuery, closeSearchPanel, highlightSelectionMatches, openSearchPanel, searchKeymap, searchPanelOpen, setSearchQuery } from '@codemirror/search';
 import { Compartment, EditorState } from '@codemirror/state';
@@ -60,6 +60,7 @@ marked.use(alert());
  */
 let cmEditor = null;
 let cmReadOnlyCompartment = null;
+let _mcpImportEditor = null;
 
 /**
  * 编辑器打开/关闭操作代际计数器：
@@ -8961,7 +8962,7 @@ function applyCodeHighlightTheme(themeName) {
     if (cmEditor) {
         const container = els.editorNoteContent;
         const content = cmEditor.state.doc.toString();
-        const isReadOnly = !(els.notePlaceholder && els.notePlaceholder.textContent === '');
+        const isReadOnly = cmEditor.state.readOnly;
         cmEditor.destroy();
 		cmEditor = null;
 		window.cmEditor = null;
@@ -9074,33 +9075,42 @@ function buildCodePreview(container, themeName) {
     }
 
     const previewCode = [
-        'import { useState, useEffect } from "react";',
+        'package main',
         '',
-        'function Counter() {',
-        '  const [count, setCount] = useState(0);',
+        'import "fmt"',
         '',
-        '  useEffect(() => {',
-        '    // Auto-increment every second',
-        '    const timer = setInterval(() => {',
-        '      setCount(prev => prev + 1);',
-        '    }, 1000);',
-        '    return () => clearInterval(timer);',
-        '  }, []);',
+        'type Counter struct {',
+        '    count int',
+        '}',
         '',
-        '  if (count > 10) {',
-        '    console.warn("Count exceeded limit!");',
-        '  }',
+        'func (c *Counter) Increment() {',
+        '    c.count++',
+        '}',
         '',
-        '  return <div>{count}</div>;',
+        'func (c *Counter) Exceed(limit int) bool {',
+        '    if c.count > limit {',
+        '        fmt.Printf("Count %d exceeded limit!\\n", c.count)',
+        '        return true',
+        '    }',
+        '    return false',
+        '}',
+        '',
+        'func main() {',
+        '    counter := &Counter{}',
+        '    for i := 0; i < 15; i++ {',
+        '        counter.Increment()',
+        '    }',
+        '    if counter.Exceed(10) {',
+        '        fmt.Println("Limit reached")',
+        '    }',
         '}',
     ].join('\n');
 
     const extensions = [
-        javascript(),
         EditorView.editable.of(false),
         EditorView.theme({
             '&': { backgroundColor: 'transparent' },
-            '.cm-scroller': { overflow: 'auto', maxHeight: '200px', fontFamily: 'Consolas, Monaco, monospace', fontSize: '12px' },
+            '.cm-scroller': { overflow: 'auto', maxHeight: '200px', fontFamily: 'var(--font-mono)', fontSize: '12px' },
             '.cm-gutters': { display: 'none' },
             '.cm-line': { padding: '0 2px' },
             '.cm-editor': { outline: 'none' },
@@ -9108,7 +9118,7 @@ function buildCodePreview(container, themeName) {
         }),
     ];
 
-    const highlightExt = getHighlightExtension('.js', themeName);
+    const highlightExt = getHighlightExtension('.go', themeName);
     if (highlightExt.length > 0) extensions.push(...highlightExt);
 
     const state = EditorState.create({
@@ -9524,22 +9534,65 @@ async function copyMCPServersShare(text, successMsg, emptyMsg) {
 }
 
 /**
+ * 创建 MCP 导入对话框的 CM6 JSON 编辑器（每次打开时重建，确保主题同步）
+ */
+function createMCPImportEditor() {
+    const container = document.getElementById('mcpServerImportInput');
+    if (!container) return;
+    // 销毁旧实例
+    if (_mcpImportEditor) {
+        _mcpImportEditor.destroy();
+        _mcpImportEditor = null;
+    }
+
+    const extensions = [
+        json(),
+        getHighlightExtension('.json', codeHighlightTheme),
+        EditorView.theme({
+            '&': {
+                height: '100%',
+                backgroundColor: 'var(--input-bg)',
+            },
+            '&.cm-focused': {
+                backgroundColor: 'var(--card-bg)',
+            },
+            '.cm-scroller': {
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.8rem',
+                lineHeight: '1.55',
+                overflow: 'auto',
+            },
+            '.cm-content': {
+                fontFamily: 'var(--font-mono)',
+                padding: '8px 12px',
+            },
+            '.cm-gutters': { display: 'none' },
+            '.cm-activeLine': { backgroundColor: 'transparent' },
+        }),
+        EditorView.lineWrapping,
+        placeholder('在此粘贴 JSON 配置…'),
+    ];
+
+    const state = EditorState.create({ doc: '', extensions });
+    _mcpImportEditor = new EditorView({ state, parent: container });
+}
+
+/**
  * 打开 MCP 导入对话框
  */
 function openMCPImportDialog() {
     const dialog = document.getElementById('mcpServerImportDialog');
     if (!dialog) return;
-    // B11: 不主动清空 textarea,让用户保留上次未成功提交的内容(可改后再导)
+    createMCPImportEditor();
     dialog.style.display = 'flex';
     requestAnimationFrame(() => dialog.classList.add('visible'));
     setTimeout(() => {
-        const input = document.getElementById('mcpServerImportInput');
-        if (input) input.focus();
+        if (_mcpImportEditor) _mcpImportEditor.focus();
     }, 200);
 }
 
 /**
- * 关闭 MCP 导入对话框并清空 textarea
+ * 关闭 MCP 导入对话框并清空编辑器
  */
 function closeMCPImportDialog() {
     const dialog = document.getElementById('mcpServerImportDialog');
@@ -9548,8 +9601,10 @@ function closeMCPImportDialog() {
     setTimeout(() => {
         if (!dialog.classList.contains('visible')) {
             dialog.style.display = 'none';
-            const input = document.getElementById('mcpServerImportInput');
-            if (input) input.value = '';
+            if (_mcpImportEditor) {
+                _mcpImportEditor.destroy();
+                _mcpImportEditor = null;
+            }
         }
     }, 220);
 }
@@ -9561,13 +9616,13 @@ function closeMCPImportDialog() {
  */
 async function handleMCPImport() {
     const dialog = document.getElementById('mcpServerImportDialog');
-    const input = document.getElementById('mcpServerImportInput');
-    if (!input) return;
-    const text = (input.value || '').trim();
+    const container = document.getElementById('mcpServerImportInput');
+    if (!container) return;
+    const text = _mcpImportEditor ? _mcpImportEditor.state.doc.toString().trim() : '';
     if (!text) {
         nm.show('请粘贴 JSON', 'error');
-        shakeMCPFormInput(input);
-        input.focus();
+        shakeMCPFormInput(container);
+        if (_mcpImportEditor) _mcpImportEditor.focus();
         return;
     }
 
@@ -9586,7 +9641,7 @@ async function handleMCPImport() {
             const reason = (parseResult && parseResult.error)
                 || 'JSON 校验失败';
             nm.show(reason, 'error', 5000);
-            shakeMCPFormInput(input);
+            shakeMCPFormInput(container);
             if (confirmBtn) {
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = '导入';
@@ -9595,7 +9650,7 @@ async function handleMCPImport() {
         }
 
         // ===== 阶段 2：校验通过,先实际入库再决定是否关对话框 =====
-        // B5: 不在阶段 2 入口立即关对话框,失败时保留对话框与 textarea,让用户可改后再导
+        // B5: 不在阶段 2 入口立即关对话框,失败时保留对话框与编辑器,让用户可改后再导
         let results = [];
         try {
             results = await window.go.main.App.ImportMCPServers(text);
@@ -9603,7 +9658,7 @@ async function handleMCPImport() {
             // binding 异常（不在预期内）: 通知 + 抖动 + 对话框不关
             const msg = mcpErrMsg(e);
             nm.show('导入失败: ' + msg, 'error', 5000);
-            shakeMCPFormInput(input);
+            shakeMCPFormInput(container);
             if (confirmBtn) {
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = '导入';
@@ -9630,8 +9685,8 @@ async function handleMCPImport() {
         nm.show(summary, level, duration);
 
         if (totalFailed > 0) {
-            // B5: 失败时保留对话框与 textarea,让用户可改后再导
-            shakeMCPFormInput(input);
+            // B5: 失败时保留对话框与编辑器,让用户可改后再导
+            shakeMCPFormInput(container);
             if (confirmBtn) {
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = '导入';
@@ -9649,7 +9704,7 @@ async function handleMCPImport() {
         // 阶段 1 的 binding 异常(binding 未就绪 / panic)
         const msg = mcpErrMsg(e);
         nm.show('导入失败: ' + msg, 'error', 5000);
-        shakeMCPFormInput(input);
+        shakeMCPFormInput(container);
     } finally {
         // 兜底恢复按钮(阶段 1 失败时已在 try 内恢复;阶段 2 成功/失败也在分支内恢复)
         if (confirmBtn && confirmBtn.disabled) {

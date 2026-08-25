@@ -2113,23 +2113,46 @@
   border-radius: var(--radius-sm);
 }
 
-/* 导入 textarea：占满宽度 + 等宽字体（JSON 阅读体验）+ 自适应高度 */
-.mcp-server-import-textarea {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  line-height: 1.55;
-  min-height: 220px;
-  resize: vertical;
-  white-space: pre;
-  word-break: normal;
-  overflow-wrap: normal;
-  overflow-x: auto;
+/* MCP 导入 CM6 编辑器容器 */
+.mcp-server-import-editor {
+  width: 100%;
+  height: 220px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition);
 }
 
-/* 复用 mcpFormInputError 抖动关键帧（textarea 加 mcp-input-invalid 类即可触发） */
-.mcp-server-import-textarea.mcp-input-invalid {
+.mcp-server-import-editor.mcp-input-invalid {
   animation: mcpFormInputError 0.6s ease;
   border-color: var(--danger) !important;
+}
+
+.mcp-server-import-editor .cm-editor {
+  outline: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mcp-server-import-editor .cm-scroller {
+  overflow: auto;
+  /* 覆盖 editor.css 全局 .cm-scroller transparent 规则 */
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* WebKit：始终显示滚动条滑块 */
+.mcp-server-import-editor .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+.mcp-server-import-editor:hover .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.mcp-server-import-editor .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* 传输方式自定义下拉：跟随全局 theme-select 样式，表单内全宽 */
@@ -2197,8 +2220,8 @@
     animation: none;
   }
 
-  /* 导入对话框 textarea 抖动同样降级（保留红色边框） */
-  .mcp-server-import-textarea.mcp-input-invalid {
+  /* 导入对话框编辑器抖动同样降级（保留红色边框） */
+  .mcp-server-import-editor.mcp-input-invalid {
     animation: none;
   }
 }
