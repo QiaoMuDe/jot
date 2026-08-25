@@ -2334,6 +2334,20 @@ func (a *App) SaveMCPServer(server models.MCPServer) error {
 	return a.mcpServerService.Save(&server)
 }
 
+// ImportMCPServers 接收用户粘贴的 JSON，解析后批量入库 MCP 服务器
+// 解析/校验/入库错误均自动写入 logs/app.log
+// 返回每条处理结果（成功/失败+原因），仅供 UI 聚合通知
+func (a *App) ImportMCPServers(jsonStr string) []models.ImportMCPServerItem {
+	return services.ImportMCPServers(a.LogSvc, a.mcpServerService, jsonStr)
+}
+
+// ParseMCPServersImport 接收用户粘贴的 JSON，仅做解析与字段校验，不入库
+// 用于前端"先校验后入库"两阶段流程：校验通过后再调 ImportMCPServers 实际入库
+// 整体校验失败时 OK=false,Error 必填(整体解析失败或任意条目校验不通过)
+func (a *App) ParseMCPServersImport(jsonStr string) models.ParseMCPServersResult {
+	return services.ParseMCPServersImport(a.LogSvc, jsonStr)
+}
+
 // DeleteMCPServer 按 ID 删除 MCP 服务器配置
 func (a *App) DeleteMCPServer(id uint) error {
 	return a.mcpServerService.Delete(id)

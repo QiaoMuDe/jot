@@ -162,6 +162,8 @@ export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
 export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
 
+export function ImportMCPServers(arg1:string):Promise<Array<models.ImportMCPServerItem>>;
+
 export function IndexNotesByAll():Promise<void>;
 
 export function IndexNotesByIDs(arg1:Array<number>):Promise<void>;
@@ -187,6 +189,8 @@ export function OpenDataDir():Promise<void>;
 export function OpenLogDir():Promise<void>;
 
 export function OpenProjectURL(arg1:string):Promise<string>;
+
+export function ParseMCPServersImport(arg1:string):Promise<models.ParseMCPServersResult>;
 
 export function PermanentDeleteNote(arg1:number):Promise<void>;
 

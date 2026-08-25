@@ -6580,6 +6580,12 @@ async function handleKeyboardNavigation(e) {
             closeMCPServerForm();
             return;
         }
+        // MCP 服务器导入对话框打开时关闭它
+        const mcpImportDlg = document.getElementById('mcpServerImportDialog');
+        if (mcpImportDlg && mcpImportDlg.classList.contains('visible')) {
+            closeMCPImportDialog();
+            return;
+        }
         // 预设弹窗打开时关闭它（不继续执行导航逻辑）
         const presetOverlay = document.getElementById('presetModalOverlay');
         if (presetOverlay && presetOverlay.classList.contains('visible')) {
@@ -9435,6 +9441,225 @@ function mcpErrMsg(err) {
 }
 
 /**
+ * 将 MCP 服务器记录数组序列化为本项目分享格式 JSON
+ * 输出只含 name / transport / 按 transport 条件附带 command / args / env 或 url / headers / enabled；
+ * 排除 id / sort_order / created_at / updated_at 等运行时/数据库字段。
+ * @param {Array} servers - MCP 服务器记录数组
+ * @returns {Array} 序列化后的纯数据对象数组
+ */
+function buildMCPServersShareJSON(servers) {
+    if (!Array.isArray(servers)) return [];
+    const out = [];
+    for (const srv of servers) {
+        if (!srv || typeof srv !== 'object') continue;
+        const transport = srv.transport || 'stdio';
+        const item = {
+            name: srv.name || '',
+            transport,
+            enabled: !!srv.enabled,
+        };
+        if (transport === 'stdio') {
+            if (srv.command) item.command = srv.command;
+            if (Array.isArray(srv.args) && srv.args.length > 0) item.args = srv.args.slice();
+            if (srv.env && typeof srv.env === 'object' && Object.keys(srv.env).length > 0) item.env = { ...srv.env };
+        } else {
+            if (srv.url) item.url = srv.url;
+            if (srv.headers && typeof srv.headers === 'object' && Object.keys(srv.headers).length > 0) {
+                item.headers = { ...srv.headers };
+            }
+        }
+        out.push(item);
+    }
+    return out;
+}
+
+/**
+ * 复制文本到剪贴板：clipboard API 主路径，execCommand 降级。
+ * @param {string} text - 要复制的文本
+ * @param {string} successMsg - 成功提示
+ * @param {string} emptyMsg - 空数据提示（传 '' 时不提示空态）
+ * @returns {Promise<boolean>} 是否复制成功
+ */
+async function copyMCPServersShare(text, successMsg, emptyMsg) {
+    // 空数据短路：直接走空态提示，不复制
+    if (typeof text !== 'string' || text.length === 0) {
+        if (emptyMsg) nm.show(emptyMsg, 'info');
+        return false;
+    }
+    // 主路径：navigator.clipboard
+    try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(text);
+            if (successMsg) nm.show(successMsg, 'success');
+            return true;
+        }
+    } catch (e) {
+        // 拒签或不支持时降级
+    }
+    // 降级方案：隐藏 textarea + document.execCommand('copy')
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.opacity = '0';
+        ta.style.pointerEvents = 'none';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) {
+            if (successMsg) nm.show(successMsg, 'success');
+            return true;
+        }
+        nm.show('复制失败，请手动复制', 'error');
+        return false;
+    } catch (e) {
+        nm.show('复制失败，请手动复制', 'error');
+        return false;
+    }
+}
+
+/**
+ * 打开 MCP 导入对话框
+ */
+function openMCPImportDialog() {
+    const dialog = document.getElementById('mcpServerImportDialog');
+    if (!dialog) return;
+    // B11: 不主动清空 textarea,让用户保留上次未成功提交的内容(可改后再导)
+    dialog.style.display = 'flex';
+    requestAnimationFrame(() => dialog.classList.add('visible'));
+    setTimeout(() => {
+        const input = document.getElementById('mcpServerImportInput');
+        if (input) input.focus();
+    }, 200);
+}
+
+/**
+ * 关闭 MCP 导入对话框并清空 textarea
+ */
+function closeMCPImportDialog() {
+    const dialog = document.getElementById('mcpServerImportDialog');
+    if (!dialog || dialog.style.display === 'none') return;
+    dialog.classList.remove('visible');
+    setTimeout(() => {
+        if (!dialog.classList.contains('visible')) {
+            dialog.style.display = 'none';
+            const input = document.getElementById('mcpServerImportInput');
+            if (input) input.value = '';
+        }
+    }, 220);
+}
+
+/**
+ * 处理导入按钮点击：两阶段流程
+ *   阶段 1：仅解析+校验（App.ParseMCPServersImport），校验失败 → 抖动+通知，对话框不关
+ *   阶段 2：校验通过 → 关闭对话框 → 调 App.ImportMCPServers 实际入库
+ */
+async function handleMCPImport() {
+    const dialog = document.getElementById('mcpServerImportDialog');
+    const input = document.getElementById('mcpServerImportInput');
+    if (!input) return;
+    const text = (input.value || '').trim();
+    if (!text) {
+        nm.show('请粘贴 JSON', 'error');
+        shakeMCPFormInput(input);
+        input.focus();
+        return;
+    }
+
+    // 防重复提交：禁用按钮 + 切换文案
+    const confirmBtn = document.getElementById('mcpServerImportConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '校验中...';
+    }
+
+    try {
+        // ===== 阶段 1：仅解析+校验，不入库 =====
+        const parseResult = await window.go.main.App.ParseMCPServersImport(text);
+        if (!parseResult || !parseResult.ok) {
+            // 校验失败：抖动 + 通知，对话框不关，按钮恢复
+            const reason = (parseResult && parseResult.error)
+                || 'JSON 校验失败';
+            nm.show(reason, 'error', 5000);
+            shakeMCPFormInput(input);
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '导入';
+            }
+            return;
+        }
+
+        // ===== 阶段 2：校验通过,先实际入库再决定是否关对话框 =====
+        // B5: 不在阶段 2 入口立即关对话框,失败时保留对话框与 textarea,让用户可改后再导
+        let results = [];
+        try {
+            results = await window.go.main.App.ImportMCPServers(text);
+        } catch (e) {
+            // binding 异常（不在预期内）: 通知 + 抖动 + 对话框不关
+            const msg = mcpErrMsg(e);
+            nm.show('导入失败: ' + msg, 'error', 5000);
+            shakeMCPFormInput(input);
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '导入';
+            }
+            return;
+        }
+        const safeResults = Array.isArray(results) ? results : [];
+        const success = safeResults.filter(r => r && r.ok).length;
+        const failed = safeResults.filter(r => r && !r.ok);
+        const totalFailed = failed.length;
+
+        // 通知文案:仅列失败条目名称,不列具体原因
+        let summary;
+        if (totalFailed === 0) {
+            summary = `已导入 ${success} 条 MCP 服务器`;
+        } else {
+            const failedNames = failed
+                .map(r => (r.name && r.name.trim()) ? r.name : `第${r.index || '?'}条`)
+                .join('、');
+            summary = `已导入 ${success} 条,失败 ${totalFailed} 条: ${failedNames},详见日志`;
+        }
+        const level = totalFailed === 0 ? 'success' : (success === 0 ? 'error' : 'warn');
+        const duration = totalFailed === 0 ? 3000 : 5000;
+        nm.show(summary, level, duration);
+
+        if (totalFailed > 0) {
+            // B5: 失败时保留对话框与 textarea,让用户可改后再导
+            shakeMCPFormInput(input);
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '导入';
+            }
+            return;
+        }
+
+        // 全部成功:关对话框 + 刷新列表与全局池（silent: 静默预热,避免与"已导入 N 条"通知冗余）
+        closeMCPImportDialog();
+        try {
+            await loadMCPServers();
+            await warmupMCPServers({ silent: true });
+        } catch (e) { /* 刷新失败不影响主通知 */ }
+    } catch (e) {
+        // 阶段 1 的 binding 异常(binding 未就绪 / panic)
+        const msg = mcpErrMsg(e);
+        nm.show('导入失败: ' + msg, 'error', 5000);
+        shakeMCPFormInput(input);
+    } finally {
+        // 兜底恢复按钮(阶段 1 失败时已在 try 内恢复;阶段 2 成功/失败也在分支内恢复)
+        if (confirmBtn && confirmBtn.disabled) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '导入';
+        }
+    }
+}
+
+/**
  * 从后端加载 MCP 服务器列表并渲染
  */
 async function loadMCPServers() {
@@ -9506,7 +9731,7 @@ function buildMCPServerItem(srv) {
     info.appendChild(nameRow);
     info.appendChild(desc);
 
-    // ── 操作区：启用开关 + 编辑 + 删除 ──
+    // ── 操作区：启用开关 + 分享 + 测试 + 编辑 + 删除 ──
     const actions = document.createElement('div');
     actions.className = 'mcp-server-item-actions';
 
@@ -9518,6 +9743,15 @@ function buildMCPServerItem(srv) {
     knob.className = 'ai-chat-toggle-knob';
     toggle.appendChild(knob);
     toggle.addEventListener('click', () => toggleMCPServer(srv, toggle));
+
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'btn btn-sm mcp-server-accent-btn';
+    shareBtn.title = '复制该服务器配置为 JSON';
+    shareBtn.textContent = '分享';
+    shareBtn.addEventListener('click', () => {
+        const text = JSON.stringify(buildMCPServersShareJSON([srv]), null, 2);
+        copyMCPServersShare(text, `已复制「${srv.name}」配置`, '');
+    });
 
     const editBtn = document.createElement('button');
     editBtn.className = 'btn btn-sm mcp-server-accent-btn';
@@ -9536,6 +9770,7 @@ function buildMCPServerItem(srv) {
     delBtn.addEventListener('click', () => deleteMCPServer(srv));
 
     actions.appendChild(toggle);
+    actions.appendChild(shareBtn);
     actions.appendChild(testBtn);
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
@@ -9910,11 +10145,14 @@ async function saveMCPServerForm() {
  * 首次进入 AI 助手、设置页启用/停用/增删改 MCP 服务器后调用；后端幂等。
  * 结果汇总为一条通知展示；无启用服务器时不打扰。
  * 暴露到 window 供 ai-chat.js 首次进入 AI 助手时调用。
+ * @param {Object} [options] 配置项
+ * @param {boolean} [options.silent=false] true=不展示"X 台已就绪"通知(用于导入等内部动作,避免通知冗余)
  */
-async function warmupMCPServers() {
+async function warmupMCPServers(options = {}) {
+    const silent = !!options.silent;
     try {
         const res = await window.go.main.App.WarmupMCPServers();
-        if (res && res.total) {
+        if (!silent && res && res.total) {
             const usable = (res.warmed || 0) + (res.reused || 0);
             if (!res.failed) {
                 const reuseText = res.reused > 0 ? `（复用 ${res.reused} 台）` : '';
@@ -9926,7 +10164,9 @@ async function warmupMCPServers() {
             }
         }
     } catch (e) {
-        nm.show(`MCP 服务器预热失败：${mcpErrMsg(e)}`, 'error');
+        if (!silent) {
+            nm.show(`MCP 服务器预热失败：${mcpErrMsg(e)}`, 'error');
+        }
     }
     // 无论预热结果如何，都刷新 Agent 工具列表（禁用/启用服务器后工具列表需同步）
     await refreshAgentToolsMeta();
@@ -9999,6 +10239,48 @@ function initMCPServerSettings() {
     // 保存按钮 → 保存表单
     const saveBtn = document.getElementById('mcpServerFormSaveBtn');
     if (saveBtn) saveBtn.addEventListener('click', saveMCPServerForm);
+
+    // 分享全部按钮 → 复制全部服务器配置为 JSON
+    // B6: 点击时现取(缓存为空时调 GetMCPServers),避免面板首开未加载时返回空
+    // B7: 幂等防护(_shareAllBound 标志),防止 initMCPServerSettings 多次调用时重复绑定
+    const shareAllBtn = document.getElementById('mcpServerShareAllBtn');
+    if (shareAllBtn && !shareAllBtn._shareAllBound) {
+        shareAllBtn._shareAllBound = true;
+        shareAllBtn.addEventListener('click', async () => {
+            let list = mcpServers;
+            if (!Array.isArray(list) || list.length === 0) {
+                // 缓存为空时现取一次(应对面板首开未加载或列表尚未渲染)
+                try {
+                    list = (await window.go.main.App.GetMCPServers()) || [];
+                    mcpServers = list; // 同步全局缓存,与 loadMCPServers 行为一致
+                } catch (e) {
+                    nm.show('获取服务器列表失败: ' + mcpErrMsg(e), 'error');
+                    return;
+                }
+            }
+            const text = JSON.stringify(buildMCPServersShareJSON(list), null, 2);
+            const n = list.length;
+            copyMCPServersShare(text, `已复制 ${n} 条服务器配置`, '当前没有可分享的服务器');
+        });
+    }
+
+    // 导入按钮 → 打开导入对话框
+    const importBtn = document.getElementById('mcpServerImportBtn');
+    if (importBtn) importBtn.addEventListener('click', openMCPImportDialog);
+
+    // 导入对话框：取消 / 确认 / backdrop 关闭
+    const importCancelBtn = document.getElementById('mcpServerImportCancelBtn');
+    if (importCancelBtn) importCancelBtn.addEventListener('click', closeMCPImportDialog);
+    const importConfirmBtn = document.getElementById('mcpServerImportConfirmBtn');
+    if (importConfirmBtn) importConfirmBtn.addEventListener('click', handleMCPImport);
+    const importDialog = document.getElementById('mcpServerImportDialog');
+    if (importDialog) {
+        importDialog.addEventListener('click', (e) => {
+            if (e.target === importDialog || (e.target.classList && e.target.classList.contains('mcp-server-form-overlay'))) {
+                closeMCPImportDialog();
+            }
+        });
+    }
 }
 
 /**

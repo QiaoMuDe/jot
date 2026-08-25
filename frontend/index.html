@@ -642,7 +642,11 @@
                     </div>
                     <div class="mcp-server-head">
                         <span class="font-setting-desc">管理 AI Agent 可调用的外部 MCP 服务器工具</span>
-                        <button id="mcpServerAddBtn" class="btn btn-sm btn-save">添加服务器</button>
+                        <div class="mcp-server-head-actions">
+                            <button id="mcpServerShareAllBtn" class="btn btn-sm mcp-server-accent-btn" title="复制全部服务器配置为 JSON">分享</button>
+                            <button id="mcpServerImportBtn" class="btn btn-sm mcp-server-accent-btn" title="从 JSON 批量导入服务器">导入</button>
+                            <button id="mcpServerAddBtn" class="btn btn-sm btn-save">添加</button>
+                        </div>
                     </div>
                     <div class="mcp-server-list" id="mcpServerList">
                         <!-- 服务器列表由 JS 动态渲染 -->
@@ -706,6 +710,28 @@
                             <div class="mcp-server-form-footer">
                                 <button id="mcpServerFormCancelBtn" class="btn btn-cancel">取消</button>
                                 <button id="mcpServerFormSaveBtn" class="btn btn-save">保存</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- MCP 服务器导入对话框（复用 form-dialog 体系，z-index 10000） -->
+                    <div id="mcpServerImportDialog" class="mcp-server-form-dialog" style="display:none;">
+                        <div class="mcp-server-form-overlay"></div>
+                        <div class="mcp-server-form-panel mcp-server-import-panel">
+                            <div class="mcp-server-form-header">
+                                <div class="mcp-server-form-title">导入 MCP 服务器</div>
+                            </div>
+                            <div class="mcp-server-form-body">
+                                <div class="mcp-import-hint">
+                                    支持三种 JSON 格式：裸数组 <code>[&#123;...&#125;]</code>、
+                                    <code>&#123;"servers": [...]&#125;</code> 包装或单个对象。
+                                    每条需包含 <code>name</code> 与 <code>transport</code>（stdio / sse / http），
+                                    stdio 必带 <code>command</code>，sse / http 必带 <code>url</code>。
+                                </div>
+                                <textarea id="mcpServerImportInput" class="settings-input mcp-form-textarea mcp-server-import-textarea" rows="10" spellcheck="false" placeholder="在此粘贴 JSON 配置…"></textarea>
+                            </div>
+                            <div class="mcp-server-form-footer">
+                                <button id="mcpServerImportCancelBtn" class="btn btn-cancel">取消</button>
+                                <button id="mcpServerImportConfirmBtn" class="btn btn-save">导入</button>
                             </div>
                         </div>
                     </div>

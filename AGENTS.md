@@ -537,19 +537,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：笔记副本创建 + 前端 ESLint 全量清零 + AI 输入长度限制
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组互不相关的改动：① **笔记「创建副本」**——右键菜单新增 `duplicate` 动作（[index.html](frontend/index.html) #contextMenu 首项「创建副本」），后端新增 `App.DuplicateNote(id)`（[app.go](app.go)）：`GetByID`（Preload Tags）读原笔记 → `NextDuplicateTitle` 生成「原标题 副本」标题（同名冲突自动递增「副本 2」「副本 3」…，超长只截断 base 前缀保留「副本」后缀、≤200 rune，空标题回退「未命名」，DB 精确查重未删除笔记）→ `CreateWithNotebook` 复制正文/后缀/所属笔记本（notebook_id=0 归默认笔记本 id=1）→ 逐个 `AddTagToNote` 复制标签（单个失败仅 Warnw 不阻断）；置顶不复制。前端 `window.duplicateNote`：成功 toast「已创建副本「标题」」+ `loadNotes()` 刷新；未绑定 mock 降级（头部插入模拟副本）。wailsjs 手工补 `DuplicateNote` 绑定（App.js/App.d.ts）。配套：`NoteService.NextDuplicateTitle` + 纯函数 `nextDuplicateTitle`/`truncateTitleRunes`（[note_service.go](internal/services/note_service.go)）+ 单测 `TestNextDuplicateTitle`/`TestTruncateTitleRunes`（[note_service_test.go](internal/services/note_service_test.go)）。② **前端 ESLint 91 warnings 清零**（fclint 检查暴露，0 errors 91 warnings）——**no-undef（~70，真实隐患）**：[cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) langMap 引用了约 70 个 legacy-modes 语言但文件头从未 import（打开 .apl/.asn1/.bf 等冷门扩展名会抛 ReferenceError），补齐 52 条 import（逐模块核对导出名：commonlisp→commonLisp、livescript→liveScript、rpm→rpmSpec、mscgen 模块导出 mscgen/msgenny/xu、coffeescript 模块导出 coffeeScript 用别名 `coffeeScript as coffeescript` 保持 langMap 引用不变）；**no-unused-vars（~21，纯死代码）**：[ai-chat.js](frontend/src/js/ai-chat.js) 删 1 条未用 import + 7 个未调用函数（formatFileSize/createSimpleSearchIndicator/addErrorMessage/handleCopy/getNoteContext/getRoleplayContext/clearSkillsState）+ 2 个闭包未用局部变量（role/parseField）+ 只写不读状态（agentAskWaiting 声明+8 处赋值、langPickerSide 声明+2 赋值）+ 连锁清理（CHECK_ICON 仅 handleCopy 用、缓存变量 cachedRefContext/roleplayCacheContext 仅被删的两个 getContext 函数读写）；[main.js](frontend/src/main.js) 删 loadedCount/AI_DEFAULT_URLS/key/setAIStatus/closeSearchModalDatePicker/updateTodoProgress；[notification.js](frontend/src/js/notification.js) 删死变量 mockNotes；[trash-page.js](frontend/src/js/trash-page.js) 解构去掉未用 nm。③ **AI 输入框长度限制**——前端 [ai-chat.js](frontend/src/js/ai-chat.js) `MAX_AI_INPUT_CHARS=20000`（与 Agent 工具 maxToolLongText 对齐）：输入事件拦截（超限截断到上限+光标置末+toast「内容过长，已截断至 20000 字符」）、`onSend` 发送前兜底校验（超限截断+提示+不发送）、Agent 反问面板输入同上限；后端 [app.go](app.go) `SaveAIMessage` 加 `maxAIMessageChars=20000` 校验（仅 user 角色走此绑定，AI 回复经 aiService.SaveAIMessage 内部方法不受影响）。 |
-| **副本标题查重（重要）** | `NextDuplicateTitle` 通过 DB 精确匹配未删除笔记判断重名（`title = ? AND deleted_at IS NULL`），查重失败保守视为已存在避免重名；`nextDuplicateTitle` 纯函数注入 `titleExists` 闭包便于单测（map 模拟不触达 DB）；超长标题**只截断 base 前缀、保留「副本」后缀**（`truncateTitleRunes` 按 rune 计，203 runes → 前 200），与"从头截断砍掉后缀"的实现坑不同（曾误实现为截 candidate 导致后缀丢失，测试暴露后修正）。 |
-| **ESLint 清零方法论（重要）** | ① 删除前**全库 grep 残留引用**（含 index.html onclick 字符串——eslint 检查不到的引用方式）；② **连锁依赖检查**——删函数前确认其内部引用的变量/常量是否还有别处使用（CHECK_ICON 仅 handleCopy 用则连删；cachedRefContext/roleplayCacheContext 仅 getNoteContext/getRoleplayContext 读写则连删），避免删出新的 unused；③ 删除后重跑 lint 看是否新增 warning；④ 复用函数验证行为等价（handleCopy 是右键菜单内联 clipboard 实现的重复封装、getNoteContext/getRoleplayContext 是 GetNoteRefContext 的重复缓存封装）。教训：**纯删死代码也要验证"删了行为不变"而非"删了能跑"**。 |
-| **明确暂缓（未实施）** | 评估过但用户决定暂缓的扩展：N1 笔记版本历史（NoteRevision 表 + UpdateNote 埋点 + 60s 同内容版本合并 + 对比/还原 UI）、A2 存为笔记确认（SaveAIMessageAsNote 加 title/notebookID 参数 + 前端预览确认弹窗）——设计已讨论，代码未写，后续可随时启动。 |
-| **涉及文件** | [app.go](app.go)（DuplicateNote + SaveAIMessage 校验 + maxAIMessageChars）、[internal/services/note_service.go](internal/services/note_service.go)（NextDuplicateTitle/nextDuplicateTitle/truncateTitleRunes/noteTitleMaxRunes）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（TestNextDuplicateTitle/TestTruncateTitleRunes）、[frontend/index.html](frontend/index.html)（#contextMenu「创建副本」项）、[frontend/src/main.js](frontend/src/main.js)（handleContextAction duplicate 分支 + window.duplicateNote + 死代码清理 + let mockNotes 声明）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_AI_INPUT_CHARS/truncateAIInput/输入拦截/onSend 校验/反问面板上限 + 死代码清理）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（+52 条 legacy-modes import）、[frontend/src/js/notification.js](frontend/src/js/notification.js)、[frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)、[frontend/eslint.config.mjs](frontend/eslint.config.mjs)（移除 mockNotes 全局豁免）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) 与 [frontend/wailsjs/go/main/App.d.ts](frontend/wailsjs/go/main/App.d.ts)（DuplicateNote） |
-
----
-
-## 记忆点 2：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
+## 记忆点 1：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -561,7 +549,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
+## 记忆点 2：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -575,7 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 3：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -588,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 4：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 5：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 6：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 7：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 8：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +641,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 9：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -664,6 +652,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **三栏合并的坑（关键教训）** | ① **空分支必须清空容器 innerHTML**——三个渲染函数（`updateRefChips`/`renderSkillChips`/`renderFileChips`）空分支曾提前 return 不清空，导致旧 chips DOM 残留、`children.length > 0` 恒为真、barsArea 永不隐藏，"批量移除点击没反应"的根因；② **switchSession/createSession 必须清空 `uploadedFiles` 并调 `renderFileChips()`**——曾只清空引用/技能，上一会话的上传文件 chips 残留到下一会话；③ **chip 不透明背景**——容器透明、每个 chip 用 `background: color-mix(in srgb, var(--accent) 8%, var(--bg))`（hover 14%），既透明不遮罩消息又保持可识别。 |
 | **批量移除按钮区分** | ≥3 项时显示批量移除标签，两个按钮语义类名分离：`ai-chat-remove-all-ref`（垃圾桶图标 + 「移除全部 N 篇引用」）/ `ai-chat-remove-all-file`（文档叉图标 + 「移除全部 N 个文件」），**事件绑定选择器与渲染类名必须一致**（曾共用 `.ai-chat-ref-chip-remove-all` 导致无法区分）；背景 `color-mix(in srgb, var(--error, #e74c3c) 8%, var(--bg))` 不透明（与 chips 同方案、error 色系贴合删除语义）+ **实线边框**（用户明确不要虚线）+ hover error 实色填充。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
+
+---
+
+## 记忆点 10：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | MCP 服务器配置的分享与批量导入功能：① **分享**——单条分享（列表行"分享"按钮）复制当前服务器为标准 JSON 到剪贴板；批量分享（头部"分享"按钮）复制全部服务器；格式为项目自定义的 `[{name, transport, command, args, env, url, headers, enabled}]` 裸数组。② **导入**——头部"导入"按钮打开导入对话框，用户粘贴 JSON 后点"解析导入"，经后端两阶段处理（校验→入库）。③ **按钮 UI 统一**——头部三个按钮（分享/导入/添加）统一 2 字文案 + 同一套 `mcp-server-accent-btn` 样式 + `min-width: 64px` 固定宽度 + `inline-flex` 防文字换行。 |
+| **后端两阶段设计（重要）** | [mcp_import.go](internal/services/mcp_import.go)（**新增文件**）提供两个 Wails 绑定：① `ParseMCPServersImport(jsonStr)` ——仅校验不入库（`parseMCPImportInput` + `buildMCPServerFromRaw`），返回 `{OK, Items[]}` 供前端决定是否继续；② `ImportMCPServers(jsonStr)` ——完整流程（解析+校验+逐条入库），返回 `[]ImportMCPServerItem`。前端两阶段调用：先 `ParseMCPServersImport`（校验失败→抖动+通知+保留对话框+textarea），通过后关对话框再 `ImportMCPServers`（入库失败→通知仅列服务器名，详情写 `logs/app.log`）。 |
+| **三格式容错 + 字段校验（重要）** | `parseMCPImportInput` 支持三种输入格式：裸数组 `[...]`、`{servers:[...]}` 包装、单个对象 `{name, command, ...}`。空数组 `[]` 返回"未找到任何服务器配置"而非"无法识别"。`buildMCPServerFromRaw` 校验含：name 非空+不含空白/tab/换行（与 `MCPServerService.Save` 一致）、`command`/`url` 不能同时有（transport 推导）、`env`/`headers` KEY 不能含空格/tab/换行/等号（与 Save 一致）、transport 合法性（stdio/sse/http）。所有错误通过 `Errorw` 写入 `logs/app.log`（结构化字段 index/name/reason）。 |
+| **warmupMCPServers silent 参数** | `warmupMCPServers` 新增 `options.silent` 参数（[main.js](frontend/src/main.js)）：`silent=true` 时跳过"X 台已就绪"通知（`refreshAgentToolsMeta()` 仍执行）。导入成功路径静默调用，避免"已导入 N 条"和"X 台已就绪"双通知。切换启用/停用、删除、表单保存、AI 助手首次进入路径仍保留通知（用户主动操作需要反馈）。 |
+| **前端按钮与样式** | 头部按钮组（[index.html](frontend/index.html) `.mcp-server-head-actions`）：三个 `btn btn-sm mcp-server-accent-btn`（分享/导入/添加），CSS 统一 `min-width: 64px` + `inline-flex` + `white-space: nowrap`。列表行每行新增"分享"按钮（`mcp-server-accent-btn`，闭包捕获行级 `srv`）。头部和行级共用同一套 accent-btn 样式，与"测试/编辑"按钮视觉一致。 |
+| **代码审查修复要点** | B2：名称空白/KEY 特殊字符在校验阶段拦截（与 Save 一致）；B3：`ParseMCPServersImport` 校验通过时 `res.OK = true`；B4：空数组返回友好提示；B5：阶段 2 失败不关对话框+textarea 保留；B6：分享全部按钮在缓存为空时现取 `GetMCPServers()`；B7：`shareAllBtn` 用 `_shareAllBound` 标志位防重复绑定；B10：抽 `tryParseInput` 公共函数；B11：`openMCPImportDialog` 不再主动清空 textarea；B12：一致性检查通过（Wails exception 路径走 `mcpErrMsg(e)`，业务中文直传）。 |
+| **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入对话框 textarea margin） |
 
 ---
 

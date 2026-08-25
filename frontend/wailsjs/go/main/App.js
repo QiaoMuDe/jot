@@ -314,6 +314,10 @@ export function ImportFiles(arg1, arg2) {
   return window['go']['main']['App']['ImportFiles'](arg1, arg2);
 }
 
+export function ImportMCPServers(arg1) {
+  return window['go']['main']['App']['ImportMCPServers'](arg1);
+}
+
 export function IndexNotesByAll() {
   return window['go']['main']['App']['IndexNotesByAll']();
 }
@@ -364,6 +368,10 @@ export function OpenLogDir() {
 
 export function OpenProjectURL(arg1) {
   return window['go']['main']['App']['OpenProjectURL'](arg1);
+}
+
+export function ParseMCPServersImport(arg1) {
+  return window['go']['main']['App']['ParseMCPServersImport'](arg1);
 }
 
 export function PermanentDeleteNote(arg1) {

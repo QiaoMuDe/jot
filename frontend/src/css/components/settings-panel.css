@@ -1705,6 +1705,24 @@
   margin-bottom: 14px;
 }
 
+/* 头部右侧三按钮组：分享全部 / 导入 / 添加服务器（10px 间距 toolbar 约定） */
+.mcp-server-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 头部三按钮统一样式：分享 / 导入 / 添加（2 字，inline-flex 防换行 + 等宽，min-width 保证三个按钮视觉一致） */
+.mcp-server-head-actions .btn {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
 .mcp-server-head-desc {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -2063,7 +2081,53 @@
   100% { transform: translateX(0);    border-color: var(--border); }
 }
 
-.mcp-server-form-body .settings-input.mcp-input-invalid {
+.mcp-server-form-dialog .settings-input.mcp-input-invalid {
+  animation: mcpFormInputError 0.6s ease;
+  border-color: var(--danger) !important;
+}
+
+/* ── 导入对话框（复用 form-dialog 体系，z-index 10000 / 复用 visible 类淡入淡出） ── */
+.mcp-server-import-panel {
+  width: 560px;
+  max-width: 92vw;
+}
+
+/* 导入提示文案：行内 code 等宽字体 + 弱化背景以区分正文 */
+.mcp-import-hint {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: var(--radius-md);
+  margin: 0 0 14px 0;
+}
+
+.mcp-import-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+/* 导入 textarea：占满宽度 + 等宽字体（JSON 阅读体验）+ 自适应高度 */
+.mcp-server-import-textarea {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  min-height: 220px;
+  resize: vertical;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+/* 复用 mcpFormInputError 抖动关键帧（textarea 加 mcp-input-invalid 类即可触发） */
+.mcp-server-import-textarea.mcp-input-invalid {
   animation: mcpFormInputError 0.6s ease;
   border-color: var(--danger) !important;
 }
@@ -2130,6 +2194,11 @@
 
   /* 校验失败抖动退化为仅红色边框提示（由 JS 定时移除） */
   .mcp-server-form-body .settings-input.mcp-input-invalid {
+    animation: none;
+  }
+
+  /* 导入对话框 textarea 抖动同样降级（保留红色边框） */
+  .mcp-server-import-textarea.mcp-input-invalid {
     animation: none;
   }
 }

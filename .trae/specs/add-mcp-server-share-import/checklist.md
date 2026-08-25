@@ -1,0 +1,24 @@
+# Checklist
+
+- [x] `.mcp-server-head` 头部三按钮「分享全部 / 导入 / 添加服务器」按 10px 间距并列显示
+- [x] 列表行操作区由三按钮扩展为四按钮「分享 / 测试 / 编辑 / 删除」，分享按钮置最左（toggle 之后）
+- [x] 导入对话框 DOM 节点 `mcpServerImportDialog` 已注入，含 textarea + 取消/导入按钮
+- [x] `buildMCPServersShareJSON` 序列化结果只含本项目字段（排除 `id / sort_order / created_at / updated_at`）
+- [x] 序列化按 transport 条件附带 `command / args / env` 或 `url / headers`（stdio 必含 command、sse/http 必含 url）
+- [x] 复制主路径用 `navigator.clipboard.writeText`，不可用时降级 `document.execCommand('copy')` + 隐藏 textarea
+- [x] 单条分享成功提示「已复制「{name}」配置」
+- [x] 分享全部成功提示「已复制 N 条服务器配置」
+- [x] 分享全部列表为空时弹「当前没有可分享的服务器」info 提示且不复制
+- [x] `parseMCPServersImportJSON` 支持三种输入：裸数组 / `{servers:[...]}` 包装 / 单个对象
+- [x] 解析失败中文错误信息含具体失败原因（行号或字段名）
+- [x] 解析失败时 textarea 抖动 + `nm.show` 错误提示，不关闭对话框
+- [x] 解析成功直接循环 `SaveMCPServer` 写入数据库（不打开添加表单）
+- [x] 导入完成后 `loadMCPServers` + `warmupMCPServers` 刷新列表与全局池
+- [x] 导入完成弹聚合通知「已导入 N / 失败 M 条，详情见应用日志」
+- [x] 失败详情仅记录后端日志（`console.error`），不在 UI 展示
+- [x] 重复 name 由后端校验自然拦截，失败数 +1，其余继续
+- [x] 关闭导入对话框时清空 textarea
+- [x] 全部样式使用主题变量，14 主题自适应
+- [x] `prefers-reduced-motion` 下抖动动画降级
+- [x] `npm run build` 通过
+- [ ] `wails build` 验证 + 运行时回归（CRUD、主题）— 未自动执行，按要求保留用户决定
