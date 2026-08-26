@@ -5,12 +5,12 @@
   - [ ] SubTask 1.2: 在 `internal/database/models.go` 注册新模型到 AllModels
 
 - [ ] Task 2: 创建密码记录服务层
-  - [ ] SubTask 2.1: 创建 `internal/services/password_service.go` 文件
-  - [ ] SubTask 2.2: 实现 Create 方法（创建密码记录）
-  - [ ] SubTask 2.3: 实现 List 方法（查询密码记录列表）
-  - [ ] SubTask 2.4: 实现 Search 方法（搜索密码记录）
-  - [ ] SubTask 2.5: 实现 Update 方法（更新密码记录）
-  - [ ] SubTask 2.6: 实现 Delete 方法（删除密码记录）
+  - [ ] SubTask 2.1: 创建 `internal/services/password_service.go` 文件（含构造函数 NewPasswordService）
+  - [ ] SubTask 2.2: 实现 Create 方法（创建密码记录，password 字段调用 EncodeB64 编码）
+  - [ ] SubTask 2.3: 实现 List 方法（查询密码记录列表，password 字段调用 DecodeB64 解码）
+  - [ ] SubTask 2.4: 实现 Search 方法（在名称、用户名、URL、备注中模糊搜索，password 字段解码）
+  - [ ] SubTask 2.5: 实现 Update 方法（更新密码记录，password 字段调用 EncodeB64 编码）
+  - [ ] SubTask 2.6: 实现 Delete 方法（软删除密码记录）
 
 - [ ] Task 3: 创建 Wails 绑定方法
   - [ ] SubTask 3.1: 在 app.go 中添加 PasswordService 字段
@@ -24,12 +24,15 @@
   - [ ] SubTask 4.1: 在 index.html 中添加密码管理视图容器 `#viewPasswordManager`
   - [ ] SubTask 4.2: 创建 `frontend/src/css/components/password-manager.css` 样式文件
   - [ ] SubTask 4.3: 在 index.html 的 CSS 入口引入新样式文件
-  - [ ] SubTask 4.4: 在 main.js 中添加 switchView 路由
-  - [ ] SubTask 4.5: 实现密码管理视图渲染逻辑（表格）
-  - [ ] SubTask 4.6: 实现添加/编辑对话框
-  - [ ] SubTask 4.7: 实现删除确认对话框
-  - [ ] SubTask 4.8: 实现密码掩码切换功能
-  - [ ] SubTask 4.9: 实现复制到剪贴板功能
+  - [ ] SubTask 4.4: 创建 `frontend/src/js/password-manager.js` 独立模块（参考 calendar.js 模式）
+  - [ ] SubTask 4.5: 在 main.js 中 import 并初始化 password-manager 模块
+  - [ ] SubTask 4.6: 在 main.js switchView 中注册 password-manager 路由
+  - [ ] SubTask 4.7: 在 password-manager.js 中实现视图渲染逻辑（表格）
+  - [ ] SubTask 4.8: 实现添加/编辑对话框（含表单校验：名称、用户名必填）
+  - [ ] SubTask 4.9: 实现删除确认对话框
+  - [ ] SubTask 4.10: 实现密码掩码切换功能
+  - [ ] SubTask 4.11: 实现复制到剪贴板功能
+  - [ ] SubTask 4.12: 实现 URL 点击在浏览器中打开
 
 - [ ] Task 5: 添加菜单入口
   - [ ] SubTask 5.1: 在 index.html 更多菜单中添加密码管理入口（ai-chat 之后）
