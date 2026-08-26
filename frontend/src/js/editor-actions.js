@@ -295,22 +295,8 @@ function initEditorActionsMenu() {
             setAIEditorLock(true);
 
             let acc = '';
-            let firstChunkApplied = false;
 
-            // 逐块写入：首块替换原始选区 [from, to] 并记入历史（undo 锚点）；
-            // 后续块替换 [from, from+上一块长度]（即上一块已写入的内容）且不入历史。
-            // 不能用固定的原始选区 to 作为终点——AI 输出远长于选区时会反复覆盖头部、残留尾部导致内容错乱。
-            const applyChunk = function (chunk) {
-                if (!cmEditor) return;
-                cmEditor.dispatch({
-                    changes: { from, to: from + _aiOpInsertedLen, insert: chunk },
-                    selection: { anchor: from + chunk.length },
-                    addToHistory: !firstChunkApplied, // 首块 true → 记入历史；后续 false → 不入历史
-                    userEvent: 'ai.op',
-                });
-                firstChunkApplied = true;
-                _aiOpInsertedLen = chunk.length;
-            };
+            // 流式期间仅累积文本，不写入编辑器；流结束后一次性写入，确保整个 AI 操作占一个 undo 槽位
 
             const finish = function () {
                 cleanupAIStream();
@@ -340,7 +326,6 @@ function initEditorActionsMenu() {
                 window.runtime.EventsOn('ai:aiop-chunk', function (g, chunk) {
                     if (g !== myGen) return; // 属于旧操作，丢弃
                     acc += chunk;
-                    applyChunk(acc);
                 });
                 window.runtime.EventsOn('ai:aiop-done', function (g, fullContent) {
                     if (g !== myGen) return;
@@ -350,8 +335,15 @@ function initEditorActionsMenu() {
                     } else {
                         // 兜底后处理：模型未按 prompt 分段时，把超长无换行文本按句末标点断行
                         const finalContent = paragraphizeLongText(fullContent || acc);
-                        if (finalContent !== acc) {
-                            applyChunk(finalContent);
+                        // 流结束后一次性写入编辑器，整个 AI 操作只占一个 undo 槽位
+                        if (cmEditor) {
+                            cmEditor.dispatch({
+                                changes: { from, to: from + (to - from), insert: finalContent },
+                                selection: { anchor: from, head: from + finalContent.length },
+                                addToHistory: true,
+                                userEvent: 'ai.op',
+                            });
+                            _aiOpInsertedLen = finalContent.length;
                         }
                     }
                     finish();

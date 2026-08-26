@@ -146,6 +146,10 @@ export const jotTheme = EditorView.theme({
     '.cm-activeLine': {
         backgroundColor: 'rgba(var(--accent-rgb), 0.1)',
     },
+    // 有选中内容时隐藏光标行高亮，避免两个背景高度不一致
+    '&:has(.cm-selectionBackground) .cm-activeLine': {
+        backgroundColor: 'transparent !important',
+    },
     '.cm-gutters': {
         backgroundColor: 'var(--card-bg)',
         border: 'none',
