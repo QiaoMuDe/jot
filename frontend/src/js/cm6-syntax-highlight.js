@@ -153,12 +153,15 @@ export const jotTheme = EditorView.theme({
     '.cm-gutters': {
         backgroundColor: 'var(--card-bg)',
         border: 'none',
+        borderRight: '1px solid var(--divider)',
     },
     '.cm-lineNumbers .cm-gutterElement': {
         color: 'var(--text-muted)',
-        fontSize: '0.75rem',
-        lineHeight: '2.13',
+        fontSize: '1rem',
+        lineHeight: '1',
         padding: '0 6px 0 8px',
+        display: 'flex',
+        alignItems: 'center',
     },
     '.cm-foldGutter .cm-gutterElement': {
         color: 'var(--text-muted)',
