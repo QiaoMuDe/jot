@@ -12,7 +12,8 @@
 
 ## Wails 绑定
 - [ ] app.go 中添加了 PasswordService 字段和所有 Wails 绑定方法（含 GetPasswordRecord）
-- [ ] main.go 中调用 `NewPasswordService(db, logger)` 创建实例并赋值给 App
+- [ ] app.go 的 `NewApp()` 中调用 `NewPasswordService(db, logSvc.Logger)` 创建实例并赋值给 App
+- [ ] app.go 的 `rebuildServices()` 中同步重建了 PasswordService（防止数据库重置后持有旧连接）
 
 ## 前端模块
 - [ ] 创建独立 `password-manager.js` 模块文件

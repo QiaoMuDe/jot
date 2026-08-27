@@ -5,7 +5,7 @@
 
 ## What Changes
 - 新增 `PasswordRecord` 数据模型
-- 新增 `PasswordService` 服务层（CRUD 操作 + 密码加解密，构造函数签名 `NewPasswordService(db *gorm.DB, logger ...)` 与现有服务一致）
+- 新增 `PasswordService` 服务层（CRUD 操作 + 密码加解密，构造函数签名 `NewPasswordService(db *gorm.DB, logger *fastlog.Logger)` 与现有服务一致）
 - 复用 `crypto.go` 中的 `EncodeB64`/`DecodeB64` 进行密码字段的编解码存储
 - 新增 Wails 绑定方法
 - 新增密码管理视图（列表展示 + 右键菜单 + 查看详情对话框 + 添加/编辑对话框 + 批量操作）
@@ -43,7 +43,7 @@
   - `note` (text) - 备注（可选）
   - `created_at` (time) - 创建时间
   - `updated_at` (time) - 更新时间
-  - `deleted_at` (time, 索引) - 软删除时间
+  - `deleted_at` (gorm.DeletedAt, 索引) - 软删除时间（须使用 `gorm.DeletedAt` 类型以启用 GORM 软删除）
 
 ### Requirement: 密码记录 CRUD 操作
 系统 SHALL 提供密码记录的增删改查操作。

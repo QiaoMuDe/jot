@@ -16,7 +16,7 @@
 
 - [ ] Task 3: 创建 Wails 绑定方法
   - [ ] SubTask 3.1: 在 app.go 中添加 PasswordService 字段
-  - [ ] SubTask 3.2: 在 main.go 中调用 `NewPasswordService(db, logger)` 创建实例并赋值给 App
+  - [ ] SubTask 3.2: 在 app.go 的 `NewApp()` 中调用 `NewPasswordService(db, logSvc.Logger)` 创建实例并赋值给 App
   - [ ] SubTask 3.3: 实现 CreatePasswordRecord 方法
   - [ ] SubTask 3.4: 实现 GetPasswordRecord 方法（根据 ID 查询单条，含密码解码）
   - [ ] SubTask 3.5: 实现 ListPasswordRecords 方法
@@ -46,7 +46,7 @@
   - [ ] SubTask 4.18: 实现右键菜单"复制用户名"功能（复制到剪贴板 + 通知提示）
   - [ ] SubTask 4.19: 实现右键菜单"复制密码"功能（复制到剪贴板 + 通知提示）
   - [ ] SubTask 4.20: 实现右键菜单"复制链接"功能（URL 非空时显示，复制到剪贴板 + 通知提示）
-  - [ ] SubTask 4.21: 实现查看详情对话框（标题栏 + 信息区：名称/用户名+复制/密码+掩码切换+复制/URL+复制+打开/备注/时间 + 底部编辑/删除按钮）
+  - [ ] SubTask 4.21: 实现查看详情对话框（标题栏 + 信息区：名称/用户名+复制/密码+掩码切换+复制/URL+复制+打开/备注/时间 + 底部编辑/删除按钮；数据通过 GetPasswordRecord(id) 获取，含解码后的密码明文）
   - [ ] SubTask 4.22: 实现添加/编辑对话框（标题栏 + 表单区：名称/用户名/密码+显示隐藏/URL/备注 + 底部取消/保存；含表单校验：名称、用户名、密码必填）
   - [ ] SubTask 4.23: 定义各字段最大长度常量（name: 200, username: 200, password: 500, url: 500）
   - [ ] SubTask 4.24: 实现输入长度实时校验（`input` 事件监听，超长时截断值 + 抖动动画 + 通知提示）
