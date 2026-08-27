@@ -124,7 +124,7 @@
 /* === 网格容器 === */
 .launcher-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     padding: 16px 18px 20px;
     flex: 1;

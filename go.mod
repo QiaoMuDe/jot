@@ -17,6 +17,7 @@ require (
 	github.com/meguminnnnnnnnn/go-openai v0.1.2
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/tidwall/gjson v1.18.0
+	github.com/trustelem/zxcvbn v1.0.1
 	github.com/wailsapp/wails/v2 v2.12.0
 	gorm.io/gorm v1.31.1
 	modernc.org/sqlite v1.51.0
@@ -41,6 +42,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20241224063832-9fbcc0e56c28 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
 	github.com/extrame/ole2 v0.0.0-20160812065207-d69429661ad7 // indirect
@@ -97,6 +99,7 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
+	github.com/test-go/testify v1.1.4 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect

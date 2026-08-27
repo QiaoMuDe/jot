@@ -258,7 +258,7 @@ function handleLauncherKeydown(e) {
     // 左/上 方向键：向上翻
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        const cols = 3;
+        const cols = 4;
         let newIndex;
         if (e.key === 'ArrowUp') {
             // 上一行（减列数）
@@ -281,7 +281,7 @@ function handleLauncherKeydown(e) {
     // 右/下 方向键：向下翻
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const cols = 3;
+        const cols = 4;
         let newIndex;
         if (e.key === 'ArrowDown') {
             // 下一行（加列数）

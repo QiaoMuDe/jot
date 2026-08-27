@@ -1996,9 +1996,10 @@ console.log(greet("Jot"));
                         <div class="pm-field">
                             <label for="pmFieldPassword">密码<i>*</i></label>
                             <div class="pm-input-wrap">
-                                <input type="password" id="pmFieldPassword" class="pm-pwd-input has-toggle" placeholder="输入密码" autocomplete="off"/>
+                                <input type="password" id="pmFieldPassword" class="pm-pwd-input" placeholder="输入密码" autocomplete="off"/>
                                 <button type="button" id="pmPwdToggleBtn" class="pm-pwd-toggle">显示</button>
                             </div>
+                            <div id="pmEditPwdStrength" class="pm-pwd-strength-bar" style="display:none"></div>
                         </div>
                         <div class="pm-field">
                             <label for="pmFieldUrl">网址（可选）</label>
@@ -2042,6 +2043,10 @@ console.log(greet("Jot"));
                                 <button class="pm-mini-btn" id="pmDetailPwdToggleBtn">显示</button>
                                 <button class="pm-mini-btn" id="pmCopyPasswordBtn">复制</button>
                             </div>
+                        </div>
+                        <div class="pm-detail-row" id="pmDetailPwdStrengthRow" style="display:none">
+                            <span class="pm-detail-label">密码强度</span>
+                            <span id="pmDetailPwdStrength" class="pm-detail-value"></span>
                         </div>
                         <div class="pm-detail-row" id="pmDetailUrlRow">
                             <span class="pm-detail-label">网址</span>
@@ -2138,7 +2143,7 @@ console.log(greet("Jot"));
                         </button>
 
                         <!-- 结果区域 -->
-                        <div id="pmGenResultsWrap" style="display:none;">
+                        <div id="pmGenResultsWrap">
                             <div class="pm-gen-results-header">
                                 <span class="pm-gen-results-label">生成结果 <span class="pm-gen-results-count"></span></span>
                                 <button type="button" class="pm-gen-copy-all-btn" id="pmGenCopyAllBtn">复制全部</button>

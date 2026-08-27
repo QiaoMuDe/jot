@@ -38,6 +38,8 @@ export function CancelAIStream():Promise<void>;
 
 export function CancelVectorIndex():Promise<void>;
 
+export function CheckPasswordStrength(arg1:string):Promise<services.PasswordStrengthResult>;
+
 export function CleanupOrphanImages():Promise<number>;
 
 export function ClearAISessionMessages(arg1:number):Promise<void>;
@@ -101,6 +103,8 @@ export function ExportDataWithDialog():Promise<string>;
 export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
 export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
+
+export function GeneratePasswords(arg1:services.PasswordGenOptions):Promise<Array<services.GeneratedPassword>>;
 
 export function GetAIConfig():Promise<services.AIConfig>;
 

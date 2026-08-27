@@ -678,6 +678,20 @@ export namespace services {
 	        this.total_passwords = source["total_passwords"];
 	    }
 	}
+	export class GeneratedPassword {
+	    password: string;
+	    score: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GeneratedPassword(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.password = source["password"];
+	        this.score = source["score"];
+	    }
+	}
 	export class ImportResult {
 	    success_count: number;
 	    fail_count: number;
@@ -797,6 +811,30 @@ export namespace services {
 	        this.page_size = source["page_size"];
 	    }
 	}
+	export class PasswordGenOptions {
+	    length: number;
+	    count: number;
+	    upper: boolean;
+	    lower: boolean;
+	    digits: boolean;
+	    symbols: boolean;
+	    excludeAmbiguous: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PasswordGenOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.length = source["length"];
+	        this.count = source["count"];
+	        this.upper = source["upper"];
+	        this.lower = source["lower"];
+	        this.digits = source["digits"];
+	        this.symbols = source["symbols"];
+	        this.excludeAmbiguous = source["excludeAmbiguous"];
+	    }
+	}
 	export class PasswordListItem {
 	    id: number;
 	    name: string;
@@ -813,6 +851,20 @@ export namespace services {
 	        this.name = source["name"];
 	        this.username = source["username"];
 	        this.url = source["url"];
+	    }
+	}
+	export class PasswordStrengthResult {
+	    score: number;
+	    guesses: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PasswordStrengthResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.score = source["score"];
+	        this.guesses = source["guesses"];
 	    }
 	}
 	export class SessionConfig {

@@ -41,8 +41,8 @@ func (s *LogService) Init(logDir string, level fastlog.Level) error {
 	logPath := filepath.Join(logDir, "app.log")
 
 	// 基于 Prod() 配置
-	cfg := fastlog.Prod(logPath)
-	//cfg := fastlog.Dev(logPath)
+	// cfg := fastlog.Prod(logPath)
+	cfg := fastlog.Dev(logPath)
 	cfg.Level = level // 使用传入的级别
 
 	s.Logger = fastlog.New(cfg)

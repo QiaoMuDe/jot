@@ -13,10 +13,10 @@ const PM_PWD_MASK = '••••••';
 let pmView, pmListEl, pmEmptyEl, pmSearchInput, pmSearchClearBtn, pmAddBtn, pmBatchToggleBtn;
 let pmBatchBar, pmSelectAllCb, pmSelectedCountEl, pmBatchDeleteBtn;
 let pmEditOverlay, pmEditTitle, pmEditCloseBtn, pmCancelBtn, pmSaveBtn;
-let pmFieldName, pmFieldUsername, pmFieldPassword, pmPwdToggleBtn, pmFieldUrl, pmFieldNote;
+let pmFieldName, pmFieldUsername, pmFieldPassword, pmEditPwdStrength, pmPwdToggleBtn, pmFieldUrl, pmFieldNote;
 let pmDetailOverlay, pmDetailTitle, pmDetailCloseBtn;
 let pmDetailName, pmDetailUsername, pmCopyUsernameBtn;
-let pmDetailPassword, pmDetailPwdToggleBtn, pmCopyPasswordBtn;
+let pmDetailPassword, pmDetailPwdToggleBtn, pmDetailPwdStrengthRow, pmDetailPwdStrength, pmCopyPasswordBtn;
 let pmDetailUrlRow, pmDetailUrl, pmCopyUrlBtn, pmOpenUrlBtn;
 let pmDetailNote, pmDetailCreatedAt, pmDetailUpdatedAt;
 let pmDetailDeleteBtn, pmDetailEditBtn;
@@ -42,6 +42,29 @@ let _lastLengthNotifyAt = 0;   // 长度超限通知节流时间戳
 let pmLoadSeq = 0;             // 列表加载序号（防慢响应乱序覆盖新结果）
 
 /* ==================== 工具函数 ==================== */
+
+/** 防抖：delay ms 内重复调用只执行最后一次 */
+function pmDebounce(fn, delay) {
+    let timer = null;
+    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+
+const PM_STRENGTH_LABELS = ['弱', '一般', '良好', '强', '极强'];
+const PM_STRENGTH_CLASSES = ['weak', 'fair', 'good', 'strong', 'verystrong'];
+
+/** 渲染密码强度 - 进度条模式（添加/编辑对话框） */
+function pmRenderStrengthBar(el, score) {
+    if (score < 0 || el == null) return;
+    const cls = PM_STRENGTH_CLASSES[score];
+    const pct = [20, 40, 60, 80, 100][score];
+    el.innerHTML = `<div class="pm-pwd-strength-track"><div class="pm-pwd-strength-fill ${cls}" style="width:${pct}%"></div></div>`;
+}
+
+/** 渲染密码强度 - 纯文字模式（查看详情对话框） */
+function pmRenderStrengthText(el, score) {
+    if (score < 0 || el == null) return;
+    el.innerHTML = `<span class="pm-pwd-strength-text ${PM_STRENGTH_CLASSES[score]}">${PM_STRENGTH_LABELS[score]}</span>`;
+}
 
 /**
  * 安全复制文本到剪贴板（主路径 navigator.clipboard，失败降级 execCommand）
@@ -176,91 +199,11 @@ function findInList(id) {
 
 /* ==================== 密码生成器 ==================== */
 
-const PM_GEN_CHARS = {
-    upper:   'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-    lower:   'abcdefghijklmnopqrstuvwxyz',
-    digits:  '0123456789',
-    symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?',
-};
-
-const PM_GEN_AMBIGUOUS = 'lI1O0';
-
-/**
- * 生成随机密码（密码学安全随机）
- */
-function pmGeneratePassword(opts) {
-    let pool = '';
-    if (opts.upper) pool += PM_GEN_CHARS.upper;
-    if (opts.lower) pool += PM_GEN_CHARS.lower;
-    if (opts.digits) pool += PM_GEN_CHARS.digits;
-    if (opts.symbols) pool += PM_GEN_CHARS.symbols;
-    if (pool.length === 0) pool = PM_GEN_CHARS.lower;
-    if (opts.excludeAmbiguous) {
-        pool = pool.split('').filter(c => !PM_GEN_AMBIGUOUS.includes(c)).join('');
-    }
-    const arr = new Uint32Array(opts.length);
-    crypto.getRandomValues(arr);
-    return Array.from(arr, v => pool[v % pool.length]).join('');
-}
-
-/** 键盘图案列表（连续3个字母不在此列，避免误判正常密码） */
-const PM_KB_PATTERNS = [
-    'qwerty','qwertz','azerty','asdfgh','zxcvbn','qazwsx',
-    '!@#$%^','1qaz2wsx','123456','098765','poiuyt','mnbvcx',
-];
-
-/** 计算密码强度（0-4），基于类型上限 + 长度阶梯 + 模式惩罚 */
-function pmCalcStrength(pwd) {
-    if (!pwd || pwd.length === 0) return 0;
-
-    // ---- 1. 统计字符类型数 ----
-    const typeCount = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter(r => r.test(pwd)).length;
-
-    // ---- 2. 类型上限：不同类型数量对应不同最高评级 ----
-    //    1 类 → 最高 2（一般），2 类 → 最高 4（强），3/4 类 → 最高 4（强）
-    const typeCap = typeCount <= 1 ? 2 : 4;
-
-    // ---- 3. 长度阶梯：根据密码长度确定基础评级 ----
-    //    混合类型(2+)在16位即可达到"强"，纯类型仍受 typeCap=2 限制
-    let base;
-    const len = pwd.length;
-    if (len < 8)       base = 0;
-    else if (len < 12) base = 1;
-    else if (len < 16) base = 2;
-    else               base = typeCount >= 2 ? 4 : 3;
-
-    // ---- 4. 模式惩罚：检测弱模式，对基础评级做 -1 微调 ----
-    let penalty = 0;
-
-    // 4a. 连续重复字符 3+ 位（如 aaa, 1111）
-    if (/(.)\1{2,}/.test(pwd)) penalty++;
-
-    // 4b. 最长连续递增/递减序列占密码 50%+ 时惩罚（如 abcdefgh, 9876543210）
-    let maxSeqLen = 1, seqLen = 1;
-    for (let i = 1; i < pwd.length; i++) {
-        const diff = pwd.charCodeAt(i) - pwd.charCodeAt(i - 1);
-        if (diff === 1 || diff === -1) { seqLen++; if (seqLen > maxSeqLen) maxSeqLen = seqLen; }
-        else seqLen = 1;
-    }
-    if (maxSeqLen >= pwd.length * 0.5) penalty++;
-
-    // 4c. 键盘图案
-    const lowerPwd = pwd.toLowerCase();
-    for (const pat of PM_KB_PATTERNS) {
-        if (lowerPwd.includes(pat)) { penalty++; break; }
-    }
-
-    // 4d. 低唯一字符比例（< 50% 的字符是不同的）
-    if (new Set(pwd).size / pwd.length < 0.5) penalty++;
-
-    // ---- 5. 最终评级 = min(长度基础, 类型上限) - 惩罚 ----
-    return Math.max(0, Math.min(base, typeCap) - Math.min(penalty, 2));
-}
-
 /** 获取当前选项配置 */
 function pmGetGenOptions() {
     return {
         length: pmGenLength,
+        count: pmGenCount,
         upper: pmGenUpper.classList.contains('active'),
         lower: pmGenLower.classList.contains('active'),
         digits: pmGenDigits.classList.contains('active'),
@@ -275,17 +218,17 @@ function pmUpdateLengthBar() {
     pmGenLengthBar.style.width = pct + '%';
 }
 
-/** 执行生成并渲染结果 */
-function pmDoGenerate() {
+/** 执行生成并渲染结果（后端一次性返回密码+强度） */
+async function pmDoGenerate() {
     const opts = pmGetGenOptions();
-    pmGenResultsEl.innerHTML = '';
 
+    const results = await window.go.main.App.GeneratePasswords(opts);
+    // 新结果就绪后再清空旧列表（与渲染同帧完成），避免生成间隙列表塌陷导致对话框跳动
+    pmGenResultsEl.innerHTML = '';
     const allPwds = [];
-    for (let i = 0; i < pmGenCount; i++) {
-        const pwd = pmGeneratePassword(opts);
+
+    for (const { password: pwd, score: strength } of results) {
         allPwds.push(pwd);
-        const strength = pmCalcStrength(pwd);
-        const strengthLabels = ['weak', 'fair', 'good', 'strong', 'strong'];
 
         const item = document.createElement('div');
         item.className = 'pm-gen-result-item';
@@ -293,9 +236,10 @@ function pmDoGenerate() {
         // 强度指示点
         const strengthEl = document.createElement('div');
         strengthEl.className = 'pm-gen-strength';
-        for (let d = 0; d < 4; d++) {
+        const cls = PM_STRENGTH_CLASSES[strength];
+        for (let d = 0; d < 5; d++) {
             const dot = document.createElement('span');
-            dot.className = 'pm-gen-strength-dot' + (d < strength ? ' filled ' + strengthLabels[strength] : '');
+            dot.className = 'pm-gen-strength-dot' + (d < strength + 1 ? ' filled ' + cls : '');
             strengthEl.appendChild(dot);
         }
 
@@ -323,7 +267,7 @@ function pmDoGenerate() {
     }
 
     // 显示结果区域并更新计数
-    pmGenResultsWrap.style.display = '';
+    pmGenResultsWrap.classList.add('open');
     const countEl = pmGenResultsWrap.querySelector('.pm-gen-results-count');
     if (countEl) countEl.textContent = `共 ${allPwds.length} 个`;
 
@@ -343,7 +287,7 @@ function openPmGenDialog() {
     pmGenDigits.classList.add('active');
     pmGenSymbols.classList.add('active');
     pmGenExcludeAmbiguous.checked = false;
-    pmGenResultsWrap.style.display = 'none';
+    pmGenResultsWrap.classList.remove('open');
     pmGenResultsEl.innerHTML = '';
     pmGenOverlay.style.display = 'flex';
 }
@@ -629,6 +573,7 @@ async function openPmEditDialog(id, presetRecord) {
     pmFieldPassword.value = '';
     pmFieldPassword.classList.remove('invalid');
     resetEditPwdVisibility();
+    pmEditPwdStrength.style.display = 'none';
 
     if (presetRecord) {
         // 零延迟路径：详情等来源已持有完整数据，无需二次请求
@@ -654,6 +599,9 @@ async function openPmEditDialog(id, presetRecord) {
         url: pmFieldUrl.value.trim(),
         note: pmFieldNote.value,
     };
+
+    // 触发密码强度检测（编辑模式下预填充了密码，需手动触发）
+    pmFieldPassword.dispatchEvent(new Event('input'));
 
     pmEditOverlay.style.display = 'flex';
     setTimeout(() => pmFieldName.focus(), 50);
@@ -793,6 +741,15 @@ async function openPmDetail(id) {
         pmDetailUsername.textContent = rec.username || '-';
 
         setDetailPwdVisibility(false);
+
+        // 密码强度显示
+        if (rec.password) {
+            const strResult = await window.go.main.App.CheckPasswordStrength(rec.password);
+            pmRenderStrengthText(pmDetailPwdStrength, strResult.score);
+            pmDetailPwdStrengthRow.style.display = '';
+        } else {
+            pmDetailPwdStrengthRow.style.display = 'none';
+        }
 
         // URL 行：为空显示 "-" 且隐藏操作按钮
         const hasUrl = !!(rec.url && rec.url.trim());
@@ -994,6 +951,7 @@ export function initPasswordManager() {
     pmFieldName = document.getElementById('pmFieldName');
     pmFieldUsername = document.getElementById('pmFieldUsername');
     pmFieldPassword = document.getElementById('pmFieldPassword');
+    pmEditPwdStrength = document.getElementById('pmEditPwdStrength');
     pmPwdToggleBtn = document.getElementById('pmPwdToggleBtn');
     pmFieldUrl = document.getElementById('pmFieldUrl');
     pmFieldNote = document.getElementById('pmFieldNote');
@@ -1006,6 +964,8 @@ export function initPasswordManager() {
     pmCopyUsernameBtn = document.getElementById('pmCopyUsernameBtn');
     pmDetailPassword = document.getElementById('pmDetailPassword');
     pmDetailPwdToggleBtn = document.getElementById('pmDetailPwdToggleBtn');
+    pmDetailPwdStrengthRow = document.getElementById('pmDetailPwdStrengthRow');
+    pmDetailPwdStrength = document.getElementById('pmDetailPwdStrength');
     pmCopyPasswordBtn = document.getElementById('pmCopyPasswordBtn');
     pmDetailUrlRow = document.getElementById('pmDetailUrlRow');
     pmDetailUrl = document.getElementById('pmDetailUrl');
@@ -1122,6 +1082,15 @@ export function initPasswordManager() {
     [pmFieldName, pmFieldUsername, pmFieldPassword].forEach((el) => {
         el.addEventListener('input', () => el.classList.remove('invalid'));
     });
+
+    // 密码输入实时强度检测（防抖 300ms）
+    const checkEditPwdStrength = pmDebounce(async (pwd) => {
+        if (!pwd) { pmEditPwdStrength.style.display = 'none'; return; }
+        const result = await window.go.main.App.CheckPasswordStrength(pwd);
+        pmRenderStrengthBar(pmEditPwdStrength, result.score);
+        pmEditPwdStrength.style.display = '';
+    }, 300);
+    pmFieldPassword.addEventListener('input', () => checkEditPwdStrength(pmFieldPassword.value));
 
     // ---- 编辑对话框 ----
     pmPwdToggleBtn.addEventListener('click', () => {

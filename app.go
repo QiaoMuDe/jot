@@ -3875,6 +3875,19 @@ func (a *App) BatchDeletePasswordRecords(ids []uint) error {
 	return nil
 }
 
+// GeneratePasswords 批量生成密码并返回强度评分，暴露给前端调用
+func (a *App) GeneratePasswords(opts services.PasswordGenOptions) []services.GeneratedPassword {
+	a.LogSvc.Logger.Debugw("GeneratePasswords", fastlog.Int("length", opts.Length), fastlog.Int("count", opts.Count))
+	return services.GeneratePasswords(opts)
+}
+
+// CheckPasswordStrength 检测密码强度（0-4 评级），暴露给前端调用
+func (a *App) CheckPasswordStrength(password string) *services.PasswordStrengthResult {
+	score := services.CheckPasswordStrength(password)
+	a.LogSvc.Logger.Debugw("CheckPasswordStrength", fastlog.Int("score", score))
+	return &services.PasswordStrengthResult{Score: score}
+}
+
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）
 func (a *App) reconnectDB(dbPath string) error {
 	a.LogSvc.Logger.Debugw("reconnectDB", fastlog.String("dbPath", dbPath))

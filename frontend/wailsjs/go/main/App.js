@@ -66,6 +66,10 @@ export function CancelVectorIndex() {
   return window['go']['main']['App']['CancelVectorIndex']();
 }
 
+export function CheckPasswordStrength(arg1) {
+  return window['go']['main']['App']['CheckPasswordStrength'](arg1);
+}
+
 export function CleanupOrphanImages() {
   return window['go']['main']['App']['CleanupOrphanImages']();
 }
@@ -192,6 +196,10 @@ export function ExportNoteAsMarkdown(arg1) {
 
 export function FetchAIModels(arg1, arg2) {
   return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
+}
+
+export function GeneratePasswords(arg1) {
+  return window['go']['main']['App']['GeneratePasswords'](arg1);
 }
 
 export function GetAIConfig() {
