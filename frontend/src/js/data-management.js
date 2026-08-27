@@ -39,6 +39,7 @@ export async function loadDataStats() {
     let aiSessions = 0, aiMessages = 0, totalTokens = 0;
     let avgResponseTime = 0, avgThinkingTime = 0, maxResponseTime = 0;
     let totalTodos = 0, completedTodos = 0;
+    let totalPasswords = 0;
     // AI 量化索引统计（笔记数 / 片段数 / 占用字节）
     let vecNoteCount = 0, vecChunkCount = 0, vecSizeBytes = 0;
 
@@ -59,6 +60,7 @@ export async function loadDataStats() {
                 maxResponseTime = stats.max_response_time || 0;
                 totalTodos = stats.total_todos || 0;
                 completedTodos = stats.completed_todos || 0;
+                totalPasswords = stats.total_passwords || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -96,7 +98,7 @@ export async function loadDataStats() {
         dateEl.textContent = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
     }
 
-    const hasData = totalNotes > 0 || aiMessages > 0 || totalTodos > 0;
+    const hasData = totalNotes > 0 || aiMessages > 0 || totalTodos > 0 || totalPasswords > 0;
 
     if (!hasData) {
         // 空数据占位
@@ -140,6 +142,11 @@ export async function loadDataStats() {
                 你共创建了 <strong>${totalTodos}</strong> 个待办事项，
                 已完成 <strong>${completedTodos}</strong> 项，
                 完成率 <strong>${totalTodos > 0 ? Math.round(completedTodos / totalTodos * 100) : 0}%</strong>。
+            </p>
+            <hr class="letter-divider">
+            <p class="letter-section-title">🔐 密码管理</p>
+            <p>
+                你共安全保管了 <strong>${totalPasswords.toLocaleString()}</strong> 条密码记录。
             </p>
             <hr class="letter-divider">
             <p class="letter-section-title">🤖 AI 统计数据</p>

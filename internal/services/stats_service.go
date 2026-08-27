@@ -4,7 +4,7 @@ package services
 //
 // StatsService 是应用数据概览（DataStats）的单一事实来源：聚合 NoteService（笔记/回收站/
 // 置顶/笔记本数）、TagService（标签数）、AIService（会话/消息/token/耗时）、TodoService
-// （待办数）以及数据库文件大小，供数据管理页面（App.GetDataStats 绑定）与 Agent 工具
+// （待办数）、PasswordService（密码记录数）以及数据库文件大小，供数据管理页面（App.GetDataStats 绑定）与 Agent 工具
 // （get_stats）共用，保证两者口径完全一致，避免重复逻辑漂移。
 // 数据库文件路径通过构造器注入函数获取（默认传入 database.DefaultDBPath），避免
 // services 包反向依赖 internal/database 造成循环引用。
@@ -19,14 +19,15 @@ type StatsService struct {
 	note   *NoteService           // 笔记统计（GetStats）
 	tag    *TagService            // 标签数（Count）
 	todo   *TodoService           // 待办数（Count / CountCompleted）
+	pw     *PasswordService       // 密码记录数（Count）
 	ai     *AIService             // AI 用量与耗时统计
 	dbPath func() (string, error) // 数据库文件路径获取函数（由 app 层注入 database.DefaultDBPath）
 }
 
 // NewStatsService 创建数据统计聚合服务。
 // dbPath 用于获取 SQLite 数据库文件路径以计算占用大小，app 层传 database.DefaultDBPath。
-func NewStatsService(note *NoteService, tag *TagService, todo *TodoService, ai *AIService, dbPath func() (string, error)) *StatsService {
-	return &StatsService{note: note, tag: tag, todo: todo, ai: ai, dbPath: dbPath}
+func NewStatsService(note *NoteService, tag *TagService, todo *TodoService, pw *PasswordService, ai *AIService, dbPath func() (string, error)) *StatsService {
+	return &StatsService{note: note, tag: tag, todo: todo, pw: pw, ai: ai, dbPath: dbPath}
 }
 
 // GetDataStats 聚合应用数据统计概览。
@@ -86,6 +87,11 @@ func (s *StatsService) GetDataStats() (*DataStats, error) {
 	}
 	if completedTodos, err := s.todo.CountCompleted(); err == nil {
 		stats.CompletedTodos = completedTodos
+	}
+
+	// 密码记录统计
+	if pwCount, err := s.pw.Count(); err == nil {
+		stats.TotalPasswords = pwCount
 	}
 
 	return stats, nil

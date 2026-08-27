@@ -181,7 +181,7 @@ func NewApp() *App {
 	vectorService := services.NewVectorService(db, logSvc.Logger)
 	todoService := services.NewTodoService(db, logSvc.Logger)
 	passwordService := services.NewPasswordService(db, logSvc.Logger)
-	statsService := services.NewStatsService(noteService, tagService, todoService, aiService, database.DefaultDBPath)
+	statsService := services.NewStatsService(noteService, tagService, todoService, passwordService, aiService, database.DefaultDBPath)
 
 	app := &App{
 		db:               db,
@@ -3645,7 +3645,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
 	a.passwordService = services.NewPasswordService(db, a.LogSvc.Logger)
 	a.mcpServerService = services.NewMCPServerService(db)
-	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.aiService, database.DefaultDBPath)
+	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.passwordService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
 	a.LogSvc = services.NewLogService()
 	logDir, err := config.SubDir(config.DirLogs)

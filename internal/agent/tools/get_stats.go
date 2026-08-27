@@ -5,7 +5,7 @@ package tools
 // 笔记/标签/待办/AI 用量/数据库大小，与数据管理页面口径一致）与
 // services.VectorService（GetIndexStatus），不感知父包 agent 的事件循环细节。
 // 一个工具通过 action 参数区分两个动作：
-//   - overview：数据统计概览（缺省），返回笔记/回收站/置顶/笔记本/标签/待办/AI 用量/
+//   - overview：数据统计概览（缺省），返回笔记/回收站/置顶/笔记本/标签/待办/密码记录/AI 用量/
 //     数据库大小/向量索引状态等总量信息；
 //   - month：某月每日笔记数（year 年份与 month 月份缺省时取当前年月）。
 // 本工具只读，不修改任何数据；查看具体笔记/待办/标签/笔记本列表请用 manage_note /
@@ -59,7 +59,7 @@ func (g *getStatsTool) ActionText(argumentsInJSON string) string {
 func (g *getStatsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "get_stats",
-		Desc: "获取应用数据统计与状态概览（只读，不修改任何数据）。当用户询问'总共有多少笔记/笔记本/标签/待办、写了多少篇笔记、向量索引状态、AI 使用量（会话/消息/token/耗时）、数据库大小'等总量或概览类问题时调用。通过 action 参数区分：overview=数据统计概览（缺省，包含笔记/回收站/置顶/笔记本/标签/待办/AI 用量/数据库大小/向量索引状态）；month=某月每日笔记数（需提供 year 年份与 month 月份，缺省为当前年月）。边界：查看具体笔记/待办/标签/笔记本列表请用对应的 manage_note / manage_todo / manage_tag / manage_notebook 工具；本工具只回答总量与趋势。",
+		Desc: "获取应用数据统计与状态概览（只读，不修改任何数据）。当用户询问'总共有多少笔记/笔记本/标签/待办/密码记录、写了多少篇笔记、向量索引状态、AI 使用量（会话/消息/token/耗时）、数据库大小'等总量或概览类问题时调用。通过 action 参数区分：overview=数据统计概览（缺省，包含笔记/回收站/置顶/笔记本/标签/待办/密码记录/AI 用量/数据库大小/向量索引状态）；month=某月每日笔记数（需提供 year 年份与 month 月份，缺省为当前年月）。边界：查看具体笔记/待办/标签/笔记本列表请用对应的 manage_note / manage_todo / manage_tag / manage_notebook 工具；本工具只回答总量与趋势。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -126,6 +126,7 @@ func (g *getStatsTool) statsOverview() (string, error) {
 	fmt.Fprintf(&b, "笔记本：%d 个\n", stats.TotalNotebooks)
 	fmt.Fprintf(&b, "标签：%d 个\n", stats.TotalTags)
 	fmt.Fprintf(&b, "待办：%d 项（已完成 %d）\n", stats.TotalTodos, stats.CompletedTodos)
+	fmt.Fprintf(&b, "密码记录：%d 条\n", stats.TotalPasswords)
 	fmt.Fprintf(&b, "AI 对话：%d 个会话，%d 条消息，累计 %d tokens\n", stats.AISessions, stats.AIMessages, stats.TotalTokens)
 	fmt.Fprintf(&b, "响应耗时：平均 %.2f 秒，思考平均 %.2f 秒，最长 %.2f 秒\n", stats.AvgResponseTime, stats.AvgThinkingTime, stats.MaxResponseTime)
 	fmt.Fprintf(&b, "数据库大小：%s\n", stats.DBSizeStr)

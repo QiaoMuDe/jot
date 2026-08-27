@@ -128,6 +128,13 @@ func (s *PasswordService) BatchDelete(ids []uint) error {
 	return nil
 }
 
+// Count 统计密码记录总数（不含已软删除）
+func (s *PasswordService) Count() (int64, error) {
+	var count int64
+	err := s.db.Model(&models.PasswordRecord{}).Count(&count).Error
+	return count, err
+}
+
 // toPasswordListItems 将模型记录转换为列表项 DTO（不携带密码）
 func toPasswordListItems(recs []models.PasswordRecord) []PasswordListItem {
 	items := make([]PasswordListItem, len(recs))

@@ -886,6 +886,8 @@ export function initPasswordManager() {
  * 刷新视图数据（main.js switchView 进入密码管理页时调用）
  */
 window.refreshPasswordManagerView = function () {
+    // 进入页面时若仍处于批量模式（异常残留），自动退出
+    if (pmBatchMode) exitPmBatchMode();
     loadPmRecords({ playEnter: true });
 };
 

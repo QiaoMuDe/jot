@@ -31,6 +31,7 @@ type DataStats struct {
 	DBSizeStr       string  `json:"db_size_str"`
 	TotalTodos      int64   `json:"total_todos"`
 	CompletedTodos  int64   `json:"completed_todos"`
+	TotalPasswords  int64   `json:"total_passwords"`
 }
 
 // ImportResult 导入操作的结果

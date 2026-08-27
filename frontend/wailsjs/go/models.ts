@@ -652,6 +652,7 @@ export namespace services {
 	    db_size_str: string;
 	    total_todos: number;
 	    completed_todos: number;
+	    total_passwords: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DataStats(source);
@@ -674,6 +675,7 @@ export namespace services {
 	        this.db_size_str = source["db_size_str"];
 	        this.total_todos = source["total_todos"];
 	        this.completed_todos = source["completed_todos"];
+	        this.total_passwords = source["total_passwords"];
 	    }
 	}
 	export class ImportResult {
