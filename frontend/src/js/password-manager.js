@@ -29,6 +29,7 @@ let pmSearchTimer = null;      // 搜索防抖定时器
 let pmBatchMode = false;       // 是否处于批量模式
 let pmSelectedIds = new Set(); // 批量模式选中的记录 ID
 let editingId = null;          // 编辑对话框的记录 ID（null = 新增）
+let pmEditSnapshot = { name: '', username: '', password: '', url: '', note: '' }; // 编辑对话框打开时的表单快照（用于关闭时判断未保存修改）
 let detailRecord = null;       // 详情对话框当前记录（含解码后的明文密码）
 let detailPwdVisible = false;  // 详情对话框中密码是否可见
 let _lastLengthNotifyAt = 0;   // 长度超限通知节流时间戳
@@ -406,7 +407,10 @@ function openPmContextMenu(e, id) {
 }
 
 function hideContextMenu() {
-    if (pmContextMenu) pmContextMenu.style.display = 'none';
+    if (pmContextMenu) {
+        pmContextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
+        pmContextMenu.style.display = 'none';
+    }
 }
 
 function isContextMenuVisible() {
@@ -457,13 +461,65 @@ async function openPmEditDialog(id, presetRecord) {
         }
     }
 
+    // 记录表单快照（用于关闭时判断是否有未保存修改）
+    pmEditSnapshot = {
+        name: pmFieldName.value.trim(),
+        username: pmFieldUsername.value.trim(),
+        password: pmFieldPassword.value,
+        url: pmFieldUrl.value.trim(),
+        note: pmFieldNote.value,
+    };
+
     pmEditOverlay.style.display = 'flex';
     setTimeout(() => pmFieldName.focus(), 50);
 }
 
-function closePmEditDialog() {
+function closePmEditDialog(force) {
+    if (force !== true && hasPmEditChanges()) {
+        showPmConfirm('有未保存的修改，确定放弃并关闭吗？').then(ok => {
+            if (ok) { pmEditOverlay.style.display = 'none'; editingId = null; }
+        });
+        return;
+    }
     pmEditOverlay.style.display = 'none';
     editingId = null;
+}
+
+/**
+ * 检测编辑对话框表单是否有未保存修改（对比当前值与打开时的快照）
+ */
+function hasPmEditChanges() {
+    return pmFieldName.value.trim() !== pmEditSnapshot.name
+        || pmFieldUsername.value.trim() !== pmEditSnapshot.username
+        || pmFieldPassword.value !== pmEditSnapshot.password
+        || pmFieldUrl.value.trim() !== pmEditSnapshot.url
+        || pmFieldNote.value !== pmEditSnapshot.note;
+}
+
+/**
+ * 密码管理页专用确认弹窗（复用全局 confirmDialog DOM，Promise<boolean>）
+ */
+function showPmConfirm(msg) {
+    return new Promise(resolve => {
+        const overlay = document.getElementById('confirmDialog');
+        const msgEl = document.getElementById('confirmDialogMsg');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+        const thirdBtn = document.getElementById('confirmThirdBtn');
+        if (!overlay || !okBtn || !cancelBtn) { resolve(true); return; }
+        msgEl.textContent = msg;
+        okBtn.textContent = '确定';
+        cancelBtn.textContent = '取消';
+        if (thirdBtn) thirdBtn.style.display = 'none';
+        overlay.classList.add('visible');
+        const cleanup = result => {
+            overlay.classList.remove('visible');
+            resolve(result);
+        };
+        okBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
+        overlay.onclick = e => { if (e.target === overlay) cleanup(false); };
+    });
 }
 
 /**
@@ -525,7 +581,7 @@ async function savePmRecord() {
             window.nm?.show('密码记录已添加', 'success');
             if (created && created.id != null) flashId = Number(created.id);
         }
-        closePmEditDialog();
+        closePmEditDialog(true);
         loadPmRecords({ flashId });
     } catch (e) {
         console.warn('保存密码记录失败:', e);
@@ -876,6 +932,15 @@ export function initPasswordManager() {
     // ---- 右键菜单关闭：点击外部（Escape 由 main.js 全局链经 window.pmHandleEscape 统一处理）----
     document.addEventListener('mousedown', (e) => {
         if (isContextMenuVisible() && !pmContextMenu.contains(e.target)) hideContextMenu();
+    });
+    // 右键菜单项按下回弹反馈：mousedown 缩小，鼠标移出清理（与笔记首页/笔记本侧栏右键菜单一致）
+    pmContextMenu.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const item = e.target.closest('.pm-context-menu-item');
+        if (item) item.classList.add('pressed');
+    });
+    pmContextMenu.addEventListener('mouseleave', () => {
+        pmContextMenu.querySelectorAll('.pressed').forEach(el => el.classList.remove('pressed'));
     });
 
     // 初始加载（播放入场动画，之后一切增删改/搜索刷新均静默）

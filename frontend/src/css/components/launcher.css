@@ -47,7 +47,7 @@
 .launcher-panel {
     position: relative;
     width: min(520px, calc(100vw - 48px));
-    max-height: 70vh;
+    max-height: 50vh;
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -127,6 +127,8 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     padding: 16px 18px 20px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
 }
