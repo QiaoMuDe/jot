@@ -18,4 +18,5 @@ var AllModels = []interface{}{
 	&models.Tag{},
 	&models.Notebook{},
 	&models.MCPServer{},
+	&models.PasswordRecord{},
 }

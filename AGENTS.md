@@ -30,6 +30,7 @@ jot/                                    # 项目根目录
 │   │   ├── note.go                     # Note 实体（笔记）
 │   │   ├── tag.go                      # Tag 实体（标签）
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
+│   │   ├── password_record.go          # PasswordRecord 实体（密码管理：name/username/password/url/note + GORM 软删除）
 │   │   ├── ai_session.go              # AI 会话实体（标题/置顶/时间戳）
 │   │   │   ├── ai_session_config.go      # AI 会话操作栏配置实体（模型/深度思考/搜索源/卡片召回（含指定笔记本）/笔记引用/技能，与 AISession 一对一关联）
 │   │   ├── ai_message.go              # AI 消息实体（角色/内容/思维链，外键关联 SessionID）
@@ -42,9 +43,10 @@ jot/                                    # 项目根目录
 │       ├── tag_service.go              # 标签管理 + 笔记标签关联 + 标签计数
 │       ├── setting_service.go          # 配置读写
 │       ├── ai_service.go               # AI 业务层（einocli 客户端，OpenAI 兼容 + 流式输出 + 深度思考 + 会话持久化 CRUD + 会话配置持久化 + 消息管理 + Token 后端计算 + 会话 Token 持久化 + 技能提示词查询）
-│       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑）
+│       ├── todo_service.go             # 待办 CRUD（创建/列表/切换完成/删除/编辑/按状态批量删除 DeleteUnfinished/DeleteCompleted/DeleteAll）
 │       ├── profile_service.go          # API 配置预设 CRUD + 切换/激活
 │       ├── crypto.go                   # 敏感密钥 Base64 编码/解码工具（(zk) 前缀标识）
+│       ├── password_service.go         # 密码管理 CRUD + 搜索（escapeLike + 四列 LIKE ESCAPE 转义）+ 批量删除
 │   │   │   ├── recall_service.go           # 召回结果类型与合并/截断工具（RecallCard/CardRecallResult/MergeRecallCards/Truncate*Preview；关键词召回已移除）
 │       ├── notebook_service.go         # 笔记本 CRUD
 │       ├── vector_service.go           # 笔记向量索引（IndexNotes 切块量化/GetIndexStatus/Count*/DeleteAllVectors）+ sqlite-vec 函数式向量召回 VectorRecall（SQL 内余弦距离 + 笔记本过滤 + 相邻块补充）
@@ -52,10 +54,10 @@ jot/                                    # 项目根目录
 │   │   │   ├── types.go                    # 通用类型（PaginatedResult, DataStats, ImportResult, SettingsConfig, RecallNotebookIDs 等）
 │
 ├── frontend/                           # 【前端目录】Wails 前端（Vanilla + Vite）
-│   ├── index.html                      # 入口 HTML，9 个视图 + 关于浮层
+│   ├── index.html                      # 入口 HTML，10 个视图 + 关于浮层
 │   ├── package.json                    # 前端依赖（Vite 3.x + CM6 ~16 包 + marked + highlight.js + @codemirror/lang-* 6 包 + @codemirror/legacy-modes）
 │   ├── src/
-│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 骨架屏 + 锁屏密码 + 标签管理；数据管理页/回收站页/常量工具函数/通知类/模拟数据已拆分为独立模块）
+│   │   ├── main.js                     # 【核心文件】前端逻辑（CM6 集成 + 搜索弹窗 + MD 语法页面 + AI 对话 + TOC + 回到顶部 + 批量管理 + 设置统一重构 + 锁屏密码 + 标签管理 + 导航切换；数据管理页/回收站页/常量工具函数/通知类/密码管理/启动器/待办清单已拆分为独立模块）
 │   │   ├── js/                         # 【JS 模块目录】
 │   │   │   ├── cm6-syntax-highlight.js # CM6 通用语法高亮模块（13 套配色 + 46+ 语言解析器映射 + 围栏代码块嵌套解析 mdCodeLanguages + 行内代码标记插件 markdownInlineCodePlugin）
 │   │   │   ├── editor-actions/        # 编辑器操作菜单分组模块目录
@@ -70,6 +72,8 @@ jot/                                    # 项目根目录
 │   │   │   ├── ai-chat.js              # AI 对话模块（自实现聊天引擎 + 流式输出 + Markdown 渲染 + 多会话管理 + 侧栏折叠 + 多来源搜索 + 卡片召回（含笔记本选择菜单）+ 引用笔记 + 上传文件 + 拖拽上传 + 更多技能 + 双语言翻译方向组件 + 语言选择浮层 + 技能激活时禁用更多技能按钮 + 用户消息编辑/删除/重新发送 + 会话统一菜单（置顶/重命名/导出/删除）+ 分块渲染 + Token 显示 + 提示词迁移 + 会话切换一次性渲染+同步滚动消除跳跃 + 会话配置持久化同步 + 替换消息操作统一后端原子方法 + 分页懒加载消息）
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
+│   │   │   ├── launcher.js             # 启动器模块（Ctrl+P 全局浮层 / 13 项功能导航 / pinyin-pro 三路拼音匹配 / 3 列网格 / 键盘四方向导航 / 弹性动画）
+│   │   │   ├── password-manager.js     # 密码管理模块（完整 CRUD / 搜索 / 批量操作 / 右键菜单 / 复制/打开链接 / Base64 编码 / 搜索高亮 / 静默渲染 + pmLoadSeq 防乱序）
 │   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 本月摘要统计 / 按日笔记列表 / 回到今天 / 点击笔记跳转 / 切月自动重置今天）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
@@ -90,7 +94,9 @@ jot/                                    # 项目根目录
 │   │           ├── data-view.css       # 数据管理页分类导航（左侧导航 + 右侧面板切换动画）+ 信笺统计 + 操作卡片
 │   │           ├── md-reference.css    # MD 语法手册卡片源码/预览双栏对照
 │   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局/联网搜索 toggle 开关+召回笔记本菜单）
-│   │           ├── todo.css            # 待办清单页面（输入+筛选一体化工具栏/8 个 @keyframes 动画 + 两段式新增 + 编辑保存动画 + 悬浮预览 tooltip）
+│   │           ├── todo.css            # 待办清单页面（FAB 浮动输入 + 两段式新增动画 + 行内编辑 + 保存涟漪 + 悬浮预览 Tooltip + 分类感知清空 + 8 个 @keyframes）
+│   │           ├── launcher.css        # 启动器样式（全屏遮罩 + 3 列网格 + 卡片 + 弹性动画 + prefers-reduced-motion 降级）
+│   │           ├── password-manager.css # 密码管理页样式（三栏布局 + hover accent 竖条 + 搜索高亮 + 批量操作栏 + 空状态）
 │   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/统计卡片/笔记列表/入场动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -120,7 +126,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应文件 | 核心依赖 |
 |----------|----------|----------|----------|
 | **数据库初始化模块** | SQLite 连接建立、连接池配置、AutoMigrate、blank import 注册 sqlite-vec 扩展 | `database/db.go` | glebarez/sqlite, GORM, modernc.org/sqlite/vec |
-| **数据模型层** | Note/Tag/Setting/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo/NoteVector 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go`, `models/note_vector.go` | GORM |
+| **数据模型层** | Note/Tag/Setting/PasswordRecord/AISession/AIMessage/APIProfile/AIPrompt/AISessionConfig/Todo/NoteVector 实体定义、GORM tag 映射 | `models/note.go`, `models/tag.go`, `models/setting.go`, `models/password_record.go`, `models/ai_session.go`, `models/ai_message.go`, `models/api_profile.go`, `models/ai_prompt.go`, `models/ai_session_config.go`, `models/todo.go`, `models/note_vector.go` | GORM |
 | **通用类型** | 分页返回格式、统计数据、导入导出结构 | `services/types.go` | 无外部依赖 |
 | **Wails 绑定层** | Go API → JS Bridge，95+ 个绑定方法，含 runtime.SaveFileDialog | `app.go` | Wails v2 binding + runtime |
 | **前端构建** | Vite 打包、Wails dev 热重载 | `frontend/package.json`, `wails.json` | Vite 3.x（保留，未移除）|
@@ -136,6 +142,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应代码 | 核心输入 | 核心输出 |
 |----------|----------|----------|----------|----------|
 | **锁屏密码** | SHA-256 哈希验证 + 设置/修改密码 | `app.go:VerifyScreenLockPassword/SetScreenLockPassword` | 密码明文 | bool/错误 |
+| **密码管理** | 完整 CRUD + 搜索 + 批量删除 + 右键菜单 + 复制/打开链接 + 搜索高亮 + Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段）| `services/password_service.go` + `app.go`（7 个绑定）+ `frontend/src/js/password-manager.js` | 名称/用户名/密码/URL/备注 | 密码记录 CRUD 结果 |
 | **笔记 CRUD** | 创建/更新/查询/删除笔记 | `services/note_service.go` | 标题/内容/颜色/ID | Note 对象/错误 |
 | **笔记搜索** | 标题+内容 LIKE 模糊搜索，支持 3 种排序（updated_at/created_at/title，均 pinned DESC 优先）| `note_service.go:Search()` | 关键词/分页/sortBy 参数 | 笔记列表+总数 |
 | **笔记置顶** | 切换置顶状态 | `note_service.go:TogglePin()` | 笔记 ID | 更新后的笔记 |
@@ -175,7 +182,7 @@ jot/                                    # 项目根目录
 ┌─────────────────────────────────────────────────────┐
 │                    Frontend                          │
 │  (main.js / css/index.css / index.html)               │
-│   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站/AI/MD 语法/日历/待办)     │
+│   ├─ 视图渲染 (卡片/搜索/设置/数据管理/回收站/AI/MD 语法/日历/待办/密码管理)     │
 │   ├─ 交互逻辑 (事件绑定/状态管理)                      │
 │   └─ Wails Bridge (window.go.main.App.*)              │
 └────────────────────────┬────────────────────────────┘
@@ -189,21 +196,21 @@ jot/                                    # 项目根目录
                          │
               ┌──────────┼──────────┐
               ▼          ▼          ▼
-    ┌─────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────────┐
-    │ NoteService │ │TagService│ │TodoService │ │  AI Service  │
-    │ (CRUD/搜索/ │ │(CRUD/关联)│ │ (CRUD/切换 │ │ (AI 流式对话 │
-    │  置顶/回收站 │ │          │ │  完成/删除 │ │  会话管理    │
-    │  统计/导入   │ │          │ │  编辑)     │ │  消息持久化) │
-    │  导出)      │ │          │ │            │ │              │
-    └──────┬──────┘ └─────┬────┘ └──────┬─────┘ └──────┬───────┘
-           │              │             │              │
-           └──────┬───────┴──────┬──────┴──────┬───────┘
-                  │              │              │
-                  ▼              ▼              ▼
-        ┌─────────────────┐ ┌──────────┐ ┌─────────────────┐
-        │    GORM ORM     │ │GORM ORM │ │   GORM ORM     │
-        │ (数据访问层)      │ │(待办层)  │ │ (AI 模型层)     │
-        └────────┬────────┘ └────┬─────┘ └────────┬────────┘
+    ┌─────────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │ NoteService │ │TagService│ │  TodoService │ │PwService     │ │  AI Service  │
+    │ (CRUD/搜索/ │ │(CRUD/关联)│ │ (CRUD/切换   │ │(CRUD/搜索/   │ │ (AI 流式对话 │
+    │  置顶/回收站 │ │          │ │  完成/删除   │ │  批量删除    │ │  会话管理    │
+    │  统计/导入   │ │          │ │  按状态清空) │ │  编码/搜索   │ │  消息持久化) │
+    │  导出)      │ │          │ │              │ │  高亮)       │ │              │
+    └──────┬──────┘ └─────┬────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+           │              │             │                │                │
+           └──────┬───────┴──────┬──────┴──────┬─────────┴──────┬─────────┘
+                  │              │             │                │
+                  ▼              ▼             ▼                ▼
+        ┌─────────────────┐ ┌──────────┐ ┌─────────────────┐ ┌─────────────────┐
+        │    GORM ORM     │ │GORM ORM │ │   GORM ORM     │ │   GORM ORM     │
+        │ (数据访问层)      │ │(待办层)  │ │ (密码管理层)    │ │ (AI 模型层)     │
+        └────────┬────────┘ └────┬─────┘ └────────┬────────┘ └────────┬────────┘
                  │               │                 │
                  └───────────────┴─────────────────┘
                                     ▼
@@ -223,13 +230,13 @@ jot/                                    # 项目根目录
 | 依赖方 | 被依赖方 | 依赖类型 | 依赖详情 |
 |--------|----------|----------|----------|
 | `app.go` | `database` | 编译依赖 | 调用 `database.InitDB()` 获取 `*gorm.DB` 实例 |
-| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` / `TodoService` / `SettingService` 实例 |
-| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` / `*models.Todo` / `*models.Setting` 类型 |
+| `app.go` | `services` | 编译依赖 | 创建 `NoteService` / `TagService` / `TodoService` / `PasswordService` / `SettingService` 实例 |
+| `app.go` | `models` | 编译依赖 | 返回 `*models.Note` / `*models.Tag` / `*models.Todo` / `*models.PasswordRecord` / `*models.Setting` 类型 |
 | `app.go` | `runtime` | 编译依赖 | `runtime.SaveFileDialog` 原生保存对话框 |
 | `app.go` | `fontutil` | 编译依赖 | `fontutil.GetFonts()` 枚举系统字体 |
 | `services` | `models` | 编译依赖 | 操作 Note/Tag/Todo/Setting/AISession/AIMessage 结构体 |
 | `services` | GORM | 编译依赖 | `*gorm.DB` 数据库操作 |
-| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{}, &models.Todo{}, &models.Setting{}, &models.AISession{}, &models.AIMessage{})` |
+| `database` | `models` | 编译依赖 | `AutoMigrate(&models.Note{}, &models.Tag{}, &models.Todo{}, &models.PasswordRecord{}, &models.Setting{}, &models.AISession{}, &models.AIMessage{})` |
 | `database` | glebarez/sqlite | 编译依赖 | 纯 Go SQLite 驱动 |
 | `fontutil` | gdi32/user32 | 运行时依赖 | syscall 调用 Windows GDI API |
 | `frontend/main.js` | `wailsjs/go/main/App.js` | 运行时调用 | `window.go.main.App.*` 调用后端 API |
@@ -245,12 +252,14 @@ graph TD
         B --> D[services/note_service.go]
         B --> E[services/tag_service.go]
         B --> TD[services/todo_service.go]
+        B --> PW[services/password_service.go]
         B --> F[services/types.go]
         B --> AI[services/ai_service.go]
         B --> CV[internal/converter/converter.go]
         C --> G[models/note.go]
         C --> H[models/tag.go]
         C --> TD2[models/todo.go]
+        C --> PR[models/password_record.go]
         C --> I[models/ai_session.go]
         C --> J[models/ai_message.go]
         D --> G
@@ -258,6 +267,7 @@ graph TD
         E --> G
         E --> H
         TD --> TD2
+        PW --> PR
         AI --> I
         AI --> J
         C --> K[glebarez/sqlite]
@@ -273,6 +283,8 @@ graph TD
         O --> P[css/index.css]
         O --> Q[wailsjs/go/main/App.js]
         O --> R[js/ai-chat.js]
+        O --> LA[js/launcher.js]
+        O --> PW[js/password-manager.js]
     end
 
     B -.->|Wails Binding| Q
@@ -359,6 +371,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **Markdown 解析** | marked | v12.0 | Markdown → HTML 渲染 |
 | **代码高亮** | highlight.js | v11.10 | 代码块语法高亮 |
 | **Mermaid 图表** | mermaid | v11.4 | Markdown 代码块图表渲染（mermaid/render 子路径） |
+| **拼音搜索** | pinyin-pro | v3.29.3 | 启动器三路拼音匹配（全拼/首字母/中文原文） |
 | **AI 对话** | einocli 薄适配层（eino 库） | github.com/cloudwego/eino v0.9.13 + eino-ext（components/model/openai v0.1.13 + libs/acl/openai v0.1.17，底层 github.com/meguminnnnnnnnn/go-openai v0.1.2） | 流式对话/深度思考/多会话/联网搜索/卡片召回 |
 | **本地存储** | localStorage | — | UI 状态持久化（主题/侧栏状态等） |
 
@@ -457,7 +470,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 8. **无 UI 框架依赖**：无 Vue/React/Svelte，纯手写 DOM 操作，极致轻量
 
-9. **Mermaid 图表渲染集成**：为 Markdown 代码块中的 `language-mermaid` 块提供按需渲染，默认显示源码，点击渲染按钮后直接主线程渲染 SVG。切换按钮与复制按钮风格统一，CSS `:has()` 处理双按钮防碰撞。
+9. **Mermaid 图表渲染集成**：为 Markdown 代码块中的 `language-mermaid` 块提供按需渲染，默认显示源码，点击渲染按钮后直接主线程渲染 SVG。切换按钮与复制按钮风格统一，CSS `:has()` 处理双按钮防碰撞
+
+10. **密码管理功能页**：独立视图，Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段，仅详情返回明文）+ 7 个 Wails 绑定 + escapeLike LIKE 转义防注入 + 静默重渲染（`.pm-no-enter` 跳过入场动画）+ pmLoadSeq 代际计数器防乱序 + 搜索高亮 + 右键菜单 + 批量操作 + 复制/打开链接
+
+11. **启动器（Launcher）Ctrl+P 拼音搜索**：全屏浮层 3 列网格导航，pinyin-pro 懒计算 + Map 缓存拼音索引，三路降级匹配（中文原文 → 全拼 → 首字母），空格压缩支持分词输入，13 个功能项覆盖全部视图入口，四方向键盘导航 + 弹性动画 + prefers-reduced-motion 降级。
 
 ### 设计系统
 
@@ -501,7 +518,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 14. **基础 System Prompt 三层重构 + 技能注入修复**：将单句硬编码基础 prompt 拆分为包级常量 `baseIdentity`（身份层）、`baseNormsBoundaries`（规范层+边界层）、`baseSystemPrompt`（完整三层，均在 [app.go](app.go)）。修复 `CallAIAgentStream` 中技能激活时跳过全部基础 prompt 的 Bug，改为始终注入规范层+边界层，仅身份层在技能激活时跳过。详见 [app.go](app.go)
 
-15. **启动器网格（Launcher Grid）全屏浮层实现**：新增 `Ctrl+P` 触发的全屏启动器网格，与"更多"菜单并存互不干扰。核心设计要点：① ES module 中函数不会自动挂到 `window` 上，launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露；② `executeAction` 先调 `closeLauncher(callback)` 等离场动画 `transitionend` 完成后再执行操作，不能用 `setTimeout` 硬等——离场动画涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发；③ 方向键首次导航 `_selectedIndex === -1` 时直接跳第一项；④ 动画使用 `requestAnimationFrame` 双阶段（`display: flex` → `visible` class 触发入场），离场用 `closing` class 触发反方向过渡 + `transitionend` 监听 + 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
+15. **启动器网格（Launcher Grid）+ 拼音搜索**：新增 `Ctrl+P` 触发的全屏浮层启动器，13 个功能项 3 列网格布局。**pinyin-pro 拼音搜索**：`import { pinyin } from 'pinyin-pro'`（v3.29.3），懒计算 + Map 缓存拼音索引（`{ full: 全拼连续串, initials: 首字母串 }`），三路降级匹配（中文原文 `includes` → 全拼 `includes` → 首字母 `includes`），输入 `compact = trimmed.replace(/\s+/g, '')` 支持空格分词（如 "s z t" 或 "she zhi" 均命中"设置"）。**ES module 函数暴露**：launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露。**离场动画**：`executeAction` 先调 `closeLauncher(callback)` 等 `transitionend` 完成后再执行操作——离场涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发。**键盘导航**：四方向（ArrowUp/Down 按列跳转+首尾循环/ArrowLeft/Right 逐项+Tab 拦截），首次导航 `_selectedIndex === -1` 时直接跳第一项。动画用 `requestAnimationFrame` 双阶段，离场加 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
 
 16. **markitdown 库本地克隆 + Wails 构建 PDF 转换修复**：将 `github.com/conductor-oss/markitdown` 从 Go module cache 克隆到 `internal/markitdown` 进行本地维护，通过 `go.mod` replace 指令引用。修复 `wails build` 后 PDF 转换失败问题——根因是 Wails GUI 构建缺少有效控制台句柄，wazero 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。修复方案：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效句柄调用 `GetFileType`。详见 [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)、[go.mod](go.mod)
 
@@ -535,35 +552,13 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 31. **AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）**：将纯滑动窗口截断（简单丢弃 40 条外消息）升级为**持久化对话摘要**方案。AISession 新增 `SummaryContent`（text）/ `SummaryMsgCount`（int），数据库持久化（[ai_session.go](internal/models/ai_session.go)）。**触发规则**：`diff = 当前总消息数 - SummaryMsgCount`，`diff ≥ 20` 时触发。首次生成（消息 21）取前 1 条，增量更新（消息 41/61...）取上次摘要终点到当前尾部 20 条之前的 20 条消息，合并旧摘要生成新摘要，`SummaryMsgCount` 更新为当前总消息数。**同步阻塞**：摘要在 `truncateAIMessages` 中同步生成（非 goroutine），确保当前轮对话就能用到新摘要，发 `ai:summary-status:generating/done` 事件给前端状态条。**提示词优化**：每条消息截断到 500 字，提示词要求"每条消息 1~2 句话概括，不要大段复制原文"。详见 [ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构）、[ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听）
 
----
+32. **密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 4 问题修复 + 样式打磨 + 头像徽章迭代教训）**：新增独立密码管理视图。后端：`PasswordRecord` 模型（name/username/password/url/note + GORM 软删除）、`PasswordService`（CRUD + Search + BatchDelete）、7 个 Wails 绑定。**列表传输安全分离**：列表接口返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），密码不出现在列表中；详情通过 `GetPasswordRecord(id)` 获取解码后明文。**编码方案**：Base64 + `(zk)` 前缀（不是加密，是可逆编码），存量兼容无前缀值原样返回，启动时自动迁移编码。**前端**：三栏等宽布局 + 实时防抖搜索（250ms）+ 搜索高亮 `<mark>` + 添加/编辑对话框（5 字段+必填校验）+ 详情对话框（密码掩码+显隐切换）+ 一键复制（navigator.clipboard+execCommand 降级）+ 打开链接（runtime.BrowserOpenURL）+ 右键菜单（6 项）+ 批量操作模式（全选/浮动操作栏/批量删除）+ 输入长度实时截断 + URL Tooltip 自动避让 + ESC 层级关闭。**4 问题修复**：① Enter 连按守卫；② `pmLoadSeq` 代际计数器防乱序（与 editorOpSeq/previewRenderSeq 同模式）；③ `escapeLike` LIKE 通配符转义（四列统一 `ESCAPE '\'`）；④ 模板残留清理改 createElement。**样式打磨**：静默重渲染（`.pm-no-enter` 跳过入场动画）、hover 左缘 accent 竖条（`scaleY` spring 缓动）、person/link 双 SVG 小图标、URL 剥离协议前缀。**头像徽章迭代教训**：四轮迭代（首字符彩色→钥匙→锁→无图标）最终移除。**并行编辑事故**：同文件并行 SearchReplace 导致常量丢失 `ReferenceError: PM_ICON_KEY`，教训：同一文件多处编辑必须顺序执行。详见 [password_service.go](internal/services/password_service.go)、[password_record.go](internal/models/password_record.go)、[crypto.go](internal/services/crypto.go)、[password-manager.js](frontend/src/js/password-manager.js)、[password-manager.css](frontend/src/css/components/password-manager.css)
 
-## 记忆点 1：笔记首页加载优化（移除骨架屏 + notes 表索引 + loadNotes 不清空重载 + 启动链并行化）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复大库下启动"骨架屏→闪烁→笔记重来"的三重根因：① **排序无索引**——默认排序 `ORDER BY pinned DESC, updated_at DESC`（[note_service.go](internal/services/note_service.go) `buildSortOrder`）在 notes 表无索引 → SQLite 全表读取 + temp B-tree 排序且排序记录携带大 content 列 → GetNotes 变慢、骨架屏显示被拉长；② **每次加载"先清空再重建"**——`loadNotes` 固定 `cardGrid.innerHTML=''` + 全量 `cardEnter` 从 opacity:0 重放 → 视觉闪烁；③ **启动链全串行**——`init()` 中 `loadSettings→loadNotebooks→loadNotes→loadTags` 依次 await，首屏空白窗口长。修复三管齐下（详见下行）。 |
-| **数据库索引（重要）** | [note.go](internal/models/note.go) 新增 3 个命名索引（GORM `priority` 小者在前，AutoMigrate 重启自动补建，旧单列索引保留不清理）：`idx_notes_sort(pinned,updated_at)` 覆盖默认排序；`idx_notes_notebook_deleted(deleted_at,notebook_id)` 同时覆盖首页分页过滤（`WHERE deleted_at IS NULL AND notebook_id=?`）与 `GetNotebookNoteCounts` 的 `WHERE deleted_at IS NULL GROUP BY notebook_id` 全表统计（启动时被 `loadNotebooks` + `renderNotebookList` IIFE 各调一次，索引后均为毫秒级）；`idx_notes_created` 覆盖日历 `GetMonthCounts`/`GetByDate`。[note_service.go](internal/services/note_service.go) `GetMonthCounts` 由 `strftime('%Y'/'%m')` 函数过滤改为 `[月初, 下月初)` 范围查询（传 `time.Time` 走索引）——**时区边界**：原按存储字符串匹配月份，新按本地时区，跨时区/修改系统时区后历史记录统计可能偏移一天（单机场景风险极低，属已知取舍）。 |
-| **loadNotes 不清空重载 + 首次/刷新动画区分（重要）** | [main.js](frontend/src/main.js) `loadNotes` 不再 `cardGrid.style.display='none'` + `innerHTML=''`（已有卡片保持可见，数据到达后 `renderCardGrid` 整体替换）；渲染改 `renderCardGrid(hadCards ? 'none' : undefined)`，其中 `hadCards = state.notes.length > 0`——**首次加载（无卡片）走全量分支保留 cardEnter 交错淡入**（首屏入场动画不变），**刷新/切笔记本/返回首页走 'none' 原地替换**（无"从 opacity:0 重放"闪感，这是修闪烁的核心）。骨架屏整体移除：[index.html](frontend/index.html) 删 `#skeletonGrid` 块、[main-content.css](frontend/src/css/components/main-content.css) 删 `.skeleton-*`/`shimmer` 样式（编辑器 `editor-skeleton`、AI 笔记引用浮层骨架屏类名独立、保留不动）。 |
-| **启动链并行化** | `init()` 改 `await Promise.all([loadSettings().catch(() => {}), loadNotebooks().catch(() => {})])`（两者互不依赖、各自内部已有 try/catch，外层 `.catch` 兜底防止任一 reject 中断 init）+ `await Promise.all([loadNotes(), loadTags()])`（loadTags 不依赖 notes）；`loadNotes` 仍严格在 `activeNotebookId` 兜底（`if (!state.activeNotebookId && state.notebooks.length > 0)`）之后执行。`loadMoreNotes` 的 `'append'` 追加动画、`togglePin` 的 `'none'`、空状态「暂无笔记」逻辑均未改动。 |
-| **涉及文件** | [internal/models/note.go](internal/models/note.go)（3 个命名索引）、[internal/services/note_service.go](internal/services/note_service.go)（GetMonthCounts 范围查询 + `time` 导入）、[frontend/index.html](frontend/index.html)（删 #skeletonGrid）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（删骨架屏样式块）、[frontend/src/main.js](frontend/src/main.js)（els.skeletonGrid 移除、loadNotes hadCards 逻辑、renderCardGrid 删骨架屏隐藏、init 并行化） |
+33. **待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空 + 行内编辑 + Tooltip 预览）**：**零重渲染架构**——toggle/delete/add 三个高频操作全部绕过 `loadTodos()` → `innerHTML` 全量重渲染，改为直接操作 DOM（prepend/remove），统计数字用独立 `refreshTodoStats()` 异步更新。**addTodo 两段式动画**：已有条目先 `translateY` 平滑下移 → rAF 中插入新条目并清除 transform，350ms 时序精控防跳动。**toggleTodo 原地切换**："全部"筛选下直接切换类+DOM 移动位置（完成移底部/取消完成移顶部），筛选模式播放 exit 动画后 `item.remove()`。**deleteTodo** 播放动画后 `item.remove()`。**FAB 浮动输入**：右下角 44px 圆形 FAB → 展开 300px 内联面板（textarea+Enter 提交），FAB 旋转 45° 变 "X"，点击外部/Escape 自动收起。**行内编辑**：双击文本进入 textarea 编辑态，Enter 保存/Escape 取消/失焦自动保存，保存后播放 1.2s 涟漪确认动画。**分类感知清空**：单按钮根据当前筛选（active/done/all）动态切换清空范围，后端 `ClearTodosByFilter(filter)` switch 到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll`，确认弹窗文案随分类变化。**悬浮 Tooltip**：600ms 防抖后弹出全文预览，基于鼠标位置智能定位。**启动提醒**：`checkUnfinishedTodosReminder()` 异步检测未完成数，支持锁屏延迟弹出。详见 [main.js](frontend/src/main.js)（todo 模块）、[todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes）、[todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll）
 
 ---
 
-## 记忆点 2：编辑器切换闪烁修复（openEditor/closeEditor 异步竞态 + 标题/预览残留 + 预览 Worker 串扰）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复"打开笔记 A 后关闭，再打开笔记 B 时先显示 A 内容再变成 B"的闪烁（用户报告 **md 笔记无闪烁、非 md 有闪烁**；表现为"标题和内容都是 A，然后整体变成 B"）。根因四类：① **openEditor 阶段二异步续体竞态**——阶段二 `Promise.all([GetNoteContent, GetAllTags])` 异步加载期间（**瓶颈常在 `loadTagsForEditor` 的 GetAllTags IPC，每次打开编辑器都触发，与笔记大小无关**），旧 openEditor(A) 的续体在 B 打开后完成 `initCodeMirror(A)` 覆盖 B；② **closeEditor 延迟清理无取消**——清理在 `setTimeout(200)` 中，与新 openEditor 竞态（误关新面板/误毁新 CM6/editingNoteId 重置为 null）；③ **标题/预览残留**——B 不在 state.notes 缓存时阶段一不清空标题（残留 A 标题），closeEditor 清理被跳过时 mdRendered 残留 A 预览（md 查看走预览区、非 md 走 CM6，故用户观察"md 无闪烁、非 md 有闪烁"）；④ **预览 Worker 渲染结果无请求标识**——旧笔记渲染结果晚到覆盖新笔记预览。 |
-| **代际计数器（核心）** | [main.js](frontend/src/main.js) 新增模块级 `editorOpSeq`（每次 openEditor/closeEditor 递增）：openEditor 阶段二 `await Promise.all` 后检查 `if (mySeq !== editorOpSeq) return`（**放弃过期续体，不初始化 CM6**，防旧笔记内容覆盖新笔记）；closeEditor 的 200ms 清理回调同样检查 `if (mySeq !== editorOpSeq) return`（**期间有新 open/close 则跳过清理**，防误关新面板/误毁新 CM6）；GetNote 分支（noteId 不在缓存）的标题/标签 DOM 修改也加 `mySeq === editorOpSeq` 检查（该分支在 contentPromise 内部、绕过续体保护，是标题污染的独立通道）。 |
-| **残留清理（重要）** | openEditor 阶段一无条件清空 `mdRendered.innerHTML` 与 `_lastPreviewContent`（防 closeEditor 清理被跳过时旧预览短暂显示）；noteId 存在但不在缓存时清空标题/标签（原残留上一笔记标题，GetNote 异步完成后才填充）；标题 input 监听器**先 removeEventListener 再按需 addEventListener**（防跳过清理时重复绑定导致 onEditorInput 双调）；`enteredFromViewMode` 每次 openEditor 重置。 |
-| **保存误关修复** | `updateNote`/`createNote` 保存完成后仅当 `state.editingNoteId` 仍是本次笔记（保存前捕获 `editingIdAtStart`/新建模式为 null）才 `closeEditor()`——防保存期间用户切换到新笔记时被误关（旧实现无条件 closeEditor，会使新 openEditor 的续体被代际递增误杀，新笔记打不开）。 |
-| **预览 Worker 请求标识** | [preview-worker.js](frontend/src/js/preview-worker.js) 消息协议改 `{content, seq}` 并原样回传；[main.js](frontend/src/main.js) `previewRenderSeq` 每次 updatePreview 递增，onmessage 校验 `seq !== previewRenderSeq` 则**丢弃过期结果**（仅释放 `_previewWorkerLoading` 防后续永远走同步路径）；worker 忙时主线程同步渲染路径同样递增 seq 防在途结果覆盖；closeEditor 清理末尾递增使在途结果失效。 |
-| **验证与排查教训（重要）** | Edge CDP 自动化验证：vite dev + 注入 IPC 延迟 stub（**mock 降级同步路径无法复现——GetNoteContent 抛错同步 fallback，必须注入延迟模拟 Wails IPC**）；真实 `wails dev -browser` + 隔离空库（**测试前必须备份替换 ~/.jot/data/jot.db，沙箱限制下备份到 workspace，测完恢复**）+ 真实后端 IPC 验证 txt→md / md→txt / 20 轮 txt→txt 快速切换零残留。排查线索：**"标题也是 A"是区分内容竞态与界面残留的关键**（openEditor 阶段一同步设置标题，标题残留说明是界面状态未清理而非数据竞态）；localStorage 仅存主题/侧栏折叠，**不含编辑器内容**（用户怀疑的持久化可排除）。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（editorOpSeq/previewRenderSeq 代际 + openEditor/closeEditor 竞态保护 + 残留清理 + updateNote/createNote 保存校验 + updatePreview/onmessage seq）、[frontend/src/js/preview-worker.js](frontend/src/js/preview-worker.js)（消息协议携带 seq） |
-
----
-
-## 记忆点 3：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
+## 记忆点 1：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -576,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 2：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -590,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 3：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +597,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 4：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +611,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 5：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 6：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -641,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 7：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 8：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,6 +663,37 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **导入编辑器样式/滚动条** | 容器 `.mcp-server-import-editor`（[settings-panel.css](frontend/src/css/components/settings-panel.css)）固定 `height: 220px` + 边框圆角；内部 `.cm-editor` `height: 100%` + flex 纵向、`.cm-scroller` `overflow: auto` 实现**编辑器内部滚动**（不撑开页面）。**覆盖 editor.css 全局透明滚动条**：`.mcp-server-import-editor .cm-scroller::-webkit-scrollbar-thumb`（WebKit）+ `scrollbar-color: var(--scrollbar-thumb) transparent`（Firefox），避免默认隐藏滑块。 |
 | **代码审查修复要点** | B2：名称空白/KEY 特殊字符在校验阶段拦截（与 Save 一致）；B3：`ParseMCPServersImport` 校验通过时 `res.OK = true`；B4：空数组返回友好提示；B5：阶段 2 失败不关对话框+编辑器内容保留；B6：分享全部按钮在缓存为空时现取 `GetMCPServers()`；B7：`shareAllBtn` 用 `_shareAllBound` 标志位防重复绑定；B10：抽 `tryParseInput` 公共函数；B11：导入输入区换 CM6 编辑器，每次打开重建（内容自然为空）、关闭销毁，失败路径保留内容便于改后再导；B12：一致性检查通过（Wails exception 路径走 `mcpErrMsg(e)`，业务中文直传）。 |
 | **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
+
+---
+
+## 记忆点 9：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增密码管理功能页（独立视图），完整 CRUD + 搜索 + 批量操作 + 右键菜单 + 复制/打开链接 + 搜索高亮 + 条目样式打磨 + 4 个 bug 修复 + 头像徽章迭代教训。 |
+| **后端功能（重要）** | [internal/models/password_record.go](internal/models/password_record.go) 数据模型（name/username/password/url/note + GORM 软删除），[internal/services/password_service.go](internal/services/password_service.go) 业务层（Create/GetPasswordRecord/List/Search/Update/Delete/BatchDelete），[app.go](app.go) 7 个 Wails 绑定。**列表传输安全分离**：列表接口返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），**密码字段不出现在列表传输中**，只有通过 `GetPasswordRecord(id)` 获取单条详情时才返回解码后的明文密码。搜索支持 name/username/url/note 四列模糊匹配，使用 `escapeLike` 转义 `\ % _` + `LIKE ? ESCAPE '\\'`。 |
+| **编码方案（重要）** | [internal/services/crypto.go](internal/services/crypto.go)：Base64 编码 + `(zk)` 前缀（**不是加密，是可逆编码**，不提供密码学安全性）。存储流程：明文 → `EncodeB64()` → `"(zk)" + Base64(std)` → 写入 SQLite。`DecodeB64()` 读取时 TrimPrefix `(zk)` + Base64 解码。存量兼容：无 `(zk)` 前缀的值原样返回（兼容迁移前明文）。启动时自动扫描 settings/api_profiles 表未编码值执行迁移编码。锁屏密码则用 SHA-256 + 固定盐值单向哈希。 |
+| **前端功能清单** | [frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（~912 行）+ [password-manager.css](frontend/src/css/components/password-manager.css)（~883 行）：三栏等宽布局（名称/用户名/URL）+ 实时防抖搜索（250ms）+ 添加/编辑对话框（5 字段 + 必填校验 + 抖动）+ 详情对话框（密码掩码 + 显隐切换）+ 一键复制（navigator.clipboard + execCommand 降级）+ 打开链接（runtime.BrowserOpenURL）+ 右键菜单（6 项操作）+ 批量操作模式（全选/浮动操作栏/批量删除带确认）+ 输入长度实时截断 + 空状态展示 + URL Tooltip 自动避让 + ESC 层级关闭 + 搜索关键词 `<mark>` 高亮 + 操作后高亮反馈（`.pm-flash` 呼吸动画 0.8s×3=2.4s）。 |
+| **静默重渲染 + 4 问题修复（重要）** | ① **静默重渲染**——`renderPmList({ playEnter })` 增加 `.pm-no-enter` 分支跳过逐条入场动画（搜索/编辑保存/状态切换原地刷新不闪烁，仅首次进入视图 `playEnter: true` 播放交错淡入）。② **Enter 连按守卫**——保存动作加进行中标志，防连续回车创建多条。③ **pmLoadSeq 代际计数器**（与 editorOpSeq/previewRenderSeq 同一模式）——响应到达时 `seq !== pmLoadSeq` 丢弃过期结果防乱序覆盖。④ **模板残留清理**——渲染统一 createElement 构建 DOM，不再拼 HTML 模板字符串。 |
+| **密码条目样式打磨（保留项）** | **B 信息层级**——`.pm-name` 字号 15px 加重标题；用户名/链接双段 `.pm-meta`（flex + gap 5px）承载 13px 内联 SVG 小图标（PM_ICON_USER person / PM_ICON_LINK link，`.pm-field-icon` 灰调不抢焦点）；URL 展示剥离 `https?://` 协议前缀（hover title 提示完整 URL）。**C hover 竖条**——`.pm-item::before` 左缘 accent 竖条胶囊（left:-1px、宽 3px、圆角 999px），hover 时 `opacity 0→1` + `scaleY(0.3)→1` spring 缓动展开。**11 主题 --shadow-* 分层阴影补齐**——[variables.css](frontend/src/css/variables.css) 各 `[data-theme]` 变量块补齐阴影变量组，教训：新增主题必须带全变量组。 |
+| **名称头像徽章迭代教训（方案已废弃，重要）** | 名称区徽章历经四轮迭代最终整体移除：首字符彩色徽章（PM_AVATAR_HUES + pmAvatarHue 哈希）→ 钥匙 PM_ICON_KEY → 锁 lock → 16px 锁视觉突兀 → 13px 仍不满意 → 最终定论"名称不带任何图标"。**SVG 视觉重量陷阱**：16×16 viewBox 图标几乎撑满画布，而 15px 文本数字/字母字面仅约 11px 高，图标必然"比字高一头"。**结论**：行内小图标只适合次级 meta（用户名/链接），主标题保持纯文本最稳。 |
+| **并行编辑同文件覆盖事故（关键教训）** | 对同一文件**并行发起两个 SearchReplace** 时，第二次基于最新快照执行覆盖第一次结果——用法代码留存而常量声明丢失 → `ReferenceError: PM_ICON_KEY is not defined`。**教训：同一文件多处编辑必须逐个顺序执行，禁止并行**；完成后再 Read/Grep 校验关键符号完整性。 |
+| **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
+
+---
+
+## 记忆点 10：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两大改动：① **启动器（Launcher）全新重构**——从简单菜单升级为 Ctrl+P 全局浮层快捷导航（类 Spotlight/Raycast），3 列网格 + pinyin-pro 三路拼音匹配 + 键盘导航 + 弹性动画；② **待办清单（Todo）大幅优化**——零重渲染架构 + FAB 浮动输入 + 两段式新增动画 + 行内编辑 + 保存涟漪 + 悬浮 Tooltip + 分类感知清空按钮 + 启动未完成提醒。 |
+| **启动器拼音搜索（重要）** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)：`import { pinyin } from 'pinyin-pro'`（v3.29.3），懒计算 + Map 缓存拼音索引（首次查询才生成，`{ full: 全拼连续串, initials: 首字母串 }`）。**三路匹配**：中文原文 `includes` → 全拼 `includes` → 首字母 `includes`，输入 `compact = trimmed.replace(/\s+/g, '')` 支持空格分词（如 "s z t" 或 "she zhi" 均命中"设置"）。搜索仅限 13 个预定义功能项（笔记首页/侧栏控制/批量管理/数据管理/回收站/设置/日历/待办/AI助手/密码管理/快捷键/MD语法/关于），不搜索笔记内容。 |
+| **启动器 UI 布局** | 全屏遮罩 + 居中面板 `min(520px, calc(100vw - 48px))` + 顶部 `padding-top: 14vh`，面板内三部分：搜索头部（图标+输入+ESC 提示）、**3 列 CSS Grid**（`grid-template-columns: repeat(3, 1fr)`）、空结果提示。卡片纵向 flex：32×32 圆角图标容器（accent 背景）+ 文字标签。四方向键盘导航（ArrowUp/Down 按列跳转+首尾循环/ArrowLeft/Right 逐项+Tab 拦截）。入场：遮罩 fade 0.2s + 面板 scale(0.92)→1 弹性 0.28s + 卡片 stagger 每项 20ms；离场 0.15s + `transitionend` 或 300ms 超时保险。`prefers-reduced-motion: reduce` 降级无动画。每次打开动态更新 sidebar-toggle 项标签/图标。 |
+| **待办清单零重渲染架构（重要）** | toggle/delete/add 三个高频操作全部绕过 `loadTodos()` → `innerHTML` 全量重渲染：**addTodo** 直接 `prepend` 新条目 DOM + 两段式动画（已有条目先 `translateY` 下移 → rAF 中插入新条目并清除 transform），不触发 `loadTodos()`；**toggleTodo** 在"全部"筛选下直接原地切换类 + DOM 移动位置（完成移底部/取消完成移顶部），筛选模式下播放 exit 动画后 `item.remove()`；**deleteTodo** 播放 `todo-deleting` 动画后 `item.remove()`。统计数字用独立 `refreshTodoStats()` 异步更新，不重渲染列表。 |
+| **FAB 浮动输入 + 行内编辑（重要）** | 右下角 44px 圆形 FAB "+" 按钮 → 点击展开 300px 宽内联面板（textarea 自动扩展 + Enter 提交/Ctrl+Enter 换行），FAB 旋转 45° 变 "X"；点击面板外部/Escape/切换视图自动收起。**双击行内编辑**：双击文本进入 textarea 编辑态，Enter 保存/Escape 取消/失焦自动保存。**保存涟漪**：编辑保存后播放 1.2s `todoSaveSuccess` 动画（缩放→光晕→恢复），确认感极强。 |
+| **分类感知清空按钮（重要）** | 单个清空按钮根据当前筛选状态动态切换清空范围：active 筛选 → 清空所有**未完成**；done 筛选 → 清空所有**已完成**；all 筛选 → 清空**全部**。前端 `clearTodosByFilter()` 传递 filter 参数 → 后端 `ClearTodosByFilter(filter)` switch 分发到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll` 三个 `DELETE WHERE` 查询。确认弹窗文案随分类动态变化，明确告知清空范围。 |
+| **悬浮 Tooltip + 启动提醒** | 鼠标悬停 600ms 防抖后弹出全文预览卡片（基于鼠标位置智能定位，`scale(0.95)→1` 弹入，`pointer-events: none` 防干扰）。启动时 `checkUnfinishedTodosReminder()` 异步检测未完成待办数量，有则弹窗询问"是否去查看"，支持锁屏场景延迟弹出（等 `app-unlocked` 事件）。三态筛选（active/done/all）按钮实时显示数量徽标，选中态卡片背景 + 阴影提升。 |
+| **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/3 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
 
 ---
 

@@ -86,6 +86,7 @@
                         </svg>待办清单
                     </div>
                     <div class="dropdown-item" data-action="ai-chat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>AI 助手</div>
+                    <div class="dropdown-item" data-action="password-manager"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>密码管理</div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item" data-action="help"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h.01M10 16h.01M14 16h.01"/></svg>快捷键说明</div>
                     <div class="dropdown-item" data-action="md-ref"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>MD 语法</div>
@@ -1892,7 +1893,7 @@ console.log(greet("Jot"));
                             已完成
                         </button>
                     </div>
-                    <button class="todo-clear-btn" id="todoClearCompletedBtn" title="清空已完成">
+                    <button class="todo-clear-btn" id="todoClearCompletedBtn" title="清空当前分类的全部待办">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         清空
                     </button>
@@ -1913,6 +1914,162 @@ console.log(greet("Jot"));
                     <span class="todo-empty-hint">点击右下角 + 添加新待办</span>
                 </div>
             </div>
+        </div>
+
+        <!-- 密码管理 -->
+        <div id="viewPasswordManager" class="view">
+            <div class="view-header">
+                <button class="back-btn" id="pmBackBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                    </svg> 返回
+                </button>
+                <h2 class="view-title">密码管理</h2>
+            </div>
+            <div class="pm-container">
+                <!-- 操作栏：搜索框在左，按钮在右 -->
+                <div class="pm-toolbar">
+                    <div class="pm-search-box">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="pmSearchInput" placeholder="搜索名称、用户名、网址或备注" autocomplete="off"/>
+                        <button id="pmSearchClearBtn" class="pm-search-clear-btn" title="清空" style="display:none;">×</button>
+                    </div>
+                    <button class="pm-add-btn" id="pmAddBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        添加
+                    </button>
+                    <button class="pm-batch-toggle-btn" id="pmBatchToggleBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        批量操作
+                    </button>
+                </div>
+                <!-- 列表区域 -->
+                <div class="pm-list-wrap">
+                    <div id="pmList" class="pm-list">
+                        <!-- 由 JS 动态渲染 -->
+                    </div>
+                    <div id="pmEmpty" class="pm-empty" style="display:none;">
+                        <div class="pm-empty-icon">
+                            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                            </svg>
+                        </div>
+                        <span class="pm-empty-hint">还没有密码记录，点击“添加”按钮创建第一条</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部批量操作栏 -->
+            <div id="pmBatchBar" class="pm-batch-bar" style="display:none;">
+                <label class="pm-select-all-label">
+                    <input type="checkbox" id="pmSelectAll"/> 全选
+                </label>
+                <span id="pmSelectedCount" class="pm-selected-count">已选 0 项</span>
+                <button class="pm-delete-btn" id="pmBatchDeleteBtn" disabled>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    删除
+                </button>
+            </div>
+
+            <!-- 添加/编辑对话框 -->
+            <div id="pmEditOverlay" class="pm-overlay" style="display:none;">
+                <div class="pm-dialog" role="dialog">
+                    <div class="pm-dialog-header">
+                        <h3 id="pmEditTitle">添加密码记录</h3>
+                        <button id="pmEditCloseBtn" class="pm-close-btn">×</button>
+                    </div>
+                    <div class="pm-form">
+                        <div class="pm-field">
+                            <label for="pmFieldName">名称<i>*</i></label>
+                            <input type="text" id="pmFieldName" placeholder="如 GitHub、淘宝" autocomplete="off"/>
+                        </div>
+                        <div class="pm-field">
+                            <label for="pmFieldUsername">用户名<i>*</i></label>
+                            <input type="text" id="pmFieldUsername" placeholder="如 zhangsan@gmail.com" autocomplete="off"/>
+                        </div>
+                        <div class="pm-field">
+                            <label for="pmFieldPassword">密码<i>*</i></label>
+                            <div class="pm-input-wrap">
+                                <input type="password" id="pmFieldPassword" class="pm-pwd-input has-toggle" placeholder="输入密码" autocomplete="off"/>
+                                <button type="button" id="pmPwdToggleBtn" class="pm-pwd-toggle">显示</button>
+                            </div>
+                        </div>
+                        <div class="pm-field">
+                            <label for="pmFieldUrl">网址（可选）</label>
+                            <input type="text" id="pmFieldUrl" placeholder="如 https://github.com" autocomplete="off"/>
+                        </div>
+                        <div class="pm-field">
+                            <label for="pmFieldNote">备注（可选）</label>
+                            <textarea id="pmFieldNote" rows="3" placeholder="补充说明"></textarea>
+                        </div>
+                    </div>
+                    <div class="pm-dialog-actions">
+                        <button class="pm-btn" id="pmCancelBtn">取消</button>
+                        <button class="pm-btn primary" id="pmSaveBtn">保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 查看详情对话框 -->
+            <div id="pmDetailOverlay" class="pm-overlay" style="display:none;">
+                <div class="pm-dialog" role="dialog">
+                    <div class="pm-dialog-header">
+                        <h3 id="pmDetailTitle">详情</h3>
+                        <button id="pmDetailCloseBtn" class="pm-close-btn">×</button>
+                    </div>
+                    <div class="pm-detail-body">
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">名称</span>
+                            <span id="pmDetailName" class="pm-detail-value"></span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">用户名</span>
+                            <div class="pm-detail-value-with-actions">
+                                <span id="pmDetailUsername" class="pm-detail-value"></span>
+                                <button class="pm-mini-btn" id="pmCopyUsernameBtn">复制</button>
+                            </div>
+                        </div>
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">密码</span>
+                            <div class="pm-detail-value-with-actions">
+                                <span id="pmDetailPassword" class="pm-detail-value password masked">••••••</span>
+                                <button class="pm-mini-btn" id="pmDetailPwdToggleBtn">显示</button>
+                                <button class="pm-mini-btn" id="pmCopyPasswordBtn">复制</button>
+                            </div>
+                        </div>
+                        <div class="pm-detail-row" id="pmDetailUrlRow">
+                            <span class="pm-detail-label">网址</span>
+                            <div class="pm-detail-value-with-actions">
+                                <span id="pmDetailUrl" class="pm-detail-value muted"></span>
+                                <button class="pm-mini-btn" id="pmCopyUrlBtn">复制</button>
+                                <button class="pm-mini-btn" id="pmOpenUrlBtn">打开</button>
+                            </div>
+                        </div>
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">备注</span>
+                            <span id="pmDetailNote" class="pm-detail-value pre-wrap"></span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">创建时间</span>
+                            <span id="pmDetailCreatedAt" class="pm-detail-value muted"></span>
+                        </div>
+                        <div class="pm-detail-row">
+                            <span class="pm-detail-label">更新时间</span>
+                            <span id="pmDetailUpdatedAt" class="pm-detail-value muted"></span>
+                        </div>
+                    </div>
+                    <div class="pm-dialog-actions split">
+                        <button class="pm-btn danger" id="pmDetailDeleteBtn">删除</button>
+                        <button class="pm-btn primary" id="pmDetailEditBtn">编辑</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右键菜单（由 JS 动态渲染菜单项） -->
+            <div id="pmContextMenu" class="pm-context-menu" style="display:none;"></div>
+
+            <!-- URL / 超长文本 Tooltip -->
+            <div id="pmTooltip" class="pm-tooltip"></div>
         </div>
     </main>
     <!-- 浮动添加按钮 + 内联输入面板（fixed 定位，放在 main 外部避免 view 入场动画影响） -->
@@ -2274,7 +2431,7 @@ console.log(greet("Jot"));
             <div class="launcher-panel">
                 <div class="launcher-header">
                     <svg class="launcher-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input id="launcherInput" class="launcher-input" type="text" placeholder="搜索菜单项..." autocomplete="off" spellcheck="false" />
+                    <input id="launcherInput" class="launcher-input" type="text" placeholder="搜索菜单项（支持拼音/首字母）..." autocomplete="off" spellcheck="false" />
                     <span class="launcher-hint">ESC</span>
                 </div>
                 <div class="launcher-grid" id="launcherGrid"></div>

@@ -26,6 +26,10 @@ export function BatchDeleteNotes(arg1) {
   return window['go']['main']['App']['BatchDeleteNotes'](arg1);
 }
 
+export function BatchDeletePasswordRecords(arg1) {
+  return window['go']['main']['App']['BatchDeletePasswordRecords'](arg1);
+}
+
 export function BatchMoveNotesToNotebook(arg1, arg2) {
   return window['go']['main']['App']['BatchMoveNotesToNotebook'](arg1, arg2);
 }
@@ -78,6 +82,10 @@ export function ClearCompletedTodos() {
   return window['go']['main']['App']['ClearCompletedTodos']();
 }
 
+export function ClearTodosByFilter(arg1) {
+  return window['go']['main']['App']['ClearTodosByFilter'](arg1);
+}
+
 export function CountUnfinishedTodos() {
   return window['go']['main']['App']['CountUnfinishedTodos']();
 }
@@ -92,6 +100,10 @@ export function CreateNote(arg1, arg2, arg3, arg4) {
 
 export function CreateNotebook(arg1) {
   return window['go']['main']['App']['CreateNotebook'](arg1);
+}
+
+export function CreatePasswordRecord(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['CreatePasswordRecord'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function CreateProfile(arg1, arg2, arg3) {
@@ -136,6 +148,10 @@ export function DeleteNotebook(arg1) {
 
 export function DeleteNotebookWithNotes(arg1) {
   return window['go']['main']['App']['DeleteNotebookWithNotes'](arg1);
+}
+
+export function DeletePasswordRecord(arg1) {
+  return window['go']['main']['App']['DeletePasswordRecord'](arg1);
 }
 
 export function DeleteProfile(arg1) {
@@ -266,6 +282,10 @@ export function GetPageSize() {
   return window['go']['main']['App']['GetPageSize']();
 }
 
+export function GetPasswordRecord(arg1) {
+  return window['go']['main']['App']['GetPasswordRecord'](arg1);
+}
+
 export function GetProfiles() {
   return window['go']['main']['App']['GetProfiles']();
 }
@@ -336,6 +356,10 @@ export function IndexNotesStale() {
 
 export function IndexNotesUnindexed() {
   return window['go']['main']['App']['IndexNotesUnindexed']();
+}
+
+export function ListPasswordRecords() {
+  return window['go']['main']['App']['ListPasswordRecords']();
 }
 
 export function ListTodos() {
@@ -474,6 +498,10 @@ export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
+export function SearchPasswordRecords(arg1) {
+  return window['go']['main']['App']['SearchPasswordRecords'](arg1);
+}
+
 export function SelectAIChatFiles() {
   return window['go']['main']['App']['SelectAIChatFiles']();
 }
@@ -552,6 +580,10 @@ export function UpdateNote(arg1, arg2, arg3, arg4) {
 
 export function UpdateNoteFileExt(arg1, arg2) {
   return window['go']['main']['App']['UpdateNoteFileExt'](arg1, arg2);
+}
+
+export function UpdatePasswordRecord(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['UpdatePasswordRecord'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function UpdateProfile(arg1, arg2, arg3, arg4) {

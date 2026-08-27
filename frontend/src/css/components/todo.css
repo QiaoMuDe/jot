@@ -547,3 +547,9 @@
     scrollbar-gutter: auto;
     overflow-y: hidden;
 }
+
+/* 列表滚动区贴到窗口底缘：抵消 .view 的 padding-bottom（通栏列表底部留白显得像被截断），
+   底部呼吸感由 .todo-list 自身的 padding-bottom 提供 */
+#viewTodo.active {
+    padding-bottom: 0;
+}

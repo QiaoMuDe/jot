@@ -1,4 +1,5 @@
 /* ===== 启动器网格模块（Ctrl+P 触发） ===== */
+import { pinyin } from 'pinyin-pro';
 
 /** 13 个功能项定义 */
 const launcherItems = [
@@ -46,6 +47,11 @@ const launcherItems = [
         action: 'ai-chat',
         label: 'AI 助手',
         svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+    },
+    {
+        action: 'password-manager',
+        label: '密码管理',
+        svg: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>'
     },
     {
         action: 'help',
@@ -101,19 +107,48 @@ function selectItem(index) {
     items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+/** 标签拼音索引缓存：label → { full: 全拼连续串, initials: 首字母串 } */
+const _pinyinIndex = new Map();
+
 /**
- * 根据搜索输入过滤网格卡片
+ * 获取标签的拼音检索键（懒计算并缓存）
+ * 非汉字字符原样保留，便于英文标签同样可被全拼串命中
+ */
+function getPinyinKey(label) {
+    let key = _pinyinIndex.get(label);
+    if (!key) {
+        key = {
+            full: pinyin(label, { toneType: 'none', type: 'array' }).join('').toLowerCase(),
+            initials: pinyin(label, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase()
+        };
+        _pinyinIndex.set(label, key);
+    }
+    return key;
+}
+
+/**
+ * 根据搜索输入过滤网格卡片（支持中文原文 / 全拼片段 / 拼音首字母）
  */
 function filterItems(query) {
     if (!_launcherGrid) return;
     const items = _launcherGrid.querySelectorAll('.launcher-item');
     const trimmed = query.trim().toLowerCase();
+    // 去掉空白后用于拼音连续串匹配（如输入 "dai ban" 也能命中 "daiban..."）
+    const compact = trimmed.replace(/\s+/g, '');
     let visibleCount = 0;
     let firstMatchIndex = -1;
 
     items.forEach((el, i) => {
         const label = el.dataset.label || '';
-        const matches = !trimmed || label.toLowerCase().includes(trimmed);
+        let matches = !trimmed;
+        if (trimmed && !matches) {
+            if (label.toLowerCase().includes(trimmed)) {
+                matches = true;
+            } else if (compact) {
+                const key = getPinyinKey(label);
+                matches = key.full.includes(compact) || key.initials.includes(compact);
+            }
+        }
         el.classList.toggle('hidden', !matches);
         if (matches) {
             if (firstMatchIndex === -1) firstMatchIndex = visibleCount;
@@ -193,6 +228,9 @@ function executeAction(action) {
             case 'todo':
                 if (win.switchView) win.switchView('todo');
                 break;
+            case 'password-manager':
+                if (win.switchView) win.switchView('password-manager');
+                break;
             case 'help':
                 if (win.openShortcuts) win.openShortcuts();
                 break;
@@ -220,7 +258,7 @@ function handleLauncherKeydown(e) {
     // 左/上 方向键：向上翻
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        const cols = 4;
+        const cols = 3;
         let newIndex;
         if (e.key === 'ArrowUp') {
             // 上一行（减列数）
@@ -243,7 +281,7 @@ function handleLauncherKeydown(e) {
     // 右/下 方向键：向下翻
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        const cols = 4;
+        const cols = 3;
         let newIndex;
         if (e.key === 'ArrowDown') {
             // 下一行（加列数）
@@ -307,6 +345,8 @@ function openLauncher() {
     }
     // 重置过滤（显示全部）
     filterItems('');
+    // 列表滚动位置归顶
+    if (_launcherGrid) _launcherGrid.scrollTop = 0;
 
     // 根据侧栏当前状态更新 sidebar-toggle 项的标签和图标
     const sidebarToggleEl = _launcherGrid?.querySelector('[data-action="sidebar-toggle"]');

@@ -18,6 +18,8 @@ export function BatchAddTagToNotes(arg1:Array<number>,arg2:number):Promise<void>
 
 export function BatchDeleteNotes(arg1:Array<number>):Promise<void>;
 
+export function BatchDeletePasswordRecords(arg1:Array<number>):Promise<void>;
+
 export function BatchMoveNotesToNotebook(arg1:Array<number>,arg2:number):Promise<void>;
 
 export function BatchPinNotes(arg1:Array<number>,arg2:boolean):Promise<void>;
@@ -44,6 +46,8 @@ export function ClearAllAISessions():Promise<void>;
 
 export function ClearCompletedTodos():Promise<string>;
 
+export function ClearTodosByFilter(arg1:string):Promise<string>;
+
 export function CountUnfinishedTodos():Promise<number>;
 
 export function CreateAISession():Promise<number>;
@@ -51,6 +55,8 @@ export function CreateAISession():Promise<number>;
 export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Promise<models.Note>;
 
 export function CreateNotebook(arg1:string):Promise<models.Notebook>;
+
+export function CreatePasswordRecord(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<models.PasswordRecord>;
 
 export function CreateProfile(arg1:string,arg2:string,arg3:string):Promise<models.APIProfile>;
 
@@ -73,6 +79,8 @@ export function DeleteNote(arg1:number):Promise<void>;
 export function DeleteNotebook(arg1:number):Promise<void>;
 
 export function DeleteNotebookWithNotes(arg1:number):Promise<void>;
+
+export function DeletePasswordRecord(arg1:number):Promise<void>;
 
 export function DeleteProfile(arg1:number):Promise<void>;
 
@@ -138,6 +146,8 @@ export function GetNotesByTag(arg1:number,arg2:number,arg3:number,arg4:string):P
 
 export function GetPageSize():Promise<number>;
 
+export function GetPasswordRecord(arg1:number):Promise<models.PasswordRecord>;
+
 export function GetProfiles():Promise<Array<models.APIProfile>>;
 
 export function GetSessionContextTokens(arg1:number):Promise<number>;
@@ -173,6 +183,8 @@ export function IndexNotesByNotebooks(arg1:Array<number>):Promise<void>;
 export function IndexNotesStale():Promise<void>;
 
 export function IndexNotesUnindexed():Promise<void>;
+
+export function ListPasswordRecords():Promise<Array<services.PasswordListItem>>;
 
 export function ListTodos():Promise<Array<models.Todo>>;
 
@@ -242,6 +254,8 @@ export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promis
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;
 
+export function SearchPasswordRecords(arg1:string):Promise<Array<services.PasswordListItem>>;
+
 export function SelectAIChatFiles():Promise<Array<main.AIChatFileResult>>;
 
 export function SetPageSize(arg1:number):Promise<void>;
@@ -281,6 +295,8 @@ export function UpdateLastUserMessageTokens(arg1:number,arg2:number):Promise<voi
 export function UpdateNote(arg1:number,arg2:string,arg3:string,arg4:string):Promise<models.Note>;
 
 export function UpdateNoteFileExt(arg1:number,arg2:string):Promise<models.Note>;
+
+export function UpdatePasswordRecord(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<models.PasswordRecord>;
 
 export function UpdateProfile(arg1:number,arg2:string,arg3:string,arg4:string):Promise<void>;
 

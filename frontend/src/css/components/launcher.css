@@ -124,13 +124,29 @@
 /* === 网格容器 === */
 .launcher-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     padding: 16px 18px 20px;
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* 隐藏式滚动条：默认不可见，鼠标悬停于列表区域内时才浮现 */
+.launcher-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.launcher-grid::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.launcher-grid::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.launcher-grid:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
 }
 
 /* === 网格卡片 === */

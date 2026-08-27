@@ -35,6 +35,8 @@ import { initAIChat, onAIChatViewActivated, resetAIChatState } from './js/ai-cha
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';
+// 密码管理视图模块
+import { initPasswordManager } from './js/password-manager.js';
 // 编辑器操作菜单模块（通过 window 暴露 initEditorActionsMenu）
 import './js/editor-actions.js';
 
@@ -404,6 +406,7 @@ const els = {
     viewAiChat: $('viewAiChat'),
     viewTodo: $('viewTodo'),
     viewCalendar: $('viewCalendar'),
+    viewPasswordManager: $('viewPasswordManager'),
     todoBackBtn: $('todoBackBtn'),
     todoInput: $('todoInput'),
     todoFab: $('todoFab'),
@@ -640,6 +643,7 @@ function switchView(view) {
         'ai-chat': els.viewAiChat,
         todo: els.viewTodo,
         'calendar': els.viewCalendar,
+        'password-manager': els.viewPasswordManager,
     };
     const targetView = viewMap[view];
     if (!targetView || _viewAnimating) return;
@@ -719,6 +723,11 @@ function switchView(view) {
             case 'calendar':
                 if (typeof window.refreshCalendarView === 'function') {
                     window.refreshCalendarView();
+                }
+                break;
+            case 'password-manager':
+                if (typeof window.refreshPasswordManagerView === 'function') {
+                    window.refreshPasswordManagerView();
                 }
                 break;
             case 'todo':
@@ -5940,6 +5949,8 @@ function initEventListeners() {
                 switchView('calendar');
             } else if (item.dataset.action === 'todo') {
                 switchView('todo');
+            } else if (item.dataset.action === 'password-manager') {
+                switchView('password-manager');
             } else if (item.dataset.action === 'help') {
                 openShortcuts();
             } else if (item.dataset.action === 'about') {
@@ -6313,8 +6324,8 @@ function initEventListeners() {
         });
     }
 
-    // 清空已完成按钮
-    els.todoClearCompletedBtn?.addEventListener('click', clearCompletedTodos);
+    // 清空按钮：按当前筛选分类清空对应范围的待办
+    els.todoClearCompletedBtn?.addEventListener('click', clearTodosByFilter);
 
     // 事件委托：筛选按钮 + 待办项操作（checkbox、删除、编辑）
     els.viewTodo?.addEventListener('click', (e) => {
@@ -6573,6 +6584,10 @@ async function handleKeyboardNavigation(e) {
         }
         // 确认框打开时忽略 ESC，避免破坏 Promise 链
         if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
+            return;
+        }
+        // 密码管理：右键菜单/编辑/详情弹层打开时只关闭最上层弹层（不继续执行导航逻辑）
+        if (typeof window.pmHandleEscape === 'function' && window.pmHandleEscape()) {
             return;
         }
         // MCP 服务器新增/编辑表单打开时关闭它
@@ -8351,6 +8366,8 @@ async function init() {
     initCalendarView();
     // 初始化启动器网格
     initLauncher();
+    // 初始化密码管理视图
+    initPasswordManager();
     // --- 锁屏密码检查 ---
     await checkScreenLock();
     // --- 未完成待办启动提示 ---
@@ -11038,6 +11055,34 @@ async function deleteTodo(id) {
         await refreshTodoStats();
     } catch (err) {
         console.error('删除待办失败:', err);
+    }
+}
+
+/**
+ * 按当前筛选分类清空待办（待办页「清空」按钮）
+ * 分类映射：active=清空所有未完成，done=清空所有已完成，all=清空全部
+ */
+async function clearTodosByFilter() {
+    if (!window.go?.main?.App?.ClearTodosByFilter) return;
+    const filter = _todoFilter || 'active';
+    // 确认文案按分类给出明确范围提示
+    const confirmMsg = {
+        active: '确定清空所有未完成的待办事项吗？此操作不可恢复。',
+        done: '确定清空所有已完成的待办事项吗？此操作不可恢复。',
+        all: '确定清空全部待办事项（含已完成和未完成）吗？此操作不可恢复。'
+    }[filter] || '确定清空所有已完成的待办事项吗？此操作不可恢复。';
+
+    const confirmed = await showConfirmDialog(confirmMsg, '清空');
+    if (!confirmed) return;
+
+    try {
+        const msg = await window.go.main.App.ClearTodosByFilter(filter);
+        nm.show(msg, 'success');
+        await loadDataStats();
+        await loadTodos();
+    } catch (err) {
+        console.error('按分类清空待办失败:', err);
+        nm.show('清空失败：' + (err.message || err), 'error');
     }
 }
 

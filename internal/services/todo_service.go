@@ -186,3 +186,23 @@ func (s *TodoService) DeleteCompleted() (int64, error) {
 	}
 	return result.RowsAffected, nil
 }
+
+// DeleteUnfinished 删除所有未完成的待办事项，返回删除条数
+func (s *TodoService) DeleteUnfinished() (int64, error) {
+	result := s.db.Where("done = ?", false).Delete(&models.Todo{})
+	if result.Error != nil {
+		s.logger.Errorw("TodoService.DeleteUnfinished 失败", fastlog.Error(result.Error))
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
+// DeleteAll 删除所有待办事项，返回删除条数
+func (s *TodoService) DeleteAll() (int64, error) {
+	result := s.db.Where("1 = 1").Delete(&models.Todo{})
+	if result.Error != nil {
+		s.logger.Errorw("TodoService.DeleteAll 失败", fastlog.Error(result.Error))
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}

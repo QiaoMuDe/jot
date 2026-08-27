@@ -101,6 +101,7 @@ type App struct {
 	profileService   *services.ProfileService
 	vectorService    *services.VectorService
 	todoService      *services.TodoService
+	passwordService  *services.PasswordService
 	statsService     *services.StatsService
 	mcpServerService *services.MCPServerService
 	LogSvc           *services.LogService
@@ -179,6 +180,7 @@ func NewApp() *App {
 	profileService := services.NewProfileService(db, logSvc.Logger)
 	vectorService := services.NewVectorService(db, logSvc.Logger)
 	todoService := services.NewTodoService(db, logSvc.Logger)
+	passwordService := services.NewPasswordService(db, logSvc.Logger)
 	statsService := services.NewStatsService(noteService, tagService, todoService, aiService, database.DefaultDBPath)
 
 	app := &App{
@@ -191,6 +193,7 @@ func NewApp() *App {
 		profileService:   profileService,
 		vectorService:    vectorService,
 		todoService:      todoService,
+		passwordService:  passwordService,
 		statsService:     statsService,
 		mcpServerService: services.NewMCPServerService(db),
 		LogSvc:           logSvc,
@@ -3640,6 +3643,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.profileService = services.NewProfileService(db, a.LogSvc.Logger)
 	a.vectorService = services.NewVectorService(db, a.LogSvc.Logger)
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
+	a.passwordService = services.NewPasswordService(db, a.LogSvc.Logger)
 	a.mcpServerService = services.NewMCPServerService(db)
 	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
@@ -3755,10 +3759,120 @@ func (a *App) ClearCompletedTodos() (string, error) {
 	return fmt.Sprintf("已清空 %d 个已完成待办事项", count), nil
 }
 
+// ClearTodosByFilter 按筛选分类清空待办：active=未完成，done=已完成，all=全部。
+// 返回成功消息（含删除条数）供前端提示。
+func (a *App) ClearTodosByFilter(filter string) (string, error) {
+	a.LogSvc.Logger.Debugw("ClearTodosByFilter", fastlog.String("filter", filter))
+	var count int64
+	var err error
+	var label string
+	switch filter {
+	case "active":
+		count, err = a.todoService.DeleteUnfinished()
+		label = "未完成"
+	case "all":
+		count, err = a.todoService.DeleteAll()
+		label = "全部"
+	default:
+		count, err = a.todoService.DeleteCompleted()
+		label = "已完成"
+	}
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ClearTodosByFilter 失败", fastlog.Error(err))
+		return "", err
+	}
+	a.LogSvc.Logger.Infow("ClearTodosByFilter 成功", fastlog.String("filter", filter), fastlog.Int64("count", count))
+	return fmt.Sprintf("已清空 %d 个%s待办事项", count, label), nil
+}
+
 // CountUnfinishedTodos 返回未完成待办数量（启动弹窗提示用）
 func (a *App) CountUnfinishedTodos() (int64, error) {
 	a.LogSvc.Logger.Debugw("CountUnfinishedTodos")
 	return a.todoService.CountUnfinished()
+}
+
+/* ===== 密码管理 ===== */
+
+// CreatePasswordRecord 创建密码记录
+func (a *App) CreatePasswordRecord(name, username, password, url, note string) (*models.PasswordRecord, error) {
+	a.LogSvc.Logger.Debugw("CreatePasswordRecord")
+	rec, err := a.passwordService.Create(name, username, password, url, note)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("CreatePasswordRecord 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("CreatePasswordRecord 成功", fastlog.Uint("id", rec.ID))
+	return rec, nil
+}
+
+// GetPasswordRecord 根据 ID 查询单条密码记录（含解码后的密码明文）
+func (a *App) GetPasswordRecord(id uint) (*models.PasswordRecord, error) {
+	a.LogSvc.Logger.Debugw("GetPasswordRecord", fastlog.Uint("id", id))
+	rec, err := a.passwordService.GetPasswordRecord(id)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetPasswordRecord 失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return nil, err
+	}
+	return rec, nil
+}
+
+// ListPasswordRecords 返回所有密码记录列表（仅含名称、用户名、URL，不含密码）
+func (a *App) ListPasswordRecords() ([]services.PasswordListItem, error) {
+	a.LogSvc.Logger.Debugw("ListPasswordRecords")
+	items, err := a.passwordService.List()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ListPasswordRecords 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return items, nil
+}
+
+// SearchPasswordRecords 在名称、用户名、URL、备注中模糊搜索（不含密码）
+func (a *App) SearchPasswordRecords(keyword string) ([]services.PasswordListItem, error) {
+	a.LogSvc.Logger.Debugw("SearchPasswordRecords")
+	items, err := a.passwordService.Search(keyword)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("SearchPasswordRecords 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return items, nil
+}
+
+// UpdatePasswordRecord 更新密码记录
+func (a *App) UpdatePasswordRecord(id uint, name, username, password, url, note string) (*models.PasswordRecord, error) {
+	a.LogSvc.Logger.Debugw("UpdatePasswordRecord", fastlog.Uint("id", id))
+	rec, err := a.passwordService.Update(id, name, username, password, url, note)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UpdatePasswordRecord 失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("UpdatePasswordRecord 成功", fastlog.Uint("id", id))
+	return rec, nil
+}
+
+// DeletePasswordRecord 删除密码记录（软删除）
+func (a *App) DeletePasswordRecord(id uint) error {
+	a.LogSvc.Logger.Debugw("DeletePasswordRecord", fastlog.Uint("id", id))
+	if err := a.passwordService.Delete(id); err != nil {
+		a.LogSvc.Logger.Errorw("DeletePasswordRecord 失败", fastlog.Uint("id", id), fastlog.Error(err))
+		return err
+	}
+	a.LogSvc.Logger.Infow("DeletePasswordRecord 成功", fastlog.Uint("id", id))
+	return nil
+}
+
+// BatchDeletePasswordRecords 批量软删除密码记录
+func (a *App) BatchDeletePasswordRecords(ids []uint) error {
+	a.LogSvc.Logger.Debugw("BatchDeletePasswordRecords", fastlog.Int("count", len(ids)))
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := a.passwordService.BatchDelete(ids); err != nil {
+		a.LogSvc.Logger.Errorw("BatchDeletePasswordRecords 失败", fastlog.Int("count", len(ids)), fastlog.Error(err))
+		return err
+	}
+	a.LogSvc.Logger.Infow("BatchDeletePasswordRecords 成功", fastlog.Int("count", len(ids)))
+	return nil
 }
 
 // reconnectDB 重新连接数据库（用于导入失败后的恢复）
