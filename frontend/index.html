@@ -1942,6 +1942,12 @@ console.log(greet("Jot"));
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                         批量操作
                     </button>
+                    <button class="pm-gen-btn" id="pmGenBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                        </svg>
+                        生成密码
+                    </button>
                 </div>
                 <!-- 列表区域 -->
                 <div class="pm-list-wrap">
@@ -2061,6 +2067,84 @@ console.log(greet("Jot"));
                     <div class="pm-dialog-actions split">
                         <button class="pm-btn danger" id="pmDetailDeleteBtn">删除</button>
                         <button class="pm-btn primary" id="pmDetailEditBtn">编辑</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 密码生成器对话框 -->
+            <div id="pmGenOverlay" class="pm-overlay" style="display:none;">
+                <div class="pm-dialog pm-gen-dialog" role="dialog">
+                    <div class="pm-dialog-header">
+                        <h3>随机密码生成器</h3>
+                        <button id="pmGenCloseBtn" class="pm-close-btn">×</button>
+                    </div>
+                    <div class="pm-gen-body">
+                        <!-- 密码长度 -->
+                        <div class="pm-gen-card">
+                            <div class="pm-gen-length-row">
+                                <span class="pm-gen-card-title">密码长度</span>
+                                <div class="pm-gen-stepper">
+                                    <button type="button" class="pm-gen-stepper-btn" data-field="length" data-delta="-1">−</button>
+                                    <span id="pmGenLengthVal" class="pm-gen-stepper-val">16</span>
+                                    <button type="button" class="pm-gen-stepper-btn" data-field="length" data-delta="1">+</button>
+                                </div>
+                            </div>
+                            <div class="pm-gen-length-bar-wrap">
+                                <div id="pmGenLengthBar" class="pm-gen-length-bar" style="width:25%"></div>
+                            </div>
+                        </div>
+
+                        <!-- 生成数量 -->
+                        <div class="pm-gen-card">
+                            <div class="pm-gen-length-row">
+                                <span class="pm-gen-card-title">生成数量</span>
+                                <div class="pm-gen-stepper">
+                                    <button type="button" class="pm-gen-stepper-btn" data-field="count" data-delta="-1">−</button>
+                                    <span id="pmGenCountVal" class="pm-gen-stepper-val">5</span>
+                                    <button type="button" class="pm-gen-stepper-btn" data-field="count" data-delta="1">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 字符类型 -->
+                        <div class="pm-gen-card">
+                            <span class="pm-gen-card-title">字符类型</span>
+                            <div class="pm-gen-type-grid">
+                                <button type="button" class="pm-gen-type-btn active" id="pmGenUpper" data-type="upper">
+                                    <span class="pm-gen-type-icon">Aa</span> 大写 A-Z
+                                </button>
+                                <button type="button" class="pm-gen-type-btn active" id="pmGenLower" data-type="lower">
+                                    <span class="pm-gen-type-icon">ab</span> 小写 a-z
+                                </button>
+                                <button type="button" class="pm-gen-type-btn active" id="pmGenDigits" data-type="digits">
+                                    <span class="pm-gen-type-icon">12</span> 数字 0-9
+                                </button>
+                                <button type="button" class="pm-gen-type-btn active" id="pmGenSymbols" data-type="symbols">
+                                    <span class="pm-gen-type-icon">#$</span> 符号 !@#$
+                                </button>
+                            </div>
+                            <div class="pm-gen-exclude-row">
+                                <input type="checkbox" id="pmGenExcludeAmbiguous" />
+                                <label for="pmGenExcludeAmbiguous">排除易混淆字符 <code>l I 1 O 0</code></label>
+                            </div>
+                        </div>
+
+                        <!-- 生成按钮 -->
+                        <button class="pm-btn primary pm-gen-action-btn" id="pmGenGenerateBtn">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                            </svg>
+                            生成密码
+                        </button>
+
+                        <!-- 结果区域 -->
+                        <div id="pmGenResultsWrap" style="display:none;">
+                            <div class="pm-gen-results-header">
+                                <span class="pm-gen-results-label">生成结果 <span class="pm-gen-results-count"></span></span>
+                                <button type="button" class="pm-gen-copy-all-btn" id="pmGenCopyAllBtn">复制全部</button>
+                            </div>
+                            <div id="pmGenResults" class="pm-gen-results"></div>
+                        </div>
                     </div>
                 </div>
             </div>

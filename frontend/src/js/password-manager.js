@@ -21,6 +21,12 @@ let pmDetailUrlRow, pmDetailUrl, pmCopyUrlBtn, pmOpenUrlBtn;
 let pmDetailNote, pmDetailCreatedAt, pmDetailUpdatedAt;
 let pmDetailDeleteBtn, pmDetailEditBtn;
 let pmContextMenu, pmTooltip;
+let pmGenOverlay, pmGenCloseBtn;
+let pmGenLengthVal, pmGenLengthBar, pmGenCountVal;
+let pmGenUpper, pmGenLower, pmGenDigits, pmGenSymbols, pmGenExcludeAmbiguous;
+let pmGenGenerateBtn, pmGenResultsEl, pmGenResultsWrap;
+let pmGenCount = 5;
+let pmGenLength = 16;
 
 // ---------- 运行时状态 ----------
 let pmRecords = [];            // 当前列表数据（PasswordListItem[]，不含密码）
@@ -166,6 +172,185 @@ function bindLengthGuard(input, max) {
  */
 function findInList(id) {
     return pmRecords.find((r) => Number(r.id) === Number(id));
+}
+
+/* ==================== 密码生成器 ==================== */
+
+const PM_GEN_CHARS = {
+    upper:   'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    lower:   'abcdefghijklmnopqrstuvwxyz',
+    digits:  '0123456789',
+    symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?',
+};
+
+const PM_GEN_AMBIGUOUS = 'lI1O0';
+
+/**
+ * 生成随机密码（密码学安全随机）
+ */
+function pmGeneratePassword(opts) {
+    let pool = '';
+    if (opts.upper) pool += PM_GEN_CHARS.upper;
+    if (opts.lower) pool += PM_GEN_CHARS.lower;
+    if (opts.digits) pool += PM_GEN_CHARS.digits;
+    if (opts.symbols) pool += PM_GEN_CHARS.symbols;
+    if (pool.length === 0) pool = PM_GEN_CHARS.lower;
+    if (opts.excludeAmbiguous) {
+        pool = pool.split('').filter(c => !PM_GEN_AMBIGUOUS.includes(c)).join('');
+    }
+    const arr = new Uint32Array(opts.length);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, v => pool[v % pool.length]).join('');
+}
+
+/** 键盘图案列表（连续3个字母不在此列，避免误判正常密码） */
+const PM_KB_PATTERNS = [
+    'qwerty','qwertz','azerty','asdfgh','zxcvbn','qazwsx',
+    '!@#$%^','1qaz2wsx','123456','098765','poiuyt','mnbvcx',
+];
+
+/** 计算密码强度（0-4），基于类型上限 + 长度阶梯 + 模式惩罚 */
+function pmCalcStrength(pwd) {
+    if (!pwd || pwd.length === 0) return 0;
+
+    // ---- 1. 统计字符类型数 ----
+    const typeCount = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter(r => r.test(pwd)).length;
+
+    // ---- 2. 类型上限：不同类型数量对应不同最高评级 ----
+    //    1 类 → 最高 2（一般），2 类 → 最高 4（强），3/4 类 → 最高 4（强）
+    const typeCap = typeCount <= 1 ? 2 : 4;
+
+    // ---- 3. 长度阶梯：根据密码长度确定基础评级 ----
+    //    混合类型(2+)在16位即可达到"强"，纯类型仍受 typeCap=2 限制
+    let base;
+    const len = pwd.length;
+    if (len < 8)       base = 0;
+    else if (len < 12) base = 1;
+    else if (len < 16) base = 2;
+    else               base = typeCount >= 2 ? 4 : 3;
+
+    // ---- 4. 模式惩罚：检测弱模式，对基础评级做 -1 微调 ----
+    let penalty = 0;
+
+    // 4a. 连续重复字符 3+ 位（如 aaa, 1111）
+    if (/(.)\1{2,}/.test(pwd)) penalty++;
+
+    // 4b. 最长连续递增/递减序列占密码 50%+ 时惩罚（如 abcdefgh, 9876543210）
+    let maxSeqLen = 1, seqLen = 1;
+    for (let i = 1; i < pwd.length; i++) {
+        const diff = pwd.charCodeAt(i) - pwd.charCodeAt(i - 1);
+        if (diff === 1 || diff === -1) { seqLen++; if (seqLen > maxSeqLen) maxSeqLen = seqLen; }
+        else seqLen = 1;
+    }
+    if (maxSeqLen >= pwd.length * 0.5) penalty++;
+
+    // 4c. 键盘图案
+    const lowerPwd = pwd.toLowerCase();
+    for (const pat of PM_KB_PATTERNS) {
+        if (lowerPwd.includes(pat)) { penalty++; break; }
+    }
+
+    // 4d. 低唯一字符比例（< 50% 的字符是不同的）
+    if (new Set(pwd).size / pwd.length < 0.5) penalty++;
+
+    // ---- 5. 最终评级 = min(长度基础, 类型上限) - 惩罚 ----
+    return Math.max(0, Math.min(base, typeCap) - Math.min(penalty, 2));
+}
+
+/** 获取当前选项配置 */
+function pmGetGenOptions() {
+    return {
+        length: pmGenLength,
+        upper: pmGenUpper.classList.contains('active'),
+        lower: pmGenLower.classList.contains('active'),
+        digits: pmGenDigits.classList.contains('active'),
+        symbols: pmGenSymbols.classList.contains('active'),
+        excludeAmbiguous: pmGenExcludeAmbiguous.checked,
+    };
+}
+
+/** 更新长度进度条 */
+function pmUpdateLengthBar() {
+    const pct = ((pmGenLength - 6) / (64 - 6)) * 100;
+    pmGenLengthBar.style.width = pct + '%';
+}
+
+/** 执行生成并渲染结果 */
+function pmDoGenerate() {
+    const opts = pmGetGenOptions();
+    pmGenResultsEl.innerHTML = '';
+
+    const allPwds = [];
+    for (let i = 0; i < pmGenCount; i++) {
+        const pwd = pmGeneratePassword(opts);
+        allPwds.push(pwd);
+        const strength = pmCalcStrength(pwd);
+        const strengthLabels = ['weak', 'fair', 'good', 'strong', 'strong'];
+
+        const item = document.createElement('div');
+        item.className = 'pm-gen-result-item';
+
+        // 强度指示点
+        const strengthEl = document.createElement('div');
+        strengthEl.className = 'pm-gen-strength';
+        for (let d = 0; d < 4; d++) {
+            const dot = document.createElement('span');
+            dot.className = 'pm-gen-strength-dot' + (d < strength ? ' filled ' + strengthLabels[strength] : '');
+            strengthEl.appendChild(dot);
+        }
+
+        const pwdEl = document.createElement('span');
+        pwdEl.className = 'pm-gen-result-pwd';
+        pwdEl.textContent = pwd;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'pm-gen-copy-btn';
+        copyBtn.textContent = '复制';
+        copyBtn.addEventListener('click', async () => {
+            const ok = await pmCopyText(pwd, '密码已复制');
+            if (ok) {
+                copyBtn.textContent = '已复制';
+                copyBtn.classList.add('copied');
+                setTimeout(() => { copyBtn.textContent = '复制'; copyBtn.classList.remove('copied'); }, 1200);
+            }
+        });
+
+        item.appendChild(strengthEl);
+        item.appendChild(pwdEl);
+        item.appendChild(copyBtn);
+        pmGenResultsEl.appendChild(item);
+    }
+
+    // 显示结果区域并更新计数
+    pmGenResultsWrap.style.display = '';
+    const countEl = pmGenResultsWrap.querySelector('.pm-gen-results-count');
+    if (countEl) countEl.textContent = `共 ${allPwds.length} 个`;
+
+    // 存储当前密码用于复制全部
+    pmGenResultsWrap._pwds = allPwds;
+}
+
+/** 打开密码生成器对话框 */
+function openPmGenDialog() {
+    pmGenLength = 16;
+    pmGenCount = 5;
+    pmGenLengthVal.textContent = '16';
+    pmGenCountVal.textContent = '5';
+    pmUpdateLengthBar();
+    pmGenUpper.classList.add('active');
+    pmGenLower.classList.add('active');
+    pmGenDigits.classList.add('active');
+    pmGenSymbols.classList.add('active');
+    pmGenExcludeAmbiguous.checked = false;
+    pmGenResultsWrap.style.display = 'none';
+    pmGenResultsEl.innerHTML = '';
+    pmGenOverlay.style.display = 'flex';
+}
+
+/** 关闭密码生成器对话框 */
+function closePmGenDialog() {
+    pmGenOverlay.style.display = 'none';
 }
 
 /* ==================== 列表加载与渲染 ==================== */
@@ -835,6 +1020,20 @@ export function initPasswordManager() {
     pmContextMenu = document.getElementById('pmContextMenu');
     pmTooltip = document.getElementById('pmTooltip');
 
+    pmGenOverlay = document.getElementById('pmGenOverlay');
+    pmGenCloseBtn = document.getElementById('pmGenCloseBtn');
+    pmGenLengthVal = document.getElementById('pmGenLengthVal');
+    pmGenLengthBar = document.getElementById('pmGenLengthBar');
+    pmGenCountVal = document.getElementById('pmGenCountVal');
+    pmGenUpper = document.getElementById('pmGenUpper');
+    pmGenLower = document.getElementById('pmGenLower');
+    pmGenDigits = document.getElementById('pmGenDigits');
+    pmGenSymbols = document.getElementById('pmGenSymbols');
+    pmGenExcludeAmbiguous = document.getElementById('pmGenExcludeAmbiguous');
+    pmGenGenerateBtn = document.getElementById('pmGenGenerateBtn');
+    pmGenResultsEl = document.getElementById('pmGenResults');
+    pmGenResultsWrap = document.getElementById('pmGenResultsWrap');
+
     if (!pmView || !pmListEl) return;
 
     // 返回首页
@@ -847,6 +1046,45 @@ export function initPasswordManager() {
     pmBatchToggleBtn.addEventListener('click', togglePmBatchMode);
     pmBatchDeleteBtn.addEventListener('click', batchDeleteSelected);
     pmSelectAllCb.addEventListener('change', handleSelectAllChange);
+
+    // ---- 生成密码 ----
+    document.getElementById('pmGenBtn')?.addEventListener('click', openPmGenDialog);
+    pmGenCloseBtn.addEventListener('click', closePmGenDialog);
+    pmGenOverlay.addEventListener('mousedown', (e) => {
+        if (e.target === pmGenOverlay) closePmGenDialog();
+    });
+    pmGenGenerateBtn.addEventListener('click', pmDoGenerate);
+
+    // 步进器按钮（长度 + 数量共用）
+    document.querySelectorAll('.pm-gen-stepper-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const field = btn.dataset.field;
+            const delta = Number(btn.dataset.delta);
+            if (field === 'length') {
+                pmGenLength = Math.max(6, Math.min(64, pmGenLength + delta));
+                pmGenLengthVal.textContent = String(pmGenLength);
+                pmUpdateLengthBar();
+            } else if (field === 'count') {
+                pmGenCount = Math.max(1, Math.min(20, pmGenCount + delta));
+                pmGenCountVal.textContent = String(pmGenCount);
+            }
+        });
+    });
+
+    // 字符类型切换按钮
+    [pmGenUpper, pmGenLower, pmGenDigits, pmGenSymbols].forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.classList.toggle('active');
+        });
+    });
+
+    // 复制全部
+    document.getElementById('pmGenCopyAllBtn')?.addEventListener('click', async () => {
+        const pwds = pmGenResultsWrap._pwds;
+        if (pwds && pwds.length > 0) {
+            await pmCopyText(pwds.join('\n'), '已复制全部密码');
+        }
+    });
 
     // 搜索（防抖 250ms）
     pmSearchInput.addEventListener('input', () => {
@@ -966,7 +1204,7 @@ window.exitPasswordManagerView = function () {
 
 /**
  * 统一 ESC 出口：由 main.js 全局 Escape 分支调用
- * 按 右键菜单 → 编辑对话框 → 详情对话框 的层级只关闭最上层一个
+ * 按 右键菜单 → 编辑对话框 → 详情对话框 → 生成器对话框 的层级只关闭最上层一个
  * @returns {boolean} 是否关闭了某个弹层（true = 本次 ESC 已被消费）
  */
 window.pmHandleEscape = function () {
@@ -975,5 +1213,6 @@ window.pmHandleEscape = function () {
     if (isContextMenuVisible()) { hideContextMenu(); return true; }
     if (pmEditOverlay && pmEditOverlay.style.display !== 'none') { closePmEditDialog(); return true; }
     if (pmDetailOverlay && pmDetailOverlay.style.display !== 'none') { closePmDetailDialog(); return true; }
+    if (pmGenOverlay && pmGenOverlay.style.display !== 'none') { closePmGenDialog(); return true; }
     return false;
 };

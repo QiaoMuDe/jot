@@ -73,7 +73,7 @@ jot/                                    # 项目根目录
 │   │   │   ├── constants.js            # 图标常量 SVGS + 工具函数（formatTime/highlightText/getSummary/debounce，从 main.js 提取）
 │   │   │   ├── notification.js         # NotificationManager 通知类 + window.showNotification 全局函数 + 模拟数据（getMockNotes/getMockTags，从 main.js 提取）
 │   │   │   ├── launcher.js             # 启动器模块（Ctrl+P 全局浮层 / 13 项功能导航 / pinyin-pro 三路拼音匹配 / 3 列网格 / 键盘四方向导航 / 弹性动画）
-│   │   │   ├── password-manager.js     # 密码管理模块（完整 CRUD / 搜索 / 批量操作 / 右键菜单 / 复制/打开链接 / Base64 编码 / 搜索高亮 / 静默渲染 + pmLoadSeq 防乱序）
+│   │   │   ├── password-manager.js     # 密码管理模块（完整 CRUD / 搜索 / 批量操作 / 右键菜单 / 复制/打开链接 / Base64 编码 / 搜索高亮 / 静默渲染 + pmLoadSeq 防乱序 + 密码生成器 + 强度算法）
 │   │   │   ├── calendar.js             # 笔记日历模块（日历网格渲染 / 墨水圆点统计 / 本月摘要统计 / 按日笔记列表 / 回到今天 / 点击笔记跳转 / 切月自动重置今天）
 │   │   │   └── preview-worker.js       # Web Worker 离线程 Markdown 渲染（从 src/ 移入）
 │   │   └── css/                        # 【CSS 模块化目录】原 style.css + app.css 拆分
@@ -96,7 +96,7 @@ jot/                                    # 项目根目录
 │   │   │   │   ├── ai-chat.css         # AI 对话页面（气泡/输入区/Markdown 渲染/打字指示器/会话侧栏/折叠按钮/滚动条自动隐藏/消息居中响应式宽度 clamp(800px,92vw,1600px)/32px 间距/更多技能菜单选中态+离场动画+翻译chip双语言布局/联网搜索 toggle 开关+召回笔记本菜单）
 │   │           ├── todo.css            # 待办清单页面（FAB 浮动输入 + 两段式新增动画 + 行内编辑 + 保存涟漪 + 悬浮预览 Tooltip + 分类感知清空 + 8 个 @keyframes）
 │   │           ├── launcher.css        # 启动器样式（全屏遮罩 + 3 列网格 + 卡片 + 弹性动画 + prefers-reduced-motion 降级）
-│   │           ├── password-manager.css # 密码管理页样式（三栏布局 + hover accent 竖条 + 搜索高亮 + 批量操作栏 + 空状态）
+│   │           ├── password-manager.css # 密码管理页样式（三栏布局 + hover accent 竖条 + 搜索高亮 + 批量操作栏 + 空状态 + 密码生成器对话框）
 │   │           └── calendar.css        # 笔记日历视图样式（日历网格/墨水圆点/统计卡片/笔记列表/入场动画）
 │   ├── wailsjs/                        # Wails 自动生成的 JS 绑定
 │   │   └── go/main/
@@ -142,7 +142,7 @@ jot/                                    # 项目根目录
 | 模块名称 | 核心功能 | 对应代码 | 核心输入 | 核心输出 |
 |----------|----------|----------|----------|----------|
 | **锁屏密码** | SHA-256 哈希验证 + 设置/修改密码 | `app.go:VerifyScreenLockPassword/SetScreenLockPassword` | 密码明文 | bool/错误 |
-| **密码管理** | 完整 CRUD + 搜索 + 批量删除 + 右键菜单 + 复制/打开链接 + 搜索高亮 + Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段）| `services/password_service.go` + `app.go`（7 个绑定）+ `frontend/src/js/password-manager.js` | 名称/用户名/密码/URL/备注 | 密码记录 CRUD 结果 |
+| **密码管理** | 完整 CRUD + 搜索 + 批量删除 + 右键菜单 + 复制/打开链接 + 搜索高亮 + Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段）+ 密码生成器（前端随机生成 + 强度评级 + 批量复制）| `services/password_service.go` + `app.go`（7 个绑定）+ `frontend/src/js/password-manager.js` | 名称/用户名/密码/URL/备注 | 密码记录 CRUD 结果 |
 | **笔记 CRUD** | 创建/更新/查询/删除笔记 | `services/note_service.go` | 标题/内容/颜色/ID | Note 对象/错误 |
 | **笔记搜索** | 标题+内容 LIKE 模糊搜索，支持 3 种排序（updated_at/created_at/title，均 pinned DESC 优先）| `note_service.go:Search()` | 关键词/分页/sortBy 参数 | 笔记列表+总数 |
 | **笔记置顶** | 切换置顶状态 | `note_service.go:TogglePin()` | 笔记 ID | 更新后的笔记 |
@@ -472,7 +472,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 9. **Mermaid 图表渲染集成**：为 Markdown 代码块中的 `language-mermaid` 块提供按需渲染，默认显示源码，点击渲染按钮后直接主线程渲染 SVG。切换按钮与复制按钮风格统一，CSS `:has()` 处理双按钮防碰撞
 
-10. **密码管理功能页**：独立视图，Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段，仅详情返回明文）+ 7 个 Wails 绑定 + escapeLike LIKE 转义防注入 + 静默重渲染（`.pm-no-enter` 跳过入场动画）+ pmLoadSeq 代际计数器防乱序 + 搜索高亮 + 右键菜单 + 批量操作 + 复制/打开链接
+10. **密码管理功能页**：独立视图，Base64 编码（`(zk)` 前缀）+ 列表/详情分离传输（列表不含密码字段，仅详情返回明文）+ 7 个 Wails 绑定 + escapeLike LIKE 转义防注入 + 静默重渲染（`.pm-no-enter` 跳过入场动画）+ pmLoadSeq 代际计数器防乱序 + 搜索高亮 + 右键菜单 + 批量操作 + 复制/打开链接 + **密码生成器**（前端 `crypto.getRandomValues` 安全随机 + 评级上限+长度阶梯强度算法 + 对话框配置长度/数量/字符类型 + 逐条/批量复制）
 
 11. **启动器（Launcher）Ctrl+P 拼音搜索**：全屏浮层 3 列网格导航，pinyin-pro 懒计算 + Map 缓存拼音索引，三路降级匹配（中文原文 → 全拼 → 首字母），空格压缩支持分词输入，13 个功能项覆盖全部视图入口，四方向键盘导航 + 弹性动画 + prefers-reduced-motion 降级。
 
@@ -558,20 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：回收站全部清空/恢复 动画死锁 + 恢复笔记 3 阶段处理 + UI 细节
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 四组相关改动：① **回收站「全部清空/恢复」Promise.all 死锁**——[trash-page.js](frontend/src/js/trash-page.js) `emptyTrash`/`restoreAllNotes` 用 `Promise.all(items.map(...))` 等待每个 `.trash-item` 的 `animationend` 才调用后端，**`animationend` 永远不触发**（shorthand `style.animation = ...` 后再 `style.animationDelay = ...` 顺序问题 + `prefers-reduced-motion: reduce` 把 `animation-duration: 0.001ms !important` 与 delay 叠加）→ 后端 `EmptyTrash` / `RestoreAllNotes` 永远不被调用，"点完按钮毫无反应"。修复：`items.forEach` 同步设 longhand 动画属性（fire-and-forget），**不等动画立刻调用后端** + `loadTrashNotes()` 刷新（DOM 替换天然截断动画）。② **恢复笔记 3 阶段处理**——[note_service.go](internal/services/note_service.go) `RestoreAll` 原逻辑统一 UPDATE `deleted_at = NULL` 不分场景，导致父笔记本在回收站时笔记被错误保留到原 notebook_id（指向软删除笔记本）。改为 3 阶段：Stage 1 先恢复这些笔记引用的、且本身在回收站的非默认笔记本；Stage 2 父笔记本已永久删除/不存在 → 迁 `notebook_id = 1`（默认）；Stage 3 再 `UPDATE notes SET deleted_at = NULL`。③ **同 bug 模式扩展**——`BatchRestore`（[note_service.go](internal/services/note_service.go) 批量 ID 恢复）和 `Restore`（[note_service.go](internal/services/note_service.go) 单条恢复）有相同的 `NOT EXISTS` / `deleted_at IS NULL` 过滤漏判，一并改为 3 阶段处理（BatchRestore 用子查询限定到用户选中的 ID，Restore 改 `Unscoped().First` 探测 + `notebook.DeletedAt.Valid` 分支）。④ **配套 UI 调整**——新建笔记本对话框取消/创建按钮 `justify-content: flex-end` → `center`（[sidebar.css](frontend/src/css/components/sidebar.css) `.new-notebook-actions`）；导入笔记多文件失败**聚合成单条 toast**（[main.js](frontend/src/main.js) `showImportResults` 改为单条 `nm.show`+"详情见应用日志"末尾提示，不再每文件发 toast，**`console.warn` 在生产构建不可见故删除**——后端 `processImportFile` ([app.go](app.go)) 每个失败分支已带 `path` 打日志，是唯一权威源）；通知容器 `max-width: 380px` → `460px`（[modals.css](frontend/src/css/components/modals.css) `.notification-container`）给多行内容更多横向空间。 |
-| **`animationend` 死锁的根因（重要教训）** | ① **CSS shorthand 后设 longhand 顺序**——`style.animation = 'deleteOut 0.45s ease-out forwards'`（shorthand 会重置 `animation-delay` 为 0），紧接 `style.animationDelay = '...ms'`——某些 Chromium 渲染对长后赋值不重启动画，listener 永远等不到 `animationend`；`prefers-reduced-motion: reduce` 媒体查询（[animations.css](frontend/src/css/animations.css)）把 `animation-duration: 0.001ms !important` 叠加到延迟上，**0.001ms 动画 + 几十 ms delay 组合下浏览器不触发 `animationend`**（已知行为）。② **正确解法不是修动画，而是别等动画**——破坏性操作（清空/恢复/删除）"快比优雅重要"，animation 作为 fire-and-forget 视觉反馈，列表刷新（DOM 替换）天然截断动画。**`await Promise.all(items.map(waitForAnimation))` 是反模式**——尤其在 CSS 媒体查询可能压缩 duration 的项目中；要么改 `Promise.race([animation, timeout])` 兜底，要么直接不等。 |
-| **恢复 3 阶段设计的边界（重要）** | 父笔记本状态决定笔记去向：① **父笔记本在回收站（软删除）**——必须先恢复父笔记本（否则笔记指向软删除笔记本会变孤儿），然后笔记保持原 `notebook_id`；② **父笔记本存活**——笔记直接 `UPDATE deleted_at = NULL` 即可；③ **父笔记本已永久删除/不存在**——笔记本被 `PermanentDelete` 后行已不存在，必须先迁 `notebook_id = 1`（默认笔记本，`EnsureDefaultNotebook` 保证存在且永不软删除）再恢复。**`notebook_id IN (0, 1)` 特殊场景跳过**——`notebook_id = 0` 是历史脏数据，删除级联不影响；`notebook_id = 1` 是默认笔记本，永不在回收站。**Stage 1 子查询必须限定 `id IN ?` 范围**（批量恢复时只处理用户选中的笔记引用的笔记本，不全表扫描）。**Stage 2 必须加 `notebook_id != 1`** 防误把已在默认的笔记改写（虽然语义上同值但白做工）。 |
-| **同 bug 模式的排查方法** | 凡是涉及父子关联（笔记-笔记本、笔记-标签、用户-权限）的恢复/合并/迁移逻辑，先问三个问题：① 父/关联表是软删除还是硬删除？② 父/关联表是否在批量操作的 ID 集合范围内？③ 父/关联表若不存在，子表应该去哪？三阶段（先恢复父 → 迁孤儿 → 改子状态）模式可复用。`note_service.go` 的 RestoreAll / BatchRestore / Restore 现在都按此模式实现，新增类似操作时直接复用。 |
-| **暖笺主题 `.btn-restore` 单独配色** | ysgrifennwr 主题下 `--accent` 与 `--danger` 色相相近（都是红系），导致"恢复"（accent）与"清空"（danger）按钮视觉无法区分。修复仅在 `[data-theme="ysgrifennwr"]` 选择器下覆盖 `.btn-restore`：背景用 `color-mix(in srgb, var(--success) 15%, transparent)`、文字 `var(--success-text)`、边框 `color-mix(in srgb, var(--success) 35%, transparent)`，**13 个其他主题完全不受影响**（--success 借用积极动作语义）。不通过新增 `--success-border` 变量是因为 13 个其他主题都靠 `--accent` 工作正常；新增主题变量会污染所有主题。 |
-| **涉及文件** | [frontend/src/js/trash-page.js](frontend/src/js/trash-page.js)（`emptyTrash`/`restoreAllNotes` 改为 forEach + 立即调后端）、[internal/services/note_service.go](internal/services/note_service.go)（RestoreAll/BatchRestore/Restore 三函数 3 阶段处理）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.new-notebook-actions` 居中）、[frontend/src/main.js](frontend/src/main.js)（`showImportResults` 聚合 toast）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.notification-container` 宽度 380→460）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)（`.btn-restore` 主题变量与 ysgrifennwr 单独覆盖） |
-
----
-
-## 记忆点 2：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
+## 记忆点 1：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 2：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -597,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 3：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 4：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 5：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 6：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 7：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+## 记忆点 8：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 9：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +681,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **分类感知清空按钮（重要）** | 单个清空按钮根据当前筛选状态动态切换清空范围：active 筛选 → 清空所有**未完成**；done 筛选 → 清空所有**已完成**；all 筛选 → 清空**全部**。前端 `clearTodosByFilter()` 传递 filter 参数 → 后端 `ClearTodosByFilter(filter)` switch 分发到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll` 三个 `DELETE WHERE` 查询。确认弹窗文案随分类动态变化，明确告知清空范围。 |
 | **悬浮 Tooltip + 启动提醒** | 鼠标悬停 600ms 防抖后弹出全文预览卡片（基于鼠标位置智能定位，`scale(0.95)→1` 弹入，`pointer-events: none` 防干扰）。启动时 `checkUnfinishedTodosReminder()` 异步检测未完成待办数量，有则弹窗询问"是否去查看"，支持锁屏场景延迟弹出（等 `app-unlocked` 事件）。三态筛选（active/done/all）按钮实时显示数量徽标，选中态卡片背景 + 阴影提升。 |
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/3 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
+
+---
+
+## 记忆点 10：密码生成器（前端随机密码生成 + 强度算法迭代 + 对话框 UI + ESC 拦截）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在密码管理页面新增「生成密码」按钮，打开独立对话框支持配置密码长度/数量/字符类型/排除易混淆字符，批量生成随机密码并逐条/批量复制。经历多轮 UI 迭代和强度算法重写。 |
+| **密码生成实现（纯前端）** | [frontend/src/js/password-manager.js](frontend/src/js/password-manager.js) `pmGeneratePassword(opts)`：基于 `crypto.getRandomValues()` 密码学安全随机，字符池从四类（upper/lower/digits/symbols）按选项拼接，排除易混淆字符 `lI1O0`。`pmDoGenerate()` 循环生成指定数量密码，每条计算强度并渲染结果列表。 |
+| **强度算法三轮迭代（重要）** | **V1 熵值法**：基础熵 = `长度 × log2(字符池大小)`，仅 `typeCount <= 1` 时 `×0.4` 惩罚 → 问题：大写+数字 16 位直接满分 4。**V2 熵值+模式惩罚**：加重复字符/序列/键盘图案/低唯一率惩罚 → 问题：纯小写 16 位仍得3分。**V3 最终方案（评级上限+长度阶梯）**：`min(长度基础评级, 类型上限) - 模式惩罚`。类型上限：1类→2（一般），2+类→4（强）；长度阶梯：<8→0, 8-11→1, 12-15→2, 16+→base=typeCount>=2?4:3；模式惩罚：重复字符3+位/-1、最长连续序列占50%+/-1、键盘图案/-1、低唯一率/-1，最多-2。**关键教训**：序列检测用正则重叠匹配会导致长度虚高，改用线性扫描 `charCodeAt` 差值±1 检测最长连续序列。 |
+| **对话框 UI 结构** | [frontend/index.html](frontend/index.html) `#pmGenOverlay`：全屏遮罩 + 居中 `.pm-gen-dialog`（覆盖父级 `pmDialogIn` 动画避免缩放抖动）。内部卡片分组：密码长度（步进器±1 + 进度条）、生成数量（步进器±1，范围 1-20）、字符类型（2×2 切换按钮网格 + 排除易混淆复选框）、结果区域（复制全部按钮 + 逐条密码列表含强度圆点+复制按钮）。 |
+| **按钮交互规范** | 所有操作按钮统一 `:active` 回弹效果（`scale(0.95)` + `transition-duration: 0.08s`），包括生成密码按钮、复制全部、单条复制、步进器±按钮。生成密码按钮图标与文字同行（`display: inline-flex; align-items: center; gap: 6px`），非全宽。 |
+| **滚动条问题修复** | 对话框 `.pm-gen-body` 和 `.pm-gen-results` 的滚动条需要显式声明完整样式（`scrollbar-width` + `scrollbar-color` + `::-webkit-scrollbar` 四件套），否则在对话框层级内不显示。不能仅依赖全局 `scrollbar.css`，因为对话框的 `overflow` 上下文会隔离滚动条样式。 |
+| **ESC 关闭拦截** | 生成器对话框的 ESC 关闭逻辑注册在全局 `pmHandleEscape` 中（遵循 AGENTS.md 规范：ESC 统一在全局处理），优先级在详情对话框之后：先判断 `pmDetailOverlay` → 再判断 `pmGenOverlay`。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmGeneratePassword`/`pmCalcStrength`/`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条） |
 
 ---
 
