@@ -158,8 +158,8 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	}
 	if cfg.AIAgentMaxIterations < 1 {
 		cfg.AIAgentMaxIterations = 20
-	} else if cfg.AIAgentMaxIterations > 100 {
-		cfg.AIAgentMaxIterations = 100
+	} else if cfg.AIAgentMaxIterations > 500 {
+		cfg.AIAgentMaxIterations = 500
 	}
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)

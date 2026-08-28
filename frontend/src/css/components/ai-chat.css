@@ -1136,61 +1136,6 @@
     transition: none !important;
 }
 
-/* 菜单项离场：反向交错消失（最后一项先消失） */
-@keyframes skillsItemOut {
-    0%   { opacity: 1; transform: translateX(0); }
-    100% { opacity: 0; transform: translateX(-6px); }
-}
-
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item {
-    animation-name: skillsItemOut;
-    animation-duration: 0.1s;
-    animation-timing-function: ease-in;
-    animation-fill-mode: forwards;
-    /* animation-delay 由 nth-child 各自设置，不能用 shorthand 以免被重置 */
-}
-
-/* 菜单项动画：展开时逐个滑入 */
-.ai-chat-skills-dropdown .ai-chat-skills-item {
-    opacity: 0;
-    transform: translateX(-8px);
-    transition: opacity 0.25s ease-out, transform 0.25s ease-out, background 0.1s;
-}
-
-.ai-chat-skills-dropdown.open .ai-chat-skills-item {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(1) { transition-delay: 0.02s, 0.02s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(2) { transition-delay: 0.04s, 0.04s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(3) { transition-delay: 0.06s, 0.06s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(4) { transition-delay: 0.08s, 0.08s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(5) { transition-delay: 0.10s, 0.10s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(6) { transition-delay: 0.12s, 0.12s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(7) { transition-delay: 0.14s, 0.14s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(8) { transition-delay: 0.16s, 0.16s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(9) { transition-delay: 0.18s, 0.18s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(10) { transition-delay: 0.20s, 0.20s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(11) { transition-delay: 0.22s, 0.22s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(12) { transition-delay: 0.24s, 0.24s, 0s; }
-.ai-chat-skills-dropdown.open .ai-chat-skills-item:nth-child(13) { transition-delay: 0.26s, 0.26s, 0s; }
-
-/* 离场反向交错：最后一项先消失 */
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(1) { animation-delay: 0.24s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(2) { animation-delay: 0.22s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(3) { animation-delay: 0.20s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(4) { animation-delay: 0.18s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(5) { animation-delay: 0.16s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(6) { animation-delay: 0.14s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(7) { animation-delay: 0.12s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(8) { animation-delay: 0.10s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(9) { animation-delay: 0.08s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(10) { animation-delay: 0.06s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(11) { animation-delay: 0.04s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(12) { animation-delay: 0.02s; }
-.ai-chat-skills-dropdown.closing .ai-chat-skills-item:nth-child(13) { animation-delay: 0s; }
-
 .ai-chat-skills-item {
     display: flex;
     align-items: center;

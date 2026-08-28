@@ -557,18 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 33. **待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空 + 行内编辑 + Tooltip 预览）**：**零重渲染架构**——toggle/delete/add 三个高频操作全部绕过 `loadTodos()` → `innerHTML` 全量重渲染，改为直接操作 DOM（prepend/remove），统计数字用独立 `refreshTodoStats()` 异步更新。**addTodo 两段式动画**：已有条目先 `translateY` 平滑下移 → rAF 中插入新条目并清除 transform，350ms 时序精控防跳动。**toggleTodo 原地切换**："全部"筛选下直接切换类+DOM 移动位置（完成移底部/取消完成移顶部），筛选模式播放 exit 动画后 `item.remove()`。**deleteTodo** 播放动画后 `item.remove()`。**FAB 浮动输入**：右下角 44px 圆形 FAB → 展开 300px 内联面板（textarea+Enter 提交），FAB 旋转 45° 变 "X"，点击外部/Escape 自动收起。**行内编辑**：双击文本进入 textarea 编辑态，Enter 保存/Escape 取消/失焦自动保存，保存后播放 1.2s 涟漪确认动画。**分类感知清空**：单按钮根据当前筛选（active/done/all）动态切换清空范围，后端 `ClearTodosByFilter(filter)` switch 到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll`，确认弹窗文案随分类变化。**悬浮 Tooltip**：600ms 防抖后弹出全文预览，基于鼠标位置智能定位。**启动提醒**：`checkUnfinishedTodosReminder()` 异步检测未完成数，支持锁屏延迟弹出。详见 [main.js](frontend/src/main.js)（todo 模块）、[todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes）、[todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll）
 
 ---
-## 记忆点 1：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三组改动：① **搜索打分排序**——[note_service.go](internal/services/note_service.go) 新增 `buildSearchSortOrder`：有关键词时返回 `clause.OrderBy{Expression: clause.Expr{SQL: CASE WHEN ... END DESC, pinned DESC, updated_at DESC}}` 打分排序（完全相等 50 > 前缀 40 > 标题+内容 30 > 仅标题 25 > 仅内容 10，空关键词回退常规排序）；标签/笔记本/时间筛选**仅过滤不参与排序**。② **LIKE 通配符转义**——新增 `escapeLike` 函数（转义 `\ % _`），4 处搜索查询（Search/SearchByNotebook/SearchNoteIDs/SearchNoteIDsByNotebook）统一 `LIKE ? ESCAPE '\'`。③ **搜索弹窗 CSS/文案修复**——[search-modal.css](frontend/src/css/components/search-modal.css) `.search-modal-content` `overflow: hidden` → `visible`（修复筛选下拉菜单被裁剪）；[index.html](frontend/index.html) placeholder 改"搜索笔记(标题/内容)..."、空状态描述改"输入关键字搜索标题或内容"；[main.js](frontend/src/main.js) `searchModalEmptyDesc` 文案同步。 |
-| **GORM v1.31.1 `Order()` 静默丢弃（关键 bug）** | `gorm.DB.Order()` 内部 switch 只处理 `clause.OrderBy` / `clause.OrderByColumn` / `string` 三种类型，传入 `gorm.Expr` **不在 switch 分支内会被静默丢弃**，导致查询完全没有 ORDER BY 子句。用户实测"搜『日志』标题命中不排前"的根因即此——`buildSearchSortOrder` 返回 `gorm.Expr` 后被 `Order()` 丢弃，所有结果按主键/插入顺序返回。修复：返回值改为 `clause.OrderBy{Expression: clause.Expr{SQL: ..., Vars: ...}}`。**教训**：GORM 的 `Order()` 并非万能接收任意 `Clause` 表达式，使用自定义 SQL 表达式排序时必须用 `clause.OrderBy` 包裹。已加注释标记此坑。 |
-| **测试假阳性教训** | `TestSearchRelevanceOrdering` 原实现中笔记插入顺序恰好与期望排序一致（完全50→前缀40→都中30→仅标题25→仅内容10），即使 ORDER BY 完全丢失，按插入顺序返回也能通过断言。修复：**打乱插入顺序**（内容10→完全50→仅标题25→前缀40→都中30），确保排序逻辑真正生效。`TestSearchByNotebookRelevanceOrdering` 和 `TestSearchRelevanceOrderingWithTagFilter` 同理打乱。**普遍教训**：排序测试的插入顺序必须与期望顺序不同，否则测试是假阳性。 |
-| **通配符转义** | `escapeLike(s)` 用 `strings.NewReplacer` 转义 `\` → `\\`、`%` → `\%`、`_` → `\_`，配合 `LIKE ? ESCAPE '\'` 使用。4 处搜索查询统一应用（原实现未转义，用户输入 `100%` 会匹配所有含 `100` 后任意字符的笔记）。`TestEscapeLike` + `TestSearchWildcardEscaping` 覆盖。 |
-| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`buildSearchSortOrder` 返回 `clause.OrderBy` + `escapeLike` + 4 处搜索查询 `ESCAPE '\'`）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`TestBuildSearchSortOrder` 类型断言改为 `clause.OrderBy` + `TestSearchRelevanceOrdering`/`TestSearchRelevanceOrderingWithTagFilter`/`TestSearchByNotebookRelevanceOrdering` 打乱插入顺序 + `TestEscapeLike` + `TestSearchWildcardEscaping`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（`overflow: visible`）、[frontend/index.html](frontend/index.html)（placeholder + 空状态文案）、[frontend/src/main.js](frontend/src/main.js)（`searchModalEmptyDesc`） |
-
----
-## 记忆点 2：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 1：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/client.go](internal/mcpserver/client.go)（go-sdk 三传输 + headerRoundTripper + 会话生命周期 cancel）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（ListTools/CallTool + callTool 重连 + InputSchema 转换）、[internal/mcpserver/pool.go](internal/mcpserver/pool.go)（新增 Pool/Warmup/Reconcile/WarmupOne/getOrCreate/in-flight）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPPool + 装配改走池）、[app.go](app.go)（WarmupMCPServers 绑定 + shutdown/rebuildServices 池生命周期）、[frontend/src/main.js](frontend/src/main.js)（warmupMCPServers 汇总通知 + 设置页联动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（首次进入预热）、[frontend/wailsjs/](frontend/wailsjs/)（WarmupMCPServers + WarmupResult 手动同步）、[go.mod](go.mod)（go-sdk v1.7.0，移除 mark3labs/eino-ext mcp）、[ping_test.go](internal/mcpserver/ping_test.go)/[pool_internal_test.go](internal/mcpserver/pool_internal_test.go)/[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)/[reconnect_test.go](internal/mcpserver/reconnect_test.go)（新增测试） |
 
 ---
-## 记忆点 3：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 2：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
 
 ---
-## 记忆点 4：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 3：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
 
 ---
-## 记忆点 5：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 4：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
 
 ---
-## 记忆点 6：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 5：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -632,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
 
 ---
-## 记忆点 7：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+## 记忆点 6：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -647,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
 
 ---
-## 记忆点 8：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 7：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航（`cols = 4`）/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/4 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
 
 ---
-## 记忆点 9：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+## 记忆点 8：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,8 +666,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件/强度渲染 `pmRenderStrengthBar`/`pmRenderStrengthText`）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条/`#pmGenResultsWrap` 过渡/`#pmDetailPwdStrength` 对齐）、[internal/services/password_generator.go](internal/services/password_generator.go)（生成与强度算法）、[app.go](app.go)（`GeneratePasswords`/`CheckPasswordStrength` Wails 绑定） |
 
 ---
-
-## 记忆点 10：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+## 记忆点 9：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -688,6 +676,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **4 个分页 Bug 修复** | ① `pmLoadingEl.style.display = pmHasMore ? 'none' : 'none'` 死代码（两分支相同）→ 统一 `'none'`；②③ `loadMorePmRecords` 缺少 `pmLoadSeq` 代际防护 → 请求前快照 `seq`，完成后 `if (seq !== pmLoadSeq) return` 丢弃过期响应，同时顺带解决"快速搜索时进行中的 loadMore 结果 concat 进新列表"竞态；④ `validIds` 只过滤当前页 → 全量重载时直接 `pmSelectedIds.clear()`（旧选中项可能不在新列表当前页，防批量选中残留）。 |
 | **进入页面滚动到顶部** | 每次进入密码管理页面时 `.pm-list-wrap` 置 `scrollTop = 0` 再加载数据，避免上次浏览位置残留。 |
 | **涉及文件** | [internal/services/password_service.go](internal/services/password_service.go)、[app.go](app.go)、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css) |
+
+---
+
+## 记忆点 10：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增「深度研究」AI 技能，突破常规 Agent 运行上限进行深度研究。该技能与其他技能互斥，激活时临时将最大迭代次数提升至 200（若当前设置小于 200）。同时移除了技能菜单项的 stagger 入场/离场动画，简化后续维护。 |
+| **后端技能提示词（重要）** | [internal/database/db.go](internal/database/db.go) `InitBuiltinPrompts` 新增 `skill_deep_research`：定义深度研究分析师角色，包含研究流程规范（问题分解→多轮搜索→信息整合→深度分析→报告生成）、工具使用策略（优先本地笔记 recall_notes，不足再联网搜索）、输出格式（研究报告五部分）。 |
+| **Agent 迭代次数临时提升（重要）** | [internal/agent/agent.go](internal/agent/agent.go) `Run` 方法读取 `maxIterations` 后，遍历 `req.SkillIDs` 检测 `skill_deep_research`，若当前设置小于 200 则临时提升至 200。**设计决策**：仅在技能激活时提升，不修改全局设置；若用户设置已大于 200 则保持用户设置（不降级）。 |
+| **前端技能菜单（重要）** | [frontend/index.html](frontend/index.html) 新增 `data-skill="deep_research"` 菜单项（搜索图标 SVG）；[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) `getSkillLabel` 新增 `case 'deep_research': return '深度研究'`；`renderSkillChips` 新增 `else if (skillId === 'deep_research')` 分支渲染 chip HTML（与内置工具 chip 结构一致）。 |
+| **技能 ID 转换流程** | 前端 `activeSkills = { deep_research: true }` → 提交时 `'skill_' + id` → 后端 `skillIds = ["skill_deep_research"]` → `app.go` `GetSkillPrompts(["skill_deep_research"], ...)` 从数据库查询提示词 → 注入 Instruction → Agent 执行时检测技能 ID 临时提升迭代次数。 |
+| **移除技能入场动画（简化维护）** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) 移除 `.ai-chat-skills-dropdown .ai-chat-skills-item` 的 `opacity:0/transform:translateX(-8px)/transition` 初始状态、`.open .ai-chat-skills-item` 的状态变化、`.closing .ai-chat-skills-item` 的离场动画、`@keyframes skillsItemOut` 定义、以及所有 `nth-child(1-14)` 的 stagger delay。**动机**：每次新增技能都需要维护 CSS 动画，移除后无需额外处理。 |
+| **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitBuiltinPrompts` 新增 `skill_deep_research`）、[internal/agent/agent.go](internal/agent/agent.go)（`Run` 迭代次数临时提升）、[frontend/index.html](frontend/index.html)（技能菜单项）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`getSkillLabel` + `renderSkillChips`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（移除 stagger 动画） |
 
 ---
 

@@ -280,6 +280,16 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 
+	// 深度研究技能：临时提升迭代次数至200（若当前设置小于200）
+	for _, skillID := range req.SkillIDs {
+		if skillID == "skill_deep_research" {
+			if maxIterations < 200 {
+				maxIterations = 200
+			}
+			break
+		}
+	}
+
 	// 0. 会话级 Agent 实例：按会话 ID 取/建交互实例（ask_user 同轮等待通道、
 	//     run 取消源、ChatModel 客户端缓存），同一会话连续消息复用；
 	//     runMu 串行化同一会话的 run（等待中的 run 结束前不启动新 run）。

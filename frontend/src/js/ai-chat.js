@@ -1816,6 +1816,12 @@ function renderSkillChips() {
                 <span class="ai-chat-skill-chip-label" title="${countTitle.replace(/"/g, '&quot;')}">角色扮演: ${label}</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}">${SVGS.windowClose}</button>
             </div>`;
+        } else if (skillId === 'deep_research') {
+            return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
+                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></span>
+                <span class="ai-chat-skill-chip-label">深度研究</span>
+                <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>`;
         }
         return '';
     }).join('');
@@ -2128,6 +2134,7 @@ function getSkillLabel(skillId, config) {
             const count = Array.isArray(roleplayNotes) ? roleplayNotes.length : 0;
             return count > 0 ? `角色扮演 · ${count} 篇` : '角色扮演';
         }
+        case 'deep_research': return '深度研究';
         default: return skillId;
     }
 }
