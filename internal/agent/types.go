@@ -23,14 +23,17 @@ type Request struct {
 	RoleplayNotes     string // 保留字段：角色扮演设定（已并入 Instruction）
 	UserMsgID         uint
 	DisabledTools     []string // 禁用工具名集合，装配时按此过滤（注册级，被禁工具模型不可见）
+	PlanMode          bool     // Plan 模式：true 时注册 create_plan/update_plan 工具并注入计划约束
 }
 
 // ToolMeta 内置工具清单条目（供前端工具清单展示）。
 // Enabled 表示当前是否启用（默认全部启用，按禁用集合过滤）。
+// PlanOnly 标记该工具仅在 Plan 模式下可用。
 type ToolMeta struct {
-	Name    string // 英文工具名
-	Label   string // 一行中文说明
-	Enabled bool   // 当前是否启用
+	Name     string // 英文工具名
+	Label    string // 一行中文说明
+	Enabled  bool   // 当前是否启用
+	PlanOnly bool   // 仅 Plan 模式可用
 }
 
 // HistoryMessage 一条历史消息（DB 中的 user/assistant 消息，已由调用方截断）。

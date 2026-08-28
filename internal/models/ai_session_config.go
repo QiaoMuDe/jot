@@ -10,4 +10,5 @@ type AISessionConfig struct {
 	EnabledSkills     string `gorm:"type:text" json:"enabled_skills"`
 	RoleplayNotes     string `gorm:"type:text;default:''" json:"roleplay_notes"`
 	RecallNotebookIDs string `gorm:"type:text" json:"recall_notebook_ids"`
+	PlanMode          bool   `gorm:"default:false" json:"plan_mode"`
 }

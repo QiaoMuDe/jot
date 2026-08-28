@@ -2139,11 +2139,15 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			}
 		}
 
+		// 读取会话配置中的 Plan 模式标记
+		sessCfg := a.aiService.LoadSessionConfig(sessionID)
+
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
 		a.LogSvc.Logger.Debugw("AI Agent 流开始",
 			fastlog.Int("history_count", len(history)),
 			fastlog.Int("skill_count", len(skillIds)),
 			fastlog.Int("disabled_tool_count", len(disabledTools)),
+			fastlog.Bool("plan_mode", sessCfg.PlanMode),
 		)
 		result, err := a.AgentSvc.Run(ctx, agent.Request{
 			SessionID:         sessionID,
@@ -2155,6 +2159,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			RecallNotebookIDs: recallNotebookIDs,
 			UserMsgID:         userMsgID,
 			DisabledTools:     disabledTools,
+			PlanMode:          sessCfg.PlanMode,
 		}, func(ev, data string) {
 			// Agent 事件统一携带 streamGen（首参），与 stream-done/stream-error/agent-result
 			// 已有的 gen 参数形态一致：前端按代过滤，防止切换/并发流串扰
@@ -2271,7 +2276,7 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 	metas := tools.BuiltinTools()
 	result := make([]agent.ToolMeta, 0, len(metas))
 	for _, m := range metas {
-		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name]})
+		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name], PlanOnly: m.PlanOnly})
 	}
 	// 追加已预热 MCP 服务器的工具（未预热时不显示，不阻塞等待）
 	if a.mcpPool != nil {

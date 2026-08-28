@@ -351,7 +351,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	for _, name := range req.DisabledTools {
 		disabledTools[name] = true
 	}
-	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools)
+	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools, req.PlanMode)
 
 	// 追加外部 MCP 服务器工具（数据库驱动 + 全局预热池）：
 	// 从数据库读取 MCP 服务器配置，全部传输（http/sse/stdio）统一优先复用预热池连接
@@ -491,12 +491,14 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			},
 		},
 		MaxIterations: maxIterations,
-		// GenModelInput：每轮 LLM 调用前注入当前计划状态，引导模型按计划执行
+		// GenModelInput：每轮 LLM 调用前注入当前计划状态（仅 Plan 模式），引导模型按计划执行
 		GenModelInput: func(_ context.Context, instruction string, input *adk.AgentInput) ([]*schema.Message, error) {
-			planHint := genPlanHint(toolCtx.PlanState, toolCtx.SkippedPlanUpdate)
 			enhanced := instruction
-			if planHint != "" {
-				enhanced = instruction + planHint
+			if req.PlanMode {
+				planHint := genPlanHint(toolCtx.PlanState, toolCtx.SkippedPlanUpdate)
+				if planHint != "" {
+					enhanced = instruction + planHint
+				}
 			}
 			msgs := make([]*schema.Message, 0, len(input.Messages)+1)
 			if enhanced != "" {
@@ -773,28 +775,31 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			result.ToolCalls = string(b)
 		}
 	}
-	// 计划兜底处理：
-	// 模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划，保证落库计划可读。
+	// 计划兜底处理（仅 Plan 模式）：
+	// Agent 模式下跳过所有计划相关逻辑，不补建计划、不补标步骤。
+	// Plan 模式下：模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划。
 	// 注意：由于已有计划完成检测机制（模型必须完成计划才能输出最终回答），
 	// 不再需要自动补标未完成步骤为 done 的逻辑。
-	if toolCtx.PlanState != nil {
-		plan := toolCtx.PlanState
-		if b, err := json.Marshal(plan); err == nil {
-			result.Plan = string(b)
-		}
-	} else if len(toolRecords) > 0 {
-		// 模型跳过了 create_plan 但执行了工具：补建单步计划（goal 取用户问题摘要）
-		if s.deps.Logger != nil {
-			s.deps.Logger.Warnw("模型跳过了 create_plan 但执行了工具调用，自动补建单步计划",
-				fastlog.Int("tool_calls", len(toolRecords)))
-		}
-		autoPlan := &tools.Plan{
-			Goal:  tools.TruncateRunes(req.UserText, 50),
-			Steps: []tools.PlanStep{{ID: 1, Description: "直接调用工具完成用户请求", Status: "done"}},
-		}
-		toolCtx.PlanState = autoPlan
-		if b, err := json.Marshal(autoPlan); err == nil {
-			result.Plan = string(b)
+	if req.PlanMode {
+		if toolCtx.PlanState != nil {
+			plan := toolCtx.PlanState
+			if b, err := json.Marshal(plan); err == nil {
+				result.Plan = string(b)
+			}
+		} else if len(toolRecords) > 0 {
+			// 模型跳过了 create_plan 但执行了工具：补建单步计划（goal 取用户问题摘要）
+			if s.deps.Logger != nil {
+				s.deps.Logger.Warnw("模型跳过了 create_plan 但执行了工具调用，自动补建单步计划",
+					fastlog.Int("tool_calls", len(toolRecords)))
+			}
+			autoPlan := &tools.Plan{
+				Goal:  tools.TruncateRunes(req.UserText, 50),
+				Steps: []tools.PlanStep{{ID: 1, Description: "直接调用工具完成用户请求", Status: "done"}},
+			}
+			toolCtx.PlanState = autoPlan
+			if b, err := json.Marshal(autoPlan); err == nil {
+				result.Plan = string(b)
+			}
 		}
 	}
 	if s.deps.Logger != nil {

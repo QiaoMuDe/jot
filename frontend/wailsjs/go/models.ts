@@ -4,6 +4,7 @@ export namespace agent {
 	    Name: string;
 	    Label: string;
 	    Enabled: boolean;
+	    PlanOnly: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolMeta(source);
@@ -14,6 +15,7 @@ export namespace agent {
 	        this.Name = source["Name"];
 	        this.Label = source["Label"];
 	        this.Enabled = source["Enabled"];
+	        this.PlanOnly = source["PlanOnly"];
 	    }
 	}
 
@@ -856,6 +858,7 @@ export namespace services {
 	    enabled_skills: string;
 	    roleplay_notes: string;
 	    recall_notebook_ids: string;
+	    plan_mode: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -869,6 +872,7 @@ export namespace services {
 	        this.enabled_skills = source["enabled_skills"];
 	        this.roleplay_notes = source["roleplay_notes"];
 	        this.recall_notebook_ids = source["recall_notebook_ids"];
+	        this.plan_mode = source["plan_mode"];
 	    }
 	}
 	export class SettingsConfig {

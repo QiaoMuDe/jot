@@ -50,6 +50,7 @@ type SessionConfig struct {
 	EnabledSkills     string `json:"enabled_skills"`
 	RoleplayNotes     string `json:"roleplay_notes"`
 	RecallNotebookIDs string `json:"recall_notebook_ids"`
+	PlanMode          bool   `json:"plan_mode"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -538,6 +539,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnabledSkills:     cfg.EnabledSkills,
 		RoleplayNotes:     cfg.RoleplayNotes,
 		RecallNotebookIDs: cfg.RecallNotebookIDs,
+		PlanMode:          cfg.PlanMode,
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -555,6 +557,7 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"enabled_skills":      cfg.EnabledSkills,
 		"roleplay_notes":      cfg.RoleplayNotes,
 		"recall_notebook_ids": cfg.RecallNotebookIDs,
+		"plan_mode":           cfg.PlanMode,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
@@ -587,6 +590,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		EnabledSkills:     record.EnabledSkills,
 		RoleplayNotes:     record.RoleplayNotes,
 		RecallNotebookIDs: record.RecallNotebookIDs,
+		PlanMode:          record.PlanMode,
 	}
 }
 

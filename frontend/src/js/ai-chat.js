@@ -39,6 +39,7 @@ let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
 let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
+let currentPlanMode = false;   // false = Agent 模式, true = Plan 模式
 // 窗口级标志，与 isStreaming 同步，供 main.js 全局拖拽系统读取
 window.__aiStreaming = false;
 let aiMsgContextMenu = null;   // AI 消息右键菜单
@@ -496,6 +497,20 @@ function bindEvents() {
     if (goSettingsBtn) {
         goSettingsBtn.addEventListener('click', () => window.switchView('settings'));
     }
+
+    // Agent/Plan 模式切换
+    document.querySelectorAll('#aiModeToggle .ai-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const newMode = btn.dataset.mode === 'plan';
+            if (newMode === currentPlanMode) return; // 已经是当前模式
+            currentPlanMode = newMode;
+            syncModeToggle();
+            // 保存到会话配置
+            saveCurrentPlanMode();
+            // 通知
+            window.showNotification?.(`已切换到 ${currentPlanMode ? 'Plan' : 'Agent'} 模式`, 'success');
+        });
+    });
 
     // 输入框事件
     if (inputEl) {
@@ -1486,6 +1501,9 @@ async function switchSession(id) {
                     };
                 }
                 renderSkillChips();
+                // 读取 plan_mode 并同步切换按钮
+                currentPlanMode = !!config.plan_mode;
+                syncModeToggle();
             }
         } catch (_) {}
 
@@ -1659,6 +1677,9 @@ async function createSession() {
                 };
             }
             renderSkillChips();
+            // 读取 plan_mode 并同步切换按钮
+            currentPlanMode = !!defaultCfg.plan_mode;
+            syncModeToggle();
         }
     } catch (_) {}
 
@@ -5696,6 +5717,30 @@ function formatDate(dateStr) {
         return `${d.getMonth() + 1}/${d.getDate()}`;
     } catch (_) {
         return '';
+    }
+}
+
+/**
+ * 同步 Agent/Plan 模式切换按钮的 active 状态
+ */
+function syncModeToggle() {
+    const btns = document.querySelectorAll('#aiModeToggle .ai-mode-btn');
+    btns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === (currentPlanMode ? 'plan' : 'agent'));
+    });
+}
+
+/**
+ * 单独保存当前 plan_mode 到会话配置
+ */
+async function saveCurrentPlanMode() {
+    if (!activeSessionId) return;
+    try {
+        const cfg = await window.go.main.App.LoadSessionConfig(activeSessionId);
+        cfg.plan_mode = currentPlanMode;
+        await window.go.main.App.SaveSessionConfig(activeSessionId, cfg);
+    } catch (e) {
+        console.error('保存 Plan 模式失败:', e);
     }
 }
 

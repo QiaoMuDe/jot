@@ -9226,10 +9226,13 @@ function updateAgentToolsButtonText() {
     const btnText = document.getElementById('aiAgentToolsBtnText');
     if (!btnText) return;
     let enabledCount = 0;
+    let totalCount = 0;
     agentToolsMeta.forEach((tool) => {
+        if (tool.PlanOnly) return; // 排除 Plan 模式专属工具
+        totalCount++;
         if (agentToolsDisabled.indexOf(tool.Name) === -1) enabledCount++;
     });
-    btnText.textContent = `已启用 ${enabledCount}/${agentToolsMeta.length}`;
+    btnText.textContent = `已启用 ${enabledCount}/${totalCount}`;
 }
 
 /**
@@ -9237,16 +9240,17 @@ function updateAgentToolsButtonText() {
  */
 function updateSelectAllCheckboxState() {
     if (!agentToolsSelectAllCheckbox) return;
-    // 空数组时显示 unchecked 状态
-    if (agentToolsMeta.length === 0) {
+    // 排除 Plan 模式专属工具后统计
+    const controllableTools = agentToolsMeta.filter(tool => !tool.PlanOnly);
+    if (controllableTools.length === 0) {
         agentToolsSelectAllCheckbox.checked = false;
         agentToolsSelectAllCheckbox.indeterminate = false;
         return;
     }
-    const enabledCount = agentToolsMeta.filter(tool =>
+    const enabledCount = controllableTools.filter(tool =>
         agentToolsDisabled.indexOf(tool.Name) === -1
     ).length;
-    if (enabledCount === agentToolsMeta.length) {
+    if (enabledCount === controllableTools.length) {
         agentToolsSelectAllCheckbox.checked = true;
         agentToolsSelectAllCheckbox.indeterminate = false;
     } else if (enabledCount === 0) {
@@ -9267,6 +9271,7 @@ function toggleSelectAllTools() {
     const shouldEnable = agentToolsSelectAllCheckbox.checked && !agentToolsSelectAllCheckbox.indeterminate;
 
     agentToolsMeta.forEach(tool => {
+        if (tool.PlanOnly) return; // Plan 模式专属工具不参与全选/全不选
         const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
         if (isEnabled === shouldEnable) return; // 状态未变，跳过
 
@@ -9296,8 +9301,8 @@ function toggleSelectAllTools() {
         }
     });
 
-    // 更新所有子 checkbox 的 UI 状态
-    document.querySelectorAll('.ai-agent-tools-item input[type="checkbox"]').forEach(cb => {
+    // 更新所有子 checkbox 的 UI 状态（排除 Plan 模式专属工具）
+    document.querySelectorAll('.ai-agent-tools-item:not(.is-plan-only) input[type="checkbox"]').forEach(cb => {
         cb.checked = shouldEnable;
     });
 
@@ -9427,6 +9432,25 @@ function createAgentToolRow(tool) {
     itemLabel.appendChild(checkbox);
     itemLabel.appendChild(nameSpan);
     itemLabel.appendChild(descSpan);
+
+    // Plan 模式专属工具：禁用展示 + 点击抖动提示
+    if (tool.PlanOnly) {
+        checkbox.disabled = true;
+        itemLabel.classList.add('is-plan-only');
+        const hint = document.createElement('span');
+        hint.className = 'plan-only-hint';
+        hint.textContent = '仅 Plan 模式可用';
+        itemLabel.appendChild(hint);
+        itemLabel.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!itemLabel.classList.contains('shake')) {
+                itemLabel.classList.add('shake');
+                setTimeout(() => itemLabel.classList.remove('shake'), 400);
+            }
+            window.showNotification?.('此工具仅在 Plan 模式下可用，请切换到 Plan 模式', 'info');
+        });
+    }
+
     return itemLabel;
 }
 

@@ -558,44 +558,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 34. **Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板）**：后端新增两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮次保存 + `GenModelInput` 钩子每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（模型跳过 create_plan 自动补建单步计划、漏调 update_plan 自动补标未完成步骤为 done 并发事件）；前端 `#aiPlanPanel` 输入框上方悬浮可折叠面板（`ai:plan-created`/`ai:plan-updated` 事件），ask_user 反问时互斥收起（方案 B）、回答后恢复，stream-done 移除面板并清空 `streamPlanData` 缓存，历史回放 `renderPlanCard` 气泡内渲染。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[index.html](frontend/index.html)
 
----
-## 记忆点 1：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为 MCP 服务器提供工具级别的启用/禁用开关，取代"服务器一启用，所有工具全量注册"的粗粒度控制。**禁用名单复用** `ai_agent_tools_disabled` 设置键（JSON 数组），与内置工具共用同一套机制，不改 schema。**数据流**：设置页打开时 `GetAgentTools()` 从 MCP 池（`Pool`）读取已预热会话的快照，追加 MCP 工具到内置工具列表后返回；MCP 工具名格式为 `mcp_{serverName}_{toolName}`，前端直接混入内置工具列表渲染（`ToolMeta` 通用渲染零改动）；预热前池为空时不显示 MCP 工具（自然降级），预热完成后 `refreshAgentToolsMeta()` 自动刷新。**禁用状态持久化**：用户开关 MCP 工具后写入 `ai_agent_tools_disabled`，重启后从数据库加载，预热后自动恢复显示禁用状态，不会自动恢复成启用。 |
-| **后端改动（重要）** | ① **[pool.go](internal/mcpserver/pool.go)**——新增 `SessionToolMeta{ServerName, FullName}` 结构体和 `ListToolMetas()` 方法：遍历池中已预热会话的 `Tools`，调用 `t.Info(context.Background())` 取改名后工具名，未预热服务器不返回（零阻塞）。② **[app.go](app.go) `GetAgentTools()`**——在原有内置工具列表后追加 MCP 工具：`mcpPool.ListToolMetas()` → `strings.TrimPrefix` 取 `originalName` → Label 格式 `"{serverName} 的 {originalName}"` → `Enabled = !disabledSet[FullName]`。③ **[agent.go](internal/agent/agent.go)**——MCP 工具装配循环（第 427-442 行）在 `toolNames = append` 前增加 `if disabledTools[mcpToolName] { continue }`，被禁工具跳过注册，模型不可见也不可调用。 |
-| **前端联动** | **[main.js](frontend/src/main.js)**——新增 `refreshAgentToolsMeta()` 函数：重新调用 `GetAgentTools()` 刷新 `agentToolsMeta` 后更新按钮文字，若工具管理面板已展开则重新渲染；`warmupMCPServers()` 末尾自动调用。`renderAgentToolsMgrList()` 和 `createAgentToolRow()` 通用渲染零改动，MCP 工具直接混入内置工具列表显示。 |
-| **行为边界** | ① 预热前：MCP 工具不显示，按钮文字只计内置工具（如"已启用 14/14"）。② 预热后：MCP 工具出现，按钮文字含 MCP 工具（如"已启用 17/18"）。③ 禁用状态持久化：重启后预热前不显示，预热后自动恢复禁用状态，不会自动启用。④ 服务器开关/新增/删除后：预热自动刷新工具列表。⑤ 支持 `ai_agent_tools_disabled` 中混存内置工具名和 MCP 工具名，互不冲突。 |
-| **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
+35. **Agent/Plan 模式切换（Session 级 plan_mode + 工具按模式过滤 + 前端切换控件 + 设置页 PlanOnly 禁用展示）**：为 AI 会话新增 Agent/Plan 双模式切换。后端：`AISessionConfig` 新增 `PlanMode bool` 列（默认 false = Agent 模式），`SessionConfig` 读写透传；`ToolMeta` 新增 `PlanOnly bool` 标记仅 Plan 模式可用的工具（`create_plan`/`update_plan`）；`buildTools` 按 `planMode` 过滤计划工具注册；`genPlanHint` 按 `req.PlanMode` 条件注入计划提示；结果兜底逻辑包裹 `PlanMode` 判断。前端：工具栏模型选择器左侧新增边框包裹的 Agent/Plan pill 切换按钮（分割线分隔），切换即时保存 + 通知；设置页 PlanOnly 工具显示禁用样式（灰色 + checkbox disabled + "仅 Plan 模式可用"说明）+ 点击 shake 抖动 + Toast 通知；全选/全不选/统计文案均排除 PlanOnly 工具。详见 [ai_session_config.go](internal/models/ai_session_config.go)、[ai_service.go](internal/services/ai_service.go)、[meta.go](internal/agent/tools/meta.go)、[types.go](internal/agent/types.go)、[registry.go](internal/agent/registry.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[main.js](frontend/src/main.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
 ---
-## 记忆点 2：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将纯滑动窗口截断（简单丢弃 40 条外消息）升级为**持久化对话摘要**方案：超出窗口大小（20 条）的消息不再直接丢弃，而是由 AI 定期压缩为结构化要点摘要持久化到数据库，每次对话时注入到模型上下文中，让模型拥有"记忆"。 |
-| **核心逻辑** | ① **AISession 新增字段**——[internal/models/ai_session.go](internal/models/ai_session.go) 新增 `SummaryContent`（text，摘要文本）和 `SummaryMsgCount`（int，上次摘要时的总消息数，默认 0），不新建表。② **触发时机**——`diff = 当前总消息数 - SummaryMsgCount`，`diff ≥ 20` 时触发更新（`windowSize` 可配置，默认 20）。③ **首次生成（消息 21）**——`keepTail = 20`，取前 1 条消息生成摘要（`SummaryMsgCount = 21`），模型看到 `[摘要_1] + 消息 1~20`。④ **增量更新（消息 41/61/...）**——`keepTail = 20`，取 `[SummaryMsgCount - keepTail]` 到 `[summarizeUpTo]` 的 20 条消息，增量合并旧摘要生成新摘要（`SummaryMsgCount` 更新为当前总消息数）。⑤ **上下文组装**——`TruncateMessagesForLLM` 保留最后 20 条完整消息，摘要作为 system 消息注入在前。 |
-| **同步阻塞设计** | 摘要生成在 `truncateAIMessages` 中**同步阻塞执行**（非 goroutine 异步），确保当前轮对话就能用到新摘要：先发 `ai:summary-status:generating` 事件 → 同步调用 `GenerateSessionSummary`（超时 30s，使用 AI 流上下文）→ 存库 → 发 `done` 事件 → 截断注入新摘要 → 发给模型。用户取消 AI 流时摘要生成也随之取消，状态条即时消失。 |
-| **摘要提示词优化** | 每条消息截断到 500 字（`[]rune` 按字符截断，非字节），防止 AI 长回复主导摘要内容。提示词明确要求"每条消息用 1~2 句话概括，不要大段复制原文"，双重约束保证摘要简洁。 |
-| **前端状态条** | 新增 `ai:summary-status` 事件监听（`EventsOn`），`generating` 状态时在输入框上方显示"正在生成对话摘要…"（带 spinner 旋转动画），`done` 后自动消失。`summaryGenerating` 状态变量控制显示，取消流时重置。CSS 样式在 [ai-chat.css](frontend/src/css/components/ai-chat.css) 中 `.ai-summary-status` 类。 |
-| **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
-
----
-## 记忆点 3：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手消息区与输入区四项前端重构（全在 [ai-chat.js](frontend/src/js/ai-chat.js) + [ai-chat.css](frontend/src/css/components/ai-chat.css) + [index.html](frontend/index.html)）：① **用户大消息截断折叠**——超长消息默认显示摘要 + 折叠效果，点击「展开全文」显示全部，切换会话自动重置折叠；② **编辑框自适应**——textarea 初始高度/宽度同步消息内容 + 多消息编辑冲突锁；③ **引用/技能/文件三栏合并为一栏** + 输入区绝对定位，消息列表可滚动到引用栏/输入区下方；④ **批量移除按钮语义区分**（移除笔记 / 移除上传文件）。 |
-| **大消息截断折叠（重要）** | `MAX_COLLAPSE_CHARS = 100`：用户消息 `content.length > 100` 时默认折叠。渲染逻辑在 `renderUserMessageWithChips`：用 `.ai-msg-collapse-wrap` 包裹 `.ai-msg-text`（`.collapsed` 类：`-webkit-line-clamp: 3` + `mask-image` 底部渐变淡出）+ 「展开全文」按钮，点击切换 `collapsed` 类显示全部。**切换会话天然重置**——折叠由渲染时按字符数判断，无需持久化状态。**布局要点**：① `.ai-msg-collapse-wrap` 保证按钮位置稳定不随文本换行漂移；② 按钮配色用 `rgba(255,255,255,...)` 半透明白适配 11 主题——**首次用 `var(--accent)` 在 accent 背景上不可见是坑**；③ 展开按钮与文本同处 flex 容器，`.ai-msg-text` `flex: 0 1 auto` 防按钮被挤换行。 |
-| **编辑框自适应 + 冲突锁（重要）** | **初始尺寸自适应**：先 `appendChild` 挂载 DOM 再 `autoResize()`（**scrollHeight 依赖布局，挂载前计算为 0**——这是"初始高度太小"的根因）；宽度同样先读消息宽度再设 textarea/`savedWidth`，编辑态锁定 `msgEl.style.width`（**flex shrink-to-fit 容器清空内容后宽度会丢失**）；`resize: none` 不做自由拖拽、`max-height: none` 不二次截断。**冲突锁**：全局 `_editingMsgEl`——消息 A 编辑中点击消息 B 的编辑 → 抖动动画 + `showNotification('请先完成当前编辑操作', 'warning')`；**注意通知类型必须是 `'warning'`**（`'warn'` 无颜色无图标）；`cancelEdit`/`exitEditModeWithoutRerender` 各路径统一清理 `_editingMsgEl = null` + 宽度复位。 |
-| **输入区绝对定位 + 三栏合并（核心）** | **布局**：输入区 `position: absolute; bottom: 0; z-index: 5`（**原 `z-index: 1` 时 `.ai-msg-actions`（token/耗时行）`z-index: 2` 会穿透显示到输入区**），背景 `var(--bg)` 实色；引用栏 `position: absolute` 浮于输入区上方（`bottom = inputArea.offsetHeight`），`z-index: 3`，`pointer-events: none` 透明穿透、子元素 `pointer-events: auto` 恢复交互；**z-index 层级：actions(2) < bars(3) < input-area(5)**。**ResizeObserver** 监听 barsArea + inputAreaEl + messagesInnerEl，动态更新 `messagesInnerEl.style.paddingBottom = barsArea.offsetHeight + inputAreaEl.offsetHeight + 60`（+60 补偿 `.ai-msg-actions` `top: 100%` 的高度），消息列表可滚动到输入区/引用栏下方。**三栏合并**：HTML 删除 `#aiChatRefBar/SkillBar/FileBar` 三个包装层，chips 容器直接作为 `#aiChatBarsArea` 子元素（`flex-direction: row` + `flex-wrap: wrap` 超行换行）；新增 `updateBarsAreaVisibility()` 按三个 chips 容器 `children.length` 统一控制显隐（任一有内容显示、全空隐藏），`hideEmptyState/showWelcome` 也接上该判断。 |
-| **三栏合并的坑（关键教训）** | ① **空分支必须清空容器 innerHTML**——三个渲染函数（`updateRefChips`/`renderSkillChips`/`renderFileChips`）空分支曾提前 return 不清空，导致旧 chips DOM 残留、`children.length > 0` 恒为真、barsArea 永不隐藏，"批量移除点击没反应"的根因；② **switchSession/createSession 必须清空 `uploadedFiles` 并调 `renderFileChips()`**——曾只清空引用/技能，上一会话的上传文件 chips 残留到下一会话；③ **chip 不透明背景**——容器透明、每个 chip 用 `background: color-mix(in srgb, var(--accent) 8%, var(--bg))`（hover 14%），既透明不遮罩消息又保持可识别。 |
-| **批量移除按钮区分** | ≥3 项时显示批量移除标签，两个按钮语义类名分离：`ai-chat-remove-all-ref`（垃圾桶图标 + 「移除全部 N 篇引用」）/ `ai-chat-remove-all-file`（文档叉图标 + 「移除全部 N 个文件」），**事件绑定选择器与渲染类名必须一致**（曾共用 `.ai-chat-ref-chip-remove-all` 导致无法区分）；背景 `color-mix(in srgb, var(--error, #e74c3c) 8%, var(--bg))` 不透明（与 chips 同方案、error 色系贴合删除语义）+ **实线边框**（用户明确不要虚线）+ hover error 实色填充。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
-
----
-## 记忆点 4：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 1：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +577,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
 
 ---
-## 记忆点 5：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+
+## 记忆点 2：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +593,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
 
 ---
-## 记忆点 6：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+
+## 记忆点 3：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +608,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航（`cols = 4`）/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/4 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
 
 ---
-## 记忆点 7：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+
+## 记忆点 4：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +625,8 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件/强度渲染 `pmRenderStrengthBar`/`pmRenderStrengthText`）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条/`#pmGenResultsWrap` 过渡/`#pmDetailPwdStrength` 对齐）、[internal/services/password_generator.go](internal/services/password_generator.go)（生成与强度算法）、[app.go](app.go)（`GeneratePasswords`/`CheckPasswordStrength` Wails 绑定） |
 
 ---
-## 记忆点 8：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+
+## 记忆点 5：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 6：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 7：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +665,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **ask_user 互斥（方案 B）** | `showAskPanel()` 先 `hidePlanPanel()` 收起计划面板，`hideAskPanel()` 后若仍在流式中且 `streamPlanData` 非空则 `showPlanPanel()` 恢复——两个悬浮面板互斥不重叠，ask_user 阻塞期间计划不推进，收起不影响信息量。 |
 | **关键 bug 教训** | ① `streamPlanData`/`streamPlanCardEl` 曾为 `startStreaming` 局部变量 → `hideAskPanel` 访问报 `ReferenceError: streamPlanData is not defined` → **提升为模块级变量**；② 强化计划提示词（"不要在仍有未完成步骤时直接输出最终回答"）与 app.go 的 ask_user 规范（"先在正文写出问题"）叠加冲突 → 模型把问句当最终回答直接输出、不调 ask_user → 提示词追加澄清"必须调用 ask_user 工具发起提问，严禁把问题写在正文里当作最终回答输出"；③ `plan == nil` 分支最初无 ask_user 提醒 → 无计划场景模型不主动反问 → 两个分支都注入 ask_user 提醒；④ stream-done 只移除面板未清 `streamPlanData` → 新对话 ask_user 快结束时 `hideAskPanel` 恢复逻辑误显示旧计划 → 流结束/新流开始两处清空缓存。 |
 | **涉及文件** | [internal/agent/tools/plan.go](internal/agent/tools/plan.go)（**新增**：create_plan/update_plan）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（Plan/PlanStep/PlanState）、[internal/agent/registry.go](internal/agent/registry.go) + [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（注册/元信息）、[internal/agent/types.go](internal/agent/types.go)（Result.Plan）、[internal/agent/agent.go](internal/agent/agent.go)（GenModelInput 钩子 + genPlanHint + 结果兜底）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.2 规划工具事件 + §9 设计说明）、[app.go](app.go)（ai:agent-result 追加 plan）、[frontend/index.html](frontend/index.html)（#aiPlanPanel）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showPlanPanel/updatePlanPanel/hidePlanPanel/renderPlanCard + 互斥 + 缓存清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-plan-panel/.ai-plan-card 系列样式） |
+
+---
+
+## 记忆点 8：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为 AI 会话新增 **Agent / Plan 双模式切换**：Session 配置持久化 `plan_mode` 字段（默认 false = Agent 模式），工具栏模型选择器左侧新增边框包裹的 pill 切换按钮组（Agent / Plan + 分割线），Agent 模式下不注册 `create_plan` / `update_plan` 工具（模型不可见、不会调用），Plan 模式下保持现有规划流程不变。设置页工具列表中 Plan 模式专属工具显示为禁用样式 + 点击抖动通知。 |
+| **后端改动** | ① **[ai_session_config.go](internal/models/ai_session_config.go)** `AISessionConfig` 新增 `PlanMode bool` 列（gorm default false）。② **[ai_service.go](internal/services/ai_service.go)** `SessionConfig` 结构体 + `SaveSessionConfig` / `LoadSessionConfig` / `CreateDefaultSessionConfig` 透传 `PlanMode`。③ **[meta.go](internal/agent/tools/meta.go)** `ToolMeta` 新增 `PlanOnly bool` 字段，`create_plan` / `update_plan` 标记 `PlanOnly: true`。④ **[types.go](internal/agent/types.go)** `Request` 新增 `PlanMode bool`，`ToolMeta` 新增 `PlanOnly bool`。⑤ **[registry.go](internal/agent/registry.go)** `buildTools` 新增 `planMode bool` 参数，Agent 模式（`planMode=false`）下跳过 `planOnlyTools` 集合中的工具注册。⑥ **[agent.go](internal/agent/agent.go)** `genPlanHint` 按 `req.PlanMode` 条件注入（Agent 模式跳过）；结果兜底逻辑（计划补建/补标）包裹在 `req.PlanMode` 判断内。⑦ **[app.go](app.go)** `GetAgentTools` 透传 `PlanOnly` 字段；`CallAIAgentStream` 读取 `SessionConfig.PlanMode` 传入 `agent.Request.PlanMode`。 |
+| **前端改动** | ① **[index.html](frontend/index.html)** 工具栏模型选择器左侧新增 `#aiModeToggle` 容器（`.ai-mode-toggle` 边框包裹 + 两个 `.ai-mode-btn` 按钮 + `.ai-mode-divider` 分割线）。② **[ai-chat.js](frontend/src/js/ai-chat.js)** 新增 `currentPlanMode` 全局变量 + `syncModeToggle()` + `saveCurrentPlanMode()`（Load→修改→Save）+ 按钮点击事件绑定 + 切换会话/新建会话时同步按钮状态 + `showNotification` 通知。③ **[ai-chat.css](frontend/src/css/components/ai-chat.css)** `.ai-mode-toggle`（`border: 1px solid var(--border); border-radius: 6px; overflow: hidden`）+ `.ai-mode-btn`（无圆角）+ `.ai-mode-btn.active`（accent 背景高亮）+ `.ai-mode-divider`（竖线分割线）。④ **[main.js](frontend/src/main.js)** `createAgentToolRow` 中 PlanOnly 工具：checkbox disabled + `is-plan-only` 类 + 说明文字"仅 Plan 模式可用" + shake 抖动点击事件 + `showNotification`；`toggleSelectAllTools` / `updateSelectAllCheckboxState` / `updateAgentToolsButtonText` 均排除 PlanOnly 工具。⑤ **[settings-panel.css](frontend/src/css/components/settings-panel.css)** `.is-plan-only` 禁用样式 + `.plan-only-hint` + `@keyframes plan-only-shake` 抖动动画。 |
+| **TOOLS.md 更新** | [TOOLS.md](internal/agent/TOOLS.md) 新增第 5 步「标记工具的模式约束」：说明 `PlanOnly` 字段的用法（后端跳过注册 + 前端禁用展示），新增/修改 PlanOnly 工具的开发者必读。 |
+| **关键设计决策** | ① Agent 模式为默认（`PlanMode=false` 零值），新会话无需显式设置。② `planOnlyTools` 为 registry 包级变量（map），过滤在 disabled 之后、工具列表返回之前，不影响其他工具。③ 前端工具栏按钮复用现有 `.ai-chat-toolbar-btn` 按压回弹动画。④ 设置页全选/全不选/统计文案均排除 PlanOnly 工具，避免 UI 状态不一致。 |
+| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/types.go](internal/agent/types.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/agent.go](internal/agent/agent.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[internal/agent/TOOLS.md](internal/agent/TOOLS.md) |
 
 ---
 

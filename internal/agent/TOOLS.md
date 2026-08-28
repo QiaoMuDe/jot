@@ -69,11 +69,25 @@ Go 包文档是工具清单的**唯一权威来源**，各补一行：
 
 注意：本指南（TOOLS.md）不维护具体工具清单，新增工具**无需更新本文件**（见 §6）。
 
-### 第 5 步：按需在工具实现内维护动作文案（可选）
+### 第 5 步：标记工具的模式约束（可选）
+
+若工具**仅在 Plan 模式下可用**（如 `create_plan` / `update_plan`），需在 [tools/meta.go](internal/agent/tools/meta.go) 的 `BuiltinTools()` 中将该条目的 `PlanOnly` 设为 `true`：
+
+```go
+{Name: "your_plan_tool", Label: "说明", PlanOnly: true},
+```
+
+`PlanOnly` 的效果：
+- **后端**：Agent 模式（`planMode=false`）下 `buildTools` 自动跳过该工具的注册，模型不可见、不会调用。
+- **前端**：设置页工具列表中该工具显示为禁用样式（灰色 + checkbox disabled），点击触发抖动并通知"仅 Plan 模式可用"。
+
+大多数工具不需要设置此字段（零值 = 两种模式都可用）。
+
+### 第 6 步：按需在工具实现内维护动作文案（可选）
 
 工具状态条与历史明细直接展示英文工具名（recall_notes 等），无需维护中文名映射；若要在开始调用时展示具体动作（如"创建待办"），让工具实现可选接口 `ActionTextProvider`（`ActionText(argumentsInJSON string) string`），父包在 `tool_start` 时自动生成 `action_text` 下发前端，无需修改前端（见 §8）。此步可跳过。
 
-### 第 6 步：验证
+### 第 7 步：验证
 
 ```bash
 go build ./...
@@ -286,6 +300,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 - [ ] 参数校验完备（必填项、非法枚举）？
 - [ ] 需要结构化收集 / 部分失败时注入了 `ctx` 并使用 `Collector` / `AddPartial`？
 - [ ] registry.go 注册了（且用 `WrapWithError` 包装）？
+- [ ] 若为仅 Plan 模式可用的工具，tools/meta.go 的 `BuiltinTools()` 中 `PlanOnly` 设为 `true`？
 - [ ] 两个 doc.go 清单更新了（含 get_stats 等只读工具与全部构造器名）？
 - [ ] （如需动作文案）工具实现了 `ActionTextProvider` 接口（见 §8）？工具名直接展示英文名，无需映射。
 - [ ] `go build ./...`、`go vet ./internal/agent/...` 通过？

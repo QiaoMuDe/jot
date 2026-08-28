@@ -1692,6 +1692,37 @@
   text-overflow: ellipsis;
 }
 
+/* Plan 模式专属工具禁用样式 */
+.ai-agent-tools-item.is-plan-only {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ai-agent-tools-item.is-plan-only .ai-agent-tools-name,
+.ai-agent-tools-item.is-plan-only .ai-agent-tools-desc {
+  color: var(--text-muted);
+}
+.ai-agent-tools-item.is-plan-only input[type="checkbox"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.plan-only-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-left: 6px;
+  font-style: italic;
+  opacity: 0.75;
+}
+@keyframes plan-only-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.ai-agent-tools-item.is-plan-only.shake {
+  animation: plan-only-shake 0.4s ease;
+}
+
 /* ==========================================================================
    Section P: MCP Server Settings (Settings)
    ========================================================================== */

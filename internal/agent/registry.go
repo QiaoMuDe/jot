@@ -13,11 +13,18 @@ type BuildParams struct {
 	ctx  *tools.Context
 }
 
-// buildTools 统一装配 Agent 工具，并按 disabled 过滤（黑名单语义，默认全部注册）。
+// planOnlyTools 仅在 Plan 模式下注册的工具名集合。
+var planOnlyTools = map[string]bool{
+	"create_plan": true,
+	"update_plan": true,
+}
+
+// buildTools 统一装配 Agent 工具，并按 disabled 和 planMode 过滤。
+// planMode=false 时不注册 planOnlyTools 中的工具（create_plan/update_plan）。
 // 新增工具：1) 在 tools/ 子包新增工具文件与导出构造器；2) 在此追加一行注册；
 // 3) 在 tools/meta.go 的 BuiltinTools 追加展示文案（名称须与注册名一致）；
 // 无需改动 Run() 的事件消费逻辑。
-func buildTools(p BuildParams, disabled map[string]bool) []tool.BaseTool {
+func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.BaseTool {
 	type namedTool struct {
 		name string
 		t    tool.BaseTool
@@ -43,6 +50,10 @@ func buildTools(p BuildParams, disabled map[string]bool) []tool.BaseTool {
 	filtered := make([]tool.BaseTool, 0, len(all))
 	for _, n := range all {
 		if disabled[n.name] {
+			continue
+		}
+		// Agent 模式下跳过仅 Plan 模式可用的工具
+		if !planMode && planOnlyTools[n.name] {
 			continue
 		}
 		filtered = append(filtered, n.t)
