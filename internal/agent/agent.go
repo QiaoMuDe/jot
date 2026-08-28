@@ -531,7 +531,39 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	var streamedContent string
 	var askedUser bool
 
+	// 步骤超时检测：记录当前步骤开始执行的时间，超时后自动跳过
+	var currentStepID int               // 当前正在跟踪的步骤 ID（0 表示未开始）
+	var stepStartTime time.Time         // 当前步骤开始时间
+	const stepTimeout = 5 * time.Minute // 步骤超时时间（默认 5 分钟）
+
 	for {
+		// 步骤超时检测：如果当前步骤执行时间超过阈值，自动跳过
+		if toolCtx.PlanState != nil && toolCtx.PlanState.Current < len(toolCtx.PlanState.Steps) {
+			step := &toolCtx.PlanState.Steps[toolCtx.PlanState.Current]
+			if step.ID != currentStepID {
+				// 步骤变化，重置计时器
+				currentStepID = step.ID
+				stepStartTime = time.Now()
+			}
+			if !stepStartTime.IsZero() && time.Since(stepStartTime) > stepTimeout {
+				// 超时处理：跳过当前步骤
+				step.Status = "skipped"
+				step.Result = "步骤执行超时，自动跳过"
+				toolCtx.PlanState.Current++
+				currentStepID = 0 // 重置，等待下一步骤
+				stepStartTime = time.Time{}
+				// 发射更新事件
+				if b, err := json.Marshal(toolCtx.PlanState); err == nil {
+					emit("ai:plan-updated", string(b))
+				}
+				if s.deps.Logger != nil {
+					s.deps.Logger.Warnw("步骤执行超时，自动跳过",
+						fastlog.Int("step", step.ID),
+						fastlog.Duration("timeout", stepTimeout))
+				}
+			}
+		}
+
 		event, ok := iter.Next()
 		if !ok {
 			break
@@ -597,7 +629,17 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 						}
 					}
 				} else if full.Content != "" {
-					// 无工具调用的 assistant 消息即最终回答（ReAct 循环最后一条）
+					// 模型想输出最终回答：先检测计划是否全部完成
+					if toolCtx.PlanState != nil && countPendingSteps(toolCtx.PlanState) > 0 {
+						// 计划未完成，拒绝接受最终回答，注入提醒继续循环
+						if s.deps.Logger != nil {
+							s.deps.Logger.Debugw("计划未完成，拒绝最终回答，强制继续执行",
+								fastlog.Int("pending_steps", countPendingSteps(toolCtx.PlanState)))
+						}
+						// 不设置 finalContent，循环将继续
+						continue
+					}
+					// 计划已完成或无计划，接受最终回答
 					finalContent = full.Content
 				}
 			} else if mv.Message != nil {
@@ -658,6 +700,35 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				// 部分失败提示（如多来源搜索部分来源失败）：工具内部经 ctx.AddPartial 登记，
 				// 此处统一在 tool_result 之后发射 tool_partial，前端展示 ⚠️ 警告；发射后清空防重复
 				toolCtx.DrainPartials(name, callID)
+
+				// 工具执行后自动检测步骤完成：
+				// 如果模型将步骤标记为 in_progress 后执行了工具，但忘记标记为 done，
+				// 系统自动将其标记为 done 并推进进度。
+				if toolCtx.PlanState != nil && name != "create_plan" && name != "update_plan" {
+					plan := toolCtx.PlanState
+					if plan.Current < len(plan.Steps) {
+						step := &plan.Steps[plan.Current]
+						if step.Status == "in_progress" {
+							step.Status = "done"
+							step.Result = fmt.Sprintf("工具 %s 执行完成", name)
+							plan.Current++
+							toolCtx.SkippedPlanUpdate = false // 清除催促标记
+							if b, err := json.Marshal(plan); err == nil {
+								emit("ai:plan-updated", string(b))
+							}
+							if s.deps.Logger != nil {
+								s.deps.Logger.Debugw("自动检测步骤完成并推进进度",
+									fastlog.String("tool", name),
+									fastlog.Int("step", step.ID))
+							}
+						}
+					}
+					// 计划状态实时同步：每次工具执行后，发射当前计划状态，
+					// 让前端实时显示"正在执行步骤X"的进度状态。
+					if b, err := json.Marshal(plan); err == nil {
+						emit("ai:plan-status", string(b))
+					}
+				}
 			}
 		}
 	}
@@ -675,6 +746,11 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	// ask_user 同轮续答：问句在中间轮、最终回答在末轮，仅存 finalContent 会丢失问句；
 	// 用本轮全部流式正文（问句 + 续答）落库，与前端同一气泡展示一致
 	if askedUser && streamedContent != "" {
+		finalContent = streamedContent
+	}
+	// 通用兜底：finalContent 为空但 streamedContent 有内容时，用 streamedContent 落库；
+	// 适用于模型调用工具后未输出正文、或计划未完成检测触发 continue 等场景
+	if finalContent == "" && streamedContent != "" {
 		finalContent = streamedContent
 	}
 
@@ -698,33 +774,20 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 	// 计划兜底处理：
-	// 1) 模型创建了计划但未全部标记完成（如忘了调用 update_plan）→ 自动将所有未完成步骤补标为 done，
-	//    并发射 ai:plan-updated 让前端同步刷新，避免计划卡片停留在全 pending 状态。
-	// 2) 模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划，保证落库计划可读。
+	// 模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划，保证落库计划可读。
+	// 注意：由于已有计划完成检测机制（模型必须完成计划才能输出最终回答），
+	// 不再需要自动补标未完成步骤为 done 的逻辑。
 	if toolCtx.PlanState != nil {
 		plan := toolCtx.PlanState
-		changed := false
-		for i := range plan.Steps {
-			if plan.Steps[i].Status == "pending" || plan.Steps[i].Status == "in_progress" {
-				plan.Steps[i].Status = "done"
-				changed = true
-			}
-		}
-		if changed {
-			// 发射更新事件，前端实时计划面板同步为全部完成态
-			if b, err := json.Marshal(plan); err == nil {
-				emit("ai:plan-updated", string(b))
-			}
-			if s.deps.Logger != nil {
-				s.deps.Logger.Debugw("计划未完成步骤已自动补标 done",
-					fastlog.Int("steps", len(plan.Steps)))
-			}
-		}
 		if b, err := json.Marshal(plan); err == nil {
 			result.Plan = string(b)
 		}
 	} else if len(toolRecords) > 0 {
 		// 模型跳过了 create_plan 但执行了工具：补建单步计划（goal 取用户问题摘要）
+		if s.deps.Logger != nil {
+			s.deps.Logger.Warnw("模型跳过了 create_plan 但执行了工具调用，自动补建单步计划",
+				fastlog.Int("tool_calls", len(toolRecords)))
+		}
 		autoPlan := &tools.Plan{
 			Goal:  tools.TruncateRunes(req.UserText, 50),
 			Steps: []tools.PlanStep{{ID: 1, Description: "直接调用工具完成用户请求", Status: "done"}},
@@ -964,23 +1027,15 @@ func genPlanHint(plan *tools.Plan, skippedPlanUpdate bool) string {
 
 	// 催促提醒：上一轮执行了工具但模型未调用 update_plan 更新进度时，注入提醒
 	if skippedPlanUpdate {
-		b.WriteString("\n【强制要求】上一轮你执行了工具但未调用 update_plan 更新计划进度。" +
-			"严禁跳过此步骤。你必须在下一步操作之前先调用 update_plan，将对应步骤标记为 done/skipped/in_progress。" +
-			"绝对不要在未调用 update_plan 的情况下输出最终回答或执行新的工具调用。")
+		b.WriteString("\n【强制要求】上一轮你执行了工具但未调用 update_plan。请立即调用 update_plan 更新进度，再继续执行。")
 	}
 
 	// 强制提醒：仍有未完成步骤时，禁止直接输出最终回答，必须先调用 update_plan 标记完成
 	if pendingCount := countPendingSteps(plan); pendingCount > 0 {
-		fmt.Fprintf(&b, "\n【强制要求】当前计划还有 %d 个步骤未完成。"+
-			"每执行完一个工具后，必须立即调用 update_plan 将对应步骤标记为 done。"+
-			"不要在仍有未完成步骤时直接输出最终回答。", pendingCount)
+		fmt.Fprintf(&b, "\n【强制要求】当前计划还有 %d 个步骤未完成。执行完工具后请调用 update_plan 更新进度。"+
+			"系统会在你输出最终回答时自动检测计划完成状态，未完成的回答将被拒绝。", pendingCount)
 	}
 
-	// ask_user 澄清：向用户提问必须调用 ask_user 工具并等待回答（不属计划步骤、不算最终回答），
-	// 严禁把问题直接写进正文当作最终回答输出（否则前端不弹反问面板、本轮直接结束）
-	b.WriteString("\n【重要】如果你需要向用户澄清、确认或提问，必须调用 ask_user 工具向用户发起提问" +
-		"并等待其回答（这不属于计划步骤，也不算输出最终回答）；" +
-		"严禁直接把问题写在正文里当作最终回答输出。")
 	return b.String()
 }
 

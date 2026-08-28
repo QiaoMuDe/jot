@@ -284,12 +284,16 @@ export async function initAIChat() {
     welcomeEl = document.getElementById('aiChatWelcome');
     inputAreaEl = document.getElementById('aiChatInputArea');
     barsArea = document.getElementById('aiChatBarsArea');
-    // 底部栏和输入区共同决定消息列表底部留白，确保最后一条消息不被遮挡
-    // +60px 补偿 .ai-msg-actions（position:absolute; top:100%）的高度
+    // 动态设置 .ai-chat-messages-inner 的 paddingBottom，确保最后一条消息（含绝对定位的
+    // .ai-msg-actions 操作栏）不被底部浮层（引用栏 + 输入区）遮挡。
+    // 计算公式：paddingBottom = 引用栏高度 + 输入区高度 + 固定补偿值
+    //   - totalHeight：引用栏和输入区的实际高度（通过 ResizeObserver 实时监听）
+    //   - 固定补偿值（当前 100px）：预留 .ai-msg-actions（absolute, top:100%）的高度
+    //     以及最后一条消息与输入框之间的视觉间距；如需调整间距大小，修改此数值即可
     if (barsArea && inputAreaEl && messagesInnerEl) {
         const updatePadding = () => {
             const totalHeight = barsArea.offsetHeight + inputAreaEl.offsetHeight;
-            messagesInnerEl.style.paddingBottom = (totalHeight + 60) + 'px';
+            messagesInnerEl.style.paddingBottom = (totalHeight + 100) + 'px';
             // 引用栏浮在输入区上方
             barsArea.style.bottom = inputAreaEl.offsetHeight + 'px';
         };
@@ -2800,6 +2804,8 @@ async function startStreaming(userText, userMsgID) {
         isStreaming = false;
         window.__aiStreaming = false;
         hideAskPanel();
+        hidePlanPanel(); // 报错时收起执行计划面板
+        streamPlanData = null; // 清除本轮计划缓存
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
