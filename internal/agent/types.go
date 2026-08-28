@@ -48,6 +48,7 @@ type Result struct {
 	SearchSources    string  // 联网搜索来源 JSON（tools.Collector.Sources）
 	RecallCards      string  // 召回卡片 JSON（tools.Collector.Cards）
 	ToolCalls        string  // 工具调用链 JSON（[]tools.Record）
+	Plan             string  // 执行计划 JSON（*tools.Plan，未使用规划工具时为空）
 	ReasoningContent string  // 深度思考链全文（流式 reasoning_content 拼接，供落库与展示）
 	ThinkingElapsed  float64 // 思考净时长（秒）：按每轮 assistant 消息独立计时并累加，排除工具执行时间
 	PromptTokens     int     // 全部 ReAct 轮次的真实输入 token 累计（provider usage.PromptTokens 求和）

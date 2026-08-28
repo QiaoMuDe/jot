@@ -3,10 +3,12 @@
 // 职责：
 //   - 工具实现（read_url / recall_notes /
 //     get_current_time / json_validate / json_format / json_extract / manage_todo /
-//     manage_notebook / manage_tag / manage_note / read_note_section / get_stats / ask_user）每文件一个，
+//     manage_notebook / manage_tag / manage_note / read_note_section / get_stats / ask_user /
+//     create_plan / update_plan）每文件一个，
 //     均提供导出构造器（NewReadURL / NewRecallNotes /
 //     NewGetCurrentTime / MustJSONValidate / MustJSONFormat / MustJSONExtract / NewManageTodo /
-//     NewManageNotebook / NewManageTag / NewManageNote / NewReadNoteSection / NewGetStats / NewAskUser），
+//     NewManageNotebook / NewManageTag / NewManageNote / NewReadNoteSection / NewGetStats / NewAskUser /
+//     NewCreatePlan / NewUpdatePlan），
 //     由父包 agent 的 registry.go 统一装配与注册。
 //   - 共享上下文类型（EmitFn / Record / Collector / Context / WrapWithError）定义于
 //     context.go：工具通过注入的 Context 发射事件、登记调用记录、收集结构化结果

@@ -17,6 +17,7 @@ internal/agent/                    父包（Agent 对话链路）
     ├── context.go                 共享上下文：Context / Record / Collector / WrapWithError
     ├── current_time.go            最简无参工具模板（参考示例）
     ├── manage_note.go             带依赖 + ActionText 的复杂工具参考（create/list/view/...）
+    ├── plan.go                    规划工具实现（create_plan / update_plan）
     └── doc.go                     子包说明文档（工具清单，需同步维护）
 
 前端对应展示（工具名直接展示英文，无需维护映射；如需动作文案见 §8）：
@@ -37,7 +38,7 @@ frontend/src/css/components/ai-chat.css    状态条与折叠摘要样式
 ```
 
 - 工具只负责：**解析参数 → 执行 → 返回纯文本**（及可选的**结构化收集**）。
-- 所有事件发射、调用记录、失败回填都由共享上下文与父包统一处理，工具内部**不直接 emit 事件**（**唯一例外**：`ask_user` 反向提问工具直接 `ctx.Emit("ai:ask-user", ...)` 发射问题卡片数据——这是向用户展示交互卡片的专用通道，见 §7.1）。
+- 所有事件发射、调用记录、失败回填都由共享上下文与父包统一处理，工具内部**不直接 emit 事件**（**唯一例外**：`ask_user` 反向提问工具直接 `ctx.Emit("ai:ask-user", ...)` 发射问题卡片数据——这是向用户展示交互卡片的专用通道，事件协议见 [EVENTS.md](internal/agent/EVENTS.md)）。
 - 前端通过 `ai:tool-status` 事件实时展示工具状态条，事件负载为 `tools.Record` 的 JSON。状态条与历史明细**直接展示英文工具名**（recall_notes 等），前端不维护中文映射。
 
 ---
@@ -250,7 +251,11 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 ### 4.7 约束与红线
 
 - **禁止 import 父包 `jot/internal/agent`**：会造成循环依赖（父包 import 了 tools）。工具只能依赖 `services` / `einocli` / 标准库 / 第三方库。
-- **禁止工具内部直接 emit 事件**（`ctx.Emit` 仅供父包使用）。需要提示前端的行为用 `AddPartial`。**唯一例外**：`ask_user` 反向提问工具为向用户展示问题卡片，直接 `ctx.Emit("ai:ask-user", ...)` 发射交互事件（负载为 `{question, options}` JSON，见 §7.1），其他工具一律不得仿照。
+- **禁止工具内部直接 emit 事件**（`ctx.Emit` 仅供父包使用）。需要提示前端的行为用 `AddPartial`。**例外**：以下工具为向用户展示交互卡片，允许直接 `ctx.Emit`：
+  - `ask_user`：发射 `ai:ask-user` 事件（负载为 `{question, options, selection}` JSON）。
+  - `create_plan`：发射 `ai:plan-created` 事件（负载为 `{goal, steps}` JSON）。
+  - `update_plan`：发射 `ai:plan-updated` 事件（负载为 `{step_id, status, result, steps}` JSON）。
+  - 其他工具一律不得仿照；各类事件的完整协议见 [EVENTS.md](internal/agent/EVENTS.md)。
 - **禁止在 `InvokableRun` 里启动长生命周期 goroutine**（工具是无状态、可并发执行的）。
 - **不感知前端协议**：工具不知道 `runtime.EventsEmit` / 事件名，只依赖 `Context` 抽象。
 - **依赖必须在构造器参数中显式声明**：不要在工具内部 new 服务或读全局变量（可测试性差）。
@@ -297,29 +302,9 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 ---
 
-## 7. 事件协议速查（前端联调用）
+## 7. 事件协议
 
-`ai:tool-status` 事件负载为 `tools.Record` 的 JSON：
-
-| Action | 含义 | Record 字段 |
-|---|---|---|
-| `tool_start` | 模型决定调用 | `name`、`args`（截断）、`action_text`（动作文案，由工具实现 `ActionTextProvider` 提供） |
-| `tool_result` | 工具执行成功 | `name`、`result`（截断） |
-| `tool_error` | 工具执行失败（回填模型） | `name`、`result`（错误文本截断） |
-| `tool_partial` | 部分失败提示（前端 ⚠️） | `name`、`result`（失败说明） |
-
-父包逻辑见 [agent.go](internal/agent/agent.go#L384-L410)（`emitToolStart` / `emitToolResult`）与 [context.go](internal/agent/tools/context.go#L66)（`DrainPartials`）。注意 `emitToolResult` 会检查"最近一条同名记录是否为 tool_error"，失败态不会被 result 覆盖。
-
-### 7.1 ask_user 交互事件（反问面板专用通道）
-
-`ask_user` 是唯一允许工具内部直接 `ctx.Emit` 事件的例外：执行时发射 `ai:ask-user` 事件，负载为 JSON 字符串 `{"question": "...", "options": ["...", ...], "selection": "single"|"multiple"}`（options 为空数组 `[]`，selection 缺省 "single"）。前端在输入区上方渲染**悬浮浮层反问面板**（`#aiAskPanel`，absolute 定位不占文档流、覆盖消息列表上方）：问句标题（右上角 × 关闭按钮，点击隐藏面板退出选择）+ 选项区 + 自定义输入行；面板宽度自适应内容（= 最长选项宽度，min-width 280px，最长选项超过输入区时满宽且文本换行）。
-
-- 该工具不执行业务，仅请求澄清。**同轮传输（AskWaiter）**：父包注入 `tools.AskWaiter`（会话级实例，见 [context.go](internal/agent/tools/context.go) 与 [agent.go](internal/agent/agent.go) 的 `agentSession`）时，工具先经 **`ClaimAsk()` 原子抢占反问名额**（模型同条消息并行发出多条 ask_user 时仅第一条成功，其余返回错误回填模型，避免多重阻塞挂起），再发射 `ai:ask-user` 事件并**阻塞等待用户回答**（ReAct 循环暂停、AI 消息不结束），答案经 `AnswerAskUser(sessionID, answer)` 投递到会话等待通道，作为本工具结果返回给模型继续完成原始请求——**不落库为新 user 消息、不新开一轮**；返回给模型的文本为"用户已回答你的提问。用户的回答是：{answer}。请结合你的问题与用户的回答继续完成用户的原始请求，直接给出最终回答或继续调用后续工具，不要重复提问。"。未注入 AskWaiter（非交互场景/测试）时保持原行为：立即返回"我需要向你确认：{question}，请从上方选项中选择或直接输入你的答案。"
-- **selection 语义**：`single`（缺省）单选——用户点选项即提交；`multiple` 多选——用户勾选多项后点"确认提交"，以 `我选择：A、B` 格式提交，若同时填写了自定义输入则拼接为 `我选择：A、B。补充说明：xxx`。选项以垂直列表一行一个展示（单选点行即发；多选条目**左侧常显 checkbox 方框**，勾选后整行高亮 + 方框填充对勾）；两种模式统一布局为"输入框 + 唯一按钮"同排一行（单选按钮「发送」/ 多选按钮「确认提交」），Enter 与按钮走同一逻辑；未勾选且无输入时抖动提示不发送。需要多选决策（多篇笔记/多个标签/方案组合）时用 multiple，选项仍 2-6 个。
-- **面板生命周期**（前端 `showAskPanel` / `hideAskPanel`）：收到 `ai:ask-user` 填充并显示（气泡保持流式状态、停止按钮可见、主输入框禁用并提示"等待你的选择…"）；用户回答经 `AnswerAskUser` **提交成功**后隐藏，提交失败（run 已结束/取消等）保留面板并提示可重试；右上角 × 关闭按钮 = **取消本轮**（复用停止按钮逻辑：收起面板、移除流式气泡、取消后端 run，防止悬挂）；切换会话（流式中被拦截）、清空会话、`stream-done`/`stream-error`/停止时隐藏；新问题到达替换旧面板内容。
-- 用户回答**同轮注入**（非新消息）：`AnswerAskUser` 把答案投递到会话级等待通道（[agent.go](internal/agent/agent.go) 的 `agentSession.WaitForAnswer`），ask_user 工具解锁，同一轮 ReAct 循环继续，同一 AI 气泡续答至最终回答。
-- 落库保障：若模型最终轮无输出，[agent.go](internal/agent/agent.go) 会以 ask_user 调用轮的正文（问句）兜底 `finalContent`，保证历史回放时 assistant 消息可读（面板不重现，仅正文文本 + 工具折叠）；**正文为空**（模型未遵守"正文写问句"约束）时退而取 ask_user 工具参数里的 `question` 兜底，避免问句整轮丢失。**同轮续答落库**：反问轮最终回答是末条 assistant 消息、问句在中间轮，仅存末条会丢失问句——故反问轮以本轮全部流式正文（问句 + 续答）作为 `result.Content` 落库，与前端同一气泡展示一致。
-- Agent Instruction（[app.go](app.go) 的 `CallAIAgentStream`）注入使用边界：仅信息不足/需决策时使用、一次一问、调用后本轮暂停等待用户回答、用户回答（作为 ask_user 工具结果）后继续完成原始请求（直接回答或继续调用后续工具，不重复提问）。
+前后端交互事件（`ai:tool-status` / `ai:ask-user` / `ai:plan-created` / `ai:plan-updated` / `ai:agent-result` / `ai:stream-*` 等）的统一协议已迁移至 [EVENTS.md](internal/agent/EVENTS.md)。前端联调、事件消费与面板生命周期请查阅该文档。
 
 ---
 

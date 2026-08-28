@@ -93,6 +93,22 @@ type AskWaiter interface {
 	WaitForAnswer(ctx context.Context) (string, error)
 }
 
+// PlanStep 单个计划步骤。
+type PlanStep struct {
+	ID          int    `json:"id"`          // 步骤编号（1-based）
+	Description string `json:"description"` // 步骤描述
+	ToolName    string `json:"tool_name"`   // 预计调用的工具（可为空，由模型自主决定）
+	Status      string `json:"status"`      // "pending" / "in_progress" / "done" / "skipped"
+	Result      string `json:"result"`      // 执行结果摘要（可为空串）
+}
+
+// Plan 一轮对话的执行计划，存储在 Context.PlanState 中，跨 ReAct 轮次共享。
+type Plan struct {
+	Goal    string     `json:"goal"`    // 计划目标描述
+	Steps   []PlanStep `json:"steps"`   // 步骤列表
+	Current int        `json:"current"` // 当前执行到第几步（0-based 索引）
+}
+
 // Context 注入给每个工具的执行上下文：事件发射、调用记录、结构化收集器与日志。
 // 部分失败等特殊事件由工具内部经 AddPartial 登记，父包在 tool_result 之后统一 DrainPartials 发射。
 type Context struct {
@@ -101,6 +117,7 @@ type Context struct {
 	Collector *Collector
 	Logger    *fastlog.Logger
 	AskWaiter AskWaiter // 非 nil 时 ask_user 工具阻塞等待用户回答（同轮续答）
+	PlanState *Plan     // 规划工具状态：create_plan 写入、update_plan 更新、GenModelInputFunc 读取注入
 
 	partials []string // 工具登记的部分失败提示（父包 DrainPartials 消费后清空）
 }

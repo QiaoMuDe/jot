@@ -37,6 +37,8 @@ func buildTools(p BuildParams, disabled map[string]bool) []tool.BaseTool {
 		{"read_note_section", tools.WrapWithError("read_note_section", tools.NewReadNoteSection(p.deps.Note, p.deps.Setting, p.ctx), p.ctx)},
 		{"get_stats", tools.WrapWithError("get_stats", tools.NewGetStats(p.deps.Stats, p.deps.Vector, p.ctx), p.ctx)},
 		{"ask_user", tools.WrapWithError("ask_user", tools.NewAskUser(p.ctx), p.ctx)},
+		{"create_plan", tools.WrapWithError("create_plan", tools.NewCreatePlan(p.ctx), p.ctx)},
+		{"update_plan", tools.WrapWithError("update_plan", tools.NewUpdatePlan(p.ctx), p.ctx)},
 	}
 	filtered := make([]tool.BaseTool, 0, len(all))
 	for _, n := range all {

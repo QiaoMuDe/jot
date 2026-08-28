@@ -556,21 +556,10 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空 + 行内编辑 + Tooltip 预览）**：**零重渲染架构**——toggle/delete/add 三个高频操作全部绕过 `loadTodos()` → `innerHTML` 全量重渲染，改为直接操作 DOM（prepend/remove），统计数字用独立 `refreshTodoStats()` 异步更新。**addTodo 两段式动画**：已有条目先 `translateY` 平滑下移 → rAF 中插入新条目并清除 transform，350ms 时序精控防跳动。**toggleTodo 原地切换**："全部"筛选下直接切换类+DOM 移动位置（完成移底部/取消完成移顶部），筛选模式播放 exit 动画后 `item.remove()`。**deleteTodo** 播放动画后 `item.remove()`。**FAB 浮动输入**：右下角 44px 圆形 FAB → 展开 300px 内联面板（textarea+Enter 提交），FAB 旋转 45° 变 "X"，点击外部/Escape 自动收起。**行内编辑**：双击文本进入 textarea 编辑态，Enter 保存/Escape 取消/失焦自动保存，保存后播放 1.2s 涟漪确认动画。**分类感知清空**：单按钮根据当前筛选（active/done/all）动态切换清空范围，后端 `ClearTodosByFilter(filter)` switch 到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll`，确认弹窗文案随分类变化。**悬浮 Tooltip**：600ms 防抖后弹出全文预览，基于鼠标位置智能定位。**启动提醒**：`checkUnfinishedTodosReminder()` 异步检测未完成数，支持锁屏延迟弹出。详见 [main.js](frontend/src/main.js)（todo 模块）、[todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes）、[todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll）
 
----
-## 记忆点 1：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | MCP 基础设施两层重构：① **客户端迁移**——[client.go](internal/mcpserver/client.go) 从 `mark3labs/mcp-go` + `eino-ext/components/tool/mcp` 迁移到官方 `github.com/modelcontextprotocol/go-sdk v1.7.0`（[go.mod](go.mod)）。根因：知乎 MCP SSE 服务器持续主动发服务端 ping 请求，mcp-go（v0.43/v0.58/v1.0.0-beta.1）SSE 客户端均无服务端请求处理分支（不回 pong）导致连接超时；go-sdk 经 jsonrpc2 + ClientSession.handle 内置 ping/cancel 处理器天然解决（[ping_test.go](internal/mcpserver/ping_test.go) 手写 SSE 服务器模拟知乎验证）。② **全局连接池**——新增 [pool.go](internal/mcpserver/pool.go) `mcpserver.Pool`：按服务器 Name 持有预热会话，http/sse/stdio **全传输入池常驻复用**（stdio 子进程不再每轮拉起），替代原 agent.go 每轮 `OpenSession` + defer Close 的建连模型。 |
-| **go-sdk 客户端要点（重要）** | `Client.Connect(ctx, transport, nil)` 自动完成传输连接 + 协议版本协商（含降级到 2024-11-05；`ClientSessionOptions.protocolVersion` 为私有字段**无法外部强制**，go-sdk `supportedProtocolVersions` 含 2024-11-05 故自动接受）；三传输：stdio=`CommandTransport{Command}`（Env 追加 `os.Environ()`）、sse=`SSEClientTransport{Endpoint,HTTPClient}`、http=`StreamableClientTransport{Endpoint,HTTPClient}`；**鉴权**——transport 无 Headers 字段，自定义 http.Client 包装 `headerRoundTripper` 注入请求头（SSE GET/POST 均生效）；**会话生命周期（关键教训）**——go-sdk 连接生命周期绑定传入 ctx（jsonrpc2 `NewConnection(ctx,...)` + SSE GET 用 ctx 发起），`defer cancel()` 在 Connect 返回后立即取消会**终止 SSE 长连接导致 EOF**；修复：`WithCancel` + 手动超时计时器（10s 握手超时，`sync/atomic` 标记超时），**cancel 移交调用方 Session.Close 时调用**。工具层 [tools.go](internal/mcpserver/tools.go)：`ListTools`/`CallTool` 替代 `mcpp.GetTools`；`InputSchema`（map JSON Schema）经 `eino-contrib/jsonschema` 转 eino `ParamsOneOf`（失败降级无参数）；返回格式保持 CallToolResult JSON 序列化（`{"content":[{"type":"text","text":...}]}`）与旧组件兼容。 |
-| **Pool 预热语义（重要）** | `Warmup(ctx, servers)`：仅 enabled 服务器，并发 3 槽位，**per-name in-flight 信号串行化同名建连**（防并发 Warmup/发消息兜底重复拉进程）；`Reconcile(ctx, servers)`：先关闭池中不在列表的条目（停用/删除）+ 预热剩余（新增/变更/复用），**设置页任何 MCP 操作后调用**；`WarmupOne(ctx, s)`：发消息装配兜底——池中无该服务器时现场连接并入池（**预热失败修复后无需重启自动恢复**）；`getOrCreate`：配置指纹 `serverFingerprint`（json.Marshal(Server) 稳定序列化）变化自动关旧重连；`Session(name)` 零网络取会话；`Close`/`CloseAll`（停用/删除/shutdown/rebuildServices）。返回 `WarmupResult{Total,Warmed,Reused,Closed,Failed,FailedMsgs,ToolTotal}` 供前端一条通知。 |
-| **断线自动重连（重要）** | `Session.callTool` 检测连接类错误（`errors.Is(err, mcp.ErrConnectionClosed/ErrSessionMissing)` 或错误串含 EOF/connection closed/session not found）→ 自动 `Connect(ctx, s.srv)` 重建一次并重试（用 OpenSession 时的服务器配置快照）；`ctx.Err()!=nil`（停止/会话释放）或 Session 已 Close **不重连**；`Session` 加 `mu sync.Mutex` 保护 cli/cancel/closed（重连与关闭并发安全），Close 幂等置 closed 拒绝重连。 |
-| **Agent 装配 + 前端联动** | agent.go `Deps.MCPPool`：Run 装配 MCP 工具时全部传输统一 `Pool.Session(name)` 命中秒回（零网络），未命中 `WarmupOne` 兜底；**移除每轮 OpenSession + defer Close**（连接由池持有跨会话跨消息常驻）。app.go 新增绑定 `WarmupMCPServers()`（内部 Reconcile）；`shutdown`/`rebuildServices` 关闭旧池并重建新池注入新 AgentSvc。前端 [main.js](frontend/src/main.js) `warmupMCPServers()`：**汇总一条通知**（全成功 success「已就绪：N 台连接（复用 M 台）共 K 个工具」/ 有失败 warning/error「N 台可用，M 台失败（原因）」），无 enabled 服务器静默；[ai-chat.js](frontend/src/js/ai-chat.js) `onAIChatViewActivated` 首次进入预热（`mcpWarmupDone` 标志防重复）；设置页 toggle/新增/编辑/删除后同步调用。 |
-| **测试与验证教训** | 新增 [pool_internal_test.go](internal/mcpserver/pool_internal_test.go)（复用幂等/指纹重连/并发/CloseAll/失败不缓存/nil 安全）、[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)（**预热进行中 WarmupOne 等待而非重复建连**——用户关心"刚进 AI 助手预热中发消息是否冲突"，in-flight 信号保证 open 仅 1 次）、[reconnect_test.go](internal/mcpserver/reconnect_test.go)（服务端主动断开后 callTool 自动重连同 URL 重试/Close 后不重连/Close 幂等）。**httptest 挂起教训**：SSE GET 长连接使 `ts.Close()` 阻塞，须先 `CloseClientConnections()`；GET handler 需同时监听 `r.Context().Done()` 与断开信号；`sync.Mutex` 不可重入（测试内锁套锁死锁）。 |
-| **涉及文件** | [internal/mcpserver/client.go](internal/mcpserver/client.go)（go-sdk 三传输 + headerRoundTripper + 会话生命周期 cancel）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（ListTools/CallTool + callTool 重连 + InputSchema 转换）、[internal/mcpserver/pool.go](internal/mcpserver/pool.go)（新增 Pool/Warmup/Reconcile/WarmupOne/getOrCreate/in-flight）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPPool + 装配改走池）、[app.go](app.go)（WarmupMCPServers 绑定 + shutdown/rebuildServices 池生命周期）、[frontend/src/main.js](frontend/src/main.js)（warmupMCPServers 汇总通知 + 设置页联动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（首次进入预热）、[frontend/wailsjs/](frontend/wailsjs/)（WarmupMCPServers + WarmupResult 手动同步）、[go.mod](go.mod)（go-sdk v1.7.0，移除 mark3labs/eino-ext mcp）、[ping_test.go](internal/mcpserver/ping_test.go)/[pool_internal_test.go](internal/mcpserver/pool_internal_test.go)/[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)/[reconnect_test.go](internal/mcpserver/reconnect_test.go)（新增测试） |
+34. **Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板）**：后端新增两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮次保存 + `GenModelInput` 钩子每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（模型跳过 create_plan 自动补建单步计划、漏调 update_plan 自动补标未完成步骤为 done 并发事件）；前端 `#aiPlanPanel` 输入框上方悬浮可折叠面板（`ai:plan-created`/`ai:plan-updated` 事件），ask_user 反问时互斥收起（方案 B）、回答后恢复，stream-done 移除面板并清空 `streamPlanData` 缓存，历史回放 `renderPlanCard` 气泡内渲染。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[index.html](frontend/index.html)
 
 ---
-## 记忆点 2：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 1：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
 
 ---
-## 记忆点 3：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 2：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
 
 ---
-## 记忆点 4：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 3：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
 
 ---
-## 记忆点 5：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 4：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
 
 ---
-## 记忆点 6：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+## 记忆点 5：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
 
 ---
-## 记忆点 7：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 6：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航（`cols = 4`）/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/4 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
 
 ---
-## 记忆点 8：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+## 记忆点 7：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -666,7 +655,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件/强度渲染 `pmRenderStrengthBar`/`pmRenderStrengthText`）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条/`#pmGenResultsWrap` 过渡/`#pmDetailPwdStrength` 对齐）、[internal/services/password_generator.go](internal/services/password_generator.go)（生成与强度算法）、[app.go](app.go)（`GeneratePasswords`/`CheckPasswordStrength` Wails 绑定） |
 
 ---
-## 记忆点 9：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+## 记忆点 8：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -679,7 +668,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 9：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -690,6 +679,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **技能 ID 转换流程** | 前端 `activeSkills = { deep_research: true }` → 提交时 `'skill_' + id` → 后端 `skillIds = ["skill_deep_research"]` → `app.go` `GetSkillPrompts(["skill_deep_research"], ...)` 从数据库查询提示词 → 注入 Instruction → Agent 执行时检测技能 ID 临时提升迭代次数。 |
 | **移除技能入场动画（简化维护）** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) 移除 `.ai-chat-skills-dropdown .ai-chat-skills-item` 的 `opacity:0/transform:translateX(-8px)/transition` 初始状态、`.open .ai-chat-skills-item` 的状态变化、`.closing .ai-chat-skills-item` 的离场动画、`@keyframes skillsItemOut` 定义、以及所有 `nth-child(1-14)` 的 stagger delay。**动机**：每次新增技能都需要维护 CSS 动画，移除后无需额外处理。 |
 | **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitBuiltinPrompts` 新增 `skill_deep_research`）、[internal/agent/agent.go](internal/agent/agent.go)（`Run` 迭代次数临时提升）、[frontend/index.html](frontend/index.html)（技能菜单项）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`getSkillLabel` + `renderSkillChips`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（移除 stagger 动画） |
+
+---
+
+## 记忆点 10：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为 Agent 增加**显式 Planning** 能力：新增 `create_plan` / `update_plan` 两个规划工具，模型先制定结构化执行计划再逐步执行（区别于纯 ReAct 隐式规划）；前端输入框上方新增悬浮计划面板（`#aiPlanPanel`）实时展示计划目标与步骤进度，支持点击标题折叠/展开；与 ask_user 反问面板互斥（方案 B），回答后恢复；完成对话后面板移除并清空缓存。 |
+| **后端工具与数据结构** | [context.go](internal/agent/tools/context.go) 新增 `Plan`（Goal/Steps/Current）与 `PlanStep`（ID/Description/ToolName/Status/Result）结构，`Context.PlanState` 跨 ReAct 轮次保存计划状态（与 AskWaiter 同模式）；[plan.go](internal/agent/tools/plan.go)（**新增**）实现 `create_plan`（校验 goal 非空、steps 1-10 条）与 `update_plan`（按 step_id 更新状态/结果，支持 new_step 追加步骤），两工具直接 `ctx.Emit` 发射 `ai:plan-created` / `ai:plan-updated` 事件（沿用 ask_user 的专用事件通道例外，见 TOOLS.md §7.2）；[registry.go](internal/agent/registry.go) + [meta.go](internal/agent/tools/meta.go) 注册，[types.go](internal/agent/types.go) `Result` 新增 `Plan` 字段落库，[app.go](app.go) `ai:agent-result` 事件追加 plan 参数。 |
+| **GenModelInput 钩子（每轮注入）** | [agent.go](internal/agent/agent.go) `Run` 装配 `GenModelInput` 回调（eino ADK 钩子，每轮 LLM 调用前触发），`genPlanHint` 按状态注入：① `PlanState == nil`——提示"需要多步操作的请求必须先调用 create_plan，简单闲聊可跳过" + **ask_user 强制提醒**（信息模糊/需求不具体/需用户选择时必须调用 ask_user，严禁把问题直接写在正文当作最终回答）；② 有计划——注入当前进度 `第 N/M 步`、已完成步骤摘要、未完成步骤强制提醒"每执行完一个工具必须调用 update_plan 标记 done，不要在仍有未完成步骤时直接输出最终回答"。 |
+| **结果兜底（重要）** | 结果汇总处（最终回答后）自动补全：① 模型创建了计划但漏调 update_plan → 所有 pending/in_progress 步骤自动补标 `done` 并发射 `ai:plan-updated` 让前端同步为全部完成态；② 模型跳过 create_plan 但执行了工具 → 自动补建单步计划（goal 取用户问题前 50 字）。 |
+| **前端悬浮面板** | [index.html](frontend/index.html) 新增 `#aiPlanPanel`（与 `#aiAskPanel` 同级，absolute 定位输入框上方 `bottom: calc(100% + 8px)`）；[ai-chat.js](frontend/src/js/ai-chat.js) `ai:plan-created` → `showPlanPanel()` / `ai:plan-updated` → `updatePlanPanel()`（`Object.assign({}, streamPlanData, payload)` **合并而非覆盖**——`ai:plan-updated` 负载不含 goal，直接覆盖会丢标题）；header 点击切换 `is-collapsed` 折叠（CSS `max-height`/`opacity` 过渡动画，无箭头）；`stream-done`/`startStreaming` 移除面板并 `streamPlanData = null` 清缓存；历史回放 `renderPlanCard()` 气泡内渲染。 |
+| **ask_user 互斥（方案 B）** | `showAskPanel()` 先 `hidePlanPanel()` 收起计划面板，`hideAskPanel()` 后若仍在流式中且 `streamPlanData` 非空则 `showPlanPanel()` 恢复——两个悬浮面板互斥不重叠，ask_user 阻塞期间计划不推进，收起不影响信息量。 |
+| **关键 bug 教训** | ① `streamPlanData`/`streamPlanCardEl` 曾为 `startStreaming` 局部变量 → `hideAskPanel` 访问报 `ReferenceError: streamPlanData is not defined` → **提升为模块级变量**；② 强化计划提示词（"不要在仍有未完成步骤时直接输出最终回答"）与 app.go 的 ask_user 规范（"先在正文写出问题"）叠加冲突 → 模型把问句当最终回答直接输出、不调 ask_user → 提示词追加澄清"必须调用 ask_user 工具发起提问，严禁把问题写在正文里当作最终回答输出"；③ `plan == nil` 分支最初无 ask_user 提醒 → 无计划场景模型不主动反问 → 两个分支都注入 ask_user 提醒；④ stream-done 只移除面板未清 `streamPlanData` → 新对话 ask_user 快结束时 `hideAskPanel` 恢复逻辑误显示旧计划 → 流结束/新流开始两处清空缓存。 |
+| **涉及文件** | [internal/agent/tools/plan.go](internal/agent/tools/plan.go)（**新增**：create_plan/update_plan）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（Plan/PlanStep/PlanState）、[internal/agent/registry.go](internal/agent/registry.go) + [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（注册/元信息）、[internal/agent/types.go](internal/agent/types.go)（Result.Plan）、[internal/agent/agent.go](internal/agent/agent.go)（GenModelInput 钩子 + genPlanHint + 结果兜底）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.2 规划工具事件 + §9 设计说明）、[app.go](app.go)（ai:agent-result 追加 plan）、[frontend/index.html](frontend/index.html)（#aiPlanPanel）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showPlanPanel/updatePlanPanel/hidePlanPanel/renderPlanCard + 互斥 + 缓存清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-plan-panel/.ai-plan-card 系列样式） |
 
 ---
 

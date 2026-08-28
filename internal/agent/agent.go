@@ -478,7 +478,8 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 
 	// 4. 组装 ChatModelAgent（内部是 ReAct 循环：模型决策 → 调用工具 → 反馈 → 继续）
-	//    Instruction 作为 system 消息由默认 GenModelInput 放在最前
+	//    Instruction 作为 system 消息由 GenModelInput 放在最前；
+	//    GenModelInput 钩子在每轮 LLM 调用前注入当前计划状态到系统提示词。
 	agent, err := adk.NewChatModelAgent(runCtx, &adk.ChatModelAgentConfig{
 		Name:        "jot-agent",
 		Description: "一个能调用联网搜索与本地笔记召回工具回答问题的助手",
@@ -490,6 +491,20 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			},
 		},
 		MaxIterations: maxIterations,
+		// GenModelInput：每轮 LLM 调用前注入当前计划状态，引导模型按计划执行
+		GenModelInput: func(_ context.Context, instruction string, input *adk.AgentInput) ([]*schema.Message, error) {
+			planHint := genPlanHint(toolCtx.PlanState)
+			enhanced := instruction
+			if planHint != "" {
+				enhanced = instruction + planHint
+			}
+			msgs := make([]*schema.Message, 0, len(input.Messages)+1)
+			if enhanced != "" {
+				msgs = append(msgs, schema.SystemMessage(enhanced))
+			}
+			msgs = append(msgs, input.Messages...)
+			return msgs, nil
+		},
 	})
 	if err != nil {
 		return result, fmt.Errorf("创建 ChatModelAgent 失败: %w", err)
@@ -678,6 +693,43 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			result.ToolCalls = string(b)
 		}
 	}
+	// 计划兜底处理：
+	// 1) 模型创建了计划但未全部标记完成（如忘了调用 update_plan）→ 自动将所有未完成步骤补标为 done，
+	//    并发射 ai:plan-updated 让前端同步刷新，避免计划卡片停留在全 pending 状态。
+	// 2) 模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划，保证落库计划可读。
+	if toolCtx.PlanState != nil {
+		plan := toolCtx.PlanState
+		changed := false
+		for i := range plan.Steps {
+			if plan.Steps[i].Status == "pending" || plan.Steps[i].Status == "in_progress" {
+				plan.Steps[i].Status = "done"
+				changed = true
+			}
+		}
+		if changed {
+			// 发射更新事件，前端实时计划面板同步为全部完成态
+			if b, err := json.Marshal(plan); err == nil {
+				emit("ai:plan-updated", string(b))
+			}
+			if s.deps.Logger != nil {
+				s.deps.Logger.Debugw("计划未完成步骤已自动补标 done",
+					fastlog.Int("steps", len(plan.Steps)))
+			}
+		}
+		if b, err := json.Marshal(plan); err == nil {
+			result.Plan = string(b)
+		}
+	} else if len(toolRecords) > 0 {
+		// 模型跳过了 create_plan 但执行了工具：补建单步计划（goal 取用户问题摘要）
+		autoPlan := &tools.Plan{
+			Goal:  tools.TruncateRunes(req.UserText, 50),
+			Steps: []tools.PlanStep{{ID: 1, Description: "直接调用工具完成用户请求", Status: "done"}},
+		}
+		toolCtx.PlanState = autoPlan
+		if b, err := json.Marshal(autoPlan); err == nil {
+			result.Plan = string(b)
+		}
+	}
 	if s.deps.Logger != nil {
 		s.deps.Logger.Debugw("Agent 对话完成",
 			fastlog.Int("content_len", len(result.Content)),
@@ -864,4 +916,74 @@ func askUserQuestionFromArgs(argumentsJSON string) string {
 		return ""
 	}
 	return strings.TrimSpace(args.Question)
+}
+
+// genPlanHint 根据当前计划状态生成注入系统提示词的规划提示文本。
+// 无计划时引导模型先调用 create_plan；有计划时注入进度和已完成步骤的结果。
+func genPlanHint(plan *tools.Plan) string {
+	if plan == nil {
+		return "\n\n【执行计划要求】收到需要多步操作的用户请求（如调研、对比分析、多来源查询）后，" +
+			"必须先用 create_plan 工具制定执行计划，再按计划逐步执行，每步执行后调用 update_plan 标记完成。" +
+			"简单闲聊或单步问答（仅需直接回答）可跳过规划直接回答。" +
+			"\n【重要】如果你需要向用户澄清、确认或提问（如用户请求信息模糊、需求不具体、缺少必要信息、需要用户在多个选项间做选择），" +
+			"必须调用 ask_user 工具向用户发起提问并等待其回答；严禁擅自猜测后直接执行，也严禁把问题直接写在正文里当作最终回答输出。"
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n\n【当前执行计划】\n目标：%s\n进度：%d/%d\n", plan.Goal, plan.Current+1, len(plan.Steps))
+
+	// 已完成步骤
+	for _, s := range plan.Steps {
+		if s.Status == "done" || s.Status == "skipped" {
+			result := s.Result
+			if len([]rune(result)) > 100 {
+				result = string([]rune(result)[:100]) + "..."
+			}
+			statusTag := "完成"
+			if s.Status == "skipped" {
+				statusTag = "跳过"
+			}
+			if result != "" {
+				fmt.Fprintf(&b, "  %d. [%s] %s（%s）\n", s.ID, statusTag, s.Description, result)
+			} else {
+				fmt.Fprintf(&b, "  %d. [%s] %s\n", s.ID, statusTag, s.Description)
+			}
+		}
+	}
+
+	// 当前待执行步骤
+	if plan.Current < len(plan.Steps) {
+		cur := plan.Steps[plan.Current]
+		fmt.Fprintf(&b, "当前待执行步骤：%d. %s\n", cur.ID, cur.Description)
+	}
+
+	b.WriteString("请按照计划继续执行，或调用 update_plan 调整计划。")
+
+	// 强制提醒：仍有未完成步骤时，禁止直接输出最终回答，必须先调用 update_plan 标记完成
+	if pendingCount := countPendingSteps(plan); pendingCount > 0 {
+		fmt.Fprintf(&b, "\n【强制要求】当前计划还有 %d 个步骤未完成。"+
+			"每执行完一个工具后，必须立即调用 update_plan 将对应步骤标记为 done。"+
+			"不要在仍有未完成步骤时直接输出最终回答。", pendingCount)
+	}
+
+	// ask_user 澄清：向用户提问必须调用 ask_user 工具并等待回答（不属计划步骤、不算最终回答），
+	// 严禁把问题直接写进正文当作最终回答输出（否则前端不弹反问面板、本轮直接结束）
+	b.WriteString("\n【重要】如果你需要向用户澄清、确认或提问，必须调用 ask_user 工具向用户发起提问" +
+		"并等待其回答（这不属于计划步骤，也不算输出最终回答）；" +
+		"严禁直接把问题写在正文里当作最终回答输出。")
+	return b.String()
+}
+
+// countPendingSteps 统计计划中未完成（pending / in_progress）的步骤数。
+func countPendingSteps(plan *tools.Plan) int {
+	if plan == nil {
+		return 0
+	}
+	n := 0
+	for _, s := range plan.Steps {
+		if s.Status == "pending" || s.Status == "in_progress" {
+			n++
+		}
+	}
+	return n
 }

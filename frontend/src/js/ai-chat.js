@@ -14,12 +14,15 @@ let inputAreaEl = null;       // #aiChatInputArea
 let clearBtnEl = null;        // #aiChatClearBtn
 let stopBtnEl = null;         // #aiChatStopBtn
 let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
+let planPanelEl = null;       // #aiPlanPanel（Agent 执行计划面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let contextSizeEl = null;     // #aiChatContextSize
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
+let streamPlanData = null;    // 本轮流的执行计划（落库 plan，历史回放）
+let streamPlanCardEl = null;  // 实时计划卡片 DOM 引用（流式过程中动态更新）
 
 let addBtn = null;            // #aiChatAddBtn
 let addDropdown = null;       // #aiChatAddDropdown
@@ -298,6 +301,7 @@ export async function initAIChat() {
     clearBtnEl = document.getElementById('aiChatClearBtn');
     stopBtnEl = document.getElementById('aiChatStopBtn');
     askPanelEl = document.getElementById('aiAskPanel');
+    planPanelEl = document.getElementById('aiPlanPanel');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
     sessionSearchEl = document.getElementById('aiSessionSearch');
@@ -1515,7 +1519,7 @@ async function switchSession(id) {
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     }
                 } else if (msg.role === 'assistant') {
-                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true);
+                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined, msg.plan);
                     el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                     bindMsgContextMenu(el, msg.content, 'assistant');
                 }
@@ -1566,7 +1570,7 @@ async function switchSession(id) {
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
                         }
                     } else if (msg.role === 'assistant') {
-                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true);
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined, msg.plan);
                         el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                         bindMsgContextMenu(el, msg.content, 'assistant');
                     }
@@ -2273,9 +2277,11 @@ async function startStreaming(userText, userMsgID) {
     let hasReceivedChunk = false;
     let recallCards = null;
 
-    // 新一轮输出开始：收起 Agent 反问面板、清除反问等待状态
+    // 新一轮输出开始：收起 Agent 反问面板/计划面板、清除反问等待状态
     //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
     hideAskPanel();
+    hidePlanPanel();
+    streamPlanData = null; // 清空上一轮计划缓存（新轮 plan-created 到达时会重新赋值）
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -2580,6 +2586,37 @@ async function startStreaming(userText, userMsgID) {
     });
     unsubs.push(unsubToolStatus);
 
+    // ── Agent 执行计划（ai:plan-created / ai:plan-updated） ──
+    // 模型调用 create_plan 工具时后端发射 ai:plan-created（tool_start 之后），
+    // 负载为 JSON 字符串 {"goal": "...", "steps": [...]}。
+    // 模型调用 update_plan 工具时后端发射 ai:plan-updated，
+    // 负载为 {"step_id": N, "status": "...", "result": "...", "steps": [...]}。
+    // 计划卡片渲染在气泡正文上方（与工具状态条同级），实时更新步骤状态。
+    const unsubPlanCreated = window.runtime.EventsOn('ai:plan-created', (streamGen, data) => {
+        if (!isAgentFlow) return;
+        if (streamGen !== myGen) return;
+        let payload = null;
+        try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
+        if (!payload || !payload.goal || !Array.isArray(payload.steps)) return;
+        streamPlanData = payload;
+        // 渲染悬浮计划面板（输入框上方）
+        showPlanPanel(payload);
+    });
+    unsubs.push(unsubPlanCreated);
+
+    const unsubPlanUpdated = window.runtime.EventsOn('ai:plan-updated', (streamGen, data) => {
+        if (!isAgentFlow) return;
+        if (streamGen !== myGen) return;
+        let payload = null;
+        try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
+        if (!payload || !Array.isArray(payload.steps)) return;
+        // 合并而非覆盖：ai:plan-updated 负载不含 goal，直接覆盖会导致 streamPlanData.goal 丢失
+        streamPlanData = Object.assign({}, streamPlanData, payload);
+        // 更新悬浮计划面板
+        updatePlanPanel(payload);
+    });
+    unsubs.push(unsubPlanUpdated);
+
     // ── Agent 反向提问（ai:ask-user） ──
     // 模型调用 ask_user 工具时后端发射该事件（tool_start 之后），
     // 负载为 JSON 字符串 {"question": "...", "options": [...], "selection": "single"|"multiple"}。
@@ -2605,13 +2642,16 @@ async function startStreaming(userText, userMsgID) {
     // 后端在流结束后把召回卡片 / 工具调用链 / 思考链 一并回传，
     // 填充 recallCards / streamToolRecords，
     // 使 stream-done 的 chatHistory.push 与气泡渲染拿到与历史加载一致的数据。
-    const unsubAgentResult = window.runtime.EventsOn('ai:agent-result', (evtGen, recallCardsJSON, toolCallsJSON, reasoningContent) => {
+    const unsubAgentResult = window.runtime.EventsOn('ai:agent-result', (evtGen, recallCardsJSON, toolCallsJSON, planJSON, reasoningContent) => {
         if (evtGen !== myGen) return; // 属于旧流, 丢弃
         if (recallCardsJSON) {
             try { recallCards = JSON.parse(recallCardsJSON); } catch (_) {}
         }
         if (toolCallsJSON) {
             try { streamToolRecords = JSON.parse(toolCallsJSON); } catch (_) {}
+        }
+        if (planJSON) {
+            try { streamPlanData = JSON.parse(planJSON); } catch (_) {}
         }
         // 思考链兜底：流式 ai:stream-thinking 未触发时，用后端汇总的完整思考链补渲染
         if (reasoningContent && !streamingThinking) {
@@ -2635,6 +2675,8 @@ async function startStreaming(userText, userMsgID) {
         isStreaming = false;
         window.__aiStreaming = false;
         hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
+        hidePlanPanel(); // 收起执行计划面板
+        streamPlanData = null; // 清除本轮计划缓存，避免新对话 ask_user 恢复时误显示旧计划
 
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
@@ -2696,7 +2738,7 @@ async function startStreaming(userText, userMsgID) {
                 streamingEl.parentNode.removeChild(streamingEl);
             }
         } else {
-            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null });
+            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null, plan: streamPlanData ? JSON.stringify(streamPlanData) : null });
             updateContextSize();
             streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
             bindMsgContextMenu(streamingEl, finalContent, 'assistant');
@@ -2973,6 +3015,7 @@ function svgIcon(name, size = 14) {
         alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
         brain: '<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>',
         wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+        list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
     };
     const p = paths[name];
     if (!p) return '';
@@ -3106,8 +3149,9 @@ function rerenderUserMessageChips(msgId, newMeta) {
  * @param {boolean} [skipScroll] - 跳过滚动与入场动画
  * @param {boolean} [deferHighlight] - 延迟高亮
  * @param {string} [meta] - 用户消息的 Meta JSON 字符串（仅 user 分支使用）
+ * @param {string|object} [plan] - 执行计划（JSON 字符串或对象）
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta, plan) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     // 仅流式消息播放入场动画，切换历史会话时跳过
@@ -3173,6 +3217,11 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     // 渲染 Agent 工具调用链折叠面板（历史消息回放，复用工具状态样式）
     if (role === 'assistant' && toolCalls && toolCalls.length > 0) {
         renderToolCalls(el, toolCalls);
+    }
+
+    // 渲染执行计划卡片（历史消息回放）
+    if (role === 'assistant' && plan) {
+        renderPlanCard(el, plan);
     }
 
     messagesInnerEl.appendChild(el);
@@ -3262,8 +3311,11 @@ export async function onAIChatViewActivated() {
 
     try {
         const cfg = await window.go.main.App.GetAIConfig();
+        console.log('[AI] onAIChatViewActivated config:', cfg);
         const hasRequired = !!(cfg.base_url && cfg.api_key && cfg.model);
+        console.log('[AI] hasRequired:', hasRequired, 'base_url:', !!cfg.base_url, 'api_key:', !!cfg.api_key, 'model:', !!cfg.model);
         if (!hasRequired) {
+            console.warn('[AI] 缺少必要配置，显示空状态');
             showEmptyState();
             return;
         }
@@ -3288,7 +3340,8 @@ export async function onAIChatViewActivated() {
 
         // 视图入场动画完成后聚焦输入框
         setTimeout(() => inputEl?.focus(), 100);
-    } catch (_) {
+    } catch (err) {
+        console.error('[AI] onAIChatViewActivated 异常:', err);
         showEmptyState();
     }
 }
@@ -3839,6 +3892,7 @@ var getToolLabel = function(name) { return name || '工具'; };
  */
 function showAskPanel(question, options, selection) {
     if (!askPanelEl) return;
+    hidePlanPanel(); // 反问时临时收起计划面板，避免两个面板重叠
     askPanelEl.innerHTML = '';
     const isMultiple = selection === 'multiple'; // 非 "multiple" 一律按单选处理
 
@@ -3989,6 +4043,43 @@ function hideAskPanel() {
     askPanelEl.style.display = 'none';
     // 面板收起（回答提交/取消本轮/结束）时恢复输入框可用态
     setAskInputWaiting(false);
+    // 反问结束后恢复计划面板（如仍在流式中且有计划数据）
+    if (streamPlanData && isStreaming) {
+        showPlanPanel(streamPlanData);
+    }
+}
+
+/* ── Agent 执行计划悬浮面板（输入框上方，回答完成后移除） ── */
+
+/**
+ * 显示执行计划悬浮面板。
+ * @param {object} plan - { goal: string, steps: [...] }
+ */
+function showPlanPanel(plan) {
+    if (!planPanelEl) return;
+    planPanelEl.innerHTML = '';
+    var card = createPlanCard(plan);
+    planPanelEl.appendChild(card);
+    planPanelEl.style.display = '';
+}
+
+/**
+ * 更新悬浮计划面板内容。
+ * @param {object} plan - 最新计划快照 { steps: [...] }
+ */
+function updatePlanPanel(plan) {
+    if (!planPanelEl) return;
+    var card = planPanelEl.querySelector('.ai-plan-card');
+    if (card) updatePlanCard(card, plan);
+}
+
+/**
+ * 收起执行计划悬浮面板。
+ */
+function hidePlanPanel() {
+    if (!planPanelEl) return;
+    planPanelEl.innerHTML = '';
+    planPanelEl.style.display = 'none';
 }
 
 /**
@@ -4163,6 +4254,114 @@ function renderToolCalls(el, toolCalls) {
     });
 
     el.appendChild(summary);
+}
+
+/* ── Agent 执行计划卡片（ai:plan-created / ai:plan-updated 实时渲染 + 历史回放） ── */
+
+// 步骤状态 → 图标/样式映射
+const PLAN_STEP_ICON = { pending: '○', in_progress: '●', done: '✓', skipped: '—' };
+const PLAN_STEP_CLASS = { pending: '', in_progress: 'is-active', done: 'is-done', skipped: 'is-skipped' };
+
+/**
+ * 创建计划卡片 DOM（流式实时渲染 + 历史回放共用）。
+ * @param {object} plan - { goal: string, steps: [{ id, description, status, result? }] }
+ * @returns {HTMLElement} 计划卡片容器
+ */
+function createPlanCard(plan) {
+    var card = document.createElement('div');
+    card.className = 'ai-plan-card';
+
+    // 目标行（点击折叠/展开）
+    var header = document.createElement('div');
+    header.className = 'ai-plan-header';
+    var icon = document.createElement('span');
+    icon.className = 'ai-plan-icon';
+    icon.innerHTML = svgIcon('list');
+    var goalText = document.createElement('span');
+    goalText.className = 'ai-plan-goal';
+    goalText.textContent = plan.goal;
+    header.appendChild(icon);
+    header.appendChild(goalText);
+    header.addEventListener('click', function() {
+        card.classList.toggle('is-collapsed');
+    });
+    card.appendChild(header);
+
+    // 步骤列表
+    var list = document.createElement('div');
+    list.className = 'ai-plan-steps';
+    plan.steps.forEach(function(step) {
+        list.appendChild(createPlanStepItem(step));
+    });
+    card.appendChild(list);
+
+    // 设置 max-height 供折叠动画使用
+    requestAnimationFrame(function() {
+        list.style.maxHeight = list.scrollHeight + 'px';
+    });
+
+    return card;
+}
+
+/**
+ * 创建单个步骤行 DOM。
+ */
+function createPlanStepItem(step) {
+    var item = document.createElement('div');
+    item.className = 'ai-plan-step ' + (PLAN_STEP_CLASS[step.status] || '');
+    item.dataset.stepId = step.id;
+
+    var marker = document.createElement('span');
+    marker.className = 'ai-plan-step-marker';
+    marker.textContent = PLAN_STEP_ICON[step.status] || '○';
+
+    var desc = document.createElement('span');
+    desc.className = 'ai-plan-step-desc';
+    desc.textContent = step.description;
+
+    item.appendChild(marker);
+    item.appendChild(desc);
+
+    return item;
+}
+
+/**
+ * 更新已有计划卡片（流式过程中 update_plan 触发时调用）。
+ * @param {HTMLElement} card - createPlanCard 返回的容器
+ * @param {object} plan - 最新计划快照 { steps: [...] }
+ */
+function updatePlanCard(card, plan) {
+    var list = card.querySelector('.ai-plan-steps');
+    if (!list) return;
+    // 重建步骤列表（简单可靠，步骤数 ≤10 不影响性能）
+    list.innerHTML = '';
+    plan.steps.forEach(function(step) {
+        list.appendChild(createPlanStepItem(step));
+    });
+    // 更新 max-height 供折叠动画使用
+    requestAnimationFrame(function() {
+        list.style.maxHeight = list.scrollHeight + 'px';
+    });
+}
+
+/**
+ * 渲染计划卡片到气泡内（历史回放用）。
+ * @param {HTMLElement} el - 消息气泡容器
+ * @param {string|object} planData - JSON 字符串或对象
+ */
+function renderPlanCard(el, planData) {
+    if (typeof planData === 'string') {
+        try { planData = JSON.parse(planData); } catch (_) { return; }
+    }
+    if (!planData || !planData.goal || !Array.isArray(planData.steps)) return;
+    var card = createPlanCard(planData);
+    // 插入到消息正文之前（与实时流中的位置一致）
+    var contentEl = el.querySelector('.msg-content');
+    if (contentEl) {
+        el.insertBefore(card, contentEl);
+    } else {
+        el.appendChild(card);
+    }
 }
 
 /**

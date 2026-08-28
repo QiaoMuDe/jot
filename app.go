@@ -2265,9 +2265,9 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			fastlog.Int("total_tokens", totalTokens),
 			fastlog.Float64("elapsed_total", elapsedTotal),
 		)
-		// agent-result 事件先于 stream-done 发送：把结构化结果（召回卡片/工具调用链/思考链）
+		// agent-result 事件先于 stream-done 发送：把结构化结果（召回卡片/工具调用链/执行计划/思考链）
 		// 回传前端，供流式完成后立即渲染（无需切换会话），并供 chatHistory.push 落库前使用
-		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.RecallCards, result.ToolCalls, result.ReasoningContent)
+		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.RecallCards, result.ToolCalls, result.Plan, result.ReasoningContent)
 		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
 	}()
 }
