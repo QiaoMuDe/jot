@@ -14,8 +14,9 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
-	"gitee.com/MM-Q/fastlog"
 	"jot/internal/services"
+
+	"gitee.com/MM-Q/fastlog"
 )
 
 // MaxResultLen 工具调用参数 / 结果摘要截断长度（用于事件与落库，避免超长）。
@@ -118,6 +119,11 @@ type Context struct {
 	Logger    *fastlog.Logger
 	AskWaiter AskWaiter // 非 nil 时 ask_user 工具阻塞等待用户回答（同轮续答）
 	PlanState *Plan     // 规划工具状态：create_plan 写入、update_plan 更新、GenModelInputFunc 读取注入
+
+	// SkippedPlanUpdate 标记上一轮是否执行了工具但未调用 update_plan，
+	// 供 GenModelInput 钩子判断是否需要注入催促提醒。由 agent 事件循环设置，
+	// update_plan 工具执行时清除。
+	SkippedPlanUpdate bool
 
 	partials []string // 工具登记的部分失败提示（父包 DrainPartials 消费后清空）
 }

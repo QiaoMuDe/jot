@@ -57,8 +57,8 @@ func (t *createPlanTool) ActionText(argumentsInJSON string) string {
 func (t *createPlanTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "create_plan",
-		Desc: "在开始执行用户请求前，调用本工具制定执行计划。将复杂目标拆解为可执行的步骤列表，" +
-			"模型将按计划逐步调用其他工具完成任务。收到用户请求后应首先调用本工具（简单闲聊/单步问答可跳过）。" +
+		Desc: "在开始执行用户请求前，调用本工具制定执行计划。将目标拆解为可执行的步骤列表，" +
+			"模型将按计划逐步调用其他工具完成任务。收到任何用户请求后都应首先调用本工具。" +
 			"计划步骤数 ≤ 10，每步 description 简洁明确。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"goal": {
@@ -300,6 +300,9 @@ func (t *updatePlanTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	step := &plan.Steps[stepID-1]
 	step.Status = args.Status
 	step.Result = strings.TrimSpace(args.Result)
+
+	// 模型主动调用了 update_plan，不再需要催促提醒
+	t.ctx.SkippedPlanUpdate = false
 
 	// 如果标记当前步骤为 done，推进 Current 指针
 	if args.Status == "done" && stepID == plan.Current+1 {

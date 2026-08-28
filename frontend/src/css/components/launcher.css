@@ -127,8 +127,8 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     padding: 16px 18px 20px;
-    flex: 1;
-    min-height: 0;
+    /* 固定 3 行高度：item(~84px) × 3 + gap(10px) × 2 + padding(16+20) = 308px */
+    height: 308px;
     overflow-y: auto;
     overflow-x: hidden;
 }

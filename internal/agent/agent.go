@@ -493,7 +493,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		MaxIterations: maxIterations,
 		// GenModelInput：每轮 LLM 调用前注入当前计划状态，引导模型按计划执行
 		GenModelInput: func(_ context.Context, instruction string, input *adk.AgentInput) ([]*schema.Message, error) {
-			planHint := genPlanHint(toolCtx.PlanState)
+			planHint := genPlanHint(toolCtx.PlanState, toolCtx.SkippedPlanUpdate)
 			enhanced := instruction
 			if planHint != "" {
 				enhanced = instruction + planHint
@@ -633,6 +633,10 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		case schema.Tool:
 			// 工具执行结果事件
 			name := mv.ToolName
+			// 执行了非计划工具但未调用 update_plan，标记需要催促
+			if name != "create_plan" && name != "update_plan" {
+				toolCtx.SkippedPlanUpdate = true
+			}
 			var content string
 			var callID string
 			if mv.IsStreaming {
@@ -920,11 +924,10 @@ func askUserQuestionFromArgs(argumentsJSON string) string {
 
 // genPlanHint 根据当前计划状态生成注入系统提示词的规划提示文本。
 // 无计划时引导模型先调用 create_plan；有计划时注入进度和已完成步骤的结果。
-func genPlanHint(plan *tools.Plan) string {
+func genPlanHint(plan *tools.Plan, skippedPlanUpdate bool) string {
 	if plan == nil {
-		return "\n\n【执行计划要求】收到需要多步操作的用户请求（如调研、对比分析、多来源查询）后，" +
-			"必须先用 create_plan 工具制定执行计划，再按计划逐步执行，每步执行后调用 update_plan 标记完成。" +
-			"简单闲聊或单步问答（仅需直接回答）可跳过规划直接回答。" +
+		return "\n\n【执行计划要求】收到用户请求后，必须先用 create_plan 工具制定执行计划，再按计划逐步执行，每步执行后调用 update_plan 标记完成。" +
+			"简单闲聊或单步问答也必须制定计划（单步计划即可）。" +
 			"\n【重要】如果你需要向用户澄清、确认或提问（如用户请求信息模糊、需求不具体、缺少必要信息、需要用户在多个选项间做选择），" +
 			"必须调用 ask_user 工具向用户发起提问并等待其回答；严禁擅自猜测后直接执行，也严禁把问题直接写在正文里当作最终回答输出。"
 	}
@@ -958,6 +961,13 @@ func genPlanHint(plan *tools.Plan) string {
 	}
 
 	b.WriteString("请按照计划继续执行，或调用 update_plan 调整计划。")
+
+	// 催促提醒：上一轮执行了工具但模型未调用 update_plan 更新进度时，注入提醒
+	if skippedPlanUpdate {
+		b.WriteString("\n【强制要求】上一轮你执行了工具但未调用 update_plan 更新计划进度。" +
+			"严禁跳过此步骤。你必须在下一步操作之前先调用 update_plan，将对应步骤标记为 done/skipped/in_progress。" +
+			"绝对不要在未调用 update_plan 的情况下输出最终回答或执行新的工具调用。")
+	}
 
 	// 强制提醒：仍有未完成步骤时，禁止直接输出最终回答，必须先调用 update_plan 标记完成
 	if pendingCount := countPendingSteps(plan); pendingCount > 0 {
