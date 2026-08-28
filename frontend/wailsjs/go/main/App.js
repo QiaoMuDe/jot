@@ -366,8 +366,8 @@ export function IndexNotesUnindexed() {
   return window['go']['main']['App']['IndexNotesUnindexed']();
 }
 
-export function ListPasswordRecords() {
-  return window['go']['main']['App']['ListPasswordRecords']();
+export function ListPasswordRecords(arg1, arg2) {
+  return window['go']['main']['App']['ListPasswordRecords'](arg1, arg2);
 }
 
 export function ListTodos() {
@@ -506,8 +506,8 @@ export function SearchNotes(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['main']['App']['SearchNotes'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
-export function SearchPasswordRecords(arg1) {
-  return window['go']['main']['App']['SearchPasswordRecords'](arg1);
+export function SearchPasswordRecords(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SearchPasswordRecords'](arg1, arg2, arg3);
 }
 
 export function SelectAIChatFiles() {

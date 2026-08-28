@@ -27,6 +27,7 @@ let pmGenUpper, pmGenLower, pmGenDigits, pmGenSymbols, pmGenExcludeAmbiguous;
 let pmGenGenerateBtn, pmGenResultsEl, pmGenResultsWrap;
 let pmGenCount = 5;
 let pmGenLength = 16;
+let pmLoadingEl; // 加载指示器 DOM
 
 // ---------- 运行时状态 ----------
 let pmRecords = [];            // 当前列表数据（PasswordListItem[]，不含密码）
@@ -40,6 +41,13 @@ let detailRecord = null;       // 详情对话框当前记录（含解码后的�
 let detailPwdVisible = false;  // 详情对话框中密码是否可见
 let _lastLengthNotifyAt = 0;   // 长度超限通知节流时间戳
 let pmLoadSeq = 0;             // 列表加载序号（防慢响应乱序覆盖新结果）
+
+// ---------- 分页状态 ----------
+let pmCurrentPage = 1;
+let pmTotal = 0;
+let pmHasMore = true;
+let pmLoadingMore = false;
+let pmPageSize = 20;
 
 /* ==================== 工具函数 ==================== */
 
@@ -301,7 +309,7 @@ function closePmGenDialog() {
 
 /**
  * 根据关键词加载记录列表（有词走 Search，否则 List），然后渲染
- * @param {object} [renderOpts] - 透传给 renderPmList（playEnter/flashId）
+ * @param {object} [renderOpts] - 透传给 renderPmList（playEnter/flashId/append）
  */
 async function loadPmRecords(renderOpts = {}) {
     // 每次加载分配新序号，返回时若已有更新的请求则丢弃本次结果（快速搜索时防旧响应覆盖新结果）
@@ -310,23 +318,80 @@ async function loadPmRecords(renderOpts = {}) {
         const kw = pmKeyword.trim();
         const app = window.go?.main?.App;
         if (!app) return;
-        let data;
+
+        // 获取分页大小（复用笔记首页设置）
+        try {
+            const size = await app.GetPageSize();
+            if (size > 0) pmPageSize = size;
+        } catch (_) { /* 保持默认值 */ }
+
+        // 重置分页
+        pmCurrentPage = 1;
+        pmHasMore = true;
+        pmLoadingMore = false;
+        if (pmLoadingEl) pmLoadingEl.style.display = 'none';
+
+        let result;
         if (kw) {
-            data = await app.SearchPasswordRecords(kw);
+            result = await app.SearchPasswordRecords(kw, 1, pmPageSize);
         } else {
-            data = await app.ListPasswordRecords();
+            result = await app.ListPasswordRecords(1, pmPageSize);
         }
         if (seq !== pmLoadSeq) return;
-        pmRecords = Array.isArray(data) ? data : [];
-        // 过滤掉批量模式中已被删除的选择项
-        const validIds = new Set(pmRecords.map((r) => Number(r.id)));
-        pmSelectedIds.forEach((id) => {
-            if (!validIds.has(Number(id))) pmSelectedIds.delete(Number(id));
-        });
+
+        const items = result?.items || [];
+        pmTotal = result?.total || 0;
+        pmRecords = items;
+        pmHasMore = pmRecords.length < pmTotal;
+
+        // 全量重载，清空批量选中（列表从头渲染，旧选中项可能不在当前页）
+        pmSelectedIds.clear();
         renderPmList(renderOpts);
     } catch (e) {
         console.warn('加载密码记录失败:', e);
         window.nm?.show('加载密码记录失败', 'error');
+    }
+}
+
+/**
+ * 滚动加载更多记录（无限滚动）
+ */
+async function loadMorePmRecords() {
+    if (pmLoadingMore || !pmHasMore) return;
+    pmLoadingMore = true;
+    if (pmLoadingEl) pmLoadingEl.style.display = 'flex';
+
+    const seq = pmLoadSeq; // 快照当前序列号，飞行期间若被 loadPmRecords 作废则丢弃结果
+    try {
+        const kw = pmKeyword.trim();
+        const app = window.go?.main?.App;
+        if (!app) return;
+
+        const nextPage = pmCurrentPage + 1;
+        let result;
+        if (kw) {
+            result = await app.SearchPasswordRecords(kw, nextPage, pmPageSize);
+        } else {
+            result = await app.ListPasswordRecords(nextPage, pmPageSize);
+        }
+
+        // 序列号不匹配说明已有新的 loadPmRecords 执行，丢弃本次结果
+        if (seq !== pmLoadSeq) return;
+
+        const items = result?.items || [];
+        if (items.length > 0) {
+            pmRecords = pmRecords.concat(items);
+            pmCurrentPage = nextPage;
+            pmHasMore = pmRecords.length < pmTotal;
+            renderPmList({ append: true });
+        } else {
+            pmHasMore = false;
+        }
+    } catch (e) {
+        console.warn('加载更多密码记录失败:', e);
+    } finally {
+        pmLoadingMore = false;
+        if (pmLoadingEl) pmLoadingEl.style.display = 'none';
     }
 }
 
@@ -339,13 +404,16 @@ const PM_ICON_LINK = '<svg class="pm-field-icon" width="13" height="13" viewBox=
  * @param {object} [opts]
  * @param {boolean} [opts.playEnter=false] - 是否播放逐条入场动画（仅进入视图时为 true）
  * @param {number|null} [opts.flashId=null] - 操作后需要高亮呼吸的记录 ID
+ * @param {boolean} [opts.append=false] - 是否追加模式（不清空现有列表）
  */
-function renderPmList({ playEnter = false, flashId = null } = {}) {
+function renderPmList({ playEnter = false, flashId = null, append = false } = {}) {
     hideContextMenu();
     hideTooltip();
-    // 清空前记录滚动位置，重建后还原，避免长列表操作后视角跳动
-    const prevScrollTop = pmListEl.scrollTop;
-    pmListEl.innerHTML = '';
+
+    if (!append) {
+        // 全量渲染：清空前记录滚动位置，重建后还原
+        pmListEl.innerHTML = '';
+    }
 
     if (!pmRecords || pmRecords.length === 0) {
         pmEmptyEl.style.display = 'flex';
@@ -353,14 +421,20 @@ function renderPmList({ playEnter = false, flashId = null } = {}) {
     }
     pmEmptyEl.style.display = 'none';
 
+    // append 模式只渲染新增的记录
+    const startIdx = append ? pmListEl.querySelectorAll('.pm-item').length : 0;
+    const toRender = pmRecords.slice(startIdx);
+    if (toRender.length === 0) return;
+
     const fragment = document.createDocumentFragment();
 
-    pmRecords.forEach((rec, index) => {
+    toRender.forEach((rec, i) => {
+        const index = startIdx + i;
         const item = document.createElement('div');
         item.className = 'pm-item';
         item.dataset.id = rec.id;
-        if (playEnter) {
-            item.style.animationDelay = `${Math.min(index * 0.03, 0.3)}s`;
+        if (!append && playEnter) {
+            item.style.animationDelay = `${Math.min(i * 0.03, 0.3)}s`;
         } else {
             item.classList.add('pm-no-enter');
         }
@@ -443,7 +517,6 @@ function renderPmList({ playEnter = false, flashId = null } = {}) {
     });
 
     pmListEl.appendChild(fragment);
-    pmListEl.scrollTop = prevScrollTop;
     updatePmSelectionUI();
 }
 
@@ -993,6 +1066,7 @@ export function initPasswordManager() {
     pmGenGenerateBtn = document.getElementById('pmGenGenerateBtn');
     pmGenResultsEl = document.getElementById('pmGenResults');
     pmGenResultsWrap = document.getElementById('pmGenResultsWrap');
+    pmLoadingEl = document.getElementById('pmLoadingIndicator');
 
     if (!pmView || !pmListEl) return;
 
@@ -1071,6 +1145,17 @@ export function initPasswordManager() {
         pmSearchInput.focus();
         loadPmRecords();
     });
+
+    // ---- 滚动加载更多（无限滚动）----
+    const pmListWrap = pmListEl?.parentElement;
+    if (pmListWrap) {
+        pmListWrap.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = pmListWrap;
+            if (scrollHeight - scrollTop - clientHeight < 200) {
+                loadMorePmRecords();
+            }
+        });
+    }
 
     // ---- 字段实时长度校验（备注 text 类型不限长，不绑定）----
     bindLengthGuard(pmFieldName, PM_MAX_LENGTH.name);
@@ -1160,6 +1245,9 @@ export function initPasswordManager() {
 window.refreshPasswordManagerView = function () {
     // 进入页面时若仍处于批量模式（异常残留），自动退出
     if (pmBatchMode) exitPmBatchMode();
+    // 滚动到顶部
+    const wrap = pmListEl?.parentElement;
+    if (wrap) wrap.scrollTop = 0;
     loadPmRecords({ playEnter: true });
 };
 

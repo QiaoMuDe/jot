@@ -3816,26 +3816,30 @@ func (a *App) GetPasswordRecord(id uint) (*models.PasswordRecord, error) {
 	return rec, nil
 }
 
-// ListPasswordRecords 返回所有密码记录列表（仅含名称、用户名、URL，不含密码）
-func (a *App) ListPasswordRecords() ([]services.PasswordListItem, error) {
-	a.LogSvc.Logger.Debugw("ListPasswordRecords")
-	items, err := a.passwordService.List()
+// ListPasswordRecords 分页返回密码记录列表（仅含名称、用户名、URL，不含密码）
+func (a *App) ListPasswordRecords(page, pageSize int) (*services.PaginatedResult, error) {
+	a.LogSvc.Logger.Debugw("ListPasswordRecords", fastlog.Int("page", page), fastlog.Int("pageSize", pageSize))
+	items, total, err := a.passwordService.List(page, pageSize)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("ListPasswordRecords 失败", fastlog.Error(err))
 		return nil, err
 	}
-	return items, nil
+	return &services.PaginatedResult{
+		Items: items, Total: total, Page: page, PageSize: pageSize,
+	}, nil
 }
 
-// SearchPasswordRecords 在名称、用户名、URL、备注中模糊搜索（不含密码）
-func (a *App) SearchPasswordRecords(keyword string) ([]services.PasswordListItem, error) {
-	a.LogSvc.Logger.Debugw("SearchPasswordRecords")
-	items, err := a.passwordService.Search(keyword)
+// SearchPasswordRecords 分页搜索名称、用户名、URL、备注（不含密码）
+func (a *App) SearchPasswordRecords(keyword string, page, pageSize int) (*services.PaginatedResult, error) {
+	a.LogSvc.Logger.Debugw("SearchPasswordRecords", fastlog.String("keyword", keyword), fastlog.Int("page", page), fastlog.Int("pageSize", pageSize))
+	items, total, err := a.passwordService.Search(keyword, page, pageSize)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("SearchPasswordRecords 失败", fastlog.Error(err))
 		return nil, err
 	}
-	return items, nil
+	return &services.PaginatedResult{
+		Items: items, Total: total, Page: page, PageSize: pageSize,
+	}, nil
 }
 
 // UpdatePasswordRecord 更新密码记录

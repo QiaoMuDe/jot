@@ -557,22 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 33. **待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空 + 行内编辑 + Tooltip 预览）**：**零重渲染架构**——toggle/delete/add 三个高频操作全部绕过 `loadTodos()` → `innerHTML` 全量重渲染，改为直接操作 DOM（prepend/remove），统计数字用独立 `refreshTodoStats()` 异步更新。**addTodo 两段式动画**：已有条目先 `translateY` 平滑下移 → rAF 中插入新条目并清除 transform，350ms 时序精控防跳动。**toggleTodo 原地切换**："全部"筛选下直接切换类+DOM 移动位置（完成移底部/取消完成移顶部），筛选模式播放 exit 动画后 `item.remove()`。**deleteTodo** 播放动画后 `item.remove()`。**FAB 浮动输入**：右下角 44px 圆形 FAB → 展开 300px 内联面板（textarea+Enter 提交），FAB 旋转 45° 变 "X"，点击外部/Escape 自动收起。**行内编辑**：双击文本进入 textarea 编辑态，Enter 保存/Escape 取消/失焦自动保存，保存后播放 1.2s 涟漪确认动画。**分类感知清空**：单按钮根据当前筛选（active/done/all）动态切换清空范围，后端 `ClearTodosByFilter(filter)` switch 到 `DeleteUnfinished`/`DeleteCompleted`/`DeleteAll`，确认弹窗文案随分类变化。**悬浮 Tooltip**：600ms 防抖后弹出全文预览，基于鼠标位置智能定位。**启动提醒**：`checkUnfinishedTodosReminder()` 异步检测未完成数，支持锁屏延迟弹出。详见 [main.js](frontend/src/main.js)（todo 模块）、[todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes）、[todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll）
 
 ---
-
-## 记忆点 1：AI 消息 Meta Chip 显示（用户引用/上传/技能可视化）+ chatHistory buffer 同步 bug + 8 项代码审查修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 用户消息气泡末尾追加 inline chip，可视化展示"引用了哪些笔记/上传了哪些文件/激活了哪些技能"，类似 Trae 的"添加到输入框"效果。**核心决策**：**AIMessage 新增 `Meta` TEXT 字段（JSON 数组）** 存 `[{type:'ref'/'file'/'skill', id, title/name/label, notebook?, truncated?}]`，与既有 `SearchSources/RecallCards/ToolCalls` 单字段 JSON 模式保持一致；**`Content` 永远纯文本 → LLM 零污染**（meta 走独立字段不混入，重新生成/继续对话/历史多轮 LLM 上下文全部干净）。前端 `addMessage` 用户分支从 `textContent` 改为 `renderUserMessageWithChips`：文本段用 `createTextNode`（XSS 安全），chip 段从 `CHIP_ICON_SVG` 常量表按 `type` 查图标 + label/title 字段截断（>20 字 + `…`）+ `user-select: text`；`buildUserMessageMeta` 派生时聚合 `referencedNotes/uploadedFiles/activeSkills/roleplayNotes` 4 个工具栏状态。 |
-| **后端 5 处贯通（重要）** | ① [ai_message.go](internal/models/ai_message.go) `AIMessage` 加 `Meta string \`gorm:"type:text" json:"meta"\``，GORM AutoMigrate 自动加列（NULL 默认，零迁移）；② [ai_service.go](internal/services/ai_service.go) `Message` 透传字段 + `SaveAIMessage`/3 处历史加载（`LoadAISessionMessages`/`LoadAISessionMessagesPaginated`/`ReplaceAISessionMessages`）补全 `Meta` 字段防丢；③ [app.go](app.go) `App.SaveAIMessage` Wails 绑定**新增第 4 参数 `meta string`**（前端必须同步传）；④ 新增 `App.UpdateAIMessageMeta(msgID, meta string)` 单独绑定（编辑保存/重新生成/重发时局部更新 meta，不动 content），`Where("id = ? AND role = ?", msgID, "user")` 防止误改非用户消息、`RowsAffected=0` 写 Warn 日志；⑤ AIMessage/AISession 已有 `services.Message` 转换点全部需要补 Meta 字段（**典型遗漏点**：3 处历史加载函数）。 |
-| **chatHistory buffer 同步 bug（重要教训）** | **`addMessage` 是纯 DOM 渲染，不维护 `chatHistory` 缓冲区**。调用方需手动 push：`sendUserText`（[ai-chat.js](frontend/src/js/ai-chat.js) L2376 后）和 `handleResend`（L5041 后）漏掉会导致 `cancelEdit`/`applyEdit` 的 `chatHistory.find(m => m.id === msgId)` 返 undefined → **取消编辑后 chip 消失，且需切换会话才能恢复**（切会话触发 `chatHistory = msgs.map(...)` 从 DB 重建）。该 bug 是用户实测后报告的——现象"取消编辑后引用内容就不显示了，还得切换会话后才显示"。**普遍教训**：DOM 渲染与 buffer 同步是**两件事**，抽象成函数时不要把 buffer 维护塞到 render 函数里（容易破坏纯函数假设）。同样模式要检查：`loadAISessionMessages` → `chatHistory = msgs.map(...)` 走全量路径已带 meta；**增量路径**（sendUserText/handleResend 新消息）必须手动补。 |
-| **编辑/重新生成/重发的 meta 同步（重要）** | 三类操作共用同一规则：**从工具栏状态派生新 meta，写回 DB，同步 `chatHistory[idx].meta`，重渲染 DOM**。① **编辑保存**（`applyEdit`）：`buildUserMessageMeta()` 派生新 meta → `UpdateAIMessageMeta` 写库 → `chatHistory[idx].meta = newMeta` → `rerenderUserMessageChips` 重渲染气泡。② **重新生成**（`handleRegenerate`）：同前流程（user 消息 meta 跟随工具栏更新，AI 回复自然重新生成）。③ **重发**（`handleResend`）：同前（重发新 user 消息继承当前工具栏）。**编辑/重发后旧的 assistant + 后续消息都被截断删除**（`TruncateAISessionAfterMessage`），所以更新 meta 不会污染后续历史。**取消编辑**走相反语义：从 `chatHistory[idx].meta` 取原值重渲染，**忽略工具栏当前状态**（用户在编辑期间对工具栏的修改不应用到这条消息）。 |
-| **8 项代码审查修复（小但关键）** | ① **M4** `.ai-msg-text` `flex: 1 1 auto` → `0 1 auto`（1 行 CSS，**修 chip 错位**——text 抢满第一行导致 chip 永远换行）；② **S2** 新增 `.ai-msg-chip-tag` CSS（11 行，截断角标半透明黄底，`file.truncated=true` 时显示）；③ **S1** `createChipElement` 开头加 `if (!text) return null;` + 调用方 `if (!chip) continue;`（空 label 跳过，避免"只有图标的空 chip"）；④ **M1** `applyEdit` 不再调 `cancelEdit`（避免 rerenderUserMessageChips + cancelEdit 两次渲染），新增 `exitEditModeWithoutRerender(msgEl)` 仅清理编辑态 DOM（textarea 移除、actions 恢复）；⑤ **M3** `cancelEdit` 找不到时 `console.warn('[AI Chat] cancelEdit: chatHistory 未找到 msgId', msgId)`；⑥ **R4** 编辑入口守卫 `if (_editMsgId <= 0) { showNotification('该消息尚未完整保存，无法编辑', 'warn'); return; }`（`userMsgId=0` 即 `SaveAIMessage` 失败时编辑按钮形同虚设，给用户明确反馈）；⑦ **R1** 6 处 `parseInt(msgEl.dataset.msgId)` 统一改为 `+msgEl.dataset.msgId \|\| 0`（更稳，NaN 兜 0，调用方 `if (!msgId)` 一致拦截）；⑧ **R3** `bindMsgContextMenu` 去重守卫 `if (!msgEl \|\| msgEl._ctxMenuBound) return; msgEl._ctxMenuBound = true;`（元素级属性标记防重复绑定）。 |
-| **XSS / 主题 / 旧消息兼容** | ① **XSS 防护**——文本 `createTextNode`（自动转义）、label `textContent`（无 HTML 解析）、icon `innerHTML = CHIP_ICON_SVG[item.type]`（图标来自常量表，非用户输入，type 缺失/异常回退 default 圆圈）；② **主题适配**——chip 半透明白色背景 `rgba(255,255,255,0.16~0.22)` 在 11 主题的 accent 底上保持高对比（无需主题切换），`ref` 加深、`file` 虚线边框、`skill` 加粗边框 + 较深背景三档微调；③ **旧消息兼容**——存量 `Meta=NULL/""` 经 `JSON.parse('')` 抛错 → catch 后 warn + 早返回只渲染文本段，**不报错不破坏**（用户实测试过升级前消息正常显示）；④ **空 meta 数组** `"[]"` → `Array.isArray(items) && items.length === 0` 早返回零 chip，**行为完全等同未加 feature 前的状态**（无视觉差异）。 |
-| **涉及文件** | [internal/models/ai_message.go](internal/models/ai_message.go)（新增 Meta 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（Message 透传 + 3 处历史加载补 Meta）、[app.go](app.go)（`SaveAIMessage` 签名加 meta 参数 + 新增 `UpdateAIMessageMeta` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（CHIP_ICON_SVG / getSkillLabel / buildUserMessageMeta / createChipElement / renderUserMessageWithChips / rerenderUserMessageChips / sendUserText+handleResend 加 chatHistory push / 8 项审查修复）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-msg-user` 容器 flex + `.ai-msg-chip*` 类型微调 + `.ai-msg-chip-tag` 新增）、[frontend/wailsjs/go/main/App.js](frontend/wailsjs/go/main/App.js) + [App.d.ts](frontend/wailsjs/go/main/App.d.ts)（`SaveAIMessage` 4 参 + `UpdateAIMessageMeta` 绑定） |
-
----
-
-## 记忆点 2：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
+## 记忆点 1：笔记搜索打分排序 + GORM `Order(gorm.Expr)` 静默丢弃大坑 + LIKE 通配符转义 + 搜索弹窗修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -583,8 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`buildSearchSortOrder` 返回 `clause.OrderBy` + `escapeLike` + 4 处搜索查询 `ESCAPE '\'`）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`TestBuildSearchSortOrder` 类型断言改为 `clause.OrderBy` + `TestSearchRelevanceOrdering`/`TestSearchRelevanceOrderingWithTagFilter`/`TestSearchByNotebookRelevanceOrdering` 打乱插入顺序 + `TestEscapeLike` + `TestSearchWildcardEscaping`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（`overflow: visible`）、[frontend/index.html](frontend/index.html)（placeholder + 空状态文案）、[frontend/src/main.js](frontend/src/main.js)（`searchModalEmptyDesc`） |
 
 ---
-
-## 记忆点 3：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
+## 记忆点 2：MCP 客户端迁移到官方 go-sdk + 全局连接池与预热机制（含断线重连与前端联动）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -597,8 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/client.go](internal/mcpserver/client.go)（go-sdk 三传输 + headerRoundTripper + 会话生命周期 cancel）、[internal/mcpserver/tools.go](internal/mcpserver/tools.go)（ListTools/CallTool + callTool 重连 + InputSchema 转换）、[internal/mcpserver/pool.go](internal/mcpserver/pool.go)（新增 Pool/Warmup/Reconcile/WarmupOne/getOrCreate/in-flight）、[internal/agent/agent.go](internal/agent/agent.go)（Deps.MCPPool + 装配改走池）、[app.go](app.go)（WarmupMCPServers 绑定 + shutdown/rebuildServices 池生命周期）、[frontend/src/main.js](frontend/src/main.js)（warmupMCPServers 汇总通知 + 设置页联动）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（首次进入预热）、[frontend/wailsjs/](frontend/wailsjs/)（WarmupMCPServers + WarmupResult 手动同步）、[go.mod](go.mod)（go-sdk v1.7.0，移除 mark3labs/eino-ext mcp）、[ping_test.go](internal/mcpserver/ping_test.go)/[pool_internal_test.go](internal/mcpserver/pool_internal_test.go)/[pool_inflight_test.go](internal/mcpserver/pool_inflight_test.go)/[reconnect_test.go](internal/mcpserver/reconnect_test.go)（新增测试） |
 
 ---
-
-## 记忆点 4：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
+## 记忆点 3：MCP 服务器工具精细化控制（工具级开关 + 设置页展示 + 池快照读取）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,8 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（SessionToolMeta + ListToolMetas）、[app.go](app.go)（GetAgentTools 扩展 MCP 工具追加）、[internal/agent/agent.go](internal/agent/agent.go)（MCP 装配 disabledTools 过滤）、[frontend/src/main.js](frontend/src/main.js)（refreshAgentToolsMeta + warmupMCPServers 联动）、[.trae/documents/mcp-tool-fine-grained-control.md](.trae/documents/mcp-tool-fine-grained-control.md)（完整计划文档） |
 
 ---
-
-## 记忆点 5：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
+## 记忆点 4：AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -622,8 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/ai_session.go](internal/models/ai_session.go)（SummaryContent + SummaryMsgCount 字段）、[internal/services/ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构 + 同步摘要生成）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听 + 状态条显示）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-summary-status 样式） |
 
 ---
-
-## 记忆点 6：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
+## 记忆点 5：AI 助手消息区/输入区重构（大消息截断折叠 + 编辑框自适应 + 引用三栏合并 + 批量移除按钮区分）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -636,8 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/index.html](frontend/index.html)（#aiChatBarsArea 三 chips 容器平铺、删三个 bar 包装层）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（输入区/引用栏绝对定位 + z-index 层级 + `.ai-msg-text.collapsed` 截断渐变 + `.ai-msg-collapse-wrap` + chip 背景 + `.ai-chat-ref-chip-remove-all` 批量按钮）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（MAX_COLLAPSE_CHARS/折叠渲染与展开交互/编辑框自适应 savedWidth/_editingMsgEl/ResizeObserver/updateBarsAreaVisibility/三渲染函数空分支清空/switchSession+createSession 清空 uploadedFiles/批量按钮语义类） |
 
 ---
-
-## 记忆点 7：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
+## 记忆点 6：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,8 +632,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
 
 ---
-
-## 记忆点 8：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+## 记忆点 7：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,8 +647,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
 
 ---
-
-## 记忆点 9：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 8：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,8 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [frontend/src/js/launcher.js](frontend/src/js/launcher.js)（13 项定义/拼音搜索/键盘导航（`cols = 4`）/开关控制）、[frontend/src/css/components/launcher.css](frontend/src/css/components/launcher.css)（全屏遮罩/面板/4 列网格/卡片/动画）、[frontend/src/main.js](frontend/src/main.js)（initLauncher/Ctrl+P 快捷键/ESC 关闭/todo 模块全部前端逻辑）、[frontend/src/css/components/todo.css](frontend/src/css/components/todo.css)（8 个 @keyframes/条目/FAB/筛选栏/Tooltip 样式）、[frontend/index.html](frontend/index.html)（#viewTodo + .launcher HTML 结构）、[package.json](frontend/package.json)（pinyin-pro 依赖）、[internal/services/todo_service.go](internal/services/todo_service.go)（DeleteUnfinished/DeleteCompleted/DeleteAll） |
 
 ---
-
-## 记忆点 10：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+## 记忆点 9：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -692,12 +669,25 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **密码生成实现（后端）** | [internal/services/password_generator.go](internal/services/password_generator.go) `GeneratePasswords(opts)`：基于 `crypto/rand` 密码学安全随机，字符池按四类（upper/lower/digits/symbols）选项拼接，`ExcludeAmbiguous` 时过滤易混淆字符 `lI1O0`，批量生成并逐条调用 `CheckPasswordStrength` 返回强度。Wails 绑定为 `App.GeneratePasswords`（[app.go](app.go)）；前端 [frontend/src/js/password-manager.js](frontend/src/js/password-manager.js) `pmDoGenerate()` 直接调用绑定并渲染结果列表（原前端 `pmGeneratePassword` 已删除）。 |
 | **强度算法（zxcvbn + 类型上限）** | 后端 `CheckPasswordStrength` 基于 `zxcvbn`（`github.com/trustelem/zxcvbn`）的猜测次数评分（0-4），叠加字符类型上限修正：纯字符类型（仅数字/仅字母等）最高 2（fair），2 种类型最高 3（good），3/4 种类型不限。**历史**：早期前端曾用熵值法（V1/V2）与"评级上限+长度阶梯+模式惩罚"（V3）方案，后整体替换为 zxcvbn 并迁至后端；详情/编辑对话框的实时强度检测同样走后端 `App.CheckPasswordStrength`。 |
 | **对话框 UI 结构** | [frontend/index.html](frontend/index.html) `#pmGenOverlay`：全屏遮罩 + 居中 `.pm-gen-dialog`（覆盖父级 `pmDialogIn` 动画避免缩放抖动）。内部卡片分组：密码长度（步进器±1 + 进度条）、生成数量（步进器±1，范围 1-20）、字符类型（2×2 切换按钮网格 + 排除易混淆复选框）、结果区域（复制全部按钮 + 逐条密码列表含强度圆点+复制按钮）。 |
-| **结果区展开防跳动（近期修复）** | `#pmGenResultsWrap` 默认收起（`max-height: 0; opacity: 0`），加 `.open` 类后经 `max-height/opacity` 0.22s 平滑展开，避免 `display:none→block` 瞬间切换导致对话框高度突变、垂直居中重定位整体跳动；HTML 移除内联 `display:none` 由 CSS 统一控制。`pmDoGenerate()` 将清空旧列表移到 `await` 之后（与渲染同帧），重新生成时旧结果保留到新结果就绪，消除列表塌陷造成的二次跳动。 |
+| **结果区展开动画（最终方案：opacity+transform，禁用 max-height 过渡）** | `#pmGenResultsWrap` 默认收起（`opacity: 0; transform: translateY(6px)`），加 `.open` 类后 `opacity: 1; transform: translateY(0)`，0.22s 淡入上移展开；**禁用 max-height 过渡**——max-height 做展开动画时对话框高度突变会整体跳动/闪烁（第一版 `max-height: 0→330px` 展开已废弃）。**嵌套滚动容器截断教训**：`.pm-dialog`（`overflow: hidden`）+ `.pm-gen-body`（`flex:1` + `overflow-y:auto`，flex 子项高度被剩余空间钳制）+ `.pm-gen-results`（`max-height`）三层叠加时，内层列表最后一条会被裁掉一半（内层不滚动、外层无法滚动）。最终 `.pm-gen-results` 固定 `max-height: 260px` + `overflow-y: auto`（超过 ~6 条内部滚动、每条完整显示），**该 max-height 不可移除**，否则结果列表无限变高撑爆对话框。HTML 移除内联 `display:none` 由 CSS 统一控制。`pmDoGenerate()` 将清空旧列表移到 `await` 之后（与渲染同帧），重新生成时旧结果保留到新结果就绪，消除列表塌陷造成的二次跳动。 |
 | **详情页强度行对齐（近期修复）** | 查看详情页强度文字是嵌套在 `.pm-detail-value`（继承 13.44px/line-height 1.6）里的 `.pm-pwd-strength-text`（12px/1.7），父容器行高支柱高于标签（12px/1.7），导致同样 12px 的文字被压低约 1px。修复：`#pmDetailPwdStrength { font-size: 12px; line-height: 1.7; }` 使值容器行盒与标签一致，文字基线自然对齐。 |
 | **按钮交互规范** | 所有操作按钮统一 `:active` 回弹效果（`scale(0.95)` + `transition-duration: 0.08s`），包括生成密码按钮、复制全部、单条复制、步进器±按钮。生成密码按钮图标与文字同行（`display: inline-flex; align-items: center; gap: 6px`），非全宽。 |
 | **滚动条问题修复** | 对话框 `.pm-gen-body` 和 `.pm-gen-results` 的滚动条需要显式声明完整样式（`scrollbar-width` + `scrollbar-color` + `::-webkit-scrollbar` 四件套），否则在对话框层级内不显示。不能仅依赖全局 `scrollbar.css`，因为对话框的 `overflow` 上下文会隔离滚动条样式。 |
 | **ESC 关闭拦截** | 生成器对话框的 ESC 关闭逻辑注册在全局 `pmHandleEscape` 中（遵循 AGENTS.md 规范：ESC 统一在全局处理），优先级在详情对话框之后：先判断 `pmDetailOverlay` → 再判断 `pmGenOverlay`。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件/强度渲染 `pmRenderStrengthBar`/`pmRenderStrengthText`）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条/`#pmGenResultsWrap` 过渡/`#pmDetailPwdStrength` 对齐）、[internal/services/password_generator.go](internal/services/password_generator.go)（生成与强度算法）、[app.go](app.go)（`GeneratePasswords`/`CheckPasswordStrength` Wails 绑定） |
+
+---
+
+## 记忆点 10：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 密码列表由全量加载改为滚动懒加载分页，分页大小复用笔记首页 `page_size` 设置。后端 `List`/`Search` 加分页参数返回 `PaginatedResult`；前端滚动距底 200px 自动加载下一页，搜索切换关键词自动重置到第 1 页。 |
+| **后端分页** | [password_service.go](internal/services/password_service.go) `List(page, pageSize)` / `Search(keyword, page, pageSize)` 改为先 `Count()` 再 `Offset().Limit()` 查询，返回 `*services.PaginatedResult`（复用 [types.go](internal/services/types.go) 既有类型）；[app.go](app.go) `ListPasswordRecords(page, pageSize)` / `SearchPasswordRecords(keyword, page, pageSize)` Wails 绑定签名同步更新。列表与搜索共用同一分页路径，仅多 LIKE 过滤。 |
+| **前端分页状态机** | [password-manager.js](frontend/src/js/password-manager.js)：分页状态 `pmCurrentPage/pmTotal/pmHasMore/pmLoadingMore`；`loadMorePmRecords()` 在 `.pm-list-wrap` 滚动距底部 200px 时触发，入口 `if (pmLoadingMore \|\| !pmHasMore) return` 防重入；`renderPmList({append:true})` 追加模式渲染（跳过入场动画、不重置滚动位置）；搜索重置 `pmCurrentPage = 1` 从头加载；`pmPageSize` 读取笔记首页 `page_size` 设置。加载指示器 `#pmLoadingIndicator`（[index.html](frontend/index.html)）+ spinner 样式（[password-manager.css](frontend/src/css/components/password-manager.css)）。 |
+| **4 个分页 Bug 修复** | ① `pmLoadingEl.style.display = pmHasMore ? 'none' : 'none'` 死代码（两分支相同）→ 统一 `'none'`；②③ `loadMorePmRecords` 缺少 `pmLoadSeq` 代际防护 → 请求前快照 `seq`，完成后 `if (seq !== pmLoadSeq) return` 丢弃过期响应，同时顺带解决"快速搜索时进行中的 loadMore 结果 concat 进新列表"竞态；④ `validIds` 只过滤当前页 → 全量重载时直接 `pmSelectedIds.clear()`（旧选中项可能不在新列表当前页，防批量选中残留）。 |
+| **进入页面滚动到顶部** | 每次进入密码管理页面时 `.pm-list-wrap` 置 `scrollTop = 0` 再加载数据，避免上次浏览位置残留。 |
+| **涉及文件** | [internal/services/password_service.go](internal/services/password_service.go)、[app.go](app.go)、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css) |
 
 ---
 

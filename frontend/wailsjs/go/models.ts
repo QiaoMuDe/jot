@@ -835,24 +835,6 @@ export namespace services {
 	        this.excludeAmbiguous = source["excludeAmbiguous"];
 	    }
 	}
-	export class PasswordListItem {
-	    id: number;
-	    name: string;
-	    username: string;
-	    url: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new PasswordListItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.username = source["username"];
-	        this.url = source["url"];
-	    }
-	}
 	export class PasswordStrengthResult {
 	    score: number;
 	    guesses: number;

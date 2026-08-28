@@ -188,7 +188,7 @@ export function IndexNotesStale():Promise<void>;
 
 export function IndexNotesUnindexed():Promise<void>;
 
-export function ListPasswordRecords():Promise<Array<services.PasswordListItem>>;
+export function ListPasswordRecords(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
 export function ListTodos():Promise<Array<models.Todo>>;
 
@@ -258,7 +258,7 @@ export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promis
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;
 
-export function SearchPasswordRecords(arg1:string):Promise<Array<services.PasswordListItem>>;
+export function SearchPasswordRecords(arg1:string,arg2:number,arg3:number):Promise<services.PaginatedResult>;
 
 export function SelectAIChatFiles():Promise<Array<main.AIChatFileResult>>;
 

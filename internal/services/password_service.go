@@ -46,31 +46,46 @@ func (s *PasswordService) Create(name, username, password, url, note string) (*m
 	return rec, nil
 }
 
-// List 返回所有密码记录（按创建时间倒序），不解码密码字段
-func (s *PasswordService) List() ([]PasswordListItem, error) {
-	var recs []models.PasswordRecord
-	if err := s.db.Order(passwordOrder).Find(&recs).Error; err != nil {
-		s.logger.Errorw("PasswordService.List 失败", fastlog.Error(err))
-		return nil, err
+// List 分页返回密码记录（按更新时间倒序），不解码密码字段
+func (s *PasswordService) List(page, pageSize int) ([]PasswordListItem, int64, error) {
+	var total int64
+	if err := s.db.Model(&models.PasswordRecord{}).Count(&total).Error; err != nil {
+		s.logger.Errorw("PasswordService.List Count 失败", fastlog.Error(err))
+		return nil, 0, err
 	}
-	return toPasswordListItems(recs), nil
+
+	offset := (page - 1) * pageSize
+	var recs []models.PasswordRecord
+	if err := s.db.Order(passwordOrder).Offset(offset).Limit(pageSize).Find(&recs).Error; err != nil {
+		s.logger.Errorw("PasswordService.List 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return toPasswordListItems(recs), total, nil
 }
 
-// Search 在名称、用户名、URL、备注字段中模糊搜索，不解码密码字段。
+// Search 分页搜索名称、用户名、URL、备注字段，不解码密码字段。
 // keyword trim 后为空时等价于 List。
-func (s *PasswordService) Search(keyword string) ([]PasswordListItem, error) {
+func (s *PasswordService) Search(keyword string, page, pageSize int) ([]PasswordListItem, int64, error) {
 	keyword = strings.TrimSpace(keyword)
 	db := s.db.Model(&models.PasswordRecord{})
 	if keyword != "" {
 		like := "%" + escapeLike(keyword) + "%"
 		db = db.Where("name LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\'", like, like, like, like)
 	}
-	var recs []models.PasswordRecord
-	if err := db.Order(passwordOrder).Find(&recs).Error; err != nil {
-		s.logger.Errorw("PasswordService.Search 失败", fastlog.Error(err))
-		return nil, err
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		s.logger.Errorw("PasswordService.Search Count 失败", fastlog.Error(err))
+		return nil, 0, err
 	}
-	return toPasswordListItems(recs), nil
+
+	offset := (page - 1) * pageSize
+	var recs []models.PasswordRecord
+	if err := db.Order(passwordOrder).Offset(offset).Limit(pageSize).Find(&recs).Error; err != nil {
+		s.logger.Errorw("PasswordService.Search 失败", fastlog.Error(err))
+		return nil, 0, err
+	}
+	return toPasswordListItems(recs), total, nil
 }
 
 // GetPasswordRecord 根据 ID 查询单条记录，password 字段解码后返回明文。
