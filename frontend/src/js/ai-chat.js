@@ -4578,6 +4578,11 @@ async function handleResend(msgEl) {
     // 重新发送
     if (!(await ensureAIReady('重新发送'))) return;
     await startStreaming(content, newUserMsgId);
+
+    // 重新发送后清空上传文件列表（与 onSend 保持一致）
+    uploadedFiles = [];
+    renderFileChips();
+
     scrollToBottom();
 }
 
