@@ -2646,5 +2646,24 @@ console.log(greet("Jot"));
     </div>
 </div>
 
+<!-- 模式悬停提示 portal：fixed 挂载 body，脱离输入区层叠上下文，保证任何业务浮层都无法盖住 -->
+<div id="aiModeTipPortal" class="ai-mode-tip-portal" aria-hidden="true">
+    <div class="ai-mode-tip" data-tip="chat">
+        <span class="ai-mode-tip-title">Chat 模式</span>
+        <span class="ai-mode-tip-line"><em>特点：</em>单次问答直接回复，不调用任何工具，响应最快。</span>
+        <span class="ai-mode-tip-line"><em>适用场景：</em>快速问答、简单咨询、日常闲聊等无需使用工具的场景。</span>
+    </div>
+    <div class="ai-mode-tip" data-tip="agent">
+        <span class="ai-mode-tip-title">Agent 模式</span>
+        <span class="ai-mode-tip-line"><em>特点：</em>AI 自主规划并调用笔记、待办、搜索等工具，多轮推理完成复杂任务。</span>
+        <span class="ai-mode-tip-line"><em>适用场景：</em>需要跨功能操作或自动处理的综合任务，如整理笔记、汇总信息、管理待办。</span>
+    </div>
+    <div class="ai-mode-tip" data-tip="plan">
+        <span class="ai-mode-tip-title">Plan 模式</span>
+        <span class="ai-mode-tip-line"><em>特点：</em>执行前先自动生成结构化执行计划（按复杂度拆解为 1~10 步），前端弹出计划卡片；执行中逐步标记进行中/完成/跳过，可新增或调整步骤。</span>
+        <span class="ai-mode-tip-line"><em>适用场景：</em>复杂多步骤任务，需要可视化步骤拆解与进度跟踪，或约束执行路径避免工具调用跑偏。</span>
+    </div>
+</div>
+
 </body>
 </html>

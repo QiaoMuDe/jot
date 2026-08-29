@@ -1193,17 +1193,25 @@
 }
 
 
-/* Agent/Plan 模式切换 — 边框包裹 + 分割线 */
+/* Chat/Agent/Plan 模式切换 — 边框包裹 + 分割线（overflow 不裁剪，供悬停提示溢出） */
 .ai-mode-toggle {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
     border: 1px solid var(--border);
     border-radius: 6px;
-    overflow: hidden;
+}
+
+/* 去掉容器 overflow 裁剪后，由首尾按钮自行圆角（容器 1px 边框 + 6px 圆角 → 内部 5px） */
+.ai-mode-toggle .ai-mode-btn:first-child {
+    border-radius: 5px 0 0 5px;
+}
+.ai-mode-toggle .ai-mode-btn:last-child {
+    border-radius: 0 5px 5px 0;
 }
 
 .ai-mode-btn {
+    position: relative;
     padding: 2px 10px;
     font-size: 0.72rem;
     border: none;
@@ -1231,6 +1239,94 @@
     height: 14px;
     background: var(--border);
     flex-shrink: 0;
+}
+
+/* ── 模式悬停提示（portal）：fixed 挂载于 body，脱离输入区层叠上下文，
+   任何业务浮层（会话菜单/弹窗等）都无法盖住 ── */
+.ai-mode-tip-portal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999; /* 高于会话菜单 1000 / 设置面板 10000 以下所有业务浮层；与锁屏同级 */
+    pointer-events: none;
+}
+
+/* 单个提示：absolute 相对 portal（视口坐标系），left/top 由 JS 按按钮实时位置计算 */
+.ai-mode-tip {
+    position: absolute;
+    width: 248px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px -2px var(--shadow-modal);
+    font-size: 0.74rem;
+    font-weight: normal;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    text-align: left;
+    white-space: normal;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: opacity 0.16s ease, transform 0.18s var(--anim-easing-spring), visibility 0.16s;
+}
+
+.ai-mode-tip.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* 底部小箭头（默认 tooltip 在按钮上方，箭头朝下）：双三角消除与边框的豁口
+   （::before 边框色垫底，::after 背景色上移 1px 盖住）；
+   水平位置由 JS 写入 --tip-arrow-x，始终指向按钮中心 */
+.ai-mode-tip::before,
+.ai-mode-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: var(--tip-arrow-x, 50%);
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border);
+}
+.ai-mode-tip::after {
+    margin-top: -1px;
+    border-top-color: var(--card-bg);
+}
+
+/* 下方弹出时（按钮上方空间不足，由 JS 加 below），箭头翻转朝上 */
+.ai-mode-tip.below::before,
+.ai-mode-tip.below::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--border);
+}
+.ai-mode-tip.below::after {
+    margin-top: 0;
+    margin-bottom: -1px;
+    border-bottom-color: var(--card-bg);
+}
+
+.ai-mode-tip-title {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 3px;
+}
+
+.ai-mode-tip-line {
+    display: block;
+    margin-top: 3px;
+}
+
+.ai-mode-tip-line em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
 /* AI 回复期间锁定：置灰（不使用 pointer-events，保留点击以触发抖动提示） */

@@ -390,6 +390,9 @@ export async function initAIChat() {
 
     bindEvents();
 
+    // 模式悬停提示（portal 挂载 body，脱离输入区层叠上下文保证置顶）
+    initModeTips();
+
     // 一次性初始化 Marked 选项 (高亮在 renderMarkdown 中用 hljs.highlightElement 后处理) 
     marked.setOptions({
         breaks: true,
@@ -398,6 +401,77 @@ export async function initAIChat() {
 
     // 初始化拖拽上传
     initAiChatFileDrop();
+}
+
+/* ── 模式悬停提示（portal） ── */
+
+/**
+ * 初始化模式悬停提示：tooltip 挂载于 body 下的 portal（fixed + z-index 9999），
+ * hover 时按按钮实时位置定位显示，彻底脱离输入区层叠上下文（对外层级 5），
+ * 任何业务浮层（会话更多菜单 1000 / 引用弹窗 1000 / 设置面板 10000 等）都无法盖住。
+ * 覆盖：Chat/Agent/Plan 三按钮、回复锁定态不提示、布局变化（侧边栏折叠动画/窗口缩放）跟随。
+ */
+function initModeTips() {
+    const toggle = document.getElementById('aiModeToggle');
+    const portal = document.getElementById('aiModeTipPortal');
+    if (!toggle || !portal) return;
+    const tipMap = new Map();
+    toggle.querySelectorAll('.ai-mode-btn').forEach(btn => {
+        const tip = portal.querySelector(`.ai-mode-tip[data-tip="${btn.dataset.mode}"]`);
+        if (tip) tipMap.set(btn, tip);
+    });
+    let activeBtn = null;
+    const MARGIN = 8;   // tooltip 距视口边缘的安全边距
+    const GAP = 9;      // tooltip 与按钮的间距
+    const TIP_W = 248;  // 与 CSS 中 .ai-mode-tip 的 width 保持一致
+
+    /**
+     * 定位 tooltip：水平居中于按钮（中心对齐），视口左/右缘不足时向内偏移防溢出；
+     * 垂直默认弹上方，按钮上方空间不足时弹下方（加 .below 翻转箭头）。
+     * 箭头（--tip-arrow-x）始终指向按钮中心。
+     */
+    const position = (btn, tip) => {
+        const rect = btn.getBoundingClientRect();
+        const tipH = tip.offsetHeight;
+        const vw = window.innerWidth || document.documentElement.clientWidth;
+        // 中心对齐，再按视口边缘 clamp
+        let left = rect.left + rect.width / 2 - TIP_W / 2;
+        if (left < MARGIN) left = MARGIN;
+        if (left + TIP_W > vw - MARGIN) left = Math.max(MARGIN, vw - MARGIN - TIP_W);
+        const below = rect.top < tipH + GAP + MARGIN;
+        const top = below ? rect.bottom + GAP : rect.top - GAP - tipH;
+        tip.classList.toggle('below', below);
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+        tip.style.setProperty('--tip-arrow-x', rect.left + rect.width / 2 - left + 'px');
+    };
+
+    const show = btn => {
+        if (toggle.classList.contains('is-locked')) return; // 回复期间锁定：不显示提示
+        const tip = tipMap.get(btn);
+        if (!tip) return;
+        position(btn, tip);
+        activeBtn = btn;
+        requestAnimationFrame(() => tip.classList.add('visible')); // 下一帧加类，确保过渡生效
+    };
+    const hide = () => {
+        if (!activeBtn) return;
+        tipMap.get(activeBtn)?.classList.remove('visible');
+        activeBtn = null;
+    };
+
+    toggle.querySelectorAll('.ai-mode-btn').forEach(btn => {
+        btn.addEventListener('mouseenter', () => show(btn));
+        btn.addEventListener('mouseleave', hide);
+    });
+
+    // 布局变化跟随：监听输入区尺寸（侧边栏折叠动画挤压 content → input-area 宽度变化、
+    // 窗口缩放等），hover 期间保持 tooltip 贴合按钮
+    if (window.ResizeObserver && inputAreaEl) {
+        new ResizeObserver(() => {
+            if (activeBtn) position(activeBtn, tipMap.get(activeBtn));
+        }).observe(inputAreaEl);
+    }
 }
 
 /* ── 上下文大小 ── */
