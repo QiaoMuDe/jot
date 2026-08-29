@@ -25,6 +25,8 @@ const (
 	CategoryNetworkError            = "network_error"
 	CategoryUnknown                 = "unknown"
 	CategoryModelNotSupportThinking = "model_not_support_thinking"
+	CategoryModelNotSupportTools    = "model_not_support_tools"
+	CategoryResponseFormat          = "response_format"
 )
 
 // AIError 结构化错误信息
@@ -47,14 +49,21 @@ var userMessages = map[string]string{
 	CategoryContentFilter:           "内容被安全策略拦截，请调整输入后重试",
 	CategoryNetworkError:            "网络连接失败，请检查网络设置或 API 地址",
 	CategoryModelNotSupportThinking: "当前模型不支持「深度思考」功能，请在输入框上方关闭深度思考开关后重试",
+	CategoryModelNotSupportTools:    "当前模型不支持工具调用，无法使用 Agent 模式，请更换支持 tool calling 的模型后重试",
+	CategoryResponseFormat:          "AI 服务返回了无法解析的响应，请检查服务状态或更换模型",
 	CategoryUnknown:                 "AI 调用出错，请稍后重试",
 }
 
 // NewAIError 创建 AIError
 func NewAIError(category, raw string) *AIError {
+	msg, ok := userMessages[category]
+	if !ok {
+		// 未知分类兜底到通用文案，避免 UserMsg 为空导致前端展示原始错误
+		msg = userMessages[CategoryUnknown]
+	}
 	return &AIError{
 		Category: category,
-		UserMsg:  userMessages[category],
+		UserMsg:  msg,
 		Raw:      raw,
 	}
 }
@@ -84,6 +93,13 @@ func ClassifyError(err error) *AIError {
 	}
 
 	raw := err.Error()
+
+	// 已分类过的 AIErrorWrapper 直接还原，避免二次分类退化为通用/误判分类
+	// （wrapper 的 Error() 只是 JSON 文本，按文本匹配会得到错误结果）
+	var wrapped *AIErrorWrapper
+	if errors.As(err, &wrapped) {
+		return wrapped.Err
+	}
 
 	// 检测 eino 转换后的错误类型
 	var einoErr *einoopenai.APIError
@@ -175,17 +191,34 @@ func classifyOpenAIRequestError(reqErr *openai.RequestError, raw string) *AIErro
 func classifyBadRequest(msg string) *AIError {
 	lower := strings.ToLower(msg)
 	switch {
-	case strings.Contains(lower, "content_filter"):
-		return NewAIError(CategoryContentFilter, rawMsg(msg))
+	// 内容安全拦截（OpenAI content_filter / 通义、DeepSeek 的 data inspection 等）
+	case strings.Contains(lower, "content_filter") ||
+		strings.Contains(lower, "content filter") ||
+		strings.Contains(lower, "was filtered") ||
+		strings.Contains(lower, "data inspection") ||
+		strings.Contains(lower, "content safety"):
+		return NewAIError(CategoryContentFilter, msg)
+	// 上下文长度超限：token 需与 exceed/too many/limit 等组合，
+	// 避免 "invalid token"、"api token" 等无关错误被误判为上下文超长
 	case strings.Contains(lower, "context_length") ||
-		strings.Contains(lower, "token") ||
-		strings.Contains(lower, "maximum context"):
-		return NewAIError(CategoryContextLength, rawMsg(msg))
+		strings.Contains(lower, "context length") ||
+		strings.Contains(lower, "maximum context") ||
+		(strings.Contains(lower, "token") &&
+			(strings.Contains(lower, "exceed") || strings.Contains(lower, "too many") ||
+				strings.Contains(lower, "too long") || strings.Contains(lower, "limit"))):
+		return NewAIError(CategoryContextLength, msg)
+	// 深度思考不支持：兼容 OpenAI 的 enable_thinking 参数报错与 Ollama 等
+	// "does not support thinking/reasoning" 类报错
 	case strings.Contains(lower, "enable_thinking") ||
-		(strings.Contains(lower, "reasoning") && strings.Contains(lower, "not supported")):
-		return NewAIError(CategoryModelNotSupportThinking, rawMsg(msg))
+		(strings.Contains(lower, "thinking") || strings.Contains(lower, "reasoning")) &&
+			(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
+		return NewAIError(CategoryModelNotSupportThinking, msg)
+	// 工具调用不支持：Ollama 等 "does not support tools" / "tools not supported" 类报错
+	case (strings.Contains(lower, "tool") || strings.Contains(lower, "function calling")) &&
+		(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
+		return NewAIError(CategoryModelNotSupportTools, msg)
 	default:
-		return NewAIError(CategoryInvalidRequest, rawMsg(msg))
+		return NewAIError(CategoryInvalidRequest, msg)
 	}
 }
 
@@ -193,6 +226,14 @@ func classifyBadRequest(msg string) *AIError {
 func classifyByText(raw string) *AIError {
 	lower := strings.ToLower(raw)
 	switch {
+	// 服务端错误：匹配常见短语（含 OpenAI 的 "server had an error"），
+	// 不再依赖 "5" + "server error" 的脆弱组合
+	case strings.Contains(lower, "internal server error") ||
+		strings.Contains(lower, "server error") ||
+		strings.Contains(lower, "bad gateway") ||
+		strings.Contains(lower, "service unavailable") ||
+		strings.Contains(lower, "server had an error"):
+		return NewAIError(CategoryServerError, raw)
 	case strings.Contains(lower, "rate limit") ||
 		strings.Contains(lower, "too many requests"):
 		return NewAIError(CategoryRateLimit, raw)
@@ -201,13 +242,32 @@ func classifyByText(raw string) *AIError {
 		strings.Contains(lower, "forbidden") ||
 		strings.Contains(lower, "api key"):
 		return NewAIError(CategoryAuthError, raw)
-	case strings.Contains(lower, "5") && strings.Contains(lower, "server error"):
-		return NewAIError(CategoryServerError, raw)
 	case strings.Contains(lower, "quota") ||
 		strings.Contains(lower, "insufficient"):
 		return NewAIError(CategoryQuotaExceeded, raw)
+	// 内容安全拦截
+	case strings.Contains(lower, "content_filter") ||
+		strings.Contains(lower, "content filter") ||
+		strings.Contains(lower, "was filtered") ||
+		strings.Contains(lower, "data inspection") ||
+		strings.Contains(lower, "content safety"):
+		return NewAIError(CategoryContentFilter, raw)
+	// 响应解析失败：非 JSON 响应、非法 JSON（本地/Ollama 等模型常见）
+	case strings.Contains(lower, "invalid character") ||
+		strings.Contains(lower, "unexpected end of json") ||
+		strings.Contains(lower, "cannot unmarshal"):
+		return NewAIError(CategoryResponseFormat, raw)
+	// 兜底检测：深度思考/工具调用不支持（置于 model 分支前，避免被误判为模型不存在）
+	case (strings.Contains(lower, "thinking") || strings.Contains(lower, "reasoning")) &&
+		(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
+		return NewAIError(CategoryModelNotSupportThinking, raw)
+	case (strings.Contains(lower, "tool") || strings.Contains(lower, "function calling")) &&
+		(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
+		return NewAIError(CategoryModelNotSupportTools, raw)
+	// 模型不存在：用精确短语代替宽泛的 "model"，避免 "model overloaded"、"model is busy" 等误判
 	case strings.Contains(lower, "not found") ||
-		strings.Contains(lower, "model"):
+		strings.Contains(lower, "does not exist") ||
+		strings.Contains(lower, "unknown model"):
 		return NewAIError(CategoryModelNotFound, raw)
 	case strings.Contains(lower, "deadline") ||
 		strings.Contains(lower, "timeout") ||
@@ -217,14 +277,10 @@ func classifyByText(raw string) *AIError {
 		strings.Contains(lower, "no such host") ||
 		strings.Contains(lower, "connection refused") ||
 		strings.Contains(lower, "connection reset") ||
+		strings.Contains(lower, "broken pipe") ||
 		strings.Contains(lower, "eof"):
 		return NewAIError(CategoryNetworkError, raw)
 	default:
 		return NewAIError(CategoryUnknown, raw)
 	}
-}
-
-// rawMsg 辅助函数：将错误消息包装为 raw 字符串
-func rawMsg(msg string) string {
-	return msg
 }

@@ -3,6 +3,7 @@ package aierrors
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"testing"
@@ -288,5 +289,168 @@ func TestClassifyError_EinoAPIError_ContextLength_400(t *testing.T) {
 	}
 	if ae.Category != CategoryContextLength {
 		t.Errorf("expected category %q, got %q", CategoryContextLength, ae.Category)
+	}
+}
+
+// TestClassifyError_NotSupportThinking_Ollama 覆盖 Ollama 返回
+// `"model:tag" does not support thinking` 的 400 报错（日志中的真实场景）。
+func TestClassifyError_NotSupportThinking_Ollama(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "\"jewelzufo/MiniCPM5-1B:latest\" does not support thinking",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportThinking {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportThinking, ae.Category)
+	}
+}
+
+// TestClassifyError_NotSupportThinking_Reasoning 覆盖 "does not support reasoning" 类报错。
+func TestClassifyError_NotSupportThinking_Reasoning(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "model qwen3 does not support reasoning",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportThinking {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportThinking, ae.Category)
+	}
+}
+
+// TestClassifyError_NotSupportTools 覆盖 Ollama 返回
+// `... does not support tools` 的 400 报错（日志中的真实场景）。
+func TestClassifyError_NotSupportTools(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "registry.ollama.ai/jewelzufo/MiniCPM5-1B:latest does not support tools",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportTools {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportTools, ae.Category)
+	}
+}
+
+// TestClassifyError_NotSupportThinking_Wrapped 覆盖 NodeRunError 链：
+// eino 的 internalError 用 %w 包装底层 APIError，errors.As 应能穿透。
+func TestClassifyError_NotSupportThinking_Wrapped(t *testing.T) {
+	apiErr := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "\"jewelzufo/MiniCPM5-1B:latest\" does not support thinking",
+	}
+	err := fmt.Errorf("[NodeRunError] %w", apiErr)
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportThinking {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportThinking, ae.Category)
+	}
+}
+
+// TestClassifyError_NotSupportTools_TextFallback 覆盖无 APIError 类型、
+// 仅剩错误文本的兜底分类路径。
+func TestClassifyError_NotSupportTools_TextFallback(t *testing.T) {
+	err := errors.New("registry.ollama.ai/jewelzufo/MiniCPM5-1B:latest does not support tools")
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportTools {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportTools, ae.Category)
+	}
+}
+
+// TestClassifyError_WrapperPreserved 覆盖二次分类场景：
+// 上层对已包装的 AIErrorWrapper 再次调用 ClassifyError，应直接还原原分类，
+// 而不是按 wrapper 的 JSON 文本重新匹配导致误判。
+func TestClassifyError_WrapperPreserved(t *testing.T) {
+	inner := NewAIError(CategoryModelNotSupportThinking, "raw thinking error")
+	wrapped := &AIErrorWrapper{Err: inner}
+	ae := ClassifyError(wrapped)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryModelNotSupportThinking {
+		t.Errorf("expected category %q, got %q", CategoryModelNotSupportThinking, ae.Category)
+	}
+	if ae.UserMsg == "" {
+		t.Error("expected non-empty UserMsg")
+	}
+}
+
+// TestClassifyError_WrapperPreserved_Wrapped 覆盖 AIErrorWrapper 被 %w 包装后的还原。
+func TestClassifyError_WrapperPreserved_Wrapped(t *testing.T) {
+	inner := NewAIError(CategoryAuthError, "raw auth error")
+	wrapped := &AIErrorWrapper{Err: inner}
+	err := fmt.Errorf("调用 AI 失败: %w", wrapped)
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryAuthError {
+		t.Errorf("expected category %q, got %q", CategoryAuthError, ae.Category)
+	}
+}
+
+// TestClassifyError_InvalidToken_NotContextLength 覆盖 400 "invalid token"
+// 不应被宽泛的 token 关键词误判为上下文超长。
+func TestClassifyError_InvalidToken_NotContextLength(t *testing.T) {
+	err := &openai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "invalid token: authentication token is malformed",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category == CategoryContextLength {
+		t.Error("expected category NOT to be context_length for invalid token")
+	}
+}
+
+// TestClassifyError_ResponseFormat_InvalidJSON 覆盖非 JSON 响应（本地模型常见）的分类。
+func TestClassifyError_ResponseFormat_InvalidJSON(t *testing.T) {
+	err := errors.New("invalid character '<' looking for beginning of value")
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryResponseFormat {
+		t.Errorf("expected category %q, got %q", CategoryResponseFormat, ae.Category)
+	}
+}
+
+// TestClassifyError_ServerError_Text 覆盖 OpenAI 常见 500 文本
+// "The server had an error while processing your request"（不含 "server error" 连写）。
+func TestClassifyError_ServerError_Text(t *testing.T) {
+	err := errors.New("The server had an error while processing your request. Sorry about that!")
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryServerError {
+		t.Errorf("expected category %q, got %q", CategoryServerError, ae.Category)
+	}
+}
+
+// TestClassifyError_ModelBusy_NotModelNotFound 覆盖含 "model" 但并非"模型不存在"
+// 的错误不再被宽泛关键词误判。
+func TestClassifyError_ModelBusy_NotModelNotFound(t *testing.T) {
+	err := errors.New("model is currently busy, please try again later")
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category == CategoryModelNotFound {
+		t.Error("expected category NOT to be model_not_found for model busy error")
 	}
 }
