@@ -303,7 +303,7 @@
 .theme-select-dropdown.open {
   max-height: 300px;
   opacity: 1;
-  padding: 4px;
+  padding: 0px;
   pointer-events: auto;
   overflow-y: auto;
   scrollbar-width: thin;
