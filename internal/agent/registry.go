@@ -13,10 +13,15 @@ type BuildParams struct {
 	ctx  *tools.Context
 }
 
-// planOnlyTools 仅在 Plan 模式下注册的工具名集合。
+// planOnlyTools 仅在 Plan 模式下注册的工具名集合（Agent 模式跳过）。
 var planOnlyTools = map[string]bool{
-	"create_plan": true,
 	"update_plan": true,
+}
+
+// planExecExcluded Plan 模式执行阶段排除的工具名集合。
+// create_plan 在预规划阶段已通过 generatePlan() 完成，执行阶段不再需要。
+var planExecExcluded = map[string]bool{
+	"create_plan": true,
 }
 
 // buildTools 统一装配 Agent 工具，并按 disabled 和 planMode 过滤。
@@ -54,6 +59,10 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		}
 		// Agent 模式下跳过仅 Plan 模式可用的工具
 		if !planMode && planOnlyTools[n.name] {
+			continue
+		}
+		// Plan 模式执行阶段跳过预规划阶段已使用的工具（create_plan）
+		if planMode && planExecExcluded[n.name] {
 			continue
 		}
 		filtered = append(filtered, n.t)

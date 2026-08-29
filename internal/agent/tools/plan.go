@@ -90,12 +90,9 @@ func (t *createPlanTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	}, nil
 }
 
-// InvokableRun 执行工具：解析参数 → 校验 → 构造 Plan → 存入 PlanState → 发射事件 → 返回确认文本。
-func (t *createPlanTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
-	if ctx.Err() != nil {
-		return "", ctx.Err()
-	}
-
+// ParseCreatePlanArgs 解析 create_plan 工具的参数 JSON，校验并构造 Plan。
+// 供 createPlanTool.InvokableRun（ReAct 循环内）和 agent.generatePlan（预规划阶段）复用。
+func ParseCreatePlanArgs(argumentsInJSON string) (*Plan, error) {
 	var args struct {
 		Goal  string `json:"goal"`
 		Steps []struct {
@@ -104,26 +101,25 @@ func (t *createPlanTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		} `json:"steps"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "", fmt.Errorf("解析 create_plan 参数失败: %w", err)
+		return nil, fmt.Errorf("解析 create_plan 参数失败: %w", err)
 	}
 
 	goal := strings.TrimSpace(args.Goal)
 	if goal == "" {
-		return "", errors.New("create_plan 参数缺少 goal")
+		return nil, errors.New("create_plan 参数缺少 goal")
 	}
 	if len(args.Steps) == 0 {
-		return "", errors.New("create_plan 参数缺少 steps（至少需要 1 个步骤）")
+		return nil, errors.New("create_plan 参数缺少 steps（至少需要 1 个步骤）")
 	}
 	if len(args.Steps) > maxPlanSteps {
-		return "", fmt.Errorf("create_plan 步骤过多（%d 步，上限 %d），请精简计划", len(args.Steps), maxPlanSteps)
+		return nil, fmt.Errorf("create_plan 步骤过多（%d 步，上限 %d），请精简计划", len(args.Steps), maxPlanSteps)
 	}
 
-	// 构造 Plan
 	steps := make([]PlanStep, len(args.Steps))
 	for i, s := range args.Steps {
 		desc := strings.TrimSpace(s.Description)
 		if desc == "" {
-			return "", fmt.Errorf("create_plan 第 %d 步 description 不能为空", i+1)
+			return nil, fmt.Errorf("create_plan 第 %d 步 description 不能为空", i+1)
 		}
 		steps[i] = PlanStep{
 			ID:          i + 1,
@@ -133,10 +129,22 @@ func (t *createPlanTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		}
 	}
 
-	plan := &Plan{
+	return &Plan{
 		Goal:    goal,
 		Steps:   steps,
 		Current: 0,
+	}, nil
+}
+
+// InvokableRun 执行工具：解析参数 → 校验 → 构造 Plan → 存入 PlanState → 发射事件 → 返回确认文本。
+func (t *createPlanTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	plan, err := ParseCreatePlanArgs(argumentsInJSON)
+	if err != nil {
+		return "", err
 	}
 
 	// 存入 PlanState（跨 ReAct 轮次共享）
@@ -145,7 +153,7 @@ func (t *createPlanTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	// 发射 ai:plan-created 事件（前端渲染计划卡片）
 	t.emitPlanCreated()
 
-	return fmt.Sprintf("计划已创建，共 %d 步。请开始执行第 1 步：%s。", len(steps), steps[0].Description), nil
+	return fmt.Sprintf("计划已创建，共 %d 步。请开始执行第 1 步：%s。", len(plan.Steps), plan.Steps[0].Description), nil
 }
 
 // emitPlanCreated 发射 ai:plan-created 事件。

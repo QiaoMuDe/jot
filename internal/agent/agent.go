@@ -255,6 +255,90 @@ func (s *AgentService) ReleaseAll() {
 	}
 }
 
+// planGenSystemPrompt 计划生成阶段的精简系统提示词（不含角色设定/工具规范，节省 token）。
+const planGenSystemPrompt = `你是一个任务规划助手。请根据用户请求制定一个可执行的行动计划。
+
+要求：
+1. 将目标拆解为清晰的步骤列表（≤ 10 步）
+2. 每步描述简洁明确，标注预计使用的工具名（如有）
+3. 步骤应当具体可执行，避免过于笼统的描述
+
+请直接调用 create_plan 工具制定计划，不要输出其他内容。`
+
+// generatePlan 在 Plan 模式下预生成执行计划：用精简提示词 + create_plan 工具的
+// function calling 强制模型输出结构化计划，设置 PlanState 并发射 ai:plan-created 事件。
+// 失败时返回错误，由 Run() 中断整个任务并通知用户。
+func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatModel,
+	req Request, toolCtx *tools.Context) error {
+
+	// 构造消息：system + 历史 + 用户当前消息
+	msgs := make([]*schema.Message, 0, len(req.History)+2)
+	msgs = append(msgs, schema.SystemMessage(planGenSystemPrompt))
+	for _, h := range req.History {
+		switch h.Role {
+		case "user":
+			msgs = append(msgs, schema.UserMessage(h.Content))
+		case "assistant":
+			msgs = append(msgs, schema.AssistantMessage(h.Content, nil))
+		}
+	}
+	if req.UserText != "" {
+		msgs = append(msgs, schema.UserMessage(req.UserText))
+	}
+
+	// 获取 create_plan 工具的 ToolInfo
+	cpTool := tools.NewCreatePlan(toolCtx)
+	cpToolInfo, err := cpTool.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("获取 create_plan 工具信息失败: %w", err)
+	}
+
+	// 用 WithTools 创建仅绑定 create_plan 的新模型（不修改原 chatModel 缓存）
+	planModel, err := chatModel.WithTools([]*schema.ToolInfo{cpToolInfo})
+	if err != nil {
+		return fmt.Errorf("绑定计划工具失败: %w", err)
+	}
+
+	// 非流式调用，模型必须调用 create_plan
+	msg, err := planModel.Generate(ctx, msgs)
+	if err != nil {
+		return fmt.Errorf("计划生成 LLM 调用失败: %w", err)
+	}
+	if msg == nil {
+		return errors.New("计划生成 LLM 返回空响应")
+	}
+
+	// 从 ToolCalls 中提取 create_plan 调用
+	if len(msg.ToolCalls) == 0 {
+		return errors.New("模型未调用 create_plan 工具，请检查模型是否支持 function calling")
+	}
+	tc := msg.ToolCalls[0]
+	if tc.Function.Name != "create_plan" {
+		return fmt.Errorf("模型调用了意外的工具 %q，期望 create_plan", tc.Function.Name)
+	}
+
+	// 解析参数并构造 Plan
+	plan, err := tools.ParseCreatePlanArgs(tc.Function.Arguments)
+	if err != nil {
+		return fmt.Errorf("解析计划参数失败: %w", err)
+	}
+
+	// 设置 PlanState + 发射 ai:plan-created 事件
+	toolCtx.PlanState = plan
+	payload := map[string]any{"goal": plan.Goal, "steps": plan.Steps}
+	if b, err := json.Marshal(payload); err == nil {
+		toolCtx.Emit("ai:plan-created", string(b))
+	}
+
+	if s.deps.Logger != nil {
+		s.deps.Logger.Infow("Plan-and-Exec 预规划完成",
+			fastlog.String("goal", plan.Goal),
+			fastlog.Int("steps", len(plan.Steps)))
+	}
+
+	return nil
+}
+
 // Run 执行一轮 Agent 对话：
 //  1. 从现有 AI 配置（aiService.GetConfig）读取 BaseURL/APIKey/Model，构建 OpenAI 兼容 ChatModel；
 //  2. 以 req.Instruction 作为系统提示词（Agent Instruction），历史消息转 schema.Message；
@@ -477,6 +561,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 
+	// Plan-and-Exec：Plan 模式下先单独调用 LLM 生成计划，再进入 ReAct 执行。
+	// 预规划失败时中断整个任务，通知用户重试或检查 API 配置。
+	if req.PlanMode {
+		emit("ai:plan-generating", "")
+		if err := s.generatePlan(runCtx, chatModel, req, toolCtx); err != nil {
+			return result, fmt.Errorf("计划生成失败: %w", err)
+		}
+	}
+
 	// 4. 组装 ChatModelAgent（内部是 ReAct 循环：模型决策 → 调用工具 → 反馈 → 继续）
 	//    Instruction 作为 system 消息由 GenModelInput 放在最前；
 	//    GenModelInput 钩子在每轮 LLM 调用前注入当前计划状态到系统提示词。
@@ -488,6 +581,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: toolList,
+				UnknownToolsHandler: func(_ context.Context, name, _ string) (string, error) {
+					return fmt.Sprintf("错误：工具 %q 不存在，请检查可用工具列表，不要调用未注册的工具。", name), nil
+				},
 			},
 		},
 		MaxIterations: maxIterations,
@@ -495,6 +591,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		GenModelInput: func(_ context.Context, instruction string, input *adk.AgentInput) ([]*schema.Message, error) {
 			enhanced := instruction
 			if req.PlanMode {
+				if toolCtx.PlanState == nil {
+					return nil, fmt.Errorf("执行阶段检测到计划为空（PlanState=nil），这表明预规划阶段未正确生成计划，请重试或检查 API 配置")
+				}
 				planHint := genPlanHint(toolCtx.PlanState, toolCtx.SkippedPlanUpdate)
 				if planHint != "" {
 					enhanced = instruction + planHint
@@ -534,11 +633,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	var askedUser bool
 
 	// 步骤超时检测：记录当前步骤开始执行的时间，超时后自动跳过
+	// 本轮工具调用跟踪（同轮多工具时避免 SkippedPlanUpdate 误触发）
+	var currentIterCalledPlanUpdate bool
+	var currentIterCalledNonPlanTool bool
 	var currentStepID int               // 当前正在跟踪的步骤 ID（0 表示未开始）
 	var stepStartTime time.Time         // 当前步骤开始时间
 	const stepTimeout = 5 * time.Minute // 步骤超时时间（默认 5 分钟）
 
 	for {
+		streamedContent = "" // 每轮重置，防止跨迭代累积导致被拒内容泄漏
 		// 步骤超时检测：如果当前步骤执行时间超过阈值，自动跳过
 		if toolCtx.PlanState != nil && toolCtx.PlanState.Current < len(toolCtx.PlanState.Steps) {
 			step := &toolCtx.PlanState.Steps[toolCtx.PlanState.Current]
@@ -586,6 +689,14 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		mv := event.Output.MessageOutput
 		switch mv.Role {
 		case schema.Assistant:
+			// 新一轮 LLM 输出：结算上一轮的工具跟踪结果
+			if currentIterCalledNonPlanTool && !currentIterCalledPlanUpdate {
+				toolCtx.SkippedPlanUpdate = true
+			} else {
+				toolCtx.SkippedPlanUpdate = false
+			}
+			currentIterCalledPlanUpdate = false
+			currentIterCalledNonPlanTool = false
 			// 模型输出事件：可能是纯文本，也可能是工具调用决策
 			if mv.IsStreaming {
 				full, roundThinking, err := consumeAssistantStream(mv.MessageStream, emit, req.ThinkingEnabled)
@@ -671,15 +782,23 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					}
 				} else if mv.Message.Content != "" {
 					emit("ai:stream-chunk", mv.Message.Content)
-					finalContent = mv.Message.Content
+					// 非流式路径同样检测计划完成状态（与流式路径一致）
+					if toolCtx.PlanState != nil && countPendingSteps(toolCtx.PlanState) > 0 {
+						// 计划未完成，拒绝接受最终回答
+						finalContent = ""
+					} else {
+						finalContent = mv.Message.Content
+					}
 				}
 			}
 		case schema.Tool:
 			// 工具执行结果事件
 			name := mv.ToolName
-			// 执行了非计划工具但未调用 update_plan，标记需要催促
-			if name != "create_plan" && name != "update_plan" {
-				toolCtx.SkippedPlanUpdate = true
+			// 跟踪本轮是否调用了 update_plan（同轮多工具时避免误触发催促）
+			if name == "update_plan" {
+				currentIterCalledPlanUpdate = true
+			} else {
+				currentIterCalledNonPlanTool = true
 			}
 			var content string
 			var callID string
@@ -775,31 +894,10 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			result.ToolCalls = string(b)
 		}
 	}
-	// 计划兜底处理（仅 Plan 模式）：
-	// Agent 模式下跳过所有计划相关逻辑，不补建计划、不补标步骤。
-	// Plan 模式下：模型跳过了 create_plan 但执行了工具调用 → 自动补建单步计划。
-	// 注意：由于已有计划完成检测机制（模型必须完成计划才能输出最终回答），
-	// 不再需要自动补标未完成步骤为 done 的逻辑。
-	if req.PlanMode {
-		if toolCtx.PlanState != nil {
-			plan := toolCtx.PlanState
-			if b, err := json.Marshal(plan); err == nil {
-				result.Plan = string(b)
-			}
-		} else if len(toolRecords) > 0 {
-			// 模型跳过了 create_plan 但执行了工具：补建单步计划（goal 取用户问题摘要）
-			if s.deps.Logger != nil {
-				s.deps.Logger.Warnw("模型跳过了 create_plan 但执行了工具调用，自动补建单步计划",
-					fastlog.Int("tool_calls", len(toolRecords)))
-			}
-			autoPlan := &tools.Plan{
-				Goal:  tools.TruncateRunes(req.UserText, 50),
-				Steps: []tools.PlanStep{{ID: 1, Description: "直接调用工具完成用户请求", Status: "done"}},
-			}
-			toolCtx.PlanState = autoPlan
-			if b, err := json.Marshal(autoPlan); err == nil {
-				result.Plan = string(b)
-			}
+	// 汇总计划到结果（仅 Plan 模式）
+	if req.PlanMode && toolCtx.PlanState != nil {
+		if b, err := json.Marshal(toolCtx.PlanState); err == nil {
+			result.Plan = string(b)
 		}
 	}
 	if s.deps.Logger != nil {
@@ -991,13 +1089,10 @@ func askUserQuestionFromArgs(argumentsJSON string) string {
 }
 
 // genPlanHint 根据当前计划状态生成注入系统提示词的规划提示文本。
-// 无计划时引导模型先调用 create_plan；有计划时注入进度和已完成步骤的结果。
+// Plan-and-Exec 模式下 plan 不应为 nil（预规划阶段已生成），此处做防御性处理。
 func genPlanHint(plan *tools.Plan, skippedPlanUpdate bool) string {
 	if plan == nil {
-		return "\n\n【执行计划要求】收到用户请求后，必须先用 create_plan 工具制定执行计划，再按计划逐步执行，每步执行后调用 update_plan 标记完成。" +
-			"简单闲聊或单步问答也必须制定计划（单步计划即可）。" +
-			"\n【重要】如果你需要向用户澄清、确认或提问（如用户请求信息模糊、需求不具体、缺少必要信息、需要用户在多个选项间做选择），" +
-			"必须调用 ask_user 工具向用户发起提问并等待其回答；严禁擅自猜测后直接执行，也严禁把问题直接写在正文里当作最终回答输出。"
+		return ""
 	}
 
 	var b strings.Builder

@@ -2288,7 +2288,7 @@ async function startStreaming(userText, userMsgID) {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user', 'ai:plan-generating', 'ai:plan-created', 'ai:plan-updated'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -2611,6 +2611,26 @@ async function startStreaming(userText, userMsgID) {
     });
     unsubs.push(unsubToolStatus);
 
+    // ── Plan-and-Exec 预规划状态（ai:plan-generating） ──
+    // Plan 模式下，后端在单独调用 LLM 生成计划期间发射此事件，
+    // 前端将打字动画替换为"正在制定执行计划..."状态文案，计划生成完成后由 ai:plan-created 覆盖。
+    const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen) => {
+        if (streamGen !== myGen) return;
+        if (!hasReceivedChunk) {
+            contentDiv.innerHTML = '';
+            const wrap = document.createElement('div');
+            wrap.className = 'ai-msg-plan-generating';
+            const spinner = document.createElement('span');
+            spinner.className = 'plan-gen-spinner';
+            wrap.appendChild(spinner);
+            const text = document.createElement('span');
+            text.textContent = '正在制定执行计划...';
+            wrap.appendChild(text);
+            contentDiv.appendChild(wrap);
+        }
+    });
+    unsubs.push(unsubPlanGenerating);
+
     // ── Agent 执行计划（ai:plan-created / ai:plan-updated） ──
     // 模型调用 create_plan 工具时后端发射 ai:plan-created（tool_start 之后），
     // 负载为 JSON 字符串 {"goal": "...", "steps": [...]}。
@@ -2626,6 +2646,8 @@ async function startStreaming(userText, userMsgID) {
         streamPlanData = payload;
         // 渲染悬浮计划面板（输入框上方）
         showPlanPanel(payload);
+        // 清除"正在制定执行计划..."状态文本（预规划完成，进入执行阶段）
+        if (!hasReceivedChunk) contentDiv.innerHTML = '';
     });
     unsubs.push(unsubPlanCreated);
 
