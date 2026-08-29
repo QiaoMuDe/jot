@@ -55,6 +55,7 @@ let _editingMsgEl = null;      // 当前正在编辑的消息元素，防止同�
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
 let sessionMoreMenuTarget = null; // 当前打开的会话项
+let _preStreamSidebarExpanded = null; // 流开始前侧栏是否展开，结束后据此还原
 
 // 模型选择器状态
 let modelTrigger = null;
@@ -448,18 +449,17 @@ function bindEvents() {
     // 清空当前对话
     if (clearBtnEl) {
         clearBtnEl.addEventListener('click', async () => {
+            if (isStreaming) {
+                shakeLockedToggle(clearBtnEl);
+                window.showNotification?.('回复进行中，暂时无法清空对话', 'warning');
+                return;
+            }
             if (activeSessionId === null || messagesInnerEl.children.length === 0) {
                 window.showNotification?.('当前没有对话可以清空', 'info');
                 return;
             }
             const confirmed = await window.showConfirmDialog('确定清空当前对话吗？');
             if (!confirmed) return;
-
-            // 流式进行中（含 Agent 反问等待）：先取消当前 run，避免清空后悬挂
-            if (isStreaming) {
-                if (stopBtnEl) stopBtnEl.click();
-                else await window.go.main.App.CancelAIStream();
-            }
 
             try {
                 await window.go.main.App.ClearAISessionMessages(activeSessionId);
@@ -476,6 +476,11 @@ function bindEvents() {
     // 新建会话
     if (sessionNewBtnEl) {
         sessionNewBtnEl.addEventListener('click', () => {
+            if (isStreaming) {
+                shakeLockedToggle(sessionNewBtnEl);
+                window.showNotification?.('回复进行中，暂时无法新建会话', 'warning');
+                return;
+            }
             triggerPulseFeedback(sessionNewBtnEl);
             createSession();
         });
@@ -501,6 +506,11 @@ function bindEvents() {
     // Agent/Plan 模式切换
     document.querySelectorAll('#aiModeToggle .ai-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            if (isStreaming) {
+                shakeLockedToggle(btn);
+                window.showNotification?.('回复进行中，暂时无法切换模式', 'warning');
+                return;
+            }
             const newMode = btn.dataset.mode === 'plan';
             if (newMode === currentPlanMode) return; // 已经是当前模式
             currentPlanMode = newMode;
@@ -580,6 +590,7 @@ function bindEvents() {
             if (sendBtnEl) sendBtnEl.style.display = '';
             isStreaming = false;
             window.__aiStreaming = false;
+            setToggleLocked(false); // 停止后恢复模式/深度思考切换
             hideAskPanel();
             // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
             const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
@@ -768,6 +779,11 @@ function bindEvents() {
 
     // 导出为全局函数，供 Ctrl+J 快捷键使用
     window.toggleAISessionSidebar = function() {
+        if (isStreaming) {
+            shakeLockedToggle(toggleBtn);
+            window.showNotification?.('回复进行中，暂时无法折叠/展开侧栏', 'warning');
+            return;
+        }
         if (!toggleBtn || !sidebar) return;
         const wasCollapsed = sidebar.classList.contains('collapsed');
         const isCollapsed = sidebar.classList.toggle('collapsed');
@@ -796,6 +812,11 @@ function bindEvents() {
     if (modelTrigger && modelDropdown) {
         modelTrigger.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (isStreaming) {
+                shakeLockedToggle(modelTrigger);
+                window.showNotification?.('回复进行中，暂时无法切换模型', 'warning');
+                return;
+            }
             if (modelDropdown.classList.contains('open')) {
                 modelDropdown.classList.remove('open');
                 clearModelSearch();
@@ -875,6 +896,11 @@ function bindEvents() {
     if (searchToggle) {
         if (enableThinking) searchToggle.classList.add('active');
         searchToggle.addEventListener('click', async () => {
+            if (isStreaming) {
+                shakeLockedToggle(searchToggle);
+                window.showNotification?.('回复进行中，暂时无法切换深度思考', 'warning');
+                return;
+            }
             enableThinking = searchToggle.classList.toggle('active');
             await saveCurrentSessionConfig();
         });
@@ -974,6 +1000,11 @@ function bindEvents() {
     if (skillsBtn && skillsDropdown) {
         skillsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (isStreaming) {
+                shakeLockedToggle(skillsBtn);
+                window.showNotification?.('回复进行中，暂时无法调整技能', 'warning');
+                return;
+            }
             if (skillsDropdown.classList.contains('open')) {
                 closeSkillsDropdown();
             } else {
@@ -1164,6 +1195,11 @@ function bindEvents() {
     if (addBtn && addDropdown) {
         addBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (isStreaming) {
+                shakeLockedToggle(addBtn);
+                window.showNotification?.('回复进行中，暂时无法添加内容', 'warning');
+                return;
+            }
             addDropdown.classList.toggle('open');
         });
 
@@ -2278,6 +2314,7 @@ async function startStreaming(userText, userMsgID) {
     if (isStreaming) return;
     isStreaming = true;
     window.__aiStreaming = true;
+    setToggleLocked(true); // 回复期间锁定模式/深度思考切换
 
     // 递增 generation, 后续事件回调据此判断是否属于当前流
     _aiStreamGen++;
@@ -2646,8 +2683,11 @@ async function startStreaming(userText, userMsgID) {
         streamPlanData = payload;
         // 渲染悬浮计划面板（输入框上方）
         showPlanPanel(payload);
-        // 清除"正在制定执行计划..."状态文本（预规划完成，进入执行阶段）
-        if (!hasReceivedChunk) contentDiv.innerHTML = '';
+        // 计划已展示，等待模型响应阶段：保留打字动画，避免气泡空白（首个 thinking/chunk 到达时被替换）
+        if (!hasReceivedChunk) {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(createTypingDots());
+        }
     });
     unsubs.push(unsubPlanCreated);
 
@@ -2721,6 +2761,7 @@ async function startStreaming(userText, userMsgID) {
         }
         isStreaming = false;
         window.__aiStreaming = false;
+        setToggleLocked(false); // 回复完成后恢复模式/深度思考切换
         hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
         hidePlanPanel(); // 收起执行计划面板
         streamPlanData = null; // 清除本轮计划缓存，避免新对话 ask_user 恢复时误显示旧计划
@@ -2846,6 +2887,7 @@ async function startStreaming(userText, userMsgID) {
         }
         isStreaming = false;
         window.__aiStreaming = false;
+        setToggleLocked(false); // 出错后恢复模式/深度思考切换
         hideAskPanel();
         hidePlanPanel(); // 报错时收起执行计划面板
         streamPlanData = null; // 清除本轮计划缓存
@@ -2905,6 +2947,7 @@ async function startStreaming(userText, userMsgID) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
         window.__aiStreaming = false;
+        setToggleLocked(false); // 调用失败后恢复模式/深度思考切换
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
         if (sendBtnEl) sendBtnEl.style.display = '';
@@ -5740,6 +5783,64 @@ function formatDate(dateStr) {
     } catch (_) {
         return '';
     }
+}
+
+/**
+ * AI 回复期间锁定模式/深度思考/模型选择/更多技能/添加内容/会话侧栏（视觉置灰，点击时抖动提示）
+ * 同时自动折叠会话侧栏（若未折叠），回复结束后还原。
+ */
+function setToggleLocked(locked) {
+    document.getElementById('aiModeToggle')?.classList.toggle('is-locked', locked);
+    searchToggle?.classList.toggle('is-locked', locked);
+    modelTrigger?.classList.toggle('is-locked', locked);
+    skillsBtn?.classList.toggle('is-locked', locked);
+    addBtn?.classList.toggle('is-locked', locked);
+
+    // 会话侧栏：折叠 + 锁定
+    const sidebar = document.querySelector('.ai-session-sidebar');
+    const sidebarToggleBtn = document.getElementById('aiSidebarToggle');
+    if (locked) {
+        // 记录流前展开状态；未折叠则先折叠（发送/重发/重新生成/编辑后发送均经 startStreaming 触发）。
+        // 不写 localStorage：折叠是流内临时态，持久化偏好仅由用户手动折叠/展开按钮维护。
+        if (sidebar) {
+            _preStreamSidebarExpanded = !sidebar.classList.contains('collapsed');
+            if (_preStreamSidebarExpanded) {
+                sidebar.classList.add('collapsed');
+                if (sidebarToggleBtn) sidebarToggleBtn.title = '展开侧栏';
+            }
+        }
+        closeSessionMenu(); // 收起可能已打开的会话菜单
+    } else if (_preStreamSidebarExpanded) {
+        // 回复结束后还原为流前的展开状态
+        if (sidebar) {
+            sidebar.classList.remove('collapsed');
+            if (sidebarToggleBtn) sidebarToggleBtn.title = '折叠侧栏';
+        }
+    }
+    _preStreamSidebarExpanded = locked ? _preStreamSidebarExpanded : null;
+
+    sidebarToggleBtn?.classList.toggle('is-locked', locked);
+    sessionNewBtnEl?.classList.toggle('is-locked', locked);
+    clearBtnEl?.classList.toggle('is-locked', locked);
+    if (sessionSearchEl) sessionSearchEl.disabled = locked;
+
+    if (locked) {
+        // 锁定同时收起可能已展开的下拉菜单
+        if (modelDropdown) modelDropdown.classList.remove('open');
+        closeSkillsDropdown();
+        if (addDropdown) addDropdown.classList.remove('open');
+    }
+}
+
+/**
+ * 锁定状态下被点击：触发抖动动画（重启动画用 reflow）
+ */
+function shakeLockedToggle(el) {
+    if (!el) return;
+    el.classList.remove('is-shaking');
+    void el.offsetWidth;
+    el.classList.add('is-shaking');
+    el.addEventListener('animationend', () => el.classList.remove('is-shaking'), { once: true });
 }
 
 /**

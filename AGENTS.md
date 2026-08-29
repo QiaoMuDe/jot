@@ -562,23 +562,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：MCP 服务器分享与导入（三格式容错 + 两阶段校验 + 后端解析日志 + 按钮 UI 统一）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | MCP 服务器配置的分享与批量导入功能：① **分享**——单条分享（列表行"分享"按钮）复制当前服务器为标准 JSON 到剪贴板；批量分享（头部"分享"按钮）复制全部服务器；格式为项目自定义的 `[{name, transport, command, args, env, url, headers, enabled}]` 裸数组。② **导入**——头部"导入"按钮打开导入对话框，输入区为 **CM6 JSON 编辑器**（实时语法高亮，跟随当前代码高亮主题），用户粘贴 JSON 后点"解析导入"，经后端两阶段处理（校验→入库）。③ **按钮 UI 统一**——头部三个按钮（分享/导入/添加）统一 2 字文案 + 同一套 `mcp-server-accent-btn` 样式 + `min-width: 64px` 固定宽度 + `inline-flex` 防文字换行。 |
-| **后端两阶段设计（重要）** | [mcp_import.go](internal/services/mcp_import.go)（**新增文件**）提供两个 Wails 绑定：① `ParseMCPServersImport(jsonStr)` ——仅校验不入库（`parseMCPImportInput` + `buildMCPServerFromRaw`），返回 `{OK, Items[]}` 供前端决定是否继续；② `ImportMCPServers(jsonStr)` ——完整流程（解析+校验+逐条入库），返回 `[]ImportMCPServerItem`。前端两阶段调用：先 `ParseMCPServersImport`（校验失败→抖动+通知+保留对话框+编辑器内容），通过后关对话框再 `ImportMCPServers`（入库失败→通知仅列服务器名，详情写 `logs/app.log`）。 |
-| **三格式容错 + 字段校验（重要）** | `parseMCPImportInput` 支持三种输入格式：裸数组 `[...]`、`{servers:[...]}` 包装、单个对象 `{name, command, ...}`。空数组 `[]` 返回"未找到任何服务器配置"而非"无法识别"。`buildMCPServerFromRaw` 校验含：name 非空+不含空白/tab/换行（与 `MCPServerService.Save` 一致）、`command`/`url` 不能同时有（transport 推导）、`env`/`headers` KEY 不能含空格/tab/换行/等号（与 Save 一致）、transport 合法性（stdio/sse/http）。所有错误通过 `Errorw` 写入 `logs/app.log`（结构化字段 index/name/reason）。 |
-| **warmupMCPServers silent 参数** | `warmupMCPServers` 新增 `options.silent` 参数（[main.js](frontend/src/main.js)）：`silent=true` 时跳过"X 台已就绪"通知（`refreshAgentToolsMeta()` 仍执行）。导入成功路径静默调用，避免"已导入 N 条"和"X 台已就绪"双通知。切换启用/停用、删除、表单保存、AI 助手首次进入路径仍保留通知（用户主动操作需要反馈）。 |
-| **前端按钮与样式** | 头部按钮组（[index.html](frontend/index.html) `.mcp-server-head-actions`）：三个 `btn btn-sm mcp-server-accent-btn`（分享/导入/添加），CSS 统一 `min-width: 64px` + `inline-flex` + `white-space: nowrap`。列表行每行新增"分享"按钮（`mcp-server-accent-btn`，闭包捕获行级 `srv`）。头部和行级共用同一套 accent-btn 样式，与"测试/编辑"按钮视觉一致。 |
-| **CM6 导入编辑器（新增）** | 输入区从 `<textarea>` 换成 CodeMirror 6 JSON 编辑器（[main.js](frontend/src/main.js) `createMCPImportEditor`）：`json()` 语言 + `getHighlightExtension('.json', codeHighlightTheme)` 跟随代码主题 + `EditorView.lineWrapping` 自动换行 + `placeholder`。**每次打开对话框重建编辑器**（销毁旧实例→新建，读最新主题，避免主题切换后不同步）；关闭对话框时销毁并置空（内容随之清空，等价原 B11 语义）。内容读取改用 `_mcpImportEditor.state.doc.toString().trim()`；校验失败抖动目标改为容器 div（`shakeMCPFormInput(container)`）。 |
-| **导入编辑器样式/滚动条** | 容器 `.mcp-server-import-editor`（[settings-panel.css](frontend/src/css/components/settings-panel.css)）固定 `height: 220px` + 边框圆角；内部 `.cm-editor` `height: 100%` + flex 纵向、`.cm-scroller` `overflow: auto` 实现**编辑器内部滚动**（不撑开页面）。**覆盖 editor.css 全局透明滚动条**：`.mcp-server-import-editor .cm-scroller::-webkit-scrollbar-thumb`（WebKit）+ `scrollbar-color: var(--scrollbar-thumb) transparent`（Firefox），避免默认隐藏滑块。 |
-| **代码审查修复要点** | B2：名称空白/KEY 特殊字符在校验阶段拦截（与 Save 一致）；B3：`ParseMCPServersImport` 校验通过时 `res.OK = true`；B4：空数组返回友好提示；B5：阶段 2 失败不关对话框+编辑器内容保留；B6：分享全部按钮在缓存为空时现取 `GetMCPServers()`；B7：`shareAllBtn` 用 `_shareAllBound` 标志位防重复绑定；B10：抽 `tryParseInput` 公共函数；B11：导入输入区换 CM6 编辑器，每次打开重建（内容自然为空）、关闭销毁，失败路径保留内容便于改后再导；B12：一致性检查通过（Wails exception 路径走 `mcpErrMsg(e)`，业务中文直传）。 |
-| **涉及文件** | [internal/services/mcp_import.go](internal/services/mcp_import.go)（**新增**：parseMCPImportInput/buildMCPServerFromRaw/tryParseInput/rawMCPServer/ParseMCPServersImport/ImportMCPServers）、[internal/models/mcp_server.go](internal/models/mcp_server.go)（新增 ImportMCPServerItem）、[app.go](app.go)（+ImportMCPServers/+ParseMCPServersImport 绑定）、[frontend/src/main.js](frontend/src/main.js)（createMCPImportEditor/openMCPImportDialog/closeMCPImportDialog/handleMCPImport/copyMCPServersShare/buildMCPServersShareJSON + warmupMCPServers silent 参数 + initMCPServerSettings 事件绑定）、[frontend/index.html](frontend/index.html)（头部三按钮组 + 分享行按钮 + 导入对话框 DOM：textarea 换为 CM6 容器 div `#mcpServerImportInput`）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（头部按钮组 min-width + 导入 CM6 编辑器容器样式与滚动条覆盖） |
-
----
-
-## 记忆点 2：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
+## 记忆点 1：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 2：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+## 记忆点 3：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -626,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+## 记忆点 4：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +623,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 5：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 6：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +652,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 7：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,7 +665,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 8：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -696,7 +680,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 9：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -709,6 +693,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **tool_name 强指导（重要）** | 计划生成提示词升级为"每步描述简洁明确，**必须填写 tool_name**（使用可用工具列表中的工具名）"；`create_plan` 工具 `tool_name` 描述改为"建议填写，使用可用工具列表中的工具名"；`genPlanHint` 当前待执行步骤显示 `（建议工具：xxx）`——**强指导但不强制**（模型仍可根据实际调整工具选择）。 |
 | **计划生成 debug 日志** | 生成前记录可用工具列表（`计划生成阶段：可用工具列表`）；生成后记录计划详情（goal/steps/detail，detail 含每步 ID/描述/工具名）。 |
 | **涉及文件** | [agent.go](internal/agent/agent.go)（`planGenSystemPrompt`/`generatePlan`/`genPlanHint`/`allStreamedContent`/三缺陷修复/调试日志/`maxToolDescLen`）、[registry.go](internal/agent/registry.go)（`loadMCPTools`/`buildToolMetas`/`planOnlyTools` 扩展）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述） |
+
+---
+
+## 记忆点 10：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 强化 AI 回复（流式）期间的交互管控与体验：① 新增统一锁定系统 `setToggleLocked`——回复期间锁定 5 个工具栏按钮（Agent/Plan 模式切换、深度思考、模型选择、更多技能、添加内容）与会话侧栏，视觉置灰 + 点击抖动 + Toast 提示；② 发送/重发/重新生成/编辑后发送时若侧栏未折叠则自动折叠，回复结束后还原流前状态；③ 计划模式系统提示词按任务复杂度分级拆解，避免小任务被强制拆步；④ 计划面板弹出后保留打字动画作为过渡。 |
+| **锁定系统（setToggleLocked，重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增模块级 `setToggleLocked(locked)` + `shakeLockedToggle(el)`（shake 动画 + `animationend` 一次性清理）。生命周期挂钩恰 5 处：`startStreaming` 置 `isStreaming=true` 后上锁；停止按钮、`ai:stream-done`、`ai:stream-error`、`CallAIAgentStream` 同步异常 catch 四处解锁。锁定元素统一加 `is-locked` 类（置灰 + `cursor: not-allowed`，**不加 `pointer-events:none`**——保留点击以触发抖动反馈）。点击守卫统一模式：`if (isStreaming) { shakeLockedToggle(el); showNotification('回复进行中，暂时无法xxx'); return; }`。 |
+| **锁定范围** | 工具栏 5 按钮：模式切换（`.ai-mode-btn`）、深度思考（`#aiChatSearchToggle`）、模型选择（`#aiChatModelTrigger`）、更多技能（`#aiChatMoreSkillsBtn`）、添加内容（`#aiChatAddBtn`，复用 `.ai-chat-toolbar-btn`）。会话侧栏：折叠按钮（`#aiSidebarToggle`，Ctrl+J 快捷键经 `toggleAISessionSidebar` 一并拦截）、新建会话（`#aiSessionNewBtn`）、清空对话（`#aiChatClearBtn`，原"自动取消流再清空"分支成为死代码已移除）、搜索框（`#aiSessionSearch` 原生 `disabled`）。锁定同时收起已展开的模型/技能/添加下拉与会话菜单。 |
+| **侧栏自动折叠（重要）** | 发送/重发/重新生成/编辑后发送均经 `startStreaming` → `setToggleLocked(true)` 触发。模块级 `_preStreamSidebarExpanded` 记录流前展开状态：未折叠则 `classList.add('collapsed')` + 按钮 title 更新；回复结束后按流前状态还原（流前已折叠则保持折叠，不强行展开）。**不写 localStorage**——折叠是流内临时态，持久化偏好仅由手动折叠按钮 `window.toggleAISessionSidebar` 维护，避免流中途关闭应用污染用户偏好。 |
+| **计划提示词分级** | [agent.go](internal/agent/agent.go) `planGenSystemPrompt` 增加任务分级：简单任务 1 步直接执行 / 常规 2-5 步 / 复杂 6-10 步 + "宁少勿多"总原则（复杂任务先核心后辅助、粒度均匀）；`create_plan` 工具 `tool_name` 参数描述改为"可选，仅当步骤依赖工具时填写"（[plan.go](internal/agent/tools/plan.go)），并移除"收到任何请求都应先调用本工具"的强引导——小任务不再被强制拆步。 |
+| **打字动画过渡** | `ai:plan-created` 处理器清空 `contentDiv` 后重新挂载 `createTypingDots()`：计划面板弹出后到首个 thinking/chunk 到达前气泡持续显示打字动画，避免"空气泡无反馈"窗口；首个正文 chunk 到达时 `hasReceivedChunk` 置位 + `contentDiv.innerHTML=''` 天然替换打字动画，无需额外清理逻辑。 |
+| **关键设计决策** | ① 用"类锁定 + 点击守卫"而非原生 `disabled`：`disabled` 阻断 click 事件、无法触发抖动反馈，且深度思考开关是 `div` 不支持；② 清空对话流式期间一并禁用（经用户确认保持禁用，需先停止再清空）；③ 会话条目/更多菜单因侧栏折叠不可见，`switchSession`/`createSession` 原有 `if (isStreaming) return` 守卫兜底；④ 润色流程走独立 `CallAI` 通道、不经过 `startStreaming`，不参与锁定；⑤ 审计确认 `isStreaming` 全文件仅 5 处赋值，锁/解锁无遗漏路径。 |
+| **涉及文件** | [ai-chat.js](frontend/src/js/ai-chat.js)（`setToggleLocked`/`shakeLockedToggle`/`_preStreamSidebarExpanded`/5 处生命周期挂钩/6 个点击守卫）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.is-locked`/`.is-shaking`/`ai-toggle-shake` keyframes/搜索框 `:disabled`）、[agent.go](internal/agent/agent.go)（`planGenSystemPrompt` 任务分级）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述可选） |
 
 ---
 

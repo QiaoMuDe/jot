@@ -1233,6 +1233,46 @@
     flex-shrink: 0;
 }
 
+/* AI 回复期间锁定：置灰（不使用 pointer-events，保留点击以触发抖动提示） */
+#aiModeToggle.is-locked .ai-mode-btn,
+.ai-chat-search-toggle.is-locked,
+.ai-chat-model-trigger.is-locked,
+.ai-chat-toolbar-btn.is-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* 锁定态点击抖动 */
+@keyframes ai-toggle-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+}
+.ai-mode-btn.is-shaking,
+.ai-chat-search-toggle.is-shaking,
+.ai-chat-model-trigger.is-shaking,
+.ai-chat-toolbar-btn.is-shaking {
+    animation: ai-toggle-shake 0.4s ease;
+}
+
+/* AI 回复期间侧栏按钮锁定（折叠/新建/清空） */
+#aiSidebarToggle.is-locked,
+#aiSessionNewBtn.is-locked,
+#aiChatClearBtn.is-locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+#aiSidebarToggle.is-shaking,
+#aiSessionNewBtn.is-shaking,
+#aiChatClearBtn.is-shaking {
+    animation: ai-toggle-shake 0.4s ease;
+}
+#aiSessionSearch:disabled {
+    opacity: 0.45;
+}
+
 /* 模型选择器容器 */
 .ai-chat-model-select {
     position: relative;
