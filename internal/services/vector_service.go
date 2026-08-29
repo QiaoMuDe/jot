@@ -42,7 +42,7 @@ const chunkCandidateMultiplier = 5
 const maxChunksPerNote = 4
 
 // chunkMaxRunes 笔记切块单块 rune 上限（IndexNotes 写路径与 classifyVectorNotes 状态比对共用，
-// 两处必须一致，否则内容未变也会被判为"需重新量化"）
+// 两处必须一致，否则内容未变也会被判为"需重新嵌入"）
 const chunkMaxRunes = 600
 
 // ===== GSE 中文分词器（懒加载，EMBED 嵌入式词典） =====
@@ -138,7 +138,7 @@ func isAllPunct(s string) bool {
 	return true
 }
 
-// IndexNotes 对指定笔记列表逐篇量化：读取笔记正文 → 切块 → 分批 embedding → 先删该笔记旧块再插入新块（幂等）
+// IndexNotes 对指定笔记列表逐篇嵌入：读取笔记正文 → 切块 → 分批 embedding → 先删该笔记旧块再插入新块（幂等）
 // progressCb(done, total, title, stage, chunkDone, chunkTotal) 每篇笔记处理时回调：
 //   - "embedding"：本篇开始向量化，done 为已完成的篇数，chunkDone/chunkTotal 为当前笔记块级进度
 //   - "done"：本篇成功，done 为已完成的篇数，chunkDone=chunkTotal
@@ -147,7 +147,7 @@ func isAllPunct(s string) bool {
 // 单条笔记失败不终止整体，计入 failed；软删除笔记（deleted_at 非空）在查询阶段跳过
 // 返回 (success, failed int, err error)，err 仅当整体性错误（如无有效笔记或 embedding client 配置错误）
 func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Client, noteIDs []uint, progressCb func(done, total int, title string, stage string, chunkDone, chunkTotal int, errMsg string)) (success, failed int, err error) {
-	// embedding client 配置检查：模型未配置时无法量化，直接返回整体性错误
+	// embedding client 配置检查：模型未配置时无法嵌入，直接返回整体性错误
 	if embedClient == nil || embedClient.Model == "" {
 		return 0, 0, fmt.Errorf("embedding 模型未配置")
 	}
@@ -175,7 +175,7 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 			tagNames = append(tagNames, tag.Name)
 		}
 		// 标签排序保证确定性：与 classifyVectorNotes 状态比对口径一致，
-		// 避免 GORM Preload 顺序变化导致内容未变却误判"需重新量化"
+		// 避免 GORM Preload 顺序变化导致内容未变却误判"需重新嵌入"
 		sort.Strings(tagNames)
 		meta := ChunkMeta{
 			Title:     note.Title,
@@ -256,7 +256,7 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 	return success, failed, nil
 }
 
-// GetIndexStatus 返回向量索引统计信息：已量化笔记数（去重 note_id）、片段总数、占用字节
+// GetIndexStatus 返回向量索引统计信息：已嵌入笔记数（去重 note_id）、片段总数、占用字节
 func (s *VectorService) GetIndexStatus() (noteCount, chunkCount int, sizeBytes int64, err error) {
 	var noteCnt int64
 	if err := s.db.Model(&models.NoteVector{}).Distinct("note_id").Count(&noteCnt).Error; err != nil {
@@ -300,29 +300,29 @@ func (s *VectorService) DeleteAllVectors() error {
 	return s.db.Where("1 = 1").Delete(&models.NoteVector{}).Error
 }
 
-// ===== 量化状态分类（未量化 / 需重新量化 / 已最新） =====
+// ===== 嵌入状态分类（未嵌入 / 需重新嵌入 / 已最新） =====
 
-// vectorNoteStatus 量化状态分类结果：按笔记 ID 集合分类，供状态统计与定向量化入口共用
+// vectorNoteStatus 嵌入状态分类结果：按笔记 ID 集合分类，供状态统计与定向嵌入入口共用
 type vectorNoteStatus struct {
 	TotalNotes   int
 	IndexedNotes int
-	UnindexedIDs []uint // 未量化（无向量记录）的非软删笔记
-	StaleIDs     []uint // 已量化但当前内容与量化时不一致，需重新量化
-	UpToDateIDs  []uint // 已量化且当前内容与量化时一致
+	UnindexedIDs []uint // 未嵌入（无向量记录）的非软删笔记
+	StaleIDs     []uint // 已嵌入但当前内容与嵌入时不一致，需重新嵌入
+	UpToDateIDs  []uint // 已嵌入且当前内容与嵌入时一致
 }
 
-// classifyVectorNotes 对全部非软删笔记做量化状态分类（一次计算，多个调用方复用）：
-//  1. 未量化 = 无任何向量记录的非软删笔记
-//  2. 需重新量化 = 已有向量记录，但用当前内容（标题/标签/创建时间/正文）重新切块后
+// classifyVectorNotes 对全部非软删笔记做嵌入状态分类（一次计算，多个调用方复用）：
+//  1. 未嵌入 = 无任何向量记录的非软删笔记
+//  2. 需重新嵌入 = 已有向量记录，但用当前内容（标题/标签/创建时间/正文）重新切块后
 //     与 note_vectors 中存储的块文本不一致（块数不同或任一文本不同）
 //  3. 已最新 = 重新切块结果与存储块完全一致
 //
 // 复用 IndexNotes 同一套 ChunkContent 切块口径（maxRunes=600）；标签名排序保证与写路径一致，
-// 存量旧块若因标签顺序不同被误判为需重新量化，重新量化一次后即稳定（自愈）
+// 存量旧块若因标签顺序不同被误判为需重新嵌入，重新嵌入一次后即稳定（自愈）
 func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteStatus, error) {
 	status := &vectorNoteStatus{}
 
-	// 1. 全部非软删笔记 id（软删/回收站笔记不参与统计与定向量化）
+	// 1. 全部非软删笔记 id（软删/回收站笔记不参与统计与定向嵌入）
 	var allIDs []uint
 	if err := s.db.WithContext(ctx).Model(&models.Note{}).
 		Where("deleted_at IS NULL").Pluck("id", &allIDs).Error; err != nil {
@@ -351,14 +351,14 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteSta
 	}
 	status.IndexedNotes = len(indexedSet)
 
-	// 3. 未量化：无向量记录的非软删笔记
+	// 3. 未嵌入：无向量记录的非软删笔记
 	for _, id := range allIDs {
 		if !indexedSet[id] {
 			status.UnindexedIDs = append(status.UnindexedIDs, id)
 		}
 	}
 
-	// 4. 对已量化笔记做内容比对：重新切块 vs 存储块
+	// 4. 对已嵌入笔记做内容比对：重新切块 vs 存储块
 	if len(indexedSet) > 0 {
 		indexedIDs := make([]uint, 0, len(indexedSet))
 		for id := range indexedSet {
@@ -407,7 +407,7 @@ func chunksEqual(current, stored []string) bool {
 	return true
 }
 
-// GetVectorNoteOverview 返回量化状态统计：总笔记数 / 未量化 / 需重新量化 / 已最新（均为非软删笔记口径）
+// GetVectorNoteOverview 返回嵌入状态统计：总笔记数 / 未嵌入 / 需重新嵌入 / 已最新（均为非软删笔记口径）
 func (s *VectorService) GetVectorNoteOverview() (totalNotes, unindexedNotes, staleNotes, upToDateNotes int, err error) {
 	status, err := s.classifyVectorNotes(context.Background())
 	if err != nil {
@@ -416,7 +416,7 @@ func (s *VectorService) GetVectorNoteOverview() (totalNotes, unindexedNotes, sta
 	return status.TotalNotes, len(status.UnindexedIDs), len(status.StaleIDs), len(status.UpToDateIDs), nil
 }
 
-// GetUnindexedNoteIDs 返回未量化的非软删笔记 ID 列表（供"仅量化未量化笔记"入口使用）
+// GetUnindexedNoteIDs 返回未嵌入的非软删笔记 ID 列表（供"仅嵌入未嵌入笔记"入口使用）
 func (s *VectorService) GetUnindexedNoteIDs() ([]uint, error) {
 	status, err := s.classifyVectorNotes(context.Background())
 	if err != nil {
@@ -425,7 +425,7 @@ func (s *VectorService) GetUnindexedNoteIDs() ([]uint, error) {
 	return status.UnindexedIDs, nil
 }
 
-// GetStaleNoteIDs 返回需重新量化（内容已变化）的非软删笔记 ID 列表
+// GetStaleNoteIDs 返回需重新嵌入（内容已变化）的非软删笔记 ID 列表
 func (s *VectorService) GetStaleNoteIDs() ([]uint, error) {
 	status, err := s.classifyVectorNotes(context.Background())
 	if err != nil {

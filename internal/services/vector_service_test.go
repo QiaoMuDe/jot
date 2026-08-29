@@ -100,24 +100,24 @@ func TestClassifyVectorNotesEmpty(t *testing.T) {
 }
 
 // TestClassifyVectorNotesMixed 混合场景：
-//   - n1 已量化且内容未变 → upToDate
-//   - n2 已量化但内容已改 → stale
-//   - n3 未量化 → unindexed
+//   - n1 已嵌入且内容未变 → upToDate
+//   - n2 已嵌入但内容已改 → stale
+//   - n3 未嵌入 → unindexed
 func TestClassifyVectorNotesMixed(t *testing.T) {
 	db := newVectorTestDB(t)
 	svc := newVectorTestService(t, db)
 
-	n1 := createNoteForTest(t, db, "已量化未变", "第一章内容", "工作")
+	n1 := createNoteForTest(t, db, "已嵌入未变", "第一章内容", "工作")
 	indexNoteForTest(t, db, n1)
 
-	n2 := createNoteForTest(t, db, "已量化已变", "原始正文")
+	n2 := createNoteForTest(t, db, "已嵌入已变", "原始正文")
 	indexNoteForTest(t, db, n2)
-	// 量化后编辑内容
+	// 嵌入后编辑内容
 	if err := db.Model(&models.Note{}).Where("id = ?", n2.ID).Update("content", "修改后的正文内容").Error; err != nil {
 		t.Fatalf("更新笔记内容失败: %v", err)
 	}
 
-	n3 := createNoteForTest(t, db, "未量化", "从未量化过")
+	n3 := createNoteForTest(t, db, "未嵌入", "从未嵌入过")
 
 	status, err := svc.classifyVectorNotes(nilCtx())
 	if err != nil {
@@ -157,7 +157,7 @@ func TestClassifyVectorNotesMixed(t *testing.T) {
 	}
 }
 
-// TestClassifyVectorNotesTitleChange 仅修改标题也应判定为需重新量化
+// TestClassifyVectorNotesTitleChange 仅修改标题也应判定为需重新嵌入
 func TestClassifyVectorNotesTitleChange(t *testing.T) {
 	db := newVectorTestDB(t)
 	svc := newVectorTestService(t, db)
@@ -177,7 +177,7 @@ func TestClassifyVectorNotesTitleChange(t *testing.T) {
 	}
 }
 
-// TestClassifyVectorNotesSoftDeleted 软删（回收站）笔记不参与计数；其残留向量不计入已量化
+// TestClassifyVectorNotesSoftDeleted 软删（回收站）笔记不参与计数；其残留向量不计入已嵌入
 func TestClassifyVectorNotesSoftDeleted(t *testing.T) {
 	db := newVectorTestDB(t)
 	svc := newVectorTestService(t, db)
@@ -203,7 +203,7 @@ func TestClassifyVectorNotesSoftDeleted(t *testing.T) {
 	}
 }
 
-// TestClassifyVectorNotesEmptiedContent 已量化笔记内容被清空 → 存储块 >0 而重新切块为 0 → stale
+// TestClassifyVectorNotesEmptiedContent 已嵌入笔记内容被清空 → 存储块 >0 而重新切块为 0 → stale
 func TestClassifyVectorNotesEmptiedContent(t *testing.T) {
 	db := newVectorTestDB(t)
 	svc := newVectorTestService(t, db)

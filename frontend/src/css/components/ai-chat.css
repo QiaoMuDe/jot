@@ -88,6 +88,7 @@
     border: 1px solid var(--border);
     border-radius: 16px 16px 16px 4px;
     max-width: 82%;
+    padding: 10px 22px;
     box-shadow: 0 1px 3px var(--shadow);
 }
 

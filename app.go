@@ -81,10 +81,10 @@ type App struct {
 	aiEditorCancel   context.CancelFunc // 编辑器 AI 写作流式操作的取消源（独立于聊天流，避免误杀后台对话）
 	AgentSvc         *agent.AgentService
 	mcpPool          *mcpserver.Pool // 全局 MCP 连接池（http/sse/stdio 预热复用），shutdown/rebuildServices 时关闭
-	// 量化任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
+	// 向量嵌入任务防重入：vectorIndexMu 保护 vectorIndexRunning / vectorIndexCancel
 	vectorIndexMu      sync.Mutex
 	vectorIndexRunning bool
-	vectorIndexCancel  context.CancelFunc // 量化任务取消源（取消在批次间/笔记间生效）
+	vectorIndexCancel  context.CancelFunc // 向量嵌入任务取消源（取消在批次间/笔记间生效）
 }
 
 // NewApp creates a new App application struct
@@ -170,7 +170,7 @@ func NewApp() *App {
 		mcpServerService: services.NewMCPServerService(db),
 		LogSvc:           logSvc,
 	}
-	// Agent 服务：复用 AI/向量/设置服务与量化连接配置，供 CallAIAgentStream 使用
+	// Agent 服务：复用 AI/向量/设置服务与向量嵌入连接配置，供 CallAIAgentStream 使用
 	// MCP 连接池全局持有（http/sse/stdio 预热复用），注入 Agent 装配
 	app.mcpPool = mcpserver.NewPool()
 	app.mcpPool.SetLogger(logSvc.Logger)
@@ -1314,7 +1314,7 @@ func (a *App) DeleteProfile(id uint) error {
 }
 
 // SwitchProfile 切换 API 配置预设
-// target 指定预设写入的配置组："chat" 写入对话连接键 ai_*，"embed" 写入量化连接键 ai_embed_*
+// target 指定预设写入的配置组："chat" 写入对话连接键 ai_*，"embed" 写入向量嵌入连接键 ai_embed_*
 func (a *App) SwitchProfile(target string, id uint) error {
 	a.LogSvc.Logger.Debugw("SwitchProfile", fastlog.String("target", target), fastlog.Uint("id", id))
 	if err := a.profileService.SwitchProfile(target, id); err != nil {
@@ -1325,9 +1325,9 @@ func (a *App) SwitchProfile(target string, id uint) error {
 	return nil
 }
 
-// ==================== 向量量化索引绑定 ====================
+// ==================== 向量索引绑定 ====================
 
-// IndexNotesByAll 对全部未删除笔记发起异步量化索引，立即返回；进度与结果通过事件推送
+// IndexNotesByAll 对全部未删除笔记发起异步向量索引，立即返回；进度与结果通过事件推送
 func (a *App) IndexNotesByAll() error {
 	a.LogSvc.Logger.Debugw("IndexNotesByAll")
 	ids, err := a.noteService.GetAllIDs()
@@ -1338,7 +1338,7 @@ func (a *App) IndexNotesByAll() error {
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// IndexNotesByNotebooks 对指定笔记本下的全部未删除笔记发起异步量化索引
+// IndexNotesByNotebooks 对指定笔记本下的全部未删除笔记发起异步向量索引
 func (a *App) IndexNotesByNotebooks(notebookIDs []uint) error {
 	a.LogSvc.Logger.Debugw("IndexNotesByNotebooks", fastlog.Int("notebook_count", len(notebookIDs)))
 	var ids []uint
@@ -1351,44 +1351,44 @@ func (a *App) IndexNotesByNotebooks(notebookIDs []uint) error {
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// IndexNotesByIDs 对指定笔记 ID 列表发起异步量化索引
+// IndexNotesByIDs 对指定笔记 ID 列表发起异步向量索引
 func (a *App) IndexNotesByIDs(ids []uint) error {
 	a.LogSvc.Logger.Debugw("IndexNotesByIDs", fastlog.Int("note_count", len(ids)))
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// IndexNotesUnindexed 仅量化未量化过的笔记（非软删且无向量记录），异步执行，进度与结果通过事件推送
+// IndexNotesUnindexed 仅嵌入未嵌入过的笔记（非软删且无向量记录），异步执行，进度与结果通过事件推送
 func (a *App) IndexNotesUnindexed() error {
 	a.LogSvc.Logger.Debugw("IndexNotesUnindexed")
 	ids, err := a.vectorService.GetUnindexedNoteIDs()
 	if err != nil {
-		a.LogSvc.Logger.Errorw("IndexNotesUnindexed 获取未量化笔记失败", fastlog.Error(err))
+		a.LogSvc.Logger.Errorw("IndexNotesUnindexed 获取未嵌入笔记失败", fastlog.Error(err))
 		return err
 	}
 	if len(ids) == 0 {
-		return errors.New("所有笔记都已量化")
+		return errors.New("所有笔记都已嵌入")
 	}
-	a.LogSvc.Logger.Debugw("IndexNotesUnindexed 待量化", fastlog.Int("note_count", len(ids)))
+	a.LogSvc.Logger.Debugw("IndexNotesUnindexed 待嵌入", fastlog.Int("note_count", len(ids)))
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// IndexNotesStale 仅重新量化内容已变化的笔记（已量化但当前内容与量化时不一致），异步执行
+// IndexNotesStale 仅重新嵌入内容已变化的笔记（已嵌入但当前内容与嵌入时不一致），异步执行
 func (a *App) IndexNotesStale() error {
 	a.LogSvc.Logger.Debugw("IndexNotesStale")
 	ids, err := a.vectorService.GetStaleNoteIDs()
 	if err != nil {
-		a.LogSvc.Logger.Errorw("IndexNotesStale 获取需重新量化笔记失败", fastlog.Error(err))
+		a.LogSvc.Logger.Errorw("IndexNotesStale 获取需重新嵌入笔记失败", fastlog.Error(err))
 		return err
 	}
 	if len(ids) == 0 {
-		return errors.New("没有需要重新量化的笔记")
+		return errors.New("没有需要重新嵌入的笔记")
 	}
-	a.LogSvc.Logger.Debugw("IndexNotesStale 待量化", fastlog.Int("note_count", len(ids)))
+	a.LogSvc.Logger.Debugw("IndexNotesStale 待嵌入", fastlog.Int("note_count", len(ids)))
 	return a.startVectorIndex(context.Background(), ids)
 }
 
 // GetVectorIndexStatus 返回向量索引全局统计（轻量：COUNT/SUM 聚合，不含逐笔记内容比对），
-// 供数据管理页概览（信笺统计）使用；量化弹窗的完整状态走 GetVectorIndexOverview
+// 供数据管理页概览（信笺统计）使用；向量索引弹窗的完整状态走 GetVectorIndexOverview
 // VectorIndexStatus 向量索引全局统计结果（Wails 绑定需单值返回，多返回值只保留第一个）
 type VectorIndexStatus struct {
 	NoteCount  int   `json:"noteCount"`
@@ -1406,14 +1406,14 @@ func (a *App) GetVectorIndexStatus() (*VectorIndexStatus, error) {
 	return &VectorIndexStatus{NoteCount: noteCount, ChunkCount: chunkCount, SizeBytes: sizeBytes}, nil
 }
 
-// GetVectorIndexOverview 返回量化弹窗所需的完整状态：
+// GetVectorIndexOverview 返回向量索引弹窗所需的完整状态：
 //   - noteCount/chunkCount/sizeBytes：全局存储口径（GetIndexStatus，含回收站残留向量）
-//   - totalNotes/unindexedNotes/staleNotes/upToDateNotes：非软删笔记的量化状态口径
-//     （staleNotes = 已量化但内容已变化、需重新量化的笔记数）
+//   - totalNotes/unindexedNotes/staleNotes/upToDateNotes：非软删笔记的嵌入状态口径
+//     （staleNotes = 已嵌入但内容已变化、需重新嵌入的笔记数）
 //
 // 注意：该接口需逐笔记重新切块比对（classifyVectorNotes），成本显著高于 GetVectorIndexStatus，
-// 仅供量化弹窗调用，勿用于高频路径（如数据管理页概览）
-// VectorIndexOverview 向量索引完整状态结果（量化弹窗专用）
+// 仅供向量索引弹窗调用，勿用于高频路径（如数据管理页概览）
+// VectorIndexOverview 向量索引完整状态结果（向量索引弹窗专用）
 type VectorIndexOverview struct {
 	NoteCount      int   `json:"noteCount"`
 	ChunkCount     int   `json:"chunkCount"`
@@ -1432,7 +1432,7 @@ func (a *App) GetVectorIndexOverview() (*VectorIndexOverview, error) {
 	}
 	totalNotes, unindexedNotes, staleNotes, upToDateNotes, err := a.vectorService.GetVectorNoteOverview()
 	if err != nil {
-		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 量化状态统计失败", fastlog.Error(err))
+		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 嵌入状态统计失败", fastlog.Error(err))
 		return nil, err
 	}
 	a.LogSvc.Logger.Debugw("GetVectorIndexOverview 结果",
@@ -1465,21 +1465,21 @@ func (a *App) DeleteAllVectors() error {
 	return nil
 }
 
-// CancelVectorIndex 停止当前正在进行的量化任务（异步取消，任务在批次间/笔记间退出）
+// CancelVectorIndex 停止当前正在进行的向量嵌入任务（异步取消，任务在批次间/笔记间退出）
 // vectorIndexRunning 复位由任务 goroutine 的 release 负责，这里不直接复位，避免并发竞态
 func (a *App) CancelVectorIndex() error {
 	a.LogSvc.Logger.Debugw("CancelVectorIndex")
 	a.vectorIndexMu.Lock()
 	defer a.vectorIndexMu.Unlock()
 	if !a.vectorIndexRunning || a.vectorIndexCancel == nil {
-		return errors.New("当前没有正在进行的量化任务")
+		return errors.New("当前没有正在进行的向量嵌入任务")
 	}
 	a.vectorIndexCancel()
 	a.LogSvc.Logger.Infow("CancelVectorIndex 已触发取消")
 	return nil
 }
 
-// GetEmbedConfig 读取量化连接配置（ai_embed_* 三键），apiKey 按现有 B64 编码方式解码
+// GetEmbedConfig 读取向量嵌入连接配置（ai_embed_* 三键），apiKey 按现有 B64 编码方式解码
 func (a *App) GetEmbedConfig() (baseURL, apiKey, model string, err error) {
 	a.LogSvc.Logger.Debugw("GetEmbedConfig")
 	baseURL = a.settingService.Get("ai_embed_base_url")
@@ -1495,68 +1495,68 @@ type CardRecallCheckResult struct {
 }
 
 // ValidateCardRecall 校验卡片召回是否可以开启：
-//  1. 基础判断：量化连接（base_url）或量化模型未设置 → 拒绝
+//  1. 基础判断：向量嵌入连接（base_url）或嵌入模型未设置 → 拒绝
 //  2. API Key 必填
-//  3. 量化表内容判断：表为空拒绝；当前量化模型无对应记录拒绝
+//  3. 向量表内容判断：表为空拒绝；当前嵌入模型无对应记录拒绝
 func (a *App) ValidateCardRecall() CardRecallCheckResult {
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
-	// 1. 基础判断：量化连接或量化模型未设置
+	// 1. 基础判断：向量嵌入连接或嵌入模型未设置
 	if baseURL == "" || model == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置向量嵌入连接与嵌入模型"}
 	}
 	// 2. API Key 必填
 	if apiKey == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+		return CardRecallCheckResult{OK: false, Message: "请先填写嵌入 API Key"}
 	}
-	// 3. 量化表内容判断
+	// 3. 向量表内容判断
 	total, err := a.vectorService.CountAllVectors()
 	if err != nil {
-		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计量化表失败", fastlog.Error(err))
-		return CardRecallCheckResult{OK: false, Message: "量化表检查失败，请查看日志"}
+		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计向量表失败", fastlog.Error(err))
+		return CardRecallCheckResult{OK: false, Message: "向量表检查失败，请查看日志"}
 	}
 	if total == 0 {
-		return CardRecallCheckResult{OK: false, Message: "量化表为空，请先在数据管理中量化笔记"}
+		return CardRecallCheckResult{OK: false, Message: "向量表为空，请先在数据管理中向量化笔记"}
 	}
 	modelCnt, err := a.vectorService.CountVectorsByModel(model)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计模型向量失败", fastlog.Error(err))
-		return CardRecallCheckResult{OK: false, Message: "量化表检查失败，请查看日志"}
+		return CardRecallCheckResult{OK: false, Message: "向量表检查失败，请查看日志"}
 	}
 	if modelCnt == 0 {
-		return CardRecallCheckResult{OK: false, Message: fmt.Sprintf("当前量化模型「%s」暂无量化数据，请先使用该模型量化笔记", model)}
+		return CardRecallCheckResult{OK: false, Message: fmt.Sprintf("当前嵌入模型「%s」暂无向量数据，请先使用该模型向量化笔记", model)}
 	}
 	return CardRecallCheckResult{OK: true, Message: ""}
 }
 
-// ValidateVectorIndexConfig 校验量化连接配置是否可以发起量化：
-//  1. 基础判断：量化连接（base_url）或量化模型未设置 → 拒绝
+// ValidateVectorIndexConfig 校验向量嵌入连接配置是否可以发起嵌入：
+//  1. 基础判断：向量嵌入连接（base_url）或嵌入模型未设置 → 拒绝
 //  2. API Key 必填
 //
-// （仅校验配置本身，不检查量化表内容，与卡片召回 ValidateCardRecall 的检查范围不同）
+// （仅校验配置本身，不检查向量表内容，与卡片召回 ValidateCardRecall 的检查范围不同）
 func (a *App) ValidateVectorIndexConfig() CardRecallCheckResult {
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	if baseURL == "" || model == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置向量嵌入连接与嵌入模型"}
 	}
 	if apiKey == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+		return CardRecallCheckResult{OK: false, Message: "请先填写嵌入 API Key"}
 	}
 	return CardRecallCheckResult{OK: true, Message: ""}
 }
 
-// startVectorIndex 量化任务公共入口：三个量化绑定方法取到笔记 ID 后统一调用
-// 校验量化模型配置与防重入，随后异步执行 IndexNotes，通过 EventsEmit 推送进度与结果
+// startVectorIndex 向量嵌入任务公共入口：三个嵌入绑定方法取到笔记 ID 后统一调用
+// 校验嵌入模型配置与防重入，随后异步执行 IndexNotes，通过 EventsEmit 推送进度与结果
 func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
-	// 防重入：量化任务进行中时拒绝新任务
+	// 防重入：向量嵌入任务进行中时拒绝新任务
 	a.vectorIndexMu.Lock()
 	if a.vectorIndexRunning {
 		a.vectorIndexMu.Unlock()
-		return errors.New("量化任务正在进行中")
+		return errors.New("向量嵌入任务正在进行中")
 	}
 	a.vectorIndexRunning = true
 	a.vectorIndexMu.Unlock()
 
-	// 创建可取消 ctx：用户可通过 CancelVectorIndex 停止量化任务
+	// 创建可取消 ctx：用户可通过 CancelVectorIndex 停止向量嵌入任务
 	ctx, cancel := context.WithCancel(ctx)
 	a.vectorIndexMu.Lock()
 	a.vectorIndexCancel = cancel
@@ -1573,15 +1573,15 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		a.vectorIndexMu.Unlock()
 	}
 
-	// 未完整配置量化连接时直接返回可读错误，不发起索引（与 ValidateCardRecall 校验强度一致）
+	// 未完整配置向量嵌入连接时直接返回可读错误，不发起索引（与 ValidateCardRecall 校验强度一致）
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	if baseURL == "" || model == "" {
 		release()
-		return errors.New("请先在设置中配置量化连接与量化模型")
+		return errors.New("请先在设置中配置向量嵌入连接与嵌入模型")
 	}
 	if apiKey == "" {
 		release()
-		return errors.New("请先填写量化 API Key")
+		return errors.New("请先填写嵌入 API Key")
 	}
 	if len(noteIDs) == 0 {
 		release()
@@ -1595,7 +1595,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		Model:   model,
 	})
 
-	// 异步执行量化，避免阻塞 Wails 事件循环（参考 Agent 流的 goroutine 模式）
+	// 异步执行嵌入，避免阻塞 Wails 事件循环（参考 Agent 流的 goroutine 模式）
 	go func() {
 		defer release()
 		success, failed, err := a.vectorService.IndexNotes(ctx, client, noteIDs, func(done, total int, title, stage string, chunkDone, chunkTotal int, errMsg string) {
@@ -1612,14 +1612,14 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		if err != nil {
 			// 用户主动取消不报错（前端已确认停止并关闭弹窗），仅记录日志
 			if errors.Is(err, context.Canceled) {
-				a.LogSvc.Logger.Infow("向量量化索引已取消")
+				a.LogSvc.Logger.Infow("向量索引任务已取消")
 				return
 			}
-			a.LogSvc.Logger.Errorw("向量量化索引失败", fastlog.Error(err))
+			a.LogSvc.Logger.Errorw("向量索引任务失败", fastlog.Error(err))
 			runtime.EventsEmit(a.ctx, "vector:index-error", map[string]interface{}{"error": err.Error()})
 			return
 		}
-		a.LogSvc.Logger.Infow("向量量化索引完成", fastlog.Int("success", success), fastlog.Int("failed", failed))
+		a.LogSvc.Logger.Infow("向量索引任务完成", fastlog.Int("success", success), fastlog.Int("failed", failed))
 		runtime.EventsEmit(a.ctx, "vector:index-done", map[string]interface{}{
 			"success": success,
 			"failed":  failed,
@@ -1641,7 +1641,7 @@ func (a *App) testAIConnection(baseURL, apiKey, logName string) (bool, error) {
 	return result, nil
 }
 
-// TestAIBaseURL 按指定 BaseURL/APIKey 测试连通性（对话/量化连接共用）
+// TestAIBaseURL 按指定 BaseURL/APIKey 测试连通性（对话/向量嵌入连接共用）
 func (a *App) TestAIBaseURL(baseURL, apiKey string) (bool, error) {
 	return a.testAIConnection(baseURL, apiKey, "TestAIBaseURL")
 }
@@ -1651,26 +1651,26 @@ func (a *App) TestAIConnection(baseURL, apiKey string) (bool, error) {
 	return a.testAIConnection(baseURL, apiKey, "TestAIConnection")
 }
 
-// TestVectorIndexConnection 测试量化服务连通性（量化弹窗打开时异步调用，不阻塞弹窗）
+// TestVectorIndexConnection 测试向量嵌入服务连通性（向量索引弹窗打开时异步调用，不阻塞弹窗）
 // 通过轻量 GET 请求检测服务可用性（均 5s 超时）
 func (a *App) TestVectorIndexConnection() CardRecallCheckResult {
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	if baseURL == "" || model == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置量化连接与量化模型"}
+		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置向量嵌入连接与嵌入模型"}
 	}
 	if apiKey == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先填写量化 API Key"}
+		return CardRecallCheckResult{OK: false, Message: "请先填写嵌入 API Key"}
 	}
 	ok, err := a.testAIConnection(baseURL, apiKey, "TestVectorIndexConnection")
 	if err != nil || !ok {
 		// 原始错误（网络/HTTP 细节）由 testAIConnection 记入日志，不向用户透出以免困惑
-		return CardRecallCheckResult{OK: false, Message: "量化服务连接失败，请检查服务是否已启动"}
+		return CardRecallCheckResult{OK: false, Message: "向量嵌入服务连接失败，请检查服务是否已启动"}
 	}
 	return CardRecallCheckResult{OK: true, Message: ""}
 }
 
 // FetchAIModels 获取可用模型列表
-// FetchAIModels 按指定 BaseURL/APIKey 获取模型列表（对话/量化连接共用）
+// FetchAIModels 按指定 BaseURL/APIKey 获取模型列表（对话/向量嵌入连接共用）
 func (a *App) FetchAIModels(baseURL, apiKey string) ([]string, error) {
 	a.LogSvc.Logger.Debugw("FetchAIModels", fastlog.String("baseURL", baseURL), fastlog.String("key", "***"))
 	cfg := services.AIConfig{BaseURL: baseURL, APIKey: apiKey}

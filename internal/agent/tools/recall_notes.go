@@ -89,10 +89,10 @@ func (r *recallNotesTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	// 构建 embedding client（ai_embed_* 四键，apiKey 为 B64 存储由工厂解码）
 	baseURL, apiKey, model, err := r.getEmbedConfig()
 	if err != nil {
-		return "", fmt.Errorf("读取量化连接配置失败: %w", err)
+		return "", fmt.Errorf("读取向量嵌入连接配置失败: %w", err)
 	}
 	if baseURL == "" || apiKey == "" || model == "" {
-		return "", errors.New("量化连接未配置（API 地址 / API Key / 模型），无法检索本地笔记")
+		return "", errors.New("向量嵌入连接未配置（API 地址 / API Key / 模型），无法检索本地笔记")
 	}
 	embedClient := einocli.NewClient(einocli.Config{
 		BaseURL: baseURL,

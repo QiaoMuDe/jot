@@ -130,7 +130,7 @@ func (g *getStatsTool) statsOverview() (string, error) {
 	fmt.Fprintf(&b, "AI 对话：%d 个会话，%d 条消息，累计 %d tokens\n", stats.AISessions, stats.AIMessages, stats.TotalTokens)
 	fmt.Fprintf(&b, "响应耗时：平均 %.2f 秒，思考平均 %.2f 秒，最长 %.2f 秒\n", stats.AvgResponseTime, stats.AvgThinkingTime, stats.MaxResponseTime)
 	fmt.Fprintf(&b, "数据库大小：%s\n", stats.DBSizeStr)
-	fmt.Fprintf(&b, "向量索引：已量化 %d 篇笔记，%d 个片段，占用 %s", noteCnt, chunkCnt, formatSize(sizeBytes))
+	fmt.Fprintf(&b, "向量索引：已嵌入 %d 篇笔记，%d 个片段，占用 %s", noteCnt, chunkCnt, formatSize(sizeBytes))
 	return b.String(), nil
 }
 

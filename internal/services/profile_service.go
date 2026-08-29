@@ -105,7 +105,7 @@ func (p *ProfileService) SwitchProfile(target string, id uint) error {
 		p.logger.Errorw("ProfileService.SwitchProfile 失败", fastlog.Error(err))
 		return err
 	}
-	// 对话目标：清除所有会话配置中的模型（切换预设后旧模型不可用）；量化目标不触碰会话配置
+	// 对话目标：清除所有会话配置中的模型（切换预设后旧模型不可用）；嵌入目标不触碰会话配置
 	if target == "chat" {
 		p.db.Model(&models.AISessionConfig{}).Where("1 = 1").Update("model_name", "")
 	}

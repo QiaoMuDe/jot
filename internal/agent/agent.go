@@ -63,7 +63,7 @@ type Deps struct {
 	MCPServerDB *gorm.DB
 	// MCPPool 全局 MCP 连接池（http/sse/stdio 预热复用）；为 nil 时跳过 MCP 工具装配。
 	MCPPool *mcpserver.Pool
-	// GetEmbedConfig 复用 app.go 现有逻辑：读取量化连接（ai_embed_* 三键），apiKey 已解码。
+	// GetEmbedConfig 复用 app.go 现有逻辑：读取向量嵌入连接（ai_embed_* 三键），apiKey 已解码。
 	GetEmbedConfig func() (baseURL, apiKey, model string, err error)
 }
 

@@ -37,7 +37,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// 打开 SQLite 连接 (使用纯 Go 实现的 glebarez/sqlite 驱动, 免 cgo)
 	// CreateBatchSize: 批量 Create(&切片) 时按此值分批 INSERT，避免单条 SQL 参数数超过
 	// SQLite 的 SQLITE_MAX_VARIABLE_NUMBER 限制（旧版 999）。NoteVector 每行 8 个参数，
-	// 100×8=800 留安全余量；大文档量化时一篇笔记可切出上百块，不分批会触发 too many SQL variables
+	// 100×8=800 留安全余量；大文档嵌入时一篇笔记可切出上百块，不分批会触发 too many SQL variables
 	// SkipDefaultTransaction: 跳过 GORM 对单条 Create/Update/Delete 的隐式事务包裹，
 	// SQLite 自动提交模式下单语句本就原子，省掉冗余 BEGIN/COMMIT 往返；不影响显式 db.Transaction
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{

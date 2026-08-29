@@ -595,7 +595,7 @@ const els = {
     aiFetchModelsBtn: $('aiFetchModelsBtn'),
     aiSettingModelSearch: $('aiSettingModelSearch'),
 
-    // AI 配置 - 量化连接
+    // AI 配置 - 向量嵌入连接
     aiEmbedBaseURL: $('aiEmbedBaseURL'),
     aiEmbedAPIKey: $('aiEmbedAPIKey'),
     aiEmbedModelTrigger: $('aiEmbedModelTrigger'),
@@ -698,7 +698,7 @@ function switchView(view) {
                 initCodePreview();
                 initSettingsSidebarNav();
                 loadTags();
-                // 每次进入设置页 Key 输入框默认隐藏（对话 + 量化）
+                // 每次进入设置页 Key 输入框默认隐藏（对话 + 嵌入）
                 resetApiKeyVisibility(els.aiAPIKey, els.aiAPIKeyToggle);
                 resetApiKeyVisibility(els.aiEmbedAPIKey, els.aiEmbedAPIKeyToggle);
                 // 每次进入设置页默认回到"外观"面板
@@ -2011,7 +2011,7 @@ async function initSortSettings() {
 // ── 全局 AI 辅助函数 ──
 
 /**
- * 重置 API Key 输入框为隐藏状态（进入设置页时调用，对话/量化共用）
+ * 重置 API Key 输入框为隐藏状态（进入设置页时调用，对话/嵌入共用）
  * @param {HTMLInputElement} input - Key 输入框
  * @param {HTMLElement} toggleBtn - 显示/隐藏切换按钮
  */
@@ -2025,7 +2025,7 @@ function resetApiKeyVisibility(input, toggleBtn) {
 }
 
 /**
- * 渲染预设下拉列表（对话/量化共用）
+ * 渲染预设下拉列表（对话/嵌入共用）
  * @param {HTMLElement} container - 下拉列表容器
  * @param {HTMLElement} labelEl - 触发按钮上的标签元素
  * @param {Array} profiles - 预设列表（来自 App.GetProfiles）
@@ -2087,7 +2087,7 @@ function setPresetTriggerLabel(labelEl, profile, empty) {
 }
 
 /**
- * 向指定模型下拉菜单添加一个选项（对话/量化共用）
+ * 向指定模型下拉菜单添加一个选项（对话/嵌入共用）
  * @param {HTMLElement} dropdown - 模型下拉容器
  * @param {string} model - 模型名称
  * @param {boolean} active - 是否高亮选中
@@ -2108,7 +2108,7 @@ function addModelDropdownItemTo(dropdown, model, active) {
 }
 
 /**
- * 绑定模型下拉菜单的通用交互（打开/选择/外部关闭/搜索过滤/Esc、Enter 处理，对话/量化共用）
+ * 绑定模型下拉菜单的通用交互（打开/选择/外部关闭/搜索过滤/Esc、Enter 处理，对话/嵌入共用）
  * @param {Object} m - { trigger, dropdown, label, searchInput, onSelect }
  */
 function bindModelDropdown(m) {
@@ -2209,7 +2209,7 @@ function bindModelDropdown(m) {
 }
 
 /**
- * 获取模型列表并渲染到指定下拉（对话/量化共用）
+ * 获取模型列表并渲染到指定下拉（对话/嵌入共用）
  * @param {Object} m - { url, key, dropdown, label, savedModel, onSaved }
  */
 async function fetchModelsAndRender(m) {
@@ -2267,7 +2267,7 @@ function setBtnLoading(btn, loading) {
 }
 
 /**
- * 初始化 API 连接模块（对话/量化共用）
+ * 初始化 API 连接模块（对话/嵌入共用）
  * 负责：测试连通性、Key 显隐、获取模型、模型下拉交互、
  *       URL/Key 自动保存、预设下拉展开/关闭。
  * @param {Object} m - 模块配置对象
@@ -2477,7 +2477,7 @@ async function initAISettings() {
         onBeforeOpenPreset: async () => { if (presetMgrExpanded) await closePresetMgrList(); },
     });
 
-    // ── 量化连接模块初始化（结构对应对话连接，预设切换走 SwitchProfile("embed", id)）──
+    // ── 向量嵌入连接模块初始化（结构对应对话连接，预设切换走 SwitchProfile("embed", id)）──
     initApiConnectionModule({
         baseURL: els.aiEmbedBaseURL,
         apiKey: els.aiEmbedAPIKey,
@@ -2490,9 +2490,9 @@ async function initAISettings() {
         modelSearch: els.aiEmbedModelSearch,
         presetTrigger: els.aiEmbedPresetTrigger,
         presetDropdown: els.aiEmbedPresetDropdown,
-        // 获取模型时用于高亮当前已保存的量化模型
+        // 获取模型时用于高亮当前已保存的嵌入模型
         getSavedModel: async () => (await window.go.main.App.GetAllSettings()).ai_embed_model,
-        // URL/Key/模型 变更保存后刷新量化预设下拉
+        // URL/Key/模型 变更保存后刷新嵌入预设下拉
         onSettingsSaved: () => { loadProfilesEmbed(); },
         // 展开预设下拉前先收起管理列表（与对话模块一致）
         onBeforeOpenPreset: async () => { if (presetMgrExpanded) await closePresetMgrList(); },
@@ -2809,7 +2809,7 @@ async function initAISettings() {
             renderPresetMgrList();
         }
     });
-    // 量化连接的新增/管理按钮（预设为共享表；新增弹窗统一纯净打开不预填当前连接，管理列表按所在行插入）
+    // 向量嵌入连接的新增/管理按钮（预设为共享表；新增弹窗统一纯净打开不预填当前连接，管理列表按所在行插入）
     document.getElementById('aiEmbedPresetAddBtn')?.addEventListener('click', openAddProfileModal);
     document.getElementById('aiEmbedPresetMgrBtn')?.addEventListener('click', (e) => {
         if (presetMgrExpanded) {
@@ -2907,19 +2907,19 @@ async function loadProfiles() {
     }
 }
 
-// 加载预设列表到量化模块的下拉（按当前量化表单值匹配高亮）
+// 加载预设列表到嵌入模块的下拉（按当前嵌入表单值匹配高亮）
 async function loadProfilesEmbed() {
     try {
         const profiles = await window.go.main.App.GetProfiles();
         if (!els.aiEmbedPresetDropdown) return;
 
-        // 按当前量化表单值（地址/Key）与预设匹配高亮
+        // 按当前嵌入表单值（地址/Key）与预设匹配高亮
         renderPresetList(els.aiEmbedPresetDropdown, els.aiEmbedPresetLabel, profiles, {
             base_url: (els.aiEmbedBaseURL.value || '').trim(),
             api_key: (els.aiEmbedAPIKey.value || '').trim(),
         }, (p) => switchProfileEmbed(p.id));
     } catch (e) {
-        console.warn('加载量化预设失败:', e);
+        console.warn('加载嵌入预设失败:', e);
     }
 }
 
@@ -2951,11 +2951,11 @@ async function switchProfile(target, id, silent) {
     }
 }
 
-// 切换量化连接预设（调用 SwitchProfile("embed", id)，切换后从整体设置回显量化键）
+// 切换向量嵌入连接预设（调用 SwitchProfile("embed", id)，切换后从整体设置回显嵌入键）
 async function switchProfileEmbed(id, silent) {
     try {
         await window.go.main.App.SwitchProfile('embed', id);
-        // 从整体设置读取量化键回显（后端尚未支持 ai_embed_* 时为空值兜底）
+        // 从整体设置读取嵌入键回显（后端尚未支持 ai_embed_* 时为空值兜底）
         const cfg = await window.go.main.App.GetAllSettings();
         els.aiEmbedBaseURL.value = cfg.ai_embed_base_url || '';
         els.aiEmbedAPIKey.value = cfg.ai_embed_api_key || '';
@@ -2964,13 +2964,13 @@ async function switchProfileEmbed(id, silent) {
         els.aiEmbedModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
         const wrap = els.aiEmbedModelDropdown.querySelector('.ai-model-search-wrap');
         if (wrap) wrap.style.display = 'none';
-        // 刷新量化预设下拉的选中态
+        // 刷新嵌入预设下拉的选中态
         await loadProfilesEmbed();
         if (!silent) {
-            nm.show('已切换到量化预设', 'success');
+            nm.show('已切换到嵌入预设', 'success');
         }
     } catch (e) {
-        nm.show('切换量化预设失败: ' + e, 'error');
+        nm.show('切换嵌入预设失败: ' + e, 'error');
     }
 }
 
@@ -6106,7 +6106,7 @@ function initEventListeners() {
     els.clearAISessionsBtn.addEventListener('click', clearAISessions);
     els.clearCompletedTodosBtn.addEventListener('click', clearCompletedTodos);
     els.cleanupOrphanImagesBtn.addEventListener('click', cleanupOrphanImages);
-    // AI 量化索引
+    // AI 向量索引
     els.vectorIndexBtn?.addEventListener('click', openVectorIndexModal);
     els.deleteVectorsBtn?.addEventListener('click', deleteAllVectors);
 
@@ -6555,7 +6555,7 @@ async function handleKeyboardNavigation(e) {
     // Escape: 关闭查找条或退出当前子视图
     if (e.key === 'Escape') {
         e.preventDefault();
-        // 量化弹窗打开时：Esc 走其关闭逻辑（量化中确认停止，否则直接关闭）
+        // 向量索引弹窗打开时：Esc 走其关闭逻辑（嵌入中确认停止，否则直接关闭）
         const viModal = document.getElementById('vectorIndexModal');
         if (viModal && viModal.style.display !== 'none') {
             onVectorIndexCloseRequested();
@@ -10466,11 +10466,11 @@ async function loadSettings() {
             }
         }
 
-        // --- AI 量化: base_url & api_key ---
+        // --- AI 向量嵌入: base_url & api_key ---
         if (els.aiEmbedBaseURL) els.aiEmbedBaseURL.value = cfg.ai_embed_base_url || '';
         if (els.aiEmbedAPIKey) els.aiEmbedAPIKey.value = cfg.ai_embed_api_key || '';
 
-        // --- AI 量化: 模型下拉 ---
+        // --- AI 向量嵌入: 模型下拉 ---
         if (els.aiEmbedModelDropdown) {
             els.aiEmbedModelDropdown.querySelectorAll('.theme-select-item').forEach(el => el.remove());
             if (cfg.ai_embed_model) {
@@ -10538,7 +10538,7 @@ async function loadSettings() {
         // --- AI: 预设配置 ---
         await loadProfiles();
 
-        // --- AI 量化: 预设配置 ---
+        // --- AI 向量嵌入: 预设配置 ---
         await loadProfilesEmbed();
 
         // --- 锁屏密码 ---
@@ -10623,7 +10623,7 @@ let _settingsAnimating = false;
 function switchSettingsTab(panelName) {
     // 切换面板时关闭「Agent 工具」管理面板
     closeAgentToolsMgrList();
-    // 切换面板时关闭预设管理列表（对话链接 / 量化链接两处共用同一容器）
+    // 切换面板时关闭预设管理列表（对话链接 / 嵌入链接两处共用同一容器）
     closePresetMgrList();
     // 切换面板时关闭 MCP 服务器表单对话框
     closeMCPServerForm();

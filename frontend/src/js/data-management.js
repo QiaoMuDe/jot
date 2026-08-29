@@ -40,7 +40,7 @@ export async function loadDataStats() {
     let avgResponseTime = 0, avgThinkingTime = 0, maxResponseTime = 0;
     let totalTodos = 0, completedTodos = 0;
     let totalPasswords = 0;
-    // AI 量化索引统计（笔记数 / 片段数 / 占用字节）
+    // AI 向量索引统计（笔记数 / 片段数 / 占用字节）
     let vecNoteCount = 0, vecChunkCount = 0, vecSizeBytes = 0;
 
     try {
@@ -122,10 +122,10 @@ export async function loadDataStats() {
         const thinkingStars = getStars(avgThinkingTime, [1, 3, 6, 10]);
         const maxStars = getStars(maxResponseTime, [10, 20, 30, 60]);
 
-        // 向量索引统计文案（未量化时给出占位）
+        // 向量索引统计文案（未嵌入时给出占位）
         const vecIndexText = vecNoteCount > 0
             ? `<strong>${vecNoteCount}</strong> 篇笔记 / <strong>${vecChunkCount}</strong> 个片段（<strong>${(vecSizeBytes / 1048576).toFixed(2)}</strong> MB）`
-            : '<span style="opacity:0.55">未量化</span>';
+            : '<span style="opacity:0.55">未嵌入</span>';
 
         // 拼接信纸正文 HTML
         bodyEl.innerHTML = `
@@ -161,7 +161,7 @@ export async function loadDataStats() {
                 <div class="star-row">最长等待 ${maxResponseTime.toFixed(1)}s &nbsp; ${maxStars}</div>
             </div>
             <hr class="letter-divider">
-            <p class="letter-section-title">🧠 AI 量化索引</p>
+            <p class="letter-section-title">🧠 AI 向量索引</p>
             <p>向量索引：${vecIndexText}</p>
         `;
     }
@@ -519,19 +519,19 @@ export async function restoreFromDir() {
     }
 }
 
-/* ===== AI 量化索引 ===== */
+/* ===== AI 向量索引 ===== */
 
-// 量化弹窗状态（模块级）
-let vectorIndexScope = 'all';        // 当前量化范围：all / notebooks / notes
-let vectorIndexAllMode = 'all';      // 「全部笔记」范围量化模式：all（全部）/ unindexed（仅未量化）/ stale（仅需重新量化）
+// 向量索引弹窗状态（模块级）
+let vectorIndexScope = 'all';        // 当前嵌入范围：all / notebooks / notes
+let vectorIndexAllMode = 'all';      // 「全部笔记」范围嵌入模式：all（全部）/ unindexed（仅未嵌入）/ stale（仅需重新嵌入）
 let vectorIndexSelected = new Set(); // 当前选中的 ID 集合（笔记本 ID 或笔记 ID）
 let vectorIndexNotebooks = [];       // 笔记本列表缓存（含 noteCount）
 let vectorIndexNotes = [];           // 笔记列表缓存（{ id, title }）
 let vectorIndexBound = false;        // 弹窗内部事件是否已绑定（懒绑定，防止重复注册）
-let vectorIndexRunning = false;      // 量化是否进行中（进行中禁止关闭弹窗）
+let vectorIndexRunning = false;      // 嵌入是否进行中（进行中禁止关闭弹窗）
 let vectorIndexChunkResetTimer = null; // 块级进度延迟清零定时器（让上一篇 100% 完整显示）
 let vectorIndexPickerTimer = null; // 选择区切换动画定时器（防止动画中断残留状态）
-let vectorIndexStatus = null; // 已量化索引统计缓存（noteCount/chunkCount/sizeBytes），供「全部笔记」信息卡片使用
+let vectorIndexStatus = null; // 向量索引统计缓存（noteCount/chunkCount/sizeBytes），供「全部笔记」信息卡片使用
 let vectorIndexLastErrorMsg = ''; // 单篇失败即时提示去重：记录上一条错误信息
 let vectorIndexLastErrorAt = 0;   // 单篇失败即时提示去重：记录上一条错误时间
 
@@ -584,8 +584,8 @@ function cleanupVectorIndexEvents() {
 }
 
 /**
- * 异步测试量化服务连通性（弹窗打开后后台执行，不阻塞弹窗）
- * 失败时 toast 提示，成功静默；接口异常时忽略，由开始量化时的后端校验兜底
+ * 异步测试向量嵌入服务连通性（弹窗打开后后台执行，不阻塞弹窗）
+ * 失败时 toast 提示，成功静默；接口异常时忽略，由开始嵌入时的后端校验兜底
  */
 async function checkVectorIndexConnection() {
     const app = window.go?.main?.App;
@@ -599,25 +599,25 @@ async function checkVectorIndexConnection() {
 }
 
 /**
- * 打开 AI 量化索引弹窗（懒绑定内部事件 + 注册进度事件 + 加载列表）
+ * 打开 AI 向量索引弹窗（懒绑定内部事件 + 注册进度事件 + 加载列表）
  */
 export async function openVectorIndexModal() {
     const modal = document.getElementById('vectorIndexModal');
     if (!modal) return;
 
-    // 打开弹窗前先校验量化连接配置（BaseURL/APIKey/Model 必填），
-    // 未配置时提示引导去设置，不打开弹窗；校验接口异常时放行，由开始量化时的后端校验兜底
+    // 打开弹窗前先校验向量嵌入连接配置（BaseURL/APIKey/Model 必填），
+    // 未配置时提示引导去设置，不打开弹窗；校验接口异常时放行，由开始嵌入时的后端校验兜底
     if (window.go?.main?.App?.ValidateVectorIndexConfig) {
         try {
             const check = await window.go.main.App.ValidateVectorIndexConfig();
             if (check && !check.ok) {
-                window.nm?.show?.(check.message || '量化连接未配置，请先在设置中完成配置', 'warning');
+                window.nm?.show?.(check.message || '向量嵌入连接未配置，请先在设置中完成配置', 'warning');
                 return;
             }
         } catch (_) { /* 忽略校验异常，放行 */ }
     }
 
-    // 配置校验通过后，异步测试量化服务连通性（不阻塞弹窗打开；失败时 toast 提示，成功静默）
+    // 配置校验通过后，异步测试向量嵌入服务连通性（不阻塞弹窗打开；失败时 toast 提示，成功静默）
     checkVectorIndexConnection();
 
     // 懒绑定弹窗内部交互事件（只执行一次）
@@ -651,7 +651,7 @@ export async function openVectorIndexModal() {
     const errorEl = document.getElementById('vectorIndexError');
     if (summaryEl) summaryEl.style.display = 'none';
     if (errorEl) errorEl.style.display = 'none';
-    // 复位「开始量化」按钮可用态（上次量化成功后可能残留 disabled）
+    // 复位「开始嵌入」按钮可用态（上次嵌入成功后可能残留 disabled）
     const startBtn = document.getElementById('vectorIndexStartBtn');
     if (startBtn) startBtn.disabled = false;
     updateVectorIndexCount();
@@ -669,7 +669,7 @@ export async function openVectorIndexModal() {
     // 弹窗布局稳定后定位分段指示条
     repositionVectorIndexScopeIndicator();
 
-    // 并行加载笔记本、笔记列表（弹窗交互所需）；量化状态（含逐笔记内容比对）改为异步填充，
+    // 并行加载笔记本、笔记列表（弹窗交互所需）；嵌入状态（含逐笔记内容比对）改为异步填充，
     // 不阻塞弹窗打开——先渲染信息卡片（状态未就绪时计数为 0），状态返回后自动刷新
     await Promise.all([
         loadVectorIndexNotebooks(),
@@ -679,18 +679,18 @@ export async function openVectorIndexModal() {
     renderVectorIndexAllInfo();
     const allInfoEl = document.getElementById('vectorIndexAllInfo');
     if (allInfoEl) allInfoEl.style.display = '';
-    // 异步加载量化状态并在就绪后刷新卡片（失败静默，卡片维持 0 计数）
+    // 异步加载嵌入状态并在就绪后刷新卡片（失败静默，卡片维持 0 计数）
     loadVectorIndexStatus().then(renderVectorIndexAllInfo);
 }
 
 /**
- * 关闭 AI 量化索引弹窗（量化进行中默认禁止关闭，关闭时清理进度事件监听）
- * @param {boolean} force - true 表示用户已确认停止量化，跳过拦截直接关闭
+ * 关闭 AI 向量索引弹窗（向量嵌入进行中默认禁止关闭，关闭时清理进度事件监听）
+ * @param {boolean} force - true 表示用户已确认停止嵌入，跳过拦截直接关闭
  */
 export function closeVectorIndexModal(force = false) {
-    // 量化进行中不允许关闭（除非已确认停止），避免事件清理导致进度 UI 中断
+    // 向量嵌入进行中不允许关闭（除非已确认停止），避免事件清理导致进度 UI 中断
     if (vectorIndexRunning && !force) {
-        window.nm?.show?.('量化进行中，请等待完成', 'warning');
+        window.nm?.show?.('向量嵌入进行中，请等待完成', 'warning');
         return;
     }
     const modal = document.getElementById('vectorIndexModal');
@@ -712,7 +712,7 @@ export function closeVectorIndexModal(force = false) {
 }
 
 /**
- * 关闭请求处理（右上角 X / Esc）：量化进行中先弹出「是否停止」确认框，
+ * 关闭请求处理（右上角 X / Esc）：向量嵌入进行中先弹出「是否停止」确认框，
  * 确认后调用后端 CancelVectorIndex 停止任务并强制关闭弹窗
  */
 export async function onVectorIndexCloseRequested() {
@@ -720,7 +720,7 @@ export async function onVectorIndexCloseRequested() {
         closeVectorIndexModal();
         return;
     }
-    const confirmed = await window.showConfirmDialog('量化进行中，确定要停止并关闭吗？', '停止', '继续');
+    const confirmed = await window.showConfirmDialog('向量嵌入进行中，确定要停止并关闭吗？', '停止', '继续');
     if (!confirmed) return;
     // 异步停止后端任务，随后立即关闭弹窗并清理事件（后端 goroutine 收尾期间事件已卸载）
     try { await window.go?.main?.App?.CancelVectorIndex?.(); } catch (_) { /* 忽略停止失败 */ }
@@ -805,12 +805,12 @@ function animateVectorIndexPicker(showEl, hideEl) {
 }
 
 /**
- * 切换量化范围（全部笔记 / 指定笔记本 / 指定笔记）
+ * 切换嵌入范围（全部笔记 / 指定笔记本 / 指定笔记）
  * @param {string} scope - 'all' / 'notebooks' / 'notes'
  */
 function switchVectorIndexScope(scope) {
     vectorIndexScope = scope;
-    // 切换范围时复位「全部笔记」量化模式（默认量化全部）
+    // 切换范围时复位「全部笔记」嵌入模式（默认嵌入全部）
     vectorIndexAllMode = 'all';
     // 更新范围按钮高亮
     document.querySelectorAll('#vectorIndexScopeSeg .vector-index-scope-btn').forEach(btn => {
@@ -827,7 +827,7 @@ function switchVectorIndexScope(scope) {
     // 三个区域互斥可见，最多一个处于显示态
     const visible = [allInfo, ntPicker, nbPicker].find(el => el && el.style.display !== 'none') || null;
     animateVectorIndexPicker(target, visible);
-    // 切到「全部笔记」时刷新已量化统计并渲染信息卡片
+    // 切到「全部笔记」时刷新已嵌入统计并渲染信息卡片
     if (scope === 'all') {
         loadVectorIndexStatus().then(renderVectorIndexAllInfo);
     }
@@ -882,7 +882,7 @@ function bindVectorIndexModalEvents() {
         syncVectorIndexSelectAllState('notes');
     });
 
-    // 开始量化
+    // 开始嵌入
     document.getElementById('vectorIndexStartBtn')?.addEventListener('click', startVectorIndex);
 }
 
@@ -943,7 +943,7 @@ async function loadVectorIndexNotes() {
 }
 
 /**
- * 获取量化弹窗完整状态（GetVectorIndexOverview：全局统计 + 未量化/需重新量化/已最新分类），
+ * 获取向量索引弹窗完整状态（GetVectorIndexOverview：全局统计 + 未嵌入/需重新嵌入/已最新分类），
  * 供「全部笔记」信息卡片使用；注意该接口含逐笔记内容比对，仅弹窗调用
  */
 async function loadVectorIndexStatus() {
@@ -985,8 +985,8 @@ function repositionVectorIndexAllModeIndicator() {
 }
 
 /**
- * 渲染「全部笔记」信息卡片（未量化 / 需重新量化 / 已量化最新 / 总笔记 / 片段 / 占用 + 量化模式分段滑块）
- * 「需重新量化」= 已量化但内容（标题/正文/标签/创建时间参与切块的全部输入）与量化时不一致
+ * 渲染「全部笔记」信息卡片（未嵌入 / 需重新嵌入 / 已嵌入最新 / 总笔记 / 片段 / 占用 + 嵌入模式分段滑块）
+ * 「需重新嵌入」= 已嵌入但内容（标题/正文/标签/创建时间参与切块的全部输入）与嵌入时不一致
  */
 function renderVectorIndexAllInfo() {
     const el = document.getElementById('vectorIndexAllInfo');
@@ -998,22 +998,22 @@ function renderVectorIndexAllInfo() {
     const chunks = vectorIndexStatus?.chunkCount || 0;
     const sizeMB = ((vectorIndexStatus?.sizeBytes || 0) / 1048576).toFixed(2);
     if (total === 0) {
-        el.innerHTML = '<p class="vector-index-all-note">当前没有可量化的笔记</p>';
+        el.innerHTML = '<p class="vector-index-all-note">当前没有可嵌入的笔记</p>';
         return;
     }
     el.innerHTML = `
         <div class="vector-index-all-cards">
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${unindexed}</div>
-                <div class="vector-index-all-card-label">未量化</div>
+                <div class="vector-index-all-card-label">未嵌入</div>
             </div>
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${stale}</div>
-                <div class="vector-index-all-card-label" title="已量化但内容（标题/正文/标签等）已编辑变化的笔记">需重新量化</div>
+                <div class="vector-index-all-card-label" title="已嵌入但内容（标题/正文/标签等）已编辑变化的笔记">需重新嵌入</div>
             </div>
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${upToDate}</div>
-                <div class="vector-index-all-card-label">已量化（最新）</div>
+                <div class="vector-index-all-card-label">已嵌入（最新）</div>
             </div>
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${total}</div>
@@ -1030,9 +1030,9 @@ function renderVectorIndexAllInfo() {
         </div>
         <div class="segmented-control vector-index-all-mode" id="vectorIndexAllModeSeg">
             <div class="segmented-indicator" id="vectorIndexAllModeIndicator"></div>
-            <button type="button" class="segmented-btn${vectorIndexAllMode === 'all' ? ' active' : ''}" data-mode="all">量化全部</button>
-            <button type="button" class="segmented-btn${vectorIndexAllMode === 'unindexed' ? ' active' : ''}" data-mode="unindexed"${unindexed === 0 ? ' disabled title="没有未量化的笔记"' : ''}>仅未量化</button>
-            <button type="button" class="segmented-btn${vectorIndexAllMode === 'stale' ? ' active' : ''}" data-mode="stale"${stale === 0 ? ' disabled title="没有需要重新量化的笔记"' : ''}>仅需重新量化</button>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'all' ? ' active' : ''}" data-mode="all">嵌入全部</button>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'unindexed' ? ' active' : ''}" data-mode="unindexed"${unindexed === 0 ? ' disabled title="没有未嵌入的笔记"' : ''}>仅未嵌入</button>
+            <button type="button" class="segmented-btn${vectorIndexAllMode === 'stale' ? ' active' : ''}" data-mode="stale"${stale === 0 ? ' disabled title="没有需要重新嵌入的笔记"' : ''}>仅需重新嵌入</button>
         </div>`;
     // 模式切换：更新 active 态并滑动指示条（数量为 0 的选项已 disabled，无需额外校验）
     el.querySelectorAll('#vectorIndexAllModeSeg .segmented-btn').forEach(btn => {
@@ -1149,13 +1149,13 @@ function syncVectorIndexSelectAllState(scope) {
 }
 
 /**
- * 开始量化：按当前范围调用对应后端方法，成功后切换到进度视图
+ * 开始嵌入：按当前范围调用对应后端方法，成功后切换到进度视图
  */
 async function startVectorIndex() {
     const { nm } = window;
     const app = window.go?.main?.App;
     if (!app) {
-        nm.show('量化功能不可用：后端未绑定', 'error');
+        nm.show('向量嵌入功能不可用：后端未绑定', 'error');
         return;
     }
 
@@ -1163,17 +1163,17 @@ async function startVectorIndex() {
     let fn = null;
     let args = [];
     if (vectorIndexScope === 'all') {
-        // 「全部笔记」范围：按所选量化模式分发（全部 / 仅未量化 / 仅需重新量化）
+        // 「全部笔记」范围：按所选嵌入模式分发（全部 / 仅未嵌入 / 仅需重新嵌入）
         if (vectorIndexAllMode === 'unindexed') {
             if ((vectorIndexStatus?.unindexedNotes || 0) === 0) {
-                nm.show('所有笔记都已量化，无需处理', 'info');
+                nm.show('所有笔记都已嵌入，无需处理', 'info');
                 return;
             }
             fn = app.IndexNotesUnindexed;
             args = [];
         } else if (vectorIndexAllMode === 'stale') {
             if ((vectorIndexStatus?.staleNotes || 0) === 0) {
-                nm.show('没有需要重新量化的笔记', 'info');
+                nm.show('没有需要重新嵌入的笔记', 'info');
                 return;
             }
             fn = app.IndexNotesStale;
@@ -1199,7 +1199,7 @@ async function startVectorIndex() {
     }
 
     if (typeof fn !== 'function') {
-        nm.show('量化功能不可用：后端未绑定', 'error');
+        nm.show('向量嵌入功能不可用：后端未绑定', 'error');
         return;
     }
 
@@ -1211,10 +1211,10 @@ async function startVectorIndex() {
     if (startBtn) startBtn.disabled = true;
 
     try {
-        // 调用后端开始量化（进度由 vector:index-progress 等事件驱动）
+        // 调用后端开始嵌入（进度由 vector:index-progress 等事件驱动）
         await fn.apply(app, args);
     } catch (err) {
-        console.error('开始量化失败:', err);
+        console.error('开始嵌入失败:', err);
         vectorIndexRunning = false;
         if (startBtn) startBtn.disabled = false;
         showVectorIndexError({ error: err?.message || String(err) });
@@ -1255,7 +1255,7 @@ function resetVectorIndexProgressUI() {
 }
 
 /**
- * 更新量化进度（vector:index-progress 事件回调）
+ * 更新嵌入进度（vector:index-progress 事件回调）
  * @param {{done:number, total:number, title:string, stage:string, chunk_done:number, chunk_total:number}} payload - 进度负载
  */
 function updateVectorIndexProgress(payload) {
@@ -1263,7 +1263,7 @@ function updateVectorIndexProgress(payload) {
     const done = Number(p.done) || 0;
     const total = Number(p.total) || 0;
     const stage = p.stage;
-    // embedding 阶段当前篇按「处理到一半」计：单篇量化时进度从 50% 起步，
+    // embedding 阶段当前篇按「处理到一半」计：单篇嵌入时进度从 50% 起步，
     // 避免 embedding 期间长时间停在 0%；done/error 阶段按实际完成篇数计
     const isEmbedding = stage === 'embedding';
     const percent = total > 0
@@ -1276,7 +1276,7 @@ function updateVectorIndexProgress(payload) {
     if (percentEl) percentEl.textContent = percent + '%';
 
     // 阶段文案映射
-    const stageMap = { embedding: '正在生成向量…', done: '量化完成', error: '处理失败，跳过' };
+    const stageMap = { embedding: '正在生成向量…', done: '嵌入完成', error: '处理失败，跳过' };
     const stageEl = document.getElementById('vectorIndexProgressStage');
     if (stageEl && p.stage) stageEl.textContent = stageMap[p.stage] || p.stage;
     const currentEl = document.getElementById('vectorIndexCurrentTitle');
@@ -1286,7 +1286,7 @@ function updateVectorIndexProgress(payload) {
     if (stage === 'error' && p.error) {
         const now = Date.now();
         if (p.error !== vectorIndexLastErrorMsg || now - vectorIndexLastErrorAt > 3000) {
-            window.nm?.show?.(`笔记「${p.title || '未知'}」量化失败：${p.error}`, 'error');
+            window.nm?.show?.(`笔记「${p.title || '未知'}」嵌入失败：${p.error}`, 'error');
         }
         vectorIndexLastErrorMsg = p.error;
         vectorIndexLastErrorAt = now;
@@ -1327,7 +1327,7 @@ function updateVectorIndexProgress(payload) {
 }
 
 /**
- * 量化完成回调（vector:index-done 事件）：显示摘要并刷新信笺统计
+ * 嵌入完成回调（vector:index-done 事件）：显示摘要并刷新信笺统计
  * @param {{success:number, failed:number}} payload - 完成负载
  */
 async function showVectorIndexSummary(payload) {
@@ -1339,7 +1339,7 @@ async function showVectorIndexSummary(payload) {
     const summary = document.getElementById('vectorIndexSummary');
     if (summary) {
         summary.style.display = '';
-        summary.innerHTML = `量化完成：成功 <strong>${success}</strong> 篇 / 失败 <strong>${failed}</strong> 篇`;
+        summary.innerHTML = `嵌入完成：成功 <strong>${success}</strong> 篇 / 失败 <strong>${failed}</strong> 篇`;
     }
     const stage = document.getElementById('vectorIndexProgressStage');
     if (stage) stage.textContent = '已完成';
@@ -1356,7 +1356,7 @@ async function showVectorIndexSummary(payload) {
 }
 
 /**
- * 量化错误回调（vector:index-error 事件）：展示错误信息
+ * 嵌入错误回调（vector:index-error 事件）：展示错误信息
  * @param {{error:string}} payload - 错误负载
  */
 function showVectorIndexError(payload) {
@@ -1365,30 +1365,30 @@ function showVectorIndexError(payload) {
     const errorEl = document.getElementById('vectorIndexError');
     if (errorEl) {
         errorEl.style.display = '';
-        errorEl.textContent = `量化失败：${p.error || '未知错误'}`;
+        errorEl.textContent = `嵌入失败：${p.error || '未知错误'}`;
     }
     const stage = document.getElementById('vectorIndexProgressStage');
     if (stage) stage.textContent = '已中断';
 }
 
 /**
- * 删除所有量化内容（二次确认后调 App.DeleteAllVectors，完成后刷新统计）
+ * 删除所有向量索引（二次确认后调 App.DeleteAllVectors，完成后刷新统计）
  */
 export async function deleteAllVectors() {
     const { nm, showConfirmDialog } = window;
 
-    const confirmed = await showConfirmDialog('确定要删除所有量化内容吗？笔记的向量索引数据将被清空，此操作不可撤销。');
+    const confirmed = await showConfirmDialog('确定要删除所有向量索引吗？笔记的向量索引数据将被清空，此操作不可撤销。');
     if (!confirmed) return;
 
     try {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.DeleteAllVectors) {
             await window.go.main.App.DeleteAllVectors();
-            nm.show('量化内容已删除', 'success');
+            nm.show('向量索引已删除', 'success');
         } else {
             nm.show('功能不可用：后端未绑定', 'error');
         }
     } catch (err) {
-        console.error('删除量化内容失败:', err);
+        console.error('删除向量索引失败:', err);
         nm.show('删除失败：' + err.message, 'error');
     }
     await loadDataStats();
