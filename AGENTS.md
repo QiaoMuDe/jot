@@ -696,6 +696,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
+## 记忆点 10：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 集中强化 Plan 模式的计划生成阶段与内容落库一致性：① 可用工具列表注入计划生成提示词；② 提示词紧凑化 + 智能拆解步骤数；③ 工具描述截断告警；④ MCP 工具加载逻辑提取为独立函数；⑤ `allStreamedContent` 跨轮累积修复落库与前端显示不一致；⑥ 三个逻辑缺陷修复；⑦ `tool_name` 强指导。 |
+| **工具列表注入生成阶段（重要）** | 不把工具注册到 `generatePlan`（避免模型误调用、污染执行），而是将 `tools.BuiltinTools()` 的名称+描述拼接成字符串（**跳过 PlanOnly 工具与用户禁用工具**），注入 [agent.go](internal/agent/agent.go) `planGenSystemPrompt` 的 `{{.Tools}}` 占位符。工具描述超 `maxToolDescLen=80` rune 截断并 `Warnw` 告警（含工具名/原始长度）。这样模型知道有哪些工具可用，生成计划时能标注工具名。 |
+| **提示词紧凑 + 智能拆解** | `planGenSystemPrompt` 精简且赋予判断能力：不再固定"≤10 步"，改为"根据需求复杂度合理拆解步骤（简单需求 2-3 步，中等 4-6 步，复杂 7-10 步）"；工具列表每行一条 `- 工具名: 描述`。 |
+| **MCP 工具加载提取（loadMCPTools）** | 将 `Run()` 中约 110 行 MCP 加载逻辑提取为 [registry.go](internal/agent/registry.go) `loadMCPTools()` 独立函数（返回已过滤禁用工具的 `[]tool.BaseTool`，空列表提前返回，失败仅记录日志不中断调用方）+ `buildToolMetas()`（从工具列表提取名称/描述元信息供 generatePlan 拼接）。两者在 `Run()` 内联调用，`generatePlan` 现在能看到全部工具（含 MCP），与执行阶段工具来源一致。 |
+| **allStreamedContent 跨轮累积（重要）** | 修复"计划模式落库内容与页面实时显示不一致、切换会话后消息内容变化"：`streamedContent` 每轮 ReAct 迭代开头重置、只保留当前轮，但前端 `ai:stream-chunk` 事件累积了所有轮次文本 → 落库只剩最后一轮。新增 `allStreamedContent` 跨轮累积变量（不随迭代重置，流式/非流式路径同步累积），最终兜底逻辑改 `finalContent == "" && allStreamedContent != ""` 时用其落库。**普通 Agent 模式无此问题**（模型通常在最后一轮输出最终回答、`finalContent` 正常设置，兜底不触发）。 |
+| **三个逻辑缺陷修复** | ① **非流式路径计划未完成缺 continue**——只清空 `finalContent` 无 `continue`（流式路径有），补 `continue` + debug 日志统一行为；② **自动步骤完成检测前置条件不完整**——仅检查 `in_progress`，模型跳过 `update_plan` 直接调用业务工具时步骤卡在 `pending` → 扩展为 `in_progress \|\| pending`；③ **`create_plan` 加入 `planOnlyTools`**——此前普通 Agent 模式下 `create_plan` 仍注册，模型误调用会意外激活计划逻辑（`countPendingSteps`/`SkippedPlanUpdate` 等），现 create_plan/update_plan 均仅 Plan 模式可见。 |
+| **tool_name 强指导（重要）** | 计划生成提示词升级为"每步描述简洁明确，**必须填写 tool_name**（使用可用工具列表中的工具名）"；`create_plan` 工具 `tool_name` 描述改为"建议填写，使用可用工具列表中的工具名"；`genPlanHint` 当前待执行步骤显示 `（建议工具：xxx）`——**强指导但不强制**（模型仍可根据实际调整工具选择）。 |
+| **计划生成 debug 日志** | 生成前记录可用工具列表（`计划生成阶段：可用工具列表`）；生成后记录计划详情（goal/steps/detail，detail 含每步 ID/描述/工具名）。 |
+| **涉及文件** | [agent.go](internal/agent/agent.go)（`planGenSystemPrompt`/`generatePlan`/`genPlanHint`/`allStreamedContent`/三缺陷修复/调试日志/`maxToolDescLen`）、[registry.go](internal/agent/registry.go)（`loadMCPTools`/`buildToolMetas`/`planOnlyTools` 扩展）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述） |
+
+---
+
 ## 十二、AGENTS.md 维护规范
 
 1. **第 1-12 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）

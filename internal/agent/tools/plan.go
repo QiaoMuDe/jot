@@ -78,7 +78,7 @@ func (t *createPlanTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 						},
 						"tool_name": {
 							Type:     schema.String,
-							Desc:     "预计调用的工具名（可选，不填则由模型自主决定）",
+							Desc:     "预计调用的工具名（建议填写，使用可用工具列表中的工具名）",
 							Required: false,
 						},
 					},

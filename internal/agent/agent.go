@@ -256,24 +256,63 @@ func (s *AgentService) ReleaseAll() {
 }
 
 // planGenSystemPrompt 计划生成阶段的精简系统提示词（不含角色设定/工具规范，节省 token）。
-const planGenSystemPrompt = `你是一个任务规划助手。请根据用户请求制定一个可执行的行动计划。
+// 占位符 {{.Tools}} 会在 generatePlan() 中被替换为可用工具列表。
+const planGenSystemPrompt = `你是任务规划助手。根据用户请求制定可执行的行动计划。
 
 要求：
-1. 将目标拆解为清晰的步骤列表（≤ 10 步）
-2. 每步描述简洁明确，标注预计使用的工具名（如有）
-3. 步骤应当具体可执行，避免过于笼统的描述
+1. 根据需求复杂度合理拆解步骤（简单需求2-3步，中等4-6步，复杂7-10步）
+2. 每步描述简洁明确，必须填写 tool_name（使用可用工具列表中的工具名）
+3. 步骤应当具体可执行，避免过于笼统
+
+可用工具列表：
+{{.Tools}}
 
 请直接调用 create_plan 工具制定计划，不要输出其他内容。`
 
 // generatePlan 在 Plan 模式下预生成执行计划：用精简提示词 + create_plan 工具的
 // function calling 强制模型输出结构化计划，设置 PlanState 并发射 ai:plan-created 事件。
 // 失败时返回错误，由 Run() 中断整个任务并通知用户。
+// toolMetas 是可用工具的元信息列表（名称和描述），用于生成工具描述字符串注入系统提示词。
 func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatModel,
-	req Request, toolCtx *tools.Context) error {
+	req Request, toolCtx *tools.Context, toolMetas []tools.ToolMeta) error {
+
+	// 生成可用工具列表字符串（从传入的 toolMetas 生成，排除 plan 工具自身）
+	// 工具描述超过 maxToolDescLen 时截断并记录警告日志
+	const maxToolDescLen = 80
+	var toolListBuilder strings.Builder
+	for _, t := range toolMetas {
+		// 跳过 plan 工具（create_plan/update_plan），它们不是"其他工具"
+		if t.PlanOnly {
+			continue
+		}
+		desc := t.Label
+		if len([]rune(desc)) > maxToolDescLen {
+			if s.deps.Logger != nil {
+				s.deps.Logger.Warnw("工具描述过长，已截断",
+					fastlog.String("tool", t.Name),
+					fastlog.Int("original_len", len([]rune(desc))),
+					fastlog.Int("max_len", maxToolDescLen))
+			}
+			desc = tools.TruncateRunes(desc, maxToolDescLen)
+		}
+		toolListBuilder.WriteString("- ")
+		toolListBuilder.WriteString(t.Name)
+		toolListBuilder.WriteString(": ")
+		toolListBuilder.WriteString(desc)
+		toolListBuilder.WriteString("\n")
+	}
+	toolListStr := toolListBuilder.String()
+	systemPrompt := strings.Replace(planGenSystemPrompt, "{{.Tools}}", toolListStr, 1)
+
+	// Debug 日志：记录传入计划生成阶段的可用工具列表
+	if s.deps.Logger != nil {
+		s.deps.Logger.Debugw("计划生成阶段：可用工具列表",
+			fastlog.String("tools", strings.TrimSpace(toolListStr)))
+	}
 
 	// 构造消息：system + 历史 + 用户当前消息
 	msgs := make([]*schema.Message, 0, len(req.History)+2)
-	msgs = append(msgs, schema.SystemMessage(planGenSystemPrompt))
+	msgs = append(msgs, schema.SystemMessage(systemPrompt))
 	for _, h := range req.History {
 		switch h.Role {
 		case "user":
@@ -331,9 +370,21 @@ func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatM
 	}
 
 	if s.deps.Logger != nil {
-		s.deps.Logger.Infow("Plan-and-Exec 预规划完成",
+		// 构建步骤摘要字符串（格式："1. 描述 [tool_name]; 2. 描述; ..."）
+		var stepSummary strings.Builder
+		for i, step := range plan.Steps {
+			if i > 0 {
+				stepSummary.WriteString("; ")
+			}
+			fmt.Fprintf(&stepSummary, "%d. %s", step.ID, step.Description)
+			if step.ToolName != "" {
+				fmt.Fprintf(&stepSummary, " [%s]", step.ToolName)
+			}
+		}
+		s.deps.Logger.Debugw("Plan-and-Exec 预规划完成",
 			fastlog.String("goal", plan.Goal),
-			fastlog.Int("steps", len(plan.Steps)))
+			fastlog.Int("steps", len(plan.Steps)),
+			fastlog.String("detail", stepSummary.String()))
 	}
 
 	return nil
@@ -437,120 +488,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools, req.PlanMode)
 
-	// 追加外部 MCP 服务器工具（数据库驱动 + 全局预热池）：
-	// 从数据库读取 MCP 服务器配置，全部传输（http/sse/stdio）统一优先复用预热池连接
-	// （Pool.Session 零网络开销），池中未命中（预热失败/从未预热）时现场连接一次并缓存
-	// 入池（WarmupOne 兜底）；连接由池持有常驻，跨会话跨消息复用。
-	// 查询失败 / 空库仅记录日志跳过，不中断内置工具与整体 Agent 运行
-	if s.deps.MCPServerDB != nil && s.deps.MCPPool != nil {
-		mcpCfg, err := mcpserver.LoadFromDB(s.deps.MCPServerDB)
-		if err != nil {
-			// 查询失败（数据库异常）仅记录日志，跳过 MCP 装配不阻断对话
-			if s.deps.Logger != nil {
-				s.deps.Logger.Debugw("MCP 服务器配置读取失败，跳过 MCP 工具装配",
-					fastlog.Error(err))
-			}
-		} else if len(mcpCfg.Servers) == 0 {
-			// 空库：无任何 MCP 服务器记录，跳过装配
-			if s.deps.Logger != nil {
-				s.deps.Logger.Debugw("无启用的 MCP 服务器，跳过 MCP 工具装配")
-			}
-		} else {
-			// 单条服务器校验失败时该条被跳过，其余合法条目正常装配；逐条输出告警便于定位
-			if s.deps.Logger != nil {
-				for _, loadErr := range mcpCfg.LoadErrors {
-					s.deps.Logger.Warnw("MCP 服务器配置校验失败，该服务器已跳过",
-						fastlog.Error(loadErr))
-				}
-			}
-			enabledServers := mcpCfg.EnabledServers()
-			if len(enabledServers) == 0 && s.deps.Logger != nil {
-				s.deps.Logger.Debugw("MCP 配置无启用的服务器，跳过 MCP 工具装配")
-			}
+	// 加载 MCP 工具（从数据库读取服务器配置，建立连接，获取工具）
+	mcpTools := loadMCPTools(runCtx, s.deps, toolCtx, disabledTools)
+	toolList = append(toolList, mcpTools...)
 
-			// 并行取/建会话，串行处理结果（保持工具顺序与日志顺序稳定）：
-			// 未命中池时现场建连（WarmupOne），goroutine 并发最多 3 台
-			// （stdio 为本地子进程，限制并发拉起进程数）；
-			// 每台内部已有 10s 连接 + 10s 工具发现超时兜底，goroutine 不会永久挂起。
-			type mcpResult struct {
-				server   mcpserver.Server
-				sess     *mcpserver.Session
-				err      error
-				duration time.Duration
-			}
-			results := make([]mcpResult, len(enabledServers))
-			sem := make(chan struct{}, 3)
-			var wg sync.WaitGroup
-			for i, server := range enabledServers {
-				wg.Add(1)
-				go func(i int, server mcpserver.Server) {
-					defer wg.Done()
-					sem <- struct{}{} // 获取并发槽位
-					defer func() { <-sem }()
-					connStart := time.Now()
-					// 优先复用预热池；未命中则现场连接并入池（兜底）
-					mcpSess := s.deps.MCPPool.Session(server.Name)
-					var err error
-					if mcpSess == nil {
-						mcpSess, err = s.deps.MCPPool.WarmupOne(runCtx, server)
-					}
-					results[i] = mcpResult{server: server, sess: mcpSess, err: err, duration: time.Since(connStart)}
-				}(i, server)
-			}
-			wg.Wait()
-
-			// 按索引顺序串行处理结果：日志输出与工具装配顺序和串行实现完全一致
-			for i := range results {
-				r := results[i]
-				if r.err != nil {
-					if s.deps.Logger != nil {
-						s.deps.Logger.Warnw("MCP 服务器连接失败，跳过该服务器",
-							fastlog.String("server", r.server.Name),
-							fastlog.Int("duration_ms", int(r.duration.Milliseconds())),
-							fastlog.Error(r.err))
-					}
-					continue
-				}
-				// 连接由池持有常驻，本轮不关闭
-				if r.sess.Skipped > 0 && s.deps.Logger != nil {
-					s.deps.Logger.Warnw("部分 MCP 工具因 Info 解析失败被跳过",
-						fastlog.String("server", r.server.Name),
-						fastlog.Int("skipped", r.sess.Skipped))
-				}
-				var toolNames []string
-				for _, t := range r.sess.Tools {
-					invokable, ok := t.(tool.InvokableTool)
-					if !ok {
-						if s.deps.Logger != nil {
-							s.deps.Logger.Warnw("MCP 工具不支持执行，已跳过",
-								fastlog.String("server", r.server.Name))
-						}
-						continue
-					}
-					// 取改名后的工具名（mcp_{服务器名}_{工具名}），供 WrapWithError 日志与调用记录使用
-					mcpToolName := r.server.Name
-					if info, err := t.Info(runCtx); err == nil && info != nil {
-						mcpToolName = info.Name
-					}
-					// 检查是否在禁用名单中：被禁工具跳过注册，模型不可见也不可调用
-					if disabledTools[mcpToolName] {
-						continue
-					}
-					toolNames = append(toolNames, mcpToolName)
-					toolList = append(toolList, tools.WrapWithError(mcpToolName, invokable, toolCtx))
-				}
-				// 上线日志：记录本服务器装配完成的 MCP 工具（改名后名称）与取/建会话耗时，
-				// 便于排查工具是否生效及定位慢服务器（池复用场景耗时接近 0）
-				if s.deps.Logger != nil {
-					s.deps.Logger.Infow("MCP 服务器工具已上线",
-						fastlog.String("server", r.server.Name),
-						fastlog.Int("count", len(toolNames)),
-						fastlog.String("tools", strings.Join(toolNames, ", ")),
-						fastlog.Int("duration_ms", int(r.duration.Milliseconds())))
-				}
-			}
-		}
-	}
+	// 从工具列表生成元信息（名称和描述），供 generatePlan 生成可用工具列表字符串
+	toolMetas := buildToolMetas(runCtx, toolList)
 
 	// 按工具名索引已装配的工具：emitToolStart 时据此查找 ActionTextProvider，
 	// 为 tool_start 事件生成动作文案（action_text）随事件下发前端
@@ -565,7 +508,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	// 预规划失败时中断整个任务，通知用户重试或检查 API 配置。
 	if req.PlanMode {
 		emit("ai:plan-generating", "")
-		if err := s.generatePlan(runCtx, chatModel, req, toolCtx); err != nil {
+		if err := s.generatePlan(runCtx, chatModel, req, toolCtx, toolMetas); err != nil {
 			return result, fmt.Errorf("计划生成失败: %w", err)
 		}
 	}
@@ -630,6 +573,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	// ask_user 同轮续答时，最终回答只是末条 assistant 消息，问句落在中间轮，
 	// 仅存 finalContent 会丢失问句；故反问轮用累计正文落库（问句 + 续答全文）
 	var streamedContent string
+	// allStreamedContent 跨轮累积所有流式文本（与前端显示一致），
+	// 解决 streamedContent 每轮重置导致落库内容丢失中间轮次文本的问题
+	var allStreamedContent string
 	var askedUser bool
 
 	// 步骤超时检测：记录当前步骤开始执行的时间，超时后自动跳过
@@ -723,6 +669,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				}
 				// 流式正文累计（与前端气泡所见一致），供 ask_user 同轮续答时整轮落库
 				streamedContent += full.Content
+				allStreamedContent += full.Content // 跨轮累积，供落库使用
 				if len(full.ToolCalls) > 0 {
 					// 模型决定调用工具：流式 Arguments 已按 Index 合并
 					for _, tc := range full.ToolCalls {
@@ -763,6 +710,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				}
 				// 流式正文累计（与前端气泡所见一致），供 ask_user 同轮续答时整轮落库
 				streamedContent += mv.Message.Content
+				allStreamedContent += mv.Message.Content // 跨轮累积，供落库使用
 				if len(mv.Message.ToolCalls) > 0 {
 					for _, tc := range mv.Message.ToolCalls {
 						emitToolStart(emit, &toolRecords, tc, toolByName)
@@ -784,11 +732,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 					emit("ai:stream-chunk", mv.Message.Content)
 					// 非流式路径同样检测计划完成状态（与流式路径一致）
 					if toolCtx.PlanState != nil && countPendingSteps(toolCtx.PlanState) > 0 {
-						// 计划未完成，拒绝接受最终回答
-						finalContent = ""
-					} else {
-						finalContent = mv.Message.Content
+						// 计划未完成，拒绝接受最终回答，继续执行
+						if s.deps.Logger != nil {
+							s.deps.Logger.Debugw("计划未完成，拒绝最终回答（非流式），强制继续执行",
+								fastlog.Int("pending_steps", countPendingSteps(toolCtx.PlanState)))
+						}
+						continue
 					}
+					// 计划已完成或无计划，接受最终回答
+					finalContent = mv.Message.Content
 				}
 			}
 		case schema.Tool:
@@ -823,13 +775,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 				toolCtx.DrainPartials(name, callID)
 
 				// 工具执行后自动检测步骤完成：
-				// 如果模型将步骤标记为 in_progress 后执行了工具，但忘记标记为 done，
-				// 系统自动将其标记为 done 并推进进度。
+				// 如果模型执行了工具但忘记调用 update_plan 标记完成，系统自动将其标记为 done 并推进进度。
+				// 覆盖两种场景：
+				//   1. 步骤已标记为 in_progress（模型调用了 update_plan 但忘记标记 done）
+				//   2. 步骤仍为 pending（模型跳过 update_plan 直接调用了业务工具）
 				if toolCtx.PlanState != nil && name != "create_plan" && name != "update_plan" {
 					plan := toolCtx.PlanState
 					if plan.Current < len(plan.Steps) {
 						step := &plan.Steps[plan.Current]
-						if step.Status == "in_progress" {
+						if step.Status == "in_progress" || step.Status == "pending" {
 							step.Status = "done"
 							step.Result = fmt.Sprintf("工具 %s 执行完成", name)
 							plan.Current++
@@ -869,10 +823,10 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	if askedUser && streamedContent != "" {
 		finalContent = streamedContent
 	}
-	// 通用兜底：finalContent 为空但 streamedContent 有内容时，用 streamedContent 落库；
+	// 通用兜底：finalContent 为空但有流式内容时，用跨轮累积的 allStreamedContent 落库；
 	// 适用于模型调用工具后未输出正文、或计划未完成检测触发 continue 等场景
-	if finalContent == "" && streamedContent != "" {
-		finalContent = streamedContent
+	if finalContent == "" && allStreamedContent != "" {
+		finalContent = allStreamedContent
 	}
 
 	// 7. 汇总结果：内容 + 工具收集的结构化来源/卡片 + 工具调用链 + 真实 token usage
@@ -1120,7 +1074,11 @@ func genPlanHint(plan *tools.Plan, skippedPlanUpdate bool) string {
 	// 当前待执行步骤
 	if plan.Current < len(plan.Steps) {
 		cur := plan.Steps[plan.Current]
-		fmt.Fprintf(&b, "当前待执行步骤：%d. %s\n", cur.ID, cur.Description)
+		if cur.ToolName != "" {
+			fmt.Fprintf(&b, "当前待执行步骤：%d. %s（建议工具：%s）\n", cur.ID, cur.Description, cur.ToolName)
+		} else {
+			fmt.Fprintf(&b, "当前待执行步骤：%d. %s\n", cur.ID, cur.Description)
+		}
 	}
 
 	b.WriteString("请按照计划继续执行，或调用 update_plan 调整计划。")
