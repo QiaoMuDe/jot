@@ -37,7 +37,7 @@ go run serve.go -no-open        # 不自动打开浏览器
 go run serve.go -host 0.0.0.0   # 局域网/公网可访问
 ```
 
-Go 版仅使用标准库，无需 `go.mod`。
+Go 版仅使用标准库，无第三方依赖（目录下 `go.mod` 仅为记录模块与 Go 版本，serve.go 本身不引入任何外部包）。
 
 ### 服务器部署
 
@@ -66,11 +66,13 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 |------|-----------|------|
 | 导航栏 | `#navbar` | 固定顶部，滚动后毛玻璃效果 |
 | Hero | `#hero` | 深色全屏首屏，背景网格 + 光晕粒子动画 |
-| 特性 | `#features` | 8 张毛玻璃卡片，hover 浮起，滚动入场动画 |
+| 特性 | `#features` | 9 张毛玻璃卡片（笔记网格/AI 助手/编辑器/智能检索/标签/联网搜索/数据管理/本地存储/异构导入），hover 浮起，滚动入场动画 |
+| 智能检索 | `#ai-recall` | 向量语义 + 关键词双通道工作流 SVG 动画 + 3 个要点 |
+| Agent 智能体 | `#agent` | Chat/Agent/Plan 三态说明 + 15 个工具徽章 + 6 个要点 |
+| 异构转换 | `#file-import` | 支持格式徽章 + 清洗转换流程 SVG + 3 个要点 |
 | 截图 | `#screenshots` | 从 `media.json` 动态渲染，点击弹出 Lightbox |
 | 视频 | `#videos` | 从 `media.json` 动态渲染，点击卡片弹出播放器 |
-| 技术栈 | `#tech-stack` | 16 个技术徽章，hover 弹跳缩放 |
-| 统计数据 | `#stats` | 4 项数字，滚动触发递增动画（easeOutExpo） |
+| 技术栈 | `#tech-stack` | 17 个技术徽章，双行无缝滚动，hover 弹跳缩放 |
 | CTA 联系 | `#cta` | 深色渐变卡片，引导联系作者 |
 | 页脚 | `footer` | 版权信息 |
 
@@ -147,7 +149,7 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 
 ### 截图替换说明
 
-当前截图使用 `landing/images/` 目录下的本地图片（`1.png` ~ `4.png`），按 `media.json` 中 `screenshots` 数组的顺序对应。替换截图时：
+当前截图使用 `landing/images/` 目录下的本地图片（`1.jpg` ~ `4.jpg`），按 `media.json` 中 `screenshots` 数组的顺序对应（当前目录仅含占位文件，真实素材待补充）。替换截图时：
 1. 将新截图放入 `landing/images/` 目录（文件名保持不变，或同步修改 `media.json` 的 `src`）
 2. 建议尺寸：宽 800px × 高 500px（16:9 比例）
 3. 占位图可临时使用 `https://via.placeholder.com/800x500/...` 在线地址，上线前替换为本地图片

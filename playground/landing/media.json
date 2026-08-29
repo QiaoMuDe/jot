@@ -11,7 +11,7 @@
       "id": "ai-assistant",
       "src": "images/2.jpg",
       "alt": "AI 智能助手",
-      "caption": "Agent / Plan 双模式 · 深度思考 · 12 技能 + 16 内置工具",
+      "caption": "Chat / Agent / Plan 三态模式 · 深度思考 · 13 技能 + 15 内置工具",
       "feature": "AI 助手"
     },
     {
@@ -42,7 +42,7 @@
       "src": "videos/ai-demo.mp4",
       "poster": "images/poster.jpg",
       "title": "AI 助手演示",
-      "caption": "Agent / Plan 双模式 + 深度思考（思维链折叠）+ 流式输出 + 联网搜索 + 工具调度的实际效果"
+      "caption": "Chat / Agent / Plan 三态模式 + 深度思考（思维链折叠）+ 流式输出 + 联网搜索 + 工具调度的实际效果"
     },
     {
       "id": "video-import",

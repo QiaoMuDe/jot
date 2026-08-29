@@ -24,8 +24,6 @@ func themeBG(theme string) (uint8, uint8, uint8) {
 		return 26, 27, 38
 	case "dracula":
 		return 40, 42, 54
-	case "one-dark-pro":
-		return 40, 44, 52
 	case "catppuccin-latte":
 		return 239, 241, 245
 	case "gruvbox-light":
@@ -41,7 +39,7 @@ func themeBG(theme string) (uint8, uint8, uint8) {
 	case "ysgrifennwr":
 		return 245, 237, 218
 	default: // "default" 主题
-		return 247, 245, 240
+		return 242, 237, 227
 	}
 }
 
