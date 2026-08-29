@@ -558,27 +558,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 34. **Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板）**：后端新增两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮次保存 + `GenModelInput` 钩子每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（模型跳过 create_plan 自动补建单步计划、漏调 update_plan 自动补标未完成步骤为 done 并发事件）；前端 `#aiPlanPanel` 输入框上方悬浮可折叠面板（`ai:plan-created`/`ai:plan-updated` 事件），ask_user 反问时互斥收起（方案 B）、回答后恢复，stream-done 移除面板并清空 `streamPlanData` 缓存，历史回放 `renderPlanCard` 气泡内渲染。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[index.html](frontend/index.html)
 
-35. **Agent/Plan 模式切换（Session 级 plan_mode + 工具按模式过滤 + 前端切换控件 + 设置页 PlanOnly 禁用展示）**：为 AI 会话新增 Agent/Plan 双模式切换。后端：`AISessionConfig` 新增 `PlanMode bool` 列（默认 false = Agent 模式），`SessionConfig` 读写透传；`ToolMeta` 新增 `PlanOnly bool` 标记仅 Plan 模式可用的工具（`create_plan`/`update_plan`）；`buildTools` 按 `planMode` 过滤计划工具注册；`genPlanHint` 按 `req.PlanMode` 条件注入计划提示；结果兜底逻辑包裹 `PlanMode` 判断。前端：工具栏模型选择器左侧新增边框包裹的 Agent/Plan pill 切换按钮（分割线分隔），切换即时保存 + 通知；设置页 PlanOnly 工具显示禁用样式（灰色 + checkbox disabled + "仅 Plan 模式可用"说明）+ 点击 shake 抖动 + Toast 通知；全选/全不选/统计文案均排除 PlanOnly 工具。详见 [ai_session_config.go](internal/models/ai_session_config.go)、[ai_service.go](internal/services/ai_service.go)、[meta.go](internal/agent/tools/meta.go)、[types.go](internal/agent/types.go)、[registry.go](internal/agent/registry.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[main.js](frontend/src/main.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
+35. **AI 模式三态切换（Chat/Agent/Plan，Session 级 Mode 字段替代 plan_mode + 工具按模式过滤 + 前端三档切换 + 设置页 PlanOnly 禁用展示）**：为 AI 会话新增 Chat/Agent/Plan 三模式切换，模式控制由 `AISessionConfig.PlanMode bool` 重构为单一 `Mode string`（`chat`/`agent`/`plan`，默认 `agent`）。后端：`SessionConfig` 读写透传 `Mode`，`LoadSessionConfig` 用 `modeOrDefault` 兜底；初始化数据库时一次性迁移存量 `plan_mode = 1` → `mode = 'plan'` 并清理孤儿列；Chat 模式不注入任何工具规范（单次请求直接回答）；Agent 请求级 `Request.PlanMode`（bool）内部保持不变，判定改 `sessCfg.Mode == "plan"`；`ToolMeta.PlanOnly` 标记仅 Plan 模式可用的工具（`create_plan`/`update_plan`），`buildTools` 按模式过滤注册；`genPlanHint` 按 `req.PlanMode` 条件注入。前端：工具栏模型选择器左侧 `#aiModeToggle` 三按钮两分割线切换（Chat/Agent/Plan），切换即时保存 + 通知；设置页 PlanOnly 工具显示禁用样式（灰色 + checkbox disabled + "仅 Plan 模式可用"说明）+ 点击 shake 抖动 + Toast 通知；全选/全不选/统计文案均排除 PlanOnly 工具。详见 [ai_session_config.go](internal/models/ai_session_config.go)、[ai_service.go](internal/services/ai_service.go)、[db.go](internal/database/db.go)、[meta.go](internal/agent/tools/meta.go)、[types.go](internal/agent/types.go)、[registry.go](internal/agent/registry.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[main.js](frontend/src/main.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
 ---
 
-## 记忆点 1：密码管理功能页（新增完整功能页 + Base64 编码 + 列表/详情分离传输 + 样式打磨 + 4 问题修复 + 头像徽章迭代教训）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增密码管理功能页（独立视图），完整 CRUD + 搜索 + 批量操作 + 右键菜单 + 复制/打开链接 + 搜索高亮 + 条目样式打磨 + 4 个 bug 修复 + 头像徽章迭代教训。 |
-| **后端功能（重要）** | [internal/models/password_record.go](internal/models/password_record.go) 数据模型（name/username/password/url/note + GORM 软删除），[internal/services/password_service.go](internal/services/password_service.go) 业务层（Create/GetPasswordRecord/List/Search/Update/Delete/BatchDelete），[app.go](app.go) 7 个 Wails 绑定。**列表传输安全分离**：列表接口返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），**密码字段不出现在列表传输中**，只有通过 `GetPasswordRecord(id)` 获取单条详情时才返回解码后的明文密码。搜索支持 name/username/url/note 四列模糊匹配，使用 `escapeLike` 转义 `\ % _` + `LIKE ? ESCAPE '\\'`。 |
-| **编码方案（重要）** | [internal/services/crypto.go](internal/services/crypto.go)：Base64 编码 + `(zk)` 前缀（**不是加密，是可逆编码**，不提供密码学安全性）。存储流程：明文 → `EncodeB64()` → `"(zk)" + Base64(std)` → 写入 SQLite。`DecodeB64()` 读取时 TrimPrefix `(zk)` + Base64 解码。存量兼容：无 `(zk)` 前缀的值原样返回（兼容迁移前明文）。启动时自动扫描 settings/api_profiles 表未编码值执行迁移编码。锁屏密码则用 SHA-256 + 固定盐值单向哈希。 |
-| **前端功能清单** | [frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（~912 行）+ [password-manager.css](frontend/src/css/components/password-manager.css)（~883 行）：三栏等宽布局（名称/用户名/URL）+ 实时防抖搜索（250ms）+ 添加/编辑对话框（5 字段 + 必填校验 + 抖动）+ 详情对话框（密码掩码 + 显隐切换）+ 一键复制（navigator.clipboard + execCommand 降级）+ 打开链接（runtime.BrowserOpenURL）+ 右键菜单（6 项操作）+ 批量操作模式（全选/浮动操作栏/批量删除带确认）+ 输入长度实时截断 + 空状态展示 + URL Tooltip 自动避让 + ESC 层级关闭 + 搜索关键词 `<mark>` 高亮 + 操作后高亮反馈（`.pm-flash` 呼吸动画 0.8s×3=2.4s）。 |
-| **静默重渲染 + 4 问题修复（重要）** | ① **静默重渲染**——`renderPmList({ playEnter })` 增加 `.pm-no-enter` 分支跳过逐条入场动画（搜索/编辑保存/状态切换原地刷新不闪烁，仅首次进入视图 `playEnter: true` 播放交错淡入）。② **Enter 连按守卫**——保存动作加进行中标志，防连续回车创建多条。③ **pmLoadSeq 代际计数器**（与 editorOpSeq/previewRenderSeq 同一模式）——响应到达时 `seq !== pmLoadSeq` 丢弃过期结果防乱序覆盖。④ **模板残留清理**——渲染统一 createElement 构建 DOM，不再拼 HTML 模板字符串。 |
-| **密码条目样式打磨（保留项）** | **B 信息层级**——`.pm-name` 字号 15px 加重标题；用户名/链接双段 `.pm-meta`（flex + gap 5px）承载 13px 内联 SVG 小图标（PM_ICON_USER person / PM_ICON_LINK link，`.pm-field-icon` 灰调不抢焦点）；URL 展示剥离 `https?://` 协议前缀（hover title 提示完整 URL）。**C hover 竖条**——`.pm-item::before` 左缘 accent 竖条胶囊（left:-1px、宽 3px、圆角 999px），hover 时 `opacity 0→1` + `scaleY(0.3)→1` spring 缓动展开。**11 主题 --shadow-* 分层阴影补齐**——[variables.css](frontend/src/css/variables.css) 各 `[data-theme]` 变量块补齐阴影变量组，教训：新增主题必须带全变量组。 |
-| **名称头像徽章迭代教训（方案已废弃，重要）** | 名称区徽章历经四轮迭代最终整体移除：首字符彩色徽章（PM_AVATAR_HUES + pmAvatarHue 哈希）→ 钥匙 PM_ICON_KEY → 锁 lock → 16px 锁视觉突兀 → 13px 仍不满意 → 最终定论"名称不带任何图标"。**SVG 视觉重量陷阱**：16×16 viewBox 图标几乎撑满画布，而 15px 文本数字/字母字面仅约 11px 高，图标必然"比字高一头"。**结论**：行内小图标只适合次级 meta（用户名/链接），主标题保持纯文本最稳。 |
-| **并行编辑同文件覆盖事故（关键教训）** | 对同一文件**并行发起两个 SearchReplace** 时，第二次基于最新快照执行覆盖第一次结果——用法代码留存而常量声明丢失 → `ReferenceError: PM_ICON_KEY is not defined`。**教训：同一文件多处编辑必须逐个顺序执行，禁止并行**；完成后再 Read/Grep 校验关键符号完整性。 |
-| **涉及文件** | [internal/models/password_record.go](internal/models/password_record.go)、[internal/services/password_service.go](internal/services/password_service.go)（CRUD + escapeLike）、[internal/services/crypto.go](internal/services/crypto.go)（Base64 编解码）、[app.go](app.go)（7 个绑定）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（renderPmList 静默分支/pm-flash/pmLoadSeq/PM_ICON_USER+PM_ICON_LINK/URL 协议剥离）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（.pm-item::before hover 竖条 + .pm-meta/.pm-field-icon/.pm-name）、[frontend/src/css/variables.css](frontend/src/css/variables.css)（11 主题 --shadow-*）、[frontend/index.html](frontend/index.html)（视图 + 对话框 HTML） |
-
----
-
-## 记忆点 2：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
+## 记忆点 1：启动器重构 + 拼音搜索 + 待办清单大幅优化（零重渲染 + FAB 输入 + 两段式动画 + 分类感知清空）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +577,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
+## 记忆点 2：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+## 记忆点 3：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +607,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 4：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 5：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 6：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +649,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 7：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +664,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 8：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -696,7 +680,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 9：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -708,6 +692,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **打字动画过渡** | `ai:plan-created` 处理器清空 `contentDiv` 后重新挂载 `createTypingDots()`：计划面板弹出后到首个 thinking/chunk 到达前气泡持续显示打字动画，避免"空气泡无反馈"窗口；首个正文 chunk 到达时 `hasReceivedChunk` 置位 + `contentDiv.innerHTML=''` 天然替换打字动画，无需额外清理逻辑。 |
 | **关键设计决策** | ① 用"类锁定 + 点击守卫"而非原生 `disabled`：`disabled` 阻断 click 事件、无法触发抖动反馈，且深度思考开关是 `div` 不支持；② 清空对话流式期间一并禁用（经用户确认保持禁用，需先停止再清空）；③ 会话条目/更多菜单因侧栏折叠不可见，`switchSession`/`createSession` 原有 `if (isStreaming) return` 守卫兜底；④ 润色流程走独立 `CallAI` 通道、不经过 `startStreaming`，不参与锁定；⑤ 审计确认 `isStreaming` 全文件仅 5 处赋值，锁/解锁无遗漏路径。 |
 | **涉及文件** | [ai-chat.js](frontend/src/js/ai-chat.js)（`setToggleLocked`/`shakeLockedToggle`/`_preStreamSidebarExpanded`/5 处生命周期挂钩/6 个点击守卫）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.is-locked`/`.is-shaking`/`ai-toggle-shake` keyframes/搜索框 `:disabled`）、[agent.go](internal/agent/agent.go)（`planGenSystemPrompt` 任务分级）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述可选） |
+
+---
+
+## 记忆点 10：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | ① 恢复 AI 助手 Chat 模式（单次请求直接回答、不调用工具），解决部分模型不支持深度思考/工具调用、本地模型跑不动 Agent 多轮循环的问题；模式控制从 `PlanMode bool` 重构为单一 `Mode` 字符串（`chat`/`agent`/`plan`），初始化数据库时自动迁移存量数据。② aierrors 错误分类增强：新增 `REASONING_REQUIRED`（模型**必须开启**深度思考，反向于已有的"不支持"场景）分类，并去掉未命中时的通用兜底文案、`UserMsg` 直接回填原始错误信息便于排查。 |
+| **Mode 三态统一（重要）** | [ai_session_config.go](internal/models/ai_session_config.go)：`AISessionConfig.PlanMode bool` → `Mode string`（`gorm:"size:10;default:'agent'"`）；[ai_service.go](internal/services/ai_service.go)：`SessionConfig` 同步 `Mode string`，`CreateDefaultSessionConfig` 写 `"agent"`、`SaveSessionConfig` 写 `"mode"`、`LoadSessionConfig` 用 `modeOrDefault` 兜底（新增）。Agent 请求级 `Request.PlanMode`（bool）内部保持不变，仅判定改 `PlanMode: sessCfg.Mode == "plan"`。 |
+| **存量数据迁移（重要）** | [db.go](internal/database/db.go) `InitDB`：AutoMigrate 后、`cleanupOrphanedData` 前一次性迁移——`HasColumn(&AISessionConfig{}, "plan_mode")` 时把 `plan_mode = 1` 的会话更新为 `mode = 'plan'`；孤儿列清单追加 `"plan_mode"`（字段移除后 AutoMigrate 残留列自动清理）。 |
+| **Chat 模式实现（重要）** | [app.go](app.go) 新增 `CallAIStream`（单次流式入口，Chat 不注入任何工具规范）；共享上下文组装抽取为 `buildAIContextInstruction`（身份层 + 技能/角色扮演/引用/追问/上传 7 个逻辑块，与 Agent 流逐行一致——抽取需与原代码逐块核对，勿偷工减料）；Token 口径：`estimateUserTokens(messages) + estimateTokens(systemMsg)`（Chat 计入系统提示词）；前端 [ai-chat.js](frontend/src/js/ai-chat.js) `currentPlanMode`→`currentMode`（`'chat'|'agent'|'plan'`），[index.html](frontend/index.html) `#aiModeToggle` 三按钮两分割线，`syncModeToggle` 按 `btn.dataset.mode === currentMode` 高亮，`startStreaming` 按 `currentMode === 'chat'` 分流走 Chat 流。 |
+| **aierrors REASONING_REQUIRED（重要）** | 新增分类 `CategoryThinkingRequired`（文案"当前模型必须开启深度思考才能回答，请在输入框上方开启深度思考开关后重试"）。**误判根因**：megumin `openai.RequestError`（400）在 `classifyOpenAIRequestError` 无 400 分支 → 直接兜底 `network_error`（显示"网络连接失败"误导用户）；且 `message: %!s(<nil>)`（`Err` 为 nil），真实错误码 `REASONING_REQUIRED` 只在 body 里。修复：`classifyOpenAIRequestError` 补 400（及 402/404）分支，末尾先 `classifyByText` 再 unknown；`classifyBadRequest(msg, code, raw)` 合并 message/code/raw 三文本匹配（覆盖 eino 路径 `Code` 字段与 RequestError body 两条来源）；匹配 `reasoning_required`/`thinking_required`/`必须开启深度思考`/`must enable thinking|reasoning`；`classifyByText` 兜底同款匹配。 |
+| **未命中回填原始错误（重要）** | 去掉 `CategoryUnknown`（"AI 调用出错，请稍后重试"）与 `CategoryInvalidRequest`（"请求参数有误"）通用兜底文案；`NewAIError` 分类无映射时 `UserMsg` 直接 = `raw`（原始错误文本），前端 `if (errData.user_msg)` 原样弹出方便排查。真实网络错误仍由文本匹配（`connection refused`/`no such host` 等）命中 `network_error` 保留友好文案。 |
+| **测试** | [errors_test.go](internal/aierrors/errors_test.go) 新增 7 个用例：RequestError(400, Err=nil, Body=REASONING_REQUIRED) 精确复现场景 / go-openai + eino APIError `Code` 路径 / 纯文本兜底 / 纯中文文案 / unknown 与 400-invalid_request 的 `UserMsg == raw` 断言。 |
+| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[internal/aierrors/errors.go](internal/aierrors/errors.go)、[internal/aierrors/errors_test.go](internal/aierrors/errors_test.go) |
 
 ---
 

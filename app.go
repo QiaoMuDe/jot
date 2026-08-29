@@ -2002,93 +2002,10 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		startTime := time.Now()
 
 		// ── 组装 Instruction（系统提示词全文），内容与顺序对齐 Agent 流上下文注入 ──
-		// 基础提示词：无技能时注入完整三层（身份层 + 规范边界层），
-		// 有技能时仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
+		// 基础上下文（身份层 + 技能/角色扮演/引用/追问/上传文件）由共享 helper 组装，
+		// Agent 模式在其后追加工具使用规范（Chat 模式直接用 helper 结果，不追加任何工具规范）
 		var instruction strings.Builder
-		if len(skillIds) == 0 {
-			instruction.WriteString(baseSystemPrompt)
-		} else {
-			instruction.WriteString(baseNormsBoundaries)
-		}
-
-		// 角色扮演上下文注入
-		hasRoleplay := false
-		for _, sid := range skillIds {
-			if sid == "skill_roleplay" {
-				hasRoleplay = true
-				break
-			}
-		}
-		var roleplayContext string
-		if hasRoleplay && len(roleplayNoteIDs) > 0 {
-			refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
-			if err == nil && refCtx != nil && refCtx.Context != "" {
-				roleplayContext = refCtx.Context
-			}
-		}
-
-		// 笔记引用上下文注入
-		if len(referencedNoteIDs) > 0 {
-			refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
-			if err == nil && refCtx != nil && refCtx.Context != "" {
-				refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
-				instruction.WriteString("\n\n" + refText)
-			}
-		}
-
-		// 追问引用内容注入
-		if followUpRefContent != "" {
-			refText := "用户正在追问以下内容：\n" + followUpRefContent
-			if len([]rune(followUpRefContent)) > 500 {
-				refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
-			}
-			instruction.WriteString("\n\n" + refText)
-		}
-
-		// 上传文件内容注入
-		if len(uploadedFiles) > 0 {
-			var b strings.Builder
-			b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
-			for _, f := range uploadedFiles {
-				if f.Error != "" || f.Content == "" {
-					continue
-				}
-				sizeStr := formatFileSize(f.Size)
-				fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
-			}
-			if b.Len() > 0 {
-				instruction.WriteString("\n\n" + b.String())
-			}
-		}
-
-		// 技能提示词注入
-		if len(skillIds) > 0 {
-			// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
-			translateArgs := make(map[string]string)
-			cleanSkillIds := make([]string, 0, len(skillIds))
-			for _, id := range skillIds {
-				if strings.HasPrefix(id, "skill_translate:") {
-					parts := strings.SplitN(id, ":", 3)
-					if len(parts) == 3 {
-						translateArgs["source"] = parts[1]
-						translateArgs["target"] = parts[2]
-					}
-					cleanSkillIds = append(cleanSkillIds, "skill_translate")
-				} else {
-					cleanSkillIds = append(cleanSkillIds, id)
-				}
-			}
-			skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
-			if err == nil && skillPrompt != "" {
-				// 替换角色扮演占位符
-				if hasRoleplay && roleplayContext != "" {
-					skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
-				}
-				instruction.WriteString("\n\n" + skillPrompt)
-			} else if err != nil {
-				a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
-			}
-		}
+		instruction.WriteString(a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles))
 
 		// Agent 模式专用约束：本地知识优先 + 联网兜底的工具选择策略
 		// 联网搜索由 MCP 服务器提供的搜索工具执行（内置 web_search 已移除），不指定具体工具名
@@ -2147,7 +2064,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			fastlog.Int("history_count", len(history)),
 			fastlog.Int("skill_count", len(skillIds)),
 			fastlog.Int("disabled_tool_count", len(disabledTools)),
-			fastlog.Bool("plan_mode", sessCfg.PlanMode),
+			fastlog.String("mode", sessCfg.Mode),
 		)
 		result, err := a.AgentSvc.Run(ctx, agent.Request{
 			SessionID:         sessionID,
@@ -2159,7 +2076,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			RecallNotebookIDs: recallNotebookIDs,
 			UserMsgID:         userMsgID,
 			DisabledTools:     disabledTools,
-			PlanMode:          sessCfg.PlanMode,
+			PlanMode:          sessCfg.Mode == "plan",
 		}, func(ev, data string) {
 			// Agent 事件统一携带 streamGen（首参），与 stream-done/stream-error/agent-result
 			// 已有的 gen 参数形态一致：前端按代过滤，防止切换/并发流串扰
@@ -2240,6 +2157,232 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		// 回传前端，供流式完成后立即渲染（无需切换会话），并供 chatHistory.push 落库前使用
 		runtime.EventsEmit(a.ctx, "ai:agent-result", streamGen, result.RecallCards, result.ToolCalls, result.Plan, result.ReasoningContent)
 		runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, result.Content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
+	}()
+}
+
+// buildAIContextInstruction 组装基础问答上下文（身份层 + 技能/角色扮演/引用/追问/上传文件）。
+// 不含任何工具使用规范（Agent 模式在其后追加，Chat 模式直接用）。
+func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, referencedNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) string {
+	// 基础提示词：无技能时注入完整三层（身份层 + 规范边界层），
+	// 有技能时仅注入规范边界层（身份层由技能 prompt 的角色定义替代）
+	var instruction strings.Builder
+	if len(skillIds) == 0 {
+		instruction.WriteString(baseSystemPrompt)
+	} else {
+		instruction.WriteString(baseNormsBoundaries)
+	}
+
+	// 角色扮演上下文注入
+	hasRoleplay := false
+	for _, sid := range skillIds {
+		if sid == "skill_roleplay" {
+			hasRoleplay = true
+			break
+		}
+	}
+	var roleplayContext string
+	if hasRoleplay && len(roleplayNoteIDs) > 0 {
+		refCtx, err := a.noteService.BuildNoteRefContext(roleplayNoteIDs)
+		if err == nil && refCtx != nil && refCtx.Context != "" {
+			roleplayContext = refCtx.Context
+		}
+	}
+
+	// 笔记引用上下文注入
+	if len(referencedNoteIDs) > 0 {
+		refCtx, err := a.noteService.BuildNoteRefContext(referencedNoteIDs)
+		if err == nil && refCtx != nil && refCtx.Context != "" {
+			refText := "以下是用户手动引用的笔记内容（来源：手动引用笔记），请参考这些内容回答：\n\n" + refCtx.Context
+			instruction.WriteString("\n\n" + refText)
+		}
+	}
+
+	// 追问引用内容注入
+	if followUpRefContent != "" {
+		refText := "用户正在追问以下内容：\n" + followUpRefContent
+		if len([]rune(followUpRefContent)) > 500 {
+			refText = "用户正在追问以下内容：\n" + string([]rune(followUpRefContent)[:500])
+		}
+		instruction.WriteString("\n\n" + refText)
+	}
+
+	// 上传文件内容注入
+	if len(uploadedFiles) > 0 {
+		var b strings.Builder
+		b.WriteString("用户上传了以下文件内容（来源：上传文件），请基于这些文件内容回答用户的提问：\n")
+		for _, f := range uploadedFiles {
+			if f.Error != "" || f.Content == "" {
+				continue
+			}
+			sizeStr := formatFileSize(f.Size)
+			fmt.Fprintf(&b, "\n--- 文件: %s (%s) ---\n%s\n---", f.Name, sizeStr, f.Content)
+		}
+		if b.Len() > 0 {
+			instruction.WriteString("\n\n" + b.String())
+		}
+	}
+
+	// 技能提示词注入
+	if len(skillIds) > 0 {
+		// 从 skillIds 中提取翻译参数（格式: skill_translate:source:target）
+		translateArgs := make(map[string]string)
+		cleanSkillIds := make([]string, 0, len(skillIds))
+		for _, id := range skillIds {
+			if strings.HasPrefix(id, "skill_translate:") {
+				parts := strings.SplitN(id, ":", 3)
+				if len(parts) == 3 {
+					translateArgs["source"] = parts[1]
+					translateArgs["target"] = parts[2]
+				}
+				cleanSkillIds = append(cleanSkillIds, "skill_translate")
+			} else {
+				cleanSkillIds = append(cleanSkillIds, id)
+			}
+		}
+		skillPrompt, err := a.aiService.GetSkillPrompts(cleanSkillIds, translateArgs)
+		if err == nil && skillPrompt != "" {
+			// 替换角色扮演占位符
+			if hasRoleplay && roleplayContext != "" {
+				skillPrompt = strings.ReplaceAll(skillPrompt, "{roleplay_context}", roleplayContext)
+			}
+			instruction.WriteString("\n\n" + skillPrompt)
+		} else if err != nil {
+			a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
+		}
+	}
+
+	return instruction.String()
+}
+
+// CallAIStream Chat 模式流式对话绑定方法（单次请求、不调用工具）。
+// 复用 truncateAIMessages + buildAIContextInstruction；走 einocli 流式（enable_thinking 方式，
+// 非思考模型安全）。事件与 Agent 流同形：ai:stream-chunk / ai:stream-thinking / ai:stream-done / ai:stream-error。
+func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, thinkingEnabled bool, skillIds []string, referencedNoteIDs []uint, roleplayNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult, userMsgID uint) {
+	// 创建可取消的 ctx 并存入 a.aiStreamCancel，供停止按钮（CancelAIStream）取消
+	ctx, cancel := context.WithCancel(context.Background())
+	a.aiStreamCancel = cancel
+
+	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
+	messages := a.truncateAIMessages(ctx, sessionID, "AI Chat 滑动窗口截断")
+
+	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
+	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与 stream-done 回传
+	if userMsgID == 0 {
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				userMsgID = messages[i].ID
+				break
+			}
+		}
+	}
+
+	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环
+	go func() {
+		var reasoningBuf strings.Builder
+
+		// 组装系统消息：基础问答上下文（不注入任何工具使用规范，Chat 模式纯单次问答）
+		systemMsg := a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles)
+
+		// 历史消息转换：跳过 system（基础提示词已并入系统消息），
+		// 当前用户消息追加在末尾（若历史末条已是同内容则跳过，避免重复，与 Agent buildMessages 一致）
+		history := make([]services.Message, 0, len(messages)+1)
+		for _, m := range messages {
+			if m.Role == "system" {
+				continue
+			}
+			history = append(history, services.Message{Role: m.Role, Content: m.Content})
+		}
+		appendUser := true
+		if n := len(history); n > 0 {
+			last := history[n-1]
+			if last.Role == "user" && last.Content == userText {
+				appendUser = false
+			}
+		}
+		if appendUser && userText != "" {
+			history = append(history, services.Message{Role: "user", Content: userText})
+		}
+
+		chatMsgs := make([]services.Message, 0, len(history)+1)
+		chatMsgs = append(chatMsgs, services.Message{Role: "system", Content: systemMsg})
+		chatMsgs = append(chatMsgs, history...)
+
+		// 如果已被用户取消（停止按钮），不再调用 LLM，避免白调用
+		if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
+			return
+		}
+
+		a.aiService.CallAIStream(ctx, chatMsgs, thinkingEnabled,
+			func(chunk string) {
+				runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
+			},
+			func(chunk string) {
+				reasoningBuf.WriteString(chunk)
+				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, chunk)
+			},
+			func(content string, elapsedThinking, elapsedTotal float64) {
+				// 用户取消导致的结束：补发完成事件（assistantMsgID=0 前端按取消处理）
+				if ctx.Err() != nil {
+					if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
+						return
+					}
+				}
+
+				// token 估算：einocli 流式回调不返回真实 usage，与旧 Chat 一致；
+				// 深度思考链计入 assistant token。
+				// 用户 token 口径：既有估算（会话中 system + 末条 user）+ 本次动态组装的
+				// 系统提示词（每次请求都会重发，计入真实输入成本，气泡显示更贴近实际）
+				userTokens := estimateUserTokens(messages) + estimateTokens(systemMsg)
+				assistantTokens := estimateTokens(content)
+				if thinkingEnabled && reasoningBuf.Len() > 0 {
+					assistantTokens += estimateTokens(reasoningBuf.String())
+				}
+				totalTokens := userTokens + assistantTokens
+
+				// 保存 assistant 消息（耗时与深度思考链一起落库）
+				assistantMsg := services.Message{
+					Role:             "assistant",
+					Content:          content,
+					ReasoningContent: reasoningBuf.String(),
+					ThinkingElapsed:  elapsedThinking,
+					TotalElapsed:     elapsedTotal,
+					Tokens:           assistantTokens,
+				}
+				assistantMsgID, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
+				if saveErr != nil {
+					a.LogSvc.Logger.Errorw("Chat 保存 assistant 消息失败", fastlog.Error(saveErr))
+				}
+
+				// 更新用户消息 tokens + 重算会话累计 token
+				_ = a.aiService.UpdateAIMessageTokens(userMsgID, userTokens)
+				accumulated, _ := a.aiService.SumSessionTokens(sessionID)
+				_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
+
+				a.LogSvc.Logger.Infow("AI Chat 流完成",
+					fastlog.Int("total_tokens", totalTokens),
+					fastlog.Float64("elapsed_total", elapsedTotal),
+				)
+				runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, content, elapsedThinking, elapsedTotal, totalTokens, userTokens, assistantTokens, userMsgID, assistantMsgID)
+			},
+			func(errMsg string) {
+				// 用户取消导致的结束：补发完成事件确保前端清理气泡
+				if ctx.Err() != nil {
+					if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
+						return
+					}
+				}
+				a.LogSvc.Logger.Errorw("AI Chat 流错误", fastlog.String("err", errMsg))
+				// 附带 userTokens 供前端更新用户消息气泡 token 显示（口径与成功路径一致：含本次系统提示词）
+				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, errMsg, estimateUserTokens(messages)+estimateTokens(systemMsg))
+			},
+		)
+
+		// 兜底：取消/超时导致 OnDone/OnError 均未触发时，补发终态事件保证前端清理
+		if ctx.Err() != nil {
+			if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
+				return
+			}
+		}
 	}()
 }
 

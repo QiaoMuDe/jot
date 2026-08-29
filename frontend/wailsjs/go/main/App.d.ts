@@ -32,6 +32,8 @@ export function CallAI(arg1:Array<services.Message>):Promise<string>;
 
 export function CallAIAgentStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:Array<number>,arg7:Array<number>,arg8:string,arg9:Array<main.AIChatFileResult>,arg10:Array<number>,arg11:number):Promise<void>;
 
+export function CallAIStream(arg1:number,arg2:number,arg3:string,arg4:boolean,arg5:Array<string>,arg6:Array<number>,arg7:Array<number>,arg8:string,arg9:Array<main.AIChatFileResult>,arg10:number):Promise<void>;
+
 export function CancelAIEditorOperation():Promise<void>;
 
 export function CancelAIStream():Promise<void>;

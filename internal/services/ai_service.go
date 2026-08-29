@@ -50,7 +50,7 @@ type SessionConfig struct {
 	EnabledSkills     string `json:"enabled_skills"`
 	RoleplayNotes     string `json:"roleplay_notes"`
 	RecallNotebookIDs string `json:"recall_notebook_ids"`
-	PlanMode          bool   `json:"plan_mode"`
+	Mode              string `json:"mode"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -539,7 +539,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		EnabledSkills:     cfg.EnabledSkills,
 		RoleplayNotes:     cfg.RoleplayNotes,
 		RecallNotebookIDs: cfg.RecallNotebookIDs,
-		PlanMode:          cfg.PlanMode,
+		Mode:              "agent",
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -557,7 +557,7 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 		"enabled_skills":      cfg.EnabledSkills,
 		"roleplay_notes":      cfg.RoleplayNotes,
 		"recall_notebook_ids": cfg.RecallNotebookIDs,
-		"plan_mode":           cfg.PlanMode,
+		"mode":                cfg.Mode,
 	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
@@ -580,6 +580,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 				EnabledSkills:     "{}",
 				RoleplayNotes:     "[]",
 				RecallNotebookIDs: "[]",
+				Mode:              "agent",
 			}
 		}
 	}
@@ -590,8 +591,16 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		EnabledSkills:     record.EnabledSkills,
 		RoleplayNotes:     record.RoleplayNotes,
 		RecallNotebookIDs: record.RecallNotebookIDs,
-		PlanMode:          record.PlanMode,
+		Mode:              modeOrDefault(record.Mode),
 	}
+}
+
+// modeOrDefault 兼容历史数据：空/非法值一律视为 agent（Plan 由初始化数据库时的一次性迁移兜底）
+func modeOrDefault(m string) string {
+	if m != "chat" && m != "plan" {
+		return "agent"
+	}
+	return m
 }
 
 // DeleteAISession 删除会话及其所有消息和配置

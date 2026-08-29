@@ -858,7 +858,7 @@ export namespace services {
 	    enabled_skills: string;
 	    roleplay_notes: string;
 	    recall_notebook_ids: string;
-	    plan_mode: boolean;
+	    mode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -872,7 +872,7 @@ export namespace services {
 	        this.enabled_skills = source["enabled_skills"];
 	        this.roleplay_notes = source["roleplay_notes"];
 	        this.recall_notebook_ids = source["recall_notebook_ids"];
-	        this.plan_mode = source["plan_mode"];
+	        this.mode = source["mode"];
 	    }
 	}
 	export class SettingsConfig {

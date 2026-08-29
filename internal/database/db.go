@@ -143,10 +143,11 @@ func cleanupOrphanedData(db *gorm.DB) error {
 		//     内置搜索（Tavily/知乎/全网）整体移除（MCP 迁移）时从代码模型删除
 		//   agent_enabled —— Agent 成为唯一对话模式（Chat 问答模式移除）后不再需要模式标记
 		//   enable_card_recall —— 卡片召回开关移除（是否召回由 Agent 自主判断）
+		//   plan_mode —— 迁移到 mode（chat/agent/plan 单字段）后删除（迁移逻辑见 db.go 顶部，须先迁移后删列）
 		// 注：AIMessage.search_sources 列保留（存量历史消息数据，仅前端不再展示）
 		{model: &models.AISessionConfig{}, cols: []string{
 			"zhihu_search_enabled", "zhihu_global_search_enabled", "tavily_search_enabled",
-			"agent_enabled", "enable_card_recall",
+			"agent_enabled", "enable_card_recall", "plan_mode",
 		}},
 	}
 	m := db.Migrator()

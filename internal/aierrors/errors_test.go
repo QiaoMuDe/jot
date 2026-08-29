@@ -454,3 +454,118 @@ func TestClassifyError_ModelBusy_NotModelNotFound(t *testing.T) {
 		t.Error("expected category NOT to be model_not_found for model busy error")
 	}
 }
+
+// TestClassifyError_ThinkingRequired_RequestError 覆盖本次报告的真实场景：
+// megumin RequestError 400，Err 为 nil（%!s(<nil>)），真实错误码 REASONING_REQUIRED 只在 body 里。
+func TestClassifyError_ThinkingRequired_RequestError(t *testing.T) {
+	err := &openai.RequestError{
+		HTTPStatus:     "400 Bad Request",
+		HTTPStatusCode: 400,
+		Body:           []byte(`{"code":"REASONING_REQUIRED","message":"当前模型必须开启深度思考","traceId":"trace_6607593a"}`),
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryThinkingRequired {
+		t.Errorf("expected category %q, got %q", CategoryThinkingRequired, ae.Category)
+	}
+	if ae.UserMsg == "" {
+		t.Error("expected non-empty UserMsg")
+	}
+}
+
+// TestClassifyError_ThinkingRequired_OpenAIAPIError_Code 覆盖 go-openai APIError 400，
+// 错误码在 Code 字段（message 为空）。
+func TestClassifyError_ThinkingRequired_OpenAIAPIError_Code(t *testing.T) {
+	err := &openai.APIError{
+		HTTPStatusCode: 400,
+		Code:           "REASONING_REQUIRED",
+		Message:        "当前模型必须开启深度思考",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryThinkingRequired {
+		t.Errorf("expected category %q, got %q", CategoryThinkingRequired, ae.Category)
+	}
+}
+
+// TestClassifyError_ThinkingRequired_EinoAPIError_Code 覆盖 eino APIError 400 路径。
+func TestClassifyError_ThinkingRequired_EinoAPIError_Code(t *testing.T) {
+	err := &einoopenai.APIError{
+		HTTPStatusCode: 400,
+		Code:           "REASONING_REQUIRED",
+		Message:        "当前模型必须开启深度思考",
+	}
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryThinkingRequired {
+		t.Errorf("expected category %q, got %q", CategoryThinkingRequired, ae.Category)
+	}
+}
+
+// TestClassifyError_ThinkingRequired_TextFallback 覆盖仅剩错误文本的兜底路径
+// （RequestError 无状态码、无底层错误时的 classifyByText）。
+func TestClassifyError_ThinkingRequired_TextFallback(t *testing.T) {
+	err := errors.New(`error, status code: 400, status: 400 Bad Request, message: %!s(<nil>), body: {"code":"REASONING_REQUIRED","message":"当前模型必须开启深度思考"}`)
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryThinkingRequired {
+		t.Errorf("expected category %q, got %q", CategoryThinkingRequired, ae.Category)
+	}
+}
+
+// TestClassifyError_ThinkingRequired_ChineseOnly 覆盖仅返回中文文案的兜底路径。
+func TestClassifyError_ThinkingRequired_ChineseOnly(t *testing.T) {
+	err := errors.New("当前模型必须开启深度思考")
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryThinkingRequired {
+		t.Errorf("expected category %q, got %q", CategoryThinkingRequired, ae.Category)
+	}
+}
+
+// TestClassifyError_Unknown_ReturnsRaw 覆盖未命中分类时不再提供兜底文案，
+// UserMsg 直接回填原始错误信息便于排查。
+func TestClassifyError_Unknown_ReturnsRaw(t *testing.T) {
+	raw := "some weird unrecognized error: foo bar"
+	err := errors.New(raw)
+	ae := ClassifyError(err)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryUnknown {
+		t.Errorf("expected category %q, got %q", CategoryUnknown, ae.Category)
+	}
+	if ae.UserMsg != raw {
+		t.Errorf("expected UserMsg to be raw %q, got %q", raw, ae.UserMsg)
+	}
+}
+
+// TestClassifyError_InvalidRequest_400_ReturnsRaw 覆盖 400 未命中具体原因时
+// UserMsg 同样回填原始错误信息。
+func TestClassifyError_InvalidRequest_400_ReturnsRaw(t *testing.T) {
+	apiErr := &openai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "bad request, unknown param foo",
+	}
+	raw := apiErr.Error()
+	ae := ClassifyError(apiErr)
+	if ae == nil {
+		t.Fatal("expected non-nil AIError")
+	}
+	if ae.Category != CategoryInvalidRequest {
+		t.Errorf("expected category %q, got %q", CategoryInvalidRequest, ae.Category)
+	}
+	if ae.UserMsg != raw {
+		t.Errorf("expected UserMsg to be raw %q, got %q", raw, ae.UserMsg)
+	}
+}

@@ -39,7 +39,7 @@ let sessions = [];             // 侧栏会话列表
 let sessionSearchQuery = '';
 let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
-let currentPlanMode = false;   // false = Agent 模式, true = Plan 模式
+let currentMode = 'agent';    // 'chat' | 'agent' | 'plan'
 // 窗口级标志，与 isStreaming 同步，供 main.js 全局拖拽系统读取
 window.__aiStreaming = false;
 let aiMsgContextMenu = null;   // AI 消息右键菜单
@@ -503,7 +503,7 @@ function bindEvents() {
         goSettingsBtn.addEventListener('click', () => window.switchView('settings'));
     }
 
-    // Agent/Plan 模式切换
+    // Chat/Agent/Plan 模式切换
     document.querySelectorAll('#aiModeToggle .ai-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             if (isStreaming) {
@@ -511,14 +511,15 @@ function bindEvents() {
                 window.showNotification?.('回复进行中，暂时无法切换模式', 'warning');
                 return;
             }
-            const newMode = btn.dataset.mode === 'plan';
-            if (newMode === currentPlanMode) return; // 已经是当前模式
-            currentPlanMode = newMode;
+            const m = btn.dataset.mode; // 'chat' | 'agent' | 'plan'
+            if (m === currentMode) return; // 已经是当前模式
+            currentMode = m;
             syncModeToggle();
             // 保存到会话配置
-            saveCurrentPlanMode();
+            saveCurrentMode();
             // 通知
-            window.showNotification?.(`已切换到 ${currentPlanMode ? 'Plan' : 'Agent'} 模式`, 'success');
+            const label = m === 'chat' ? 'Chat' : (m === 'plan' ? 'Plan' : 'Agent');
+            window.showNotification?.(`已切换到 ${label} 模式`, 'success');
         });
     });
 
@@ -1537,8 +1538,8 @@ async function switchSession(id) {
                     };
                 }
                 renderSkillChips();
-                // 读取 plan_mode 并同步切换按钮
-                currentPlanMode = !!config.plan_mode;
+                // 读取 mode 并同步切换按钮
+                currentMode = config.mode || 'agent';
                 syncModeToggle();
             }
         } catch (_) {}
@@ -1713,8 +1714,8 @@ async function createSession() {
                 };
             }
             renderSkillChips();
-            // 读取 plan_mode 并同步切换按钮
-            currentPlanMode = !!defaultCfg.plan_mode;
+            // 读取 mode 并同步切换按钮
+            currentMode = defaultCfg.mode || 'agent';
             syncModeToggle();
         }
     } catch (_) {}
@@ -2320,8 +2321,9 @@ async function startStreaming(userText, userMsgID) {
     _aiStreamGen++;
     const myGen = _aiStreamGen;
 
-    // Agent 为唯一对话模式（Chat 问答模式已移除），流恒走 Agent 通道
-    const isAgentFlow = true;
+    // Chat 为单次问答（不调用工具）；Agent/Plan 走 Agent 通道（ReAct 多轮 + 工具）
+    const isChatFlow = currentMode === 'chat';
+    const isAgentFlow = !isChatFlow;
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
@@ -2862,10 +2864,10 @@ async function startStreaming(userText, userMsgID) {
             }
 
             // 计划模式执行完毕：自动回退 Agent 模式（停止/出错/取消不回退，保留供重试续跑）
-            if (currentPlanMode) {
-                currentPlanMode = false;
+            if (currentMode === 'plan') {
+                currentMode = 'agent';
                 syncModeToggle();
-                saveCurrentPlanMode();
+                saveCurrentMode();
                 window.showNotification?.('计划执行完毕，已自动切换回 Agent 模式', 'success');
             }
         }
@@ -2946,11 +2948,18 @@ async function startStreaming(userText, userMsgID) {
         });
         const refNoteIDs = referencedNotes.map(n => n.id);
         const roleNoteIDs = roleplayNotes.map(n => n.id);
-        // Agent 为唯一对话模式：调用 Agent 流式接口（联网搜索由 MCP 工具执行、卡片召回由
-        // recall_notes 工具执行，均无前端开关参数）
-        // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
-        // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, recallNotebookIDs, userMsgID
-        window.go.main.App.CallAIAgentStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, Array.from(recallNotebookIds), userMsgID);
+        if (isChatFlow) {
+            // Chat 模式：单次问答流式接口（不调用工具，兼容不支持 function calling 的模型与本地模型）
+            // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
+            // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, userMsgID
+            window.go.main.App.CallAIStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, userMsgID);
+        } else {
+            // Agent 模式：调用 Agent 流式接口（联网搜索由 MCP 工具执行、卡片召回由
+            // recall_notes 工具执行，均无前端开关参数）
+            // 参数顺序按后端签名：streamGen, sessionID, userText, thinkingEnabled, skillIds,
+            // referencedNoteIDs, roleplayNoteIDs, followUpRefContent, uploadedFiles, recallNotebookIDs, userMsgID
+            window.go.main.App.CallAIAgentStream(myGen, activeSessionId, userText, enableThinking, skillIds, refNoteIDs, roleNoteIDs, followUpRef, uploadedFiles, Array.from(recallNotebookIds), userMsgID);
+        }
     } catch (e) {
         unsubs.forEach(fn => fn());
         isStreaming = false;
@@ -5852,26 +5861,26 @@ function shakeLockedToggle(el) {
 }
 
 /**
- * 同步 Agent/Plan 模式切换按钮的 active 状态
+ * 同步 Chat/Agent/Plan 模式切换按钮的 active 状态
  */
 function syncModeToggle() {
     const btns = document.querySelectorAll('#aiModeToggle .ai-mode-btn');
     btns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === (currentPlanMode ? 'plan' : 'agent'));
+        btn.classList.toggle('active', btn.dataset.mode === currentMode);
     });
 }
 
 /**
- * 单独保存当前 plan_mode 到会话配置
+ * 单独保存当前 mode 到会话配置
  */
-async function saveCurrentPlanMode() {
+async function saveCurrentMode() {
     if (!activeSessionId) return;
     try {
         const cfg = await window.go.main.App.LoadSessionConfig(activeSessionId);
-        cfg.plan_mode = currentPlanMode;
+        cfg.mode = currentMode;
         await window.go.main.App.SaveSessionConfig(activeSessionId, cfg);
     } catch (e) {
-        console.error('保存 Plan 模式失败:', e);
+        console.error('保存模式失败:', e);
     }
 }
 

@@ -25,6 +25,7 @@ const (
 	CategoryNetworkError            = "network_error"
 	CategoryUnknown                 = "unknown"
 	CategoryModelNotSupportThinking = "model_not_support_thinking"
+	CategoryThinkingRequired        = "thinking_required"
 	CategoryModelNotSupportTools    = "model_not_support_tools"
 	CategoryResponseFormat          = "response_format"
 )
@@ -45,21 +46,23 @@ var userMessages = map[string]string{
 	CategoryModelNotFound:           "模型不存在或已弃用，请更换模型名称",
 	CategoryContextLength:           "上下文长度超限，请缩短对话历史或笔记内容",
 	CategoryTimeout:                 "请求超时，请检查网络连接或稍后重试",
-	CategoryInvalidRequest:          "请求参数有误，请检查输入内容",
 	CategoryContentFilter:           "内容被安全策略拦截，请调整输入后重试",
 	CategoryNetworkError:            "网络连接失败，请检查网络设置或 API 地址",
 	CategoryModelNotSupportThinking: "当前模型不支持「深度思考」功能，请在输入框上方关闭深度思考开关后重试",
+	CategoryThinkingRequired:        "当前模型必须开启深度思考才能回答，请在输入框上方开启深度思考开关后重试",
 	CategoryModelNotSupportTools:    "当前模型不支持工具调用，无法使用 Agent 模式，请更换支持 tool calling 的模型后重试",
 	CategoryResponseFormat:          "AI 服务返回了无法解析的响应，请检查服务状态或更换模型",
-	CategoryUnknown:                 "AI 调用出错，请稍后重试",
+	// CategoryUnknown / CategoryInvalidRequest 未命中时不再提供兜底文案，
+	// 由 NewAIError 直接回填原始错误信息，便于排查
 }
 
 // NewAIError 创建 AIError
 func NewAIError(category, raw string) *AIError {
 	msg, ok := userMessages[category]
 	if !ok {
-		// 未知分类兜底到通用文案，避免 UserMsg 为空导致前端展示原始错误
-		msg = userMessages[CategoryUnknown]
+		// 未命中已知分类时直接回填原始错误信息，方便排查，
+		// 不提供 "AI 调用出错，请稍后重试" 之类的通用兜底文案
+		msg = raw
 	}
 	return &AIError{
 		Category: category,
@@ -155,7 +158,9 @@ func classifyAPIErrorLike(statusCode int, code any, msg, raw string) *AIError {
 	case 500, 502, 503:
 		return NewAIError(CategoryServerError, raw)
 	case 400:
-		return classifyBadRequest(msg)
+		// code 与 raw（含 body）一并传入，message 可能为空（如 %!s(<nil>)）
+		codeStr, _ := code.(string)
+		return classifyBadRequest(msg, codeStr, raw)
 	default:
 		return NewAIError(CategoryUnknown, raw)
 	}
@@ -168,8 +173,15 @@ func classifyOpenAIRequestError(reqErr *openai.RequestError, raw string) *AIErro
 		switch reqErr.HTTPStatusCode {
 		case 401, 403:
 			return NewAIError(CategoryAuthError, raw)
+		case 402:
+			return NewAIError(CategoryQuotaExceeded, raw)
 		case 429:
 			return NewAIError(CategoryRateLimit, raw)
+		case 400:
+			// Err 可能为 nil（%!s(<nil>)），真实错误在 body（raw）里，需按文本分类
+			return classifyBadRequest("", "", raw)
+		case 404:
+			return NewAIError(CategoryModelNotFound, raw)
 		default:
 			if reqErr.HTTPStatusCode >= 500 {
 				return NewAIError(CategoryServerError, raw)
@@ -184,12 +196,21 @@ func classifyOpenAIRequestError(reqErr *openai.RequestError, raw string) *AIErro
 		}
 	}
 
-	return NewAIError(CategoryNetworkError, raw)
+	// 未命中已知状态码或状态码缺失时，先按错误文本兜底分类（含 body 中的错误码，
+	// 如 REASONING_REQUIRED）；文本也未命中时返回 unknown，UserMsg 回填原始错误信息，
+	// 不猜测为网络错误
+	if classified := classifyByText(raw); classified != nil && classified.Category != CategoryUnknown {
+		return classified
+	}
+
+	return NewAIError(CategoryUnknown, raw)
 }
 
 // classifyBadRequest 分类 400 Bad Request 的具体原因
-func classifyBadRequest(msg string) *AIError {
-	lower := strings.ToLower(msg)
+// msg 为解析出的 message 字段、code 为错误码、raw 为完整错误文本（可能含 body）；
+// 三者合并匹配，避免 message 为空（如 %!s(<nil>)）时漏判。
+func classifyBadRequest(msg, code, raw string) *AIError {
+	lower := strings.ToLower(strings.Join([]string{msg, code, raw}, "\n"))
 	switch {
 	// 内容安全拦截（OpenAI content_filter / 通义、DeepSeek 的 data inspection 等）
 	case strings.Contains(lower, "content_filter") ||
@@ -197,7 +218,7 @@ func classifyBadRequest(msg string) *AIError {
 		strings.Contains(lower, "was filtered") ||
 		strings.Contains(lower, "data inspection") ||
 		strings.Contains(lower, "content safety"):
-		return NewAIError(CategoryContentFilter, msg)
+		return NewAIError(CategoryContentFilter, raw)
 	// 上下文长度超限：token 需与 exceed/too many/limit 等组合，
 	// 避免 "invalid token"、"api token" 等无关错误被误判为上下文超长
 	case strings.Contains(lower, "context_length") ||
@@ -206,19 +227,26 @@ func classifyBadRequest(msg string) *AIError {
 		(strings.Contains(lower, "token") &&
 			(strings.Contains(lower, "exceed") || strings.Contains(lower, "too many") ||
 				strings.Contains(lower, "too long") || strings.Contains(lower, "limit"))):
-		return NewAIError(CategoryContextLength, msg)
+		return NewAIError(CategoryContextLength, raw)
+	// 深度思考必须开启：与"不支持"相反，模型强制要求开启深度思考（REASONING_REQUIRED）
+	case strings.Contains(lower, "reasoning_required") ||
+		strings.Contains(lower, "thinking_required") ||
+		strings.Contains(lower, "必须开启深度思考") ||
+		strings.Contains(lower, "must enable thinking") ||
+		strings.Contains(lower, "must enable reasoning"):
+		return NewAIError(CategoryThinkingRequired, raw)
 	// 深度思考不支持：兼容 OpenAI 的 enable_thinking 参数报错与 Ollama 等
 	// "does not support thinking/reasoning" 类报错
 	case strings.Contains(lower, "enable_thinking") ||
 		(strings.Contains(lower, "thinking") || strings.Contains(lower, "reasoning")) &&
 			(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
-		return NewAIError(CategoryModelNotSupportThinking, msg)
+		return NewAIError(CategoryModelNotSupportThinking, raw)
 	// 工具调用不支持：Ollama 等 "does not support tools" / "tools not supported" 类报错
 	case (strings.Contains(lower, "tool") || strings.Contains(lower, "function calling")) &&
 		(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
-		return NewAIError(CategoryModelNotSupportTools, msg)
+		return NewAIError(CategoryModelNotSupportTools, raw)
 	default:
-		return NewAIError(CategoryInvalidRequest, msg)
+		return NewAIError(CategoryInvalidRequest, raw)
 	}
 }
 
@@ -257,6 +285,13 @@ func classifyByText(raw string) *AIError {
 		strings.Contains(lower, "unexpected end of json") ||
 		strings.Contains(lower, "cannot unmarshal"):
 		return NewAIError(CategoryResponseFormat, raw)
+	// 深度思考必须开启：模型强制要求开启深度思考（REASONING_REQUIRED）
+	case strings.Contains(lower, "reasoning_required") ||
+		strings.Contains(lower, "thinking_required") ||
+		strings.Contains(lower, "必须开启深度思考") ||
+		strings.Contains(lower, "must enable thinking") ||
+		strings.Contains(lower, "must enable reasoning"):
+		return NewAIError(CategoryThinkingRequired, raw)
 	// 兜底检测：深度思考/工具调用不支持（置于 model 分支前，避免被误判为模型不存在）
 	case (strings.Contains(lower, "thinking") || strings.Contains(lower, "reasoning")) &&
 		(strings.Contains(lower, "not support") || strings.Contains(lower, "unsupported")):
