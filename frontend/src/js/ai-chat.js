@@ -2860,6 +2860,14 @@ async function startStreaming(userText, userMsgID) {
                 var actionsEl = streamingEl.querySelector('.ai-msg-actions');
                 if (actionsEl) streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
             }
+
+            // 计划模式执行完毕：自动回退 Agent 模式（停止/出错/取消不回退，保留供重试续跑）
+            if (currentPlanMode) {
+                currentPlanMode = false;
+                syncModeToggle();
+                saveCurrentPlanMode();
+                window.showNotification?.('计划执行完毕，已自动切换回 Agent 模式', 'success');
+            }
         }
 
         scrollToBottom();
