@@ -2413,7 +2413,6 @@ async function startStreaming(userText, userMsgID) {
     let streamingContent = '';
     let streamingThinking = '';
     let hasReceivedChunk = false;
-    let hasReceivedToolStart = false;
     let recallCards = null;
 
     // 新一轮输出开始：收起 Agent 反问面板/计划面板、清除反问等待状态
@@ -2714,14 +2713,6 @@ async function startStreaming(userText, userMsgID) {
         if (!payload || !payload.action) return;
         streamToolRecords.push(payload); // 收集工具调用记录（tool_start / tool_result），供落库 tool_calls
         if (payload.action === 'tool_start') {
-            // 首次收到工具调用时，清空气泡内的中间文本（模型在工具调用前输出的过渡性文字）
-            if (!hasReceivedToolStart) {
-                hasReceivedToolStart = true;
-                Array.from(contentDiv.childNodes).forEach(function (node) {
-                    if (node.nodeType === 1 && node.classList && node.classList.contains('ai-tool-status-list')) return;
-                    contentDiv.removeChild(node);
-                });
-            }
             showToolStatusStart(payload);
         } else if (payload.action === 'tool_result') {
             showToolStatusDone(payload);
