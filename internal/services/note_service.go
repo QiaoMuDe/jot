@@ -104,6 +104,20 @@ func (s *NoteService) GetByID(id uint) (*models.Note, error) {
 	return &note, nil
 }
 
+// FindByTitleAndExt 按标题+后缀+笔记本查找已有笔记，用于导入时判断是否重复
+func (s *NoteService) FindByTitleAndExt(title, fileExt string, notebookID uint) (*models.Note, error) {
+	var note models.Note
+	if err := s.db.Where("title = ? AND file_ext = ? AND notebook_id = ? AND deleted_at IS NULL", title, fileExt, notebookID).
+		First(&note).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		s.logger.Errorw("NoteService.FindByTitleAndExt 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return &note, nil
+}
+
 // GetNoteContent 按 ID 仅获取笔记的完整 content 文本（列表查询只返回截断版本，用于按需加载）
 func (s *NoteService) GetNoteContent(id uint) (string, error) {
 	var content string

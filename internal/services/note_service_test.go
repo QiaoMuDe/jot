@@ -314,3 +314,84 @@ func TestSearchWildcardEscaping(t *testing.T) {
 		t.Errorf("应只返回字面匹配的笔记, got %+v", notes)
 	}
 }
+
+// TestFindByTitleAndExt 验证按标题+后缀+笔记本查找已有笔记的逻辑
+func TestFindByTitleAndExt(t *testing.T) {
+	svc, db := newSearchTestService(t)
+
+	// 创建测试笔记：标题=readme, 后缀=.md, 笔记本=1
+	note := createSearchTestNote(t, db, "readme", "# Hello")
+	if err := db.Model(&note).Update("notebook_id", 1).Error; err != nil {
+		t.Fatalf("设置笔记本失败: %v", err)
+	}
+	if err := db.Model(&note).Update("file_ext", ".md").Error; err != nil {
+		t.Fatalf("设置后缀失败: %v", err)
+	}
+
+	// 创建干扰项：同标题不同后缀
+	干扰 := createSearchTestNote(t, db, "readme", "plain text")
+	if err := db.Model(&干扰).Update("notebook_id", 1).Error; err != nil {
+		t.Fatalf("设置笔记本失败: %v", err)
+	}
+	if err := db.Model(&干扰).Update("file_ext", ".txt").Error; err != nil {
+		t.Fatalf("设置后缀失败: %v", err)
+	}
+
+	// 创建干扰项：同标题同后缀但不同笔记本
+	其他笔记本 := createSearchTestNote(t, db, "readme", "# Other")
+	if err := db.Model(&其他笔记本).Update("notebook_id", 2).Error; err != nil {
+		t.Fatalf("设置笔记本失败: %v", err)
+	}
+	if err := db.Model(&其他笔记本).Update("file_ext", ".md").Error; err != nil {
+		t.Fatalf("设置后缀失败: %v", err)
+	}
+
+	t.Run("有匹配", func(t *testing.T) {
+		result, err := svc.FindByTitleAndExt("readme", ".md", 1)
+		if err != nil {
+			t.Fatalf("FindByTitleAndExt 失败: %v", err)
+		}
+		if result == nil {
+			t.Fatal("应找到匹配笔记，结果为 nil")
+		}
+		if result.ID != note.ID {
+			t.Errorf("匹配到错误的笔记: got ID=%d, want ID=%d", result.ID, note.ID)
+		}
+	})
+
+	t.Run("不同后缀不匹配", func(t *testing.T) {
+		result, err := svc.FindByTitleAndExt("readme", ".txt", 1)
+		if err != nil {
+			t.Fatalf("FindByTitleAndExt 失败: %v", err)
+		}
+		if result == nil {
+			t.Fatal("应找到匹配笔记（.txt），结果为 nil")
+		}
+		if result.ID != 干扰.ID {
+			t.Errorf("匹配到错误的笔记: got ID=%d, want ID=%d", result.ID, 干扰.ID)
+		}
+	})
+
+	t.Run("不同笔记本不匹配", func(t *testing.T) {
+		result, err := svc.FindByTitleAndExt("readme", ".md", 2)
+		if err != nil {
+			t.Fatalf("FindByTitleAndExt 失败: %v", err)
+		}
+		if result == nil {
+			t.Fatal("应找到匹配笔记（笔记本2），结果为 nil")
+		}
+		if result.ID != 其他笔记本.ID {
+			t.Errorf("匹配到错误的笔记: got ID=%d, want ID=%d", result.ID, 其他笔记本.ID)
+		}
+	})
+
+	t.Run("无匹配返回nil", func(t *testing.T) {
+		result, err := svc.FindByTitleAndExt("不存在的标题", ".md", 1)
+		if err != nil {
+			t.Fatalf("FindByTitleAndExt 失败: %v", err)
+		}
+		if result != nil {
+			t.Errorf("不应找到匹配笔记，但返回了 ID=%d", result.ID)
+		}
+	})
+}

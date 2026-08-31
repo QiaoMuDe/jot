@@ -1227,6 +1227,9 @@ function showConfirmDialog(msg, okText = '确定', cancelText = '取消') {
         if (els.confirmOkBtn) els.confirmOkBtn.textContent = okText;
         if (els.confirmCancelBtn) els.confirmCancelBtn.textContent = cancelText;
         els.confirmDialog.classList.add('visible');
+        // 让确认框获取焦点，确保 ESC 事件被确认框的 keydown 处理，而非冒泡到下层弹窗
+        els.confirmDialog.setAttribute('tabindex', '-1');
+        els.confirmDialog.focus();
 
         const cleanup = (result) => {
             els.confirmDialog.classList.remove('visible');
@@ -6586,6 +6589,12 @@ async function handleKeyboardNavigation(e) {
         if (els.confirmDialog && els.confirmDialog.classList.contains('visible')) {
             return;
         }
+        // 导入冲突弹窗打开时：ESC 终止导入并关闭弹窗
+        const conflictOverlay = document.querySelector('.import-conflict-overlay');
+        if (conflictOverlay && conflictOverlay.classList.contains('visible')) {
+            conflictOverlay._onCancel?.();
+            return;
+        }
         // 密码管理：右键菜单/编辑/详情弹层打开时只关闭最上层弹层（不继续执行导航逻辑）
         if (typeof window.pmHandleEscape === 'function' && window.pmHandleEscape()) {
             return;
@@ -8584,6 +8593,7 @@ let _dragCounter = 0;
 let _lastPreviewContent = '';
 /** 预览渲染 Worker 实例 */
 let _previewWorker = null;
+let _importing = false;
 function initFileDrop() {
     const dropOverlay = document.getElementById('dropOverlay');
     let registered = false;
@@ -8612,6 +8622,11 @@ function initFileDrop() {
         }
         if (_dragCounter === 1 && dropOverlay) {
             dropOverlay.classList.add('active');
+            if (_importing) {
+                dropOverlay.classList.add('disabled');
+                const p = dropOverlay.querySelector('p');
+                if (p) p.textContent = '导入进行中，请稍候';
+            }
         }
     });
 
@@ -8637,7 +8652,12 @@ function initFileDrop() {
         _dragCounter--;
         if (_dragCounter <= 0) {
             _dragCounter = 0;
-            if (dropOverlay) dropOverlay.classList.remove('active');
+            if (dropOverlay) {
+                dropOverlay.classList.remove('active');
+                dropOverlay.classList.remove('disabled');
+                const p = dropOverlay.querySelector('p');
+                if (p) p.textContent = '释放以导入文件';
+            }
             // 移除编辑器悬停样式
             const cmEl = document.querySelector('.cm-editor');
             if (cmEl) cmEl.classList.remove('dragover');
@@ -8655,7 +8675,12 @@ function initFileDrop() {
         if (e.target.closest('.ai-chat-content')) return;
 
         _dragCounter = 0;
-        if (dropOverlay) dropOverlay.classList.remove('active');
+        if (dropOverlay) {
+            dropOverlay.classList.remove('active');
+            dropOverlay.classList.remove('disabled');
+            const p = dropOverlay.querySelector('p');
+            if (p) p.textContent = '释放以导入文件';
+        }
         const cmEl = document.querySelector('.cm-editor');
         if (cmEl) cmEl.classList.remove('dragover');
     });
@@ -8668,7 +8693,12 @@ function initFileDrop() {
             console.log('[拖拽] OnFileDrop 触发, paths:', paths);
             // 确保遮罩已隐藏
             _dragCounter = 0;
-            if (dropOverlay) dropOverlay.classList.remove('active');
+            if (dropOverlay) {
+                dropOverlay.classList.remove('active');
+                dropOverlay.classList.remove('disabled');
+                const p = dropOverlay.querySelector('p');
+                if (p) p.textContent = '释放以导入文件';
+            }
             const cmEl = document.querySelector('.cm-editor');
             if (cmEl) cmEl.classList.remove('dragover');
             if (!paths || paths.length === 0) return;
@@ -8780,39 +8810,292 @@ function flashNoteCards(noteIds) {
 }
 
 // 展示导入结果通知（成功/失败详情），并刷新 UI
-function showImportResults(results) {
+function showImportResults(results, onComplete, onDone) {
     let successCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
     const failItems = [];
     const importedNoteIds = [];
+    const conflicts = [];
 
     for (const result of results) {
         const label = result.path ? result.path.split(/[/\\]/).pop() || '文件' : '文件';
-        if (result.success) {
-            successCount++;
-            importedNoteIds.push(result.note_id);
+        if (result.status === 'conflict') {
+            conflicts.push(result);
+        } else if (result.success) {
+            if (result.status === 'updated') {
+                updatedCount++;
+                importedNoteIds.push(result.note_id);
+            } else if (result.status === 'skipped') {
+                skippedCount++;
+            } else {
+                successCount++;
+                importedNoteIds.push(result.note_id);
+            }
         } else {
             failItems.push({ label, error: result.error || '导入失败' });
         }
     }
 
     const failCount = failItems.length;
-    let msg = `导入完成: 成功 ${successCount} 个${failCount > 0 ? `, 失败 ${failCount} 个\n\n详情见应用日志` : ''}`;
+    const conflictCount = conflicts.length;
+    const parts = [];
+    if (successCount > 0) parts.push(`新建 ${successCount} 个`);
+    if (updatedCount > 0) parts.push(`覆盖 ${updatedCount} 个`);
+    if (skippedCount > 0) parts.push(`跳过 ${skippedCount} 个`);
+    if (conflictCount > 0) parts.push(`冲突 ${conflictCount} 个`);
+    if (failCount > 0) parts.push(`失败 ${failCount} 个`);
 
+    if (conflicts.length > 0) {
+        // 有冲突时先弹窗处理冲突，完成后再显示结果通知
+        showImportConflictDialog(conflicts, (result) => {
+            if (result === false) {
+                // 用户取消了冲突弹窗（ESC 或点击遮罩）
+                const cancelParts = [];
+                if (successCount > 0) cancelParts.push(`新建 ${successCount} 个`);
+                if (updatedCount > 0) cancelParts.push(`覆盖 ${updatedCount} 个`);
+                if (conflictCount > 0) cancelParts.push(`冲突 ${conflictCount} 个`);
+                const msg = `导入已取消${cancelParts.length > 0 ? ': ' + cancelParts.join(', ') : ''}`;
+                nm.show(msg, 'warning', 3000);
+                if (successCount > 0 || updatedCount > 0) {
+                    loadNotes().then(() => {
+                        loadNotebooks();
+                        flashNoteCards(importedNoteIds);
+                    });
+                }
+                if (onComplete) onComplete();
+                if (onDone) onDone();
+                return;
+            }
+            // result === null，正常完成 — 统计冲突处理结果
+            for (const r of (result || [])) {
+                if (r.status === 'updated') {
+                    updatedCount++;
+                    importedNoteIds.push(r.note_id);
+                } else if (r.status === 'skipped') {
+                    skippedCount++;
+                }
+            }
+            // 重新组装通知
+            const finalParts = [];
+            if (successCount > 0) finalParts.push(`新建 ${successCount} 个`);
+            if (updatedCount > 0) finalParts.push(`覆盖 ${updatedCount} 个`);
+            if (skippedCount > 0) finalParts.push(`跳过 ${skippedCount} 个`);
+            if (failCount > 0) finalParts.push(`失败 ${failCount} 个`);
+            const msg = `导入完成: ${finalParts.join(', ')}`;
+            nm.show(msg, failCount > 0 ? 'warning' : 'success', failCount > 0 ? 8000 : 3000);
+            if (importedNoteIds.length > 0) {
+                loadNotes().then(() => {
+                    loadNotebooks();
+                    flashNoteCards(importedNoteIds);
+                });
+            }
+            if (onComplete) onComplete();
+            if (onDone) onDone();
+        });
+        return;
+    }
+
+    // 无冲突，直接显示结果
+    let msg = `导入完成: ${parts.join(', ')}`;
     nm.show(msg, failCount > 0 ? 'warning' : 'success', failCount > 0 ? 8000 : 3000);
 
-    if (successCount > 0) {
+    if (successCount > 0 || updatedCount > 0) {
         loadNotes().then(() => {
             loadNotebooks();
             flashNoteCards(importedNoteIds);
         });
     }
+    if (onComplete) onComplete();
+    if (onDone) onDone();
+}
+
+/**
+ * 显示导入冲突解决弹窗
+ * @param {Array} conflicts - 冲突结果列表（含 note_id, title, content, file_ext, file_time, note_time, path）
+ * @param {Function} onComplete - 全部处理完成后的回调，参数为处理结果数组
+ */
+function showImportConflictDialog(conflicts, onComplete) {
+    const resolved = [];
+    let items = [...conflicts];
+
+    // 创建弹窗 DOM
+    const overlay = document.createElement('div');
+    overlay.className = 'import-conflict-overlay';
+    overlay.innerHTML = `
+        <div class="import-conflict-dialog">
+            <div class="import-conflict-header">
+                <h3>发现 ${items.length} 个冲突文件</h3>
+                <div class="import-conflict-actions">
+                    <button class="import-conflict-batch-btn" data-action="overwrite-all" title="用所有导入文件的内容替换对应笔记">全部覆盖</button>
+                    <button class="import-conflict-batch-btn import-conflict-batch-skip" data-action="skip-all" title="跳过所有冲突文件，笔记内容保持不变">全部跳过</button>
+                </div>
+            </div>
+            <div class="import-conflict-list"></div>
+        </div>
+    `;
+
+    const listEl = overlay.querySelector('.import-conflict-list');
+
+    function renderItems() {
+        listEl.innerHTML = '';
+        if (items.length === 0) {
+            // 全部处理完，关闭弹窗并传递处理结果
+            close(false, resolved);
+            return;
+        }
+        for (const item of items) {
+            const fileName = item.path ? item.path.split(/[/\\]/).pop() || '文件' : '文件';
+            const fileDate = new Date(item.file_time * 1000).toLocaleString('zh-CN');
+            const noteDate = new Date(item.note_time * 1000).toLocaleString('zh-CN');
+            const el = document.createElement('div');
+            el.className = 'import-conflict-item';
+            el.innerHTML = `
+                <div class="import-conflict-item-info">
+                    <div class="import-conflict-item-title">
+                        ${(!item.content || item.content.trim() === '') ? '<span class="import-conflict-empty-badge" title="导入文件内容为空，覆盖将清空笔记">空文件</span>' : ''}
+                        ${escapeHtml(item.title)}
+                    </div>
+                    <div class="import-conflict-item-detail">
+                        <span>笔记: ${noteDate}</span>
+                        <span>文件: ${fileDate}</span>
+                    </div>
+                </div>
+                <div class="import-conflict-item-actions">
+                    <button class="import-conflict-btn import-conflict-overwrite" data-action="overwrite" title="用导入文件的内容替换笔记内容">覆盖</button>
+                    <button class="import-conflict-btn import-conflict-skip" data-action="skip" title="跳过此文件，笔记内容保持不变">跳过</button>
+                </div>
+            `;
+            el.querySelector('[data-action="overwrite"]').addEventListener('click', () => handleItem('overwrite', item, el));
+            el.querySelector('[data-action="skip"]').addEventListener('click', () => handleItem('skip', item, el));
+            listEl.appendChild(el);
+        }
+    }
+
+    async function handleItem(action, item, el) {
+        const overwrite = action === 'overwrite';
+        const msg = overwrite
+            ? `确认覆盖笔记「${item.title}」？`
+            : `确认跳过笔记「${item.title}」？`;
+        const ok = await showConfirmDialog(msg, '确定', '取消');
+        if (!ok) return;
+        try {
+            const result = await window.go.main.App.ResolveImportConflict(
+                item.note_id, overwrite, item.title, item.content, item.file_ext
+            );
+            resolved.push(result);
+        } catch (err) {
+            resolved.push({ note_id: item.note_id, success: false, status: 'error', error: err.message });
+        }
+        // 记录剩余条目的当前位置（First）
+        const remaining = [...listEl.querySelectorAll('.import-conflict-item')].filter(e => e !== el);
+        const oldPositions = new Map();
+        remaining.forEach(e => oldPositions.set(e, e.getBoundingClientRect()));
+
+        // 折叠移除条目
+        items = items.filter(i => i !== item);
+        el.style.maxHeight = el.offsetHeight + 'px';
+        el.classList.add('collapsing');
+
+        await new Promise(resolve => {
+            el.addEventListener('transitionend', resolve, { once: true });
+            // fallback 防止 transitionend 不触发
+            setTimeout(resolve, 300);
+        });
+        el.remove();
+
+        if (items.length === 0) {
+            close(false, resolved);
+            return;
+        }
+
+        // FLIP 动画：重建 DOM 后平滑移动剩余条目
+        renderItems();
+        const newItems = [...listEl.querySelectorAll('.import-conflict-item')];
+        newItems.forEach(el => {
+            const oldPos = oldPositions.get(el);
+            if (!oldPos) return;
+            const newPos = el.getBoundingClientRect();
+            const dy = oldPos.top - newPos.top;
+            if (Math.abs(dy) < 1) return;
+            el.style.transform = `translateY(${dy}px)`;
+            el.style.transition = 'none';
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    el.style.transition = 'transform 0.25s ease';
+                    el.style.transform = '';
+                });
+            });
+        });
+    }
+
+    async function handleBatch(action) {
+        const overwrite = action === 'overwrite';
+        const msg = overwrite
+            ? `确认覆盖全部 ${items.length} 个笔记？`
+            : `确认跳过全部 ${items.length} 个笔记？`;
+        const ok = await showConfirmDialog(msg, '确定', '取消');
+        if (!ok) return;
+        const batchItems = [...items];
+        for (const item of batchItems) {
+            try {
+                const result = await window.go.main.App.ResolveImportConflict(
+                    item.note_id, overwrite, item.title, item.content, item.file_ext
+                );
+                resolved.push(result);
+            } catch (err) {
+                resolved.push({ note_id: item.note_id, success: false, status: 'error', error: err.message });
+            }
+        }
+        items = [];
+        renderItems();
+    }
+
+    function close(cancelled = false, result = null) {
+        overlay.classList.remove('visible');
+        setTimeout(() => {
+            overlay.remove();
+            if (onComplete) onComplete(cancelled ? false : result);
+        }, 200);
+    }
+
+    // 挂载取消回调供全局 ESC 调用
+    overlay._onCancel = () => close(true);
+
+    // 绑定批量按钮
+    overlay.querySelector('[data-action="overwrite-all"]').addEventListener('click', () => handleBatch('overwrite'));
+    overlay.querySelector('[data-action="skip-all"]').addEventListener('click', () => handleBatch('skip'));
+
+    // 点击遮罩关闭（视为取消）
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close(true);
+    });
+
+    // ESC 关闭（视为取消）
+    overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close(true);
+    });
+
+    // 挂载并显示
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+    });
+
+    renderItems();
 }
 
 async function handleFileDropPaths(paths, notebookId) {
     if (!paths || paths.length === 0) return;
+    if (_importing) {
+        nm.show('导入进行中，请稍候', 'warning');
+        return;
+    }
+    _importing = true;
 
     if (!window.go || !window.go.main || !window.go.main.App || !window.go.main.App.ImportFiles) {
         nm.show('文件导入功能暂不可用', 'error');
+        _importing = false;
         return;
     }
 
@@ -8838,22 +9121,27 @@ async function handleFileDropPaths(paths, notebookId) {
 
     try {
         const results = await window.go.main.App.ImportFiles(paths, notebookId);
-        if (!results || results.length === 0) return;
+        if (!results || results.length === 0) {
+            _importing = false;
+            return;
+        }
 
+        const doneFn = () => { _importing = false; };
         if (done) {
             // 等保底延迟完成后再展示通知和刷新 UI
             const elapsed = Date.now() - startTime;
             setTimeout(() => {
-                showImportResults(results);
+                showImportResults(results, null, doneFn);
             }, Math.max(0, 500 - elapsed));
             return;
         }
 
         // 兜底：事件未收到时，直接处理结果
-        showImportResults(results);
+        showImportResults(results, null, doneFn);
     } catch (err) {
         console.error('批量导入失败:', err);
         nm.show('文件导入失败：' + (err.message || '未知错误'), 'error');
+        _importing = false;
     } finally {
         unsub();
     }

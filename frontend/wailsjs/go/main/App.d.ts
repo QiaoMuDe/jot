@@ -228,6 +228,8 @@ export function ReplaceAISessionMessages(arg1:number,arg2:Array<services.Message
 
 export function ResetDatabase():Promise<void>;
 
+export function ResolveImportConflict(arg1:number,arg2:boolean,arg3:string,arg4:string,arg5:string):Promise<main.FileImportResult>;
+
 export function RestoreAllNotes():Promise<void>;
 
 export function RestoreAllTrashNotebooks():Promise<void>;

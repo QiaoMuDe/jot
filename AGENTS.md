@@ -551,24 +551,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：密码生成器（后端随机密码生成 + zxcvbn 强度检测 + 对话框 UI + ESC 拦截）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在密码管理页面新增「生成密码」按钮，打开独立对话框支持配置密码长度/数量/字符类型/排除易混淆字符，批量生成随机密码并逐条/批量复制。密码生成与强度检测已全部迁移到后端（Wails 绑定），前端仅负责收集选项与渲染结果。后续修复了两个 UI 问题：结果区展开导致对话框整体跳动、详情页强度文字与标签未对齐。 |
-| **密码生成实现（后端）** | [internal/services/password_generator.go](internal/services/password_generator.go) `GeneratePasswords(opts)`：基于 `crypto/rand` 密码学安全随机，字符池按四类（upper/lower/digits/symbols）选项拼接，`ExcludeAmbiguous` 时过滤易混淆字符 `lI1O0`，批量生成并逐条调用 `CheckPasswordStrength` 返回强度。Wails 绑定为 `App.GeneratePasswords`（[app.go](app.go)）；前端 [frontend/src/js/password-manager.js](frontend/src/js/password-manager.js) `pmDoGenerate()` 直接调用绑定并渲染结果列表（原前端 `pmGeneratePassword` 已删除）。 |
-| **强度算法（zxcvbn + 类型上限）** | 后端 `CheckPasswordStrength` 基于 `zxcvbn`（`github.com/trustelem/zxcvbn`）的猜测次数评分（0-4），叠加字符类型上限修正：纯字符类型（仅数字/仅字母等）最高 2（fair），2 种类型最高 3（good），3/4 种类型不限。**历史**：早期前端曾用熵值法（V1/V2）与"评级上限+长度阶梯+模式惩罚"（V3）方案，后整体替换为 zxcvbn 并迁至后端；详情/编辑对话框的实时强度检测同样走后端 `App.CheckPasswordStrength`。 |
-| **对话框 UI 结构** | [frontend/index.html](frontend/index.html) `#pmGenOverlay`：全屏遮罩 + 居中 `.pm-gen-dialog`（覆盖父级 `pmDialogIn` 动画避免缩放抖动）。内部卡片分组：密码长度（步进器±1 + 进度条）、生成数量（步进器±1，范围 1-20）、字符类型（2×2 切换按钮网格 + 排除易混淆复选框）、结果区域（复制全部按钮 + 逐条密码列表含强度圆点+复制按钮）。 |
-| **结果区展开动画（最终方案：opacity+transform，禁用 max-height 过渡）** | `#pmGenResultsWrap` 默认收起（`opacity: 0; transform: translateY(6px)`），加 `.open` 类后 `opacity: 1; transform: translateY(0)`，0.22s 淡入上移展开；**禁用 max-height 过渡**——max-height 做展开动画时对话框高度突变会整体跳动/闪烁（第一版 `max-height: 0→330px` 展开已废弃）。**嵌套滚动容器截断教训**：`.pm-dialog`（`overflow: hidden`）+ `.pm-gen-body`（`flex:1` + `overflow-y:auto`，flex 子项高度被剩余空间钳制）+ `.pm-gen-results`（`max-height`）三层叠加时，内层列表最后一条会被裁掉一半（内层不滚动、外层无法滚动）。最终 `.pm-gen-results` 固定 `max-height: 260px` + `overflow-y: auto`（超过 ~6 条内部滚动、每条完整显示），**该 max-height 不可移除**，否则结果列表无限变高撑爆对话框。HTML 移除内联 `display:none` 由 CSS 统一控制。`pmDoGenerate()` 将清空旧列表移到 `await` 之后（与渲染同帧），重新生成时旧结果保留到新结果就绪，消除列表塌陷造成的二次跳动。 |
-| **详情页强度行对齐（近期修复）** | 查看详情页强度文字是嵌套在 `.pm-detail-value`（继承 13.44px/line-height 1.6）里的 `.pm-pwd-strength-text`（12px/1.7），父容器行高支柱高于标签（12px/1.7），导致同样 12px 的文字被压低约 1px。修复：`#pmDetailPwdStrength { font-size: 12px; line-height: 1.7; }` 使值容器行盒与标签一致，文字基线自然对齐。 |
-| **按钮交互规范** | 所有操作按钮统一 `:active` 回弹效果（`scale(0.95)` + `transition-duration: 0.08s`），包括生成密码按钮、复制全部、单条复制、步进器±按钮。生成密码按钮图标与文字同行（`display: inline-flex; align-items: center; gap: 6px`），非全宽。 |
-| **滚动条问题修复** | 对话框 `.pm-gen-body` 和 `.pm-gen-results` 的滚动条需要显式声明完整样式（`scrollbar-width` + `scrollbar-color` + `::-webkit-scrollbar` 四件套），否则在对话框层级内不显示。不能仅依赖全局 `scrollbar.css`，因为对话框的 `overflow` 上下文会隔离滚动条样式。 |
-| **ESC 关闭拦截** | 生成器对话框的 ESC 关闭逻辑注册在全局 `pmHandleEscape` 中（遵循 AGENTS.md 规范：ESC 统一在全局处理），优先级在详情对话框之后：先判断 `pmDetailOverlay` → 再判断 `pmGenOverlay`。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（生成密码按钮 + 对话框 HTML）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（`pmDoGenerate`/`openPmGenDialog`/`closePmGenDialog`/`pmHandleEscape` 扩展/`pmGenStepper` 事件/强度渲染 `pmRenderStrengthBar`/`pmRenderStrengthText`）、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)（对话框样式/步进器/切换按钮/结果列表/强度圆点/滚动条/`#pmGenResultsWrap` 过渡/`#pmDetailPwdStrength` 对齐）、[internal/services/password_generator.go](internal/services/password_generator.go)（生成与强度算法）、[app.go](app.go)（`GeneratePasswords`/`CheckPasswordStrength` Wails 绑定） |
-
----
-
-## 记忆点 2：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
+## 记忆点 1：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +564,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 2：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 3：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 4：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -623,7 +606,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 5：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +621,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 6：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,7 +637,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 7：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +652,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 8：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +667,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 9：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +677,23 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **主题三处同步（重要）** | 系统主题配色实际分散在 **3 处**，维护必须同步（详见"十二、维护规范"第 9 条）：① [variables.css](frontend/src/css/variables.css) `[data-theme="..."]` 块（最终样式，唯一权威色值）；② [index.html](frontend/index.html) 头部内联 `criticalColors`（CSS 加载前的首帧背景，防闪烁）；③ [main.go](main.go) `themeBG()`（Wails 窗口背景色）。 |
 | **本次清理内容** | ① `one-dark-pro`（已从主题注册表移除）：删除 [index.html](frontend/index.html) 内联 `criticalColors` 残留键 + [main.go](main.go) `themeBG` 残留 `case "one-dark-pro"` 分支；② default 色值统一：CSS default 为 `--bg:#F2EDE3 / --topbar-bg:#FCF9F2`，而 Go 窗口色（`#F7F5F0`）与内联首帧（`#F7F5F0/#FFFFFF`）不一致 → 全部统一为 `#F2EDE3 / #FCF9F2`，消除启动瞬间窗口底色→页面背景的色差闪烁。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（`#aiModeTipPortal` + 内联 `criticalColors`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`initModeTips`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-mode-tip-portal`/`.ai-mode-tip`）、[main.go](main.go)（`themeBG`） |
+
+---
+
+## 记忆点 10：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为文件导入功能增加重复检测与覆盖机制，解决"同一文件反复导入产生重复笔记"问题。导入前按标题+后缀+笔记本查找已有笔记，根据文件修改时间与笔记更新时间对比自动覆盖或弹窗让用户选择。同时增加批量内同名文件去重（自动追加编号后缀）、导入期间拖入禁用、冲突弹窗交互优化等。 |
+| **重复检测逻辑（后端）** | [note_service.go](internal/services/note_service.go) `FindByTitleAndExt(title, fileExt, notebookID)` 按三条件精确查询已有笔记（排除已删除）。[app.go](app.go) `processImportFile` 新增 `titleOverride` 参数：导入前先查找匹配笔记，获取文件 `info.ModTime()` 与笔记 `UpdatedAt` 对比——文件更新则自动覆盖（status: `updated`），笔记更新则返回冲突（status: `conflict`，附带 Content/FileExt/FileTime/NoteTime），时间相同则跳过（status: `skipped`）。无匹配则创建新笔记（status: `created`）。`FileImportResult` 扩展 `Status`/`FileTime`/`NoteTime`/`Content`/`FileExt` 字段。 |
+| **冲突解决（后端）** | `ResolveImportConflict(noteID, overwrite, title, content, fileExt)` 处理用户选择：`overwrite=true` 调用 `Update` 覆盖笔记，`false` 标记跳过。`Update` 方法直接操作 DB（不 preload Tags）。 |
+| **批量内同名去重（后端）** | `ImportFiles` 入口处按 `title+ext` 去重（办公文件统一 `.md`），首次出现正常处理，重复出现自动追加编号后缀（`readme` → `readme (2)` → `readme (3)`），通过 `titleOverride` 传入 goroutine，全部导入不跳过。 |
+| **冲突弹窗（前端）** | [main.js](frontend/src/main.js) `showImportConflictDialog` 创建 `.import-conflict-overlay`（z-index 10000），支持逐个覆盖/跳过和全部覆盖/全部跳过。**FLIP 动画**：单条操作时先折叠移除（opacity+height 250ms），再用 `requestAnimationFrame` 双层帧驱动剩余条目平滑上移（250ms ease）。空文件条目标题左侧显示红色 `[空文件]` 小标签（`title` 悬停显示完整提示）。所有操作按钮点击后弹出二次确认框（z-index 10001），确认框 `focus()` 捕获键盘。 |
+| **ESC 层级关闭** | 全局 `handleKeyboardNavigation` 中：确认框打开时 ESC 只关确认框（`stopPropagation`）；冲突弹窗打开时 ESC 关闭弹窗并显示"导入已取消"；点击遮罩空白处同 ESC 行为；导入完成后（所有条目处理完）弹窗自动关闭显示"导入完成"。 |
+| **导入期间禁用（前端）** | 模块级 `_importing` 标志：`handleFileDropPaths` 入口置 true，所有完成路径（正常/冲突/取消/异常）清除。导入中拖入文件：遮罩变灰（`.disabled` 类）+ 文字改为"导入进行中，请稍候"，释放时弹通知不触发导入。Wails 绑定不可用时 guard 失败也清除标志防泄漏。 |
+| **冲突计数修复** | 后端冲突项 `Success` 改为 `false`（原为 `true` 导致统计不准确）；前端对 `status === 'conflict'` 单独计数显示"冲突 N 个"。`close()` 传递 `resolved` 数组而非 `null`，确保全部跳过/全部覆盖后正确显示统计。 |
+| **ESC 确认框层级教训** | 初版确认框与冲突弹窗无 `stopPropagation`，ESC 事件冒泡导致同时关闭两层。修复：确认框 `focus()` + `keydown` 中 `e.stopPropagation()`，全局处理函数用 `.confirm-dialog-overlay` 判断优先级。 |
+| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`FindByTitleAndExt`）、[app.go](app.go)（`processImportFile` 重构 + `ResolveImportConflict` + `FileImportResult` 扩展 + 批量去重）、[frontend/src/main.js](frontend/src/main.js)（`showImportConflictDialog`/`showImportResults` 改造 + `_importing` 锁 + `OnFileDrop`/`handleFileDropPaths` 防重入 + FLIP 动画）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.import-conflict-overlay`/`.conflict-item`/`.empty-file-badge`/`.drop-overlay.disabled` 样式）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`FindByTitleAndExt` 测试） |
 
 ---
 

@@ -1732,6 +1732,9 @@ func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 		}(i, p)
 	}
 
+	// 发射导入开始事件
+	runtime.EventsEmit(a.ctx, "import:progress", "start", len(paths))
+
 	wg.Wait()
 
 	// 统计结果并发射完成事件
@@ -3521,11 +3524,16 @@ func (a *App) GetBackupInfo() (map[string]string, error) {
 
 // FileImportResult 单个文件导入结果
 type FileImportResult struct {
-	Path    string `json:"path"`
-	Title   string `json:"title"`
-	NoteID  uint   `json:"note_id"`
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
+	Path     string `json:"path"`
+	Title    string `json:"title"`
+	NoteID   uint   `json:"note_id"`
+	Success  bool   `json:"success"`
+	Error    string `json:"error"`
+	Status   string `json:"status"`    // "created" / "updated" / "conflict" / "skipped"
+	FileTime int64  `json:"file_time"` // 导入文件修改时间戳（冲突时传给前端展示）
+	NoteTime int64  `json:"note_time"` // 笔记更新时间戳（冲突时传给前端展示）
+	Content  string `json:"content"`   // 文件内容（冲突时传给前端，用于 ResolveImportConflict 回传）
+	FileExt  string `json:"file_ext"`  // 文件后缀（冲突时传给前端，用于 ResolveImportConflict 回传）
 }
 
 // AIChatFileResult AI 聊天上传文件的处理结果
@@ -3557,18 +3565,37 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	// 发射导入开始事件
-	runtime.EventsEmit(a.ctx, "import:progress", "start", len(paths))
-
+	// 批量内按标题+后缀去重，重复的文件自动追加编号后缀（如 "readme (2)"）
+	seen := make(map[string]int) // key → 已出现次数
 	for i, p := range paths {
+		name := filepath.Base(p)
+		ext := filepath.Ext(name)
+		title := strings.TrimSuffix(name, ext)
+		if title == "" {
+			title = "untitled"
+		}
+		if ext == "" {
+			ext = ".txt"
+		}
+		// 办公文件最终后缀为 .md，提前统一 key
+		if converter.IsOfficeFile(p) {
+			ext = ".md"
+		}
+		key := title + ext
+		dedupTitle := title
+		if count := seen[key]; count > 0 {
+			dedupTitle = fmt.Sprintf("%s (%d)", title, count+1)
+		}
+		seen[key]++
+
 		wg.Add(1)
-		go func(idx int, path string) {
+		go func(idx int, path string, tOverride string) {
 			defer wg.Done()
-			result := a.processImportFile(path, maxSize, notebookID)
+			result := a.processImportFile(path, maxSize, notebookID, tOverride)
 			mu.Lock()
 			results[idx] = result
 			mu.Unlock()
-		}(i, p)
+		}(i, p, dedupTitle)
 	}
 
 	wg.Wait()
@@ -3589,7 +3616,7 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 }
 
 // processImportFile 处理单个文件的导入逻辑。
-func (a *App) processImportFile(path string, maxSize int64, notebookID uint) FileImportResult {
+func (a *App) processImportFile(path string, maxSize int64, notebookID uint, titleOverride string) FileImportResult {
 	result := FileImportResult{Path: path}
 
 	// 1. 检查路径
@@ -3619,6 +3646,9 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint) Fil
 	name := filepath.Base(path)
 	ext := filepath.Ext(name)
 	title := strings.TrimSuffix(name, ext)
+	if titleOverride != "" {
+		title = titleOverride
+	}
 	if title == "" {
 		title = "untitled"
 	}
@@ -3671,7 +3701,62 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint) Fil
 		content = string(data)
 	}
 
-	// 5. 创建笔记（归入指定笔记本）
+	// 5. 查找已有匹配笔记（按标题+后缀+笔记本）
+	fileModTime := info.ModTime()
+	existingNote, err := a.noteService.FindByTitleAndExt(title, fileExt, notebookID)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("processImportFile: 查询已有笔记失败", fastlog.String("path", path), fastlog.Error(err))
+		result.Error = "查询已有笔记失败: " + err.Error()
+		return result
+	}
+
+	if existingNote != nil {
+		// 找到匹配笔记，进行时间对比
+		noteTime := existingNote.UpdatedAt
+		fileTimeUnix := fileModTime.Unix()
+		noteTimeUnix := noteTime.Unix()
+
+		switch {
+		case fileTimeUnix > noteTimeUnix:
+			// 文件更新 → 直接覆盖
+			updated, err := a.noteService.Update(existingNote.ID, title, content, fileExt)
+			if err != nil {
+				a.LogSvc.Logger.Errorw("processImportFile: 覆盖笔记失败", fastlog.String("path", path), fastlog.Error(err))
+				result.Error = "覆盖笔记失败: " + err.Error()
+				return result
+			}
+			a.LogSvc.Logger.Infow("processImportFile: 覆盖已有笔记", fastlog.String("path", path), fastlog.String("title", title), fastlog.Uint("noteID", updated.ID))
+			result.Title = title
+			result.NoteID = updated.ID
+			result.Success = true
+			result.Status = "updated"
+			return result
+
+		case noteTimeUnix > fileTimeUnix:
+			// 笔记更新 → 返回冲突，等待用户决策
+			a.LogSvc.Logger.Infow("processImportFile: 笔记比文件新，返回冲突", fastlog.String("path", path), fastlog.String("title", title))
+			result.Title = title
+			result.NoteID = existingNote.ID
+			result.Success = false
+			result.Status = "conflict"
+			result.FileTime = fileTimeUnix
+			result.NoteTime = noteTimeUnix
+			result.Content = content
+			result.FileExt = fileExt
+			return result
+
+		default:
+			// 时间相同 → 跳过
+			a.LogSvc.Logger.Infow("processImportFile: 时间相同，跳过", fastlog.String("path", path), fastlog.String("title", title))
+			result.Title = title
+			result.NoteID = existingNote.ID
+			result.Success = true
+			result.Status = "skipped"
+			return result
+		}
+	}
+
+	// 6. 无匹配笔记，创建新笔记（归入指定笔记本）
 	note, err := a.noteService.CreateWithNotebook(title, content, fileExt, notebookID)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("processImportFile: 创建笔记失败", fastlog.String("path", path), fastlog.String("title", title), fastlog.Error(err))
@@ -3684,6 +3769,33 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint) Fil
 	result.Title = title
 	result.NoteID = note.ID
 	result.Success = true
+	result.Status = "created"
+	return result
+}
+
+// ResolveImportConflict 解决导入冲突：overwrite=true 时用新内容覆盖笔记，false 时跳过
+func (a *App) ResolveImportConflict(noteID uint, overwrite bool, title, content, fileExt string) FileImportResult {
+	result := FileImportResult{NoteID: noteID, Success: true}
+
+	if !overwrite {
+		// 用户选择保留笔记，跳过导入
+		a.LogSvc.Logger.Infow("ResolveImportConflict: 用户保留笔记", fastlog.Uint("noteID", noteID))
+		result.Status = "skipped"
+		return result
+	}
+
+	// 用户选择覆盖，更新笔记内容
+	note, err := a.noteService.Update(noteID, title, content, fileExt)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ResolveImportConflict: 覆盖笔记失败", fastlog.Uint("noteID", noteID), fastlog.Error(err))
+		result.Error = "覆盖笔记失败: " + err.Error()
+		result.Success = false
+		return result
+	}
+
+	a.LogSvc.Logger.Infow("ResolveImportConflict: 覆盖笔记成功", fastlog.Uint("noteID", noteID), fastlog.String("title", title))
+	result.Title = note.Title
+	result.Status = "updated"
 	return result
 }
 

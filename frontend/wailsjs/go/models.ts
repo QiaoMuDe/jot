@@ -103,6 +103,11 @@ export namespace main {
 	    note_id: number;
 	    success: boolean;
 	    error: string;
+	    status: string;
+	    file_time: number;
+	    note_time: number;
+	    content: string;
+	    file_ext: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileImportResult(source);
@@ -115,6 +120,11 @@ export namespace main {
 	        this.note_id = source["note_id"];
 	        this.success = source["success"];
 	        this.error = source["error"];
+	        this.status = source["status"];
+	        this.file_time = source["file_time"];
+	        this.note_time = source["note_time"];
+	        this.content = source["content"];
+	        this.file_ext = source["file_ext"];
 	    }
 	}
 	export class SaveAIMessageResult {
