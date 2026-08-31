@@ -514,26 +514,14 @@
 
 
 
-/* ── Agent 工具调用过程状态条（展示在 AI 气泡正文上方） ── */
+/* ── Agent 工具调用折叠摘要明细列表（位于 .ai-tool-summary-body 内，与流式/回放共用） ──
+   统一由折叠摘要条承载：无 max-height 内部滚动、无分隔虚线（原实时链 live/exiting 样式已移除） */
 .ai-tool-status-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
     padding: 4px 0 6px 0;
     margin-bottom: 4px;
-    border-bottom: 1px dashed var(--border);
-}
-
-/* 实时工具链（流式过程）：上限高度滚动，防止超长工具链撑爆气泡；完成态摘要不受影响。
-   淡出过渡：stream-done 折叠为底部摘要时 opacity 渐变（JS 添加 .exiting 触发） */
-.ai-tool-status-list-live {
-    max-height: 220px;
-    overflow-y: auto;
-    transition: opacity 0.18s ease;
-}
-
-.ai-tool-status-list-live.exiting {
-    opacity: 0;
 }
 
 /* 单次调用耗时：右对齐灰字等宽数字 */
@@ -623,13 +611,21 @@
     }
 }
 
-/* ── Agent 工具调用折叠摘要（完成后归入正文下方证据区，样式与来源/卡片面板一致） ── */
+/* ── Agent 工具调用折叠摘要条（流式实时展示与历史回放统一，固定于 AI 气泡正文上方） ── */
 .ai-tool-summary {
     margin: 6px 0 4px 0;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--bg-secondary);
     overflow: hidden;
+}
+
+/* 执行中（任一工具进行中，is-working 由 JS 维护）：header 图标脉冲 + 文本强调 */
+.ai-tool-summary.is-working .ai-tool-summary-header-icon {
+    animation: ai-icon-pulse 1.2s ease-in-out infinite;
+}
+.ai-tool-summary.is-working .ai-tool-summary-header-text {
+    color: var(--text-primary);
 }
 
 .ai-tool-summary-header {
@@ -699,7 +695,7 @@
     opacity: 0;
 }
 .ai-tool-summary.open .ai-tool-summary-body {
-    max-height: 2000px;
+    /* max-height 由 JS 控制（展开 none / 折叠 0，自然撑开无截断），CSS 仅控制透明度 */
     opacity: 1;
 }
 

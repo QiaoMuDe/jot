@@ -551,20 +551,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：密码列表分页（滚动懒加载 + 复用笔记 page_size + 4 个分页 Bug 修复 + 进入页面滚动到顶部）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 密码列表由全量加载改为滚动懒加载分页，分页大小复用笔记首页 `page_size` 设置。后端 `List`/`Search` 加分页参数返回 `PaginatedResult`；前端滚动距底 200px 自动加载下一页，搜索切换关键词自动重置到第 1 页。 |
-| **后端分页** | [password_service.go](internal/services/password_service.go) `List(page, pageSize)` / `Search(keyword, page, pageSize)` 改为先 `Count()` 再 `Offset().Limit()` 查询，返回 `*services.PaginatedResult`（复用 [types.go](internal/services/types.go) 既有类型）；[app.go](app.go) `ListPasswordRecords(page, pageSize)` / `SearchPasswordRecords(keyword, page, pageSize)` Wails 绑定签名同步更新。列表与搜索共用同一分页路径，仅多 LIKE 过滤。 |
-| **前端分页状态机** | [password-manager.js](frontend/src/js/password-manager.js)：分页状态 `pmCurrentPage/pmTotal/pmHasMore/pmLoadingMore`；`loadMorePmRecords()` 在 `.pm-list-wrap` 滚动距底部 200px 时触发，入口 `if (pmLoadingMore \|\| !pmHasMore) return` 防重入；`renderPmList({append:true})` 追加模式渲染（跳过入场动画、不重置滚动位置）；搜索重置 `pmCurrentPage = 1` 从头加载；`pmPageSize` 读取笔记首页 `page_size` 设置。加载指示器 `#pmLoadingIndicator`（[index.html](frontend/index.html)）+ spinner 样式（[password-manager.css](frontend/src/css/components/password-manager.css)）。 |
-| **4 个分页 Bug 修复** | ① `pmLoadingEl.style.display = pmHasMore ? 'none' : 'none'` 死代码（两分支相同）→ 统一 `'none'`；②③ `loadMorePmRecords` 缺少 `pmLoadSeq` 代际防护 → 请求前快照 `seq`，完成后 `if (seq !== pmLoadSeq) return` 丢弃过期响应，同时顺带解决"快速搜索时进行中的 loadMore 结果 concat 进新列表"竞态；④ `validIds` 只过滤当前页 → 全量重载时直接 `pmSelectedIds.clear()`（旧选中项可能不在新列表当前页，防批量选中残留）。 |
-| **进入页面滚动到顶部** | 每次进入密码管理页面时 `.pm-list-wrap` 置 `scrollTop = 0` 再加载数据，避免上次浏览位置残留。 |
-| **涉及文件** | [internal/services/password_service.go](internal/services/password_service.go)、[app.go](app.go)、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)、[frontend/index.html](frontend/index.html)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css) |
-
----
-
-## 记忆点 2：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
+## 记忆点 1：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -578,7 +565,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 2：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 3：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -606,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 4：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -621,7 +608,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 5：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -637,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 6：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -652,7 +639,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 7：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,7 +654,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 8：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,7 +667,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 9：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +681,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **冲突计数修复** | 后端冲突项 `Success` 改为 `false`（原为 `true` 导致统计不准确）；前端对 `status === 'conflict'` 单独计数显示"冲突 N 个"。`close()` 传递 `resolved` 数组而非 `null`，确保全部跳过/全部覆盖后正确显示统计。 |
 | **ESC 确认框层级教训** | 初版确认框与冲突弹窗无 `stopPropagation`，ESC 事件冒泡导致同时关闭两层。修复：确认框 `focus()` + `keydown` 中 `e.stopPropagation()`，全局处理函数用 `.confirm-dialog-overlay` 判断优先级。 |
 | **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`FindByTitleAndExt`）、[app.go](app.go)（`processImportFile` 重构 + `ResolveImportConflict` + `FileImportResult` 扩展 + 批量去重）、[frontend/src/main.js](frontend/src/main.js)（`showImportConflictDialog`/`showImportResults` 改造 + `_importing` 锁 + `OnFileDrop`/`handleFileDropPaths` 防重入 + FLIP 动画）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.import-conflict-overlay`/`.conflict-item`/`.empty-file-badge`/`.drop-overlay.disabled` 样式）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`FindByTitleAndExt` 测试） |
+
+---
+
+## 记忆点 10：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手 Agent 模式工具调用展示重构：流式实时与历史回放统一为**折叠摘要条**（`.ai-tool-summary`），彻底删除"逐行状态条 + 350ms 延迟淡出"状态机，从根上消除"工具条闪烁/记录丢失"竞态；召回卡片面板归位到工具面板下方（正文上方）；确认计划（plan）**不落库、不历史回放**，仅前端流式悬浮面板临时展示，并清理对应前端死代码。 |
+| **折叠摘要条行为规则（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js)：① 首次调用工具**默认折叠**（`showToolStatusStart` 不自动展开），header 显示"正在调用工具…"（`.is-working` 图标脉冲）；② 用户手动展开后**中途不自动收起**——正文 chunk、决策文本均不打断观察状态；③ 流结束（`ai:stream-done`）统一收起（移除 `.open` + 重置内联 `maxHeight: 0`），与历史回放折叠形态一致；④ 展开状态由 JS 内联 `maxHeight: 'none'/'0'` 控制，CSS 仅负责 opacity 过渡，无内部滚动。 |
+| **工具行名与统计（重要）** | 工具行名统一「工具名 ×N」（`toolNameSeq` 同名计数，与历史回放一致）；header 完成后显示"已调用 N 次 · M 个工具"+ 失败/部分徽标（`_liveToolStats` 实时统计）。摘要条懒创建（`ensureToolSummary`）于正文上方（thinking 之下），header 点击切换 `.open` + `aria-expanded`。 |
+| **正文/工具切换清理机制（重要）** | `tool_start` 时调用 `clearStreamedText()` 清除模型决策输出的中间文本（最终正文单独累积）；`clearStreamedText()` 中**重置 `hasReceivedChunk = false`**——这是修复"正文开始不收起摘要"的关键：决策文本曾提前置位 `hasReceivedChunk`，导致工具执行后的最终正文首 chunk 跳过收起逻辑。重置后最终正文首 chunk 重新走完整流程（清空占位/停思考计时/检查并收起摘要）。 |
+| **召回面板归位（重要）** | `renderRecallCards` 内部优先插入 `.ai-tool-summary` 之后（正文上方，与工具调用同属"过程证据区"），无工具面板时 append 末尾；历史回放 `addMessage` 先 `renderToolCalls` 再 `renderRecallCards`（顺序依赖，工具面板须先存在）。流式路径同步简化（删除"插到操作栏之前"旧逻辑），消除流式/历史召回面板位置不一致。 |
+| **计划卡片不落库决策（重要）** | 计划（plan）**不落库、不历史回放**，仅前端执行时输入框上方悬浮面板（`showPlanPanel`/`createPlanCard`）临时展示。数据链路现状：`models.AIMessage` 与 `services.Message` 均无 Plan 字段（保存/查询均不回传）。同步清理前端死代码：`renderPlanCard` 函数、`addMessage` 的 `plan` 形参及 JSDoc、历史加载两处调用实参 `msg.plan`；`createPlanCard` 因被悬浮面板复用而保留。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`ensureToolSummary`/`updateToolSummaryHeader`/`showToolStatus*`/`clearStreamedText`/`handleStreamChunk`/`renderToolCalls`/`renderRecallCards`/`unsubToolStatus`/`unsubDone`/`addMessage` 清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 `.ai-tool-status-list-live`/`.exiting`/分隔虚线，新增 `.is-working` 脉冲与折叠高度控制） |
 
 ---
 

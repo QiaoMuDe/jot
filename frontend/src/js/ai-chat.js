@@ -1652,7 +1652,7 @@ async function switchSession(id) {
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     }
                 } else if (msg.role === 'assistant') {
-                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined, msg.plan);
+                    const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined);
                     el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                     bindMsgContextMenu(el, msg.content, 'assistant');
                 }
@@ -1703,7 +1703,7 @@ async function switchSession(id) {
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
                         }
                     } else if (msg.role === 'assistant') {
-                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined, msg.plan);
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined);
                         el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
                         bindMsgContextMenu(el, msg.content, 'assistant');
                     }
@@ -2502,36 +2502,9 @@ async function startStreaming(userText, userMsgID) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
             // 首个正文 chunk 到达 → 思考结束, 停止计时并更新摘要
+            //（正文段不触发收起工具摘要：折叠状态仅由用户手动控制，流结束时统一收起）
             if (streamingThinking && _thinkingStartedAt > 0) {
                 stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
-            }
-            // Agent 模式：ReAct 循环中工具调用均发生在正文输出前，首个正文 token 即已全部终态；
-            // 实时工具条在此淡出移除（工具阶段 → 正文输出阶段的自然过渡），
-            // stream-done 时工具摘要随召回面板同一时刻插入，避免摘要"迟到"突兀
-            if (isAgentFlow && toolStatusListEl && toolStatusListEl.parentNode) {
-                // 清除所有工具的实时计时器
-                Object.keys(toolStatusItems).forEach(function(k) {
-                    if (toolStatusItems[k] && toolStatusItems[k].timerId) {
-                        clearInterval(toolStatusItems[k].timerId);
-                        toolStatusItems[k].timerId = null;
-                    }
-                });
-                var liveList = toolStatusListEl;
-                liveList.classList.add('exiting');
-                var liveRemoved = false;
-                var removeLiveList = function() {
-                    if (liveRemoved) return;
-                    liveRemoved = true;
-                    liveList.removeEventListener('transitionend', onLiveExitDone);
-                    if (liveList.parentNode) liveList.parentNode.removeChild(liveList);
-                    if (toolStatusListEl === liveList) toolStatusListEl = null; // 允许 ask_user 续答时重建
-                };
-                var onLiveExitDone = function(e) {
-                    if (e && e.target !== liveList) return;
-                    removeLiveList();
-                };
-                liveList.addEventListener('transitionend', onLiveExitDone, { once: true });
-                setTimeout(removeLiveList, 250); // 兜底：过渡未触发时强制移除
             }
         }
         // 缓冲 chunk，定时批量渲染（50ms 间隔，减少全量 Markdown 解析 + DOM 替换次数）
@@ -2554,29 +2527,95 @@ async function startStreaming(userText, userMsgID) {
     unsubs.push(unsubChunk);
 
     // ── Agent 模式工具调用过程展示（ai:tool-status） ──
-    // 工具状态条渲染在消息气泡正文（contentDiv）上方，样式与搜索/召回指示器保持一致观感
-    let toolStatusListEl = null;   // 工具状态容器
+    // 统一折叠摘要条渲染在消息气泡正文（contentDiv）上方：初始折叠、不自动展开（手动展开保持观察），
+    // 流结束时统一收起，与历史回放（renderToolCalls）复用同一 .ai-tool-summary 组件与位置，无淡出/重建
+    let toolSummaryEl = null;      // 折叠摘要条容器（.ai-tool-summary）
     let toolStatusItems = {};      // { [name]: {el, iconEl, nameEl, textEl, timeEl, startTime} } — 每个工具一行，重复调用同记录覆盖累加
     let toolNameSeq = {};          // { [name]: 已调用次数 } — 同名重复调用自增序号（「第N次调用」前缀）
+    let _liveToolStats = { total: 0, names: {}, fail: 0, partial: 0 }; // 流式统计：更新 header 文本/徽标
     let streamToolRecords = [];    // 本轮流的工具调用记录（落库 tool_calls，历史回放）
 
-    /** 创建工具状态容器（懒创建，插入到正文 contentDiv 上方） */
-    const ensureToolStatusList = () => {
-        if (toolStatusListEl) return toolStatusListEl;
-        toolStatusListEl = document.createElement('div');
-        toolStatusListEl.className = 'ai-tool-status-list ai-tool-status-list-live';
-        streamingEl.insertBefore(toolStatusListEl, contentDiv);
-        return toolStatusListEl;
+    /** 创建折叠摘要条（懒创建，插入到正文 contentDiv 上方），header 点击展开/收起明细 */
+    const ensureToolSummary = () => {
+        if (toolSummaryEl) return toolSummaryEl;
+        const summary = document.createElement('div');
+        summary.className = 'ai-tool-summary';
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'ai-tool-summary-header';
+        header.setAttribute('aria-expanded', 'false');
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'ai-tool-summary-header-icon';
+        iconSpan.innerHTML = svgIcon('wrench');
+        const textSpan = document.createElement('span');
+        textSpan.className = 'ai-tool-summary-header-text';
+        textSpan.textContent = '正在调用工具…';
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'ai-tool-summary-header-arrow';
+        arrowSpan.innerHTML = CHEVRON_RIGHT_ICON;
+        header.appendChild(iconSpan);
+        header.appendChild(textSpan);
+        header.appendChild(arrowSpan);
+        const body = document.createElement('div');
+        body.className = 'ai-tool-summary-body';
+        const list = document.createElement('div');
+        list.className = 'ai-tool-status-list';
+        body.appendChild(list);
+        summary.appendChild(header);
+        summary.appendChild(body);
+        header.addEventListener('click', function() {
+            const isOpen = summary.classList.toggle('open');
+            header.setAttribute('aria-expanded', isOpen);
+            // 自然撑开：展开时取消高度上限，折叠时收起（无内部滚动、无截断）
+            body.style.maxHeight = isOpen ? 'none' : '0';
+        });
+        streamingEl.insertBefore(summary, contentDiv);
+        toolSummaryEl = summary;
+        return summary;
     };
 
-    /** 展示工具调用开始状态（tool_start）— 每个工具仅一行：首次显示「工具名：动作」，
-        重复调用在同一记录上覆盖累加，改为「第N次调用 工具名：动作」 */
+    /** 更新折叠摘要条 header 文本/徽标（执行中 vs 完成统计） */
+    const updateToolSummaryHeader = () => {
+        if (!toolSummaryEl) return;
+        const header = toolSummaryEl.querySelector('.ai-tool-summary-header');
+        const textSpan = header.querySelector('.ai-tool-summary-header-text');
+        const arrowSpan = header.querySelector('.ai-tool-summary-header-arrow');
+        // 移除旧状态徽标后按最新统计重建
+        header.querySelectorAll('.ai-tool-summary-status').forEach(function(b) { b.remove(); });
+        const anyActive = Object.keys(toolStatusItems).some(function(k) {
+            return toolStatusItems[k] && toolStatusItems[k].el && toolStatusItems[k].el.classList.contains('is-active');
+        });
+        toolSummaryEl.classList.toggle('is-working', anyActive);
+        if (anyActive) {
+            textSpan.textContent = '正在调用工具…';
+            return;
+        }
+        const distinct = Object.keys(_liveToolStats.names).length;
+        textSpan.textContent = '已调用 ' + _liveToolStats.total + ' 次 · ' + distinct + ' 个工具';
+        if (_liveToolStats.fail > 0) {
+            const failBadge = document.createElement('span');
+            failBadge.className = 'ai-tool-summary-status is-error';
+            failBadge.textContent = _liveToolStats.fail + ' 失败';
+            header.insertBefore(failBadge, arrowSpan);
+        }
+        if (_liveToolStats.partial > 0) {
+            const partialBadge = document.createElement('span');
+            partialBadge.className = 'ai-tool-summary-status is-warning';
+            partialBadge.textContent = _liveToolStats.partial + ' 来源不可用';
+            header.insertBefore(partialBadge, arrowSpan);
+        }
+    };
+
+    /** 展示工具调用开始状态（tool_start）— 摘要条明细中每个工具仅一行，
+        重复调用在同一记录上覆盖累加，行名「工具名 ×N」与历史回放一致 */
     const showToolStatusStart = (payload) => {
         const name = payload.name || 'tool';
         const seq = (toolNameSeq[name] || 0) + 1;
         toolNameSeq[name] = seq;
         const action = payload.action_text || '执行';
-        const list = ensureToolStatusList();
+        const summary = ensureToolSummary();
+        // 默认收起：工具开始调用时摘要条保持折叠，明细由用户手动点击 header 展开查看
+        const list = summary.querySelector('.ai-tool-summary-body .ai-tool-status-list');
         let item = toolStatusItems[name];
         if (!item) {
             item = { el: null, iconEl: null, nameEl: null, textEl: null, timeEl: null, startTime: 0 };
@@ -2599,8 +2638,8 @@ async function startStreaming(userText, userMsgID) {
             list.appendChild(item.el);
             toolStatusItems[name] = item;
         }
-        // 首次调用不显示序号；从第 2 次起显示「第N次调用」，结果在后续事件覆盖累加
-        item.nameEl.textContent = (seq > 1 ? '第' + seq + '次调用 ' : '') + getToolLabel(name);
+        // 行名与历史回放一致：「工具名 ×N」
+        item.nameEl.textContent = getToolLabel(name) + ' ×' + seq;
         item.textEl.textContent = '：' + action;
         // 同名工具重复调用时，清除旧的实时计时器
         if (toolStatusItems[name] && toolStatusItems[name].timerId) {
@@ -2617,7 +2656,10 @@ async function startStreaming(userText, userMsgID) {
                 item.timeEl.textContent = ((Date.now() - item.startTime) / 1000).toFixed(1) + 's';
             }
         }, 200);
-        list.scrollTop = list.scrollHeight; // 超长链自动滚到最新行
+        // 流式统计：调用次数与工具种类
+        _liveToolStats.total++;
+        _liveToolStats.names[name] = true;
+        updateToolSummaryHeader();
         scrollToBottom();
     };
 
@@ -2640,6 +2682,7 @@ async function startStreaming(userText, userMsgID) {
         item.iconEl.innerHTML = svgIcon('check');
         item.textEl.textContent = '：已完成';
         setToolElapsed(item);
+        updateToolSummaryHeader();
         scrollToBottom();
     };
 
@@ -2651,7 +2694,8 @@ async function startStreaming(userText, userMsgID) {
             // 防御：无活动行时按序号新建一行（结构与 start 行一致）
             const seq = (toolNameSeq[name] || 0) + 1;
             toolNameSeq[name] = seq;
-            const list = ensureToolStatusList();
+            const summary = ensureToolSummary();
+            const list = summary.querySelector('.ai-tool-summary-body .ai-tool-status-list');
             item = { el: null, iconEl: null, nameEl: null, textEl: null, timeEl: null, startTime: Date.now() };
             item.el = document.createElement('div');
             item.el.className = 'ai-tool-status-item';
@@ -2660,7 +2704,7 @@ async function startStreaming(userText, userMsgID) {
             item.iconEl.className = 'ai-tool-status-icon';
             item.nameEl = document.createElement('span');
             item.nameEl.className = 'ai-tool-status-name';
-            item.nameEl.textContent = (seq > 1 ? '第' + seq + '次调用 ' : '') + getToolLabel(name);
+            item.nameEl.textContent = getToolLabel(name) + ' ×' + seq;
             item.textEl = document.createElement('span');
             item.textEl.className = 'ai-tool-status-text';
             item.timeEl = document.createElement('span');
@@ -2682,6 +2726,8 @@ async function startStreaming(userText, userMsgID) {
         item.iconEl.innerHTML = svgIcon('x');
         item.textEl.textContent = fullLabel;
         setToolElapsed(item);
+        _liveToolStats.fail++; // 流式统计：失败次数
+        updateToolSummaryHeader();
         scrollToBottom();
     };
 
@@ -2700,7 +2746,30 @@ async function startStreaming(userText, userMsgID) {
         item.iconEl.innerHTML = svgIcon('alert');
         item.textEl.textContent = fullLabel;
         setToolElapsed(item);
+        _liveToolStats.partial++; // 流式统计：部分失败次数
+        updateToolSummaryHeader();
         scrollToBottom();
+    };
+
+    /**
+     * 清除已累积的模型流式正文（含待渲染缓冲与节流定时器）。
+     * 方案：模型在中间轮（决策调用工具前）输出的文本属于"过程性回复"，在工具真正开始执行
+     * （tool_start）时清除，使最终正文轮单独累积，气泡最终只显示正文，与后端落库内容一致。
+     */
+    const clearStreamedText = () => {
+        streamingContent = '';
+        _pendingStreamChunks = '';
+        if (_streamRenderTimer) {
+            clearTimeout(_streamRenderTimer);
+            _streamRenderTimer = null;
+        }
+        // 重置首 chunk 标记：中间轮的决策文本可能已触发过 handleStreamChunk 的首 chunk 逻辑
+        //（hasReceivedChunk 已被置 true），清除后须复位，使工具执行后最终正文的首 chunk
+        // 重新触发"清空占位 / 停思考计时"等逻辑
+        hasReceivedChunk = false;
+        if (contentDiv) {
+            contentDiv.innerHTML = '';
+        }
     };
 
     const unsubToolStatus = window.runtime.EventsOn('ai:tool-status', (streamGen, data) => {
@@ -2713,6 +2782,7 @@ async function startStreaming(userText, userMsgID) {
         if (!payload || !payload.action) return;
         streamToolRecords.push(payload); // 收集工具调用记录（tool_start / tool_result），供落库 tool_calls
         if (payload.action === 'tool_start') {
+            clearStreamedText(); // 清除模型本轮决策输出的中间文本，最终正文单独累积
             showToolStatusStart(payload);
         } else if (payload.action === 'tool_result') {
             showToolStatusDone(payload);
@@ -2841,6 +2911,12 @@ async function startStreaming(userText, userMsgID) {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
+        // 流结束：若工具折叠摘要仍展开（用户手动展开），统一收起，与历史回放折叠形态一致
+        if (toolSummaryEl && toolSummaryEl.classList.contains('open')) {
+            toolSummaryEl.classList.remove('open');
+            const summaryBody = toolSummaryEl.querySelector('.ai-tool-summary-body');
+            if (summaryBody) summaryBody.style.maxHeight = '0';
+        }
         // 清理流式渲染节流定时器，flush 残留 chunk 到 streamingContent（供后续引用）
         if (_streamRenderTimer) {
             clearTimeout(_streamRenderTimer);
@@ -2928,23 +3004,14 @@ async function startStreaming(userText, userMsgID) {
                 }
             }
 
-            // 展示卡片召回折叠面板
+            // 展示卡片召回折叠面板（renderRecallCards 内部置于工具面板 .ai-tool-summary 下方）
             if (recallCards && recallCards.length > 0) {
-                var actionsEl = streamingEl.querySelector('.ai-msg-actions');
-                if (actionsEl) {
-                    renderRecallCards(streamingEl, recallCards);
-                    streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
-                } else {
-                    renderRecallCards(streamingEl, recallCards);
-                }
+                renderRecallCards(streamingEl, recallCards);
             }
 
-            // 工具调用链：与召回面板同一时刻渲染（实时工具条已在正文开始时淡出）；
-            // 兜底：若实时条仍挂载（如无正文输出），此处直接移除
-            if (streamToolRecords.length > 0) {
-                if (toolStatusListEl && toolStatusListEl.parentNode) {
-                    toolStatusListEl.parentNode.removeChild(toolStatusListEl);
-                }
+            // 工具调用链：流式过程已由折叠摘要条展示（toolSummaryEl 存在），无需重建；
+            // 兜底：若流式 tool_status 事件异常缺失导致未创建，此处补渲染
+            if (streamToolRecords.length > 0 && !toolSummaryEl) {
                 renderToolCalls(streamingEl, streamToolRecords);
                 var actionsEl = streamingEl.querySelector('.ai-msg-actions');
                 if (actionsEl) streamingEl.insertBefore(streamingEl.lastChild, actionsEl);
@@ -3345,9 +3412,8 @@ function rerenderUserMessageChips(msgId, newMeta) {
  * @param {boolean} [skipScroll] - 跳过滚动与入场动画
  * @param {boolean} [deferHighlight] - 延迟高亮
  * @param {string} [meta] - 用户消息的 Meta JSON 字符串（仅 user 分支使用）
- * @param {string|object} [plan] - 执行计划（JSON 字符串或对象）
  */
-function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta, plan) {
+function addMessage(content, role, reasoningContent, thinkingElapsed, totalElapsed, tokens, msgId, recallCards, toolCalls, skipScroll = false, deferHighlight = false, meta) {
     const el = document.createElement('div');
     el.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-assistant');
     // 仅流式消息播放入场动画，切换历史会话时跳过
@@ -3405,19 +3471,15 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         try { toolCalls = JSON.parse(toolCalls); } catch (_) { toolCalls = null; }
     }
 
-    // 渲染召回卡片折叠面板
-    if (role === 'assistant' && recallCards && recallCards.length > 0) {
-        renderRecallCards(el, recallCards);
-    }
-
     // 渲染 Agent 工具调用链折叠面板（历史消息回放，复用工具状态样式）
+    // 先于召回面板渲染：召回面板由 renderRecallCards 内部插到工具面板（.ai-tool-summary）下方
     if (role === 'assistant' && toolCalls && toolCalls.length > 0) {
         renderToolCalls(el, toolCalls);
     }
 
-    // 渲染执行计划卡片（历史消息回放）
-    if (role === 'assistant' && plan) {
-        renderPlanCard(el, plan);
+    // 渲染召回卡片折叠面板（置于工具调用面板下方，正文上方）
+    if (role === 'assistant' && recallCards && recallCards.length > 0) {
+        renderRecallCards(el, recallCards);
     }
 
     messagesInnerEl.appendChild(el);
@@ -4066,7 +4128,14 @@ function renderRecallCards(el, cards) {
 
     panel.appendChild(header);
     panel.appendChild(body);
-    el.appendChild(panel);
+    // 召回面板置于工具调用面板（.ai-tool-summary）下方（正文上方），
+    // 与工具调用同属"过程证据区"；无工具面板时追加到气泡末尾，保持原行为
+    var toolSummary = el.querySelector('.ai-tool-summary');
+    if (toolSummary && toolSummary.nextSibling) {
+        el.insertBefore(panel, toolSummary.nextSibling);
+    } else {
+        el.appendChild(panel);
+    }
 
     header.addEventListener('click', function() {
         var isOpen = panel.classList.toggle('open');
@@ -4443,13 +4512,21 @@ function renderToolCalls(el, toolCalls) {
     summary.appendChild(header);
     summary.appendChild(body);
 
-    // 与卡片面板一致：点击 header 切换面板 .open（aria-expanded 同步）
+    // 与卡片面板一致：点击 header 切换面板 .open（aria-expanded 同步）；
+    // 明细自然撑开：展开时取消高度上限（max-height: none），折叠时收起（无内部滚动、无截断）
     header.addEventListener('click', function() {
         var isOpen = summary.classList.toggle('open');
         header.setAttribute('aria-expanded', isOpen);
+        body.style.maxHeight = isOpen ? 'none' : '0';
     });
 
-    el.appendChild(summary);
+    // 固定于正文上方（thinking 之下），与流式折叠摘要条位置一致，所见即所存
+    var contentAnchor = el.querySelector('.msg-content');
+    if (contentAnchor) {
+        el.insertBefore(summary, contentAnchor);
+    } else {
+        el.appendChild(summary);
+    }
 }
 
 /* ── Agent 执行计划卡片（ai:plan-created / ai:plan-updated 实时渲染 + 历史回放） ── */
@@ -4538,26 +4615,6 @@ function updatePlanCard(card, plan) {
     requestAnimationFrame(function() {
         list.style.maxHeight = list.scrollHeight + 'px';
     });
-}
-
-/**
- * 渲染计划卡片到气泡内（历史回放用）。
- * @param {HTMLElement} el - 消息气泡容器
- * @param {string|object} planData - JSON 字符串或对象
- */
-function renderPlanCard(el, planData) {
-    if (typeof planData === 'string') {
-        try { planData = JSON.parse(planData); } catch (_) { return; }
-    }
-    if (!planData || !planData.goal || !Array.isArray(planData.steps)) return;
-    var card = createPlanCard(planData);
-    // 插入到消息正文之前（与实时流中的位置一致）
-    var contentEl = el.querySelector('.msg-content');
-    if (contentEl) {
-        el.insertBefore(card, contentEl);
-    } else {
-        el.appendChild(card);
-    }
 }
 
 /**
