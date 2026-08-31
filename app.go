@@ -2342,7 +2342,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				// 保存 assistant 消息（耗时与深度思考链一起落库）
 				assistantMsg := services.Message{
 					Role:             "assistant",
-					Content:          content,
+					Content:          strings.TrimSpace(content),
 					ReasoningContent: reasoningBuf.String(),
 					ThinkingElapsed:  elapsedThinking,
 					TotalElapsed:     elapsedTotal,
@@ -2905,7 +2905,8 @@ func (a *App) UpdateLastUserMessageTokens(sessionID uint, tokens int) error {
 // SaveAIMessageAsNote 将 AI 消息内容保存为笔记（归入默认笔记本）
 func (a *App) SaveAIMessageAsNote(content string) (*models.Note, error) {
 	a.LogSvc.Logger.Debugw("SaveAIMessageAsNote")
-	if strings.TrimSpace(content) == "" {
+	content = strings.TrimSpace(content)
+	if content == "" {
 		err := fmt.Errorf("内容不能为空")
 		a.LogSvc.Logger.Errorw("SaveAIMessageAsNote 失败", fastlog.Error(err))
 		return nil, err

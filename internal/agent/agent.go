@@ -834,7 +834,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	}
 
 	// 7. 汇总结果：内容 + 工具收集的结构化来源/卡片 + 工具调用链 + 真实 token usage
-	result.Content = finalContent
+	result.Content = strings.TrimSpace(finalContent)
 	result.PromptTokens = promptTokensTotal
 	result.CompletionTokens = completionTokensTotal
 	if len(toolCtx.Collector.Sources) > 0 {
