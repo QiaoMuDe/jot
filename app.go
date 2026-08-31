@@ -2281,8 +2281,6 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 
 	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环
 	go func() {
-		var reasoningBuf strings.Builder
-
 		// 组装系统消息：基础问答上下文（不注入任何工具使用规范，Chat 模式纯单次问答）
 		systemMsg := a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles)
 
@@ -2320,10 +2318,9 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				runtime.EventsEmit(a.ctx, "ai:stream-chunk", streamGen, chunk)
 			},
 			func(chunk string) {
-				reasoningBuf.WriteString(chunk)
 				runtime.EventsEmit(a.ctx, "ai:stream-thinking", streamGen, chunk)
 			},
-			func(content string, elapsedThinking, elapsedTotal float64) {
+			func(content, reasoningContent string, elapsedThinking, elapsedTotal float64) {
 				// 用户取消导致的结束：补发完成事件（assistantMsgID=0 前端按取消处理）
 				if ctx.Err() != nil {
 					if a.handleAICancelled(ctx, sessionID, userMsgID, messages, streamGen) {
@@ -2337,8 +2334,8 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				// 系统提示词（每次请求都会重发，计入真实输入成本，气泡显示更贴近实际）
 				userTokens := estimateUserTokens(messages) + estimateTokens(systemMsg)
 				assistantTokens := estimateTokens(content)
-				if thinkingEnabled && reasoningBuf.Len() > 0 {
-					assistantTokens += estimateTokens(reasoningBuf.String())
+				if thinkingEnabled && reasoningContent != "" {
+					assistantTokens += estimateTokens(reasoningContent)
 				}
 				totalTokens := userTokens + assistantTokens
 
@@ -2346,7 +2343,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 				assistantMsg := services.Message{
 					Role:             "assistant",
 					Content:          strings.TrimSpace(content),
-					ReasoningContent: reasoningBuf.String(),
+					ReasoningContent: reasoningContent,
 					ThinkingElapsed:  elapsedThinking,
 					TotalElapsed:     elapsedTotal,
 					Tokens:           assistantTokens,
@@ -2597,7 +2594,7 @@ func (a *App) AITextOperationStream(streamGen int, text string, operation string
 				runtime.EventsEmit(a.ctx, "ai:aiop-chunk", streamGen, chunk)
 			},
 			func(string) {}, // OnThinking 忽略（写作操作不需要思维链）
-			func(content string, _, _ float64) {
+			func(content string, _ string, _, _ float64) {
 				runtime.EventsEmit(a.ctx, "ai:aiop-done", streamGen, content)
 			},
 			func(errMsg string) {

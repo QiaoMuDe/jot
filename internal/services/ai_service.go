@@ -359,7 +359,7 @@ func (a *AIService) CallAI(ctx context.Context, messages []Message) (string, err
 // CallAIStream 流式调用 AI 接口
 // 通过 onChunk/onThinking/onDone/onError 回调逐块推送内容
 // onThinking 用于深度思考模型的 reasoning_content 字段
-func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, float64, float64), onError func(string)) {
+func (a *AIService) CallAIStream(ctx context.Context, messages []Message, thinkingEnabled bool, onChunk func(string), onThinking func(string), onDone func(string, string, float64, float64), onError func(string)) {
 	cfg := a.GetConfig()
 
 	client := einocli.NewClient(einocli.Config{

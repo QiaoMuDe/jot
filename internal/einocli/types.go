@@ -12,7 +12,7 @@ type Message struct {
 type StreamCallbacks struct {
 	OnChunk    func(text string)
 	OnThinking func(text string)
-	OnDone     func(fullContent string, thinkingElapsed float64, totalElapsed float64)
+	OnDone     func(fullContent string, reasoningContent string, thinkingElapsed float64, totalElapsed float64)
 	OnError    func(errMsg string)
 }
 
