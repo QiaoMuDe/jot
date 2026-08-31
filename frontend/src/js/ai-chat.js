@@ -2413,6 +2413,7 @@ async function startStreaming(userText, userMsgID) {
     let streamingContent = '';
     let streamingThinking = '';
     let hasReceivedChunk = false;
+    let hasReceivedToolStart = false;
     let recallCards = null;
 
     // 新一轮输出开始：收起 Agent 反问面板/计划面板、清除反问等待状态
@@ -2713,6 +2714,14 @@ async function startStreaming(userText, userMsgID) {
         if (!payload || !payload.action) return;
         streamToolRecords.push(payload); // 收集工具调用记录（tool_start / tool_result），供落库 tool_calls
         if (payload.action === 'tool_start') {
+            // 首次收到工具调用时，清空气泡内的中间文本（模型在工具调用前输出的过渡性文字）
+            if (!hasReceivedToolStart) {
+                hasReceivedToolStart = true;
+                Array.from(contentDiv.childNodes).forEach(function (node) {
+                    if (node.nodeType === 1 && node.classList && node.classList.contains('ai-tool-status-list')) return;
+                    contentDiv.removeChild(node);
+                });
+            }
             showToolStatusStart(payload);
         } else if (payload.action === 'tool_result') {
             showToolStatusDone(payload);
@@ -2727,19 +2736,32 @@ async function startStreaming(userText, userMsgID) {
     // ── Plan-and-Exec 预规划状态（ai:plan-generating） ──
     // Plan 模式下，后端在单独调用 LLM 生成计划期间发射此事件，
     // 前端将打字动画替换为"正在制定执行计划..."状态文案，计划生成完成后由 ai:plan-created 覆盖。
-    const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen) => {
+    // 重试时 payload 携带重试信息（如"第 2 次尝试"），更新文案显示进度。
+    const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen, payload) => {
         if (streamGen !== myGen) return;
         if (!hasReceivedChunk) {
-            contentDiv.innerHTML = '';
-            const wrap = document.createElement('div');
-            wrap.className = 'ai-msg-plan-generating';
-            const spinner = document.createElement('span');
-            spinner.className = 'plan-gen-spinner';
-            wrap.appendChild(spinner);
-            const text = document.createElement('span');
-            text.textContent = '正在制定执行计划...';
-            wrap.appendChild(text);
-            contentDiv.appendChild(wrap);
+            let wrap = contentDiv.querySelector('.ai-msg-plan-generating');
+            if (!wrap) {
+                // 首次：清空打字动画，创建 spinner + 文案
+                contentDiv.innerHTML = '';
+                wrap = document.createElement('div');
+                wrap.className = 'ai-msg-plan-generating';
+                const spinner = document.createElement('span');
+                spinner.className = 'plan-gen-spinner';
+                wrap.appendChild(spinner);
+                const text = document.createElement('span');
+                text.className = 'plan-gen-text';
+                text.textContent = '正在制定执行计划...';
+                wrap.appendChild(text);
+                contentDiv.appendChild(wrap);
+            }
+            // 更新文案：重试时追加进度信息
+            const textEl = wrap.querySelector('.plan-gen-text');
+            if (textEl) {
+                textEl.textContent = payload
+                    ? '正在制定执行计划...（' + payload + '）'
+                    : '正在制定执行计划...';
+            }
         }
     });
     unsubs.push(unsubPlanGenerating);

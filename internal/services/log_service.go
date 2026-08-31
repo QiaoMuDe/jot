@@ -43,7 +43,8 @@ func (s *LogService) Init(logDir string, level fastlog.Level) error {
 	// 基于 Prod() 配置
 	cfg := fastlog.Prod(logPath)
 	// cfg := fastlog.Dev(logPath)
-	cfg.Level = level // 使用传入的级别
+	cfg.Level = level        // 使用传入的级别
+	cfg.MaxSize = 512 * 1024 // 512KB 日志文件最大大小
 
 	s.Logger = fastlog.New(cfg)
 	return nil

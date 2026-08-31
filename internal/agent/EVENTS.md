@@ -16,7 +16,7 @@
 | `ai:stream-error` | 流错误 | `error` JSON、token 估算 | 展示错误态 |
 | `ai:tool-status` | 工具调用各阶段 | `tools.Record` JSON（`tool_start`/`tool_result`/`tool_error`/`tool_partial`） | 状态条 + 历史明细 |
 | `ai:ask-user` | 模型发起反问 | `{question, options, selection}` JSON | 弹出反问面板并阻塞等待 |
-| `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 | 空字符串 | 替换打字动画为状态文案 |
+| `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 / 重试时 | 空字符串（首次）或重试信息（如"第 2 次尝试"） | 显示/更新计划生成状态文案 |
 | `ai:plan-created` | `create_plan` 调用成功 / 预规划完成 | `{goal, steps}` JSON | 弹出计划面板 |
 | `ai:plan-updated` | `update_plan` 调用成功 / 结果兜底 | `{step_id, status, result, steps}` JSON | 刷新计划面板 |
 | `ai:agent-result` | Agent 结果汇总 | `RecallCards`、`ToolCalls`、`Plan`、`ReasoningContent` | 随 `stream-done` 落库渲染 |
@@ -72,10 +72,11 @@
 
 ### 5.0 `ai:plan-generating`（Plan-and-Exec 预规划状态）
 
-Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generatePlan()`（单独 LLM 调用生成执行计划）前发射此事件，通知前端预规划阶段开始。负载为空字符串。
+Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generatePlan()`（单独 LLM 调用生成执行计划）前发射此事件，通知前端预规划阶段开始。首次负载为空字符串。
 
 - 前端收到后将打字动画（`createTypingDots`）替换为"正在制定执行计划…"状态文案（`.ai-msg-plan-generating`）。
-- `generatePlan()` 完成后由 `ai:plan-created` 事件接替渲染计划面板；失败时由 `ai:stream-error` 接替展示错误。
+- **重试机制**：`generatePlan()` 内部在解析/校验失败时自动重试（最多 3 次），每次重试时再次发射此事件，payload 携带重试信息（如 `"第 2 次尝试"`），前端据此更新状态文案显示进度。
+- `generatePlan()` 完成后由 `ai:plan-created` 事件接替渲染计划面板；所有重试均失败时由 `ai:stream-error` 接替展示错误。
 - Agent 模式下不发射此事件。
 
 ### 5.1 `ai:plan-created`

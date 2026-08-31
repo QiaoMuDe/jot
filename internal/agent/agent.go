@@ -29,7 +29,6 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -44,6 +43,9 @@ import (
 
 // DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用）。
 const DefaultMaxIterations = 20
+
+// maxPlanRetries 计划生成阶段最大重试次数（解析/校验失败时自动重试）。
+const maxPlanRetries = 3
 
 // MaxCachedSessions 会话级 Agent 实例缓存上限（LRU 淘汰），防止注册表无限增长。
 const MaxCachedSessions = 32
@@ -271,11 +273,16 @@ const planGenSystemPrompt = `你是任务规划助手。根据用户请求制定
 可用工具列表：
 {{.Tools}}
 
-请直接调用 create_plan 工具制定计划，不要输出其他内容。`
+输出格式：严格输出一个 JSON 对象，不要输出任何其他内容、不要用 markdown 代码块包裹。
+JSON schema：
+{"goal":"计划目标（一句话）","steps":[{"description":"步骤描述","tool_name":"可选的工具名"}]}
 
-// generatePlan 在 Plan 模式下预生成执行计划：用精简提示词 + create_plan 工具的
-// function calling 强制模型输出结构化计划，设置 PlanState 并发射 ai:plan-created 事件。
-// 失败时返回错误，由 Run() 中断整个任务并通知用户。
+示例：
+{"goal":"搜索笔记并回答问题","steps":[{"description":"搜索本地笔记中相关内容","tool_name":"recall_notes"},{"description":"综合搜索结果回答用户"}]}`
+
+// generatePlan 在 Plan 模式下预生成执行计划：用精简提示词让模型直接输出结构化 JSON 计划，
+// 解析校验后设置 PlanState 并发射 ai:plan-created 事件。
+// 失败时自动重试（最多 maxPlanRetries 次），通过 ai:plan-generating 事件通知前端进度。
 // toolMetas 是可用工具的元信息列表（名称和描述），用于生成工具描述字符串注入系统提示词。
 func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatModel,
 	req Request, toolCtx *tools.Context, toolMetas []tools.ToolMeta) error {
@@ -329,69 +336,101 @@ func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatM
 		msgs = append(msgs, schema.UserMessage(req.UserText))
 	}
 
-	// 获取 create_plan 工具的 ToolInfo
-	cpTool := tools.NewCreatePlan(toolCtx)
-	cpToolInfo, err := cpTool.Info(ctx)
-	if err != nil {
-		return fmt.Errorf("获取 create_plan 工具信息失败: %w", err)
-	}
-
-	// 用 WithTools 创建仅绑定 create_plan 的新模型（不修改原 chatModel 缓存）
-	planModel, err := chatModel.WithTools([]*schema.ToolInfo{cpToolInfo})
-	if err != nil {
-		return fmt.Errorf("绑定计划工具失败: %w", err)
-	}
-
-	// 非流式调用，通过 ToolChoiceForced 强制模型必须调用 create_plan
-	msg, err := planModel.Generate(ctx, msgs, model.WithToolChoice(schema.ToolChoiceForced))
-	if err != nil {
-		return fmt.Errorf("计划生成 LLM 调用失败: %w", err)
-	}
-	if msg == nil {
-		return errors.New("计划生成 LLM 返回空响应")
-	}
-
-	// 从 ToolCalls 中提取 create_plan 调用
-	if len(msg.ToolCalls) == 0 {
-		return errors.New("模型未调用 create_plan 工具，请检查模型是否支持 function calling")
-	}
-	tc := msg.ToolCalls[0]
-	if tc.Function.Name != "create_plan" {
-		return fmt.Errorf("模型调用了意外的工具 %q，期望 create_plan", tc.Function.Name)
-	}
-
-	// 解析参数并构造 Plan
-	plan, err := tools.ParseCreatePlanArgs(tc.Function.Arguments)
-	if err != nil {
-		return fmt.Errorf("解析计划参数失败: %w", err)
-	}
-
-	// 设置 PlanState + 发射 ai:plan-created 事件
-	toolCtx.PlanState = plan
-	payload := map[string]any{"goal": plan.Goal, "steps": plan.Steps}
-	if b, err := json.Marshal(payload); err == nil {
-		toolCtx.Emit("ai:plan-created", string(b))
-	}
-
-	if s.deps.Logger != nil {
-		// 构建步骤摘要字符串（格式："1. 描述 [tool_name]; 2. 描述; ..."）
-		var stepSummary strings.Builder
-		for i, step := range plan.Steps {
-			if i > 0 {
-				stepSummary.WriteString("; ")
-			}
-			fmt.Fprintf(&stepSummary, "%d. %s", step.ID, step.Description)
-			if step.ToolName != "" {
-				fmt.Fprintf(&stepSummary, " [%s]", step.ToolName)
+	// 重试循环：解析/校验失败时自动重试，最多 maxPlanRetries 次
+	var lastErr error
+	for attempt := 1; attempt <= maxPlanRetries; attempt++ {
+		// 非首次重试时通知前端显示进度
+		if attempt > 1 {
+			toolCtx.Emit("ai:plan-generating", fmt.Sprintf("第 %d 次尝试", attempt))
+			if s.deps.Logger != nil {
+				s.deps.Logger.Debugw("计划生成重试",
+					fastlog.Int("attempt", attempt))
 			}
 		}
-		s.deps.Logger.Debugw("Plan-and-Exec 预规划完成",
-			fastlog.String("goal", plan.Goal),
-			fastlog.Int("steps", len(plan.Steps)),
-			fastlog.String("detail", stepSummary.String()))
+
+		// 非流式调用：提示词引导模型直接输出 JSON，不依赖 function calling
+		msg, err := chatModel.Generate(ctx, msgs)
+		if err != nil {
+			return fmt.Errorf("计划生成 LLM 调用失败: %w", err)
+		}
+		if msg == nil || strings.TrimSpace(msg.Content) == "" {
+			lastErr = errors.New("计划生成 LLM 返回空响应")
+			continue
+		}
+
+		// 从模型文本输出中提取 JSON
+		raw := stripCodeBlock(strings.TrimSpace(msg.Content))
+
+		// 记录模型原始输出，便于排查
+		if s.deps.Logger != nil {
+			s.deps.Logger.Debugw("计划生成原始输出",
+				fastlog.Int("attempt", attempt),
+				fastlog.String("raw", raw))
+		}
+
+		// 解析参数并构造 Plan（复用 create_plan 的校验逻辑）
+		plan, err := tools.ParseCreatePlanArgs(raw)
+		if err != nil {
+			lastErr = fmt.Errorf("解析计划参数失败: %w", err)
+			if s.deps.Logger != nil {
+				s.deps.Logger.Warnw("计划生成第 N 次尝试失败",
+					fastlog.Int("attempt", attempt),
+					fastlog.Error(err))
+			}
+			// 将模型错误输出和失败原因反馈给模型，让其针对性修正
+			msgs = append(msgs, schema.AssistantMessage(msg.Content, nil))
+			msgs = append(msgs, schema.UserMessage(fmt.Sprintf(
+				"上次输出解析失败：%s。请严格按 JSON 格式重新输出，不要输出其他内容。", err)))
+			continue
+		}
+
+		// 成功：设置 PlanState + 发射 ai:plan-created 事件
+		toolCtx.PlanState = plan
+		payload := map[string]any{"goal": plan.Goal, "steps": plan.Steps}
+		if b, err := json.Marshal(payload); err == nil {
+			toolCtx.Emit("ai:plan-created", string(b))
+		}
+
+		if s.deps.Logger != nil {
+			// 构建步骤摘要字符串（格式："1. 描述 [tool_name]; 2. 描述; ..."）
+			var stepSummary strings.Builder
+			for i, step := range plan.Steps {
+				if i > 0 {
+					stepSummary.WriteString("; ")
+				}
+				fmt.Fprintf(&stepSummary, "%d. %s", step.ID, step.Description)
+				if step.ToolName != "" {
+					fmt.Fprintf(&stepSummary, " [%s]", step.ToolName)
+				}
+			}
+			s.deps.Logger.Debugw("Plan-and-Exec 预规划完成",
+				fastlog.Int("attempts", attempt),
+				fastlog.String("goal", plan.Goal),
+				fastlog.Int("steps", len(plan.Steps)),
+				fastlog.String("detail", stepSummary.String()))
+		}
+
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("计划生成 %d 次尝试均失败: %w", maxPlanRetries, lastErr)
+}
+
+// stripCodeBlock 去掉文本首尾的 markdown 代码块包裹（```json ... ``` 或 ``` ... ```）。
+func stripCodeBlock(s string) string {
+	s = strings.TrimSpace(s)
+	// 去掉开头的 ```json 或 ```
+	if strings.HasPrefix(s, "```") {
+		if idx := strings.Index(s, "\n"); idx != -1 {
+			s = s[idx+1:]
+		}
+		// 去掉末尾的 ```
+		if idx := strings.LastIndex(s, "```"); idx != -1 {
+			s = s[:idx]
+		}
+		s = strings.TrimSpace(s)
+	}
+	return s
 }
 
 // Run 执行一轮 Agent 对话：
