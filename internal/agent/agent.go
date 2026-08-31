@@ -29,6 +29,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -341,8 +342,8 @@ func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatM
 		return fmt.Errorf("绑定计划工具失败: %w", err)
 	}
 
-	// 非流式调用，模型必须调用 create_plan
-	msg, err := planModel.Generate(ctx, msgs)
+	// 非流式调用，通过 ToolChoiceForced 强制模型必须调用 create_plan
+	msg, err := planModel.Generate(ctx, msgs, model.WithToolChoice(schema.ToolChoiceForced))
 	if err != nil {
 		return fmt.Errorf("计划生成 LLM 调用失败: %w", err)
 	}
