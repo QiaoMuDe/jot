@@ -551,21 +551,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 助手深度研究技能（新增技能 + 迭代次数临时提升 + 移除技能入场动画）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增「深度研究」AI 技能，突破常规 Agent 运行上限进行深度研究。该技能与其他技能互斥，激活时临时将最大迭代次数提升至 200（若当前设置小于 200）。同时移除了技能菜单项的 stagger 入场/离场动画，简化后续维护。 |
-| **后端技能提示词（重要）** | [internal/database/db.go](internal/database/db.go) `InitBuiltinPrompts` 新增 `skill_deep_research`：定义深度研究分析师角色，包含研究流程规范（问题分解→多轮搜索→信息整合→深度分析→报告生成）、工具使用策略（优先本地笔记 recall_notes，不足再联网搜索）、输出格式（研究报告五部分）。 |
-| **Agent 迭代次数临时提升（重要）** | [internal/agent/agent.go](internal/agent/agent.go) `Run` 方法读取 `maxIterations` 后，遍历 `req.SkillIDs` 检测 `skill_deep_research`，若当前设置小于 200 则临时提升至 200。**设计决策**：仅在技能激活时提升，不修改全局设置；若用户设置已大于 200 则保持用户设置（不降级）。 |
-| **前端技能菜单（重要）** | [frontend/index.html](frontend/index.html) 新增 `data-skill="deep_research"` 菜单项（搜索图标 SVG）；[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js) `getSkillLabel` 新增 `case 'deep_research': return '深度研究'`；`renderSkillChips` 新增 `else if (skillId === 'deep_research')` 分支渲染 chip HTML（与内置工具 chip 结构一致）。 |
-| **技能 ID 转换流程** | 前端 `activeSkills = { deep_research: true }` → 提交时 `'skill_' + id` → 后端 `skillIds = ["skill_deep_research"]` → `app.go` `GetSkillPrompts(["skill_deep_research"], ...)` 从数据库查询提示词 → 注入 Instruction → Agent 执行时检测技能 ID 临时提升迭代次数。 |
-| **移除技能入场动画（简化维护）** | [frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css) 移除 `.ai-chat-skills-dropdown .ai-chat-skills-item` 的 `opacity:0/transform:translateX(-8px)/transition` 初始状态、`.open .ai-chat-skills-item` 的状态变化、`.closing .ai-chat-skills-item` 的离场动画、`@keyframes skillsItemOut` 定义、以及所有 `nth-child(1-14)` 的 stagger delay。**动机**：每次新增技能都需要维护 CSS 动画，移除后无需额外处理。 |
-| **涉及文件** | [internal/database/db.go](internal/database/db.go)（`InitBuiltinPrompts` 新增 `skill_deep_research`）、[internal/agent/agent.go](internal/agent/agent.go)（`Run` 迭代次数临时提升）、[frontend/index.html](frontend/index.html)（技能菜单项）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`getSkillLabel` + `renderSkillChips`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（移除 stagger 动画） |
-
----
-
-## 记忆点 2：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
+## 记忆点 1：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +566,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 2：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 3：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -608,7 +594,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 4：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -624,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 5：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -639,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 6：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -654,7 +640,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 7：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 8：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +670,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 9：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -695,6 +681,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **召回面板归位（重要）** | `renderRecallCards` 内部优先插入 `.ai-tool-summary` 之后（正文上方，与工具调用同属"过程证据区"），无工具面板时 append 末尾；历史回放 `addMessage` 先 `renderToolCalls` 再 `renderRecallCards`（顺序依赖，工具面板须先存在）。流式路径同步简化（删除"插到操作栏之前"旧逻辑），消除流式/历史召回面板位置不一致。 |
 | **计划卡片不落库决策（重要）** | 计划（plan）**不落库、不历史回放**，仅前端执行时输入框上方悬浮面板（`showPlanPanel`/`createPlanCard`）临时展示。数据链路现状：`models.AIMessage` 与 `services.Message` 均无 Plan 字段（保存/查询均不回传）。同步清理前端死代码：`renderPlanCard` 函数、`addMessage` 的 `plan` 形参及 JSDoc、历史加载两处调用实参 `msg.plan`；`createPlanCard` 因被悬浮面板复用而保留。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`ensureToolSummary`/`updateToolSummaryHeader`/`showToolStatus*`/`clearStreamedText`/`handleStreamChunk`/`renderToolCalls`/`renderRecallCards`/`unsubToolStatus`/`unsubDone`/`addMessage` 清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 `.ai-tool-status-list-live`/`.exiting`/分隔虚线，新增 `.is-working` 脉冲与折叠高度控制） |
+
+---
+
+## 记忆点 10：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 消息气泡顶部"过程证据区"（思维链/工具记录/召回卡片）重设计：三个组件去掉"盒子感"（border+背景+圆角），统一为**极简单行元数据**样式（hover 才高亮、展开仅细分割线）；思维链 header 图标配色与右侧箭头对齐工具/召回；思维链实时计时重构为**思考段累计计时**（仅实际推理期间累加，工具执行不计时），修复"决策文本提前结束计时/假终态/时间变空"多个 bug；思维链折叠行为对齐工具摘要（默认折叠、不持久化偏好、流结束若展开则折叠）。 |
+| **极简单行样式（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：`.thinking-details`/`.ai-tool-summary`/`.recall-cards-panel` 移除 `border+background+border-radius`，仅 `margin: 2px 0`；header padding 压至 `4px 6px`（思维链 `3px 6px`）+ `border-radius: var(--radius-sm)`，折叠态每行高度约 24px；hover 才 `--accent`+`--hover-bg` 高亮；展开内容区（`.open`/`[open]`）仅加 `border-top: 1px solid var(--border)` 细分割线（折叠态不泄漏残留边框）；正文 `.ai-msg-assistant .msg-content` 加 `margin-top: 6px` 与证据区保持距离。 |
+| **思维链对齐工具/召回（重要）** | 思维链 header 与工具/召回样式统一：图标 `color: var(--accent)`；右侧新增 `.thinking-summary-arrow`（14px chevron，`margin-left: auto`，`[open]` 时 `rotate(90deg)`）；隐藏 `<details>` 原生三角 marker（`list-style: none` + `::-webkit-details-marker{display:none}`）；[ai-chat.js](frontend/src/js/ai-chat.js) 流式（`appendThinkingChunk`）与历史回放（`addMessage`）两处 summary 均追加箭头 span。 |
+| **思维链真实计时重构（重要）** | 原"一次性计时"（首个正文 chunk 即 `stopThinkingTimer` 设"已思考"终态）在 Agent 多轮 ReAct 下失效：工具决策正文会提前结束计时、工具后推理无计时、每次工具后时间"跳变"。重构为**思考段累计计时**：`_thinkingAccumMs`（累计毫秒）+ `_segmentStartedAt`（当前段起点）；`pauseThinkingTimer()` 在首正文 chunk / `tool_start`（`clearStreamedText` 兜底）时冻结并累加；`resumeThinkingTimer()` 在工具后新推理分片（`appendThinkingChunk` else 分支）续算（不清空文本、立即刷新，避免"思考中"无时间闪烁）；`stopThinkingTimer` 仅流结束/错误时调用，`ai:stream-done` 用后端思考净耗时（`elapsedThinking`，已排除工具执行时间）定稿"已思考 N 秒"。interval 100ms 平滑递增。 |
+| **思维链折叠行为（重要）** | 与工具摘要一致：① 首次创建（流式）与历史回放（`addMessage`）均**默认折叠**（`details.open = false`）；② 移除 `ai_cot_collapsed` localStorage 持久化（不再保存用户展开偏好）；③ 输出过程中手动展开不干预、不自动折叠；④ 流结束（`ai:stream-done`）若仍展开则 `thinkingDetails.open = false` 统一折叠。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`appendThinkingChunk`/`updateThinkingTimer`/`pauseThinkingTimer`/`resumeThinkingTimer`/`stopThinkingTimer`/`handleStreamChunk`/`clearStreamedText`/`unsubDone`/`addMessage` + 两处 summary 箭头）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（三组件去盒子化 + 思维链图标/箭头/marker + 正文间距） |
 
 ---
 

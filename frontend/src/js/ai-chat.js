@@ -2431,25 +2431,51 @@ async function startStreaming(userText, userMsgID) {
 
     let thinkingDetails = null;
     let thinkingContentEl = null;
-    let _thinkingStartedAt = 0;
+    let _thinkingAccumMs = 0;      // 已累计思考毫秒（跨工具轮，仅实际推理期间累加）
+    let _segmentStartedAt = 0;     // 当前思考段开始时间（0 = 暂停中）
     let _thinkingTimer = null;
     let unsubs = [];
 
-    /** 更新思维链实时计时摘要 */
+    /** 更新思维链实时计时摘要：仅在实际推理期间累计（工具决策正文/工具执行/正文输出不计入） */
     function updateThinkingTimer() {
-        if (_thinkingStartedAt <= 0) return;
-        const elapsed = (Date.now() - _thinkingStartedAt) / 1000;
+        if (_segmentStartedAt <= 0) return;
+        const elapsed = (_thinkingAccumMs + (Date.now() - _segmentStartedAt)) / 1000;
         const summary = thinkingDetails?.querySelector('.thinking-summary');
         const text = summary?.querySelector('.thinking-text');
         if (text) text.textContent = '思考中 ' + elapsed.toFixed(1) + ' 秒';
     }
 
-    /** 停止实时计时, 设为最终态 */
-    function stopThinkingTimer(finalElapsed) {
+    /** 暂停实时计时（工具决策正文 / 工具执行期间），保留"思考中"状态、不显示终态 */
+    function pauseThinkingTimer() {
+        if (_segmentStartedAt > 0) {
+            _thinkingAccumMs += Date.now() - _segmentStartedAt;
+            _segmentStartedAt = 0;
+        }
         if (_thinkingTimer) {
             clearInterval(_thinkingTimer);
             _thinkingTimer = null;
         }
+    }
+
+    /** 恢复实时计时（工具执行后再次收到推理分片），累计续算 */
+    function resumeThinkingTimer() {
+        if (!thinkingDetails || _segmentStartedAt > 0) return;
+        _segmentStartedAt = Date.now();
+        if (!_thinkingTimer) {
+            _thinkingTimer = setInterval(updateThinkingTimer, 100);
+        }
+        // 恢复 is-thinking 脉冲；不清空时间文本，立即刷新累计值，
+        // 避免 resume 后出现"思考中"无时间文本的闪烁空窗
+        const summary = thinkingDetails.querySelector('.thinking-summary');
+        if (summary) {
+            summary.classList.add('is-thinking');
+            updateThinkingTimer();
+        }
+    }
+
+    /** 停止实时计时, 设为最终态（finalElapsed 传后端思考净耗时） */
+    function stopThinkingTimer(finalElapsed) {
+        pauseThinkingTimer();
         if (thinkingDetails) {
             const summary = thinkingDetails.querySelector('.thinking-summary');
             const text = summary?.querySelector('.thinking-text');
@@ -2462,13 +2488,11 @@ async function startStreaming(userText, userMsgID) {
     const appendThinkingChunk = (chunk) => {
         if (!enableThinking) return; // 深度思考关闭时跳过展示思维链
         if (!thinkingDetails) {
-            _thinkingStartedAt = Date.now();
             thinkingDetails = document.createElement('details');
             thinkingDetails.className = 'thinking-details';
-            thinkingDetails.open = localStorage.getItem('ai_cot_collapsed') !== 'true';
-            thinkingDetails.addEventListener('toggle', () => {
-                localStorage.setItem('ai_cot_collapsed', thinkingDetails.open ? 'false' : 'true');
-            });
+            // 与工具摘要一致：默认折叠，不持久化展开偏好；
+            // 输出过程中手动展开不干预，流结束时若仍展开统一折叠
+            thinkingDetails.open = false;
             const summary = document.createElement('summary');
             summary.className = 'thinking-summary is-thinking';
             summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">思考中</span><span class="thinking-summary-arrow">' + CHEVRON_RIGHT_ICON + '</span>';
@@ -2477,8 +2501,14 @@ async function startStreaming(userText, userMsgID) {
             thinkingContentEl.className = 'thinking-content';
             thinkingDetails.appendChild(thinkingContentEl);
             streamingEl.insertBefore(thinkingDetails, contentDiv);
-            // 启动实时计时器 (每 200ms 更新) 
-            _thinkingTimer = setInterval(updateThinkingTimer, 200);
+            // 启动实时计时器 (每 100ms 更新)，仅在实际推理期间累计；
+            // 立即刷新一次，避免初始"思考中"无时间文本的空窗
+            _segmentStartedAt = Date.now();
+            _thinkingTimer = setInterval(updateThinkingTimer, 100);
+            updateThinkingTimer();
+        } else {
+            // 工具调用后再次进入推理：恢复实时计时（累计续算）
+            resumeThinkingTimer();
         }
         streamingThinking += chunk;
         thinkingContentEl.textContent = streamingThinking;
@@ -2501,11 +2531,9 @@ async function startStreaming(userText, userMsgID) {
         if (!hasReceivedChunk) {
             hasReceivedChunk = true;
             contentDiv.innerHTML = '';
-            // 首个正文 chunk 到达 → 思考结束, 停止计时并更新摘要
-            //（正文段不触发收起工具摘要：折叠状态仅由用户手动控制，流结束时统一收起）
-            if (streamingThinking && _thinkingStartedAt > 0) {
-                stopThinkingTimer((Date.now() - _thinkingStartedAt) / 1000);
-            }
+            // 首个正文 chunk 到达（工具决策文本或最终正文）：暂停思考计时，不显示"已思考"终态，
+            // 若是工具轮，工具执行后再次推理时由 resumeThinkingTimer 恢复续算；最终 stream-done 用后端净耗时定稿
+            pauseThinkingTimer();
         }
         // 缓冲 chunk，定时批量渲染（50ms 间隔，减少全量 Markdown 解析 + DOM 替换次数）
         _pendingStreamChunks += chunk;
@@ -2767,6 +2795,8 @@ async function startStreaming(userText, userMsgID) {
         //（hasReceivedChunk 已被置 true），清除后须复位，使工具执行后最终正文的首 chunk
         // 重新触发"清空占位 / 停思考计时"等逻辑
         hasReceivedChunk = false;
+        // 工具执行期间不计入思考时长（模型决策轮未输出正文时首 chunk 未触发，此处兜底暂停）
+        pauseThinkingTimer();
         if (contentDiv) {
             contentDiv.innerHTML = '';
         }
@@ -2917,6 +2947,11 @@ async function startStreaming(userText, userMsgID) {
             const summaryBody = toolSummaryEl.querySelector('.ai-tool-summary-body');
             if (summaryBody) summaryBody.style.maxHeight = '0';
         }
+        // 流结束：若思维链仍展开，统一折叠（折叠经 toggle 事件保存偏好，历史回放默认折叠形态一致）
+        if (thinkingDetails && thinkingDetails.open) {
+            thinkingDetails.open = false;
+        }
+
         // 清理流式渲染节流定时器，flush 残留 chunk 到 streamingContent（供后续引用）
         if (_streamRenderTimer) {
             clearTimeout(_streamRenderTimer);
@@ -3424,10 +3459,8 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
     if (role === 'assistant' && reasoningContent) {
         const details = document.createElement('details');
         details.className = 'thinking-details';
-        details.open = localStorage.getItem('ai_cot_collapsed') !== 'true';
-        details.addEventListener('toggle', () => {
-            localStorage.setItem('ai_cot_collapsed', details.open ? 'false' : 'true');
-        });
+        // 与工具摘要一致：历史回放默认折叠，不持久化展开偏好
+        details.open = false;
         const summary = document.createElement('summary');
         summary.className = 'thinking-summary';
         summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">' + (thinkingElapsed > 0 ? '已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '已思考') + '</span><span class="thinking-summary-arrow">' + CHEVRON_RIGHT_ICON + '</span>';
