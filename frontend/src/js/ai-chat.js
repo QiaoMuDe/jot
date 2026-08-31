@@ -2471,7 +2471,7 @@ async function startStreaming(userText, userMsgID) {
             });
             const summary = document.createElement('summary');
             summary.className = 'thinking-summary is-thinking';
-            summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">思考中</span>';
+            summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">思考中</span><span class="thinking-summary-arrow">' + CHEVRON_RIGHT_ICON + '</span>';
             thinkingDetails.appendChild(summary);
             thinkingContentEl = document.createElement('div');
             thinkingContentEl.className = 'thinking-content';
@@ -3430,7 +3430,7 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         });
         const summary = document.createElement('summary');
         summary.className = 'thinking-summary';
-        summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">' + (thinkingElapsed > 0 ? '已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '已思考') + '</span>';
+        summary.innerHTML = svgIcon('brain') + '<span class="thinking-text">' + (thinkingElapsed > 0 ? '已思考 ' + thinkingElapsed.toFixed(1) + ' 秒' : '已思考') + '</span><span class="thinking-summary-arrow">' + CHEVRON_RIGHT_ICON + '</span>';
         details.appendChild(summary);
         const thinkingEl = document.createElement('div');
         thinkingEl.className = 'thinking-content';

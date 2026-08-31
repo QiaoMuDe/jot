@@ -95,6 +95,8 @@
 
 .ai-msg-assistant .msg-content {
     line-height: 1.6;
+    /* 与上方思维链/工具/召回证据区保持间距 */
+    margin-top: 6px;
 }
 
 /* 用户消息混排：原文本段包在 .ai-msg-text 内保留 pre-wrap 换行，
@@ -611,12 +613,10 @@
     }
 }
 
-/* ── Agent 工具调用折叠摘要条（流式实时展示与历史回放统一，固定于 AI 气泡正文上方） ── */
+/* ── Agent 工具调用折叠摘要条（流式实时展示与历史回放统一，固定于 AI 气泡正文上方） ──
+   极简元数据行样式：无边框无背景，hover 才高亮；展开明细时仅用顶部细分割线区分 */
 .ai-tool-summary {
-    margin: 6px 0 4px 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-secondary);
+    margin: 2px 0;
     overflow: hidden;
 }
 
@@ -633,7 +633,7 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: 8px 12px;
+    padding: 4px 6px;
     background: none;
     border: none;
     cursor: pointer;
@@ -641,6 +641,7 @@
     font-size: 0.82rem;
     font-family: inherit;
     text-align: left;
+    border-radius: var(--radius-sm);
     transition: color 0.15s, background 0.15s;
 }
 .ai-tool-summary-header:hover {
@@ -697,17 +698,19 @@
 .ai-tool-summary.open .ai-tool-summary-body {
     /* max-height 由 JS 控制（展开 none / 折叠 0，自然撑开无截断），CSS 仅控制透明度 */
     opacity: 1;
+    border-top: 1px solid var(--border);
 }
 
 .ai-tool-summary-body > .ai-tool-status-list {
-    padding: 10px 12px 10px;
+    padding: 8px 6px 8px;
     margin-bottom: 0;
     border-bottom: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .ai-tool-summary-header-arrow,
-    .ai-tool-summary-body {
+    .ai-tool-summary-body,
+    .thinking-summary-arrow {
         transition: none;
     }
 }
@@ -884,12 +887,9 @@
 }
 
 
-/* ── 召回笔记折叠面板 ── */
+/* ── 召回笔记折叠面板（与工具摘要条同风格：极简元数据行，无边框无背景） ── */
 .recall-cards-panel {
-    margin: 6px 0 4px 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-secondary);
+    margin: 2px 0;
     overflow: hidden;
 }
 
@@ -898,7 +898,7 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    padding: 8px 12px;
+    padding: 4px 6px;
     background: none;
     border: none;
     cursor: pointer;
@@ -906,6 +906,7 @@
     font-size: 0.82rem;
     font-family: inherit;
     text-align: left;
+    border-radius: var(--radius-sm);
     transition: color 0.15s, background 0.15s;
 }
 .recall-cards-header:hover {
@@ -945,11 +946,12 @@
 .recall-cards-panel.open .recall-cards-body {
     max-height: 2000px;
     opacity: 1;
+    border-top: 1px solid var(--border);
 }
 
 /* ── 条目样式 ── */
 .recall-cards-item {
-    padding: 10px 12px;
+    padding: 8px 10px;
     cursor: pointer;
     transition: background 0.1s;
     border-top: 1px solid var(--border);
@@ -2263,38 +2265,58 @@
     color: var(--danger);
 }
 
-/* ── 思考过程可折叠区域（深度思考模型） ── */
+/* ── 思考过程可折叠区域（深度思考模型） ──
+   极简元数据行样式：无边框无背景（去盒子感），hover 才高亮；
+   展开时内容区仅用顶部细分割线与正文/头部区分 */
 .thinking-details {
-    margin: 0 0 8px 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--input-bg);
+    margin: 0 0 2px 0;
     overflow: hidden;
 }
 
 .thinking-summary {
-    padding: 6px 10px;
+    padding: 3px 6px;
     font-size: 0.8rem;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     user-select: none;
     display: flex;
     align-items: center;
     gap: 4px;
+    border-radius: var(--radius-sm);
+    list-style: none; /* 隐藏原生 details 三角 marker，改用右侧箭头 */
 }
 
 .thinking-summary .ai-inline-icon {
     width: 14px;
     height: 14px;
+    color: var(--accent); /* 与工具/召回 header 图标配色一致 */
+}
+
+.thinking-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* 右侧折叠箭头（与工具/召回 header 箭头样式一致） */
+.thinking-summary-arrow {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+.thinking-details[open] .thinking-summary-arrow {
+    transform: rotate(90deg);
 }
 
 .thinking-summary:hover {
+    color: var(--accent);
     background: var(--hover-bg);
 }
 
 .thinking-content {
-    padding: 0 10px 8px;
+    padding: 6px 10px 8px;
     font-size: 0.82rem;
     line-height: 1.5;
     color: var(--text-muted);
