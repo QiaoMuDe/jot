@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"jot/internal/models"
 
@@ -394,4 +395,61 @@ func TestFindByTitleAndExt(t *testing.T) {
 			t.Errorf("不应找到匹配笔记，但返回了 ID=%d", result.ID)
 		}
 	})
+}
+
+// TestCreateWithNotebookAt 验证创建笔记时预设时间戳被保留（GORM 不覆盖非零值），
+// 且读回的 CreatedAt/UpdatedAt 与传入时间一致（导入场景下为文件修改时间）
+func TestCreateWithNotebookAt(t *testing.T) {
+	svc, _ := newSearchTestService(t)
+
+	fileTime := time.Now().Add(-24 * time.Hour).Truncate(time.Second)
+	note, err := svc.CreateWithNotebookAt("readme", "# Hello", ".md", 1, fileTime)
+	if err != nil {
+		t.Fatalf("CreateWithNotebookAt 失败: %v", err)
+	}
+
+	got, err := svc.GetByID(note.ID)
+	if err != nil {
+		t.Fatalf("GetByID 失败: %v", err)
+	}
+	if got.CreatedAt.Unix() != fileTime.Unix() {
+		t.Errorf("CreatedAt = %v, want %v（应保留预设的文件修改时间）", got.CreatedAt, fileTime)
+	}
+	if got.UpdatedAt.Unix() != fileTime.Unix() {
+		t.Errorf("UpdatedAt = %v, want %v（应保留预设的文件修改时间）", got.UpdatedAt, fileTime)
+	}
+	if got.Title != "readme" || got.Content != "# Hello" || got.FileExt != ".md" || got.NotebookID != 1 {
+		t.Errorf("基础字段写入不正确: got %+v", got)
+	}
+}
+
+// TestUpdateWithTime 验证覆盖更新笔记内容时 UpdatedAt 被对齐为指定时间
+// （绕过 GORM 自动刷新），且 CreatedAt 保持不变
+func TestUpdateWithTime(t *testing.T) {
+	svc, _ := newSearchTestService(t)
+
+	createTime := time.Now().Add(-48 * time.Hour).Truncate(time.Second)
+	note, err := svc.CreateWithNotebookAt("readme", "# 旧内容", ".md", 1, createTime)
+	if err != nil {
+		t.Fatalf("CreateWithNotebookAt 失败: %v", err)
+	}
+
+	fileTime := time.Now().Add(-24 * time.Hour).Truncate(time.Second)
+	if _, err := svc.UpdateWithTime(note.ID, "readme", "# 新内容", ".md", fileTime); err != nil {
+		t.Fatalf("UpdateWithTime 失败: %v", err)
+	}
+
+	got, err := svc.GetByID(note.ID)
+	if err != nil {
+		t.Fatalf("GetByID 失败: %v", err)
+	}
+	if got.Content != "# 新内容" {
+		t.Errorf("内容未更新: got %q", got.Content)
+	}
+	if got.UpdatedAt.Unix() != fileTime.Unix() {
+		t.Errorf("UpdatedAt = %v, want %v（应对齐为文件修改时间）", got.UpdatedAt, fileTime)
+	}
+	if got.CreatedAt.Unix() != createTime.Unix() {
+		t.Errorf("CreatedAt = %v, want %v（覆盖时创建时间不应改变）", got.CreatedAt, createTime)
+	}
 }

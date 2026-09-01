@@ -37,6 +37,7 @@ import (
 
 	"gitee.com/MM-Q/fastlog"
 	"gitee.com/MM-Q/go-kit/fs"
+	"gitee.com/MM-Q/go-kit/hash"
 	"gitee.com/MM-Q/verman"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
@@ -3612,6 +3613,14 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	return results
 }
 
+// importContentHash 计算导入内容的规范化哈希（统一换行符 + 去首尾空白），
+// 用于导入时快速判断笔记内容与文件内容是否一致。
+func importContentHash(s string) (string, error) {
+	normalized := strings.ReplaceAll(s, "\r\n", "\n")
+	normalized = strings.TrimSpace(normalized)
+	return hash.HashString(normalized, hash.SHA256)
+}
+
 // processImportFile 处理单个文件的导入逻辑。
 func (a *App) processImportFile(path string, maxSize int64, notebookID uint, titleOverride string) FileImportResult {
 	result := FileImportResult{Path: path}
@@ -3708,6 +3717,26 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 	}
 
 	if existingNote != nil {
+		// 0. 哈希兜底：内容一致说明两边本就同步，无论时间戳如何直接跳过，
+		// 避免首次导入后 UpdatedAt 与文件时间对比造成的误报冲突
+		fileHash, err := importContentHash(content)
+		if err != nil {
+			// 哈希失败仅记日志，降级为纯时间对比
+			a.LogSvc.Logger.Warnw("processImportFile: 计算文件内容哈希失败", fastlog.String("path", path), fastlog.Error(err))
+		} else {
+			noteHash, err := importContentHash(existingNote.Content)
+			if err != nil {
+				a.LogSvc.Logger.Warnw("processImportFile: 计算笔记内容哈希失败", fastlog.String("path", path), fastlog.Uint("noteID", existingNote.ID), fastlog.Error(err))
+			} else if fileHash == noteHash {
+				a.LogSvc.Logger.Infow("processImportFile: 内容一致，跳过", fastlog.String("path", path), fastlog.String("title", title), fastlog.Uint("noteID", existingNote.ID))
+				result.Title = title
+				result.NoteID = existingNote.ID
+				result.Success = true
+				result.Status = "skipped"
+				return result
+			}
+		}
+
 		// 找到匹配笔记，进行时间对比
 		noteTime := existingNote.UpdatedAt
 		fileTimeUnix := fileModTime.Unix()
@@ -3715,8 +3744,8 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 
 		switch {
 		case fileTimeUnix > noteTimeUnix:
-			// 文件更新 → 直接覆盖
-			updated, err := a.noteService.Update(existingNote.ID, title, content, fileExt)
+			// 文件更新 → 直接覆盖（时间戳对齐为文件修改时间）
+			updated, err := a.noteService.UpdateWithTime(existingNote.ID, title, content, fileExt, fileModTime)
 			if err != nil {
 				a.LogSvc.Logger.Errorw("processImportFile: 覆盖笔记失败", fastlog.String("path", path), fastlog.Error(err))
 				result.Error = "覆盖笔记失败: " + err.Error()
@@ -3753,8 +3782,8 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 		}
 	}
 
-	// 6. 无匹配笔记，创建新笔记（归入指定笔记本）
-	note, err := a.noteService.CreateWithNotebook(title, content, fileExt, notebookID)
+	// 6. 无匹配笔记，创建新笔记（归入指定笔记本，时间戳对齐为文件修改时间）
+	note, err := a.noteService.CreateWithNotebookAt(title, content, fileExt, notebookID, fileModTime)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("processImportFile: 创建笔记失败", fastlog.String("path", path), fastlog.String("title", title), fastlog.Error(err))
 		result.Error = "创建笔记失败: " + err.Error()
@@ -3770,8 +3799,11 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 	return result
 }
 
-// ResolveImportConflict 解决导入冲突：overwrite=true 时用新内容覆盖笔记，false 时跳过
-func (a *App) ResolveImportConflict(noteID uint, overwrite bool, title, content, fileExt string) FileImportResult {
+// ResolveImportConflict 处理导入冲突的用户决策：overwrite=true 时用文件内容覆盖笔记，
+// false 时保留笔记跳过。
+// fileTime 为导入文件的修改时间戳（秒），覆盖时用于把笔记 UpdatedAt 对齐为文件时间，
+// 保证后续重导入的时间对比基准正确。
+func (a *App) ResolveImportConflict(noteID uint, overwrite bool, title, content, fileExt string, fileTime int64) FileImportResult {
 	result := FileImportResult{NoteID: noteID, Success: true}
 
 	if !overwrite {
@@ -3781,8 +3813,8 @@ func (a *App) ResolveImportConflict(noteID uint, overwrite bool, title, content,
 		return result
 	}
 
-	// 用户选择覆盖，更新笔记内容
-	note, err := a.noteService.Update(noteID, title, content, fileExt)
+	// 用户选择覆盖，更新笔记内容（时间戳对齐为文件修改时间）
+	note, err := a.noteService.UpdateWithTime(noteID, title, content, fileExt, time.Unix(fileTime, 0))
 	if err != nil {
 		a.LogSvc.Logger.Errorw("ResolveImportConflict: 覆盖笔记失败", fastlog.Uint("noteID", noteID), fastlog.Error(err))
 		result.Error = "覆盖笔记失败: " + err.Error()

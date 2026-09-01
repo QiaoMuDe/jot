@@ -549,26 +549,13 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
-34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（标准库 net/http 调用第三方 REST API，method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type 缺省 application/json、UA 缺省浏览器、4xx/5xx 原样返回不算工具失败、二进制 Content-Type 只提示类型、`ai_http_max_chars` 截断默认 5000、日志不含请求头防密钥泄漏、ActionText "请求 GET url"、重定向后输出"最终地址"行）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用 `newGuardedHTTPClient` 三层防护）：① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（LookupIPAddr 解析全部 IP 逐个黑名单校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录逐个拨号容灾）+ limitBodyTransport 传输层 1MB 响应体限长。Transport 以 **DefaultTransport.Clone() 为底座**（裸构造 `&http.Transport{}` 会丢系统代理/HTTP2/TLS 超时等默认配置，曾导致环境变量代理失效）。**isPrivateHost 加固**：normalizeIPLiteral 归一化 inet_aton 数值编码 IP（0x7f000001/2130706433/0177.0.0.1/127.1 等不再绕过内网判定）+ 修复裸 IPv6（::1）被端口剥离逻辑截断成 ":" 漏判的既有 bug（单冒号才当 host:port 截断，多冒号裸 IPv6 直接判定）。**关键决策**：标准库不引三方库（重试由模型在 ReAct 循环承担，HTTP 层自动重试对非幂等方法有重复副作用）；内网/本机默认拒绝是业界主流（Claude/Dify/OpenClaw 默认禁，MCP 官方 fetch 未禁被视为漏洞）；代理模式下第③层校验的是代理地址（已知权衡写入 ssrf.go 文件头）；测试注入缝 buildClient(false)/skipURLGuard 零值全防护。详见 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[read_url.go](internal/agent/tools/read_url.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)、[registry.go](internal/agent/registry.go)、[meta.go](internal/agent/tools/meta.go)、[db.go](internal/database/db.go)
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 9 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
+
+35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
 ---
 
-## 记忆点 1：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 将 Plan 模式从"计划与执行在同一 ReAct 循环"重构为 **Plan-and-Exec 分离模式**：先单独调用 LLM 生成结构化计划，再进入 ReAct 循环执行。同时修复了多个长期存在的 Bug，增强了 Agent 健壮性。 |
-| **预规划阶段（generatePlan）** | [agent.go](internal/agent/agent.go) 新增 `generatePlan()` 方法——Plan 模式下在 `Run()` 开头先单独调用 LLM：复用 `chatModel.WithTools()` 创建仅绑定 `create_plan` 的新模型实例，非流式 `Generate()` 获取结构化计划，通过 `ParseCreatePlanArgs` 解析 → 设置 `PlanState` + emit `ai:plan-created`。失败时返回 error 终止整个任务（用户看到"计划生成失败"提示）。[plan.go](internal/agent/tools/plan.go) 抽取 `ParseCreatePlanArgs()` 导出函数供 `generatePlan()` 复用。 |
-| **执行阶段工具过滤** | [registry.go](internal/agent/registry.go) 新增 `planExecExcluded` 集合（`{"create_plan": true}`）——Plan 模式执行阶段不再注册 `create_plan` 工具，防止模型重复生成计划。`planOnlyTools` 仅保留 `update_plan`。Agent 模式完全不受影响。 |
-| **ai:plan-generating 事件** | 后端在调用 `generatePlan()` 前 emit `ai:plan-generating` 事件通知前端"正在制定执行计划..."。前端 [ai-chat.js](frontend/src/js/ai-chat.js) 监听后将打字动画替换为旋转 spinner + 固定文字（`.ai-msg-plan-generating`）。`ai:plan-created` 到达时清空 contentDiv 移除状态文案。[ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.plan-gen-spinner` 旋转动画。 |
-| **Bug 修复合集** | ① **streamedContent 跨迭代累积**——外层 ReAct 循环开头 `streamedContent = ""` 重置，防止被拒内容通过兜底逻辑泄漏为最终回答；② **非流式路径缺少计划完成检测**——非流式 assistant 消息同样检查 `countPendingSteps`；③ **SkippedPlanUpdate 同轮多工具误触发**——改为按轮次跟踪 `currentIterCalledPlanUpdate` + `currentIterCalledNonPlanTool`，在下一个 assistant 消息到来时结算，消除工具执行时序不确定性；④ **genPlanHint nil 分支**——移除防御性引导文本（"必须先调用 create_plan"），改为返回空串，`GenModelInput` 中新增 `PlanState == nil` 检查直接报错终止。 |
-| **UnknownToolsHandler** | [agent.go](internal/agent/agent.go) `ToolsConfig` 新增 `UnknownToolsHandler`——模型幻觉调用不存在工具时，框架返回友好错误提示而非崩溃，模型可自行调整策略继续执行。 |
-| **关键设计决策** | ① 预规划失败直接终止任务（不降级到旧模式），因为失败意味着 API 配置或模型能力问题；② `create_plan` 保留用于预规划阶段（`generatePlan` 复用），执行阶段排除；③ 前端事件协议不变（`ai:plan-created`/`ai:plan-updated`），UI 零改动。 |
-| **涉及文件** | [agent.go](internal/agent/agent.go)（`generatePlan`/`genPlanHint` 重构/`UnknownToolsHandler`/Bug 修复）、[plan.go](internal/agent/tools/plan.go)（`ParseCreatePlanArgs` 导出）、[registry.go](internal/agent/registry.go)（`planExecExcluded` 过滤）、[ai-chat.js](frontend/src/js/ai-chat.js)（`ai:plan-generating` 监听 + `ai:plan-created` 清理）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.plan-gen-spinner` 样式）、[EVENTS.md](internal/agent/EVENTS.md)（新增 §5.0 事件文档） |
-
----
-
-## 记忆点 2：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 1：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -584,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 2：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +586,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 3：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 4：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -627,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 5：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +631,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 6：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +645,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 7：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 8：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -686,7 +673,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 9：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -697,6 +684,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **关键设计决策** | ① 标准库不引三方库：resty/retryablehttp 的自动重试有害——重试由模型在 ReAct 循环承担（带推理、不会重复副作用），HTTP 层盲目重试对 POST/PUT/DELETE 有重复副作用风险；SSRF 防护三方库也不提供。② 内网/本机默认拒绝是业界主流（Claude/Dify/OpenClaw 默认禁；MCP 官方 fetch 未禁被公认为漏洞，EC2 上可经提示词注入偷云元数据）；本地调用内网 API 的真实需求将来用"设置项 opt-in/白名单，默认关"模式实现。③ 已知权衡：配置系统代理时第③层校验的是代理地址而非目标主机（代理视为可信基础设施，写入 ssrf.go 文件头）。④ 测试注入缝 `buildClient(guardDial)` / `skipURLGuard`（跳过第①层内网拒绝）仅供同包测试访问 httptest 本机服务器，生产构造器零值全防护。 |
 | **测试与教训** | [ssrf_test.go](internal/agent/tools/ssrf_test.go)：共享客户端拨号防护（guardDial=true 拒绝 127.0.0.1 / false 可访问 httptest）、传输层 1MB 限长（服务端写 2MB）、isPrivateHost 编码归一化 12 用例；[http_request_test.go](internal/agent/tools/http_request_test.go)：方法校验/GET/POST 成功路径/截断/ActionText。教训：① 新测试驱动暴露裸 IPv6 漏判既有 bug，说明边界用例表（含 IPv6 各形式）值得写全；② 改 method 白名单时记得同步三处（Info Enum / 校验 switch / 测试非法用例）。 |
 | **涉及文件** | [internal/agent/tools/ssrf.go](internal/agent/tools/ssrf.go)（新）、[internal/agent/tools/http_request.go](internal/agent/tools/http_request.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)（isPrivateHost 加固 + loader 换共享客户端）、[internal/agent/tools/ssrf_test.go](internal/agent/tools/ssrf_test.go)（新）、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/tools/doc.go](internal/agent/tools/doc.go)、[internal/database/db.go](internal/database/db.go)（ai_http_max_chars 种子） |
+
+---
+
+## 记忆点 10：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 5 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
+| **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
+| **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
 
 ---
 

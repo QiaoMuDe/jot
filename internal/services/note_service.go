@@ -898,6 +898,55 @@ func (s *NoteService) CreateWithNotebook(title, content, fileExt string, noteboo
 	return &note, nil
 }
 
+// CreateWithNotebookAt 创建一条新笔记并指定所属笔记本，同时把 CreatedAt/UpdatedAt
+// 对齐为指定时间（导入场景下为文件的修改时间），使时间戳成为文件同步的对比基准。
+// GORM 对时间字段仅在零值时自动填充，预设非零值会被保留。
+func (s *NoteService) CreateWithNotebookAt(title, content, fileExt string, notebookID uint, t time.Time) (*models.Note, error) {
+	note := models.Note{
+		Title:      title,
+		Content:    content,
+		FileExt:    fileExt,
+		NotebookID: notebookID,
+		CreatedAt:  t,
+		UpdatedAt:  t,
+	}
+	if err := s.db.Create(&note).Error; err != nil {
+		s.logger.Errorw("NoteService.CreateWithNotebookAt 失败", fastlog.Error(err))
+		return nil, err
+	}
+	// GORM 若仍覆盖了预设时间戳，则用 UpdateColumns 修正（一次额外写入，仅在需要时执行）
+	if !note.CreatedAt.Equal(t) || !note.UpdatedAt.Equal(t) {
+		if err := s.db.Model(&models.Note{}).Where("id = ?", note.ID).UpdateColumns(map[string]interface{}{
+			"created_at": t,
+			"updated_at": t,
+		}).Error; err != nil {
+			s.logger.Errorw("NoteService.CreateWithNotebookAt 修正时间戳失败", fastlog.Error(err))
+			return nil, err
+		}
+		note.CreatedAt = t
+		note.UpdatedAt = t
+	}
+	return &note, nil
+}
+
+// UpdateWithTime 更新指定 ID 的笔记的标题、内容、后缀，并把 UpdatedAt 对齐为指定时间
+// （导入覆盖场景下为文件的修改时间）。使用 UpdateColumns 绕过 GORM 自动刷新 UpdatedAt。
+func (s *NoteService) UpdateWithTime(id uint, title, content, fileExt string, t time.Time) (*models.Note, error) {
+	if _, err := s.GetByID(id); err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&models.Note{}).Where("id = ?", id).UpdateColumns(map[string]interface{}{
+		"title":      title,
+		"content":    content,
+		"file_ext":   fileExt,
+		"updated_at": t,
+	}).Error; err != nil {
+		s.logger.Errorw("NoteService.UpdateWithTime 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return s.GetByID(id)
+}
+
 // noteTitleMaxRunes 笔记标题上限（models.Note.Title 为 size:200 的 VARCHAR，按 rune 计保护多字节标题）。
 const noteTitleMaxRunes = 200
 

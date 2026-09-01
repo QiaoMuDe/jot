@@ -9133,7 +9133,7 @@ function showImportConflictDialog(conflicts, onComplete) {
         if (!ok) return;
         try {
             const result = await window.go.main.App.ResolveImportConflict(
-                item.note_id, overwrite, item.title, item.content, item.file_ext
+                item.note_id, overwrite, item.title, item.content, item.file_ext, item.file_time
             );
             resolved.push(result);
         } catch (err) {
@@ -9192,7 +9192,7 @@ function showImportConflictDialog(conflicts, onComplete) {
         for (const item of batchItems) {
             try {
                 const result = await window.go.main.App.ResolveImportConflict(
-                    item.note_id, overwrite, item.title, item.content, item.file_ext
+                    item.note_id, overwrite, item.title, item.content, item.file_ext, item.file_time
                 );
                 resolved.push(result);
             } catch (err) {
