@@ -104,6 +104,19 @@ func (s *NoteService) GetByID(id uint) (*models.Note, error) {
 	return &note, nil
 }
 
+// GetNoteWithRelations 按 ID 获取单条笔记，预加载标签与笔记本（Unscoped 使回收站笔记也可查，用于属性展示）
+func (s *NoteService) GetNoteWithRelations(id uint) (*models.Note, error) {
+	var note models.Note
+	if err := s.db.Unscoped().Preload("Tags").Preload("Notebook").First(&note, id).Error; err != nil {
+		s.logger.Errorw("NoteService.GetNoteWithRelations 失败", fastlog.Error(err))
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("note not found")
+		}
+		return nil, err
+	}
+	return &note, nil
+}
+
 // FindByTitleAndExt 按标题+后缀+笔记本查找已有笔记，用于导入时判断是否重复
 func (s *NoteService) FindByTitleAndExt(title, fileExt string, notebookID uint) (*models.Note, error) {
 	var note models.Note

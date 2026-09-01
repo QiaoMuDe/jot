@@ -555,23 +555,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 集中强化 Plan 模式的计划生成阶段与内容落库一致性：① 可用工具列表注入计划生成提示词；② 提示词紧凑化 + 智能拆解步骤数；③ 工具描述截断告警；④ MCP 工具加载逻辑提取为独立函数；⑤ `allStreamedContent` 跨轮累积修复落库与前端显示不一致；⑥ 三个逻辑缺陷修复；⑦ `tool_name` 强指导。 |
-| **工具列表注入生成阶段（重要）** | 不把工具注册到 `generatePlan`（避免模型误调用、污染执行），而是将 `tools.BuiltinTools()` 的名称+描述拼接成字符串（**跳过 PlanOnly 工具与用户禁用工具**），注入 [agent.go](internal/agent/agent.go) `planGenSystemPrompt` 的 `{{.Tools}}` 占位符。工具描述超 `maxToolDescLen=80` rune 截断并 `Warnw` 告警（含工具名/原始长度）。这样模型知道有哪些工具可用，生成计划时能标注工具名。 |
-| **提示词紧凑 + 智能拆解** | `planGenSystemPrompt` 精简且赋予判断能力：不再固定"≤10 步"，改为"根据需求复杂度合理拆解步骤（简单需求 2-3 步，中等 4-6 步，复杂 7-10 步）"；工具列表每行一条 `- 工具名: 描述`。 |
-| **MCP 工具加载提取（loadMCPTools）** | 将 `Run()` 中约 110 行 MCP 加载逻辑提取为 [registry.go](internal/agent/registry.go) `loadMCPTools()` 独立函数（返回已过滤禁用工具的 `[]tool.BaseTool`，空列表提前返回，失败仅记录日志不中断调用方）+ `buildToolMetas()`（从工具列表提取名称/描述元信息供 generatePlan 拼接）。两者在 `Run()` 内联调用，`generatePlan` 现在能看到全部工具（含 MCP），与执行阶段工具来源一致。 |
-| **allStreamedContent 跨轮累积（重要）** | 修复"计划模式落库内容与页面实时显示不一致、切换会话后消息内容变化"：`streamedContent` 每轮 ReAct 迭代开头重置、只保留当前轮，但前端 `ai:stream-chunk` 事件累积了所有轮次文本 → 落库只剩最后一轮。新增 `allStreamedContent` 跨轮累积变量（不随迭代重置，流式/非流式路径同步累积），最终兜底逻辑改 `finalContent == "" && allStreamedContent != ""` 时用其落库。**普通 Agent 模式无此问题**（模型通常在最后一轮输出最终回答、`finalContent` 正常设置，兜底不触发）。 |
-| **三个逻辑缺陷修复** | ① **非流式路径计划未完成缺 continue**——只清空 `finalContent` 无 `continue`（流式路径有），补 `continue` + debug 日志统一行为；② **自动步骤完成检测前置条件不完整**——仅检查 `in_progress`，模型跳过 `update_plan` 直接调用业务工具时步骤卡在 `pending` → 扩展为 `in_progress \|\| pending`；③ **`create_plan` 加入 `planOnlyTools`**——此前普通 Agent 模式下 `create_plan` 仍注册，模型误调用会意外激活计划逻辑（`countPendingSteps`/`SkippedPlanUpdate` 等），现 create_plan/update_plan 均仅 Plan 模式可见。 |
-| **tool_name 强指导（重要）** | 计划生成提示词升级为"每步描述简洁明确，**必须填写 tool_name**（使用可用工具列表中的工具名）"；`create_plan` 工具 `tool_name` 描述改为"建议填写，使用可用工具列表中的工具名"；`genPlanHint` 当前待执行步骤显示 `（建议工具：xxx）`——**强指导但不强制**（模型仍可根据实际调整工具选择）。 |
-| **计划生成 debug 日志** | 生成前记录可用工具列表（`计划生成阶段：可用工具列表`）；生成后记录计划详情（goal/steps/detail，detail 含每步 ID/描述/工具名）。 |
-| **涉及文件** | [agent.go](internal/agent/agent.go)（`planGenSystemPrompt`/`generatePlan`/`genPlanHint`/`allStreamedContent`/三缺陷修复/调试日志/`maxToolDescLen`）、[registry.go](internal/agent/registry.go)（`loadMCPTools`/`buildToolMetas`/`planOnlyTools` 扩展）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述） |
-
----
-
-## 记忆点 2：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 1：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -586,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 2：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 3：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +598,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 4：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 5：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -645,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 6：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 7：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 8：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -687,13 +671,22 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 9：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 5 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
+| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 4 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
 | **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
 | **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
+
+---
+
+## 记忆点 10：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 笔记右键菜单新增"属性"项（放在第一组"查看"之后，不放删除附近），打开仿资源管理器风格的只读属性弹窗：类型/位置/大小/字符数/行数/标签/置顶/创建时间/修改时间/状态。后端新增 `GetNoteProperties`（[app.go](app.go)）+ `GetNoteWithRelations`（[note_service.go](internal/services/note_service.go)，`Unscoped` 支持回收站笔记、预加载 Tags+Notebook）；统计（字节数/字符数/行数）后端算好，content 全文不出后端。 |
+| **实现要点** | 前端弹窗静态骨架在 [index.html](frontend/index.html)（`#notePropertiesOverlay`），`.note-properties-*` 样式在 [modals.css](frontend/src/css/components/modals.css)（对齐现有 overlay+visible 模式）；[main.js](frontend/src/main.js) `showNoteProperties` 每次实时调 API 填充，"已删除"状态红色强调。**Esc 关闭走全局 Escape 分发链**（与导入冲突弹窗等一致，分支位于全局 keydown 处理中），本地只保留关闭按钮 + 遮罩点击。 |
 
 ---
 

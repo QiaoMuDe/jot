@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"jot/internal/converter"
 
@@ -531,6 +532,56 @@ func (a *App) GetNoteContent(id uint) (string, error) {
 		return "", err
 	}
 	return content, nil
+}
+
+// NoteProperties 笔记属性信息（只读展示用，不含 content 全文）
+type NoteProperties struct {
+	ID           uint      `json:"id"`
+	Title        string    `json:"title"`
+	FileExt      string    `json:"file_ext"`
+	NotebookName string    `json:"notebook_name"`
+	Pinned       bool      `json:"pinned"`
+	Tags         []string  `json:"tags"`
+	SizeBytes    int       `json:"size_bytes"`
+	CharCount    int       `json:"char_count"`
+	LineCount    int       `json:"line_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Deleted      bool      `json:"deleted"`
+}
+
+// GetNoteProperties 按 ID 获取笔记属性信息（只读，供前端属性弹窗展示；回收站笔记同样可查）
+func (a *App) GetNoteProperties(noteID uint) (*NoteProperties, error) {
+	a.LogSvc.Logger.Debugw("GetNoteProperties", fastlog.Uint("noteID", noteID))
+	note, err := a.noteService.GetNoteWithRelations(noteID)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetNoteProperties 失败", fastlog.Error(err))
+		return nil, err
+	}
+
+	tags := make([]string, 0, len(note.Tags))
+	for _, t := range note.Tags {
+		tags = append(tags, t.Name)
+	}
+	notebookName := ""
+	if note.Notebook != nil {
+		notebookName = note.Notebook.Name
+	}
+
+	return &NoteProperties{
+		ID:           note.ID,
+		Title:        note.Title,
+		FileExt:      note.FileExt,
+		NotebookName: notebookName,
+		Pinned:       note.Pinned,
+		Tags:         tags,
+		SizeBytes:    len(note.Content),
+		CharCount:    utf8.RuneCountInString(note.Content),
+		LineCount:    strings.Count(note.Content, "\n") + 1,
+		CreatedAt:    note.CreatedAt,
+		UpdatedAt:    note.UpdatedAt,
+		Deleted:      note.DeletedAt.Valid,
+	}, nil
 }
 
 // GetNoteRefContext 构建笔记引用上下文。

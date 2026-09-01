@@ -140,6 +140,8 @@ export function GetNoteContent(arg1:number):Promise<string>;
 
 export function GetNoteIDsByNotebook(arg1:number):Promise<Array<number>>;
 
+export function GetNoteProperties(arg1:number):Promise<main.NoteProperties>;
+
 export function GetNoteRefContext(arg1:Array<number>):Promise<services.NoteRefContext>;
 
 export function GetNotebookNoteCounts():Promise<Record<number, number>>;

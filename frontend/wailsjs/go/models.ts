@@ -127,6 +127,60 @@ export namespace main {
 	        this.file_ext = source["file_ext"];
 	    }
 	}
+	export class NoteProperties {
+	    id: number;
+	    title: string;
+	    file_ext: string;
+	    notebook_name: string;
+	    pinned: boolean;
+	    tags: string[];
+	    size_bytes: number;
+	    char_count: number;
+	    line_count: number;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    deleted: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new NoteProperties(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.file_ext = source["file_ext"];
+	        this.notebook_name = source["notebook_name"];
+	        this.pinned = source["pinned"];
+	        this.tags = source["tags"];
+	        this.size_bytes = source["size_bytes"];
+	        this.char_count = source["char_count"];
+	        this.line_count = source["line_count"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.deleted = source["deleted"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SaveAIMessageResult {
 	    msgID: number;
 	    tokens: number;

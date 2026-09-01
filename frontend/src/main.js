@@ -5274,6 +5274,62 @@ window.showContextMenu = function (event, noteId) {
 };
 
 /**
+ * 显示笔记属性弹窗（只读，仿资源管理器文件属性；回收站笔记同样可用）
+ */
+async function showNoteProperties(noteId) {
+    let props;
+    try {
+        props = await window.go.main.App.GetNoteProperties(noteId);
+    } catch (err) {
+        console.error('获取笔记属性失败:', err);
+        nm.show('获取笔记属性失败', 'error');
+        return;
+    }
+
+    const overlay = document.getElementById('notePropertiesOverlay');
+    const titleEl = document.getElementById('notePropsTitle');
+    const subtitleEl = document.getElementById('notePropsSubtitle');
+    const bodyEl = document.getElementById('notePropsBody');
+
+    // 标题与类型副标题
+    titleEl.textContent = props.title || '未命名';
+    const ext = (props.file_ext || '').toLowerCase();
+    const typeName = (ext === '.md' || ext === '.markdown') ? 'Markdown 笔记'
+        : ext === '.txt' ? '文本笔记'
+        : (ext ? ext.slice(1).toUpperCase() + ' 笔记' : '笔记');
+    subtitleEl.textContent = `${typeName}（${ext || '-'}）`;
+
+    // 格式化工具
+    const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString('zh-CN', { hour12: false }) : '-');
+    const fmtSize = (bytes) => {
+        if (!bytes || bytes < 1024) return `${bytes || 0} 字节`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB（${bytes.toLocaleString()} 字节）`;
+        return `${(bytes / 1024 / 1024).toFixed(2)} MB（${bytes.toLocaleString()} 字节）`;
+    };
+    const row = (label, value, cls) =>
+        `<div class="note-properties-row"><span class="note-properties-label">${label}</span><span class="note-properties-value${cls ? ' ' + cls : ''}">${value}</span></div>`;
+
+    bodyEl.innerHTML =
+        row('类型', typeName) +
+        row('位置', escapeHtml(props.notebook_name || '默认笔记本')) +
+        row('大小', fmtSize(props.size_bytes)) +
+        row('字符数', (props.char_count || 0).toLocaleString()) +
+        row('行数', (props.line_count || 0).toLocaleString()) +
+        row('标签', props.tags && props.tags.length ? props.tags.map((t) => escapeHtml(t)).join('、') : '无') +
+        row('置顶', props.pinned ? '是' : '否') +
+        row('创建时间', fmtTime(props.created_at)) +
+        row('修改时间', fmtTime(props.updated_at)) +
+        row('状态', props.deleted ? '已删除（回收站中）' : '正常', props.deleted ? 'note-properties-value-danger' : '');
+
+    // 关闭交互（Esc 关闭由全局 Escape 分发统一处理）
+    const close = () => overlay.classList.remove('visible');
+    document.getElementById('notePropsClose').onclick = close;
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+    overlay.classList.add('visible');
+}
+
+/**
  * 处理右键菜单点击
  */
 window.handleContextAction = function (action) {
@@ -5283,6 +5339,9 @@ window.handleContextAction = function (action) {
     switch (action) {
         case 'view':
             window.viewNote(id);
+            break;
+        case 'properties':
+            showNoteProperties(id);
             break;
         case 'edit':
             window.openNote(id);
@@ -6744,6 +6803,12 @@ async function handleKeyboardNavigation(e) {
         const conflictOverlay = document.querySelector('.import-conflict-overlay');
         if (conflictOverlay && conflictOverlay.classList.contains('visible')) {
             conflictOverlay._onCancel?.();
+            return;
+        }
+        // 笔记属性弹窗打开时关闭它
+        const notePropsOverlay = document.getElementById('notePropertiesOverlay');
+        if (notePropsOverlay && notePropsOverlay.classList.contains('visible')) {
+            notePropsOverlay.classList.remove('visible');
             return;
         }
         // 密码管理：右键菜单/编辑/详情弹层打开时只关闭最上层弹层（不继续执行导航逻辑）

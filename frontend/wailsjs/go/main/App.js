@@ -270,6 +270,10 @@ export function GetNoteIDsByNotebook(arg1) {
   return window['go']['main']['App']['GetNoteIDsByNotebook'](arg1);
 }
 
+export function GetNoteProperties(arg1) {
+  return window['go']['main']['App']['GetNoteProperties'](arg1);
+}
+
 export function GetNoteRefContext(arg1) {
   return window['go']['main']['App']['GetNoteRefContext'](arg1);
 }
