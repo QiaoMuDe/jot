@@ -6102,6 +6102,7 @@ async function saveCurrentSessionConfig() {
             roleplay_notes: JSON.stringify(roleplayNotes),
             enabled_skills: JSON.stringify(activeSkills),
             recall_notebook_ids: JSON.stringify(Array.from(recallNotebookIds)),
+            mode: currentMode, // 必须携带：后端按全量覆写保存，漏传会把 Plan 标记清空
         });
     } catch (_) {}
 }

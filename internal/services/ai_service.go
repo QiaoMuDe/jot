@@ -550,15 +550,20 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 
 // SaveSessionConfig 保存会话配置
 func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
-	err := a.db.Where("session_id = ?", sessionID).Assign(map[string]interface{}{
+	assign := map[string]interface{}{
 		"model_name":          cfg.ModelName,
 		"enable_thinking":     cfg.EnableThinking,
 		"referenced_notes":    cfg.ReferencedNotes,
 		"enabled_skills":      cfg.EnabledSkills,
 		"roleplay_notes":      cfg.RoleplayNotes,
 		"recall_notebook_ids": cfg.RecallNotebookIDs,
-		"mode":                cfg.Mode,
-	}).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
+	}
+	// mode 为空时不覆写：防止调用方漏传该字段导致 Plan 标记被静默清空
+	// （空值在 LoadSessionConfig 侧由 modeOrDefault 兜底为 agent，一旦误写即无法恢复）
+	if cfg.Mode != "" {
+		assign["mode"] = cfg.Mode
+	}
+	err := a.db.Where("session_id = ?", sessionID).Assign(assign).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
 		a.logger.Errorw("AIService.SaveSessionConfig 失败", fastlog.Error(err))
 	}
