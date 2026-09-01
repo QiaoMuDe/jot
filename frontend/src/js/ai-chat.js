@@ -1421,11 +1421,11 @@ function showAISessionRenameDialog(sessionId, currentTitle) {
 
     input.addEventListener('input', () => {
         const runes = [...input.value];
-        if (runes.length > 50) {
-            input.value = runes.slice(0, 50).join('');
+        if (runes.length > 20) {
+            input.value = runes.slice(0, 20).join('');
             input.classList.add('shake');
             setTimeout(() => input.classList.remove('shake'), 400);
-            window.nm?.show('名称不能超过50个字符', 'warning');
+            window.nm?.show('名称不能超过20个字符', 'warning');
         }
     });
     confirmBtn.addEventListener('click', doRename);
@@ -2826,32 +2826,74 @@ async function startStreaming(userText, userMsgID) {
 
     // ── Plan-and-Exec 预规划状态（ai:plan-generating） ──
     // Plan 模式下，后端在单独调用 LLM 生成计划期间发射此事件，
-    // 前端将打字动画替换为"正在制定执行计划..."状态文案，计划生成完成后由 ai:plan-created 覆盖。
-    // 重试时 payload 携带重试信息（如"第 2 次尝试"），更新文案显示进度。
+    // 前端将打字动画替换为"SVG 描边清单 + 轮换文案"状态，计划生成完成后由 ai:plan-created 覆盖。
+    // 重试时 payload 携带重试信息（如"第 2 次尝试"），显示在副行。
+    const PLAN_GEN_PHRASES = ['正在梳理任务目标', '正在拆解执行步骤', '正在规划最优路径'];
     const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen, payload) => {
         if (streamGen !== myGen) return;
         if (!hasReceivedChunk) {
             let wrap = contentDiv.querySelector('.ai-msg-plan-generating');
             if (!wrap) {
-                // 首次：清空打字动画，创建 spinner + 文案
+                // 首次：清空打字动画，创建描边图标 + 轮换文案结构
                 contentDiv.innerHTML = '';
                 wrap = document.createElement('div');
                 wrap.className = 'ai-msg-plan-generating';
-                const spinner = document.createElement('span');
-                spinner.className = 'plan-gen-spinner';
-                wrap.appendChild(spinner);
-                const text = document.createElement('span');
-                text.className = 'plan-gen-text';
-                text.textContent = '正在制定执行计划...';
-                wrap.appendChild(text);
+                wrap.setAttribute('aria-live', 'polite');
+                const icon = document.createElement('span');
+                icon.className = 'plan-gen-icon';
+                icon.innerHTML = svgIcon('list', 16);
+                wrap.appendChild(icon);
+                const main = document.createElement('div');
+                main.className = 'plan-gen-main';
+                const textBox = document.createElement('div');
+                textBox.className = 'plan-gen-text';
+                const phrase = document.createElement('span');
+                phrase.className = 'show';
+                phrase.textContent = PLAN_GEN_PHRASES[0];
+                // 圆点内联在文案 span 内，轮换时随节点移动，动画不中断
+                const dots = document.createElement('span');
+                dots.className = 'plan-gen-dots';
+                dots.innerHTML = '<i></i><i></i><i></i>';
+                phrase.appendChild(dots);
+                textBox.appendChild(phrase);
+                main.appendChild(textBox);
+                const retry = document.createElement('span');
+                retry.className = 'plan-gen-retry';
+                retry.style.display = 'none';
+                main.appendChild(retry);
+                wrap.appendChild(main);
                 contentDiv.appendChild(wrap);
+                // 文案轮换：wrap 被任何路径（chunk/plan-created/ask-user/done）从 DOM 移除后自停，
+                // 避免孤儿节点续写（contentDiv 用 innerHTML 清空会使引用悬空）
+                if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    let phraseIdx = 0, curPhrase = phrase;
+                    const timer = setInterval(function() {
+                        if (!wrap.isConnected) { clearInterval(timer); return; }
+                        phraseIdx = (phraseIdx + 1) % PLAN_GEN_PHRASES.length;
+                        const next = document.createElement('span');
+                        next.textContent = PLAN_GEN_PHRASES[phraseIdx];
+                        next.appendChild(dots); // 共享圆点随节点移动
+                        textBox.appendChild(next);
+                        requestAnimationFrame(function() {
+                            next.classList.add('show');
+                            curPhrase.classList.add('hide');
+                        });
+                        setTimeout(function() {
+                            if (curPhrase.parentNode) curPhrase.parentNode.removeChild(curPhrase);
+                            curPhrase = next;
+                        }, 450);
+                    }, 2500);
+                }
             }
-            // 更新文案：重试时追加进度信息
-            const textEl = wrap.querySelector('.plan-gen-text');
-            if (textEl) {
-                textEl.textContent = payload
-                    ? '正在制定执行计划...（' + payload + '）'
-                    : '正在制定执行计划...';
+            // 重试信息显示在副行（语义化，不拼进主文案）
+            const retryEl = wrap.querySelector('.plan-gen-retry');
+            if (retryEl) {
+                if (payload) {
+                    retryEl.textContent = payload;
+                    retryEl.style.display = '';
+                } else {
+                    retryEl.style.display = 'none';
+                }
             }
         }
     });

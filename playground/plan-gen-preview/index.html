@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>计划生成提示 · 重设计对比预览</title>
+<style>
+/* ── 主题变量（取自 jot variables.css 的 4 套代表主题） ── */
+:root, [data-theme="warm"] {
+    --bg: #F2EDE3; --bg-secondary: #EBE3D3;
+    --text-primary: #2D2A24; --text-secondary: #6A6258; --text-muted: #807A72;
+    --accent: #D97706; --border: #D0C8B8; --hover-bg: #F0E9DC;
+}
+[data-theme="blue"] {
+    --bg: #F4F4F7; --bg-secondary: #EBEBF0;
+    --text-primary: #1A1A1A; --text-secondary: #5A5A62; --text-muted: #787880;
+    --accent: #2563EB; --border: #D0D0D8; --hover-bg: #EEEFF3;
+}
+[data-theme="dark"] {
+    --bg: #18181C; --bg-secondary: #1C1C22;
+    --text-primary: #E4E4E8; --text-secondary: #9C9CA8; --text-muted: #6E6E7A;
+    --accent: #F59E0B; --border: #2D2D33; --hover-bg: #2A2A30;
+}
+[data-theme="tokyo"] {
+    --bg: #1A1B26; --bg-secondary: #13141F;
+    --text-primary: #C0CAF5; --text-secondary: #7982A9; --text-muted: #565F89;
+    --accent: #7AA2F7; --border: #2A2F44; --hover-bg: #262B3E;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: var(--bg); color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 32px 24px 64px; transition: background 0.3s ease, color 0.3s ease;
+}
+.page { max-width: 1080px; margin: 0 auto; }
+
+h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+.sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+
+/* 主题切换 */
+.themes { display: flex; gap: 8px; margin-top: 18px; }
+.themes button {
+    padding: 6px 14px; font-size: 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+    transition: all 0.15s ease;
+}
+.themes button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* 对比区 */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 28px; }
+@media (max-width: 860px) { .compare { grid-template-columns: 1fr; } }
+.panel {
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: var(--bg-secondary);
+}
+.panel-head {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 10px;
+}
+.panel-head .tag {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent); color: #fff; letter-spacing: 1px;
+}
+.panel-head .tag.old { background: var(--text-muted); }
+.panel-head h2 { font-size: 14px; font-weight: 600; }
+.panel-head .note { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.panel-body { padding: 20px 18px 24px; }
+
+/* 模拟聊天气泡语境 */
+.mock-user {
+    margin-left: auto; width: fit-content; max-width: 80%;
+    background: var(--accent); color: #fff; font-size: 13px;
+    padding: 7px 12px; border-radius: 12px 12px 3px 12px; margin-bottom: 14px;
+}
+.mock-ai { max-width: 92%; }
+
+/* ═══ 现状（改造前） ═══ */
+.old-gen { display: inline-flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--text-muted); }
+.old-spinner {
+    width: 16px; height: 16px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: old-spin 0.8s linear infinite;
+}
+@keyframes old-spin { to { transform: rotate(360deg); } }
+
+/* ═══ 方向 A：骨架步骤线（计划卡前置态） ═══ */
+.pgA-card {
+    position: relative; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg-secondary); padding: 10px 12px; overflow: hidden;
+    animation: card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes card-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.pgA-head { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+.pgA-dot {
+    flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); animation: pgA-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pgA-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.72); opacity: 0.55; } }
+.pgA-text { font-size: 13px; font-weight: 500; color: var(--text-secondary); position: relative; height: 18px; overflow: hidden; }
+.pgA-text span {
+    position: absolute; left: 0; top: 0; white-space: nowrap;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.pgA-text span.show { opacity: 1; transform: translateY(0); }
+.pgA-text span.hide { opacity: 0; transform: translateY(-8px); }
+
+.pgA-ghost { display: flex; flex-direction: column; gap: 7px; }
+.pgA-row { display: flex; align-items: center; gap: 8px; }
+.pgA-marker {
+    flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%;
+    border: 1.5px solid var(--accent); opacity: 0.4;
+    animation: pgA-marker 1.8s ease-in-out infinite;
+}
+.pgA-row:nth-child(2) .pgA-marker { animation-delay: 0.25s; }
+.pgA-row:nth-child(3) .pgA-marker { animation-delay: 0.5s; }
+@keyframes pgA-marker { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.pgA-line {
+    position: relative; height: 8px; border-radius: 3px; background: var(--hover-bg);
+    border: 1px solid var(--border); overflow: hidden;
+}
+.pgA-line::before {
+    content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.28; animation: pgA-sweep 1.8s ease-in-out infinite;
+}
+.pgA-row:nth-child(2) .pgA-line::before { animation-delay: 0.25s; }
+.pgA-row:nth-child(3) .pgA-line::before { animation-delay: 0.5s; }
+@keyframes pgA-sweep { 60%, 100% { transform: translateX(100%); } }
+
+/* 方向 A：模拟"计划到达"原地填充 */
+.pgA-card.filled .pgA-ghost { display: none; }
+.pgA-card.filled .pgA-real { display: flex; }
+.pgA-real { display: none; flex-direction: column; gap: 4px; animation: card-in 0.25s ease; }
+.pgA-real .step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); padding: 2px 0; }
+.pgA-real .step b { color: var(--accent); font-weight: 400; }
+.pgA-card.filled .pgA-dot { animation: none; background: var(--accent); opacity: 1; }
+.pgA-card.filled .pgA-text span { transition: none; }
+
+.demo-actions { margin-top: 14px; display: flex; gap: 8px; }
+.demo-actions button, .replay {
+    font-size: 12px; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-secondary);
+    transition: all 0.15s ease;
+}
+.demo-actions button:hover, .replay:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ═══ 方向 B：SVG 描边清单 ═══ */
+.pgB { display: inline-flex; align-items: flex-start; gap: 9px; padding: 4px 0; }
+.pgB-icon { flex-shrink: 0; color: var(--accent); display: flex; margin-top: 1px; }
+.pgB-icon svg { overflow: visible; }
+.pgB-icon .seg {
+    stroke-dasharray: 30; stroke-dashoffset: 30;
+    animation: pgB-draw 0.5s ease forwards, pgB-ants 1.6s linear 2.2s infinite;
+}
+.pgB-icon .seg:nth-child(1) { animation-delay: 0.05s, 2.2s; }
+.pgB-icon .seg:nth-child(2) { animation-delay: 0.35s, 2.2s; }
+.pgB-icon .seg:nth-child(3) { animation-delay: 0.65s, 2.2s; }
+.pgB-icon .seg:nth-child(4) { animation-delay: 0.95s, 2.2s; }
+.pgB-icon .seg:nth-child(5) { animation-delay: 1.15s, 2.2s; }
+.pgB-icon .seg:nth-child(6) { animation-delay: 1.35s, 2.2s; }
+@keyframes pgB-draw { to { stroke-dashoffset: 0; } }
+@keyframes pgB-ants { to { stroke-dashoffset: -8; } }
+
+.pgB-right { display: flex; flex-direction: column; gap: 3px; }
+.pgB-text { display: inline-flex; align-items: baseline; font-size: 13px; font-weight: 500; color: var(--text-secondary); position: relative; height: 18px; overflow: hidden; }
+.pgB-text span {
+    position: absolute; left: 0; top: 0; white-space: nowrap;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.pgB-text span.show { opacity: 1; transform: translateY(0); }
+.pgB-text span.hide { opacity: 0; transform: translateY(-8px); }
+.pgB-ellipsis i {
+    display: inline-block; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--accent); margin-left: 3px; opacity: 0.25;
+    animation: pgB-dot 1.2s ease-in-out infinite;
+}
+.pgB-ellipsis i:nth-child(2) { animation-delay: 0.2s; }
+.pgB-ellipsis i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pgB-dot { 0%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.pgB-retry { font-size: 11.5px; color: var(--text-muted); }
+
+/* 重试状态示例（方向 A） */
+.retry-note { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.retry-note .cap { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+.pgA-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+
+/* 规格说明 */
+.spec { margin-top: 28px; border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+.spec h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text-primary); }
+.spec ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.spec li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; padding-left: 16px; position: relative; }
+.spec li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.spec code { font-size: 11.5px; background: var(--hover-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--text-primary); }
+
+/* reduced-motion：全部静止 */
+@media (prefers-reduced-motion: reduce) {
+    .old-spinner, .pgA-dot, .pgA-marker, .pgA-line::before, .pgB-ellipsis i { animation: none !important; }
+    .pgB-icon .seg { animation: pgB-draw 0.01s forwards !important; stroke-dashoffset: 0 !important; }
+    .pgA-text span, .pgB-text span { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>计划生成提示 · 重设计对比预览</h1>
+    <p class="sub">改造前 vs 方向 A（骨架步骤线）vs 方向 B（SVG 描边清单）· 切换主题验证适配性</p>
+
+    <div class="themes" id="themes">
+        <button data-t="warm" class="on">暖沙（默认）</button>
+        <button data-t="blue">冷灰蓝</button>
+        <button data-t="dark">暗夜</button>
+        <button data-t="tokyo">Tokyo Night</button>
+    </div>
+
+    <div class="compare">
+        <!-- 现状 -->
+        <div class="panel">
+            <div class="panel-head">
+                <span class="tag old">现状</span>
+                <h2>改造前</h2>
+                <span class="note">border spinner + 静态文案</span>
+            </div>
+            <div class="panel-body">
+                <div class="mock-user">帮我把最近关于向量检索的笔记整理成一份行动方案</div>
+                <div class="mock-ai">
+                    <div class="old-gen">
+                        <span class="old-spinner"></span>
+                        <span>正在制定执行计划...（第 2 次尝试）</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方向 A -->
+        <div class="panel">
+            <div class="panel-head">
+                <span class="tag">方向 A</span>
+                <h2>骨架步骤线 · 计划卡前置态</h2>
+                <span class="note">计划到达时原地填充</span>
+            </div>
+            <div class="panel-body">
+                <div class="mock-user">帮我把最近关于向量检索的笔记整理成一份行动方案</div>
+                <div class="mock-ai">
+                    <div class="pgA-card" id="pgACard">
+                        <div class="pgA-head">
+                            <span class="pgA-dot"></span>
+                            <span class="pgA-text" id="pgAText"></span>
+                        </div>
+                        <div class="pgA-ghost">
+                            <div class="pgA-row"><span class="pgA-marker"></span><span class="pgA-line" style="width:76%"></span></div>
+                            <div class="pgA-row"><span class="pgA-marker"></span><span class="pgA-line" style="width:58%"></span></div>
+                            <div class="pgA-row"><span class="pgA-marker"></span><span class="pgA-line" style="width:67%"></span></div>
+                        </div>
+                        <div class="pgA-real">
+                            <div class="step"><b>①</b>检索「向量检索」相关笔记</div>
+                            <div class="step"><b>②</b>提炼要点并归纳主题</div>
+                            <div class="step"><b>③</b>生成行动方案并输出</div>
+                        </div>
+                    </div>
+                    <div class="retry-note">
+                        <div class="cap">重试状态示例</div>
+                        <div class="pgA-card">
+                            <div class="pgA-head">
+                                <span class="pgA-dot"></span>
+                                <span class="pgA-text"><span class="show">正在规划最优路径</span></span>
+                            </div>
+                            <div class="pgA-ghost">
+                                <div class="pgA-row"><span class="pgA-marker"></span><span class="pgA-line" style="width:62%"></span></div>
+                                <div class="pgA-row"><span class="pgA-marker"></span><span class="pgA-line" style="width:74%"></span></div>
+                            </div>
+                            <div class="pgA-sub">第 2 次尝试 · 换个思路重新规划</div>
+                        </div>
+                    </div>
+                    <div class="demo-actions">
+                        <button id="btnFill">模拟计划到达（原地填充）</button>
+                        <button id="btnReset">重置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方向 B -->
+        <div class="panel">
+            <div class="panel-head">
+                <span class="tag">方向 B</span>
+                <h2>SVG 描边清单 + 轮换文案</h2>
+                <span class="note">轻量 · 行内态</span>
+            </div>
+            <div class="panel-body">
+                <div class="mock-user">帮我把最近关于向量检索的笔记整理成一份行动方案</div>
+                <div class="mock-ai">
+                    <div class="pgB">
+                        <span class="pgB-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line class="seg" x1="8" y1="6" x2="21" y2="6"/>
+                                <line class="seg" x1="8" y1="12" x2="21" y2="12"/>
+                                <line class="seg" x1="8" y1="18" x2="21" y2="18"/>
+                                <line class="seg" x1="3" y1="6" x2="3.01" y2="6"/>
+                                <line class="seg" x1="3" y1="12" x2="3.01" y2="12"/>
+                                <line class="seg" x1="3" y1="18" x2="3.01" y2="18"/>
+                            </svg>
+                        </span>
+                        <div class="pgB-right">
+                            <span class="pgB-text" id="pgBText"></span>
+                            <span class="pgB-retry">（重试时显示：第 2 次尝试 · 换个思路重新规划）</span>
+                        </div>
+                    </div>
+                    <div class="demo-actions">
+                        <button class="replay" id="btnReplay">重播描边动画</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="spec">
+        <h3>实现规格（两方向共用）</h3>
+        <ul>
+            <li>文案轮换：「正在梳理任务目标」→「正在拆解执行步骤」→「正在规划最优路径」，每 2.5s 上下位移淡入淡出，尾部动态圆点代替省略号；重试信息改为副行「第 2 次尝试 · 换个思路重新规划」</li>
+            <li>容器复用 <code>.ai-msg .ai-plan-card</code> 同款边框/圆角/背景/内边距，生成中 → 计划卡为<strong>同一容器的状态切换</strong>，消除跳跃感</li>
+            <li>进场动画统一 <code>0.2s cubic-bezier(0.22, 1, 0.36, 1)</code>（与现有 ai-plan-card 一致）</li>
+            <li>动画只走 <code>transform / opacity / stroke-dashoffset</code>，不触发布局重排</li>
+            <li>容器加 <code>aria-live="polite"</code>；<code>prefers-reduced-motion: reduce</code> 时停用轮换/流光/描边，保留静态提示</li>
+            <li>接入点：<code>ai-chat.js</code> 的 <code>ai:plan-generating</code> 监听（约 L2831）+ <code>ai-chat.css</code> 的 <code>.ai-msg-plan-generating</code> 块（约 L443）</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+(function () {
+    var PHRASES = ['正在梳理任务目标', '正在拆解执行步骤', '正在规划最优路径'];
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* 主题切换 */
+    var themeBox = document.getElementById('themes');
+    themeBox.addEventListener('click', function (e) {
+        var btn = e.target.closest('button'); if (!btn) return;
+        document.documentElement.dataset.theme = btn.dataset.t;
+        themeBox.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === btn); });
+    });
+
+    /* 文案轮换（上下位移淡入淡出） */
+    function makeRotator(container, interval) {
+        var idx = 0, cur = null;
+        var first = document.createElement('span');
+        first.textContent = PHRASES[0];
+        first.classList.add('show');
+        container.appendChild(first); cur = first; idx = 0;
+        if (reduced) return;
+        setInterval(function () {
+            idx = (idx + 1) % PHRASES.length;
+            var next = document.createElement('span');
+            next.textContent = PHRASES[idx];
+            container.appendChild(next);
+            requestAnimationFrame(function () { next.classList.add('show'); cur.classList.add('hide'); });
+            setTimeout(function () { if (cur.parentNode) cur.parentNode.removeChild(cur); cur = next; }, 450);
+        }, interval);
+    }
+    makeRotator(document.getElementById('pgAText'), 2500);
+    makeRotator(document.getElementById('pgBText'), 2500);
+
+    /* 方向 B 文案加动态省略号 */
+    (function () {
+        var ell = document.createElement('span');
+        ell.className = 'pgB-ellipsis';
+        ell.innerHTML = '<i></i><i></i><i></i>';
+        var box = document.getElementById('pgBText');
+        box.appendChild(ell);
+        var obs = new MutationObserver(function () {
+            if (!box.querySelector('.pgB-ellipsis')) box.appendChild(ell);
+        });
+        obs.observe(box, { childList: true });
+    })();
+
+    /* 方向 A：模拟计划到达（原地填充） */
+    var card = document.getElementById('pgACard');
+    document.getElementById('btnFill').addEventListener('click', function () {
+        card.classList.add('filled');
+    });
+    document.getElementById('btnReset').addEventListener('click', function () {
+        card.classList.remove('filled');
+    });
+
+    /* 方向 B：重播描边 */
+    document.getElementById('btnReplay').addEventListener('click', function () {
+        var svg = document.querySelector('.pgB-icon svg');
+        var clone = svg.cloneNode(true);
+        svg.parentNode.replaceChild(clone, svg);
+    });
+})();
+</script>
+</body>
+</html>

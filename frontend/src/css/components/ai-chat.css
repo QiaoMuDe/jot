@@ -439,33 +439,128 @@
     padding: 4px 0;
 }
 
-/* ── Plan-and-Exec 预规划状态（生成计划期间） ── */
+/* ── Plan-and-Exec 预规划状态（生成计划期间：SVG 描边清单 + 轮换文案） ── */
 .ai-msg-plan-generating {
     display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 4px 0;
+    animation: ai-plan-gen-fadein 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.plan-gen-icon {
+    flex-shrink: 0;
+    color: var(--accent);
+    display: flex;
+    margin-top: 1px;
+    animation: plan-gen-glow 1.6s ease-in-out 2.2s infinite;
+}
+
+.plan-gen-icon svg {
+    overflow: visible;
+}
+
+.plan-gen-icon svg line {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 30;
+    animation: plan-gen-draw 0.5s ease forwards;
+}
+
+.plan-gen-icon svg line:nth-child(1) { animation-delay: 0.05s; }
+.plan-gen-icon svg line:nth-child(2) { animation-delay: 0.35s; }
+.plan-gen-icon svg line:nth-child(3) { animation-delay: 0.65s; }
+.plan-gen-icon svg line:nth-child(4) { animation-delay: 0.95s; }
+.plan-gen-icon svg line:nth-child(5) { animation-delay: 1.15s; }
+.plan-gen-icon svg line:nth-child(6) { animation-delay: 1.35s; }
+
+@keyframes plan-gen-draw {
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes plan-gen-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.plan-gen-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.plan-gen-text {
+    display: grid;
     font-size: 13px;
-    color: var(--text-muted);
-    animation: ai-plan-gen-fadein 0.3s ease;
+    font-weight: 500;
+    color: var(--text-secondary);
+    overflow: hidden;
 }
 
-.ai-msg-plan-generating .plan-gen-spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
+/* grid 堆叠：轮换 span 共占同一格，且参与容器固有宽度计算（避免绝对定位导致宽度塌缩被裁剪） */
+.plan-gen-text > span {
+    grid-area: 1 / 1;
+    justify-self: start;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.plan-gen-text > span.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.plan-gen-text > span.hide {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.plan-gen-dots i {
+    display: inline-block;
+    width: 3px;
+    height: 3px;
     border-radius: 50%;
-    animation: ai-plan-gen-spin 0.8s linear infinite;
+    background: var(--accent);
+    margin-left: 3px;
+    opacity: 0.25;
+    animation: plan-gen-dot 1.2s ease-in-out infinite;
 }
 
-@keyframes ai-plan-gen-spin {
-    to { transform: rotate(360deg); }
+.plan-gen-dots i:nth-child(2) { animation-delay: 0.2s; }
+.plan-gen-dots i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes plan-gen-dot {
+    0%, 100% { opacity: 0.25; }
+    40% { opacity: 1; }
+}
+
+.plan-gen-retry {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.4;
 }
 
 @keyframes ai-plan-gen-fadein {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .plan-gen-icon {
+        animation: none;
+    }
+    .plan-gen-icon svg line {
+        animation: none;
+        stroke-dashoffset: 0;
+    }
+    .plan-gen-dots i {
+        animation: none;
+        opacity: 0.6;
+    }
+    .plan-gen-text > span {
+        transition: none;
+    }
 }
 
 .ai-typing-dot {
