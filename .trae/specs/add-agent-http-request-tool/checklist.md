@@ -1,0 +1,23 @@
+# Checklist
+
+- [x] 工具基于纯标准库实现，go.mod 无新增 require 条目
+- [x] `internal/agent/tools/http_request.go` 文件头注释说明职责、与 read_url 分工、实现要点
+- [x] `httpRequestTool` 有 `var _ tool.InvokableTool = (*httpRequestTool)(nil)` 编译期断言，构造器 `NewHTTP(setting, ctx)` 导出
+- [x] 参数 schema：url 必填；method 枚举仅 GET/POST/PUT/DELETE 默认 GET；headers 可选 object；body 可选 string
+- [x] 非法 method 返回列出合法枚举的 error；body 超过 maxToolLongText 返回 error
+- [x] SSRF 第 1 层：初始 URL 经 validateHTTPURL + isPrivateHost 校验（复用，未重复造轮子）
+- [x] SSRF 第 2 层：CheckRedirect 逐跳 isPrivateHost 校验，上限 10 次
+- [x] SSRF 第 3 层（DNS rebinding 防护）：Transport.DialContext 对 DNS 解析出的每个实际 IP 执行内网黑名单校验，命中即拒绝并返回含解析 IP 的描述性错误
+- [x] 请求超时 15s；响应体 io.LimitReader 限 1MB 后按 ai_http_max_chars（默认 5000，上限 50000）rune 截断并附截断提示
+- [x] 输出首行为协议+状态码，含 Content-Type/Content-Length 关键头；二进制 Content-Type 不返回正文；4xx/5xx 不作为工具失败
+- [x] 默认浏览器 UA，headers 显式 User-Agent 可覆盖；headers 中 Host 键不透传
+- [x] 日志仅记录 method/URL/状态码/耗时/字节数，不输出请求头（Authorization 等不落日志）
+- [x] 实现 ActionTextProvider：`请求 {METHOD} {url}`，解析失败回退"发起 HTTP 请求"
+- [x] registry.go buildTools 已注册（WrapWithError 包装，位置紧邻 read_url）
+- [x] meta.go BuiltinTools 已追加展示文案（名称与注册名一致 http_request）
+- [x] tools/doc.go 包级文档清单与构造器名已同步
+- [x] db.go 设置种子键 ai_http_max_chars=5000 已追加（含注释）
+- [x] 设置页工具列表出现 http_request，可勾选禁用（走既有黑名单机制，经 BuiltinTools 自动渲染，无需新代码）
+- [x] 单元测试覆盖：DNS 解析 IP 校验（内网拒绝/公网放行）、method 枚举校验、ActionText 正常与回退；GET/POST 成功路径与截断（httptest）
+- [x] `go build ./...`、`go vet ./internal/agent/...`、`go test ./internal/agent/...` 全部通过
+- [x] 未改动前端文件（工具名英文直显 + ActionTextProvider 自动下发动作文案）

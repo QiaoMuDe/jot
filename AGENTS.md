@@ -549,22 +549,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
----
-
-## 记忆点 1：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为 AI 会话新增 **Agent / Plan 双模式切换**：Session 配置持久化 `plan_mode` 字段（默认 false = Agent 模式），工具栏模型选择器左侧新增边框包裹的 pill 切换按钮组（Agent / Plan + 分割线），Agent 模式下不注册 `create_plan` / `update_plan` 工具（模型不可见、不会调用），Plan 模式下保持现有规划流程不变。设置页工具列表中 Plan 模式专属工具显示为禁用样式 + 点击抖动通知。 |
-| **后端改动** | ① **[ai_session_config.go](internal/models/ai_session_config.go)** `AISessionConfig` 新增 `PlanMode bool` 列（gorm default false）。② **[ai_service.go](internal/services/ai_service.go)** `SessionConfig` 结构体 + `SaveSessionConfig` / `LoadSessionConfig` / `CreateDefaultSessionConfig` 透传 `PlanMode`。③ **[meta.go](internal/agent/tools/meta.go)** `ToolMeta` 新增 `PlanOnly bool` 字段，`create_plan` / `update_plan` 标记 `PlanOnly: true`。④ **[types.go](internal/agent/types.go)** `Request` 新增 `PlanMode bool`，`ToolMeta` 新增 `PlanOnly bool`。⑤ **[registry.go](internal/agent/registry.go)** `buildTools` 新增 `planMode bool` 参数，Agent 模式（`planMode=false`）下跳过 `planOnlyTools` 集合中的工具注册。⑥ **[agent.go](internal/agent/agent.go)** `genPlanHint` 按 `req.PlanMode` 条件注入（Agent 模式跳过）；结果兜底逻辑（计划补建/补标）包裹在 `req.PlanMode` 判断内。⑦ **[app.go](app.go)** `GetAgentTools` 透传 `PlanOnly` 字段；`CallAIAgentStream` 读取 `SessionConfig.PlanMode` 传入 `agent.Request.PlanMode`。 |
-| **前端改动** | ① **[index.html](frontend/index.html)** 工具栏模型选择器左侧新增 `#aiModeToggle` 容器（`.ai-mode-toggle` 边框包裹 + 两个 `.ai-mode-btn` 按钮 + `.ai-mode-divider` 分割线）。② **[ai-chat.js](frontend/src/js/ai-chat.js)** 新增 `currentPlanMode` 全局变量 + `syncModeToggle()` + `saveCurrentPlanMode()`（Load→修改→Save）+ 按钮点击事件绑定 + 切换会话/新建会话时同步按钮状态 + `showNotification` 通知。③ **[ai-chat.css](frontend/src/css/components/ai-chat.css)** `.ai-mode-toggle`（`border: 1px solid var(--border); border-radius: 6px; overflow: hidden`）+ `.ai-mode-btn`（无圆角）+ `.ai-mode-btn.active`（accent 背景高亮）+ `.ai-mode-divider`（竖线分割线）。④ **[main.js](frontend/src/main.js)** `createAgentToolRow` 中 PlanOnly 工具：checkbox disabled + `is-plan-only` 类 + 说明文字"仅 Plan 模式可用" + shake 抖动点击事件 + `showNotification`；`toggleSelectAllTools` / `updateSelectAllCheckboxState` / `updateAgentToolsButtonText` 均排除 PlanOnly 工具。⑤ **[settings-panel.css](frontend/src/css/components/settings-panel.css)** `.is-plan-only` 禁用样式 + `.plan-only-hint` + `@keyframes plan-only-shake` 抖动动画。 |
-| **TOOLS.md 更新** | [TOOLS.md](internal/agent/TOOLS.md) 新增第 5 步「标记工具的模式约束」：说明 `PlanOnly` 字段的用法（后端跳过注册 + 前端禁用展示），新增/修改 PlanOnly 工具的开发者必读。 |
-| **关键设计决策** | ① Agent 模式为默认（`PlanMode=false` 零值），新会话无需显式设置。② `planOnlyTools` 为 registry 包级变量（map），过滤在 disabled 之后、工具列表返回之前，不影响其他工具。③ 前端工具栏按钮复用现有 `.ai-chat-toolbar-btn` 按压回弹动画。④ 设置页全选/全不选/统计文案均排除 PlanOnly 工具，避免 UI 状态不一致。 |
-| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/types.go](internal/agent/types.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/agent.go](internal/agent/agent.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[internal/agent/TOOLS.md](internal/agent/TOOLS.md) |
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（标准库 net/http 调用第三方 REST API，method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type 缺省 application/json、UA 缺省浏览器、4xx/5xx 原样返回不算工具失败、二进制 Content-Type 只提示类型、`ai_http_max_chars` 截断默认 5000、日志不含请求头防密钥泄漏、ActionText "请求 GET url"、重定向后输出"最终地址"行）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用 `newGuardedHTTPClient` 三层防护）：① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（LookupIPAddr 解析全部 IP 逐个黑名单校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录逐个拨号容灾）+ limitBodyTransport 传输层 1MB 响应体限长。Transport 以 **DefaultTransport.Clone() 为底座**（裸构造 `&http.Transport{}` 会丢系统代理/HTTP2/TLS 超时等默认配置，曾导致环境变量代理失效）。**isPrivateHost 加固**：normalizeIPLiteral 归一化 inet_aton 数值编码 IP（0x7f000001/2130706433/0177.0.0.1/127.1 等不再绕过内网判定）+ 修复裸 IPv6（::1）被端口剥离逻辑截断成 ":" 漏判的既有 bug（单冒号才当 host:port 截断，多冒号裸 IPv6 直接判定）。**关键决策**：标准库不引三方库（重试由模型在 ReAct 循环承担，HTTP 层自动重试对非幂等方法有重复副作用）；内网/本机默认拒绝是业界主流（Claude/Dify/OpenClaw 默认禁，MCP 官方 fetch 未禁被视为漏洞）；代理模式下第③层校验的是代理地址（已知权衡写入 ssrf.go 文件头）；测试注入缝 buildClient(false)/skipURLGuard 零值全防护。详见 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[read_url.go](internal/agent/tools/read_url.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)、[registry.go](internal/agent/registry.go)、[meta.go](internal/agent/tools/meta.go)、[db.go](internal/database/db.go)
 
 ---
 
-## 记忆点 2：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 1：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 2：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +584,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 3：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +599,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 4：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 5：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -638,7 +627,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 6：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 7：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 8：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -682,7 +671,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 9：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +683,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **右键菜单体系统一（重要）** | **5 个菜单**（笔记首页/笔记本侧边栏/密码记录/AI 消息/AI 会话侧边栏）统一规格：图标 **14px / stroke 1.5** 线性风（同款 path 复用：置顶图钉/重命名铅笔/删除垃圾桶等）、**gap 8px**、着色 `opacity 0.72`（danger 0.9，不再用 color: muted）、**内容左缩进统一 16px**（容器 4px + 菜单项左右 12px；`.context-menu` 经 `padding: 4px` + `--ctx-inset: 12px` 达成）。笔记菜单按用途重排 4 组：打开（编辑/查看）→ 整理（置顶/移动到/管理标签）→ 输出（复制内容/导出/创建副本）→ 危险（删除），divider 6→3，「复制」改名「复制内容」防与「创建副本」混淆；置顶动态文案改写 `<span data-label>` 防止 `textContent` 覆盖抹掉图标。笔记本菜单（[sidebar.css](frontend/src/css/components/sidebar.css)）与密码菜单（[password-manager.css](frontend/src/css/components/password-manager.css)）`mkItem` 式加图标。 |
 | **标签管理弹窗 manage 模式（重要）** | 笔记右键菜单「添加标签/移除标签」两入口合并为单一「**管理标签**」（永远可点，删除满额/空标签禁用逻辑）。[main.js](frontend/src/main.js) `openBatchTagPicker('manage', ...)`：芯片变 toggle（已挂标签初始选中，快照存 `batchTagInitialSelected`），点击切换、实时 ≤3 拦截（提示先取消一个）；确认按钮差量计数「保存（n）」；`confirmBatchTagAction` 差量提交（先加后删 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes`），无修改提示"未做任何修改"，成功按差量报「已添加 x 个、移除 y 个」。批量模式（工具栏批量添加/移除）保留原 add/remove 路径不动。**孤儿标签过滤**：快照过滤掉已不存在于标签库的 id，防止残留关联被计入差量误报"已移除"。**`MAX_NOTE_TAGS = 3` 常量**收拢全文件 6 处硬编码（编辑器选择/添加额度/批量额度/manage 上限），文案模板变量跟随。教训：manage 快照须与渲染/差量计算/按钮计数共用同一数据源，否则计数与提交错位。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（标题移位 + 笔记菜单重排/图标 + 笔记本菜单项）、[frontend/src/main.js](frontend/src/main.js)（标题交互 4 函数 + tooltip + 状态栏/标签/菜单/manage 弹窗/MAX_NOTE_TAGS）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（会话菜单图标 14px/1.5 + RESEND_ICON 描边统一）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（菜单图标 ICONS 表 + mkItem 图标参数）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（focus outline + content padding）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（顶栏标题/状态栏/回弹）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（卡片标签单行 + 菜单 flex/图标/缩进）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 两菜单图标/间距/缩进） |
+
+---
+
+## 记忆点 10：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增内置 Agent 工具 `http_request`（标准库 net/http 调用第三方 REST API，与 read_url 的"网页正文提取"分工：本工具面向 API/原始响应，不做任何解析加工），并抽出 read_url 与 http_request **共享的 SSRF 三层防护客户端**（[ssrf.go](internal/agent/tools/ssrf.go) 新文件），read_url 补齐拨号期 DNS rebinding 防护与响应体 1MB 限长；`isPrivateHost` 增加 inet_aton 数值编码 IP 归一化并修复裸 IPv6 漏判 bug。 |
+| **ssrf.go 共享防护客户端（核心）** | `newGuardedHTTPClient(timeout, guardDial)` 统一三层防护：① 调用方 `validateHTTPURL` 仅放行 http/https 公网地址；② `CheckRedirect` 对每个重定向目标逐跳 `isPrivateHost` 校验（上限 10 次）；③ `guardedDialContext` 拨号期防护——`LookupIPAddr` 解析出全部 IP 逐个黑名单校验（任一命中即整体拒绝）、**直连已校验 IP 而非原 addr**（防 DNS rebinding）、通过校验的公网 IP 依次尝试拨号（多 A 记录容灾）。`limitBodyTransport` 在传输层统一限长响应体 1MB（对透明解压后字节流生效，保留 Close）。**Transport 必须 `http.DefaultTransport.(*http.Transport).Clone()` 为底座**——裸构造 `&http.Transport{}` 会丢 `Proxy: ProxyFromEnvironment`（系统代理/环境变量代理失效）、HTTP/2、TLS 握手超时等默认配置，只覆写 `DialContext`。 |
+| **http_request 工具** | method 白名单 GET/POST/PUT/DELETE/PATCH（**PATCH 曾遗漏**，REST 更新资源主流方法，补齐时同步改 Info Enum + 校验 + 测试用例，原测试用 PATCH 当非法方法需改 TRACE）；headers/body 可选，Host 头跳过、body 实际发送且未指定 Content-Type 时默认 application/json、UA 缺省浏览器 UA；4xx/5xx 原样返回不算工具失败（模型依据状态码推理）；二进制 Content-Type（image/audio/video/octet-stream 等）不输出正文仅提示类型；`ai_http_max_chars` rune 截断（默认 5000 上限 50000，db.go 种子键）；重定向后输出"最终地址（跟随重定向后）"行（`resp.Request.URL` 与初始 URL 不同时）；**日志禁止输出请求头**（防 Authorization/API Key 泄漏）；ActionText "请求 GET url（截 30 字符）"。 |
+| **read_url / isPrivateHost 加固** | read_url 的 eino loader Client 换共享防护客户端（补第③层拨号期防护）；`isPrivateHost` 新增 `normalizeIPLiteral`——inet_aton 兼容写法归一化（`2130706433` 十进制、`0x7f000001` 十六进制、`0177.0.0.1` 八进制、`127.1` 末段吸收等不再绕过内网判定），仅当 `net.ParseIP` 失败时兜底调用；**修复既有 bug**：裸 IPv6 字面量（`::1`）被旧端口剥离逻辑从尾部截断成 ":" 漏判——改为单冒号才当 host:port 截断、多冒号无方括号视为裸 IPv6 直接判定。 |
+| **关键设计决策** | ① 标准库不引三方库：resty/retryablehttp 的自动重试有害——重试由模型在 ReAct 循环承担（带推理、不会重复副作用），HTTP 层盲目重试对 POST/PUT/DELETE 有重复副作用风险；SSRF 防护三方库也不提供。② 内网/本机默认拒绝是业界主流（Claude/Dify/OpenClaw 默认禁；MCP 官方 fetch 未禁被公认为漏洞，EC2 上可经提示词注入偷云元数据）；本地调用内网 API 的真实需求将来用"设置项 opt-in/白名单，默认关"模式实现。③ 已知权衡：配置系统代理时第③层校验的是代理地址而非目标主机（代理视为可信基础设施，写入 ssrf.go 文件头）。④ 测试注入缝 `buildClient(guardDial)` / `skipURLGuard`（跳过第①层内网拒绝）仅供同包测试访问 httptest 本机服务器，生产构造器零值全防护。 |
+| **测试与教训** | [ssrf_test.go](internal/agent/tools/ssrf_test.go)：共享客户端拨号防护（guardDial=true 拒绝 127.0.0.1 / false 可访问 httptest）、传输层 1MB 限长（服务端写 2MB）、isPrivateHost 编码归一化 12 用例；[http_request_test.go](internal/agent/tools/http_request_test.go)：方法校验/GET/POST 成功路径/截断/ActionText。教训：① 新测试驱动暴露裸 IPv6 漏判既有 bug，说明边界用例表（含 IPv6 各形式）值得写全；② 改 method 白名单时记得同步三处（Info Enum / 校验 switch / 测试非法用例）。 |
+| **涉及文件** | [internal/agent/tools/ssrf.go](internal/agent/tools/ssrf.go)（新）、[internal/agent/tools/http_request.go](internal/agent/tools/http_request.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)（isPrivateHost 加固 + loader 换共享客户端）、[internal/agent/tools/ssrf_test.go](internal/agent/tools/ssrf_test.go)（新）、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/tools/doc.go](internal/agent/tools/doc.go)、[internal/database/db.go](internal/database/db.go)（ai_http_max_chars 种子） |
 
 ---
 

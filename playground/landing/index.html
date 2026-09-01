@@ -111,7 +111,7 @@
           </svg>
         </div>
         <h3>AI 智能助手</h3>
-        <p>支持 OpenAI 兼容端点（DeepSeek、通义千问等），Chat / Agent / Plan 三态模式（Chat 纯对话、Agent 自动调度工具、Plan 先规划后执行），流式输出 + 深度思考 + 13 项技能，15 个内置工具（管理笔记 / 待办 / 标签 / 笔记本 / 统计 / 召回 / JSON 处理 / 网页读取 / 分段读取笔记 / 创建与更新计划），可反问确认、接入外部 MCP 工具。</p>
+        <p>支持 OpenAI 兼容端点（DeepSeek、通义千问等），Chat / Agent / Plan 三态模式（Chat 纯对话、Agent 自动调度工具、Plan 先规划后执行），流式输出 + 深度思考 + 13 项技能，16 个内置工具（管理笔记 / 待办 / 标签 / 笔记本 / 统计 / 召回 / JSON 处理 / 网页读取 / HTTP API 调用 / 分段读取笔记 / 创建与更新计划），可反问确认、接入外部 MCP 工具。</p>
       </div>
 
       <div class="feature-card reveal" style="transition-delay: 0.15s;">
@@ -155,8 +155,8 @@
             <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
           </svg>
         </div>
-        <h3>联网搜索</h3>
-        <p>内置 Tavily、知乎搜索等 MCP 服务器，配置自己的 API Key 即可使用，AI 自动精化搜索词，获取最新信息。</p>
+        <h3>联网能力</h3>
+        <p>内置网页读取与 HTTP API 调用工具（带 SSRF 防护），支持自由接入外部 MCP 服务器扩展搜索等能力，AI 自动获取最新信息。</p>
       </div>
 
       <div class="feature-card reveal" style="transition-delay: 0.35s;">
@@ -340,6 +340,7 @@
 
     <div class="format-badges reveal">
       <span class="format-badge">read_url</span>
+      <span class="format-badge">http_request</span>
       <span class="format-badge">recall_notes</span>
       <span class="format-badge">get_current_time</span>
       <span class="format-badge">json_validate</span>
@@ -364,8 +365,8 @@
           </svg>
         </div>
         <div>
-          <h4>15 个内置工具</h4>
-          <p>管理笔记 / 待办 / 标签 / 笔记本、笔记召回、数据统计、JSON 处理、网页读取、分段读取笔记，Agent 按任务自动调度</p>
+          <h4>16 个内置工具</h4>
+          <p>管理笔记 / 待办 / 标签 / 笔记本、笔记召回、数据统计、JSON 处理、网页读取、HTTP API 调用、分段读取笔记，Agent 按任务自动调度</p>
         </div>
       </div>
       <div class="import-point reveal" style="transition-delay: 0.1s;">

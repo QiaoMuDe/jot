@@ -66,9 +66,9 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 |------|-----------|------|
 | 导航栏 | `#navbar` | 固定顶部，滚动后毛玻璃效果 |
 | Hero | `#hero` | 深色全屏首屏，背景网格 + 光晕粒子动画 |
-| 特性 | `#features` | 9 张毛玻璃卡片（笔记网格/AI 助手/编辑器/智能检索/标签/联网搜索/数据管理/本地存储/异构导入），hover 浮起，滚动入场动画 |
+| 特性 | `#features` | 9 张毛玻璃卡片（笔记网格/AI 助手/编辑器/智能检索/标签/联网能力/数据管理/本地存储/异构导入），hover 浮起，滚动入场动画 |
 | 智能检索 | `#ai-recall` | 向量语义 + 关键词双通道工作流 SVG 动画 + 3 个要点 |
-| Agent 智能体 | `#agent` | Chat/Agent/Plan 三态说明 + 15 个工具徽章 + 6 个要点 |
+| Agent 智能体 | `#agent` | Chat/Agent/Plan 三态说明 + 16 个工具徽章 + 6 个要点 |
 | 异构转换 | `#file-import` | 支持格式徽章 + 清洗转换流程 SVG + 3 个要点 |
 | 截图 | `#screenshots` | 从 `media.json` 动态渲染，点击弹出 Lightbox |
 | 视频 | `#videos` | 从 `media.json` 动态渲染，点击卡片弹出播放器 |

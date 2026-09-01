@@ -4,6 +4,8 @@ package tools
 // 包含链接或要求阅读网页时调用，内部基于 eino-ext 官方 URL Document Loader
 // 抓取网页并提取正文（默认 HTML 解析器，取 body 内容），按 ai_read_url_max_chars
 // 设置截断后返回给模型。仅放行 http/https，避免 file:// 等本地路径读取。
+// SSRF 三层防护复用 ssrf.go 的共享客户端（含拨号期 DNS rebinding 校验与
+// 响应体 1MB 限长）；isPrivateHost 额外做 inet_aton 数值编码 IP 归一化。
 
 import (
 	"context"
@@ -13,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,23 +91,11 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", err
 	}
 
-	// 2. 构建 loader：默认 HTML 解析器提取正文；自定义超时与浏览器 UA（规避 403）。
-	//    CheckRedirect 复用 isPrivateHost 校验每个重定向目标：Go 默认跟随重定向，
-	//    若不拦截，公网 URL 可 302 跳转到 127.0.0.1 / 169.254.169.254 等内网地址被读取
-	//    （SSRF 绕过），与初始 URL 的 isPrivateHost 防护一致。
+	// 2. 构建 loader：默认 HTML 解析器提取正文；复用共享防护客户端（SSRF 三层
+	//    防护，含拨号期 DNS rebinding 校验与响应体限长，见 ssrf.go），浏览器 UA
+	//    规避 403。
 	loader, err := urlLoader.NewLoader(ctx, &urlLoader.LoaderConfig{
-		Client: &http.Client{
-			Timeout: readURLTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return errors.New("重定向次数过多（超过 10 次）")
-				}
-				if isPrivateHost(req.URL.Host) {
-					return fmt.Errorf("拒绝跟随重定向到内网/本机地址 %s", req.URL.Host)
-				}
-				return nil
-			},
-		},
+		Client: newGuardedHTTPClient(readURLTimeout, true),
 		RequestBuilder: func(ctx context.Context, src document.Source, _ ...document.LoaderOption) (*http.Request, error) {
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URI, nil)
 			if err != nil {
@@ -184,17 +175,20 @@ func validateHTTPURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
-// isPrivateHost 判断主机是否指向内网/本机（SSRF 防护）：仅依据 IP 字面量与显式本机
-// hostname 判断，不做 DNS 解析（避免额外网络 IO 与探测面）。
+// isPrivateHost 判断主机是否指向内网/本机（SSRF 防护）：仅依据 IP 字面量与显式
+// 本机 hostname 判断，不做 DNS 解析（避免额外网络 IO 与探测面）。数值编码的 IP
+// 字面量（如 0x7f000001）会先经 normalizeIPLiteral 归一化再判定。
 func isPrivateHost(host string) bool {
 	h := host
-	// 去除端口（IPv6 形如 [::1]:8080，需先剥掉方括号再找冒号）
+	// 去除端口：带方括号的 IPv6（[::1]:8080）剥掉端口与方括号；单冒号视为
+	// host:port（IPv4/域名）去除端口；裸 IPv6 字面量（如 ::1，多冒号无方括号）
+	// 与无冒号主机直接判定，避免尾部截断破坏 IPv6 形式
 	if ipv6Bracket := strings.IndexByte(h, ']'); ipv6Bracket >= 0 {
-		h = h[:ipv6Bracket+1]
-	} else if i := strings.LastIndexByte(h, ':'); i >= 0 {
-		h = h[:i]
+		h = strings.Trim(h[:ipv6Bracket+1], "[]")
+	} else if strings.Count(h, ":") == 1 {
+		h = h[:strings.IndexByte(h, ':')]
 	}
-	h = strings.Trim(h, "[]")
+	h = strings.TrimSpace(h)
 
 	if strings.EqualFold(h, "localhost") ||
 		strings.HasSuffix(strings.ToLower(h), ".local") ||
@@ -204,9 +198,73 @@ func isPrivateHost(host string) bool {
 
 	ip := net.ParseIP(h)
 	if ip == nil {
-		return false // 非 IP 字面量（普通域名），不做 DNS 解析，放行
+		// 标准形式解析失败：尝试 inet_aton 兼容的数值编码形式归一化
+		// （0x7f000001 / 2130706433 / 0177.0.0.1 等写法可绕过 ParseIP 判定），
+		// 仍失败则按普通域名处理（非 IP 字面量不做 DNS 解析，放行）
+		if ip = normalizeIPLiteral(h); ip == nil {
+			return false
+		}
 	}
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast()
+}
+
+// normalizeIPLiteral 将 inet_aton 兼容的数值编码 IP 字面量归一化为标准 IPv4，
+// 防止 2130706433（十进制整数）、0x7f000001（十六进制）、0177.0.0.1（八进制）、
+// 127.1（末段吸收剩余字节）等写法绕过 isPrivateHost 的 IP 判定。
+// 解析失败返回 nil（按普通域名处理，交由拨号层失败兜底）。
+func normalizeIPLiteral(h string) net.IP {
+	// 含冒号视为 IPv6，标准形式 ParseIP 已覆盖，不做数值归一化
+	if strings.Contains(h, ":") {
+		return nil
+	}
+	// 无点纯数值：整体为 32 位地址（十进制/0x 十六进制/0 前缀八进制）
+	if !strings.Contains(h, ".") {
+		v, err := strconv.ParseUint(h, 0, 64)
+		if err != nil || v > 0xFFFFFFFF {
+			return nil
+		}
+		return ipv4FromParts(uint32(v)>>24, uint32(v)>>16, uint32(v)>>8, uint32(v))
+	}
+	// 点分形式：各段允许十进制/0x 十六进制/0 前缀八进制；末段按 inet_aton
+	// 语义吸收剩余字节（a.b.c.d / a.b.c / a.b）
+	parts := strings.Split(h, ".")
+	if len(parts) > 4 {
+		return nil
+	}
+	vals := make([]uint32, 0, 4)
+	for i, p := range parts {
+		if p == "" {
+			return nil
+		}
+		v, err := strconv.ParseUint(p, 0, 64)
+		if err != nil {
+			return nil
+		}
+		// 末段上限：4 段时单字节，3/2 段时吸收剩余 2/3 字节
+		limit := uint64(0xFF)
+		if i == len(parts)-1 && len(parts) < 4 {
+			limit = uint64(1)<<(8*(4-len(parts)+1)) - 1
+		}
+		if v > limit {
+			return nil
+		}
+		vals = append(vals, uint32(v))
+	}
+	switch len(vals) {
+	case 4:
+		return ipv4FromParts(vals[0], vals[1], vals[2], vals[3])
+	case 3: // a.b.c → a.b.(c 高字节).(c 低字节)
+		return ipv4FromParts(vals[0], vals[1], vals[2]>>8, vals[2])
+	case 2: // a.b → a.(b 三字节拆分)
+		return ipv4FromParts(vals[0], vals[1]>>16, vals[1]>>8, vals[1])
+	default:
+		return nil
+	}
+}
+
+// ipv4FromParts 由四个字节构造标准 IPv4 地址。
+func ipv4FromParts(a, b, c, d uint32) net.IP {
+	return net.IPv4(byte(a), byte(b), byte(c), byte(d))
 }
 
 // NewReadURL 创建网页链接读取工具。

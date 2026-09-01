@@ -14,6 +14,7 @@ type ToolMeta struct {
 func BuiltinTools() []ToolMeta {
 	return []ToolMeta{
 		{Name: "read_url", Label: "读取网页链接内容"},
+		{Name: "http_request", Label: "发起 HTTP 请求调用 API（GET/POST/PUT/DELETE）"},
 		{Name: "recall_notes", Label: "召回本地笔记，基于向量相似度检索"},
 		{Name: "get_current_time", Label: "获取当前时间/日期/星期"},
 		{Name: "json_validate", Label: "校验 JSON 合法性并定位错误位置"},
