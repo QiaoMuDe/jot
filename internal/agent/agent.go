@@ -339,13 +339,10 @@ func (s *AgentService) generatePlan(ctx context.Context, chatModel *openai.ChatM
 	// 重试循环：解析/校验失败时自动重试，最多 maxPlanRetries 次
 	var lastErr error
 	for attempt := 1; attempt <= maxPlanRetries; attempt++ {
-		// 非首次重试时通知前端显示进度
-		if attempt > 1 {
-			toolCtx.Emit("ai:plan-generating", fmt.Sprintf("第 %d 次尝试", attempt))
-			if s.deps.Logger != nil {
-				s.deps.Logger.Debugw("计划生成重试",
-					fastlog.Int("attempt", attempt))
-			}
+		// 非首次重试时记录日志（重试进度不通知前端，前端始终显示轮换文案）
+		if attempt > 1 && s.deps.Logger != nil {
+			s.deps.Logger.Debugw("计划生成重试",
+				fastlog.Int("attempt", attempt))
 		}
 
 		// 非流式调用：提示词引导模型直接输出 JSON，不依赖 function calling

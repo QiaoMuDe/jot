@@ -535,12 +535,6 @@
     40% { opacity: 1; }
 }
 
-.plan-gen-retry {
-    font-size: 11.5px;
-    color: var(--text-muted);
-    line-height: 1.4;
-}
-
 @keyframes ai-plan-gen-fadein {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }

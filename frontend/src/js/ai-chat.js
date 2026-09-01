@@ -2827,9 +2827,9 @@ async function startStreaming(userText, userMsgID) {
     // ── Plan-and-Exec 预规划状态（ai:plan-generating） ──
     // Plan 模式下，后端在单独调用 LLM 生成计划期间发射此事件，
     // 前端将打字动画替换为"SVG 描边清单 + 轮换文案"状态，计划生成完成后由 ai:plan-created 覆盖。
-    // 重试时 payload 携带重试信息（如"第 2 次尝试"），显示在副行。
-    const PLAN_GEN_PHRASES = ['正在梳理任务目标', '正在拆解执行步骤', '正在规划最优路径'];
-    const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen, payload) => {
+    // 重试时后端不再额外通知，前端始终显示轮换文案。
+    const PLAN_GEN_PHRASES = ['正在梳理任务目标', '正在拆解执行步骤', '正在评估可用工具', '正在安排执行顺序', '正在规划最优路径', '正在检查计划可行性'];
+    const unsubPlanGenerating = window.runtime.EventsOn('ai:plan-generating', (streamGen) => {
         if (streamGen !== myGen) return;
         if (!hasReceivedChunk) {
             let wrap = contentDiv.querySelector('.ai-msg-plan-generating');
@@ -2857,10 +2857,6 @@ async function startStreaming(userText, userMsgID) {
                 phrase.appendChild(dots);
                 textBox.appendChild(phrase);
                 main.appendChild(textBox);
-                const retry = document.createElement('span');
-                retry.className = 'plan-gen-retry';
-                retry.style.display = 'none';
-                main.appendChild(retry);
                 wrap.appendChild(main);
                 contentDiv.appendChild(wrap);
                 // 文案轮换：wrap 被任何路径（chunk/plan-created/ask-user/done）从 DOM 移除后自停，
@@ -2883,16 +2879,6 @@ async function startStreaming(userText, userMsgID) {
                             curPhrase = next;
                         }, 450);
                     }, 2500);
-                }
-            }
-            // 重试信息显示在副行（语义化，不拼进主文案）
-            const retryEl = wrap.querySelector('.plan-gen-retry');
-            if (retryEl) {
-                if (payload) {
-                    retryEl.textContent = payload;
-                    retryEl.style.display = '';
-                } else {
-                    retryEl.style.display = 'none';
                 }
             }
         }
