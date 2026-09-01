@@ -7909,6 +7909,7 @@ function openSearchModal() {
     // 显示弹窗
     els.searchModal.classList.add('visible');
     // 重置状态
+    _searchModalLoadSeq++; // 使弹窗关闭前未完成的旧请求失效
     state.searchModalKeyword = '';
     state.searchModalPage = 1;
     state.searchModalTotal = 0;
@@ -7977,6 +7978,7 @@ function closeSearchModal() {
  * 弹窗输入防抖处理
  */
 let _searchModalInputTimer = null;
+let _searchModalLoadSeq = 0; // 请求序号,用于丢弃过期响应
 function handleSearchModalInput() {
     if (_searchModalInputTimer) clearTimeout(_searchModalInputTimer);
     _searchModalInputTimer = setTimeout(() => {
@@ -7992,7 +7994,7 @@ function handleSearchModalInput() {
  * 加载弹窗搜索分页
  */
 async function searchModalLoadPage(page, append) {
-    if (state.searchModalLoading) return;
+    const seq = ++_searchModalLoadSeq;
     state.searchModalLoading = true;
     try {
         const kw = state.searchModalKeyword;
@@ -8015,16 +8017,19 @@ async function searchModalLoadPage(page, append) {
             notes = [];
             total = 0;
         }
+        // 已有更新的请求发出,丢弃本次过期响应
+        if (seq !== _searchModalLoadSeq) return;
         // 后端已支持标签 AND 过滤,此处不再需要客户端过滤
         state.searchModalTotal = total;
         const loaded = (page - 1) * pageSize + notes.length;
         state.searchModalHasMore = loaded < total;
         renderSearchModalResults(notes, append);
-        // 底部状态
-        if (page > 1 && !state.searchModalHasMore) {
+        // 底部状态(只要有结果就固定显示统计,footer 不在滚动区内,始终吸底)
+        // 用渲染后的列表判断,避免翻页返回空时误隐藏
+        if (els.searchModalResults && els.searchModalResults.children.length > 0) {
             if (els.searchModalCount) els.searchModalCount.textContent = `共 ${state.searchModalTotal} 条结果`;
-            if (els.searchModalFooter) els.searchModalFooter.style.display = 'block';
-        } else if (notes.length > 0) {
+            if (els.searchModalFooter) els.searchModalFooter.style.display = 'flex';
+        } else {
             if (els.searchModalFooter) els.searchModalFooter.style.display = 'none';
         }
         // 空状态
@@ -8041,8 +8046,12 @@ async function searchModalLoadPage(page, append) {
         }
     } catch (err) {
         console.error('[searchModal] load page error:', err);
+        // 滚动加载失败时回退页码,避免下次滚动跳页
+        if (append && seq === _searchModalLoadSeq && page > 1 && page === state.searchModalPage) {
+            state.searchModalPage -= 1;
+        }
     } finally {
-        state.searchModalLoading = false;
+        if (seq === _searchModalLoadSeq) state.searchModalLoading = false;
     }
 }
 
