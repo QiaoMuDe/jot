@@ -551,22 +551,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：Agent 显式规划（create_plan/update_plan + 前端悬浮计划面板 + ask_user 互斥）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为 Agent 增加**显式 Planning** 能力：新增 `create_plan` / `update_plan` 两个规划工具，模型先制定结构化执行计划再逐步执行（区别于纯 ReAct 隐式规划）；前端输入框上方新增悬浮计划面板（`#aiPlanPanel`）实时展示计划目标与步骤进度，支持点击标题折叠/展开；与 ask_user 反问面板互斥（方案 B），回答后恢复；完成对话后面板移除并清空缓存。 |
-| **后端工具与数据结构** | [context.go](internal/agent/tools/context.go) 新增 `Plan`（Goal/Steps/Current）与 `PlanStep`（ID/Description/ToolName/Status/Result）结构，`Context.PlanState` 跨 ReAct 轮次保存计划状态（与 AskWaiter 同模式）；[plan.go](internal/agent/tools/plan.go)（**新增**）实现 `create_plan`（校验 goal 非空、steps 1-10 条）与 `update_plan`（按 step_id 更新状态/结果，支持 new_step 追加步骤），两工具直接 `ctx.Emit` 发射 `ai:plan-created` / `ai:plan-updated` 事件（沿用 ask_user 的专用事件通道例外，见 TOOLS.md §7.2）；[registry.go](internal/agent/registry.go) + [meta.go](internal/agent/tools/meta.go) 注册，[types.go](internal/agent/types.go) `Result` 新增 `Plan` 字段落库，[app.go](app.go) `ai:agent-result` 事件追加 plan 参数。 |
-| **GenModelInput 钩子（每轮注入）** | [agent.go](internal/agent/agent.go) `Run` 装配 `GenModelInput` 回调（eino ADK 钩子，每轮 LLM 调用前触发），`genPlanHint` 按状态注入：① `PlanState == nil`——提示"需要多步操作的请求必须先调用 create_plan，简单闲聊可跳过" + **ask_user 强制提醒**（信息模糊/需求不具体/需用户选择时必须调用 ask_user，严禁把问题直接写在正文当作最终回答）；② 有计划——注入当前进度 `第 N/M 步`、已完成步骤摘要、未完成步骤强制提醒"每执行完一个工具必须调用 update_plan 标记 done，不要在仍有未完成步骤时直接输出最终回答"。 |
-| **结果兜底（重要）** | 结果汇总处（最终回答后）自动补全：① 模型创建了计划但漏调 update_plan → 所有 pending/in_progress 步骤自动补标 `done` 并发射 `ai:plan-updated` 让前端同步为全部完成态；② 模型跳过 create_plan 但执行了工具 → 自动补建单步计划（goal 取用户问题前 50 字）。 |
-| **前端悬浮面板** | [index.html](frontend/index.html) 新增 `#aiPlanPanel`（与 `#aiAskPanel` 同级，absolute 定位输入框上方 `bottom: calc(100% + 8px)`）；[ai-chat.js](frontend/src/js/ai-chat.js) `ai:plan-created` → `showPlanPanel()` / `ai:plan-updated` → `updatePlanPanel()`（`Object.assign({}, streamPlanData, payload)` **合并而非覆盖**——`ai:plan-updated` 负载不含 goal，直接覆盖会丢标题）；header 点击切换 `is-collapsed` 折叠（CSS `max-height`/`opacity` 过渡动画，无箭头）；`stream-done`/`startStreaming` 移除面板并 `streamPlanData = null` 清缓存；历史回放 `renderPlanCard()` 气泡内渲染。 |
-| **ask_user 互斥（方案 B）** | `showAskPanel()` 先 `hidePlanPanel()` 收起计划面板，`hideAskPanel()` 后若仍在流式中且 `streamPlanData` 非空则 `showPlanPanel()` 恢复——两个悬浮面板互斥不重叠，ask_user 阻塞期间计划不推进，收起不影响信息量。 |
-| **关键 bug 教训** | ① `streamPlanData`/`streamPlanCardEl` 曾为 `startStreaming` 局部变量 → `hideAskPanel` 访问报 `ReferenceError: streamPlanData is not defined` → **提升为模块级变量**；② 强化计划提示词（"不要在仍有未完成步骤时直接输出最终回答"）与 app.go 的 ask_user 规范（"先在正文写出问题"）叠加冲突 → 模型把问句当最终回答直接输出、不调 ask_user → 提示词追加澄清"必须调用 ask_user 工具发起提问，严禁把问题写在正文里当作最终回答输出"；③ `plan == nil` 分支最初无 ask_user 提醒 → 无计划场景模型不主动反问 → 两个分支都注入 ask_user 提醒；④ stream-done 只移除面板未清 `streamPlanData` → 新对话 ask_user 快结束时 `hideAskPanel` 恢复逻辑误显示旧计划 → 流结束/新流开始两处清空缓存。 |
-| **涉及文件** | [internal/agent/tools/plan.go](internal/agent/tools/plan.go)（**新增**：create_plan/update_plan）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（Plan/PlanStep/PlanState）、[internal/agent/registry.go](internal/agent/registry.go) + [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（注册/元信息）、[internal/agent/types.go](internal/agent/types.go)（Result.Plan）、[internal/agent/agent.go](internal/agent/agent.go)（GenModelInput 钩子 + genPlanHint + 结果兜底）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（§7.2 规划工具事件 + §9 设计说明）、[app.go](app.go)（ai:agent-result 追加 plan）、[frontend/index.html](frontend/index.html)（#aiPlanPanel）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（showPlanPanel/updatePlanPanel/hidePlanPanel/renderPlanCard + 互斥 + 缓存清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-plan-panel/.ai-plan-card 系列样式） |
-
----
-
-## 记忆点 2：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
+## 记忆点 1：Agent/Plan 模式切换（Session 级 plan_mode + 工具过滤 + 前端切换控件 + 设置页禁用展示）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +564,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
+## 记忆点 2：Plan-and-Exec 解耦（预规划 + 执行分离 + 多 Bug 修复 + UnknownToolsHandler）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -594,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
+## 记忆点 3：计划生成阶段强化（可用工具列表注入 + 提示词智能拆解 + allStreamedContent 跨轮累积 + 多缺陷修复）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
+## 记忆点 4：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -625,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 5：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -640,7 +625,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 6：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -653,7 +638,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 7：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -670,7 +655,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 8：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,7 +669,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 9：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -694,6 +679,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **思维链真实计时重构（重要）** | 原"一次性计时"（首个正文 chunk 即 `stopThinkingTimer` 设"已思考"终态）在 Agent 多轮 ReAct 下失效：工具决策正文会提前结束计时、工具后推理无计时、每次工具后时间"跳变"。重构为**思考段累计计时**：`_thinkingAccumMs`（累计毫秒）+ `_segmentStartedAt`（当前段起点）；`pauseThinkingTimer()` 在首正文 chunk / `tool_start`（`clearStreamedText` 兜底）时冻结并累加；`resumeThinkingTimer()` 在工具后新推理分片（`appendThinkingChunk` else 分支）续算（不清空文本、立即刷新，避免"思考中"无时间闪烁）；`stopThinkingTimer` 仅流结束/错误时调用，`ai:stream-done` 用后端思考净耗时（`elapsedThinking`，已排除工具执行时间）定稿"已思考 N 秒"。interval 100ms 平滑递增。 |
 | **思维链折叠行为（重要）** | 与工具摘要一致：① 首次创建（流式）与历史回放（`addMessage`）均**默认折叠**（`details.open = false`）；② 移除 `ai_cot_collapsed` localStorage 持久化（不再保存用户展开偏好）；③ 输出过程中手动展开不干预、不自动折叠；④ 流结束（`ai:stream-done`）若仍展开则 `thinkingDetails.open = false` 统一折叠。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`appendThinkingChunk`/`updateThinkingTimer`/`pauseThinkingTimer`/`resumeThinkingTimer`/`stopThinkingTimer`/`handleStreamChunk`/`clearStreamedText`/`unsubDone`/`addMessage` + 两处 summary 箭头）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（三组件去盒子化 + 思维链图标/箭头/marker + 正文间距） |
+
+---
+
+## 记忆点 10：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 一轮编辑器与全局 UI 体系改造：① 编辑器标题输入框从 editor-body 顶部**迁移到顶栏操作栏左侧**（双击编辑的伪静态文字）；② 编辑器正文顶部留白收紧 + CM6 聚焦虚线轮廓修复；③ 底部状态栏统一 40px 高度 + 按钮按压回弹；④ 首页卡片标签强制单行截断；⑤ **5 个右键菜单统一图标/间距/缩进体系**；⑥ 笔记右键菜单按用途重排分组；⑦ 标签「添加/移除」两弹窗合并为单一「管理标签」toggle 差量模式。 |
+| **顶栏标题（重要）** | [index.html](frontend/index.html) `#editorNoteTitle` 移入顶栏新增 `.editor-title-wrap`（左侧），`.editor-header` 改 `justify-content: space-between`。**复用原 input 而非双元素切换**——20+ 处 `els.editorNoteTitle.value` 读写（保存/快照/关闭确认/默认标题）数据流零改动。[editor.css](frontend/src/css/components/editor.css) 方案 A"纸面标题"：静态纯文字（1.05rem/650 字重/0.01em 字距/max-width 50% + ellipsis），hover 淡胶囊（仅编辑/新建模式），双击进编辑态=胶囊+accent 双层光环（外圈 22% 透明 + 内圈 1px 实线），查看模式零痕迹；全走 CSS 变量 + `color-mix` 适配 14 主题。[main.js](frontend/src/main.js) 新增双击进编辑（光标至末尾）/Enter 提交/Esc 取消恢复快照/blur 提交+空值回退 + `updateTitleTooltip()`（编辑态"双击编辑标题"、查看态全文）。新建默认标题 `YYYY-MM-DD HH:MM ☺️` 机制与后端"空标题不覆盖"语义不变。 |
+| **CM6 聚焦轮廓教训** | 编辑区聚焦时顶栏交界处出现"虚线"，曾误判为标题 hover 样式——真因是 **CM6 baseTheme 给 `.cm-editor.cm-focused` 画的 1px dotted 全局轮廓**（顶边恰在顶栏/编辑区交界）。修复：[cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) jotTheme 补 `'&.cm-focused': { outline: 'none' }`（设置页预览/MCP 编辑器两个 CM6 实例早有此覆盖，唯独主编辑器 jotTheme 漏了）。同轮将 `.cm-content` 顶部 padding 归零、4px 留白移到 `.editor-textarea` 容器——留白放内容列会导致行号分割线比首行凸出。 |
+| **底部状态栏（重要）** | 原 `.editor-footer` 高度随模式/笔记类型在 26~45px 跳动（取消/保存按钮 `display:none` 脱离文档流不占高度）。统一 `min-height: 40px`；控件压扁进预算（40px-12px padding=28px）：`.editor-footer .btn` padding `4px 14px` + `line-height: 1`（≈22px）、`.editor-modes` 容器 `2px 3px` + `.mode-btn` `4px 12px` + `line-height: 1`（≈24px）。**教训：footer 控件继承 body `line-height: 1.6` 是高度膨胀主因**，压高度先统一 `line-height: 1` 再调 padding。另加按压回弹：`:active scale(0.92)` 0.12s + 松开 0.25s 过冲曲线。全程限定 `.editor-footer` 作用域，不污染全局 `.btn`。 |
+| **卡片标签单行** | [main-content.css](frontend/src/css/components/main-content.css) `.card-tags`：`nowrap + overflow: hidden + flex: 1`；`.card-tag`：`nowrap + ellipsis + max-width: 100%`（单个超长标签自身省略号）。渐隐 mask 曾实现后按需求移除（直接硬裁切）。[main.js](frontend/src/main.js) 标签 HTML 加 `title` 属性悬停看全文。卡片固定 190px 高下 footer 恒定单行。 |
+| **右键菜单体系统一（重要）** | **5 个菜单**（笔记首页/笔记本侧边栏/密码记录/AI 消息/AI 会话侧边栏）统一规格：图标 **14px / stroke 1.5** 线性风（同款 path 复用：置顶图钉/重命名铅笔/删除垃圾桶等）、**gap 8px**、着色 `opacity 0.72`（danger 0.9，不再用 color: muted）、**内容左缩进统一 16px**（容器 4px + 菜单项左右 12px；`.context-menu` 经 `padding: 4px` + `--ctx-inset: 12px` 达成）。笔记菜单按用途重排 4 组：打开（编辑/查看）→ 整理（置顶/移动到/管理标签）→ 输出（复制内容/导出/创建副本）→ 危险（删除），divider 6→3，「复制」改名「复制内容」防与「创建副本」混淆；置顶动态文案改写 `<span data-label>` 防止 `textContent` 覆盖抹掉图标。笔记本菜单（[sidebar.css](frontend/src/css/components/sidebar.css)）与密码菜单（[password-manager.css](frontend/src/css/components/password-manager.css)）`mkItem` 式加图标。 |
+| **标签管理弹窗 manage 模式（重要）** | 笔记右键菜单「添加标签/移除标签」两入口合并为单一「**管理标签**」（永远可点，删除满额/空标签禁用逻辑）。[main.js](frontend/src/main.js) `openBatchTagPicker('manage', ...)`：芯片变 toggle（已挂标签初始选中，快照存 `batchTagInitialSelected`），点击切换、实时 ≤3 拦截（提示先取消一个）；确认按钮差量计数「保存（n）」；`confirmBatchTagAction` 差量提交（先加后删 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes`），无修改提示"未做任何修改"，成功按差量报「已添加 x 个、移除 y 个」。批量模式（工具栏批量添加/移除）保留原 add/remove 路径不动。**孤儿标签过滤**：快照过滤掉已不存在于标签库的 id，防止残留关联被计入差量误报"已移除"。**`MAX_NOTE_TAGS = 3` 常量**收拢全文件 6 处硬编码（编辑器选择/添加额度/批量额度/manage 上限），文案模板变量跟随。教训：manage 快照须与渲染/差量计算/按钮计数共用同一数据源，否则计数与提交错位。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（标题移位 + 笔记菜单重排/图标 + 笔记本菜单项）、[frontend/src/main.js](frontend/src/main.js)（标题交互 4 函数 + tooltip + 状态栏/标签/菜单/manage 弹窗/MAX_NOTE_TAGS）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（会话菜单图标 14px/1.5 + RESEND_ICON 描边统一）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（菜单图标 ICONS 表 + mkItem 图标参数）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（focus outline + content padding）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（顶栏标题/状态栏/回弹）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（卡片标签单行 + 菜单 flex/图标/缩进）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 两菜单图标/间距/缩进） |
 
 ---
 

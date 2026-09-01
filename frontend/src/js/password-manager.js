@@ -561,11 +561,22 @@ function openPmContextMenu(e, id) {
 
     pmContextMenu.innerHTML = '';
 
-    const mkItem = (label, onClick, danger = false) => {
+    // 菜单图标（14px 线性风格，与笔记/笔记本右键菜单一致）
+    const svg = (paths) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+    const ICONS = {
+        user: svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
+        key: svg('<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>'),
+        link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+        eye: svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),
+        edit: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'),
+        trash: svg('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+    };
+
+    const mkItem = (label, onClick, danger = false, icon = '') => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'pm-context-menu-item' + (danger ? ' danger' : '');
-        btn.textContent = label;
+        btn.innerHTML = icon + label;
         btn.addEventListener('click', () => {
             hideContextMenu();
             onClick();
@@ -578,7 +589,7 @@ function openPmContextMenu(e, id) {
         pmContextMenu.appendChild(sep);
     };
 
-    mkItem('复制用户名', () => pmCopyText(rec.username, '用户名已复制'));
+    mkItem('复制用户名', () => pmCopyText(rec.username, '用户名已复制'), false, ICONS.user);
     mkItem('复制密码', async () => {
         try {
             const full = await window.go.main.App.GetPasswordRecord(id);
@@ -587,15 +598,15 @@ function openPmContextMenu(e, id) {
             console.warn('获取密码失败:', err);
             window.nm?.show('获取密码失败', 'error');
         }
-    });
+    }, false, ICONS.key);
     if (rec.url) {
-        mkItem('复制链接', () => pmCopyText(rec.url, '链接已复制'));
+        mkItem('复制链接', () => pmCopyText(rec.url, '链接已复制'), false, ICONS.link);
     }
     mkSep();
-    mkItem('查看详情', () => openPmDetail(id));
-    mkItem('编辑', () => openPmEditDialog(id));
+    mkItem('查看详情', () => openPmDetail(id), false, ICONS.eye);
+    mkItem('编辑', () => openPmEditDialog(id), false, ICONS.edit);
     mkSep();
-    mkItem('删除', () => deletePmRecord(id), true);
+    mkItem('删除', () => deletePmRecord(id), true, ICONS.trash);
 
     // 定位并夹紧到视口内
     pmContextMenu.style.display = 'block';

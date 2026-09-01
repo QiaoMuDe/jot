@@ -194,12 +194,14 @@
   gap: 12px;
 }
 
-/* ---- Card Tags ---- */
+/* ---- Card Tags（单行：容器不换行，超出直接裁切）---- */
 .card-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 /* ---- Card Tag (紧凑风格: 纯色背景 + 白色文字) ---- */
@@ -212,6 +214,11 @@
   font-weight: 500;
   cursor: pointer;
   transition: opacity var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .card-tag:hover {
@@ -637,7 +644,7 @@
   background: var(--card-bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  padding: 6px;
+  padding: 4px;
   min-width: 120px;
   z-index: 2000;
   border: 1px solid var(--border);
@@ -645,7 +652,7 @@
   transform: scale(0.9);
   pointer-events: none;
   transition: background-color 0.3s ease-out, border-color 0.3s ease-out;
-  --ctx-inset: 14px;
+  --ctx-inset: 12px;
 }
 
 .context-menu.active {
@@ -655,7 +662,9 @@
 }
 
 .context-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px var(--ctx-inset);
   border-radius: var(--radius-sm);
   font-size: 0.813rem;
@@ -671,6 +680,16 @@
 
 .context-menu-item:hover {
   background: var(--hover-bg);
+}
+
+/* 菜单项图标：随文字颜色，略微降透明度避免抢视觉 */
+.context-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.context-menu-item.danger svg {
+  opacity: 0.9;
 }
 
 .context-menu-item.danger {

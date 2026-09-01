@@ -129,9 +129,14 @@ export const jotTheme = EditorView.theme({
         lineHeight: '1.85',
         overflow: 'auto',
     },
+    // 覆盖 CM6 baseTheme 的聚焦轮廓（1px dotted），避免顶栏与编辑区之间出现虚线
+    '&.cm-focused': {
+        outline: 'none',
+    },
     '.cm-content': {
         caretColor: 'var(--accent)',
-        padding: '20px 24px 40vh 0',
+        // 顶部 0：顶部留白由 .editor-textarea 容器统一提供，使行号分割线与首行顶对齐
+        padding: '0 24px 40vh 0',
         fontFamily: 'var(--font-family)',
         fontSize: '1rem',
     },

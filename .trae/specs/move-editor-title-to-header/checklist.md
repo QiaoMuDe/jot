@@ -1,0 +1,24 @@
+# Checklist
+
+- [x] 顶栏左侧常驻显示标题，右侧操作按钮布局不受挤压（index.html:142-160 + editor.css:94-155，max-width:50% 保护右侧）
+- [x] 新建笔记：顶栏显示默认标题 `YYYY-MM-DD HH:MM ☺️`（main.js:3826-3829，_defaultNewNoteTitle 逻辑未动）
+- [x] 编辑笔记：顶栏显示原标题（main.js:3814-3817）；标题经保存流程写入 UpdateNote，首页卡片同步
+- [x] 查看模式：标题为纯文本，双击无效（main.js:263 readOnly 守卫），无 hover 下划线（editor.css:133-137 :not 排除），cursor 为 default（editor.css:146-148）
+- [x] 编辑/新建模式：hover 标题显示淡下划线 + tooltip「双击编辑标题」（main.js:249-256 + editor.css:128、133-137），cursor 为 text
+- [x] 双击进入编辑态并获得焦点（main.js:261-271，focus + setSelectionRange 光标至末尾）
+- [x] Enter 提交修改并退出编辑态（main.js:280-282，preventDefault + blur）
+- [x] blur（点击标题以外区域）提交修改并退出编辑态（main.js:294-308）
+- [x] 提交空标题（trim 后）时恢复原标题，不产生空标题（main.js:303-305）
+- [x] Esc 取消修改，恢复进入编辑态前的原标题（main.js:283-288 + 295-301，_titleEscPressed 标志区分取消与提交）
+- [x] 查看模式点击「编辑」按钮后，标题切换为双击可编辑（main.js:6061-6068 → switchEditorReadOnly(false):314-323）
+- [x] 编辑模式点击「保存并查看」后，标题变为纯文本不可编辑（main.js:6069-6088 → switchEditorReadOnly(true)，聚焦时先 blur）
+- [x] 超长标题默认态 ellipsis 截断（editor.css:123-125），hover 可通过 tooltip 看到完整标题（main.js:251-252 只读态 title=完整值）
+- [x] 标题脏检测正常：仅改标题不改正文时，关闭编辑器仍弹出「是否保存」确认（快照时序核验通过：blur 先于 click 取值，main.js:361-367、5138-5143）
+- [x] 新建模式不改标题且正文为空时，直接关闭不弹确认（main.js:5121-5133，_defaultNewNoteTitle 逻辑未动）
+- [x] editor-body 顶部无残留标题输入框（index.html:161-166），标签选择器间距补偿（editor.css:480-483 margin-top:8px）
+- [x] 全屏模式下顶栏标题正常显示、双击编辑正常（editor.css:66-92 全屏规则不隐藏 header/title-wrap）
+- [x] Markdown 笔记与纯文本笔记行为一致（标题交互与文件类型无耦合，main.js:261-308）
+- [x] Ctrl/Cmd+S 保存、Ctrl/Cmd+N 新建等快捷键不受影响（keydown 仅 Enter preventDefault，无 stopPropagation，正常冒泡至 document，main.js:277-289）
+- [x] 从 AI 召回卡片打开的查看模式（hideEditBtn 场景）标题展示正常（main.js:3801、3833-3837；注：hideEditBtn 参数当前无调用点传入，属预留）
+- [x] `npm run build` 前端构建通过（exit 0）
+- [x] `wails build` 编译通过，jot.exe 已生成（build/bin/jot.exe，26.4s）

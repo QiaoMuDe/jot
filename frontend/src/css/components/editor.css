@@ -94,12 +94,66 @@
 .editor-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 4px 12px 0;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
 }
 
 .editor-header h3 {
   display: none;
+}
+
+/* 编辑器顶栏标题容器：占据左侧剩余空间，双击进入编辑态（伪静态文字样式） */
+.editor-title-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  margin-right: 12px;
+  display: flex;
+}
+
+/* 顶栏内标题输入框：纸面标题风格——静态纯文字，hover 淡胶囊，编辑态胶囊+accent 光环 */
+.editor-title-wrap .editor-input {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 8px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  margin-bottom: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  outline: none;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: text;
+  caret-color: var(--accent);
+  transition: background var(--anim-duration-fast) ease,
+              box-shadow 0.2s var(--anim-easing-spring);
+}
+
+/* 编辑/新建模式 hover：淡胶囊提示（readonly 态被 :not() 排除） */
+.editor-title-wrap .editor-input:hover:not(:focus):not(.editor-input-readonly) {
+  background: var(--hover-bg);
+}
+
+/* 编辑态（focus）：胶囊 + accent 光环包裹，无下划线 */
+.editor-title-wrap .editor-input:focus {
+  background: var(--hover-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent),
+              inset 0 0 0 1px var(--accent);
+}
+
+/* 选中文字用 accent 软色 */
+.editor-title-wrap .editor-input::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* 查看模式：不可编辑，纯文字零提示 */
+.editor-title-wrap .editor-input.editor-input-readonly {
+  cursor: default;
 }
 
 .editor-header-actions {
@@ -321,7 +375,9 @@
 
 .editor-textarea {
   width: 100%;
-  padding: 0;
+  /* 顶部 4px + 顶栏 padding-bottom 4px = 8px 留白；padding 放在容器上，
+     使行号 gutter 分割线与正文首行顶对齐（而非凸出到首行上方） */
+  padding: 4px 0 0;
   border: none;
   color: var(--text-primary);
   outline: none;
@@ -692,6 +748,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 6px 24px;
+  min-height: 40px;
   border-top: 1px solid var(--divider);
 }
 .editor-footer-left {
@@ -716,7 +773,7 @@
   gap: 2px;
   background: var(--hover-bg);
   border-radius: var(--radius-lg);
-  padding: 3px;
+  padding: 2px 3px;
 }
 
 .editor-footer .mode-btn {
@@ -726,6 +783,7 @@
   color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 500;
+  line-height: 1;
   padding: 4px 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -741,6 +799,19 @@
   background: var(--card-bg);
   color: var(--accent);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 底部按钮点击回弹：按下快速缩小，松手弹性恢复（过冲曲线） */
+.editor-footer .btn,
+.editor-footer .mode-btn {
+  transition: all var(--anim-duration-fast) var(--anim-easing-spring),
+              transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.editor-footer .btn:active,
+.editor-footer .mode-btn:active {
+  transform: scale(0.92);
+  transition: transform 0.12s ease-out;
 }
 
 /* 笔记类型切换器（工具栏图标按钮，位于 header 全屏按钮左侧） */
@@ -768,8 +839,9 @@
   flex-shrink: 0;
 }
 .editor-footer-btns .btn {
-  padding: 5px 14px;
+  padding: 4px 14px;
   font-size: 0.75rem;
+  line-height: 1;
 }
 
 .word-count {

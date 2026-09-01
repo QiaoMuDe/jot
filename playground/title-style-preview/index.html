@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标题栏重设计 — 三方案对比演示</title>
+<style>
+  :root {
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --anim-fast: 0.15s;
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ===== 主题（模拟应用的 14 套主题机制）===== */
+  .theme-light {
+    --bg: #f5f4f1; --card-bg: #fffdf9; --hover-bg: rgba(0,0,0,0.055);
+    --text: #2b2926; --text-muted: #8a857e; --divider: rgba(0,0,0,0.09);
+    --accent: #e8890c; --accent-soft: rgba(232,137,12,0.16);
+  }
+  .theme-dark {
+    --bg: #232323; --card-bg: #2d2d2d; --hover-bg: rgba(255,255,255,0.075);
+    --text: #e8e5e0; --text-muted: #96918a; --divider: rgba(255,255,255,0.1);
+    --accent: #f09a2b; --accent-soft: rgba(240,154,43,0.2);
+  }
+  .theme-paper {
+    --bg: #efe9dd; --card-bg: #faf6ec; --hover-bg: rgba(94,74,42,0.08);
+    --text: #3d3428; --text-muted: #97897a; --divider: rgba(94,74,42,0.14);
+    --accent: #8f6b2e; --accent-soft: rgba(143,107,46,0.16);
+  }
+  .theme-teal {
+    --bg: #f0f4f3; --card-bg: #fcfefd; --hover-bg: rgba(15,60,55,0.06);
+    --text: #22312e; --text-muted: #7d8f8b; --divider: rgba(15,60,55,0.1);
+    --accent: #0f766e; --accent-soft: rgba(15,118,110,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-family);
+    background: #e9e7e3;
+    color: #2b2926;
+    padding: 32px 20px 60px;
+  }
+
+  .page-head { max-width: 1080px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 1.35rem; font-weight: 700; }
+  .page-head p { color: #6f6a63; font-size: 0.875rem; margin-top: 6px; line-height: 1.6; }
+  .page-head .kbd-hint { margin-top: 10px; font-size: 0.8rem; color: #8a857e; }
+  kbd {
+    background: #fff; border: 1px solid #d5d1ca; border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 7px; font-family: inherit; font-size: 0.78rem;
+  }
+
+  .theme-bar {
+    max-width: 1080px; margin: 0 auto 22px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .theme-bar span { font-size: 0.8rem; color: #6f6a63; margin-right: 4px; }
+  .theme-btn {
+    border: 1px solid #d5d1ca; background: #fff; border-radius: 999px;
+    padding: 5px 14px; font-size: 0.8rem; cursor: pointer; font-family: inherit;
+    transition: all var(--anim-fast) ease;
+  }
+  .theme-btn:hover { border-color: #b8b3ab; }
+  .theme-btn.active { background: #2b2926; color: #fff; border-color: #2b2926; }
+
+  .panels { max-width: 1080px; margin: 0 auto; display: grid; gap: 22px; }
+
+  .panel { border-radius: 14px; overflow: hidden; background: var(--bg); }
+  .theme-light, .theme-dark, .theme-paper, .theme-teal { transition: background 0.25s ease; }
+
+  .panel-note {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 0;
+  }
+  .panel-note .name { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+  .panel-note .name small { font-weight: 500; color: var(--text-muted); margin-left: 8px; font-size: 0.78rem; }
+
+  .mode-toggle {
+    display: flex; background: var(--hover-bg); border-radius: 8px; padding: 2px;
+    font-size: 0.75rem;
+  }
+  .mode-toggle button {
+    border: none; background: transparent; color: var(--text-muted);
+    padding: 3px 12px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; transition: all var(--anim-fast) ease;
+  }
+  .mode-toggle button.on { background: var(--card-bg); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+
+  /* ===== 模拟编辑器窗口 ===== */
+  .editor-mock { padding: 10px 14px 0; }
+  .window {
+    background: var(--card-bg); border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 8px 28px rgba(0,0,0,0.05);
+    overflow: hidden;
+  }
+
+  .ed-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px 7px; position: relative;
+  }
+  .ed-title-zone { flex: 1 1 auto; min-width: 0; display: flex; margin-right: 12px; position: relative; }
+  .ed-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .icon-btn {
+    width: 30px; height: 30px; border: none; border-radius: 8px;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--anim-fast) ease;
+  }
+  .icon-btn:hover { background: var(--hover-bg); color: var(--text); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  .ed-body { border-top: 1px solid var(--divider); padding: 10px 16px 22px; }
+  .tag-row { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tag {
+    font-size: 0.7rem; color: var(--text-muted); background: var(--hover-bg);
+    border-radius: 5px; padding: 2px 8px;
+  }
+  .fake-line { height: 9px; border-radius: 4px; background: var(--hover-bg); margin-bottom: 8px; }
+  .fake-line.w60 { width: 60%; } .fake-line.w85 { width: 85%; } .fake-line.w40 { width: 40%; }
+
+  .state-tip {
+    padding: 8px 18px 14px; font-size: 0.75rem; color: var(--text-muted);
+  }
+
+  /* ============================================================
+     方向 A：纸面标题 —— 静态纯文字，hover 淡胶囊，编辑态光环
+     ============================================================ */
+  .dirA .title-input {
+    width: 100%; min-width: 0;
+    font-family: inherit;
+    font-size: 1.05rem; font-weight: 650; letter-spacing: 0.01em;
+    color: var(--text);
+    background: transparent; border: none; outline: none;
+    padding: 3px 8px; border-radius: 8px;
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+    caret-color: var(--accent);
+    cursor: text;
+    transition: background var(--anim-fast) ease, box-shadow 0.2s var(--spring);
+  }
+  .dirA .title-input:hover:not(:focus):not(.readonly) { background: var(--hover-bg); }
+  .dirA .title-input:focus {
+    background: var(--hover-bg);
+    box-shadow: 0 0 0 2px var(--accent-soft), inset 0 0 0 1px var(--accent);
+  }
+  .dirA .title-input.readonly { cursor: default; }
+  .dirA .title-input::selection { background: var(--accent-soft); }
+
+  /* ============================================================
+     方向 B：墨水划线 —— 2px 底线 focus 时从左向右弹性展开
+     ============================================================ */
+  .dirB .inkline { position: relative; width: 100%; min-width: 0; }
+  .dirB .inkline::after {
+    content: ""; position: absolute; left: 4px; right: 4px; bottom: 0;
+    height: 2px; border-radius: 2px; background: var(--accent);
+    transform: scaleX(0); transform-origin: left center;
+    transition: transform 0.28s var(--spring);
+  }
+  .dirB .inkline.focused::after { transform: scaleX(1); }
+  .dirB .title-input {
+    width: 100%; min-width: 0;
+    font-family: inherit;
+    font-size: 1.05rem; font-weight: 650; letter-spacing: 0.01em;
+    color: var(--text);
+    background: transparent; border: none; outline: none;
+    padding: 3px 4px;
+    border-bottom: 2px solid transparent;
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+    caret-color: var(--accent); cursor: text;
+    transition: border-color var(--anim-fast) ease;
+  }
+  .dirB .title-input:focus { border-bottom-color: transparent; }
+  .dirB .title-input.readonly { cursor: default; }
+  .dirB .title-input::selection { background: var(--accent-soft); }
+
+  /* ============================================================
+     方向 C：居中窗题 —— 标题绝对居中，像窗口标题栏
+     ============================================================ */
+  .dirC .ed-header { padding-left: 44px; }
+  .dirC .ed-title-zone {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(46%, 340px); margin-right: 0; justify-content: center;
+  }
+  .dirC .title-input {
+    width: 100%; min-width: 0; text-align: center;
+    font-family: inherit;
+    font-size: 1rem; font-weight: 650; letter-spacing: 0.01em;
+    color: var(--text);
+    background: transparent; border: none; outline: none;
+    padding: 3px 10px; border-radius: 8px;
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+    caret-color: var(--accent); cursor: text;
+    transition: background var(--anim-fast) ease, box-shadow 0.2s var(--spring);
+  }
+  .dirC .title-input:hover:not(:focus):not(.readonly) { background: var(--hover-bg); }
+  .dirC .title-input:focus {
+    background: var(--hover-bg);
+    box-shadow: 0 0 0 2px var(--accent-soft), inset 0 0 0 1px var(--accent);
+  }
+  .dirC .title-input.readonly { cursor: default; }
+  .dirC .title-input::selection { background: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="page-head">
+    <h1>编辑器顶栏标题 · 三个重设计方向</h1>
+    <p>每个方案都是真实可交互的模拟窗口：<b>双击标题</b>进入编辑态，<kbd>Enter</kbd> 或点击别处提交，<kbd>Esc</kbd> 取消。右上角开关可切换 编辑/查看 模式（查看模式 = 纯文字，双击无效）。</p>
+    <p class="kbd-hint">下方还有 4 套主题色，用于检查方案在不同主题下的适配效果。</p>
+  </div>
+
+  <div class="theme-bar">
+    <span>主题：</span>
+    <button class="theme-btn active" data-theme="theme-light">浅色 · 橙</button>
+    <button class="theme-btn" data-theme="theme-dark">深色</button>
+    <button class="theme-btn" data-theme="theme-paper">纸张米黄</button>
+    <button class="theme-btn" data-theme="theme-teal">青碧</button>
+  </div>
+
+  <div class="panels" id="panels"></div>
+
+<script>
+  const eyeIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const editIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+  const fullIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+
+  const dirs = [
+    {
+      cls: 'dirA',
+      name: '方向 A · 纸面标题',
+      brief: '静态时纯粹是文字，层级靠字号字重；hover 浮现淡胶囊，编辑态胶囊 + accent 光环（无下划线）',
+      tip: '试一下：双击标题 → 光环包裹；hover → 淡胶囊；查看模式 → 零痕迹'
+    },
+    {
+      cls: 'dirB',
+      name: '方向 B · 墨水划线',
+      brief: '保留底线语言但重做：2px accent 底线，focus 时从左向右弹性展开（注意进入编辑态那一刻的动画）',
+      tip: '试一下：双击标题 → 底线从左划出；Esc 退出 → 底线收回'
+    },
+    {
+      cls: 'dirC',
+      name: '方向 C · 居中窗题',
+      brief: '标题绝对居中于顶栏，像窗口标题栏；碰撞风险：长标题会与两侧按钮争夺空间（这里用 46% 宽度截断演示）',
+      tip: '试一下：双击居中标题编辑；输入长文字观察截断行为'
+    }
+  ];
+
+  const panels = document.getElementById('panels');
+  dirs.forEach((d, i) => {
+    const el = document.createElement('section');
+    el.className = `panel theme-light ${d.cls}`;
+    el.innerHTML = `
+      <div class="panel-note">
+        <div class="name">${d.name}<small>${d.brief}</small></div>
+        <div class="mode-toggle">
+          <button class="on" data-mode="edit">编辑模式</button>
+          <button data-mode="view">查看模式</button>
+        </div>
+      </div>
+      <div class="editor-mock">
+        <div class="window">
+          <div class="ed-header">
+            <div class="ed-title-zone"><input class="title-input" value="${i === 1 ? '深入理解 CSS 层叠上下文与渲染顺序' : '深入理解 CSS 层叠上下文与渲染顺序'}" spellcheck="false"></div>
+            <div class="ed-actions">
+              <button class="icon-btn" tabindex="-1">${eyeIcon}</button>
+              <button class="icon-btn" tabindex="-1">${editIcon}</button>
+              <button class="icon-btn" tabindex="-1">${fullIcon}</button>
+            </div>
+          </div>
+          <div class="ed-body">
+            <div class="tag-row"><span class="tag">CSS</span><span class="tag">前端</span><span class="tag">渲染原理</span></div>
+            <div class="fake-line w85"></div>
+            <div class="fake-line w60"></div>
+            <div class="fake-line w85"></div>
+            <div class="fake-line w40"></div>
+          </div>
+        </div>
+      </div>
+      <div class="state-tip">${d.tip}</div>`;
+    panels.appendChild(el);
+
+    // 交互：双击编辑 / Enter 提交 / Esc 取消 / blur 提交
+    const input = el.querySelector('.title-input');
+    const original = input.value;
+    const zone = el.querySelector('.ed-title-zone');
+    input.addEventListener('dblclick', () => { if (!input.classList.contains('readonly')) input.focus(); });
+    input.addEventListener('focus', () => { if (d.cls === 'dirB') zone.classList.add('focused'); });
+    input.addEventListener('blur', () => {
+      if (d.cls === 'dirB') zone.classList.remove('focused');
+      if (!input.value.trim()) input.value = original;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.value = original; input.blur(); }
+    });
+
+    // 模式切换
+    el.querySelectorAll('.mode-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.querySelectorAll('.mode-toggle button').forEach(b => b.classList.toggle('on', b === btn));
+        const view = btn.dataset.mode === 'view';
+        input.classList.toggle('readonly', view);
+        if (view) input.blur();
+        input.title = view ? input.value : '双击编辑标题';
+      });
+    });
+  });
+
+  // 主题切换：全部面板同换
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.panel').forEach(p => {
+        p.classList.remove('theme-light', 'theme-dark', 'theme-paper', 'theme-teal');
+        p.classList.add(btn.dataset.theme);
+      });
+    });
+  });
+</script>
+</body>
+</html>

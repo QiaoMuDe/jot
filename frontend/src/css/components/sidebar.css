@@ -289,6 +289,16 @@
   background: var(--hover-bg);
 }
 
+/* 菜单项图标：随文字颜色，略微降透明度避免抢视觉 */
+.notebook-context-item svg {
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.notebook-context-item.danger svg {
+  opacity: 0.9;
+}
+
 /* 按下回弹反馈：按下快速缩小，松开经 spring 缓动弹回 */
 .notebook-context-item.pressed {
   transform: scale(0.94);

@@ -2348,16 +2348,16 @@
 #aiMsgContextMenu .context-menu-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 #aiMsgContextMenu .ctx-item-icon {
     display: flex;
     align-items: center;
-    color: var(--text-muted);
+    opacity: 0.72;
     flex-shrink: 0;
 }
 #aiMsgContextMenu .context-menu-item.danger .ctx-item-icon {
-    color: var(--danger);
+    opacity: 0.9;
 }
 
 /* ── 思考过程可折叠区域（深度思考模型） ──
@@ -2671,14 +2671,24 @@
 .ai-session-more-menu-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: 8px;
+    padding: 6px 12px;
     font-size: 0.78rem;
     color: var(--text-primary);
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: background 0.12s, transform 0.18s var(--anim-easing-spring);
     white-space: nowrap;
+}
+
+/* 菜单图标：随文字颜色，略微降透明度避免抢视觉（与其他右键菜单统一） */
+.ai-session-more-menu-item svg {
+    flex-shrink: 0;
+    opacity: 0.72;
+}
+
+.ai-session-more-menu-item.danger svg {
+    opacity: 0.9;
 }
 .ai-session-more-menu-item:hover {
     background: var(--hover-bg);

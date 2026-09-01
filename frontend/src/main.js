@@ -242,13 +242,85 @@ function setCMReadOnly(readOnly) {
 window.setCMReadOnly = setCMReadOnly;
 
 /**
+ * 更新标题输入框的 tooltip 文案
+ * 查看模式：显示完整标题（超长时供用户查看全文）
+ * 编辑模式：提示双击编辑标题
+ */
+function updateTitleTooltip() {
+    const titleEl = els.editorNoteTitle;
+    if (titleEl.readOnly) {
+        titleEl.title = titleEl.value;
+    } else {
+        titleEl.title = titleEl.value ? `${titleEl.value}（双击编辑标题）` : '双击编辑标题';
+    }
+}
+
+/**
+ * 标题双击进入编辑态：记录编辑前的值，聚焦并把光标移到末尾
+ */
+function onEditorTitleDblclick() {
+    // 查看模式（只读）双击无效
+    if (els.editorNoteTitle.readOnly) return;
+    // 已处于编辑态（聚焦中）则不重复处理
+    if (document.activeElement === els.editorNoteTitle) return;
+    state._titleBeforeEdit = els.editorNoteTitle.value;
+    els.editorNoteTitle.focus();
+    // 光标移到末尾
+    const len = els.editorNoteTitle.value.length;
+    els.editorNoteTitle.setSelectionRange(len, len);
+}
+
+/**
+ * 标题编辑态键盘处理：Enter 提交（交给 blur 处理），Esc 取消并恢复编辑前的值
+ * @param {KeyboardEvent} e
+ */
+function onEditorTitleKeydown(e) {
+    // 查看模式（只读）不响应，防止 Esc 清空只读标题
+    if (els.editorNoteTitle.readOnly) return;
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        els.editorNoteTitle.blur();
+    } else if (e.key === 'Escape') {
+        state._titleEscPressed = true;
+        els.editorNoteTitle.value = state._titleBeforeEdit ?? '';
+        updateTitleTooltip();
+        els.editorNoteTitle.blur();
+    }
+}
+
+/**
+ * 标题失焦退出编辑态：Esc 取消场景直接结束；空标题回退为编辑前的值，防止提交空标题
+ */
+function onEditorTitleBlur() {
+    if (state._titleEscPressed) {
+        // Esc 取消场景：恢复值不当作新提交
+        state._titleEscPressed = false;
+        state._titleBeforeEdit = null;
+        updateTitleTooltip();
+        return;
+    }
+    // 空标题：回退为进入编辑态前的值
+    if (!els.editorNoteTitle.value.trim()) {
+        els.editorNoteTitle.value = state._titleBeforeEdit ?? '';
+    }
+    updateTitleTooltip();
+    state._titleBeforeEdit = null;
+}
+
+/**
  * 内联切换编辑器查看/编辑模式，不重建 CM6 实例，避免闪烁
  * @param {boolean} readOnly - true=查看模式, false=编辑模式
  */
 function switchEditorReadOnly(readOnly) {
+    // 切换为查看模式时，若标题正处于编辑态则先失焦（走提交/回退逻辑）
+    if (readOnly && document.activeElement === els.editorNoteTitle) {
+        els.editorNoteTitle.blur();
+    }
     // 切换标题只读状态
     els.editorNoteTitle.readOnly = readOnly;
     els.editorNoteTitle.classList.toggle('editor-input-readonly', readOnly);
+    // 同步标题 tooltip（依赖 readOnly 状态）
+    updateTitleTooltip();
     // 切换按钮显隐
     els.editorSaveBtn.style.display = readOnly ? 'none' : '';
     els.editorCancelBtn.style.display = readOnly ? 'none' : '';
@@ -341,6 +413,8 @@ const state = {
     notebooks: [],              // 笔记本列表
     enteredFromViewMode: false, // 是否从查看模式点击编辑按钮进入编辑模式（控制返回按钮显示）
     _titleInputListenerAttached: false, // 编辑器标题 input 监听是否已绑定（用于清理）
+    _titleBeforeEdit: null,     // 标题进入编辑态前的值（双击编辑时记录，用于 Esc 取消/空值回退）
+    _titleEscPressed: false,    // 标题编辑态下按过 Esc 的标志（blur 时检测后重置，避免把恢复值当新提交）
     // 搜索弹窗状态(替代原 topbar 搜索)
     _searchModalPrevFocus: null,        // 弹窗打开前 document.activeElement
     searchModalKeyword: '',
@@ -3406,7 +3480,7 @@ function renderCardGrid(animateMode, prevCount) {
                     ${(note.tags || [])
                         .map(
                             (tag) =>
-                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" onclick="${state.batchMode ? `event.stopPropagation()` : `event.stopPropagation(); window.searchByTag(${tag.id}, '${escapeHtml(tag.name)}')`}">${escapeHtml(tag.name)}</span>`
+                                `<span class="card-tag" style="background-color: ${tag.color || '#6366f1'}" title="${escapeHtml(tag.name)}" onclick="${state.batchMode ? `event.stopPropagation()` : `event.stopPropagation(); window.searchByTag(${tag.id}, '${escapeHtml(tag.name)}')`}">${escapeHtml(tag.name)}</span>`
                         )
                         .join('')}
                 </div>
@@ -3758,6 +3832,9 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     // 只读/编辑模式 UI 切换（同步）
     els.editorNoteTitle.readOnly = isReadOnly;
     els.editorNoteTitle.classList.toggle('editor-input-readonly', isReadOnly);
+    // 每次打开均为新会话：重置标题编辑态状态，并同步 tooltip（需在 readOnly 设置后调用）
+    state._titleBeforeEdit = null;
+    updateTitleTooltip();
     els.editorSaveBtn.style.display = isReadOnly ? 'none' : '';
     els.editorCancelBtn.style.display = isReadOnly ? 'none' : '';
     els.editorPanel.classList.toggle('editor-view-mode', isReadOnly);
@@ -3902,6 +3979,8 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
                                 if (mySeq === editorOpSeq) {
                                     els.editorNoteTitle.value = fetchedNote.title || '';
                                     state.selectedTags = (fetchedNote.tags || []).map((t) => t.id);
+                                    // 阶段二异步填充标题后同步 tooltip（查看模式下展示完整标题）
+                                    updateTitleTooltip();
                                 }
                                 try {
                                     if (window.go.main.App.GetNoteContent)
@@ -4850,6 +4929,8 @@ function updateFindCount(total) {
  * 编辑器输入事件处理：更新字数 + 预览渲染
  */
 function onEditorInput() {
+    // 手动改值时同步标题 tooltip
+    updateTitleTooltip();
     updateWordCount();
     // 预览模式下自动更新
     if (els.editorOverlay.dataset.mode === 'preview') {
@@ -5006,6 +5087,7 @@ function closeEditor() {
         state.selectedTags = [];
         state._editSnapshot = null;
         state._defaultNewNoteTitle = null;
+        state._titleBeforeEdit = null;
         // 字数归零
         els.editorWordCount.textContent = '';
         // 清除文件后缀显示
@@ -5153,27 +5235,16 @@ window.viewNote = function (id) {
 window.showContextMenu = function (event, noteId) {
     contextMenuNoteId = noteId;
     const menu = els.contextMenu;
-    // 更新置顶选项文本
+    // 更新置顶选项文本（仅更新 label span，保留图标）
     const note = state.notes.find((n) => n.id === noteId);
     const pinItem = menu.querySelector('[data-action="pin"]');
     if (pinItem && note) {
-        pinItem.textContent = note.pinned ? '取消置顶' : '置顶';
-    }
-
-    // 更新标签菜单项可用性：已有 3 个标签时不可再添加；无标签时不可移除
-    if (note) {
-        const tagCount = (note.tags || []).length;
-        const addTagItem = menu.querySelector('[data-action="add-tag"]');
-        const removeTagItem = menu.querySelector('[data-action="remove-tag"]');
-        if (addTagItem) {
-            addTagItem.classList.toggle('disabled', tagCount >= 3);
-            addTagItem.title = tagCount >= 3 ? '该笔记标签已达上限（3 个）' : '';
-        }
-        if (removeTagItem) {
-            removeTagItem.classList.toggle('disabled', tagCount === 0);
-            removeTagItem.title = tagCount === 0 ? '该笔记暂无标签' : '';
+        const pinLabel = pinItem.querySelector('[data-label]');
+        if (pinLabel) {
+            pinLabel.textContent = note.pinned ? '取消置顶' : '置顶';
         }
     }
+    // 「管理标签」永远可点，无需禁用逻辑
 
     // 计算 transform-origin：靠近左上角还是右下角
     const isRight = event.clientX > window.innerWidth / 2;
@@ -5234,11 +5305,8 @@ window.handleContextAction = function (action) {
         case 'move':
             openMoveDialog([id]);
             break;
-        case 'add-tag':
-            openBatchTagPicker('add', [id]);
-            break;
-        case 'remove-tag':
-            openBatchTagPicker('remove', [id]);
+        case 'manage-tags':
+            openBatchTagPicker('manage', [id]);
             break;
     }
 };
@@ -5284,9 +5352,9 @@ window.toggleEditorTag = function (tagId, el) {
         state.selectedTags.splice(idx, 1);
         el.classList.remove('active');
     } else {
-        // 新增选中：检查是否已达上限 3
-        if (state.selectedTags.length >= 3) {
-            window.showNotification('一篇笔记最多选择 3 个标签', 'warning');
+        // 新增选中：检查是否已达上限
+        if (state.selectedTags.length >= MAX_NOTE_TAGS) {
+            window.showNotification(`一篇笔记最多选择 ${MAX_NOTE_TAGS} 个标签`, 'warning');
             return;
         }
         state.selectedTags.push(tagId);
@@ -5509,9 +5577,12 @@ async function batchPinSelected() {
 
 /* ===== 批量标签操作 ===== */
 
-let batchTagAction = null; // 'add' | 'remove'
+const MAX_NOTE_TAGS = 3; // 单篇笔记标签数量上限（编辑器标签选择、右键管理标签、批量添加共用）
+
+let batchTagAction = null; // 'add' | 'remove' | 'manage'
 let batchTagNoteIds = null; // 右键菜单单笔记模式：显式笔记 ID 数组；null = 批量模式使用 selectedNoteIds
 let batchTagAddLimit = null; // 单笔记添加模式：可再添加的标签数上限（3 - 笔记已有标签数）
+let batchTagInitialSelected = new Set(); // manage 模式：打开弹窗时笔记已挂标签的 id 快照，用于差量提交
 
 /**
  * 收集指定笔记中已包含的标签 ID 集合
@@ -5529,7 +5600,7 @@ function getTagIdsInNotes(noteIds) {
 
 /**
  * 打开批量标签选择弹窗
- * @param {string} action - 'add' | 'remove'
+ * @param {string} action - 'add' | 'remove' | 'manage'（manage：单笔记右键菜单专用，芯片开关 + 差量保存）
  * @param {number[]} [noteIds] - 可选。右键菜单单笔记模式传入的笔记 ID 数组；缺省时使用批量选中的笔记
  */
 function openBatchTagPicker(action, noteIds = null) {
@@ -5543,6 +5614,24 @@ function openBatchTagPicker(action, noteIds = null) {
         }
     }
     const isAdd = action === 'add';
+
+    // manage 模式：单笔记右键菜单专用，芯片即开关，确认时按差量提交
+    if (action === 'manage') {
+        const attached = getTagIdsInNotes([batchTagNoteIds[0]]);
+        // 仅保留仍存在于标签库中的 id：已删除标签的残留关联不渲染芯片，
+        // 也不参与差量计算，避免"什么都没点却提示已移除"
+        batchTagInitialSelected = new Set(Array.from(attached).filter(tid => state.tags.some(t => t.id === tid)));
+        els.batchTagTitle.textContent = '管理标签';
+        els.batchTagFooter.style.display = 'flex';
+        els.batchTagConfirmBtn.textContent = '保存';
+        renderBatchTagList();
+        els.batchTagOverlay.style.display = 'flex';
+        requestAnimationFrame(() => {
+            els.batchTagOverlay.style.opacity = '1';
+        });
+        return;
+    }
+
     // 单笔记模式标题更明确
     els.batchTagTitle.textContent = batchTagNoteIds && batchTagNoteIds.length === 1
         ? (isAdd ? '添加标签' : '移除标签')
@@ -5553,24 +5642,24 @@ function openBatchTagPicker(action, noteIds = null) {
     if (isAdd && batchTagNoteIds && batchTagNoteIds.length === 1) {
         const note = state.notes.find(n => n.id === batchTagNoteIds[0]);
         const existing = (note && note.tags) ? note.tags.length : 0;
-        if (existing >= 3) {
-            nm.show('该笔记标签已达上限（3 个）', 'info');
+        if (existing >= MAX_NOTE_TAGS) {
+            nm.show(`该笔记标签已达上限（${MAX_NOTE_TAGS} 个）`, 'info');
             batchTagAction = null;
             batchTagNoteIds = null;
             return;
         }
-        batchTagAddLimit = 3 - existing;
+        batchTagAddLimit = MAX_NOTE_TAGS - existing;
     } else if (isAdd && !batchTagNoteIds) {
-        // 批量添加模式：按所有选中笔记的最小剩余额度收紧，避免部分笔记超过 3 个标签
-        let minRemaining = 3;
+        // 批量添加模式：按所有选中笔记的最小剩余额度收紧，避免部分笔记超过标签上限
+        let minRemaining = MAX_NOTE_TAGS;
         for (const id of state.selectedNoteIds) {
             const note = state.notes.find(n => n.id === id);
             const existing = (note && note.tags) ? note.tags.length : 0;
-            minRemaining = Math.min(minRemaining, 3 - existing);
+            minRemaining = Math.min(minRemaining, MAX_NOTE_TAGS - existing);
             if (minRemaining <= 0) break;
         }
         if (minRemaining <= 0) {
-            nm.show('所选笔记中有笔记已达 3 个标签上限', 'info');
+            nm.show(`所选笔记中有笔记已达 ${MAX_NOTE_TAGS} 个标签上限`, 'info');
             batchTagAction = null;
             return;
         }
@@ -5609,6 +5698,7 @@ function closeBatchTagPicker() {
     batchTagAction = null;
     batchTagNoteIds = null;
     batchTagAddLimit = null;
+    batchTagInitialSelected = new Set();
 }
 
 /**
@@ -5622,8 +5712,14 @@ function renderBatchTagList() {
     }
 
     const isRemove = batchTagAction === 'remove';
+    const isManage = batchTagAction === 'manage';
     const isAdd = batchTagAction === 'add';
-    const tagIdsInNotes = isRemove ? getTagIdsInNotes(batchTagNoteIds || Array.from(state.selectedNoteIds)) : new Set();
+    // manage 模式：初始选中 = 笔记已挂标签，全部芯片可点（点击即切换期望状态）
+    const tagIdsInNotes = isRemove
+        ? getTagIdsInNotes(batchTagNoteIds || Array.from(state.selectedNoteIds))
+        : isManage
+            ? batchTagInitialSelected
+            : new Set();
     // 单笔记添加模式：该笔记已有的标签不可重复添加（禁用 + 提示，避免重复添加/白占可选项额度）
     const existingTagIds = (isAdd && batchTagNoteIds && batchTagNoteIds.length === 1)
         ? getTagIdsInNotes(batchTagNoteIds)
@@ -5640,7 +5736,9 @@ function renderBatchTagList() {
             // 移除模式：不在笔记中的标签不可选；单笔记添加模式：已有标签不可选
             const disabled = (isRemove && !tagIdsInNotes.has(tag.id)) || existingTagIds.has(tag.id);
             const title = existingTagIds.has(tag.id) ? ' title="该笔记已有此标签"' : '';
-            const cls = `batch-tag-chip${disabled ? ' disabled' : ''}`;
+            // manage 模式：已挂标签初始为选中态
+            const selectedCls = isManage && tagIdsInNotes.has(tag.id) ? ' selected' : '';
+            const cls = `batch-tag-chip${disabled ? ' disabled' : ''}${selectedCls}`;
             return `<div class="${cls}"${title} data-tag-id="${tag.id}" data-tag-color="${tag.color || '#6B7280'}" style="--tag-color:${tag.color || '#6B7280'}">${escapeHtml(tag.name)}</div>`;
         })
         .join('');
@@ -5657,7 +5755,26 @@ function renderBatchTagList() {
  */
 function onBatchTagClick(el) {
     const isAdd = batchTagAction === 'add';
-    const limit = batchTagAddLimit !== null ? batchTagAddLimit : 3;
+    const limit = batchTagAddLimit !== null ? batchTagAddLimit : MAX_NOTE_TAGS;
+    // manage 模式：点击即切换期望状态，选中数（笔记最终标签数）不得超过上限
+    if (batchTagAction === 'manage') {
+        if (!el.classList.contains('selected')) {
+            const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
+            if (count >= MAX_NOTE_TAGS) {
+                window.showNotification(`一篇笔记最多 ${MAX_NOTE_TAGS} 个标签，请先取消一个`, 'warning');
+                return;
+            }
+        }
+        el.classList.toggle('selected');
+        // 统计与初始快照的差异项数，实时反馈到保存按钮
+        let changed = 0;
+        els.batchTagList.querySelectorAll('.batch-tag-chip').forEach(chip => {
+            const id = parseInt(chip.dataset.tagId);
+            if (chip.classList.contains('selected') !== batchTagInitialSelected.has(id)) changed++;
+        });
+        els.batchTagConfirmBtn.textContent = changed > 0 ? `保存（${changed}）` : '保存';
+        return;
+    }
     // 追加模式下，如果芯片当前未选中且已选 ≥ 上限，拒绝
     if (isAdd && !el.classList.contains('selected')) {
         const count = els.batchTagList.querySelectorAll('.batch-tag-chip.selected').length;
@@ -5677,6 +5794,38 @@ function onBatchTagClick(el) {
  */
 async function confirmBatchTagAction() {
     const selectedChips = els.batchTagList.querySelectorAll('.batch-tag-chip.selected');
+    // manage 模式：按差量提交（先加后删）；清空全部标签也合法
+    if (batchTagAction === 'manage') {
+        const selectedIds = new Set(Array.from(selectedChips).map(c => parseInt(c.dataset.tagId)));
+        const added = Array.from(selectedIds).filter(id => !batchTagInitialSelected.has(id));
+        const removed = Array.from(batchTagInitialSelected).filter(id => !selectedIds.has(id));
+        if (added.length === 0 && removed.length === 0) {
+            closeBatchTagPicker();
+            nm.show('未做任何修改', 'info');
+            return;
+        }
+        const ids = [...batchTagNoteIds];
+        try {
+            for (const tagId of added) {
+                await window.go.main.App.BatchAddTagToNotes(ids, tagId);
+            }
+            for (const tagId of removed) {
+                await window.go.main.App.BatchRemoveTagFromNotes(ids, tagId);
+            }
+        } catch (err) {
+            console.error('管理标签保存失败:', err);
+            closeBatchTagPicker();
+            nm.show('操作失败', 'error');
+            return;
+        }
+        closeBatchTagPicker();
+        await loadNotes();
+        const parts = [];
+        if (added.length > 0) parts.push(`已添加 ${added.length} 个标签`);
+        if (removed.length > 0) parts.push(`已移除 ${removed.length} 个标签`);
+        nm.show(parts.join('，'), 'success');
+        return;
+    }
     if (selectedChips.length === 0) {
         nm.show('请先选择标签', 'warning');
         return;
@@ -5971,6 +6120,10 @@ function initEventListeners() {
 
     // 编辑器
     els.editorCloseBtn.addEventListener('click', closeEditorSafe);
+    // 标题双击编辑交互（元素常驻 DOM，initEventListeners 仅执行一次，无需清理）
+    els.editorNoteTitle.addEventListener('dblclick', onEditorTitleDblclick);
+    els.editorNoteTitle.addEventListener('keydown', onEditorTitleKeydown);
+    els.editorNoteTitle.addEventListener('blur', onEditorTitleBlur);
     els.editorTypeToggle?.addEventListener('click', toggleFileExt);
     els.editorEditBtn.addEventListener('click', () => {
         const noteId = state.editingNoteId;
@@ -6156,8 +6309,6 @@ function initEventListeners() {
             e.stopPropagation();
             // 置灰项不执行动作，仅提示原因
             if (item.classList.contains('disabled')) {
-                if (item.dataset.action === 'add-tag') nm.show('该笔记标签已达上限（3 个）', 'info');
-                else if (item.dataset.action === 'remove-tag') nm.show('该笔记暂无标签', 'info');
                 return;
             }
             window.handleContextAction(item.dataset.action);
@@ -7118,6 +7269,7 @@ async function openMdRefTryEditor(source, badgeText) {
     await openEditor(null);
     // 设置标题和内容（此时 cmEditor 已就绪）
     els.editorNoteTitle.value = `[MD 语法] ${badgeText}`;
+    updateTitleTooltip();
     setEditorContent(decoded);
     // 设为 Markdown 类型（覆盖 openEditor 内部默认的 'text'）
     els.editorFileExt.textContent = '.md';
@@ -7375,8 +7527,8 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
     menu.style.top = event.clientY + 'px';
 
     menu.innerHTML = `
-        <div class="notebook-context-item${isDefault ? ' disabled' : ''}" data-action="rename">${isDefault ? '默认笔记本' : '重命名'}</div>
-        <div class="notebook-context-item danger${isDefault ? ' disabled' : ''}" data-action="delete">${isDefault ? '不可删除' : '删除'}</div>
+        <div class="notebook-context-item${isDefault ? ' disabled' : ''}" data-action="rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>${isDefault ? '默认笔记本' : '重命名'}</div>
+        <div class="notebook-context-item danger${isDefault ? ' disabled' : ''}" data-action="delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>${isDefault ? '不可删除' : '删除'}</div>
     `;
     document.body.appendChild(menu);
 
