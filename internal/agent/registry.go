@@ -186,7 +186,6 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"read_url", tools.WrapWithError("read_url", tools.NewReadURL(p.deps.Setting, p.ctx), p.ctx)},
 		{"http_request", tools.WrapWithError("http_request", tools.NewHTTP(p.deps.Setting, p.ctx), p.ctx)},
 		{"recall_notes", tools.WrapWithError("recall_notes", tools.NewRecallNotes(p.deps.Vector, p.deps.Setting, p.deps.GetEmbedConfig, p.req.RecallNotebookIDs, p.ctx), p.ctx)},
-		{"get_current_time", tools.WrapWithError("get_current_time", tools.NewGetCurrentTime(), p.ctx)},
 		{"json_validate", tools.WrapWithError("json_validate", tools.MustJSONValidate(), p.ctx)},
 		{"json_format", tools.WrapWithError("json_format", tools.MustJSONFormat(), p.ctx)},
 		{"json_extract", tools.WrapWithError("json_extract", tools.MustJSONExtract(), p.ctx)},

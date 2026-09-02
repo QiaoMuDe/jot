@@ -88,7 +88,7 @@ type validateArgs struct {
 func NewJSONValidateTool() (tool.InvokableTool, error) {
 	return utils.InferTool[*validateArgs, string](
 		"json_validate",
-		"校验一段文本是否为合法 JSON，返回校验结果。适用场景：①模型生成 JSON 后自检；②用户粘贴 JSON 要求检查；③read_url 返回的响应体疑似 JSON 需确认。合法时说明顶层类型（object/array/string/number/boolean/null）；不合法时给出错误信息与出错位置（第几行第几列）。边界：本工具只校验不修改，修复请用 json_format（美化）或 json_extract（提取）。输入上限 100KB。",
+		"校验文本是否为合法 JSON。合法时返回顶层类型；不合法时报告错误位置（第几行第几列）。只校验不修改，美化用 json_format，提取字段用 json_extract。输入上限 100KB。",
 		func(ctx context.Context, a *validateArgs) (string, error) {
 			return validateRun(ctx, a)
 		},
@@ -170,7 +170,7 @@ type formatArgs struct {
 func NewJSONFormatTool() (tool.InvokableTool, error) {
 	return utils.InferTool[*formatArgs, string](
 		"json_format",
-		"把合法的 JSON 文本格式化为易读的缩进形式（美化输出）。适用场景：①模型生成的 JSON 紧凑难读，格式化后便于检查结构；②用户粘贴的 JSON 格式混乱要求美化；③从 API/网页获取的压缩 JSON 需要可读化。边界：非法 JSON 返回错误提示，请先用 json_validate 检查；本工具只美化不提取字段，提取请用 json_extract。输入上限 100KB。",
+		"将合法 JSON 美化为缩进易读形式。非法 JSON 会报错，请先用 json_validate 校验；只美化不提取字段，提取用 json_extract。输入上限 100KB。",
 		func(ctx context.Context, a *formatArgs) (string, error) {
 			return formatRun(ctx, a)
 		},
@@ -231,7 +231,7 @@ type extractArgs struct {
 func NewJSONExtractTool() (tool.InvokableTool, error) {
 	return utils.InferTool[*extractArgs, string](
 		"json_extract",
-		"从 JSON 中按路径提取一个值。适用场景：①从 API 响应/网页抓取的大 JSON 中取特定字段，避免把整段塞进上下文；②用户要求提取 JSON 中某个值；③read_url 返回的 JSON 响应需要取特定字段。路径用点语法：对象字段直接写字段名，数组用下标（[0] 或 .0 均可）；例如 data.items[0].title 提取 data 下 items 数组首项的 title；用 # 通配可一次取回所有元素（如 data.items.#.title 返回全部 title 的数组）。标量值（字符串/数字/布尔）直接返回，对象/数组返回原始 JSON。路径不存在返回提示。边界：JSON 不合法时返回错误，请先用 json_validate 检查；本工具只提取不修改，美化请用 json_format。输入上限 100KB。",
+		"从 JSON 中按点路径提取值，避免把大 JSON 整段塞进上下文。路径写法：字段用点连接，数组下标 [0] 或 .0 均可，如 data.items[0].title；# 通配可取全部元素（如 data.items.#.title）。标量直接返回，对象/数组返回原始 JSON，路径不存在返回提示。非法 JSON 请先用 json_validate 校验；只提取不修改，美化用 json_format。输入上限 100KB。",
 		func(ctx context.Context, a *extractArgs) (string, error) {
 			return extractRun(ctx, a)
 		},

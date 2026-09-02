@@ -22,7 +22,7 @@ jot/                                    # 项目根目录
 │   │   ├── registry.go                 # 内置工具注册表（按 Mode 过滤 + ToolMeta 声明）
 │   │   ├── types.go                    # Agent 类型（Request/PlanState/Deps/Event 等）
 │   │   ├── TOOLS.md / EVENTS.md        # 工具文档 / 事件文档
-│   │   │   └── tools/                      # 内置工具实现（manage_note/ask_user/plan/recall_notes/read_url/read_note_section/json 三件套/manage_notebook/manage_tag/manage_todo/get_stats/current_time 共 15 个）
+│   │   │   └── tools/                      # 内置工具实现（manage_note/ask_user/plan/recall_notes/read_url/http_request/read_note_section/json 三件套/manage_notebook/manage_tag/manage_todo/get_stats 共 15 个）
 │   ├── aierrors/                       # AI 错误分类（errors.go：auth_error/rate_limit/server_error 等 11 类）
 │   ├── config/                         # 路径工具（JotHomeDir/SubDir，~/.jot 下 data/backup/images/logs/mcp 五子目录）
 │   ├── converter/                      # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
@@ -549,28 +549,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
-34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 9 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 7 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
 
 35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
----
-
-## 记忆点 1：AI 回复期间交互锁定（工具栏 5 按钮 + 侧栏自动折叠禁用 + 计划提示词分级 + 打字动画过渡）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 强化 AI 回复（流式）期间的交互管控与体验：① 新增统一锁定系统 `setToggleLocked`——回复期间锁定 5 个工具栏按钮（Agent/Plan 模式切换、深度思考、模型选择、更多技能、添加内容）与会话侧栏，视觉置灰 + 点击抖动 + Toast 提示；② 发送/重发/重新生成/编辑后发送时若侧栏未折叠则自动折叠，回复结束后还原流前状态；③ 计划模式系统提示词按任务复杂度分级拆解，避免小任务被强制拆步；④ 计划面板弹出后保留打字动画作为过渡。 |
-| **锁定系统（setToggleLocked，重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增模块级 `setToggleLocked(locked)` + `shakeLockedToggle(el)`（shake 动画 + `animationend` 一次性清理）。生命周期挂钩恰 5 处：`startStreaming` 置 `isStreaming=true` 后上锁；停止按钮、`ai:stream-done`、`ai:stream-error`、`CallAIAgentStream` 同步异常 catch 四处解锁。锁定元素统一加 `is-locked` 类（置灰 + `cursor: not-allowed`，**不加 `pointer-events:none`**——保留点击以触发抖动反馈）。点击守卫统一模式：`if (isStreaming) { shakeLockedToggle(el); showNotification('回复进行中，暂时无法xxx'); return; }`。 |
-| **锁定范围** | 工具栏 5 按钮：模式切换（`.ai-mode-btn`）、深度思考（`#aiChatSearchToggle`）、模型选择（`#aiChatModelTrigger`）、更多技能（`#aiChatMoreSkillsBtn`）、添加内容（`#aiChatAddBtn`，复用 `.ai-chat-toolbar-btn`）。会话侧栏：折叠按钮（`#aiSidebarToggle`，Ctrl+J 快捷键经 `toggleAISessionSidebar` 一并拦截）、新建会话（`#aiSessionNewBtn`）、清空对话（`#aiChatClearBtn`，原"自动取消流再清空"分支成为死代码已移除）、搜索框（`#aiSessionSearch` 原生 `disabled`）。锁定同时收起已展开的模型/技能/添加下拉与会话菜单。 |
-| **侧栏自动折叠（重要）** | 发送/重发/重新生成/编辑后发送均经 `startStreaming` → `setToggleLocked(true)` 触发。模块级 `_preStreamSidebarExpanded` 记录流前展开状态：未折叠则 `classList.add('collapsed')` + 按钮 title 更新；回复结束后按流前状态还原（流前已折叠则保持折叠，不强行展开）。**不写 localStorage**——折叠是流内临时态，持久化偏好仅由手动折叠按钮 `window.toggleAISessionSidebar` 维护，避免流中途关闭应用污染用户偏好。 |
-| **计划提示词分级** | [agent.go](internal/agent/agent.go) `planGenSystemPrompt` 增加任务分级：简单任务 1 步直接执行 / 常规 2-5 步 / 复杂 6-10 步 + "宁少勿多"总原则（复杂任务先核心后辅助、粒度均匀）；`create_plan` 工具 `tool_name` 参数描述改为"可选，仅当步骤依赖工具时填写"（[plan.go](internal/agent/tools/plan.go)），并移除"收到任何请求都应先调用本工具"的强引导——小任务不再被强制拆步。 |
-| **打字动画过渡** | `ai:plan-created` 处理器清空 `contentDiv` 后重新挂载 `createTypingDots()`：计划面板弹出后到首个 thinking/chunk 到达前气泡持续显示打字动画，避免"空气泡无反馈"窗口；首个正文 chunk 到达时 `hasReceivedChunk` 置位 + `contentDiv.innerHTML=''` 天然替换打字动画，无需额外清理逻辑。 |
-| **关键设计决策** | ① 用"类锁定 + 点击守卫"而非原生 `disabled`：`disabled` 阻断 click 事件、无法触发抖动反馈，且深度思考开关是 `div` 不支持；② 清空对话流式期间一并禁用（经用户确认保持禁用，需先停止再清空）；③ 会话条目/更多菜单因侧栏折叠不可见，`switchSession`/`createSession` 原有 `if (isStreaming) return` 守卫兜底；④ 润色流程走独立 `CallAI` 通道、不经过 `startStreaming`，不参与锁定；⑤ 审计确认 `isStreaming` 全文件仅 5 处赋值，锁/解锁无遗漏路径。 |
-| **涉及文件** | [ai-chat.js](frontend/src/js/ai-chat.js)（`setToggleLocked`/`shakeLockedToggle`/`_preStreamSidebarExpanded`/5 处生命周期挂钩/6 个点击守卫）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.is-locked`/`.is-shaking`/`ai-toggle-shake` keyframes/搜索框 `:disabled`）、[agent.go](internal/agent/agent.go)（`planGenSystemPrompt` 任务分级）、[plan.go](internal/agent/tools/plan.go)（`tool_name` 描述可选） |
+36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 10
 
 ---
 
-## 记忆点 2：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
+## 记忆点 1：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 2：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 3：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 4：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 5：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 6：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 7：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,22 +658,33 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 8：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 4 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
+| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 3 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
 | **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
 | **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
 
 ---
 
-## 记忆点 10：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 9：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 笔记右键菜单新增"属性"项（放在第一组"查看"之后，不放删除附近），打开仿资源管理器风格的只读属性弹窗：类型/位置/大小/字符数/行数/标签/置顶/创建时间/修改时间/状态。后端新增 `GetNoteProperties`（[app.go](app.go)）+ `GetNoteWithRelations`（[note_service.go](internal/services/note_service.go)，`Unscoped` 支持回收站笔记、预加载 Tags+Notebook）；统计（字节数/字符数/行数）后端算好，content 全文不出后端。 |
 | **实现要点** | 前端弹窗静态骨架在 [index.html](frontend/index.html)（`#notePropertiesOverlay`），`.note-properties-*` 样式在 [modals.css](frontend/src/css/components/modals.css)（对齐现有 overlay+visible 模式）；[main.js](frontend/src/main.js) `showNoteProperties` 每次实时调 API 填充，"已删除"状态红色强调。**Esc 关闭走全局 Escape 分发链**（与导入冲突弹窗等一致，分支位于全局 keydown 处理中），本地只保留关闭按钮 + 遮罩点击。 |
+
+---
+
+## 记忆点 10：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 移除内置工具 `get_current_time`（一次工具往返延迟 + 长 Desc schema token + 依赖提示词强制调用规范的非确定性约束），改为共享系统提示词组装函数 `buildAIContextInstruction`（[app.go](app.go)）末尾注入一行【环境信息】当前时间（日期 + 中文星期 + 时分 + 时区名 + UTC 偏移，桌面应用本地时区即用户时区）。Chat 与 Agent 两模式共用：补齐 Chat 模式此前无任何真实时间来源（只能靠模型训练知识瞎猜）的缺口，Agent 模式回答时间问题不再触发工具调用。内置工具 16 → 15。 |
+| **实现要点** | 注入位于技能提示词之后、`return` 之前（Instruction 尾部：不扰动前部稳定内容、利于提示词前缀缓存）；`now.Zone()` 取时区名 + `Format("-07:00")` 取 UTC 偏移，中文星期数组内联 app.go（不复用 tools 包未导出变量）。同步删除：current_time.go、registry.go 注册行、meta.go 展示条目（前端工具开关列表自动少一项）、Agent 提示词"时间工具强制调用"规范段、两个 doc.go 工具清单、TOOLS.md 引用（§1 架构树 + §4.2 无参模板的文件引用 + §4.3 命名示例改 read_url）。用户设置 `ai_agent_tools_disabled` 中的残留工具名按未知名忽略，无需迁移。 |
+| **相关决策** | ① 不采用"注入 + 保留工具"混合方案：应用无"运行中反复获取秒级时间"的场景，保留工具徒增 schema token 与冗余调用风险；将来若引入子代理，在子代理提示词同样注入一行即可。② 曾评估将 json_validate/json_format/json_extract 合并为单工具 + action 参数，否决——三工具参数形状差异大（path 仅 extract 必填），InferTool 反射无法表达条件必填，合并损害模型调用准确率；改为精简三个工具 Desc（删除"适用场景 ①②③"枚举，保留功能定义 + 关键参数写法 + 互相引导边界，约减 55%，每次请求省约 300 token）。 |
+| **涉及文件** | [app.go](app.go)、[registry.go](internal/agent/registry.go)、[meta.go](internal/agent/tools/meta.go)、[json_tools.go](internal/agent/tools/json_tools.go)、[doc.go](internal/agent/doc.go)、[tools/doc.go](internal/agent/tools/doc.go)、[TOOLS.md](internal/agent/TOOLS.md)、[mcpserver/tools_test.go](internal/mcpserver/tools_test.go)（测试假工具 get_current_time 改名 ping 避免混淆）、[README.md](README.md) 与 playground/landing 展示口径（16→15）。方案详见 [.trae/documents/plan-inject-current-time-remove-time-tool.md](.trae/documents/plan-inject-current-time-remove-time-tool.md) |
 
 ---
 

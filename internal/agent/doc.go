@@ -2,7 +2,7 @@
 //
 // 职责：
 //   - AgentService.Run：组装 ChatModelAgent（OpenAI 兼容协议，配置复用现有 AI 设置）、
-//     统一注册工具（只读：read_url / recall_notes / get_stats / get_current_time /
+//     统一注册工具（只读：read_url / recall_notes / get_stats /
 //     read_note_section；交互：ask_user；规划：create_plan / update_plan；
 //     写操作：manage_todo / manage_notebook / manage_tag / manage_note）
 //   - 外部 MCP 服务器工具（联网搜索等由 MCP 提供）、消费事件流，

@@ -2109,11 +2109,6 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"1. manage_note 的写操作（update/edit/pin/move/add_tag/remove_tag）执行前必须通过 ask_user 确认，用户同意后携带 confirm=true 执行。create 无需确认。\n" +
 			"2. 用户拒绝或撤回时不执行。\n")
 
-		// Agent 模式专用约束：当前时间工具强制调用规范
-		instruction.WriteString("\n\n【工具使用规范 - get_current_time 时间工具（强制调用）】\n" +
-			"1. 涉及当前时间/日期的问题，必须先调用 get_current_time 获取真实时间，严禁凭模型知识猜测。\n" +
-			"2. 调用失败时如实告知用户，不要替代。\n")
-
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
 		history := make([]agent.HistoryMessage, 0, len(messages))
@@ -2334,6 +2329,17 @@ func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, refe
 			a.LogSvc.Logger.Errorw("获取技能提示词失败", fastlog.Error(err))
 		}
 	}
+
+	// 环境信息：注入当前时间（Chat/Agent 两模式共用），模型回答时间相关问题
+	// 直接以此为背景，无需调用工具；放于末尾避免扰动前部稳定内容（利于提示词前缀缓存）
+	now := time.Now()
+	tzName, _ := now.Zone()
+	weekdays := [...]string{"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}
+	fmt.Fprintf(&instruction, "\n\n【环境信息】当前时间：%s %s（%s，UTC%s）",
+		now.Format("2006-01-02 15:04"),
+		weekdays[now.Weekday()],
+		tzName,
+		now.Format("-07:00"))
 
 	return instruction.String()
 }

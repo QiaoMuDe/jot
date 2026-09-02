@@ -24,7 +24,7 @@ func TestOpenSessionOverSSE(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// 1. 起内存 MCP 服务器并注册两个工具：add（两数求和）与 get_current_time（只读）
+	// 1. 起内存 MCP 服务器并注册两个工具：add（两数求和）与 ping（只读）
 	srv := mcp.NewServer(&mcp.Implementation{Name: "test-math-server", Version: "1.0.0"}, nil)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "add",
@@ -45,12 +45,12 @@ func TestOpenSessionOverSSE(t *testing.T) {
 		}, nil, nil
 	})
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "get_current_time",
-		Description: "只读：返回当前时间",
+		Name:        "ping",
+		Description: "只读：返回 pong",
 		InputSchema: map[string]any{"type": "object"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "2026-08-11 12:00:00"}},
+			Content: []mcp.Content{&mcp.TextContent{Text: "pong"}},
 		}, nil, nil
 	})
 
@@ -109,14 +109,14 @@ func TestOpenSessionOverSSE(t *testing.T) {
 		t.Errorf("add(2,3) 结果 text = %q, want \"5\"（原始输出: %s）", text, out)
 	}
 
-	// 8. 执行只读工具 get_current_time
-	timeTool := findTool(t, ctx, sess.Tools, "_get_current_time")
-	timeOut, err := timeTool.InvokableRun(ctx, `{}`)
+	// 8. 执行只读工具 ping
+	pingTool := findTool(t, ctx, sess.Tools, "_ping")
+	pingOut, err := pingTool.InvokableRun(ctx, `{}`)
 	if err != nil {
-		t.Fatalf("InvokableRun(get_current_time) 失败: %v", err)
+		t.Fatalf("InvokableRun(ping) 失败: %v", err)
 	}
-	if !strings.Contains(timeOut, "2026-08-11") {
-		t.Errorf("get_current_time 结果未包含期望时间, 原始输出: %s", timeOut)
+	if !strings.Contains(pingOut, "pong") {
+		t.Errorf("ping 结果未包含期望内容, 原始输出: %s", pingOut)
 	}
 
 	// 9. 关闭会话无错误

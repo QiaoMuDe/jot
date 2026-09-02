@@ -15,7 +15,6 @@ internal/agent/                    父包（Agent 对话链路）
 ├── doc.go                         包级说明文档
 └── tools/                         工具子包（每文件一个工具，完整清单见 §6）
     ├── context.go                 共享上下文：Context / Record / Collector / WrapWithError
-    ├── current_time.go            最简无参工具模板（参考示例）
     ├── manage_note.go             带依赖 + ActionText 的复杂工具参考（create/list/view/...）
     ├── plan.go                    规划工具实现（create_plan / update_plan）
     └── doc.go                     子包说明文档（工具清单，需同步维护）
@@ -195,7 +194,9 @@ func NewXxx(svc *services.XxxService, ctx *Context) tool.InvokableTool {
 }
 ```
 
-### 4.2 最简无参工具模板（参考 [current_time.go](internal/agent/tools/current_time.go)）
+### 4.2 最简无参工具模板
+
+当前内置工具均带参数，此模板供未来新增无参工具时参考：
 
 ```go
 func (c *xxxTool) Info(_ context.Context) (*schema.ToolInfo, error) {
@@ -215,10 +216,10 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 | 项目 | 规范 | 示例 |
 |---|---|---|
-| 工具名 | snake_case，动词 + 对象，全局唯一 | `get_current_time` / `read_url` |
-| 结构体 | 工具名 + `Tool` 后缀（小写，包内私有） | `currentTimeTool` |
-| 文件 | 工具名 + `.go`，一文件一工具 | `current_time.go` |
-| 构造器 | `New` + 工具名（导出的 CamelCase） | `NewGetCurrentTime` |
+| 工具名 | snake_case，动词 + 对象，全局唯一 | `read_url` / `recall_notes` |
+| 结构体 | 工具名 + `Tool` 后缀（小写，包内私有） | `readURLTool` |
+| 文件 | 工具名 + `.go`，一文件一工具 | `read_url.go` |
+| 构造器 | `New` + 工具名（导出的 CamelCase） | `NewReadURL` |
 | 参数名 | 小写 snake_case | `query` / `sources` |
 | 依赖字段 | 类型简写字段 | `ai` / `setting` / `vector` |
 
