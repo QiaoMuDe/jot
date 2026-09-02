@@ -46,7 +46,7 @@ jot/                                    # 项目根目录
 │   │   ├── setting.go                  # Setting 实体（KV 配置）
 │   │   ├── password_record.go / todo.go  # 密码记录 / 待办实体
 │   │   ├── note_vector.go              # NoteVector 实体（笔记切块向量索引，按 note_id+chunk_index 索引）
-│   │   ├── ai_session.go               # AI 会话实体（标题/置顶/时间戳/摘要 SummaryContent/SummaryMsgCount）
+│   │   ├── ai_session.go               # AI 会话实体（标题/置顶/时间戳/摘要 SummaryContent/摘要边界 SummaryUpToMsgID）
 │   │   ├── ai_session_config.go        # AI 会话操作栏配置（模型/深度思考/搜索源/Mode 三态/卡片召回/引用/技能，与 AISession 一对一）
 │   │   ├── ai_message.go               # AI 消息实体（角色/内容/思维链/Meta chip 字段，外键关联 SessionID）
 │   │   ├── ai_prompt.go                # AI 提示词实体（技能提示词数据库存储）
@@ -55,7 +55,8 @@ jot/                                    # 项目根目录
 │   └── services/                       # 业务服务层
 │       ├── note_service.go             # 笔记 CRUD + 搜索 + 置顶 + 回收站 + 统计 + 导入导出 + VACUUM 瘦身 + GetAllIDs
 │       ├── notebook_service.go / tag_service.go / setting_service.go  # 笔记本/标签/配置读写
-│       ├── ai_service.go               # AI 业务层（einocli 客户端，OpenAI 兼容 + 流式 + 深度思考 + 会话/消息持久化 + 对话摘要 + Token 计算 + 上下文注入）
+│       ├── ai_service.go               # AI 业务层（einocli 客户端，OpenAI 兼容 + 流式 + 深度思考 + 会话/消息持久化 + Token 计算 + 上下文注入）
+│       ├── ai_context.go               # AI 上下文与摘要压缩（token 预算窗口/轮次对齐选取/摘要边界持久化/增量压缩/触发比例与预算设置读取）
 │       ├── todo_service.go             # 待办 CRUD + 按状态批量删除（DeleteUnfinished/DeleteCompleted/DeleteAll）
 │       ├── password_service.go / password_generator.go  # 密码管理 CRUD/搜索（escapeLike 转义）/批量删除 + 密码生成器
 │       ├── profile_service.go / stats_service.go / log_service.go  # API 预设 CRUD / 统计 / 日志服务
@@ -541,7 +542,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 29. **全局 MCP 连接池与预热机制（http/sse/stdio 常驻复用，替代每轮重建连）**：[pool.go](internal/mcpserver/pool.go) `mcpserver.Pool` 按 Name 持有预热会话（stdio 子进程常驻）：`Warmup`（并发 3 槽位，**per-name in-flight 信号串行化同名建连**防并发重复拉进程）/`Reconcile`（关不在列表条目 + 预热剩余）/`WarmupOne`（发消息兜底现场连接）/`getOrCreate`（指纹 `serverFingerprint` 变化自动关旧重连）/`Close`/`CloseAll`；**断线自动重连**——`Session.callTool` 检测连接类错误自动重建一次并重试，Close 后拒绝重连；`Session` 加锁保护 cli 替换。装配：agent.go `Deps.MCPPool`，Run 时统一 `Pool.Session` + `WarmupOne` 兜底，**移除每轮 OpenSession + defer Close**；app.go `WarmupMCPServers()`（内部 Reconcile）+ shutdown/rebuildServices 关旧池；前端首次进入 AI 助手预热（`mcpWarmupDone` 防重复）+ 设置页操作后同步预热，汇总一条通知。详见 [pool.go](internal/mcpserver/pool.go)、[tools.go](internal/mcpserver/tools.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
-30. **AI 会话持久化对话摘要（窗口 20 条 + 增量更新 + 同步阻塞生成）**：将纯滑动窗口截断（简单丢弃 40 条外消息）升级为**持久化对话摘要**方案。AISession 新增 `SummaryContent`（text）/ `SummaryMsgCount`（int），数据库持久化（[ai_session.go](internal/models/ai_session.go)）。**触发规则**：`diff = 当前总消息数 - SummaryMsgCount`，`diff ≥ 20` 时触发。首次生成（消息 21）取前 1 条，增量更新（消息 41/61...）取上次摘要终点到当前尾部 20 条之前的 20 条消息，合并旧摘要生成新摘要，`SummaryMsgCount` 更新为当前总消息数。**同步阻塞**：摘要在 `truncateAIMessages` 中同步生成（非 goroutine），确保当前轮对话就能用到新摘要，发 `ai:summary-status:generating/done` 事件给前端状态条。**提示词优化**：每条消息截断到 500 字，提示词要求"每条消息 1~2 句话概括，不要大段复制原文"。详见 [ai_service.go](internal/services/ai_service.go)（GenerateSessionSummary + UpdateSessionSummary + buildSummaryPrompt）、[app.go](app.go)（truncateAIMessages 重构）、[ai-chat.js](frontend/src/js/ai-chat.js)（summaryGenerating 状态 + 事件监听）
+30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 10）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
 
 31. **密码管理功能页（列表/详情分离传输 + Base64 编码 + 修复 + 样式打磨）**：独立视图。后端：`PasswordRecord` 模型（name/username/password/url/note + GORM 软删除）、`PasswordService`（CRUD+Search+BatchDelete）、7 个 Wails 绑定。**传输安全分离**：列表返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），密码不出现在列表；详情 `GetPasswordRecord(id)` 解码明文。**编码**：Base64 + `(zk)` 前缀（可逆编码非加密），存量无前缀值原样返回，启动自动迁移。**前端**：三栏布局 + 防抖搜索（250ms）+ 高亮 `<mark>` + 添加/编辑对话框 + 详情（掩码+显隐）+ 一键复制（clipboard+execCommand 降级）+ 打开链接 + 右键菜单 + 批量操作 + ESC 层级关闭。**修复**：Enter 连按守卫、`pmLoadSeq` 代际防乱序、`escapeLike` 转义、模板残留改 createElement。详见 [password_service.go](internal/services/password_service.go)、[password_record.go](internal/models/password_record.go)、[crypto.go](internal/services/crypto.go)、[password-manager.js](frontend/src/js/password-manager.js)、[password-manager.css](frontend/src/css/components/password-manager.css)
 
@@ -549,28 +550,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
-34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 7 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 5 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
 
 35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
-36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 10
+36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 9
 
 ---
 
-## 记忆点 1：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | ① AI 模式切换按钮（Chat/Agent/Plan）新增悬停提示卡片（标题 + 特点 + 适用场景）：初版 CSS `:hover` 实现 → 发现层级被遮挡 → 重构为 **JS portal 方案**（挂 body + fixed + z-index 9999）；② 主题体系一致性清理：移除已删除主题 `one-dark-pro` 在前端内联配色与 Go 窗口色中的残留，统一 default 主题的窗口/首帧/最终三处背景色。 |
-| **悬停提示初版问题（重要教训）** | 初版 tooltip 放在 `.ai-mode-btn` 内部、`z-index: 1000` 绝对定位。**但父级 `.ai-chat-input-area` 同时有 `z-index: 5` + `transform`，构成层叠上下文**——子元素 z-index 对外只按父级上下文生效（对外层级 = 5），导致 tooltip 被 `z-index: 1000` 的会话更多菜单等浮层遮挡。**教训：绝对定位浮层若父链存在 `transform` + `z-index` 组合，z-index 无法突破父级层叠上下文；纯 CSS 提高 z-index 无效，需脱离该上下文。** |
-| **JS portal 重构（重要）** | [index.html](frontend/index.html) 在 `</body>` 前新增 `#aiModeTipPortal`（`position: fixed; inset: 0; z-index: 9999; pointer-events: none`），三种模式提示内容移入 portal（`data-tip` 区分，`aria-hidden` 不影响可访问性）；[ai-chat.js](frontend/src/js/ai-chat.js) `initModeTips()`：`mouseenter/mouseleave` 控制显示（锁定态 `is-locked` 时不显示）、定位基于 `getBoundingClientRect()` 浮点计算（水平防视口溢出自动向内偏移、垂直空间不足自动弹下方）、`ResizeObserver` 监听输入区（侧栏折叠动画/窗口缩放期间实时跟随）。 |
-| **主题三处同步（重要）** | 系统主题配色实际分散在 **3 处**，维护必须同步（详见"十二、维护规范"第 9 条）：① [variables.css](frontend/src/css/variables.css) `[data-theme="..."]` 块（最终样式，唯一权威色值）；② [index.html](frontend/index.html) 头部内联 `criticalColors`（CSS 加载前的首帧背景，防闪烁）；③ [main.go](main.go) `themeBG()`（Wails 窗口背景色）。 |
-| **本次清理内容** | ① `one-dark-pro`（已从主题注册表移除）：删除 [index.html](frontend/index.html) 内联 `criticalColors` 残留键 + [main.go](main.go) `themeBG` 残留 `case "one-dark-pro"` 分支；② default 色值统一：CSS default 为 `--bg:#F2EDE3 / --topbar-bg:#FCF9F2`，而 Go 窗口色（`#F7F5F0`）与内联首帧（`#F7F5F0/#FFFFFF`）不一致 → 全部统一为 `#F2EDE3 / #FCF9F2`，消除启动瞬间窗口底色→页面背景的色差闪烁。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（`#aiModeTipPortal` + 内联 `criticalColors`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`initModeTips`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-mode-tip-portal`/`.ai-mode-tip`）、[main.go](main.go)（`themeBG`） |
-
----
-
-## 记忆点 2：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 1：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +575,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 2：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +589,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 3：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +602,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 4：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +617,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 5：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -643,17 +631,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 6：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 3 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
+| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 1 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
 | **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
 | **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
 
 ---
 
-## 记忆点 8：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 7：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -662,7 +650,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 8：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -673,7 +661,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 9：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -684,6 +672,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **Windows 渲染教训（重要）** | ① **滚动不能放在圆角面板自身**（`border-radius` + `overflow-y:auto` 合成滚动层在 Windows 显示缩放下对文字做纹理重采样导致发糊），必须滚动内部矩形容器（应用其他列表均为矩形裁剪所以清晰）；② **动画去掉 `both` 填充**——结束后 transform 残留把面板永久提升为 GPU 合成层，超高触发滚动后文字丢子像素抗锯齿；③ **字号用整数 px**，`0.92em` 类小数像素（≈12.88px）在 Windows 发虚；④ **`scrollbar-color` 可继承**——面板在 `#mainContent` 内会继承其"默认透明"滚动条颜色导致滚动条隐形，悬浮面板需显式声明常显样式（thin + thumb 常显）；⑤ 水平内边距从面板下沉到 header/body/footer 内部，让滚动条贴住面板右边框。 |
 | **相关决策** | ① 单次调用带 questions 数组而非并行多条 ask_user：ClaimAsk 互斥设计无需改动（并行方案需计数抢占 + 答案按问题 ID 路由 + 多面板互相覆盖，复杂度高收益低）；② 面板高度封顶 `min(420px, 60vh)` 而非弹性撑满（小窗口回退防溢出），超出部分列表内部滚动，头部问题与底部按钮固定可见。 |
 | **涉及文件** | [ask_user.go](internal/agent/tools/ask_user.go)、[meta.go](internal/agent/tools/meta.go)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-ask-body` 滚动区 + `.ai-ask-qgroup` 分组样式） |
+
+---
+
+## 记忆点 10：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 上下文摘要机制从"条数窗口"整体重构为 **token 预算制**（新文件 [ai_context.go](internal/services/ai_context.go)）：`SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部选 tail（轮次对齐 + 单条超预算保护）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio` 默认 0.8，无 UI 设置键，测试可改库调小）时压缩 tail 头部旧消息（保留 ≤50% 预算）进摘要；**持久化摘要边界 `SummaryUpToMsgID` 替代 SummaryMsgCount**（按消息 ID 推进，解耦设置变更；tail 选取从边界之后开始，防"压缩后每轮重复触发"）。压缩**失败即中止本轮**（failed + stream-error，本轮不调 LLM，重发自动再触发）。旧键 `ai_context_window_size` / 旧列 `summary_msg_count` 经 [db.go](internal/database/db.go) `cleanupOrphanedData` 清理。 |
+| **Wails 事件派发教训（重要）** | **绑定方法返回前发出的 `runtime.EventsEmit` 不会实时送达前端，积压到方法返回后才派发**。摘要压缩（10s+）若在绑定方法体内同步执行，`generating` 状态条事件会延迟到压缩结束才到达，UI 全程无反馈（用户只见打字点动画）。**修复：`truncateAIMessages`（含压缩与事件发射）必须移入 `go func()` goroutine**（[app.go](app.go) `CallAIAgentStream`），与流式 chunk 事件同机制实时送达。该约束已写入 [AI_CONTEXT.md](internal/services/AI_CONTEXT.md)。 |
+| **前端使用率圆环（重要）** | 头部新增 SVG 双圆环进度组件（20px，`stroke-dashoffset` 驱动，三态色随语义变量：正常 accent / ≥触发比例 warning / >95% danger），日常仅显示"圆环 + 百分比"；悬停 tooltip 复用 `#aiModeTipPortal` 同款组件（`initModeTips` 泛化绑定，明细"已用 X / 128K tokens"1024 进制折算，阈值随触发比例动态化）。数据源 `GetAIContextUsage` 与压缩机制**严格同口径**（边界感知 tail token / 同一预算）。0% 时 dashoffset 取周长+1 防圆点伪影。 |
+| **状态条与重试语义** | `ai:summary-status` generating/done/failed 三态；状态条 **700ms 最短可见**（生成过快时延迟隐藏保证反馈可感知，定时器互斥清理防误隐藏）；failed 显示"生成失败，请重新发送"5s + stream-error 通知，输入解锁复用既有 handler。摘要生成超时 30s→**90s**（40K token 区间慢网关实测 13s~30s+，30s 频繁超时）。 |
+| **测试与验证方法** | [ai_context_test.go](internal/services/ai_context_test.go) 覆盖 token 估算/选取/轮次对齐/边界推进/失败沿用旧摘要（httptest 模拟 OpenAI 全链路）。**调试技巧**：settings 表改 `ai_context_token_budget=12000` + `ai_context_summary_trigger_ratio=0.06`（约 720 token 触发），几轮对话即可走完压缩流程；日志观察 `compact_elapsed_ms` 字段（该字段存在即证明运行新代码）。前端热重载时注意：运行的应用若非 wails dev/最新构建，修复不会生效（曾因此误判修复无效）。 |
+| **涉及文件** | [internal/services/ai_context.go](internal/services/ai_context.go)（新）、[internal/services/ai_context_test.go](internal/services/ai_context_test.go)（新）、[internal/services/AI_CONTEXT.md](internal/services/AI_CONTEXT.md)（新，机制文档）、[app.go](app.go)（truncateAIMessages 重写 + GetAIContextUsage + 移入 goroutine）、[internal/models/ai_session.go](internal/models/ai_session.go)（SummaryUpToMsgID）、[internal/database/db.go](internal/database/db.go)（种子 + 清理清单）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md) §7、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/index.html](frontend/index.html)（圆环 + tooltip 复用） |
 
 ---
 

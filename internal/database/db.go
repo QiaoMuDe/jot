@@ -149,6 +149,9 @@ func cleanupOrphanedData(db *gorm.DB) error {
 			"zhihu_search_enabled", "zhihu_global_search_enabled", "tavily_search_enabled",
 			"agent_enabled", "enable_card_recall", "plan_mode",
 		}},
+		// ai_sessions：
+		//   summary_msg_count —— 摘要触发从条数口径改为 token 预算（SummaryUpToMsgID）后废弃的旧列
+		{model: &models.AISession{}, cols: []string{"summary_msg_count"}},
 	}
 	m := db.Migrator()
 	for _, spec := range orphanColumnSpecs {
@@ -172,6 +175,8 @@ func cleanupOrphanedData(db *gorm.DB) error {
 		"ai_web_search_max_chars", "ai_search_result_limit", "ai_web_search_enabled",
 		// 卡片召回开关移除（是否召回由 Agent 自主判断）
 		"ai_card_recall_enabled",
+		// 摘要触发从条数窗口改为 token 预算（ai_context_token_budget）后废弃的旧键
+		"ai_context_window_size",
 	}
 	if err := db.Where("key IN ?", orphanSettingKeys).Delete(&models.Setting{}).Error; err != nil {
 		return err
@@ -218,7 +223,10 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "screen_lock_enabled", Value: "false"},
 		{Key: "screen_lock_password", Value: ""},
 		{Key: "editor_word_wrap", Value: "false"},
-		{Key: "ai_context_window_size", Value: "20"},
+		// AI 上下文 token 预算（默认 128K），tail 达触发比例时摘要压缩
+		{Key: "ai_context_token_budget", Value: "131072"},
+		// 摘要压缩触发比例（无前端 UI，tail 达预算该比例时触发，调小便于测试）
+		{Key: "ai_context_summary_trigger_ratio", Value: "0.8"},
 	}
 
 	var toInsert []models.Setting

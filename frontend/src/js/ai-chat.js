@@ -17,7 +17,9 @@ let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
 let planPanelEl = null;       // #aiPlanPanel（Agent 执行计划面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
-let contextSizeEl = null;     // #aiChatContextSize
+let contextUsageEl = null;    // #aiChatContextUsage（上下文使用率指示器容器）
+let contextUsageArcEl = null;   // 环形进度弧（stroke-dashoffset 控制比例）
+let contextUsageTextEl = null;  // 百分比 + 上限文本
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
@@ -223,20 +225,46 @@ async function switchModel(model) {
 
 /* ===== 会话摘要生成状态 ===== */
 
-/** 会话摘要生成状态标志 */
-let summaryGenerating = false;
+// 状态条最短可见时长：摘要生成很快时（<1s）保证"压缩发生过"的反馈可感知
+const SUMMARY_STATUS_MIN_VISIBLE = 700;
+let summaryStatusShownAt = 0;
+let summaryHideTimer = null;
+// failed 状态条的自动隐藏定时器（新一轮事件到来时需清除，避免误隐藏 generating 状态条）
+let summaryFailedTimer = null;
 
 // 监听摘要状态事件（启动时注册一次，生命周期内持续生效）
-// 摘要生成在后台异步执行，不阻塞当前对话
+// 摘要压缩同步执行：generating 期间阻塞当前对话，failed 时后端中止本轮
 window.runtime?.EventsOn('ai:summary-status', function(data) {
+    // 诊断埋点：确认事件送达与 session 匹配（排查状态条不显示问题）
+    console.info('[summary-status]', data && data.status, 'event_sid=', data && data.session_id, 'active_sid=', activeSessionId);
     if (!data || data.session_id !== activeSessionId) return;
 
     if (data.status === 'generating') {
-        summaryGenerating = true;
+        if (summaryHideTimer) { clearTimeout(summaryHideTimer); summaryHideTimer = null; }
+        if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
+        summaryStatusShownAt = Date.now();
         showSummaryStatus('正在生成对话摘要…');
+    } else if (data.status === 'failed') {
+        // 摘要压缩失败：本轮对话已被后端中止（另有 stream-error 通知），
+        // 状态条短暂提示，用户重新发送时会再次触发摘要
+        showSummaryStatus('对话摘要生成失败，请重新发送消息');
+        if (summaryFailedTimer) clearTimeout(summaryFailedTimer);
+        summaryFailedTimer = setTimeout(hideSummaryStatus, 5000);
     } else {
-        summaryGenerating = false;
-        hideSummaryStatus();
+        if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
+        // 保证状态条最短可见时长，太快完成时延迟隐藏
+        const elapsed = Date.now() - summaryStatusShownAt;
+        const wait = Math.max(0, SUMMARY_STATUS_MIN_VISIBLE - elapsed);
+        if (wait > 0) {
+            if (summaryHideTimer) clearTimeout(summaryHideTimer);
+            summaryHideTimer = setTimeout(hideSummaryStatus, wait);
+        } else {
+            hideSummaryStatus();
+        }
+        if (data.status === 'done') {
+            // 压缩后 tail 回落，刷新使用率指示器（状态条延迟隐藏不影响刷新）
+            updateContextUsage();
+        }
     }
 });
 
@@ -311,7 +339,9 @@ export async function initAIChat() {
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
     sessionSearchEl = document.getElementById('aiSessionSearch');
-    contextSizeEl = document.getElementById('aiChatContextSize');
+    contextUsageEl = document.getElementById('aiChatContextUsage');
+    contextUsageArcEl = contextUsageEl?.querySelector('.ai-context-usage-arc') || null;
+    contextUsageTextEl = contextUsageEl?.querySelector('.ai-context-usage-text') || null;
     polishBtn = document.getElementById('aiChatPolishBtn');
 
     // 模型选择器
@@ -447,7 +477,8 @@ function initModeTips() {
     };
 
     const show = btn => {
-        if (toggle.classList.contains('is-locked')) return; // 回复期间锁定：不显示提示
+        // 回复期间模式切换锁定：仅模式按钮受锁定限制，其他绑定元素（如使用率圆环）不受影响
+        if (btn.classList.contains('ai-mode-btn') && toggle.classList.contains('is-locked')) return;
         const tip = tipMap.get(btn);
         if (!tip) return;
         position(btn, tip);
@@ -465,6 +496,15 @@ function initModeTips() {
         btn.addEventListener('mouseleave', hide);
     });
 
+    // 上下文使用率指示器（头部右侧圆环）：同款 tooltip 组件
+    const usageEl = document.getElementById('aiChatContextUsage');
+    const usageTip = portal.querySelector('.ai-mode-tip[data-tip="context-usage"]');
+    if (usageEl && usageTip) {
+        tipMap.set(usageEl, usageTip);
+        usageEl.addEventListener('mouseenter', () => show(usageEl));
+        usageEl.addEventListener('mouseleave', hide);
+    }
+
     // 布局变化跟随：监听输入区尺寸（侧边栏折叠动画挤压 content → input-area 宽度变化、
     // 窗口缩放等），hover 期间保持 tooltip 贴合按钮
     if (window.ResizeObserver && inputAreaEl) {
@@ -476,43 +516,66 @@ function initModeTips() {
 
 /* ── 上下文大小 ── */
 
-/** 格式化 token 数为可读字符串 */
+/** 格式化 token 数为可读字符串（按 1024 折算 K/M，与模型上下文惯例一致：128K = 131072） */
 function formatTokens(count) {
-    if (count >= 1000000) {
+    if (count >= 1048576) {
         // ≥ 1M: 显示 M 单位，1 位小数，如 1.5M
-        return (count / 1000000).toFixed(1) + 'M';
+        return (count / 1048576).toFixed(1) + 'M';
     }
-    if (count >= 1000) {
+    if (count >= 1024) {
         // ≥ 1K: 显示 K 单位
-        // ≥ 100K 时不显示小数（如 100K），< 100K 时显示 1 位小数（如 1.5K）
-        if (count >= 100000) {
-            return Math.round(count / 1000) + 'K';
+        // ≥ 100K 时不显示小数（如 128K），< 100K 时显示 1 位小数（如 1.5K）
+        if (count >= 102400) {
+            return Math.round(count / 1024) + 'K';
         }
-        return (count / 1000).toFixed(1) + 'K';
+        return (count / 1024).toFixed(1) + 'K';
     }
     return String(count);
 }
 
-/** 更新上下文大小指示器（从后端读取会话缓存 tokens） */
-async function updateContextSize() {
-    if (!contextSizeEl) return;
+/** 更新上下文使用率指示器（与后端摘要压缩同口径：tail 估算 token / 预算） */
+async function updateContextUsage() {
+    if (!contextUsageEl) return;
     if (!activeSessionId) {
-        contextSizeEl.textContent = '';
-        contextSizeEl.style.display = 'none';
+        contextUsageEl.style.display = 'none';
         return;
     }
     try {
-        const tokens = await window.go.main.App.GetSessionContextTokens(activeSessionId);
-        if (tokens > 0) {
-            contextSizeEl.textContent = formatTokens(tokens) + ' tokens';
-            contextSizeEl.style.display = '';
-        } else {
-            contextSizeEl.textContent = '';
-            contextSizeEl.style.display = 'none';
+        const sid = activeSessionId;
+        const usage = await window.go.main.App.GetAIContextUsage(sid);
+        // 异步返回前可能已切换会话，丢弃过期结果
+        if (sid !== activeSessionId) return;
+        if (!usage || !usage.budget) {
+            contextUsageEl.style.display = 'none';
+            return;
         }
+        const pct = Math.round(usage.percent);
+        // 警示态只靠颜色（is-warning 琥珀 / is-critical 红），文本恒为百分比
+        // 阈值跟随后端触发比例（ai_context_summary_trigger_ratio，默认 0.8）
+        const triggerPct = Math.round((usage.trigger ?? 0.8) * 100);
+        contextUsageEl.classList.toggle('is-warning', pct >= triggerPct && pct <= 95);
+        contextUsageEl.classList.toggle('is-critical', pct > 95);
+        contextUsageTextEl.textContent = pct + '%';
+        contextUsageEl.setAttribute('aria-valuenow', String(usage.percent));
+        // 悬停明细写入同款 portal tooltip（initModeTips 绑定显示），不再用原生 title
+        const tipDetailEl = document.getElementById('aiContextUsageTipDetail');
+        if (tipDetailEl) {
+            tipDetailEl.textContent = formatTokens(usage.used) + ' / ' + formatTokens(usage.budget) + ' tokens';
+        }
+        const tipTriggerEl = document.getElementById('aiContextUsageTipTrigger');
+        if (tipTriggerEl) {
+            tipTriggerEl.textContent = triggerPct + '%';
+        }
+        // 环形弧长：周长 50.27（r=8），按使用率缩减 dashoffset。
+        // 0% 时 offset 需大于周长：恰好等于周长时零长度 dash 交界会因
+        // round 线帽在 12 点方向渲染出多余圆点
+        const RING_CIRCUMFERENCE = 50.27;
+        const ratio = Math.min(usage.percent, 100) / 100;
+        contextUsageArcEl.style.strokeDashoffset =
+            String(ratio <= 0 ? RING_CIRCUMFERENCE + 1 : RING_CIRCUMFERENCE * (1 - ratio));
+        contextUsageEl.style.display = '';
     } catch (_) {
-        contextSizeEl.textContent = '';
-        contextSizeEl.style.display = 'none';
+        contextUsageEl.style.display = 'none';
     }
 }
 
@@ -542,7 +605,7 @@ function bindEvents() {
             messagesInnerEl.innerHTML = '';
             chatHistory = [];
             hideAskPanel(); // 清空会话时收起 Agent 反问面板
-            updateContextSize();
+            updateContextUsage();
             scrollToBottom();
         });
     }
@@ -1633,7 +1696,7 @@ async function switchSession(id) {
             if (currentItem) currentItem.classList.add('active');
             updateChatTitle();
             showWelcome();
-            updateContextSize();
+            updateContextUsage();
             scrollToBottom();
             return;
         }
@@ -1671,7 +1734,7 @@ async function switchSession(id) {
         updateChatTitle();
 
         // 直接从 chatHistory 的消息 tokens 汇总显示（避免依赖缓存）
-        updateContextSize();
+        updateContextUsage();
 
         // 添加滚动加载更多（移除旧监听器防止重复绑定）
         if (_scrollHandler) {
@@ -1795,7 +1858,7 @@ async function createSession() {
     } catch (_) {}
 
     chatHistory = [];
-    updateContextSize();
+    updateContextUsage();
     messagesInnerEl.innerHTML = '';
     hideEmptyState();
     showWelcome();
@@ -3068,7 +3131,7 @@ async function startStreaming(userText, userMsgID) {
             }
         } else {
             chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null, plan: streamPlanData ? JSON.stringify(streamPlanData) : null });
-            updateContextSize();
+            updateContextUsage();
             streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
             bindMsgContextMenu(streamingEl, finalContent, 'assistant');
 
@@ -3165,7 +3228,7 @@ async function startStreaming(userText, userMsgID) {
             }
         }
         // 刷新会话 token 显示
-        updateContextSize();
+        updateContextUsage();
     });
     unsubs.push(unsubError);
 
@@ -3697,9 +3760,8 @@ function showEmptyState() {
     // 重置标题和 Token 显示
     const titleEl = document.getElementById('aiChatTitle');
     if (titleEl) titleEl.textContent = 'AI 助手';
-    if (contextSizeEl) {
-        contextSizeEl.textContent = '';
-        contextSizeEl.style.display = 'none';
+    if (contextUsageEl) {
+        contextUsageEl.style.display = 'none';
     }
     // 清空内存中的旧会话数据（数据库已重置，这些数据已失效）
     chatHistory = [];
@@ -5122,7 +5184,7 @@ async function handleDeleteMsg(msgEl) {
     }
 
     // 刷新会话 token 总数显示
-    updateContextSize();
+    updateContextUsage();
     scrollToBottom();
 }
 
@@ -5211,7 +5273,7 @@ async function handleResend(msgEl) {
             await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
         } catch (_) { /* 静默 */ }
         // 截断后后端已重算会话 token 缓存，立即刷新右上角总 token 显示
-        updateContextSize();
+        updateContextUsage();
     }
 
     // 截断 chatHistory 缓冲区

@@ -21,7 +21,6 @@ import (
 	"jot/internal/mcpserver"
 	"jot/internal/models"
 	"jot/internal/services"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"jot/internal/converter"
@@ -1932,17 +1930,9 @@ func formatFileSize(size int64) string {
 	}
 }
 
-// estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致）
+// estimateTokens 估算文本的 token 数（与前端 estimateTokens 算法一致，委托 services.EstimateTokens）
 func estimateTokens(text string) int {
-	chineseCount := 0
-	for _, r := range text {
-		if unicode.Is(unicode.Han, r) {
-			chineseCount++
-		}
-	}
-	runes := []rune(text)
-	otherCount := len(runes) - chineseCount
-	return int(math.Ceil(float64(chineseCount)/1.5 + float64(otherCount)/4))
+	return services.EstimateTokens(text)
 }
 
 // estimateUserTokens 计算会话中 system 消息与最后一条 user 消息的估算 token 数
@@ -1962,88 +1952,133 @@ func estimateUserTokens(messages []services.Message) int {
 	return tokens
 }
 
-// truncateAIMessages 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息，
-// 需要更新摘要时同步生成并向前端发送状态事件，新摘要当前轮即可注入。
+// errSummaryCompactFailed 表示会话摘要压缩失败，当前轮对话需中止。
+// 用户重新发起对话时 truncateAIMessages 会再次触发摘要。
+var errSummaryCompactFailed = errors.New("会话摘要压缩失败")
+
+// truncateAIMessages 加载会话消息并按 token 预算构建 LLM 输入：
+// system 消息 + 【历史对话摘要】 + tail（user/assistant 消息，轮次对齐）。
+// tail 估算 token 达预算 80% 时同步压缩摘要（旧摘要 + 待摘要区间 → 新摘要），
+// 摘要边界按消息 ID 持久化（SummaryUpToMsgID）。
+// 压缩失败时返回 errSummaryCompactFailed，调用方应中止本轮对话（不调用 LLM），
+// 用户重新发起对话时会再次触发摘要。
 // ctx 传入 AI 流的取消上下文，用户取消时摘要生成也随之取消。
-func (a *App) truncateAIMessages(ctx context.Context, sessionID uint, logLabel string) []services.Message {
+func (a *App) truncateAIMessages(ctx context.Context, sessionID uint, logLabel string) ([]services.Message, error) {
 	// 加载会话消息
 	messages := a.aiService.LoadAISessionMessages(sessionID)
-	nonSystemBefore := 0
+
+	// 分离 system 与 user/assistant 消息
+	systemMsgs := make([]services.Message, 0)
+	nonSystem := make([]services.Message, 0, len(messages))
 	for _, m := range messages {
-		if m.Role != "system" {
-			nonSystemBefore++
+		if m.Role == "system" {
+			systemMsgs = append(systemMsgs, m)
+		} else {
+			nonSystem = append(nonSystem, m)
 		}
 	}
 
-	windowSize := a.aiService.GetContextWindowSize()
+	budget := a.aiService.GetContextTokenBudget()
+	triggerRatio := a.aiService.GetContextSummaryTriggerRatio()
 
-	// 需要更新摘要时同步生成，阻塞当前对话，但前端能看到状态条反馈
-	if nonSystemBefore > windowSize {
-		// 先检查是否真的需要更新（diff >= windowSize），避免每次发空事件
-		var checkSession models.AISession
-		needUpdate := false
-		if err := a.db.First(&checkSession, sessionID).Error; err == nil {
-			needUpdate = nonSystemBefore-checkSession.SummaryMsgCount >= windowSize
-		}
-
-		if needUpdate {
-			runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
-				"status":     "generating",
-				"session_id": sessionID,
-			})
-		}
-
-		updated := a.aiService.UpdateSessionSummary(ctx, sessionID, windowSize)
-
-		if needUpdate {
-			status := "done"
-			if !updated {
-				status = "skipped"
-			}
-			runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
-				"status":     status,
-				"session_id": sessionID,
-			})
-		}
-	}
-
-	// 滑动窗口截断：只保留 system 消息 + 最后 N 条 user/assistant 消息
-	messages = services.TruncateMessagesForLLM(messages, windowSize)
-
-	// 读取已有会话摘要，注入到 system 消息之后、tail 消息之前
+	// 读取会话摘要状态
 	var session models.AISession
-	if err := a.db.First(&session, sessionID).Error; err == nil && session.SummaryContent != "" {
-		summaryMsg := services.Message{
-			Role:    "system",
-			Content: "【历史对话摘要】\n" + session.SummaryContent,
-		}
-		insertIdx := 0
-		for i, m := range messages {
-			if m.Role == "system" {
-				insertIdx = i + 1
-			} else {
+	summaryText := ""
+	boundaryMsgID := uint(0)
+	if err := a.db.First(&session, sessionID).Error; err == nil {
+		summaryText = session.SummaryContent
+		boundaryMsgID = session.SummaryUpToMsgID
+	}
+
+	// 定位摘要边界下标（边界=0 表示未摘要或存量旧数据，从头取全量历史；
+	// 边界消息被删除时同样回退为 0，走全量重摘要路径）
+	boundaryPos := 0
+	if boundaryMsgID > 0 {
+		for i, m := range nonSystem {
+			if m.ID == boundaryMsgID {
+				boundaryPos = i + 1
 				break
 			}
 		}
-		messages = append(messages[:insertIdx], append([]services.Message{summaryMsg}, messages[insertIdx:]...)...)
 	}
 
-	nonSystemAfter := 0
-	hasSummary := false
-	for _, m := range messages {
-		if m.Role != "system" {
-			nonSystemAfter++
-		} else if strings.Contains(m.Content, "【历史对话摘要】") {
-			hasSummary = true
+	// 按预算从边界之后选取 tail（轮次对齐）。
+	// 边界之前的内容已由摘要覆盖，不参与窗口计算——否则压缩后 raw tail
+	// 仍接近满预算，会导致每轮都重复触发摘要压缩
+	rest := nonSystem[boundaryPos:]
+	tail, tailRestStart := services.SelectTailByTokenBudget(rest, budget)
+	tailStart := tailRestStart + boundaryPos
+	tailTokens := 0
+	for _, m := range tail {
+		tailTokens += services.EstimateTokens(m.Content)
+	}
+
+	// tail 达预算 × 触发比例（ai_context_summary_trigger_ratio，默认 80%）时压缩摘要：
+	// 保留最近 50% 预算的轮次，其余与旧摘要合并生成新摘要，边界推进到新 tail 起点
+	compacted := false
+	var compactElapsed time.Duration
+	if tailTokens >= int(float64(budget)*triggerRatio) {
+		kept := services.SelectKeepTailByTokenBudget(tail, budget, services.CompactKeepRatio)
+		newTailStart := tailStart + (len(tail) - len(kept))
+		if newTailStart > 0 {
+			if newTailStart > boundaryPos {
+				region := nonSystem[boundaryPos:newTailStart]
+				compactStart := time.Now()
+				runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
+					"status":     "generating",
+					"session_id": sessionID,
+				})
+				newSummary, ok := a.aiService.CompactSessionSummary(ctx, sessionID, region, nonSystem[newTailStart-1].ID)
+				if !ok {
+					// 压缩失败：中止本轮对话（不调用 LLM）。用户主动取消（ctx 已取消）
+					// 时不发 failed 事件——调用方按取消语义收尾（stream-done）；
+					// 真实失败才通知前端，用户重新发起对话时 tail 仍 ≥ 80% 会再次触发摘要
+					if ctx.Err() == nil {
+						runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
+							"status":     "failed",
+							"session_id": sessionID,
+						})
+					}
+					return nil, errSummaryCompactFailed
+				}
+				compacted = true
+				compactElapsed = time.Since(compactStart)
+				summaryText = newSummary
+				// 压缩成功：当前轮即按新边界重建 tail
+				tail = nonSystem[newTailStart:]
+				tailStart = newTailStart
+				tailTokens = 0
+				for _, m := range tail {
+					tailTokens += services.EstimateTokens(m.Content)
+				}
+				runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]interface{}{
+					"status":     "done",
+					"session_id": sessionID,
+				})
+			}
 		}
 	}
+
+	// 组装：system 消息 + 摘要 system 消息 + tail
+	result := make([]services.Message, 0, len(systemMsgs)+len(tail)+1)
+	result = append(result, systemMsgs...)
+	if summaryText != "" {
+		result = append(result, services.Message{
+			Role:    "system",
+			Content: "【历史对话摘要】\n" + summaryText,
+		})
+	}
+	result = append(result, tail...)
+
 	a.LogSvc.Logger.Debugw(logLabel,
-		fastlog.Int("window_size", windowSize),
-		fastlog.Int("non_system_before", nonSystemBefore),
-		fastlog.Int("non_system_after", nonSystemAfter),
-		fastlog.Int("total_after", len(messages)),
-		fastlog.Bool("has_summary", hasSummary))
-	return messages
+		fastlog.Int("budget", budget),
+		fastlog.Int("tail_tokens", tailTokens),
+		fastlog.Int("tail_start", tailStart),
+		fastlog.Int("tail_msgs", len(tail)),
+		fastlog.Bool("has_summary", summaryText != ""),
+		fastlog.Bool("compacted", compacted),
+		fastlog.Int64("compact_elapsed_ms", compactElapsed.Milliseconds()))
+	return result, nil
 }
 
 // CancelAIStream 取消当前正在进行的 AI 流式调用
@@ -2064,23 +2099,38 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
-	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-	messages := a.truncateAIMessages(ctx, sessionID, "AI Agent 滑动窗口截断")
+	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环。
+	// 注意：会话上下文构建（含摘要压缩，可能耗时数十秒）也必须在 goroutine 内执行——
+	// 绑定方法返回前发出的 EventsEmit 不会送达前端（积压到方法返回后才派发），
+	// 若放在方法体内，generating/failed 状态条事件会延迟到压缩结束才到达，UI 全程无反馈
+	go func() {
+		// 加载并构建会话上下文（tail 达预算 × 触发比例时先压缩摘要）
+		messages, err := a.truncateAIMessages(ctx, sessionID, "AI Agent 滑动窗口截断")
+		if err != nil {
+			// 摘要压缩失败：中止本轮（不调用 LLM）。用户在摘要生成期间点停止
+			// （ctx 已取消）按取消语义收尾 stream-done；真实失败发 stream-error
+			// 提示，用户重新发起对话时会再次触发摘要
+			if !a.handleAICancelled(ctx, sessionID, userMsgID, nil, streamGen) {
+				a.LogSvc.Logger.Warnw("Agent 流因摘要压缩失败中止", fastlog.Error(err))
+				aiErr := &aierrors.AIError{Category: aierrors.CategoryServerError, UserMsg: "对话摘要生成失败，请重新发送消息", Raw: err.Error()}
+				runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.ToJSON(), 0)
+			}
+			a.aiStreamCancel = nil
+			return
+		}
 
-	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
-	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与
-	// stream-done 回传（语义与 Agent 再生一致）。
-	if userMsgID == 0 {
-		for i := len(messages) - 1; i >= 0; i-- {
-			if messages[i].Role == "user" {
-				userMsgID = messages[i].ID
-				break
+		// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
+		// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与
+		// stream-done 回传（语义与 Agent 再生一致）。
+		if userMsgID == 0 {
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "user" {
+					userMsgID = messages[i].ID
+					break
+				}
 			}
 		}
-	}
 
-	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环
-	go func() {
 		// 计时：总耗时（含工具调用/思考）从调用开始计；
 		// 思考净时长由 agent.Run 按每轮 assistant 消息统计（排除工具执行时间）
 		startTime := time.Now()
@@ -2352,8 +2402,20 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiStreamCancel = cancel
 
-	// 加载并截断会话消息，保留 system 消息 + 最后 N 条 user/assistant 消息
-	messages := a.truncateAIMessages(ctx, sessionID, "AI Chat 滑动窗口截断")
+	// 加载并构建会话上下文（tail 达预算 80% 时先压缩摘要）
+	messages, err := a.truncateAIMessages(ctx, sessionID, "AI Chat 滑动窗口截断")
+	if err != nil {
+		// 摘要压缩失败：中止本轮（不调用 LLM）。用户在摘要生成期间点停止
+		// （ctx 已取消）按取消语义收尾 stream-done；真实失败发 stream-error
+		// 提示，用户重新发起对话时会再次触发摘要
+		if !a.handleAICancelled(ctx, sessionID, userMsgID, nil, streamGen) {
+			a.LogSvc.Logger.Warnw("Chat 流因摘要压缩失败中止", fastlog.Error(err))
+			aiErr := &aierrors.AIError{Category: aierrors.CategoryServerError, UserMsg: "对话摘要生成失败，请重新发送消息", Raw: err.Error()}
+			runtime.EventsEmit(a.ctx, "ai:stream-error", streamGen, aiErr.ToJSON(), 0)
+		}
+		a.aiStreamCancel = nil
+		return
+	}
 
 	// 重新生成场景：前端传 userMsgID=0（重新生成不新建用户消息）。
 	// 此处从截断后的消息中倒序找回末条用户消息 ID，用于 token 更新与 stream-done 回传
@@ -2800,6 +2862,54 @@ func (a *App) GetSessionContextTokens(sessionID uint) (int, error) {
 		return 0, err
 	}
 	return tokens, nil
+}
+
+// ContextUsage 上下文窗口使用率信息（与摘要压缩同口径）
+type ContextUsage struct {
+	Used    int     `json:"used"`    // tail 估算 token 数
+	Budget  int     `json:"budget"`  // 上下文 token 预算（ai_context_token_budget）
+	Percent float64 `json:"percent"` // 使用率百分比（保留 1 位小数）
+	Trigger float64 `json:"trigger"` // 摘要压缩触发比例（ai_context_summary_trigger_ratio）
+}
+
+// GetAIContextUsage 返回指定会话的当前上下文窗口使用率，供前端使用率指示器展示。
+// 与 truncateAIMessages 同口径：仅对摘要边界（SummaryUpToMsgID）之后的消息按
+// token 预算选取 tail 并估算 token，budget = ai_context_token_budget 设置值。
+func (a *App) GetAIContextUsage(sessionID uint) ContextUsage {
+	if sessionID == 0 {
+		return ContextUsage{}
+	}
+	messages := a.aiService.LoadAISessionMessages(sessionID)
+	nonSystem := make([]services.Message, 0, len(messages))
+	for _, m := range messages {
+		if m.Role != "system" {
+			nonSystem = append(nonSystem, m)
+		}
+	}
+	// 摘要边界之后的消息才参与窗口计算（与 truncateAIMessages 一致）
+	boundaryPos := 0
+	var session models.AISession
+	if err := a.db.First(&session, sessionID).Error; err == nil && session.SummaryUpToMsgID > 0 {
+		for i, m := range nonSystem {
+			if m.ID == session.SummaryUpToMsgID {
+				boundaryPos = i + 1
+				break
+			}
+		}
+	}
+	rest := nonSystem[boundaryPos:]
+	budget := a.aiService.GetContextTokenBudget()
+	tail, _ := services.SelectTailByTokenBudget(rest, budget)
+	used := 0
+	for _, m := range tail {
+		used += services.EstimateTokens(m.Content)
+	}
+	percent := 0.0
+	if budget > 0 {
+		percent = float64(used*1000/budget) / 10
+	}
+	trigger := a.aiService.GetContextSummaryTriggerRatio()
+	return ContextUsage{Used: used, Budget: budget, Percent: percent, Trigger: trigger}
 }
 
 // ReplaceAISessionMessages 原子替换指定会话的所有消息（清空 + 批量写入）

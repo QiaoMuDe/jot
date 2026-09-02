@@ -214,6 +214,10 @@ export function GetAIConfig() {
   return window['go']['main']['App']['GetAIConfig']();
 }
 
+export function GetAIContextUsage(arg1) {
+  return window['go']['main']['App']['GetAIContextUsage'](arg1);
+}
+
 export function GetAISessions() {
   return window['go']['main']['App']['GetAISessions']();
 }

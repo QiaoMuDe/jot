@@ -3697,12 +3697,59 @@
     animation: slideInNew 0.3s var(--anim-easing-out) forwards;
 }
 
-/* ── 上下文大小指示器 ── */
-.ai-context-size {
-    font-size: 0.75rem;
-    color: var(--text-muted);
+/* ── 上下文使用率指示器（头部右侧：环形进度 + 百分比 + 上限标签） ── */
+.ai-context-usage {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     white-space: nowrap;
     user-select: none;
+    cursor: default;
+}
+
+.ai-context-usage-ring {
+    flex-shrink: 0;
+}
+
+/* 底环 */
+.ai-context-usage-track {
+    stroke: var(--border);
+}
+
+/* 进度弧：r=8 → 周长 2π×8 ≈ 50.27，dashoffset 由 JS 按使用率设置 */
+.ai-context-usage-arc {
+    stroke: var(--accent);
+    stroke-dasharray: 50.27;
+    stroke-dashoffset: 50.27;
+    transition: stroke-dashoffset 0.3s var(--anim-easing-out), stroke 0.3s;
+}
+
+.ai-context-usage-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 接近摘要压缩阈值（≥80%）：琥珀色，文本附加"接近上限"文字（不只靠颜色传达） */
+.ai-context-usage.is-warning .ai-context-usage-arc {
+    stroke: var(--warning);
+}
+.ai-context-usage.is-warning .ai-context-usage-text {
+    color: var(--warning);
+}
+
+/* 超过 95%：危险色 */
+.ai-context-usage.is-critical .ai-context-usage-arc {
+    stroke: var(--danger);
+}
+.ai-context-usage.is-critical .ai-context-usage-text {
+    color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-context-usage-arc {
+        transition: none;
+    }
 }
 
 /* ── 消息编辑模式 ── */

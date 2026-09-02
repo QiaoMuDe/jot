@@ -97,6 +97,24 @@ export namespace main {
 	        this.message = source["message"];
 	    }
 	}
+	export class ContextUsage {
+	    used: number;
+	    budget: number;
+	    percent: number;
+	    trigger: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ContextUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.used = source["used"];
+	        this.budget = source["budget"];
+	        this.percent = source["percent"];
+	        this.trigger = source["trigger"];
+	    }
+	}
 	export class FileImportResult {
 	    path: string;
 	    title: string;

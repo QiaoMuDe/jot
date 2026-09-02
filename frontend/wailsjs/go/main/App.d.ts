@@ -112,6 +112,8 @@ export function GeneratePasswords(arg1:services.PasswordGenOptions):Promise<Arra
 
 export function GetAIConfig():Promise<services.AIConfig>;
 
+export function GetAIContextUsage(arg1:number):Promise<main.ContextUsage>;
+
 export function GetAISessions():Promise<Array<services.AISessionSummary>>;
 
 export function GetAgentTools():Promise<Array<agent.ToolMeta>>;

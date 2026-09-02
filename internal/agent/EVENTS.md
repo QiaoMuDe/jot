@@ -140,14 +140,16 @@ Agent 最终结果汇总时由 [app.go](app.go) `CallAIAgentStream` 发射，参
 
 ## 7. 摘要状态事件（`ai:summary-status`）
 
-会话摘要生成状态，由 [app.go](app.go) `UpdateSessionSummary` 路径发射，参数为 map：
+会话摘要压缩状态，由 [app.go](../../app.go) `truncateAIMessages` 路径发射，参数为 map：
 
 ```json
-{"status": "generating" | "done" | "skipped", "session_id": 123}
+{"status": "generating" | "done" | "failed", "session_id": 123}
 ```
 
+- 触发条件：tail 估算 token 达上下文预算（`ai_context_token_budget`，默认 128K）× 触发比例（`ai_context_summary_trigger_ratio`，默认 0.8）时压缩摘要；事件仅在触发轮发射。
 - `generating`：开始生成（同步阻塞，当前轮对话即可用新摘要）。
-- `done`：生成成功；`skipped`：本次无需更新。
+- `done`：生成成功，正常继续本轮对话。
+- `failed`：生成失败，**本轮对话被后端中止**（紧随其后会有 `ai:stream-error` 通知并解锁输入）；用户重新发起对话时会再次触发摘要。用户主动取消时不发 `failed`，由取消语义的 `ai:stream-done` 收尾。
 - 前端 `summaryGenerating` 状态控制"正在生成对话摘要…"提示，取消流时重置。
 
 ---
