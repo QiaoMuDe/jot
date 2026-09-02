@@ -2923,22 +2923,35 @@ async function startStreaming(userText, userMsgID) {
 
     // ── Agent 反向提问（ai:ask-user） ──
     // 模型调用 ask_user 工具时后端发射该事件（tool_start 之后），
-    // 负载为 JSON 字符串 {"question": "...", "options": [...], "selection": "single"|"multiple"}。
+    // 负载为主格式 {"questions": [{question, options, selection}, ...]}（1-3 条问题），
+    // 兼容旧格式 {"question", "options", "selection"}（包装为单条）。
     // 本轮 ReAct 循环在 ask_user 工具处阻塞等待：AI 消息不结束、气泡保持流式状态，
-    // 在输入区上方渲染反问面板；用户点击选择/输入答案后经 AnswerAskUser 同轮投递，
+    // 在输入区上方渲染反问面板；用户作答后经 AnswerAskUser 同轮投递，
     // 同一气泡继续流式输出直至最终回答（不落库为新用户消息、不开新流）。
     const unsubAskUser = window.runtime.EventsOn('ai:ask-user', (streamGen, data) => {
         if (!isAgentFlow) return;
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         let payload = null;
         try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
-        if (!payload || !payload.question) return;
+        if (!payload) return;
+        // 双格式解析：新格式 questions 数组优先；旧单字段格式包装为单条
+        let questions = Array.isArray(payload.questions) ? payload.questions : null;
+        if (!questions || questions.length === 0) {
+            if (!payload.question) return;
+            questions = [{
+                question: payload.question,
+                options: Array.isArray(payload.options) ? payload.options : [],
+                selection: payload.selection
+            }];
+        }
+        questions = questions.filter(q => q && q.question);
+        if (!questions.length) return;
         // 模型未在正文输出问句（正文为空）时，气泡内展示等待提示
         if (!hasReceivedChunk) {
             contentDiv.innerHTML = '';
             contentDiv.appendChild(createWaitingHint());
         }
-        showAskPanel(payload.question, Array.isArray(payload.options) ? payload.options : [], payload.selection);
+        showAskPanel(questions);
     });
     unsubs.push(unsubAskUser);
 
@@ -4210,60 +4223,34 @@ var getToolLabel = function(name) { return name || '工具'; };
 
 /**
  * 显示 Agent 反问面板（ai:ask-user）
- * 渲染在输入区上方：问句标题 + 选项（单选/多选）+ 输入行（输入框 + 唯一按钮）。
- * 单选：点击选项即发送；多选：勾选后点「确认提交」汇总发送（勾选 + 自定义输入可拼接）。
+ * 渲染在输入区上方。单问题：问句标题 + 选项（单选/多选）+ 输入行（输入框 + 唯一按钮），
+ * 交互与旧版一致：单选点击选项即发送；多选勾选后点「确认提交」汇总发送（勾选 + 自定义输入可拼接）。
+ * 多问题（1-3 条）：表单式渲染 N 个问题分组（编号标题 + 各题选项 + 各题自定义输入），
+ * 所有题统一"选中后待全局提交"（单选=组内互斥选中，多选=勾选），底部唯一「确认提交」
+ * 按钮逐题校验后按题序拼装（每题一行，行内无换行）一次性发送，后端按行数逐题映射答案。
  * 提交 = 同轮回答：经 AnswerAskUser 投递给后端等待中的 ask_user 工具，
  * 本轮 ReAct 循环继续、同一 AI 气泡续答（不新建用户消息、不开新流）。
  * 右上角关闭 = 取消本轮（与停止按钮一致），避免等待中的 run 悬挂。
  */
-function showAskPanel(question, options, selection) {
-    if (!askPanelEl) return;
+function showAskPanel(questions) {
+    if (!askPanelEl || !Array.isArray(questions) || questions.length === 0) return;
     hidePlanPanel(); // 反问时临时收起计划面板，避免两个面板重叠
     askPanelEl.innerHTML = '';
-    const isMultiple = selection === 'multiple'; // 非 "multiple" 一律按单选处理
 
-    // 问句标题行（标题 + 右上角关闭按钮，关闭 = 取消本轮）
-    const header = document.createElement('div');
-    header.className = 'ai-ask-header';
-    const title = document.createElement('div');
-    title.className = 'ai-ask-question';
-    title.textContent = question;
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'ai-ask-close';
-    closeBtn.title = '取消本轮提问';
-    closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', () => {
-        // 复用停止按钮逻辑：收起面板、移除流式气泡、取消后端 run（防止悬挂）
-        if (stopBtnEl) stopBtnEl.click();
-        else hideAskPanel();
-    });
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    askPanelEl.appendChild(header);
-
-    // 输入行元素（先创建：唯一按钮回调与 Enter 需读取输入值）
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.className = 'ai-ask-input';
-    inp.placeholder = '输入你的答案…';
-    // 长度上限拦截：超过 MAX_AI_INPUT_CHARS 时截断到上限并提示
-    inp.addEventListener('input', () => {
-        const res = truncateAIInput(inp.value);
-        if (res.truncated) {
-            inp.value = res.text;
-            inp.selectionStart = inp.selectionEnd = inp.value.length;
-            window.showNotification?.(`内容过长，已截断至 ${MAX_AI_INPUT_CHARS} 字符`, 'warning');
-        }
-    });
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ai-ask-submit';
-    btn.textContent = isMultiple ? '确认提交' : '发送'; // 统一布局：输入框 + 唯一按钮同排
-    const shake = () => {
-        inp.classList.add('error');
-        setTimeout(() => inp.classList.remove('error'), 600);
+    // 输入框长度上限拦截：反问答案与后端 maxToolShortText(500) 对齐，
+    // 超出部分后端会静默截断，故在前端先行截断并提示（各题输入共用）
+    const bindInputGuard = (inp) => {
+        const maxChars = 500;
+        inp.addEventListener('input', () => {
+            const res = truncateAIInput(inp.value, maxChars);
+            if (res.truncated) {
+                inp.value = res.text;
+                inp.selectionStart = inp.selectionEnd = inp.value.length;
+                window.showNotification?.(`内容过长，已截断至 ${maxChars} 字符`, 'warning');
+            }
+        });
     };
+
     // 同轮回答：投递答案给后端等待中的 ask_user 工具（AnswerAskUser），
     // 成功才隐藏面板；失败（run 已结束/取消等）保留面板便于重试
     let submitting = false; // 防重复提交（双重点击/快速 Enter）
@@ -4279,81 +4266,252 @@ function showAskPanel(question, options, selection) {
         }
     };
 
-    let doPrimary; // 唯一按钮与 Enter 共用的提交逻辑
-    if (isMultiple) {
-        // 多选：勾选多个选项，唯一按钮汇总提交（勾选优先，自定义输入作为补充拼接）
-        const selected = new Set();
-        if (options && options.length > 0) {
-            const opts = document.createElement('div');
-            opts.className = 'ai-ask-options';
-            options.forEach(opt => {
-                const optBtn = document.createElement('button');
-                optBtn.type = 'button';
-                optBtn.className = 'ai-ask-option';
-                // 对勾图标 + 文本节点（textContent 会覆盖子元素，故用文本节点追加）
-                const check = document.createElement('span');
-                check.className = 'ai-ask-check';
-                check.textContent = '✓';
-                optBtn.appendChild(check);
-                optBtn.appendChild(document.createTextNode(opt));
-                optBtn.addEventListener('click', () => {
-                    if (selected.has(opt)) {
-                        selected.delete(opt);
-                        optBtn.classList.remove('selected');
-                    } else {
-                        selected.add(opt);
-                        optBtn.classList.add('selected');
-                    }
-                });
-                opts.appendChild(optBtn);
-            });
-            askPanelEl.appendChild(opts);
-        }
-        doPrimary = () => {
-            const v = inp.value.trim();
-            if (selected.size > 0) {
-                let text = '我选择：' + [...selected].join('、');
-                if (v) text += '。补充说明：' + v; // 勾选 + 自定义输入拼接
-                doSend(text);
-            } else if (v) {
-                doSend(v);
-            } else {
-                shake(); // 均空：不发送，输入框加轻微抖动提示
-            }
-        };
-    } else {
-        // 单选：点击选项即发送；唯一按钮发送自定义输入
-        if (options && options.length > 0) {
-            const opts = document.createElement('div');
-            opts.className = 'ai-ask-options';
-            options.forEach(opt => {
-                const optBtn = document.createElement('button');
-                optBtn.type = 'button';
-                optBtn.className = 'ai-ask-option';
-                optBtn.textContent = opt;
-                optBtn.addEventListener('click', () => {
-                    optBtn.classList.add('selected'); // 点过的按钮临时选中反馈
-                    doSend(opt);
-                });
-                opts.appendChild(optBtn);
-            });
-            askPanelEl.appendChild(opts);
-        }
-        doPrimary = () => {
-            const v = inp.value.trim();
-            if (!v) { shake(); return; } // 空输入不发送，抖动提示
-            doSend(v);
-        };
-    }
+    const shake = (inp) => {
+        inp.classList.add('error');
+        setTimeout(() => inp.classList.remove('error'), 600);
+    };
 
-    // 输入行：输入框 + 唯一按钮（Enter 与按钮走同一逻辑）
-    btn.addEventListener('click', doPrimary);
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPrimary(); } });
-    const row = document.createElement('div');
-    row.className = 'ai-ask-input-row';
-    row.appendChild(inp);
-    row.appendChild(btn);
-    askPanelEl.appendChild(row);
+    // 问句标题行（标题 + 右上角关闭按钮，关闭 = 取消本轮）
+    const buildHeader = (titleText) => {
+        const header = document.createElement('div');
+        header.className = 'ai-ask-header';
+        const title = document.createElement('div');
+        title.className = 'ai-ask-question';
+        title.textContent = titleText;
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'ai-ask-close';
+        closeBtn.title = '取消本轮提问';
+        closeBtn.textContent = '×';
+        closeBtn.addEventListener('click', () => {
+            // 复用停止按钮逻辑：收起面板、移除流式气泡、取消后端 run（防止悬挂）
+            if (stopBtnEl) stopBtnEl.click();
+            else hideAskPanel();
+        });
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        askPanelEl.appendChild(header);
+    };
+
+    if (questions.length === 1) {
+        // ── 单问题：保持旧版交互 ──
+        const q = questions[0];
+        const isMultiple = q.selection === 'multiple'; // 非 "multiple" 一律按单选处理
+        buildHeader(q.question);
+        // 中部滚动区：选项列表在此滚动，头部问题与底部输入行固定可见
+        const body = document.createElement('div');
+        body.className = 'ai-ask-body';
+        askPanelEl.appendChild(body);
+
+        // 输入行元素（先创建：唯一按钮回调与 Enter 需读取输入值）
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'ai-ask-input';
+        inp.placeholder = '输入你的答案…';
+        bindInputGuard(inp);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ai-ask-submit';
+        btn.textContent = isMultiple ? '确认提交' : '发送'; // 统一布局：输入框 + 唯一按钮同排
+
+        let doPrimary; // 唯一按钮与 Enter 共用的提交逻辑
+        if (isMultiple) {
+            // 多选：勾选多个选项，唯一按钮汇总提交（勾选优先，自定义输入作为补充拼接）
+            const selected = new Set();
+            if (q.options && q.options.length > 0) {
+                const opts = document.createElement('div');
+                opts.className = 'ai-ask-options';
+                q.options.forEach(opt => {
+                    const optBtn = document.createElement('button');
+                    optBtn.type = 'button';
+                    optBtn.className = 'ai-ask-option';
+                    // 对勾图标 + 文本节点（textContent 会覆盖子元素，故用文本节点追加）
+                    const check = document.createElement('span');
+                    check.className = 'ai-ask-check';
+                    check.textContent = '✓';
+                    optBtn.appendChild(check);
+                    optBtn.appendChild(document.createTextNode(opt));
+                    optBtn.addEventListener('click', () => {
+                        if (selected.has(opt)) {
+                            selected.delete(opt);
+                            optBtn.classList.remove('selected');
+                        } else {
+                            selected.add(opt);
+                            optBtn.classList.add('selected');
+                        }
+                    });
+                    opts.appendChild(optBtn);
+                });
+                body.appendChild(opts);
+            }
+            doPrimary = () => {
+                const v = inp.value.trim();
+                if (selected.size > 0) {
+                    let text = '我选择：' + [...selected].join('、');
+                    if (v) text += '。补充说明：' + v; // 勾选 + 自定义输入拼接
+                    doSend(text);
+                } else if (v) {
+                    doSend(v);
+                } else {
+                    shake(inp); // 均空：不发送，输入框加轻微抖动提示
+                }
+            };
+        } else {
+            // 单选：点击选项即发送；唯一按钮发送自定义输入
+            if (q.options && q.options.length > 0) {
+                const opts = document.createElement('div');
+                opts.className = 'ai-ask-options';
+                q.options.forEach(opt => {
+                    const optBtn = document.createElement('button');
+                    optBtn.type = 'button';
+                    optBtn.className = 'ai-ask-option';
+                    optBtn.textContent = opt;
+                    optBtn.addEventListener('click', () => {
+                        optBtn.classList.add('selected'); // 点过的按钮临时选中反馈
+                        doSend(opt);
+                    });
+                    opts.appendChild(optBtn);
+                });
+                body.appendChild(opts);
+            }
+            doPrimary = () => {
+                const v = inp.value.trim();
+                if (!v) { shake(inp); return; } // 空输入不发送，抖动提示
+                doSend(v);
+            };
+        }
+
+        // 底部固定区：输入行（Enter 与按钮走同一逻辑）
+        btn.addEventListener('click', doPrimary);
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPrimary(); } });
+        const footer = document.createElement('div');
+        footer.className = 'ai-ask-footer';
+        const row = document.createElement('div');
+        row.className = 'ai-ask-input-row';
+        row.appendChild(inp);
+        row.appendChild(btn);
+        footer.appendChild(row);
+        askPanelEl.appendChild(footer);
+    } else {
+        // ── 多问题：表单式分组，所有题统一"选中后待全局提交" ──
+        buildHeader(`请回答以下 ${questions.length} 个问题`);
+        // 中部滚动区：问题分组列表在此滚动，头部标题与底部提交按钮固定可见
+        const body = document.createElement('div');
+        body.className = 'ai-ask-body';
+        askPanelEl.appendChild(body);
+
+        // 每题作答状态：单选=selectedOne（组内互斥）；多选=selected 集合；inp=自定义输入
+        const states = questions.map(q => ({
+            isMultiple: q.selection === 'multiple',
+            selectedOne: null,
+            selected: new Set(),
+            inp: null
+        }));
+
+        questions.forEach((q, idx) => {
+            const st = states[idx];
+            const group = document.createElement('div');
+            group.className = 'ai-ask-qgroup';
+            const qTitle = document.createElement('div');
+            qTitle.className = 'ai-ask-qtitle';
+            qTitle.textContent = `${idx + 1}. ${q.question}`;
+            group.appendChild(qTitle);
+
+            if (q.options && q.options.length > 0) {
+                const opts = document.createElement('div');
+                opts.className = 'ai-ask-options';
+                q.options.forEach(opt => {
+                    const optBtn = document.createElement('button');
+                    optBtn.type = 'button';
+                    optBtn.className = 'ai-ask-option';
+                    if (st.isMultiple) {
+                        // 多选：对勾图标 + 勾选切换
+                        const check = document.createElement('span');
+                        check.className = 'ai-ask-check';
+                        check.textContent = '✓';
+                        optBtn.appendChild(check);
+                        optBtn.appendChild(document.createTextNode(opt));
+                        optBtn.addEventListener('click', () => {
+                            if (st.selected.has(opt)) {
+                                st.selected.delete(opt);
+                                optBtn.classList.remove('selected');
+                            } else {
+                                st.selected.add(opt);
+                                optBtn.classList.add('selected');
+                            }
+                        });
+                    } else {
+                        // 单选：组内互斥选中（待全局提交，不即发）
+                        optBtn.textContent = opt;
+                        optBtn.addEventListener('click', () => {
+                            st.selectedOne = opt;
+                            opts.querySelectorAll('.ai-ask-option.selected').forEach(b => b.classList.remove('selected'));
+                            optBtn.classList.add('selected');
+                        });
+                    }
+                    opts.appendChild(optBtn);
+                });
+                group.appendChild(opts);
+            }
+
+            // 各题自定义输入（可选）：Enter 触发全局提交
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.className = 'ai-ask-input';
+            inp.placeholder = '自定义答案（可选）';
+            bindInputGuard(inp);
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPrimary(); } });
+            st.inp = inp;
+            group.appendChild(inp);
+            body.appendChild(group);
+        });
+
+        // 全局提交：逐题收集答案（选项优先，自定义输入补充/兜底），缺题抖动对应输入框并终止
+        const doPrimary = () => {
+            const lines = [];
+            for (const st of states) {
+                const v = st.inp.value.trim();
+                let line = '';
+                if (st.isMultiple) {
+                    if (st.selected.size > 0) {
+                        line = '我选择：' + [...st.selected].join('、');
+                        if (v) line += '。补充说明：' + v;
+                    } else if (v) {
+                        line = v;
+                    }
+                } else {
+                    if (st.selectedOne) {
+                        line = st.selectedOne;
+                        if (v) line += '。补充说明：' + v;
+                    } else if (v) {
+                        line = v;
+                    }
+                }
+                if (!line) {
+                    // 缺题：把对应输入框滚入视野再抖动（否则列表滚走时提示不可见）
+                    st.inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    shake(st.inp);
+                    return;
+                }
+                lines.push(line);
+            }
+            doSend(lines.join('\n')); // 每题一行，行内无换行（后端按行数逐题映射）
+        };
+
+        // 底部固定区：唯一「确认提交」按钮
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ai-ask-submit';
+        btn.textContent = '确认提交';
+        btn.addEventListener('click', doPrimary);
+        const footer = document.createElement('div');
+        footer.className = 'ai-ask-footer';
+        const row = document.createElement('div');
+        row.className = 'ai-ask-input-row ai-ask-row-right'; // 提交按钮靠右下角
+        row.appendChild(btn);
+        footer.appendChild(row);
+        askPanelEl.appendChild(footer);
+    }
 
     // 显示面板；反问等待期间输入框改为"等待你的选择…"禁用态（面板收起时恢复）
     askPanelEl.style.display = '';

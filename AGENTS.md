@@ -557,22 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI Chat 模式回归（Mode 字段统一 chat/agent/plan + 会话配置迁移 + 三档切换 UI）+ aierrors 增强（REASONING_REQUIRED 分类 + 未命中回填原始错误）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | ① 恢复 AI 助手 Chat 模式（单次请求直接回答、不调用工具），解决部分模型不支持深度思考/工具调用、本地模型跑不动 Agent 多轮循环的问题；模式控制从 `PlanMode bool` 重构为单一 `Mode` 字符串（`chat`/`agent`/`plan`），初始化数据库时自动迁移存量数据。② aierrors 错误分类增强：新增 `REASONING_REQUIRED`（模型**必须开启**深度思考，反向于已有的"不支持"场景）分类，并去掉未命中时的通用兜底文案、`UserMsg` 直接回填原始错误信息便于排查。 |
-| **Mode 三态统一（重要）** | [ai_session_config.go](internal/models/ai_session_config.go)：`AISessionConfig.PlanMode bool` → `Mode string`（`gorm:"size:10;default:'agent'"`）；[ai_service.go](internal/services/ai_service.go)：`SessionConfig` 同步 `Mode string`，`CreateDefaultSessionConfig` 写 `"agent"`、`SaveSessionConfig` 写 `"mode"`、`LoadSessionConfig` 用 `modeOrDefault` 兜底（新增）。Agent 请求级 `Request.PlanMode`（bool）内部保持不变，仅判定改 `PlanMode: sessCfg.Mode == "plan"`。 |
-| **存量数据迁移（重要）** | [db.go](internal/database/db.go) `InitDB`：AutoMigrate 后、`cleanupOrphanedData` 前一次性迁移——`HasColumn(&AISessionConfig{}, "plan_mode")` 时把 `plan_mode = 1` 的会话更新为 `mode = 'plan'`；孤儿列清单追加 `"plan_mode"`（字段移除后 AutoMigrate 残留列自动清理）。 |
-| **Chat 模式实现（重要）** | [app.go](app.go) 新增 `CallAIStream`（单次流式入口，Chat 不注入任何工具规范）；共享上下文组装抽取为 `buildAIContextInstruction`（身份层 + 技能/角色扮演/引用/追问/上传 7 个逻辑块，与 Agent 流逐行一致——抽取需与原代码逐块核对，勿偷工减料）；Token 口径：`estimateUserTokens(messages) + estimateTokens(systemMsg)`（Chat 计入系统提示词）；前端 [ai-chat.js](frontend/src/js/ai-chat.js) `currentPlanMode`→`currentMode`（`'chat'|'agent'|'plan'`），[index.html](frontend/index.html) `#aiModeToggle` 三按钮两分割线，`syncModeToggle` 按 `btn.dataset.mode === currentMode` 高亮，`startStreaming` 按 `currentMode === 'chat'` 分流走 Chat 流。 |
-| **aierrors REASONING_REQUIRED（重要）** | 新增分类 `CategoryThinkingRequired`（文案"当前模型必须开启深度思考才能回答，请在输入框上方开启深度思考开关后重试"）。**误判根因**：megumin `openai.RequestError`（400）在 `classifyOpenAIRequestError` 无 400 分支 → 直接兜底 `network_error`（显示"网络连接失败"误导用户）；且 `message: %!s(<nil>)`（`Err` 为 nil），真实错误码 `REASONING_REQUIRED` 只在 body 里。修复：`classifyOpenAIRequestError` 补 400（及 402/404）分支，末尾先 `classifyByText` 再 unknown；`classifyBadRequest(msg, code, raw)` 合并 message/code/raw 三文本匹配（覆盖 eino 路径 `Code` 字段与 RequestError body 两条来源）；匹配 `reasoning_required`/`thinking_required`/`必须开启深度思考`/`must enable thinking|reasoning`；`classifyByText` 兜底同款匹配。 |
-| **未命中回填原始错误（重要）** | 去掉 `CategoryUnknown`（"AI 调用出错，请稍后重试"）与 `CategoryInvalidRequest`（"请求参数有误"）通用兜底文案；`NewAIError` 分类无映射时 `UserMsg` 直接 = `raw`（原始错误文本），前端 `if (errData.user_msg)` 原样弹出方便排查。真实网络错误仍由文本匹配（`connection refused`/`no such host` 等）命中 `network_error` 保留友好文案。 |
-| **测试** | [errors_test.go](internal/aierrors/errors_test.go) 新增 7 个用例：RequestError(400, Err=nil, Body=REASONING_REQUIRED) 精确复现场景 / go-openai + eino APIError `Code` 路径 / 纯文本兜底 / 纯中文文案 / unknown 与 400-invalid_request 的 `UserMsg == raw` 断言。 |
-| **涉及文件** | [internal/models/ai_session_config.go](internal/models/ai_session_config.go)、[internal/services/ai_service.go](internal/services/ai_service.go)、[internal/database/db.go](internal/database/db.go)、[app.go](app.go)、[frontend/index.html](frontend/index.html)、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[internal/aierrors/errors.go](internal/aierrors/errors.go)、[internal/aierrors/errors_test.go](internal/aierrors/errors_test.go) |
-
----
-
-## 记忆点 2：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
+## 记忆点 1：AI 模式按钮悬停提示（JS portal 重构解决层叠遮挡）+ 主题三处同步清理（one-dark-pro 残留移除 + default 色值统一）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
+## 记忆点 2：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 3：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 4：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +614,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 5：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 6：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +643,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 7：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -668,7 +653,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 8：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -677,7 +662,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 9：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,6 +670,20 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **实现要点** | 注入位于技能提示词之后、`return` 之前（Instruction 尾部：不扰动前部稳定内容、利于提示词前缀缓存）；`now.Zone()` 取时区名 + `Format("-07:00")` 取 UTC 偏移，中文星期数组内联 app.go（不复用 tools 包未导出变量）。同步删除：current_time.go、registry.go 注册行、meta.go 展示条目（前端工具开关列表自动少一项）、Agent 提示词"时间工具强制调用"规范段、两个 doc.go 工具清单、TOOLS.md 引用（§1 架构树 + §4.2 无参模板的文件引用 + §4.3 命名示例改 read_url）。用户设置 `ai_agent_tools_disabled` 中的残留工具名按未知名忽略，无需迁移。 |
 | **相关决策** | ① 不采用"注入 + 保留工具"混合方案：应用无"运行中反复获取秒级时间"的场景，保留工具徒增 schema token 与冗余调用风险；将来若引入子代理，在子代理提示词同样注入一行即可。② 曾评估将 json_validate/json_format/json_extract 合并为单工具 + action 参数，否决——三工具参数形状差异大（path 仅 extract 必填），InferTool 反射无法表达条件必填，合并损害模型调用准确率；改为精简三个工具 Desc（删除"适用场景 ①②③"枚举，保留功能定义 + 关键参数写法 + 互相引导边界，约减 55%，每次请求省约 300 token）。 |
 | **涉及文件** | [app.go](app.go)、[registry.go](internal/agent/registry.go)、[meta.go](internal/agent/tools/meta.go)、[json_tools.go](internal/agent/tools/json_tools.go)、[doc.go](internal/agent/doc.go)、[tools/doc.go](internal/agent/tools/doc.go)、[TOOLS.md](internal/agent/TOOLS.md)、[mcpserver/tools_test.go](internal/mcpserver/tools_test.go)（测试假工具 get_current_time 改名 ping 避免混淆）、[README.md](README.md) 与 playground/landing 展示口径（16→15）。方案详见 [.trae/documents/plan-inject-current-time-remove-time-tool.md](.trae/documents/plan-inject-current-time-remove-time-tool.md) |
+
+---
+
+## 记忆点 10：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | ask_user 从单问题升级为单次调用携带 `questions` 数组（1-3 条，每题独立 options 2-6 个 + single/multiple 选择模式），相关联信息合并为一次提问；前端反问面板重写为三段式布局（固定头部 / 中部列表滚动 / 固定底部按钮）；**会话等待机制零改动**——仍是一次 ClaimAsk 抢占 + 一次 WaitForAnswer 阻塞 + 一个答案投递，仅答案从单条文本变为多条拼装文本。 |
+| **后端要点** | [ask_user.go](internal/agent/tools/ask_user.go)：schema 用 eino `ElemInfo`+`SubParams` 表达对象数组（**该表示法不支持 minItems/maxItems**，1-3 上限靠 `maxAskUserQuestions=3` 运行时校验 + Desc 文字双重约束）；保留旧单字段 question/options/selection 兜底解析（模型偶发回退旧格式）；逐题校验（问句非空/500 rune、选项 200 rune）→ `normalizeAskUserOptions` 去空去重取 6 项 → **先校验后 ClaimAsk**（参数错误不占反问名额）；`ActionText` 多问显示"向用户提问（共N问）：首问"；事件负载双格式（questions 数组 + 旧顶层字段取首条）。 |
+| **答案映射协议（重要）** | 前端约定：单问题 = 原始答案文本；多问题 = 每题一行（`答案1\n答案2`，行内禁止换行，输入框 maxlength=500 与后端 `maxToolShortText` 截断对齐——**曾用全局 20000 上限，长答案会被后端静默截断**）。`buildAskUserAnswerText`：行数与问题数一致时逐题映射"问题→用户回答"列表回填模型；不匹配时整体兜底为单条答案（防御性防错配）。 |
+| **前端面板** | [ai-chat.js](frontend/src/js/ai-chat.js) `showAskPanel` 重写：多问题渲染表单分组（编号标题 + 各组单选互斥/多选勾选 + 各组"其他"自定义输入），底部唯一「确认提交」右对齐；缺题提交时 `scrollIntoView` 滚到视野中央再抖动（**只抖动不滚动时缺的题可能在滚动区外，用户看不到**）；单问题保留旧交互（单选点击即发、无分组样式）；事件解析兼容新旧双格式。 |
+| **Windows 渲染教训（重要）** | ① **滚动不能放在圆角面板自身**（`border-radius` + `overflow-y:auto` 合成滚动层在 Windows 显示缩放下对文字做纹理重采样导致发糊），必须滚动内部矩形容器（应用其他列表均为矩形裁剪所以清晰）；② **动画去掉 `both` 填充**——结束后 transform 残留把面板永久提升为 GPU 合成层，超高触发滚动后文字丢子像素抗锯齿；③ **字号用整数 px**，`0.92em` 类小数像素（≈12.88px）在 Windows 发虚；④ **`scrollbar-color` 可继承**——面板在 `#mainContent` 内会继承其"默认透明"滚动条颜色导致滚动条隐形，悬浮面板需显式声明常显样式（thin + thumb 常显）；⑤ 水平内边距从面板下沉到 header/body/footer 内部，让滚动条贴住面板右边框。 |
+| **相关决策** | ① 单次调用带 questions 数组而非并行多条 ask_user：ClaimAsk 互斥设计无需改动（并行方案需计数抢占 + 答案按问题 ID 路由 + 多面板互相覆盖，复杂度高收益低）；② 面板高度封顶 `min(420px, 60vh)` 而非弹性撑满（小窗口回退防溢出），超出部分列表内部滚动，头部问题与底部按钮固定可见。 |
+| **涉及文件** | [ask_user.go](internal/agent/tools/ask_user.go)、[meta.go](internal/agent/tools/meta.go)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-ask-body` 滚动区 + `.ai-ask-qgroup` 分组样式） |
 
 ---
 

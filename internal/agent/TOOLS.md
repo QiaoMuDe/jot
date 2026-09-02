@@ -267,7 +267,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 - **禁止 import 父包 `jot/internal/agent`**：会造成循环依赖（父包 import 了 tools）。工具只能依赖 `services` / `einocli` / 标准库 / 第三方库。
 - **禁止工具内部直接 emit 事件**（`ctx.Emit` 仅供父包使用）。需要提示前端的行为用 `AddPartial`。**例外**：以下工具为向用户展示交互卡片，允许直接 `ctx.Emit`：
-  - `ask_user`：发射 `ai:ask-user` 事件（负载为 `{question, options, selection}` JSON）。
+  - `ask_user`：发射 `ai:ask-user` 事件（负载为 `{questions: [{question, options, selection}], question, options, selection}` JSON，`questions` 数组为主格式，旧顶层字段取首条问题值兼容旧前端）。
   - `create_plan`：发射 `ai:plan-created` 事件（负载为 `{goal, steps}` JSON）。
   - `update_plan`：发射 `ai:plan-updated` 事件（负载为 `{step_id, status, result, steps}` JSON）。
   - 其他工具一律不得仿照；各类事件的完整协议见 [EVENTS.md](internal/agent/EVENTS.md)。

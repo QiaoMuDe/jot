@@ -52,11 +52,12 @@
 
 ## 4. 反问交互事件（`ai:ask-user`）
 
-`ask_user` 工具执行时发射，负载为 JSON 字符串 `{"question": "...", "options": ["...", ...], "selection": "single"|"multiple"}`（`options` 为空数组 `[]`，`selection` 缺省 `"single"`）。
+`ask_user` 工具执行时发射，负载为 JSON 字符串 `{"questions": [{"question": "...", "options": ["...", ...], "selection": "single"|"multiple"}, ...], "question": "...", "options": [...], "selection": "..."}`。主格式为 `questions` 数组（1-3 条，每题可独立设置 `options` 与 `selection`，`options` 为空数组 `[]`、`selection` 缺省 `"single"`）；旧顶层字段（`question`/`options`/`selection`）取首条问题的值，仅作兼容保留。
 
-- 前端收到后在输入区上方渲染**悬浮反问面板**（`#aiAskPanel`）：问句标题（右上角 × 关闭按钮 = 取消本轮）+ 选项区 + 自定义输入行。
+- 前端收到后在输入区上方渲染**悬浮反问面板**（`#aiAskPanel`）：单问题时问句标题（右上角 × 关闭按钮 = 取消本轮）+ 选项区 + 自定义输入行；多问题时表单式渲染 N 个问题分组（编号题目标题 + 各题选项 + 各题自定义输入），底部唯一"确认提交"按钮逐题收集后一次性提交。
 - **同轮传输（AskWaiter）**：工具先 `ClaimAsk()` 原子抢占反问名额（模型并行发多条 ask_user 仅第一条成功），再发射事件并阻塞等待用户回答（ReAct 循环暂停、AI 消息不结束）；答案经 `AnswerAskUser(sessionID, answer)` 投递到会话等待通道，作为工具结果返回给模型继续完成原始请求——不落库为新 user 消息、不新开一轮。
-- `selection` 语义：`single` 单选（点选项即提交）；`multiple` 多选（勾选多项后点"确认提交"）。
+- **答案提交格式约定**：单问题 = 原始答案文本；多问题 = 每题一行（`答案1\n答案2...`，输入框单行、多选拼接为一行，行内无换行），后端按行数与问题数逐题映射；行数不匹配时整体作为单条答案兜底。
+- `selection` 语义（每题独立）：`single` 单选（单问题时点选项即提交，多问题时选中后待全局提交）；`multiple` 多选（勾选多项后确认提交）。
 - 面板生命周期：`showAskPanel` / `hideAskPanel`；提交成功隐藏；× 关闭 = 取消本轮（复用停止逻辑）；切换会话/清空会话/`stream-done`/`stream-error`/停止时隐藏。
 - 与计划面板互斥（方案 B）：`showAskPanel` 先收起计划面板，`hideAskPanel` 后若仍在流式中且有计划数据则恢复。
 - 未注入 AskWaiter（非交互场景/测试）时不发射事件，直接返回引导文本。

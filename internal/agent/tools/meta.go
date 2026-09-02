@@ -25,7 +25,7 @@ func BuiltinTools() []ToolMeta {
 		{Name: "manage_note", Label: "管理笔记（创建/查看/编辑/置顶/移动/打标签等）"},
 		{Name: "read_note_section", Label: "分段读取笔记内容"},
 		{Name: "get_stats", Label: "获取笔记/待办/笔记本等数据统计"},
-		{Name: "ask_user", Label: "向用户发起澄清提问（单选/多选）"},
+		{Name: "ask_user", Label: "向用户发起澄清提问（1-3 个问题，单选/多选）"},
 		{Name: "create_plan", Label: "制定执行计划（拆解目标为步骤列表）", PlanOnly: true},
 		{Name: "update_plan", Label: "更新执行计划（标记步骤完成/跳过/新增）", PlanOnly: true},
 	}

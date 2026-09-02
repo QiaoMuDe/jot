@@ -3878,13 +3878,16 @@
     width: fit-content;  /* 面板宽度跟随内容收缩 = 最长选项（标题/输入行跟随） */
     min-width: 280px;    /* 短选项时保证面板宽度（用户确认 280px） */
     max-width: 100%;     /* 最长选项超容器时面板满宽，内部换行 */
-    padding: 14px;
+    display: flex;       /* 纵向 flex：头部问题/底部按钮固定，中部列表滚动 */
+    flex-direction: column;
+    max-height: min(420px, 60vh); /* 面板高度封顶 420px（小窗口回退 60vh），超高仅列表内部滚动 */
+    padding: 14px 0 4px; /* 水平内边距下沉到 header/body/footer：让滚动条贴住面板右边框 */
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); /* 悬浮阴影，浮层感 */
-    animation: ai-ask-panel-in 0.2s ease-out both;
+    animation: ai-ask-panel-in 0.2s ease-out; /* 不用 both 填充：结束后清除 transform 合成层，避免滚动时文字发虚 */
 }
 
 @keyframes ai-ask-panel-in {
@@ -3904,9 +3907,48 @@
     }
 }
 
+/* 面板中部滚动区：选项/问题分组在此滚动，头部问题与底部按钮固定可见
+   （矩形裁剪走标准滚动路径，圆角裁剪的合成滚动层在 Windows 缩放下文字会发虚） */
+.ai-ask-body {
+    flex: 1 1 auto;      /* 占据剩余空间，内容少时面板仍自适应收缩 */
+    min-height: 0;       /* 允许 flex 子项收缩，超高时启用滚动 */
+    overflow-y: auto;
+    padding: 0 14px;     /* 内容左右留白（面板水平内边距已下沉至此，滚动条贴边框） */
+    /* 显式声明滚动条：面板位于 #mainContent 内，会继承其"默认透明"的
+       scrollbar-color 导致滚动条不可见，这里按下拉组件惯例常显 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.ai-ask-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-ask-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-ask-body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+
+.ai-ask-body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 面板底部固定区：输入行/提交按钮（顶部 4px 为与滚动区的固定间隙，不随内容滚动变化） */
+.ai-ask-footer {
+    flex-shrink: 0;
+    padding: 4px 14px 0; /* 顶部 4px 固定间隙；水平内边距已下沉至此 */
+}
+
 .ai-ask-header {
     display: flex;
     align-items: flex-start;
+    flex-shrink: 0; /* 三段式布局：头部固定，超高时不参与 flex 压缩 */
+    padding: 0 14px; /* 面板水平内边距已下沉至此 */
     gap: 8px;
     margin-bottom: 10px;
 }
@@ -3918,6 +3960,27 @@
     color: var(--text-primary);
 }
 
+/* 多问题分组（1-3 题）：组间分隔线 + 上下间距（首组无上边框） */
+.ai-ask-qgroup {
+    padding: 10px 0;
+}
+
+/* 末组底部只留 4px：与底部固定区（提交按钮）的留白对齐 */
+.ai-ask-qgroup:last-child {
+    padding-bottom: 4px;
+}
+
+.ai-ask-qgroup + .ai-ask-qgroup {
+    border-top: 1px solid var(--border);
+}
+
+/* 编号题目标题：复用问句标题基调（继承整数像素字号，避免小数像素渲染发虚） */
+.ai-ask-qtitle {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
 .ai-ask-close {
     flex-shrink: 0;
     width: 28px;
@@ -3926,7 +3989,7 @@
     border-radius: 50%;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 1.15rem;
+    font-size: 18px; /* 整数像素：避免小数像素渲染发虚 */
     line-height: 1;
     cursor: pointer;
     display: flex;
@@ -3944,7 +4007,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-bottom: 10px;
+    margin-bottom: 4px; /* 与底部固定区（按钮/输入行）的留白对齐 */
 }
 
 .ai-ask-option {
@@ -3952,7 +4015,7 @@
     align-items: center;
     width: 100%;
     padding: 8px 12px;
-    font-size: 0.82rem;
+    font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
     font-family: inherit;
     text-align: left;
     color: var(--text-primary);
@@ -3997,15 +4060,21 @@
 
 .ai-ask-input-row {
     display: flex;
+    align-items: center; /* 行内元素垂直居中（多问题模式行内只有按钮） */
     gap: 8px;
     width: 100%;
+}
+
+/* 多问题模式：提交按钮靠右下角 */
+.ai-ask-row-right {
+    justify-content: flex-end;
 }
 
 .ai-ask-input {
     flex: 1;
     min-width: 0;
     padding: 7px 10px;
-    font-size: 0.82rem;
+    font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
     font-family: inherit;
     color: var(--text-primary);
     background: var(--bg);
@@ -4037,8 +4106,8 @@
 
 .ai-ask-submit {
     flex-shrink: 0;
-    padding: 7px 14px;
-    font-size: 0.82rem;
+    padding: 6px 12px; /* 更紧凑：降低底部区域高度与按钮宽度 */
+    font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
     font-family: inherit;
     color: #fff;
     background: var(--accent);
