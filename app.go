@@ -1412,7 +1412,7 @@ func (a *App) IndexNotesByIDs(ids []uint) error {
 // IndexNotesUnindexed 仅嵌入未嵌入过的笔记（非软删且无向量记录），异步执行，进度与结果通过事件推送
 func (a *App) IndexNotesUnindexed() error {
 	a.LogSvc.Logger.Debugw("IndexNotesUnindexed")
-	ids, err := a.vectorService.GetUnindexedNoteIDs()
+	ids, err := a.vectorService.GetUnindexedNoteIDs(a.settingService.Get("ai_embed_model"))
 	if err != nil {
 		a.LogSvc.Logger.Errorw("IndexNotesUnindexed 获取未嵌入笔记失败", fastlog.Error(err))
 		return err
@@ -1424,10 +1424,10 @@ func (a *App) IndexNotesUnindexed() error {
 	return a.startVectorIndex(context.Background(), ids)
 }
 
-// IndexNotesStale 仅重新嵌入内容已变化的笔记（已嵌入但当前内容与嵌入时不一致），异步执行
+// IndexNotesStale 仅重新嵌入需更新的笔记（内容已变化，或嵌入模型已切换导致模型不匹配），异步执行
 func (a *App) IndexNotesStale() error {
 	a.LogSvc.Logger.Debugw("IndexNotesStale")
-	ids, err := a.vectorService.GetStaleNoteIDs()
+	ids, err := a.vectorService.GetStaleNoteIDs(a.settingService.Get("ai_embed_model"))
 	if err != nil {
 		a.LogSvc.Logger.Errorw("IndexNotesStale 获取需重新嵌入笔记失败", fastlog.Error(err))
 		return err
@@ -1461,19 +1461,23 @@ func (a *App) GetVectorIndexStatus() (*VectorIndexStatus, error) {
 // GetVectorIndexOverview 返回向量索引弹窗所需的完整状态：
 //   - noteCount/chunkCount/sizeBytes：全局存储口径（GetIndexStatus，含回收站残留向量）
 //   - totalNotes/unindexedNotes/staleNotes/upToDateNotes：非软删笔记的嵌入状态口径
-//     （staleNotes = 已嵌入但内容已变化、需重新嵌入的笔记数）
+//     （staleNotes = 已嵌入但内容已变化、或嵌入模型已切换导致模型不匹配的笔记数）
+//   - currentModel/currentModelChunks/otherModels：向量库模型归属（当前模型块数与其他模型残留分布）
 //
 // 注意：该接口需逐笔记重新切块比对（classifyVectorNotes），成本显著高于 GetVectorIndexStatus，
 // 仅供向量索引弹窗调用，勿用于高频路径（如数据管理页概览）
 // VectorIndexOverview 向量索引完整状态结果（向量索引弹窗专用）
 type VectorIndexOverview struct {
-	NoteCount      int   `json:"noteCount"`
-	ChunkCount     int   `json:"chunkCount"`
-	SizeBytes      int64 `json:"sizeBytes"`
-	TotalNotes     int   `json:"totalNotes"`
-	UnindexedNotes int   `json:"unindexedNotes"`
-	StaleNotes     int   `json:"staleNotes"`
-	UpToDateNotes  int   `json:"upToDateNotes"`
+	NoteCount          int                         `json:"noteCount"`
+	ChunkCount         int                         `json:"chunkCount"`
+	SizeBytes          int64                       `json:"sizeBytes"`
+	TotalNotes         int                         `json:"totalNotes"`
+	UnindexedNotes     int                         `json:"unindexedNotes"`
+	StaleNotes         int                         `json:"staleNotes"`
+	UpToDateNotes      int                         `json:"upToDateNotes"`
+	CurrentModel       string                      `json:"currentModel"`       // 当前配置的嵌入模型名
+	CurrentModelChunks int64                       `json:"currentModelChunks"` // 当前模型的向量块数
+	OtherModels        []services.VectorModelCount `json:"otherModels"`        // 其他模型的向量分布
 }
 
 func (a *App) GetVectorIndexOverview() (*VectorIndexOverview, error) {
@@ -1482,10 +1486,29 @@ func (a *App) GetVectorIndexOverview() (*VectorIndexOverview, error) {
 		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 失败", fastlog.Error(err))
 		return nil, err
 	}
-	totalNotes, unindexedNotes, staleNotes, upToDateNotes, err := a.vectorService.GetVectorNoteOverview()
+	currentModel := a.settingService.Get("ai_embed_model")
+	totalNotes, unindexedNotes, staleNotes, upToDateNotes, err := a.vectorService.GetVectorNoteOverview(currentModel)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 嵌入状态统计失败", fastlog.Error(err))
 		return nil, err
+	}
+	// 模型归属分布：按当前模型拆分出当前块数与其他模型残留；
+	// 当前模型未配置时不产出 otherModels（"其他模型"概念无意义，避免前端误报），与
+	// CheckVectorIndexModelConsistency 的空模型放行口径保持一致
+	currentModelChunks := int64(0)
+	var otherModels []services.VectorModelCount
+	modelCounts, err := a.vectorService.GetVectorModelCounts()
+	if err != nil {
+		// 统计失败不阻断弹窗：模型归属仅用于提示，记录日志后返回空分布
+		a.LogSvc.Logger.Errorw("GetVectorIndexOverview 模型分布统计失败", fastlog.Error(err))
+	} else if currentModel != "" {
+		for _, c := range modelCounts {
+			if c.Model == currentModel {
+				currentModelChunks = c.ChunkCount
+			} else {
+				otherModels = append(otherModels, c)
+			}
+		}
 	}
 	a.LogSvc.Logger.Debugw("GetVectorIndexOverview 结果",
 		fastlog.Int("noteCount", noteCount),
@@ -1494,16 +1517,56 @@ func (a *App) GetVectorIndexOverview() (*VectorIndexOverview, error) {
 		fastlog.Int("totalNotes", totalNotes),
 		fastlog.Int("unindexedNotes", unindexedNotes),
 		fastlog.Int("staleNotes", staleNotes),
-		fastlog.Int("upToDateNotes", upToDateNotes))
+		fastlog.Int("upToDateNotes", upToDateNotes),
+		fastlog.String("currentModel", currentModel),
+		fastlog.Int64("currentModelChunks", currentModelChunks),
+		fastlog.Int("otherModelKinds", len(otherModels)))
 	return &VectorIndexOverview{
-		NoteCount:      noteCount,
-		ChunkCount:     chunkCount,
-		SizeBytes:      sizeBytes,
-		TotalNotes:     totalNotes,
-		UnindexedNotes: unindexedNotes,
-		StaleNotes:     staleNotes,
-		UpToDateNotes:  upToDateNotes,
+		NoteCount:          noteCount,
+		ChunkCount:         chunkCount,
+		SizeBytes:          sizeBytes,
+		TotalNotes:         totalNotes,
+		UnindexedNotes:     unindexedNotes,
+		StaleNotes:         staleNotes,
+		UpToDateNotes:      upToDateNotes,
+		CurrentModel:       currentModel,
+		CurrentModelChunks: currentModelChunks,
+		OtherModels:        otherModels,
 	}, nil
+}
+
+// CheckVectorIndexModelConsistency 启动嵌入前检查向量库模型归属与当前配置是否一致：
+// 库中存在其他模型的向量时返回不通过及确认提示文案（提示未纳入本次索引的笔记无法被当前模型检索）
+func (a *App) CheckVectorIndexModelConsistency() CardRecallCheckResult {
+	currentModel := a.settingService.Get("ai_embed_model")
+	if currentModel == "" {
+		// 模型未配置时由 startVectorIndex 的配置校验兜底，此处视为通过
+		return CardRecallCheckResult{OK: true}
+	}
+	modelCounts, err := a.vectorService.GetVectorModelCounts()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("CheckVectorIndexModelConsistency 统计模型分布失败", fastlog.Error(err))
+		return CardRecallCheckResult{OK: true} // 统计失败不阻塞主流程
+	}
+	otherTotal := int64(0)
+	names := make([]string, 0, len(modelCounts))
+	for _, c := range modelCounts {
+		if c.Model == currentModel {
+			continue
+		}
+		otherTotal += c.ChunkCount
+		names = append(names, c.Model)
+	}
+	if otherTotal == 0 {
+		return CardRecallCheckResult{OK: true}
+	}
+	msg := fmt.Sprintf("库中存在其他模型的向量（%s，共 %d 块）。本次嵌入将把所选笔记重建为「%s」的向量；未纳入本次索引的笔记仍保留旧模型向量，无法被当前模型检索到。是否继续？",
+		strings.Join(names, "、"), otherTotal, currentModel)
+	a.LogSvc.Logger.Debugw("CheckVectorIndexModelConsistency 检测到模型不一致",
+		fastlog.String("currentModel", currentModel),
+		fastlog.String("otherModels", strings.Join(names, ",")),
+		fastlog.Int64("otherTotal", otherTotal))
+	return CardRecallCheckResult{OK: false, Message: msg}
 }
 
 // DeleteAllVectors 删除全部向量索引内容
@@ -1546,45 +1609,11 @@ type CardRecallCheckResult struct {
 	Message string `json:"message"`
 }
 
-// ValidateCardRecall 校验卡片召回是否可以开启：
-//  1. 基础判断：向量嵌入连接（base_url）或嵌入模型未设置 → 拒绝
-//  2. API Key 必填
-//  3. 向量表内容判断：表为空拒绝；当前嵌入模型无对应记录拒绝
-func (a *App) ValidateCardRecall() CardRecallCheckResult {
-	baseURL, apiKey, model, _ := a.GetEmbedConfig()
-	// 1. 基础判断：向量嵌入连接或嵌入模型未设置
-	if baseURL == "" || model == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先在设置中配置向量嵌入连接与嵌入模型"}
-	}
-	// 2. API Key 必填
-	if apiKey == "" {
-		return CardRecallCheckResult{OK: false, Message: "请先填写嵌入 API Key"}
-	}
-	// 3. 向量表内容判断
-	total, err := a.vectorService.CountAllVectors()
-	if err != nil {
-		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计向量表失败", fastlog.Error(err))
-		return CardRecallCheckResult{OK: false, Message: "向量表检查失败，请查看日志"}
-	}
-	if total == 0 {
-		return CardRecallCheckResult{OK: false, Message: "向量表为空，请先在数据管理中向量化笔记"}
-	}
-	modelCnt, err := a.vectorService.CountVectorsByModel(model)
-	if err != nil {
-		a.LogSvc.Logger.Errorw("ValidateCardRecall 统计模型向量失败", fastlog.Error(err))
-		return CardRecallCheckResult{OK: false, Message: "向量表检查失败，请查看日志"}
-	}
-	if modelCnt == 0 {
-		return CardRecallCheckResult{OK: false, Message: fmt.Sprintf("当前嵌入模型「%s」暂无向量数据，请先使用该模型向量化笔记", model)}
-	}
-	return CardRecallCheckResult{OK: true, Message: ""}
-}
-
 // ValidateVectorIndexConfig 校验向量嵌入连接配置是否可以发起嵌入：
 //  1. 基础判断：向量嵌入连接（base_url）或嵌入模型未设置 → 拒绝
 //  2. API Key 必填
 //
-// （仅校验配置本身，不检查向量表内容，与卡片召回 ValidateCardRecall 的检查范围不同）
+// （仅校验配置本身，不检查向量表内容）
 func (a *App) ValidateVectorIndexConfig() CardRecallCheckResult {
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	if baseURL == "" || model == "" {
@@ -1625,7 +1654,7 @@ func (a *App) startVectorIndex(ctx context.Context, noteIDs []uint) error {
 		a.vectorIndexMu.Unlock()
 	}
 
-	// 未完整配置向量嵌入连接时直接返回可读错误，不发起索引（与 ValidateCardRecall 校验强度一致）
+	// 未完整配置向量嵌入连接时直接返回可读错误，不发起索引（与 ValidateVectorIndexConfig 校验强度一致）
 	baseURL, apiKey, model, _ := a.GetEmbedConfig()
 	if baseURL == "" || model == "" {
 		release()

@@ -42,6 +42,8 @@ export function CancelVectorIndex():Promise<void>;
 
 export function CheckPasswordStrength(arg1:string):Promise<services.PasswordStrengthResult>;
 
+export function CheckVectorIndexModelConsistency():Promise<main.CardRecallCheckResult>;
+
 export function CleanupOrphanImages():Promise<number>;
 
 export function ClearAISessionMessages(arg1:number):Promise<void>;
@@ -317,8 +319,6 @@ export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Ta
 export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
 
 export function VacuumDatabase():Promise<string>;
-
-export function ValidateCardRecall():Promise<main.CardRecallCheckResult>;
 
 export function ValidateVectorIndexConfig():Promise<main.CardRecallCheckResult>;
 

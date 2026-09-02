@@ -219,6 +219,9 @@ export namespace main {
 	    unindexedNotes: number;
 	    staleNotes: number;
 	    upToDateNotes: number;
+	    currentModel: string;
+	    currentModelChunks: number;
+	    otherModels: services.VectorModelCount[];
 	
 	    static createFrom(source: any = {}) {
 	        return new VectorIndexOverview(source);
@@ -233,7 +236,28 @@ export namespace main {
 	        this.unindexedNotes = source["unindexedNotes"];
 	        this.staleNotes = source["staleNotes"];
 	        this.upToDateNotes = source["upToDateNotes"];
+	        this.currentModel = source["currentModel"];
+	        this.currentModelChunks = source["currentModelChunks"];
+	        this.otherModels = this.convertValues(source["otherModels"], services.VectorModelCount);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class VectorIndexStatus {
 	    noteCount: number;
@@ -997,6 +1021,20 @@ export namespace services {
 	        this.screen_lock_enabled = source["screen_lock_enabled"];
 	        this.screen_lock_password = source["screen_lock_password"];
 	        this.editor_word_wrap = source["editor_word_wrap"];
+	    }
+	}
+	export class VectorModelCount {
+	    model: string;
+	    chunkCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VectorModelCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model = source["model"];
+	        this.chunkCount = source["chunkCount"];
 	    }
 	}
 

@@ -37,8 +37,14 @@ func newVectorTestService(t *testing.T, db *gorm.DB) *VectorService {
 	return NewVectorService(db, logger)
 }
 
-// indexNoteForTest 按生产 IndexNotes 同一切块口径（标签排序 + ChunkContent 600）为笔记写入向量记录
+// indexNoteForTest 按生产 IndexNotes 同一切块口径（标签排序 + ChunkContent 600）为笔记写入向量记录（默认模型 test-embed）
 func indexNoteForTest(t *testing.T, db *gorm.DB, note models.Note) {
+	t.Helper()
+	indexNoteWithModelForTest(t, db, note, "test-embed")
+}
+
+// indexNoteWithModelForTest 同 indexNoteForTest，但可指定向量记录的模型名（用于模型不匹配场景）
+func indexNoteWithModelForTest(t *testing.T, db *gorm.DB, note models.Note, model string) {
 	t.Helper()
 	names := make([]string, 0, len(note.Tags))
 	for _, tg := range note.Tags {
@@ -53,7 +59,7 @@ func indexNoteForTest(t *testing.T, db *gorm.DB, note models.Note) {
 			NoteID:     note.ID,
 			ChunkIndex: i,
 			ChunkText:  c,
-			Model:      "test-embed",
+			Model:      model,
 		})
 	}
 	if err := db.Create(&rows).Error; err != nil {
@@ -89,7 +95,7 @@ func TestClassifyVectorNotesEmpty(t *testing.T) {
 	db := newVectorTestDB(t)
 	svc := newVectorTestService(t, db)
 
-	status, err := svc.classifyVectorNotes(nilCtx())
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
 	if err != nil {
 		t.Fatalf("classifyVectorNotes 空库不应报错: %v", err)
 	}
@@ -119,7 +125,7 @@ func TestClassifyVectorNotesMixed(t *testing.T) {
 
 	n3 := createNoteForTest(t, db, "未嵌入", "从未嵌入过")
 
-	status, err := svc.classifyVectorNotes(nilCtx())
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
 	if err != nil {
 		t.Fatalf("classifyVectorNotes 失败: %v", err)
 	}
@@ -140,18 +146,18 @@ func TestClassifyVectorNotesMixed(t *testing.T) {
 	}
 
 	// 导出方法口径一致
-	total, unindexed, stale, uptodate, err := svc.GetVectorNoteOverview()
+	total, unindexed, stale, uptodate, err := svc.GetVectorNoteOverview("test-embed")
 	if err != nil {
 		t.Fatalf("GetVectorNoteOverview 失败: %v", err)
 	}
 	if total != 3 || unindexed != 1 || stale != 1 || uptodate != 1 {
 		t.Errorf("GetVectorNoteOverview = (%d,%d,%d,%d), want (3,1,1,1)", total, unindexed, stale, uptodate)
 	}
-	unidxIDs, err := svc.GetUnindexedNoteIDs()
+	unidxIDs, err := svc.GetUnindexedNoteIDs("test-embed")
 	if err != nil || !containsID(unidxIDs, n3.ID) || len(unidxIDs) != 1 {
 		t.Errorf("GetUnindexedNoteIDs = %v, err=%v, want [%d]", unidxIDs, err, n3.ID)
 	}
-	staleIDs, err := svc.GetStaleNoteIDs()
+	staleIDs, err := svc.GetStaleNoteIDs("test-embed")
 	if err != nil || !containsID(staleIDs, n2.ID) || len(staleIDs) != 1 {
 		t.Errorf("GetStaleNoteIDs = %v, err=%v, want [%d]", staleIDs, err, n2.ID)
 	}
@@ -168,7 +174,7 @@ func TestClassifyVectorNotesTitleChange(t *testing.T) {
 		t.Fatalf("更新笔记标题失败: %v", err)
 	}
 
-	status, err := svc.classifyVectorNotes(nilCtx())
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
 	if err != nil {
 		t.Fatalf("classifyVectorNotes 失败: %v", err)
 	}
@@ -191,7 +197,7 @@ func TestClassifyVectorNotesSoftDeleted(t *testing.T) {
 		t.Fatalf("软删笔记失败: %v", err)
 	}
 
-	status, err := svc.classifyVectorNotes(nilCtx())
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
 	if err != nil {
 		t.Fatalf("classifyVectorNotes 失败: %v", err)
 	}
@@ -214,12 +220,58 @@ func TestClassifyVectorNotesEmptiedContent(t *testing.T) {
 		t.Fatalf("清空笔记内容失败: %v", err)
 	}
 
-	status, err := svc.classifyVectorNotes(nilCtx())
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
 	if err != nil {
 		t.Fatalf("classifyVectorNotes 失败: %v", err)
 	}
 	if len(status.StaleIDs) != 1 || len(status.UpToDateIDs) != 0 {
 		t.Errorf("内容清空应判为 stale, got UpToDate=%v Stale=%v", status.UpToDateIDs, status.StaleIDs)
+	}
+}
+
+// TestClassifyVectorNotesModelMismatch 模型不匹配场景：换嵌入模型后，旧模型笔记应归入 stale，
+// 当前模型笔记归入 upToDate；currentModel 为空时退化为纯内容比对（旧模型笔记仍 upToDate）
+func TestClassifyVectorNotesModelMismatch(t *testing.T) {
+	db := newVectorTestDB(t)
+	svc := newVectorTestService(t, db)
+
+	// nOld 以旧模型 bge3 索引且内容未变；nNew 以当前模型 test-embed 索引且内容未变
+	nOld := createNoteForTest(t, db, "旧模型笔记", "旧模型嵌入的内容")
+	indexNoteWithModelForTest(t, db, nOld, "bge3")
+	nNew := createNoteForTest(t, db, "新模型笔记", "新模型嵌入的内容")
+	indexNoteForTest(t, db, nNew) // test-embed
+
+	// 当前模型 = test-embed：nOld 模型不匹配 → stale；nNew → upToDate
+	status, err := svc.classifyVectorNotes(nilCtx(), "test-embed")
+	if err != nil {
+		t.Fatalf("classifyVectorNotes 失败: %v", err)
+	}
+	if !containsID(status.StaleIDs, nOld.ID) || len(status.StaleIDs) != 1 {
+		t.Errorf("旧模型笔记应判为 stale（模型不匹配）, got StaleIDs=%v", status.StaleIDs)
+	}
+	if !containsID(status.UpToDateIDs, nNew.ID) || len(status.UpToDateIDs) != 1 {
+		t.Errorf("当前模型笔记应判为 upToDate, got UpToDateIDs=%v", status.UpToDateIDs)
+	}
+
+	// 当前模型 = bge3：nOld → upToDate，nNew 反而模型不匹配 → stale
+	status, err = svc.classifyVectorNotes(nilCtx(), "bge3")
+	if err != nil {
+		t.Fatalf("classifyVectorNotes(bge3) 失败: %v", err)
+	}
+	if !containsID(status.UpToDateIDs, nOld.ID) || len(status.UpToDateIDs) != 1 {
+		t.Errorf("bge3 视角下旧模型笔记应判为 upToDate, got UpToDateIDs=%v", status.UpToDateIDs)
+	}
+	if !containsID(status.StaleIDs, nNew.ID) || len(status.StaleIDs) != 1 {
+		t.Errorf("bge3 视角下当前模型笔记应判为 stale, got StaleIDs=%v", status.StaleIDs)
+	}
+
+	// currentModel 为空：不启用模型维度，纯内容比对，两者均 upToDate
+	status, err = svc.classifyVectorNotes(nilCtx(), "")
+	if err != nil {
+		t.Fatalf("classifyVectorNotes(空模型) 失败: %v", err)
+	}
+	if len(status.UpToDateIDs) != 2 || len(status.StaleIDs) != 0 {
+		t.Errorf("空模型串应退化为纯内容比对, got UpToDate=%v Stale=%v", status.UpToDateIDs, status.StaleIDs)
 	}
 }
 

@@ -679,8 +679,16 @@ export async function openVectorIndexModal() {
     renderVectorIndexAllInfo();
     const allInfoEl = document.getElementById('vectorIndexAllInfo');
     if (allInfoEl) allInfoEl.style.display = '';
-    // 异步加载嵌入状态并在就绪后刷新卡片（失败静默，卡片维持 0 计数）
-    loadVectorIndexStatus().then(renderVectorIndexAllInfo);
+    // 异步加载嵌入状态并在就绪后刷新卡片（失败静默，卡片维持 0 计数）；
+    // 模型不一致不在弹窗内展示，统一通过通知提示（详情见应用日志与「需重新嵌入」计数）
+    loadVectorIndexStatus().then(() => {
+        renderVectorIndexAllInfo();
+        const others = vectorIndexStatus?.otherModels || [];
+        if (others.length > 0) {
+            const parts = others.map(m => `${m.model}（${m.chunkCount} 块）`);
+            window.nm?.show(`库中存在其他模型的向量：${parts.join('、')}，当前模型仅能检索自身向量，建议重建索引`, 'warning', 5000);
+        }
+    });
 }
 
 /**
@@ -960,6 +968,9 @@ async function loadVectorIndexStatus() {
                     unindexedNotes: v.unindexedNotes || 0,
                     staleNotes: v.staleNotes || 0,
                     upToDateNotes: v.upToDateNotes || 0,
+                    currentModel: v.currentModel || '',
+                    currentModelChunks: v.currentModelChunks || 0,
+                    otherModels: Array.isArray(v.otherModels) ? v.otherModels : [],
                 };
             }
         }
@@ -1009,7 +1020,7 @@ function renderVectorIndexAllInfo() {
             </div>
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${stale}</div>
-                <div class="vector-index-all-card-label" title="已嵌入但内容（标题/正文/标签等）已编辑变化的笔记">需重新嵌入</div>
+                <div class="vector-index-all-card-label" title="已嵌入但内容（标题/正文/标签等）已编辑变化，或嵌入模型已切换的笔记">需重新嵌入</div>
             </div>
             <div class="vector-index-all-card">
                 <div class="vector-index-all-card-num">${upToDate}</div>
@@ -1202,6 +1213,17 @@ async function startVectorIndex() {
         nm.show('向量嵌入功能不可用：后端未绑定', 'error');
         return;
     }
+
+    // 启动前检查向量库模型归属：库中存在其他模型的向量时弹确认框（避免换模型后误操作/无感知）
+    try {
+        if (typeof app.CheckVectorIndexModelConsistency === 'function') {
+            const check = await app.CheckVectorIndexModelConsistency();
+            if (check && !check.ok && check.message) {
+                const confirmed = await showConfirmDialog(check.message, '继续嵌入', '取消');
+                if (!confirmed) return;
+            }
+        }
+    } catch (_) { /* 预检失败不阻塞主流程，配置校验由后端兜底 */ }
 
     // 切换到进度视图并复位进度显示
     vectorIndexRunning = true;

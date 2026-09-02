@@ -11121,7 +11121,15 @@ async function saveSettings() {
             screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
             editor_word_wrap: els.editorWordWrapToggle?.checked || false,
         };
+        // 嵌入模型变更检测：换模型后库中旧模型向量无法被当前模型检索，保存成功后提示重建索引
+        let oldEmbedModel = '';
+        try {
+            oldEmbedModel = (await window.go.main.App.GetAllSettings()).ai_embed_model || '';
+        } catch (_) { /* 读取旧值失败时跳过提示，不阻塞保存 */ }
         await window.go.main.App.SaveAllSettings(cfg);
+        if (oldEmbedModel && cfg.ai_embed_model && oldEmbedModel !== cfg.ai_embed_model) {
+            window.showNotification(`嵌入模型已从「${oldEmbedModel}」变更为「${cfg.ai_embed_model}」，建议在数据管理中重建向量索引`, 'warning', 5000);
+        }
     } catch (e) {
         console.error('保存设置失败:', e);
     }

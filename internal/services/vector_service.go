@@ -295,6 +295,24 @@ func (s *VectorService) CountVectorsByModel(model string) (int64, error) {
 	return cnt, nil
 }
 
+// VectorModelCount 向量库中单个模型的向量块数
+type VectorModelCount struct {
+	Model      string `json:"model"`
+	ChunkCount int64  `json:"chunkCount"`
+}
+
+// GetVectorModelCounts 返回 note_vectors 表按模型分组的向量块数（模型名升序），
+// 供召回预检报错提示与向量索引弹窗的模型归属展示共用
+func (s *VectorService) GetVectorModelCounts() ([]VectorModelCount, error) {
+	var counts []VectorModelCount
+	if err := s.db.Raw(
+		"SELECT model, COUNT(*) AS chunk_count FROM note_vectors GROUP BY model ORDER BY model").
+		Scan(&counts).Error; err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
 // DeleteAllVectors 清空 note_vectors 表（物理删除所有向量记录）
 func (s *VectorService) DeleteAllVectors() error {
 	return s.db.Where("1 = 1").Delete(&models.NoteVector{}).Error
@@ -307,19 +325,22 @@ type vectorNoteStatus struct {
 	TotalNotes   int
 	IndexedNotes int
 	UnindexedIDs []uint // 未嵌入（无向量记录）的非软删笔记
-	StaleIDs     []uint // 已嵌入但当前内容与嵌入时不一致，需重新嵌入
-	UpToDateIDs  []uint // 已嵌入且当前内容与嵌入时一致
+	StaleIDs     []uint // 需重新嵌入：内容已变化，或向量中没有 currentModel 的记录（模型不匹配）；currentModel 为空时仅内容维度
+	UpToDateIDs  []uint // 已嵌入（拥有 currentModel 向量）且当前内容与嵌入时一致
 }
 
 // classifyVectorNotes 对全部非软删笔记做嵌入状态分类（一次计算，多个调用方复用）：
 //  1. 未嵌入 = 无任何向量记录的非软删笔记
-//  2. 需重新嵌入 = 已有向量记录，但用当前内容（标题/标签/创建时间/正文）重新切块后
-//     与 note_vectors 中存储的块文本不一致（块数不同或任一文本不同）
-//  3. 已最新 = 重新切块结果与存储块完全一致
+//  2. 需重新嵌入 = 已有向量记录但满足以下任一条件：
+//     a) 记录中没有属于 currentModel 的向量（嵌入模型已切换，模型不匹配）
+//     b) 用当前内容（标题/标签/创建时间/正文）重新切块后与存储块文本不一致
+//  3. 已最新 = 拥有 currentModel 的向量记录且重新切块结果与存储块完全一致
+//
+// currentModel 为空时不启用模型维度，保持纯内容比对行为（兼容未配置嵌入模型的场景）
 //
 // 复用 IndexNotes 同一套 ChunkContent 切块口径（maxRunes=600）；标签名排序保证与写路径一致，
 // 存量旧块若因标签顺序不同被误判为需重新嵌入，重新嵌入一次后即稳定（自愈）
-func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteStatus, error) {
+func (s *VectorService) classifyVectorNotes(ctx context.Context, currentModel string) (*vectorNoteStatus, error) {
 	status := &vectorNoteStatus{}
 
 	// 1. 全部非软删笔记 id（软删/回收站笔记不参与统计与定向嵌入）
@@ -331,22 +352,28 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteSta
 	}
 	status.TotalNotes = len(allIDs)
 
-	// 2. 已有向量的非软删笔记：note_id -> 按 chunk_index 升序的存储块文本
+	// 2. 已有向量的非软删笔记：note_id -> 按 chunk_index 升序的存储块文本 + 模型归属集合
 	var rows []struct {
 		NoteID    uint
 		ChunkText string
+		Model     string
 	}
 	if err := s.db.WithContext(ctx).Raw(
-		"SELECT nv.note_id, nv.chunk_text FROM note_vectors nv " +
+		"SELECT nv.note_id, nv.chunk_text, nv.model FROM note_vectors nv " +
 			"JOIN notes n ON n.id = nv.note_id AND n.deleted_at IS NULL " +
 			"ORDER BY nv.note_id, nv.chunk_index").Scan(&rows).Error; err != nil {
 		s.logger.Errorw("VectorService.classifyVectorNotes 查询向量失败", fastlog.Error(err))
 		return nil, fmt.Errorf("查询向量记录失败: %w", err)
 	}
 	byNote := make(map[uint][]string)
+	modelSetByNote := make(map[uint]map[string]bool)
 	indexedSet := make(map[uint]bool)
 	for _, r := range rows {
 		byNote[r.NoteID] = append(byNote[r.NoteID], r.ChunkText)
+		if modelSetByNote[r.NoteID] == nil {
+			modelSetByNote[r.NoteID] = make(map[string]bool)
+		}
+		modelSetByNote[r.NoteID][r.Model] = true
 		indexedSet[r.NoteID] = true
 	}
 	status.IndexedNotes = len(indexedSet)
@@ -371,6 +398,11 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context) (*vectorNoteSta
 			return nil, fmt.Errorf("查询笔记内容失败: %w", err)
 		}
 		for _, note := range notes {
+			// 模型不匹配：笔记向量中没有当前配置模型的记录（换模型后旧模型笔记需重新嵌入）
+			if currentModel != "" && !modelSetByNote[note.ID][currentModel] {
+				status.StaleIDs = append(status.StaleIDs, note.ID)
+				continue
+			}
 			// 与 IndexNotes 一致的标签排序，保证切块口径确定
 			tagNames := make([]string, 0, len(note.Tags))
 			for _, tag := range note.Tags {
@@ -407,9 +439,10 @@ func chunksEqual(current, stored []string) bool {
 	return true
 }
 
-// GetVectorNoteOverview 返回嵌入状态统计：总笔记数 / 未嵌入 / 需重新嵌入 / 已最新（均为非软删笔记口径）
-func (s *VectorService) GetVectorNoteOverview() (totalNotes, unindexedNotes, staleNotes, upToDateNotes int, err error) {
-	status, err := s.classifyVectorNotes(context.Background())
+// GetVectorNoteOverview 返回嵌入状态统计：总笔记数 / 未嵌入 / 需重新嵌入 / 已最新（均为非软删笔记口径）；
+// currentModel 为当前配置的嵌入模型名（空串表示未配置，退化为纯内容比对）
+func (s *VectorService) GetVectorNoteOverview(currentModel string) (totalNotes, unindexedNotes, staleNotes, upToDateNotes int, err error) {
+	status, err := s.classifyVectorNotes(context.Background(), currentModel)
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
@@ -417,17 +450,17 @@ func (s *VectorService) GetVectorNoteOverview() (totalNotes, unindexedNotes, sta
 }
 
 // GetUnindexedNoteIDs 返回未嵌入的非软删笔记 ID 列表（供"仅嵌入未嵌入笔记"入口使用）
-func (s *VectorService) GetUnindexedNoteIDs() ([]uint, error) {
-	status, err := s.classifyVectorNotes(context.Background())
+func (s *VectorService) GetUnindexedNoteIDs(currentModel string) ([]uint, error) {
+	status, err := s.classifyVectorNotes(context.Background(), currentModel)
 	if err != nil {
 		return nil, err
 	}
 	return status.UnindexedIDs, nil
 }
 
-// GetStaleNoteIDs 返回需重新嵌入（内容已变化）的非软删笔记 ID 列表
-func (s *VectorService) GetStaleNoteIDs() ([]uint, error) {
-	status, err := s.classifyVectorNotes(context.Background())
+// GetStaleNoteIDs 返回需重新嵌入（内容已变化或嵌入模型不匹配）的非软删笔记 ID 列表
+func (s *VectorService) GetStaleNoteIDs(currentModel string) ([]uint, error) {
+	status, err := s.classifyVectorNotes(context.Background(), currentModel)
 	if err != nil {
 		return nil, err
 	}
@@ -514,7 +547,12 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 	if len(tokens) == 0 {
 		return nil, nil
 	}
+	return s.keywordRecallByTokens(ctx, tokens, limit, notebookIDs)
+}
 
+// keywordRecallByTokens 基于已分词 token 的关键词检索主体，供 KeywordRecall 与 HybridRecall 共用
+// （HybridRecall 复用同一份 token 计算召回与 kwScore，避免 tokenize 执行两遍且口径漂移）
+func (s *VectorService) keywordRecallByTokens(ctx context.Context, tokens []string, limit int, notebookIDs []uint) ([]models.NoteVector, error) {
 	// 限制关键词数量，防止超长 LIKE 查询
 	if len(tokens) > maxRecallKeywords {
 		tokens = tokens[:maxRecallKeywords]
@@ -536,11 +574,11 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 		return nil, fmt.Errorf("统计笔记块总数失败: %w", err)
 	}
 
-	// 各 token 命中数（COUNT + LIKE）
+	// 各 token 命中数（COUNT + LIKE；escapeLike 防止 token 中 % / _ 被当通配符）
 	counts := make([]int, len(tokens))
 	for i, t := range tokens {
-		args := append(append([]interface{}{}, cntArgs...), "%"+t+"%")
-		if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) "+base+" WHERE note_vectors.chunk_text LIKE ?", args...).Scan(&counts[i]).Error; err != nil {
+		args := append(append([]interface{}{}, cntArgs...), "%"+escapeLike(t)+"%")
+		if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) "+base+" WHERE note_vectors.chunk_text LIKE ? ESCAPE '\\'", args...).Scan(&counts[i]).Error; err != nil {
 			s.logger.Errorw("VectorService.KeywordRecall 统计 token 命中数失败", fastlog.String("token", t), fastlog.Error(err))
 			return nil, fmt.Errorf("统计关键词命中数失败: %w", err)
 		}
@@ -548,13 +586,14 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 
 	// 高频词过滤：无区分度 token 丢弃；全部被过滤时关键词路不贡献，返回空
 	before := len(tokens)
-	tokens = filterHighFreqTokens(tokens, counts, total)
-	if len(tokens) == 0 {
+	filtered := filterHighFreqTokens(tokens, counts, total)
+	if len(filtered) == 0 {
 		s.logger.Debugw("VectorService.KeywordRecall 无有效关键词",
-			fastlog.String("query", query),
+			fastlog.String("tokens", strings.Join(tokens, " / ")),
 			fastlog.Int("dropped", before))
 		return nil, nil
 	}
+	tokens = filtered
 
 	// 构建主检索 SQL：OR 拼接各 token 的 LIKE，LIMIT 放大避免好块被截断
 	// 不加 model 过滤——关键词检索跨所有模型
@@ -570,8 +609,8 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 		if i > 0 {
 			kwSQL += " OR "
 		}
-		kwSQL += "note_vectors.chunk_text LIKE ?"
-		args = append(args, "%"+t+"%")
+		kwSQL += "note_vectors.chunk_text LIKE ? ESCAPE '\\'"
+		args = append(args, "%"+escapeLike(t)+"%")
 	}
 	kwSQL += " LIMIT ?"
 	args = append(args, limit*chunkCandidateMultiplier)
@@ -586,7 +625,6 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 	hits = rankKwHits(hits, tokens, limit)
 
 	s.logger.Debugw("VectorService.KeywordRecall 命中",
-		fastlog.String("query", query),
 		fastlog.String("tokens", strings.Join(tokens, " / ")),
 		fastlog.Int("dropped", before-len(tokens)),
 		fastlog.Int("hits", len(hits)))
@@ -598,9 +636,10 @@ func (s *VectorService) KeywordRecall(ctx context.Context, query string, limit i
 // 按距离升序召回 TopN 命中块
 // embedClient 为 nil 或模型未配置时返回 (nil, nil) 静默跳过，由调用方决定是否降级为仅关键词检索
 func (s *VectorService) vectorSearch(ctx context.Context, query string, limit int, embedClient *einocli.Client, notebookIDs []uint) ([]models.NoteVector, error) {
-	// embedding client 配置检查：模型未配置时无法向量化 query，静默跳过
+	// embedding client 配置检查：client 未传入或模型为空时无法向量化 query，静默跳过
+	// （调用方 recall_notes 预检不通过时直接报错，不会以 nil client 走到此处的降级路径）
 	if embedClient == nil || embedClient.Model == "" {
-		s.logger.Debugw("VectorService.vectorSearch 跳过：embedding 模型未配置")
+		s.logger.Debugw("VectorService.vectorSearch 跳过：embedding client 未传入或模型未配置")
 		return nil, nil
 	}
 
@@ -638,17 +677,22 @@ func (s *VectorService) vectorSearch(ctx context.Context, query string, limit in
 	// dist < 1.0 等价原逻辑 score > 0 过滤；无条件 JOIN notes 过滤软删除笔记（回收站笔记不参与召回），
 	// 指定笔记本时 ON 条件追加 notebook_id 过滤；JOIN 必须紧跟 FROM（位于 WHERE 之前），
 	// 列名加 note_vectors 前缀避免 JOIN notes 时 id 列歧义
-	vecSQL := "SELECT note_vectors.id, note_vectors.note_id, note_vectors.chunk_index, note_vectors.chunk_text, note_vectors.model " +
+	// 子查询形式：距离仅在子查询内计算一次并物化为 dist，外层 WHERE/ORDER BY 复用，
+	// 避免 SQLite 不做公共子表达式消除导致 WHERE + ORDER BY 各算一遍（暴力扫描计算量翻倍）
+	// dim = ? 过滤：维度不一致的行会被 vec_distance_cosine 判错并炸掉整条查询，
+	// 按 query 向量维度过滤后跳过脏数据/模型变更导致的异构行
+	vecSQL := "SELECT id, note_id, chunk_index, chunk_text, model FROM (" +
+		"SELECT note_vectors.id, note_vectors.note_id, note_vectors.chunk_index, note_vectors.chunk_text, note_vectors.model, " +
+		"vec_distance_cosine(note_vectors.embedding, vec_f32(?)) AS dist " +
 		"FROM note_vectors JOIN notes ON notes.id = note_vectors.note_id AND notes.deleted_at IS NULL"
-	args := []interface{}{}
+	args := []interface{}{string(queryVecJSON)}
 	if len(notebookIDs) > 0 {
 		vecSQL += " AND notes.notebook_id IN ?"
 		args = append(args, notebookIDs)
 	}
-	vecSQL += " WHERE note_vectors.model = ? " +
-		"AND vec_distance_cosine(note_vectors.embedding, vec_f32(?)) < 1.0" +
-		" ORDER BY vec_distance_cosine(note_vectors.embedding, vec_f32(?)) ASC LIMIT ?"
-	args = append(args, embedClient.Model, string(queryVecJSON), string(queryVecJSON), limit*chunkCandidateMultiplier)
+	vecSQL += " WHERE note_vectors.model = ? AND note_vectors.dim = ?" +
+		") WHERE dist < 1.0 ORDER BY dist ASC LIMIT ?"
+	args = append(args, embedClient.Model, len(embeddings[0]), limit*chunkCandidateMultiplier)
 
 	var hits []models.NoteVector
 	if err := s.db.WithContext(ctx).Raw(vecSQL, args...).Scan(&hits).Error; err != nil {
@@ -664,7 +708,8 @@ func (s *VectorService) vectorSearch(ctx context.Context, query string, limit in
 	return hits, nil
 }
 
-// HybridRecall 混合召回：并行执行向量检索与关键词检索，按 (note_id, chunk_index) 去重合并
+// HybridRecall 混合召回：依次执行向量检索与关键词检索（SQLite 连接池为单连接，两路 SQL 本就串行，无需并行），
+// 按 (note_id, chunk_index) 去重合并
 // 排序优先级：双命中（向量+关键词）> 仅向量命中 > 仅关键词命中
 // 合并后补充相邻块并组装卡片，返回 CardRecallResult
 func (s *VectorService) HybridRecall(ctx context.Context, query string, limit int, embedClient *einocli.Client, notebookIDs ...uint) (*CardRecallResult, error) {
@@ -680,9 +725,15 @@ func (s *VectorService) HybridRecall(ctx context.Context, query string, limit in
 	}
 
 	// 关键词检索路（enableKeywordRecall=false 时临时禁用，仅走向量检索）
+	// token 只分词一次，检索与 kwScore 计算共用同一份：先按 maxRecallKeywords 截断，
+	// 保证 kwScore 统计口径与 keywordRecallByTokens 内部检索口径严格一致
 	var kwHits []models.NoteVector
-	if enableKeywordRecall {
-		kwHits, err = s.KeywordRecall(ctx, query, limit, notebookIDs...)
+	kwTokens := tokenize(query)
+	if len(kwTokens) > maxRecallKeywords {
+		kwTokens = kwTokens[:maxRecallKeywords]
+	}
+	if enableKeywordRecall && len(kwTokens) > 0 {
+		kwHits, err = s.keywordRecallByTokens(ctx, kwTokens, limit, notebookIDs)
 		if err != nil {
 			s.logger.Errorw("VectorService.HybridRecall 关键词检索失败", fastlog.Error(err))
 			// 关键词检索失败不中断，继续使用向量结果
@@ -705,8 +756,7 @@ func (s *VectorService) HybridRecall(ctx context.Context, query string, limit in
 		}
 	}
 
-	// 关键词命中 token 列表（用于计算 kwScore）
-	kwTokens := tokenize(query)
+	// 关键词命中：kwScore = 块文本包含的检索 token 数
 	for _, h := range kwHits {
 		k := keyOf(h.NoteID, h.ChunkIndex)
 		score := 0

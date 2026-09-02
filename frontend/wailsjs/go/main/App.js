@@ -74,6 +74,10 @@ export function CheckPasswordStrength(arg1) {
   return window['go']['main']['App']['CheckPasswordStrength'](arg1);
 }
 
+export function CheckVectorIndexModelConsistency() {
+  return window['go']['main']['App']['CheckVectorIndexModelConsistency']();
+}
+
 export function CleanupOrphanImages() {
   return window['go']['main']['App']['CleanupOrphanImages']();
 }
@@ -624,10 +628,6 @@ export function UpdateTodo(arg1, arg2) {
 
 export function VacuumDatabase() {
   return window['go']['main']['App']['VacuumDatabase']();
-}
-
-export function ValidateCardRecall() {
-  return window['go']['main']['App']['ValidateCardRecall']();
 }
 
 export function ValidateVectorIndexConfig() {

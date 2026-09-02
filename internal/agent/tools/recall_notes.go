@@ -94,6 +94,26 @@ func (r *recallNotesTool) InvokableRun(ctx context.Context, argumentsInJSON stri
 	if baseURL == "" || apiKey == "" || model == "" {
 		return "", errors.New("向量嵌入连接未配置（API 地址 / API Key / 模型），无法检索本地笔记")
 	}
+	// 预检向量库数据：当前配置模型在向量库中无任何记录时直接报错返回，不降级关键词检索——
+	// 避免库中嵌入文档与配置模型不一致时静默降级、用户无感知（前端工具调用记录可直接看到失败原因）
+	vecCnt, err := r.vector.CountVectorsByModel(model)
+	if err != nil {
+		return "", fmt.Errorf("检查向量索引数据失败: %w", err)
+	}
+	if vecCnt == 0 {
+		counts, err := r.vector.GetVectorModelCounts()
+		if err != nil {
+			return "", fmt.Errorf("检查向量索引数据失败: %w", err)
+		}
+		if len(counts) == 0 {
+			return "", errors.New("向量库为空，请先在数据管理中对笔记建立向量索引")
+		}
+		names := make([]string, 0, len(counts))
+		for _, c := range counts {
+			names = append(names, c.Model)
+		}
+		return "", fmt.Errorf("当前嵌入模型「%s」暂无向量索引数据，无法进行向量检索（库中现有向量属于模型：%s）。请在数据管理中重新索引，或将嵌入模型切换回原模型", model, strings.Join(names, "、"))
+	}
 	embedClient := einocli.NewClient(einocli.Config{
 		BaseURL: baseURL,
 		APIKey:  apiKey,
