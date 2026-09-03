@@ -250,11 +250,11 @@ function setupSummaryStatusListener() {
             summaryStatusShownAt = Date.now();
             showSummaryStatus('正在生成对话摘要…');
         } else if (data.status === 'failed') {
-            // 摘要压缩失败：本轮对话已被后端中止（另有 stream-error 通知），
-            // 状态条短暂提示，用户重新发送时会再次触发摘要
-            showSummaryStatus('对话摘要生成失败，请重新发送消息');
-            if (summaryFailedTimer) clearTimeout(summaryFailedTimer);
-            summaryFailedTimer = setTimeout(hideSummaryStatus, 5000);
+            // 仅当确实收到了 generating（即有摘要正在进行）才显示失败提示
+            if (summaryStatusShownAt > 0) {
+                hideSummaryStatus();
+            }
+            summaryStatusShownAt = 0;
         } else {
             if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
             // 保证状态条最短可见时长，太快完成时延迟隐藏
@@ -1266,6 +1266,9 @@ function bindEvents() {
                     return;
                 }
                 enterEditMode(msgEl, content);
+            } else if (action === 'rollback') {
+                if (isStreaming) return;
+                if (msgEl) handleRollback(msgEl);
             } else if (action === 'delete') {
                 if (isStreaming) return;
                 if (msgEl) handleDeleteMsg(msgEl);
@@ -1953,7 +1956,7 @@ function renderSkillChips() {
             const sourceLang = getLanguageDisplayName(config.source || 'english');
             const targetLang = getLanguageDisplayName(config.target || 'chinese');
             return `<div class="ai-chat-skill-chip ai-chat-skill-chip-translate" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-translate-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M8 11l3 3 5-5"/></svg></span>
+                <span class="ai-chat-skill-chip-translate-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-translate-lang" data-side="source">${sourceLang}</span>
                 <span class="ai-chat-skill-chip-translate-arrow">⇄</span>
                 <span class="ai-chat-skill-chip-translate-lang" data-side="target">${targetLang}</span>
@@ -1961,61 +1964,61 @@ function renderSkillChips() {
             </div>`;
         } else if (skillId === 'coding') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">编程开发</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'writing') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">创意写作</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'tutor') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">解题答疑</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'reqspec') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">需求规格</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'polish') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">文本润色</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'summary') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">内容摘要</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'copywriting') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">文案生成</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'report') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">工作总结</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'promptgen') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">提示词生成</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
         } else if (skillId === 'character') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">人物档案</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
@@ -2024,13 +2027,13 @@ function renderSkillChips() {
             const label = count > 0 ? count + ' 篇' : '未设置';
             const countTitle = count > 0 ? roleplayNotes.map(n => n.title || '无标题').join(' · ') : '';
             return `<div class="ai-chat-skill-chip ai-chat-skill-chip-roleplay" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14h2a4 4 0 0 1 4 4v2H2v-2a4 4 0 0 1 4-4h2"/><circle cx="12" cy="14" r="3"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label" title="${countTitle.replace(/"/g, '&quot;')}">角色扮演: ${label}</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}">${SVGS.windowClose}</button>
             </div>`;
         } else if (skillId === 'deep_research') {
             return `<div class="ai-chat-skill-chip" data-skill="${skillId}">
-                <span class="ai-chat-skill-chip-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></span>
+                <span class="ai-chat-skill-chip-icon">${SKILL_ICON}</span>
                 <span class="ai-chat-skill-chip-label">深度研究</span>
                 <button class="ai-chat-skill-chip-remove" title="取消技能" data-skill="${skillId}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>`;
@@ -3984,6 +3987,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     if (role === 'user') {
         items.push({ type: 'divider' });
         items.push({ action: 'edit', label: '编辑' });
+        items.push({ action: 'rollback', label: '回退' });
     }
 
     if (role === 'assistant') {
@@ -4002,6 +4006,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     const actionIcons = {
         copy: COPY_ICON,
         edit: EDIT_ICON,
+        rollback: ROLLBACK_ICON,
         save: SAVE_ICON,
         regen: REGEN_ICON,
         followUp: FOLLOWUP_ICON,
@@ -4183,6 +4188,8 @@ const EDIT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
 const FOLLOWUP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 const DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+const ROLLBACK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
+const SKILL_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
 
 const CHEVRON_RIGHT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
@@ -5297,9 +5304,106 @@ async function handleRegenerate(msgEl) {
     scrollToBottom();
 }
 
+/**
+ * 回退到本轮对话发起前：删除本条及之后所有消息，将文本填入输入框，恢复技能/引用笔记
+ */
+async function handleRollback(msgEl) {
+    if (!msgEl || !msgEl.parentNode || isStreaming) return;
+
+    const confirmed = await window.showConfirmDialog('确定回退到该消息之前的状态吗？');
+    if (!confirmed) return;
+
+    const msgId = +msgEl.dataset.msgId || 0;
+    if (!msgId) return;
+
+    // 读取消息内容
+    const contentDiv = msgEl.querySelector('.msg-content');
+    if (!contentDiv) return;
+    const textEl = contentDiv.querySelector('.ai-msg-text');
+    const content = textEl ? textEl.textContent : (contentDiv.textContent || '');
+
+    // 读取消息的 Meta（从 chatHistory）
+    let msgMeta = '';
+    const idx = chatHistory.findIndex(m => m.id === msgId);
+    if (idx >= 0 && chatHistory[idx].meta) {
+        msgMeta = chatHistory[idx].meta;
+    }
+
+    // 移除本条及之后所有消息的 DOM
+    let nextEl = msgEl;
+    while (nextEl) {
+        const toRemove = nextEl;
+        nextEl = nextEl.nextElementSibling;
+        if (toRemove.classList.contains('ai-msg')) {
+            toRemove.remove();
+        }
+    }
+
+    // 后端截断（删除本条及之后的消息）
+    if (activeSessionId !== null) {
+        try {
+            await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
+        } catch (_) { /* 静默 */ }
+    }
+
+    // 截断 chatHistory 缓冲区
+    if (idx >= 0) {
+        chatHistory = chatHistory.slice(0, idx);
+    }
+
+    // 恢复 Meta 到工具栏状态（仅 ref 和 skill，不恢复 file）
+    const refNotes = [];
+    const skills = {};
+    const rpNotes = [];
+    if (msgMeta) {
+        try {
+            const items = JSON.parse(msgMeta);
+            if (Array.isArray(items)) {
+                for (const it of items) {
+                    if (!it || typeof it !== 'object') continue;
+                    if (it.type === 'ref') {
+                        refNotes.push({ id: it.id, title: it.title || '', notebook_name: it.notebook || '' });
+                    } else if (it.type === 'skill') {
+                        const cfg = { ...it };
+                        delete cfg.type;
+                        delete cfg.id;
+                        delete cfg.label;
+                        skills[it.id] = cfg;
+                    } else if (it.type === 'roleplay') {
+                        rpNotes.push({ id: it.id, title: it.title || '', notebook_name: it.notebook || '' });
+                    }
+                }
+            }
+        } catch (_) { /* 静默 */ }
+    }
+    referencedNotes = refNotes;
+    activeSkills = skills;
+    roleplayNotes = rpNotes;
+    // 不回退上传文件
+    uploadedFiles = [];
+    // 更新输入区芯片
+    updateRefChips();
+    renderSkillChips();
+    renderFileChips();
+    // 保存会话配置到数据库，切换会话后恢复
+    saveCurrentSessionConfig();
+
+    // 填入输入框并聚焦
+    if (inputEl) {
+        inputEl.value = content;
+        inputEl.focus();
+        // 触发 input 事件以更新自动撑高
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // 更新上下文使用率
+    updateContextUsage();
+}
+
 /* ── 笔记引用 ═══════════════════════════════════════════════════ */
 
 const DOC_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+const FILE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
 const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
 /**
@@ -5976,7 +6080,7 @@ function renderFileChips() {
     let html = uploadedFiles.map((f, idx) => {
         const truncTip = f.truncated ? '<span class="ai-chat-ref-chip-trunc">(内容已截断)</span>' : '';
         return `<div class="ai-chat-file-chip" data-index="${idx}">
-            <span class="ai-chat-file-chip-icon">${DOC_ICON}</span>
+            <span class="ai-chat-file-chip-icon">${FILE_ICON}</span>
             <span class="ai-chat-file-chip-name" title="${f.name.replace(/"/g, '&quot;')}">${f.name}</span>
             ${truncTip}
             <button class="ai-chat-file-chip-remove" data-index="${idx}" title="移除文件">
