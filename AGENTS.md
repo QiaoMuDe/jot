@@ -542,7 +542,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 29. **全局 MCP 连接池与预热机制（http/sse/stdio 常驻复用，替代每轮重建连）**：[pool.go](internal/mcpserver/pool.go) `mcpserver.Pool` 按 Name 持有预热会话（stdio 子进程常驻）：`Warmup`（并发 3 槽位，**per-name in-flight 信号串行化同名建连**防并发重复拉进程）/`Reconcile`（关不在列表条目 + 预热剩余）/`WarmupOne`（发消息兜底现场连接）/`getOrCreate`（指纹 `serverFingerprint` 变化自动关旧重连）/`Close`/`CloseAll`；**断线自动重连**——`Session.callTool` 检测连接类错误自动重建一次并重试，Close 后拒绝重连；`Session` 加锁保护 cli 替换。装配：agent.go `Deps.MCPPool`，Run 时统一 `Pool.Session` + `WarmupOne` 兜底，**移除每轮 OpenSession + defer Close**；app.go `WarmupMCPServers()`（内部 Reconcile）+ shutdown/rebuildServices 关旧池；前端首次进入 AI 助手预热（`mcpWarmupDone` 防重复）+ 设置页操作后同步预热，汇总一条通知。详见 [pool.go](internal/mcpserver/pool.go)、[tools.go](internal/mcpserver/tools.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
-30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 10）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
+30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 9）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
 
 31. **密码管理功能页（列表/详情分离传输 + Base64 编码 + 修复 + 样式打磨）**：独立视图。后端：`PasswordRecord` 模型（name/username/password/url/note + GORM 软删除）、`PasswordService`（CRUD+Search+BatchDelete）、7 个 Wails 绑定。**传输安全分离**：列表返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），密码不出现在列表；详情 `GetPasswordRecord(id)` 解码明文。**编码**：Base64 + `(zk)` 前缀（可逆编码非加密），存量无前缀值原样返回，启动自动迁移。**前端**：三栏布局 + 防抖搜索（250ms）+ 高亮 `<mark>` + 添加/编辑对话框 + 详情（掩码+显隐）+ 一键复制（clipboard+execCommand 降级）+ 打开链接 + 右键菜单 + 批量操作 + ESC 层级关闭。**修复**：Enter 连按守卫、`pmLoadSeq` 代际防乱序、`escapeLike` 转义、模板残留改 createElement。详见 [password_service.go](internal/services/password_service.go)、[password_record.go](internal/models/password_record.go)、[crypto.go](internal/services/crypto.go)、[password-manager.js](frontend/src/js/password-manager.js)、[password-manager.css](frontend/src/css/components/password-manager.css)
 
@@ -550,32 +550,15 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
-34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 5 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 4 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
 
 35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
-36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 9
+36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 8
 
 ---
 
-## 记忆点 1：文件导入重复检测与覆盖（标题+后缀匹配 + 时间对比 + 冲突弹窗 + 批量去重 + 导入锁）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 为文件导入功能增加重复检测与覆盖机制，解决"同一文件反复导入产生重复笔记"问题。导入前按标题+后缀+笔记本查找已有笔记，根据文件修改时间与笔记更新时间对比自动覆盖或弹窗让用户选择。同时增加批量内同名文件去重（自动追加编号后缀）、导入期间拖入禁用、冲突弹窗交互优化等。 |
-| **重复检测逻辑（后端）** | [note_service.go](internal/services/note_service.go) `FindByTitleAndExt(title, fileExt, notebookID)` 按三条件精确查询已有笔记（排除已删除）。[app.go](app.go) `processImportFile` 新增 `titleOverride` 参数：导入前先查找匹配笔记，获取文件 `info.ModTime()` 与笔记 `UpdatedAt` 对比——文件更新则自动覆盖（status: `updated`），笔记更新则返回冲突（status: `conflict`，附带 Content/FileExt/FileTime/NoteTime），时间相同则跳过（status: `skipped`）。无匹配则创建新笔记（status: `created`）。`FileImportResult` 扩展 `Status`/`FileTime`/`NoteTime`/`Content`/`FileExt` 字段。 |
-| **冲突解决（后端）** | `ResolveImportConflict(noteID, overwrite, title, content, fileExt)` 处理用户选择：`overwrite=true` 调用 `Update` 覆盖笔记，`false` 标记跳过。`Update` 方法直接操作 DB（不 preload Tags）。 |
-| **批量内同名去重（后端）** | `ImportFiles` 入口处按 `title+ext` 去重（办公文件统一 `.md`），首次出现正常处理，重复出现自动追加编号后缀（`readme` → `readme (2)` → `readme (3)`），通过 `titleOverride` 传入 goroutine，全部导入不跳过。 |
-| **冲突弹窗（前端）** | [main.js](frontend/src/main.js) `showImportConflictDialog` 创建 `.import-conflict-overlay`（z-index 10000），支持逐个覆盖/跳过和全部覆盖/全部跳过。**FLIP 动画**：单条操作时先折叠移除（opacity+height 250ms），再用 `requestAnimationFrame` 双层帧驱动剩余条目平滑上移（250ms ease）。空文件条目标题左侧显示红色 `[空文件]` 小标签（`title` 悬停显示完整提示）。所有操作按钮点击后弹出二次确认框（z-index 10001），确认框 `focus()` 捕获键盘。 |
-| **ESC 层级关闭** | 全局 `handleKeyboardNavigation` 中：确认框打开时 ESC 只关确认框（`stopPropagation`）；冲突弹窗打开时 ESC 关闭弹窗并显示"导入已取消"；点击遮罩空白处同 ESC 行为；导入完成后（所有条目处理完）弹窗自动关闭显示"导入完成"。 |
-| **导入期间禁用（前端）** | 模块级 `_importing` 标志：`handleFileDropPaths` 入口置 true，所有完成路径（正常/冲突/取消/异常）清除。导入中拖入文件：遮罩变灰（`.disabled` 类）+ 文字改为"导入进行中，请稍候"，释放时弹通知不触发导入。Wails 绑定不可用时 guard 失败也清除标志防泄漏。 |
-| **冲突计数修复** | 后端冲突项 `Success` 改为 `false`（原为 `true` 导致统计不准确）；前端对 `status === 'conflict'` 单独计数显示"冲突 N 个"。`close()` 传递 `resolved` 数组而非 `null`，确保全部跳过/全部覆盖后正确显示统计。 |
-| **ESC 确认框层级教训** | 初版确认框与冲突弹窗无 `stopPropagation`，ESC 事件冒泡导致同时关闭两层。修复：确认框 `focus()` + `keydown` 中 `e.stopPropagation()`，全局处理函数用 `.confirm-dialog-overlay` 判断优先级。 |
-| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`FindByTitleAndExt`）、[app.go](app.go)（`processImportFile` 重构 + `ResolveImportConflict` + `FileImportResult` 扩展 + 批量去重）、[frontend/src/main.js](frontend/src/main.js)（`showImportConflictDialog`/`showImportResults` 改造 + `_importing` 锁 + `OnFileDrop`/`handleFileDropPaths` 防重入 + FLIP 动画）、[frontend/src/css/components/modals.css](frontend/src/css/components/modals.css)（`.import-conflict-overlay`/`.conflict-item`/`.empty-file-badge`/`.drop-overlay.disabled` 样式）、[internal/services/note_service_test.go](internal/services/note_service_test.go)（`FindByTitleAndExt` 测试） |
-
----
-
-## 记忆点 2：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
+## 记忆点 1：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +572,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 2：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 3：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -617,7 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 4：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,17 +614,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 5：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代记忆点 1 中"时间对比"机制的描述，其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
+| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代旧时间对比机制描述（原记忆点 1 已删除），其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
 | **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
 | **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
 
 ---
 
-## 记忆点 7：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 6：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -650,7 +633,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 7：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -661,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 8：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -675,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 9：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,6 +668,21 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **状态条与重试语义** | `ai:summary-status` generating/done/failed 三态；状态条 **700ms 最短可见**（生成过快时延迟隐藏保证反馈可感知，定时器互斥清理防误隐藏）；failed 显示"生成失败，请重新发送"5s + stream-error 通知，输入解锁复用既有 handler。摘要生成超时 30s→**90s**（40K token 区间慢网关实测 13s~30s+，30s 频繁超时）。 |
 | **测试与验证方法** | [ai_context_test.go](internal/services/ai_context_test.go) 覆盖 token 估算/选取/轮次对齐/边界推进/失败沿用旧摘要（httptest 模拟 OpenAI 全链路）。**调试技巧**：settings 表改 `ai_context_token_budget=12000` + `ai_context_summary_trigger_ratio=0.06`（约 720 token 触发），几轮对话即可走完压缩流程；日志观察 `compact_elapsed_ms` 字段（该字段存在即证明运行新代码）。前端热重载时注意：运行的应用若非 wails dev/最新构建，修复不会生效（曾因此误判修复无效）。 |
 | **涉及文件** | [internal/services/ai_context.go](internal/services/ai_context.go)（新）、[internal/services/ai_context_test.go](internal/services/ai_context_test.go)（新）、[internal/services/AI_CONTEXT.md](internal/services/AI_CONTEXT.md)（新，机制文档）、[app.go](app.go)（truncateAIMessages 重写 + GetAIContextUsage + 移入 goroutine）、[internal/models/ai_session.go](internal/models/ai_session.go)（SummaryUpToMsgID）、[internal/database/db.go](internal/database/db.go)（种子 + 清理清单）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md) §7、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/index.html](frontend/index.html)（圆环 + tooltip 复用） |
+
+---
+
+## 记忆点 10：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 修复上下文摘要状态条在输入框下方的显示问题，实现用户消息右键菜单"回退"功能，统一引用栏/用户消息图标风格，实现上下文使用率两阶段更新机制，以及修复停止时误报摘要失败等边界问题。 |
+| **摘要状态条 z-index 修复（重要）** | 摘要状态条（`.ai-summary-status`）显示在输入框下方而非上方，根因是 CSS 定位与 z-index 层级问题。修复：`position: absolute; bottom: calc(8px + var(--input-h, 120px) + 8px); left: 50%; transform: translateX(-50%); z-index: 6; white-space: nowrap;`。[ai-chat.js](frontend/src/js/ai-chat.js) `showSummaryStatus` 将状态条追加到父容器并设置 `--input-h` CSS 变量。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
+| **停止按钮静默隐藏（重要）** | 点击停止按钮时，如果无摘要生成（从未收到 `generating` 事件），则不显示失败提示。`handleAICancelled` 仅当 `summaryStatusShownAt > 0` 时才发 `ai:summary-status:failed` 事件（带 `session_id` 字段），避免误报"摘要生成失败"。详见 [app.go](app.go) `handleAICancelled` |
+| **回退功能（重要）** | 用户消息右键菜单新增"回退"项（`handleRollback`），完整流程：弹出确认对话框（支持 ESC 关闭）→ 删除该消息起的后续 DOM 消息 → `TruncateAISessionAfterMessage` 截断数据库 → 恢复 `referencedNotes`/`activeSkills`/`roleplayNotes` 到输入区 chips → 调用 `saveCurrentSessionConfig()` 持久化状态 → `updateContextUsage()` 刷新。**关键教训**：`buildUserMessageMeta` 用 `id` 字段存技能 ID（非 `skillId`），`renderSkillChips` 是引用栏技能 chip 渲染入口。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
+| **图标统一（重要）** | 引用栏与用户消息气泡图标统一：引用栏技能使用统一闪电图标（`CHIP_ICON_SVG.skill`），文件使用回形针图标（`CHIP_ICON_SVG.file`）；用户消息气泡中 `type: skill` 使用闪电，`type: roleplay` 使用角色头像图标。详见 [ai-chat.js](frontend/src/js/ai-chat.js) `CHIP_ICON_SVG`、`renderSkillChips` |
+| **使用率两阶段更新** | 上下文使用率显示与摘要触发时序不一致（显示不包含刚发送的消息，但摘要触发检查包含）。修复：`sendUserText`/`handleResend`/`handleRegenerate` 中在消息保存/截断后立即调用 `updateContextUsage()`（Phase 1），AI 回复完成后再次调用（Phase 2），确保显示与触发判断口径一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
+| **HTML 验证修复** | `npm run validate:html` 报 `prefer-native-element` 错误（line 1131:106）：在 [index.html](frontend/index.html) 中添加 `<!-- html-validate-disable-next prefer-native-element -->` 注释忽略该警告。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleRollback`/`showSummaryStatus`/`hideSummaryStatus`/`updateContextUsage`/`CHIP_ICON_SVG`/`renderSkillChips`/`sendUserText`/`handleResend`/`handleRegenerate`/右键菜单项）、[app.go](app.go)（`handleAICancelled` 事件补发）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-summary-status` 定位修复）、[frontend/index.html](frontend/index.html)（html-validate 忽略注释） |
 
 ---
 
