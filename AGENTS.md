@@ -1,4 +1,4 @@
-# Jot 项目分析报告
+﻿# Jot 项目分析报告
 
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ einocli 薄适配层（eino 库驱动，OpenAI 兼容）
@@ -556,22 +556,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 8
 
----
-
-## 记忆点 1：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 消息气泡顶部"过程证据区"（思维链/工具记录/召回卡片）重设计：三个组件去掉"盒子感"（border+背景+圆角），统一为**极简单行元数据**样式（hover 才高亮、展开仅细分割线）；思维链 header 图标配色与右侧箭头对齐工具/召回；思维链实时计时重构为**思考段累计计时**（仅实际推理期间累加，工具执行不计时），修复"决策文本提前结束计时/假终态/时间变空"多个 bug；思维链折叠行为对齐工具摘要（默认折叠、不持久化偏好、流结束若展开则折叠）。 |
-| **极简单行样式（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css)：`.thinking-details`/`.ai-tool-summary`/`.recall-cards-panel` 移除 `border+background+border-radius`，仅 `margin: 2px 0`；header padding 压至 `4px 6px`（思维链 `3px 6px`）+ `border-radius: var(--radius-sm)`，折叠态每行高度约 24px；hover 才 `--accent`+`--hover-bg` 高亮；展开内容区（`.open`/`[open]`）仅加 `border-top: 1px solid var(--border)` 细分割线（折叠态不泄漏残留边框）；正文 `.ai-msg-assistant .msg-content` 加 `margin-top: 6px` 与证据区保持距离。 |
-| **思维链对齐工具/召回（重要）** | 思维链 header 与工具/召回样式统一：图标 `color: var(--accent)`；右侧新增 `.thinking-summary-arrow`（14px chevron，`margin-left: auto`，`[open]` 时 `rotate(90deg)`）；隐藏 `<details>` 原生三角 marker（`list-style: none` + `::-webkit-details-marker{display:none}`）；[ai-chat.js](frontend/src/js/ai-chat.js) 流式（`appendThinkingChunk`）与历史回放（`addMessage`）两处 summary 均追加箭头 span。 |
-| **思维链真实计时重构（重要）** | 原"一次性计时"（首个正文 chunk 即 `stopThinkingTimer` 设"已思考"终态）在 Agent 多轮 ReAct 下失效：工具决策正文会提前结束计时、工具后推理无计时、每次工具后时间"跳变"。重构为**思考段累计计时**：`_thinkingAccumMs`（累计毫秒）+ `_segmentStartedAt`（当前段起点）；`pauseThinkingTimer()` 在首正文 chunk / `tool_start`（`clearStreamedText` 兜底）时冻结并累加；`resumeThinkingTimer()` 在工具后新推理分片（`appendThinkingChunk` else 分支）续算（不清空文本、立即刷新，避免"思考中"无时间闪烁）；`stopThinkingTimer` 仅流结束/错误时调用，`ai:stream-done` 用后端思考净耗时（`elapsedThinking`，已排除工具执行时间）定稿"已思考 N 秒"。interval 100ms 平滑递增。 |
-| **思维链折叠行为（重要）** | 与工具摘要一致：① 首次创建（流式）与历史回放（`addMessage`）均**默认折叠**（`details.open = false`）；② 移除 `ai_cot_collapsed` localStorage 持久化（不再保存用户展开偏好）；③ 输出过程中手动展开不干预、不自动折叠；④ 流结束（`ai:stream-done`）若仍展开则 `thinkingDetails.open = false` 统一折叠。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`appendThinkingChunk`/`updateThinkingTimer`/`pauseThinkingTimer`/`resumeThinkingTimer`/`stopThinkingTimer`/`handleStreamChunk`/`clearStreamedText`/`unsubDone`/`addMessage` + 两处 summary 箭头）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（三组件去盒子化 + 思维链图标/箭头/marker + 正文间距） |
-
----
-
-## 记忆点 2：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 1：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -586,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 2：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +585,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 3：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,7 +595,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 4：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -619,7 +604,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 5：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -630,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 6：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +629,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 7：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +642,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+## 记忆点 8：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：用户消息发送时间显示 + 智能截断与悬停提示
+## 记忆点 9：用户消息发送时间显示 + 智能截断与悬停提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -681,6 +666,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **前端时间渲染（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `formatSmartTime(isoStr)` 工具函数：解析 ISO 字符串后按天/年边界智能格式化。`createMsgActions` 新增 `createdAt` 参数，拼接 token + 时间显示到 `.user-tokens` 元素。`loadSession` 的 chatHistory map 保存 `created_at: msg.created_at`，`sendUserText` 从后端 `result.createdAt` 获取并传递/保存，`handleRegenerate` 同理。**修复关键 bug**：AI 回复完成后更新用户消息 token 数时（`updateUserMessageTokens`/`updateMsgActions`）覆盖了时间——修复为从 `chatHistory` 读取 `created_at` 重新拼接完整内容。 |
 | **截断与悬停（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-msg-user .user-tokens` 和 `.ai-msg-time` 均添加 `overflow: hidden; text-overflow: ellipsis; min-width: 0;`，超出气泡宽度时自动截断省略号。[ai-chat.js](frontend/src/js/ai-chat.js) 创建元素时设置 `title` 属性为完整文本内容，鼠标悬停时浏览器原生 tooltip 显示完整信息（截断和不截断时均显示）。 |
 | **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`Message.CreatedAt` + `SaveAIMessage` 返回值 + `LoadAISessionMessagesPaginated` 赋值）、[app.go](app.go)（`SaveAIMessageResult.CreatedAt` + 两处 assistant 消息调用适配）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`formatSmartTime`/`createMsgActions`/`loadSession`/`sendUserText`/`handleRegenerate`/`updateUserMessageTokens` 更新）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.user-tokens` + `.ai-msg-time` 截断样式） |
+
+---
+
+## 记忆点 10：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三处改动：① AI 消息右键菜单新增"分叉"功能，复制选中消息及之前消息到新会话，标题递增编号，长标题 20 字符截断，复制会话配置，侧边栏自动刷新；② MCP Agent 工具描述改为从 MCP 服务器动态获取（两段式：MCP desc 优先取前 40 字符，空则兜底拼接"服务器名 的 工具名"）；③ AI 消息右键菜单按方案 B 重新分组（保存为笔记/分叉/追问此条回复一组，重新生成单独一组，删除独立）。 |
+| **分叉功能（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) `forkSession()`：获取右键消息 ID → `LoadAISessionMessages` 筛选到该消息为止 → 复制会话配置（模型/深度思考/搜索源/Mode/引用笔记/技能/角色扮演）→ `CreateAISession` → `RenameAISession`（`parseForkTitle` 递增编号 `(1)` `(2)`... + 20 字符截断）→ `SaveAIMessages` → `SaveSessionConfig` → `switchSession` + `loadSessionList` + `updateChatTitle`。右键菜单项 `FORK_ICON`（git-branch SVG），菜单位置在"保存为笔记"和"重新生成"之间。修复右键菜单重复追加 bug（`closeAiMsgContextMenu` 定时器取消后清空 `innerHTML`）。分叉后侧边栏展开时刷新列表。 |
+| **MCP 工具描述两段式（重要）** | [pool.go](internal/mcpserver/pool.go) `SessionToolMeta` 增加 `Description` 字段，`ListToolMetas` 从 `t.Info(ctx).Desc` 提取描述。[app.go](app.go) `GetAgentTools` 两段式构造 Label：`mt.Description` 非空时取前 40 rune（`[...]` 中英文安全），超长追加 `"..."`；空时回退 `"{ServerName} 的 {toolName}"` 拼接。内置工具不受影响，仍使用 `meta.go` 硬编码中文描述。 |
+| **右键菜单分组调整** | [ai-chat.js](frontend/src/js/ai-chat.js) AI 消息右键菜单按方案 B 重新分组：`复制` → `保存为笔记` / `分叉` / `追问此条回复`（同一组）→ `重新生成`（单独一组）→ `删除`。消除原来中间组杂糅（保存为笔记/分叉/重新生成三种不同性质操作混放）的问题。 |
+| **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（`SessionToolMeta.Description` + `ListToolMetas` 提取 desc）、[app.go](app.go)（`GetAgentTools` 两段式 Label）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`forkSession`/`parseForkTitle`/`FORK_ICON`/右键菜单项/分组重排/菜单重复追加修复） |
 
 ---
 

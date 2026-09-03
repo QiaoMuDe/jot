@@ -1292,6 +1292,8 @@ function bindEvents() {
                         window.showNotification?.('保存失败: ' + (e.message || e), 'error');
                     }
                 })();
+            } else if (action === 'fork') {
+                forkSession(msgEl);
             } else if (action === 'regen') {
                 handleRegenerate(msgEl);
             } else if (action === 'edit') {
@@ -1923,6 +1925,99 @@ async function createSession() {
     }
 
     scrollToBottom();
+}
+
+/**
+ * 分叉当前会话：复制选中消息之前的所有消息到新会话，标题递增编号，附带会话配置。
+ * @param {Element} msgEl - 右键消息元素
+ */
+async function forkSession(msgEl) {
+    if (isStreaming) return;
+    const msgId = msgEl?.dataset.msgId;
+    if (!msgId) return;
+    const curSession = sessions.find(s => s.id === activeSessionId);
+    if (!curSession || !curSession.title) return;
+
+    // 加载全部消息 → 过滤出选中消息及之前的部分
+    let msgs;
+    try {
+        msgs = await window.go.main.App.LoadAISessionMessages(activeSessionId);
+    } catch (_) { return; }
+    if (!msgs || msgs.length === 0) return;
+
+    const targetId = +msgId;
+    const filteredMsgs = [];
+    for (const m of msgs) {
+        filteredMsgs.push(m);
+        if (m.id === targetId) break;
+    }
+
+    // 加载会话配置（模型、模式、引用笔记、技能等）
+    let config;
+    try {
+        config = await window.go.main.App.LoadSessionConfig(activeSessionId);
+    } catch (_) { config = null; }
+
+    // 计算新标题
+    const newTitle = parseForkTitle(curSession.title);
+
+    // 创建新会话
+    let newId;
+    try {
+        newId = await window.go.main.App.CreateAISession();
+    } catch (_) { return; }
+
+    // 重命名
+    try {
+        await window.go.main.App.RenameAISession(newId, newTitle);
+    } catch (_) { /* 静默：标题超长等 */ }
+
+    // 保存消息
+    try {
+        await window.go.main.App.SaveAIMessages(newId, filteredMsgs);
+    } catch (_) {
+        window.showNotification?.('分叉失败：消息保存异常', 'error');
+        return;
+    }
+
+    // 保存会话配置
+    if (config) {
+        try {
+            await window.go.main.App.SaveSessionConfig(newId, config);
+        } catch (_) { /* 静默 */ }
+    }
+
+    // 切换到新会话
+	await switchSession(newId);
+
+	// 刷新会话列表，使侧边栏显示新会话且标题正确
+	await loadSessionList();
+	// 重新刷新标题，因为 loadSessionList 更新了 sessions 但未调用 updateChatTitle
+	updateChatTitle();
+
+	window.showNotification?.('已分叉', 'success');
+}
+
+/**
+ * 解析分叉标题：提取开头 "(N) " 编号并递增，无编号则添加 "(1) "。
+ * @param {string} title
+ * @returns {string}
+ */
+function parseForkTitle(title) {
+    const match = title.match(/^\((\d+)\)\s*/);
+    let result;
+    if (match) {
+        const num = parseInt(match[1], 10) + 1;
+        result = `(${num}) ${title.substring(match[0].length)}`;
+    } else {
+        result = `(1) ${title}`;
+    }
+    // 后端 RenameAISession 限制标题最多 20 字符，超长时截断
+    const runes = [...result];
+    if (runes.length > 20) {
+        result = runes.slice(0, 19).join('') + '…';
+    }
+    return result;
 }
 
 /* ── 对话管理 ── */
@@ -4174,6 +4269,8 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     // 取消退场清理定时器并清除退场动画，避免影响新菜单
     if (aiMsgContextMenu._closeTimer) { clearTimeout(aiMsgContextMenu._closeTimer); aiMsgContextMenu._closeTimer = null; }
     aiMsgContextMenu.style.animation = '';
+    // 清空旧内容，防止重复追加
+    aiMsgContextMenu.innerHTML = '';
 
     // 保存上下文：优先从 DOM 实时读取（修复编辑后闭包内容过期的问题）
     _contextMsgContent = (msgEl && msgEl.querySelector('.ai-msg-text')) ? msgEl.querySelector('.ai-msg-text').textContent : content;
@@ -4195,9 +4292,10 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     if (role === 'assistant') {
         items.push({ type: 'divider' });
         items.push({ action: 'save', label: '保存为笔记' });
-        items.push({ action: 'regen', label: '重新生成' });
-        items.push({ type: 'divider' });
+        items.push({ action: 'fork', label: '分叉' });
         items.push({ action: 'followUp', label: '追问此条回复' });
+        items.push({ type: 'divider' });
+        items.push({ action: 'regen', label: '重新生成' });
     }
 
     // 删除（所有消息共有）
@@ -4210,6 +4308,7 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
         edit: EDIT_ICON,
         rollback: ROLLBACK_ICON,
         save: SAVE_ICON,
+        fork: FORK_ICON,
         regen: REGEN_ICON,
         followUp: FOLLOWUP_ICON,
         delete: DELETE_ICON,
@@ -4389,6 +4488,7 @@ const RESEND_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
 const EDIT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
 const SAVE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
 const FOLLOWUP_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+const FORK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="21" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>';
 const DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 const ROLLBACK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
 const SKILL_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
