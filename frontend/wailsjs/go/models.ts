@@ -202,6 +202,7 @@ export namespace main {
 	export class SaveAIMessageResult {
 	    msgID: number;
 	    tokens: number;
+	    createdAt: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SaveAIMessageResult(source);
@@ -211,6 +212,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.msgID = source["msgID"];
 	        this.tokens = source["tokens"];
+	        this.createdAt = source["createdAt"];
 	    }
 	}
 	export class TestMCPServerResult {
@@ -830,6 +832,8 @@ export namespace services {
 	    recall_cards: string;
 	    tool_calls: string;
 	    meta: string;
+	    // Go type: time
+	    created_at: any;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -848,7 +852,26 @@ export namespace services {
 	        this.recall_cards = source["recall_cards"];
 	        this.tool_calls = source["tool_calls"];
 	        this.meta = source["meta"];
+	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class NoteRefInfo {
 	    id: number;

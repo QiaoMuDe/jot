@@ -558,21 +558,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：Agent 工具调用折叠摘要条重构（统一折叠摘要 + 删淡出状态机 + 召回面板归位 + 计划卡片不落库决策）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手 Agent 模式工具调用展示重构：流式实时与历史回放统一为**折叠摘要条**（`.ai-tool-summary`），彻底删除"逐行状态条 + 350ms 延迟淡出"状态机，从根上消除"工具条闪烁/记录丢失"竞态；召回卡片面板归位到工具面板下方（正文上方）；确认计划（plan）**不落库、不历史回放**，仅前端流式悬浮面板临时展示，并清理对应前端死代码。 |
-| **折叠摘要条行为规则（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js)：① 首次调用工具**默认折叠**（`showToolStatusStart` 不自动展开），header 显示"正在调用工具…"（`.is-working` 图标脉冲）；② 用户手动展开后**中途不自动收起**——正文 chunk、决策文本均不打断观察状态；③ 流结束（`ai:stream-done`）统一收起（移除 `.open` + 重置内联 `maxHeight: 0`），与历史回放折叠形态一致；④ 展开状态由 JS 内联 `maxHeight: 'none'/'0'` 控制，CSS 仅负责 opacity 过渡，无内部滚动。 |
-| **工具行名与统计（重要）** | 工具行名统一「工具名 ×N」（`toolNameSeq` 同名计数，与历史回放一致）；header 完成后显示"已调用 N 次 · M 个工具"+ 失败/部分徽标（`_liveToolStats` 实时统计）。摘要条懒创建（`ensureToolSummary`）于正文上方（thinking 之下），header 点击切换 `.open` + `aria-expanded`。 |
-| **正文/工具切换清理机制（重要）** | `tool_start` 时调用 `clearStreamedText()` 清除模型决策输出的中间文本（最终正文单独累积）；`clearStreamedText()` 中**重置 `hasReceivedChunk = false`**——这是修复"正文开始不收起摘要"的关键：决策文本曾提前置位 `hasReceivedChunk`，导致工具执行后的最终正文首 chunk 跳过收起逻辑。重置后最终正文首 chunk 重新走完整流程（清空占位/停思考计时/检查并收起摘要）。 |
-| **召回面板归位（重要）** | `renderRecallCards` 内部优先插入 `.ai-tool-summary` 之后（正文上方，与工具调用同属"过程证据区"），无工具面板时 append 末尾；历史回放 `addMessage` 先 `renderToolCalls` 再 `renderRecallCards`（顺序依赖，工具面板须先存在）。流式路径同步简化（删除"插到操作栏之前"旧逻辑），消除流式/历史召回面板位置不一致。 |
-| **计划卡片不落库决策（重要）** | 计划（plan）**不落库、不历史回放**，仅前端执行时输入框上方悬浮面板（`showPlanPanel`/`createPlanCard`）临时展示。数据链路现状：`models.AIMessage` 与 `services.Message` 均无 Plan 字段（保存/查询均不回传）。同步清理前端死代码：`renderPlanCard` 函数、`addMessage` 的 `plan` 形参及 JSDoc、历史加载两处调用实参 `msg.plan`；`createPlanCard` 因被悬浮面板复用而保留。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`ensureToolSummary`/`updateToolSummaryHeader`/`showToolStatus*`/`clearStreamedText`/`handleStreamChunk`/`renderToolCalls`/`renderRecallCards`/`unsubToolStatus`/`unsubDone`/`addMessage` 清理）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（删除 `.ai-tool-status-list-live`/`.exiting`/分隔虚线，新增 `.is-working` 脉冲与折叠高度控制） |
-
----
-
-## 记忆点 2：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
+## 记忆点 1：AI 气泡过程证据区重设计（极简单行样式 + 思维链真实计时重构 + 折叠行为对齐）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
+## 记忆点 2：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +586,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 3：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -614,7 +600,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 4：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -624,7 +610,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 5：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -633,7 +619,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 6：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -644,7 +630,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 7：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +644,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 8：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -671,7 +657,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+## 记忆点 9：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -683,6 +669,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **使用率两阶段更新** | 上下文使用率显示与摘要触发时序不一致（显示不包含刚发送的消息，但摘要触发检查包含）。修复：`sendUserText`/`handleResend`/`handleRegenerate` 中在消息保存/截断后立即调用 `updateContextUsage()`（Phase 1），AI 回复完成后再次调用（Phase 2），确保显示与触发判断口径一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
 | **HTML 验证修复** | `npm run validate:html` 报 `prefer-native-element` 错误（line 1131:106）：在 [index.html](frontend/index.html) 中添加 `<!-- html-validate-disable-next prefer-native-element -->` 注释忽略该警告。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleRollback`/`showSummaryStatus`/`hideSummaryStatus`/`updateContextUsage`/`CHIP_ICON_SVG`/`renderSkillChips`/`sendUserText`/`handleResend`/`handleRegenerate`/右键菜单项）、[app.go](app.go)（`handleAICancelled` 事件补发）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-summary-status` 定位修复）、[frontend/index.html](frontend/index.html)（html-validate 忽略注释） |
+
+---
+
+## 记忆点 10：用户消息发送时间显示 + 智能截断与悬停提示
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 用户消息气泡底部增加发送时间显示（复用 `AIMessage.CreatedAt` 字段），采用智能格式化规则（今天→`HH:MM`、今年内→`MM-DD HH:MM`、跨年→`YYYY-MM-DD HH:MM`）；时间与 token 数同行显示，超出气泡宽度时截断省略号，悬停显示完整内容。AI 消息的耗时/token 脚标同步应用相同的截断+悬停方案。 |
+| **后端数据链路（重要）** | [services/ai_service.go](internal/services/ai_service.go) `Message` 结构体新增 `CreatedAt time.Time json:"created_at"` 字段；`LoadAISessionMessagesPaginated` 转换时赋值 `CreatedAt: m.CreatedAt`；`SaveAIMessage` 返回值改为 `(uint, time.Time, error)` 同时返回消息 ID 和创建时间。[app.go](app.go) `SaveAIMessageResult` 新增 `CreatedAt string json:"createdAt"`，填入 `createdAt.Format(time.RFC3339)`，两处保存 assistant 消息的调用同步适配新签名。 |
+| **前端时间渲染（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `formatSmartTime(isoStr)` 工具函数：解析 ISO 字符串后按天/年边界智能格式化。`createMsgActions` 新增 `createdAt` 参数，拼接 token + 时间显示到 `.user-tokens` 元素。`loadSession` 的 chatHistory map 保存 `created_at: msg.created_at`，`sendUserText` 从后端 `result.createdAt` 获取并传递/保存，`handleRegenerate` 同理。**修复关键 bug**：AI 回复完成后更新用户消息 token 数时（`updateUserMessageTokens`/`updateMsgActions`）覆盖了时间——修复为从 `chatHistory` 读取 `created_at` 重新拼接完整内容。 |
+| **截断与悬停（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-msg-user .user-tokens` 和 `.ai-msg-time` 均添加 `overflow: hidden; text-overflow: ellipsis; min-width: 0;`，超出气泡宽度时自动截断省略号。[ai-chat.js](frontend/src/js/ai-chat.js) 创建元素时设置 `title` 属性为完整文本内容，鼠标悬停时浏览器原生 tooltip 显示完整信息（截断和不截断时均显示）。 |
+| **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`Message.CreatedAt` + `SaveAIMessage` 返回值 + `LoadAISessionMessagesPaginated` 赋值）、[app.go](app.go)（`SaveAIMessageResult.CreatedAt` + 两处 assistant 消息调用适配）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`formatSmartTime`/`createMsgActions`/`loadSession`/`sendUserText`/`handleRegenerate`/`updateUserMessageTokens` 更新）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.user-tokens` + `.ai-msg-time` 截断样式） |
 
 ---
 

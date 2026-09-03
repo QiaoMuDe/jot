@@ -543,6 +543,30 @@ function formatTokens(count) {
     return String(count);
 }
 
+/**
+ * 智能格式化时间戳：当天显示 HH:MM，今年内显示 MM-DD HH:MM，跨年显示 YYYY-MM-DD HH:MM
+ * @param {string} isoString - ISO 8601 时间字符串
+ * @returns {string} 格式化后的时间文本
+ */
+function formatSmartTime(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const hhmm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    // 同一天：只显示 HH:MM
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+        return hhmm;
+    }
+    // 今年内：MM-DD HH:MM
+    if (d.getFullYear() === now.getFullYear()) {
+        return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hhmm;
+    }
+    // 跨年：YYYY-MM-DD HH:MM
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hhmm;
+}
+
 /** 更新上下文使用率指示器（与后端摘要压缩同口径：tail 估算 token / 预算） */
 async function updateContextUsage() {
     if (!contextUsageEl) return;
@@ -1694,7 +1718,7 @@ async function switchSession(id) {
         } catch (_) {}
 
         // 重建 chatHistory (仅渲染缓冲区)
-        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })) : [];
+        chatHistory = msgs ? msgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '', created_at: msg.created_at || null })) : [];
         // 记录最旧消息 ID 用于分页加载
         _oldestMsgId = msgs && msgs.length > 0 ? msgs[0].id : 0;
 
@@ -1723,7 +1747,7 @@ async function switchSession(id) {
                     addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
                     const userMsgEl = messagesInnerEl.lastElementChild;
                     if (userMsgEl) {
-                        userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
+                        userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0, msg.created_at));
                         bindMsgContextMenu(userMsgEl, msg.content, 'user');
                     }
                 } else if (msg.role === 'assistant') {
@@ -1774,7 +1798,7 @@ async function switchSession(id) {
                         addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
                         const userMsgEl = messagesInnerEl.lastElementChild;
                         if (userMsgEl) {
-                            userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0));
+                            userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0, msg.created_at));
                             bindMsgContextMenu(userMsgEl, msg.content, 'user');
                         }
                     } else if (msg.role === 'assistant') {
@@ -2433,23 +2457,25 @@ async function sendUserText(text) {
     // 先保存用户消息到数据库，确保前端能立即拿到 msgId 和 token 数
     let userMsgId = 0;
     let userTokens = 0;
+    let userCreatedAt = null;
     // 从工具栏状态派生本次消息的 Meta（引用笔记 / 上传文件 / 激活技能 / 角色档案）
     const userMeta = buildUserMessageMeta();
     try {
         const result = await window.go.main.App.SaveAIMessage(activeSessionId, text, 'user', userMeta);
         userMsgId = result?.msgID || 0;
         userTokens = result?.tokens || 0;
+        userCreatedAt = result?.createdAt || null;
     } catch (_) { /* 静默失败，后续流程继续 */ }
 
     addMessage(text, 'user', undefined, undefined, undefined, userTokens, userMsgId || undefined, undefined, undefined, false, false, userMeta);
     const userMsgEl = messagesInnerEl.lastElementChild;
     if (userMsgEl) {
-        userMsgEl.appendChild(createMsgActions(text, 'user', undefined, userTokens));
+        userMsgEl.appendChild(createMsgActions(text, 'user', undefined, userTokens, userCreatedAt));
         bindMsgContextMenu(userMsgEl, text, 'user');
     }
     // 同步 push 到 chatHistory（否则 cancelEdit / applyEdit 找不到 meta，chip 不显示）
     if (userMsgId) {
-        chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '' });
+        chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '', created_at: userCreatedAt });
     }
     // Phase 1: 用户消息发出后立即更新上下文使用率（含本条消息）
     updateContextUsage();
@@ -3129,8 +3155,21 @@ async function startStreaming(userText, userMsgID) {
             if (lastUserEl) {
                 lastUserEl.dataset.msgId = userMsgID;
                 const tokensEl = lastUserEl.querySelector('.user-tokens');
-                if (tokensEl) {
-                    tokensEl.textContent = userTokens > 0 ? formatTokens(userTokens) + ' tokens' : '';
+                if (tokensEl && userMsgID) {
+                    // 从 chatHistory 中找到这条消息的 created_at
+                    const idx = chatHistory.findIndex(m => m.id === userMsgID);
+                    const createdAt = idx >= 0 ? chatHistory[idx].created_at : null;
+                    let text = '';
+                    if (userTokens > 0) {
+                        text = formatTokens(userTokens) + ' tokens';
+                    }
+                    const timeText = formatSmartTime(createdAt);
+                    if (text && timeText) {
+                        text += ' · ' + timeText;
+                    } else if (timeText) {
+                        text = timeText;
+                    }
+                    tokensEl.textContent = text;
                     tokensEl.style.display = '';
                 }
             }
@@ -3236,8 +3275,24 @@ async function startStreaming(userText, userMsgID) {
             const lastUserMsgEl = messagesInnerEl.querySelector('.ai-msg-user:last-child');
             if (lastUserMsgEl) {
                 const tokensEl = lastUserMsgEl.querySelector('.user-tokens');
-                if (tokensEl && userTokens > 0) {
-                    tokensEl.textContent = formatTokens(userTokens) + ' tokens';
+                // 从 DOM 上找 msgId，然后从 chatHistory 找 created_at
+                const msgId = parseInt(lastUserMsgEl.dataset.msgId || '0');
+                const createdAt = msgId ? (() => {
+                    const idx = chatHistory.findIndex(m => m.id === msgId);
+                    return idx >= 0 ? chatHistory[idx].created_at : null;
+                })() : null;
+                if (tokensEl) {
+                    let text = '';
+                    if (userTokens > 0) {
+                        text = formatTokens(userTokens) + ' tokens';
+                    }
+                    const timeText = formatSmartTime(createdAt);
+                    if (text && timeText) {
+                        text += ' · ' + timeText;
+                    } else if (timeText) {
+                        text = timeText;
+                    }
+                    tokensEl.textContent = text;
                 }
             }
         }
@@ -4199,7 +4254,7 @@ const NOTE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 /**
  * 创建消息气泡操作按钮
  */
-function createMsgActions(content, role, elapsedTotal, tokens) {
+function createMsgActions(content, role, elapsedTotal, tokens, createdAt) {
     const container = document.createElement('div');
     container.className = 'ai-msg-actions';
 
@@ -4210,14 +4265,32 @@ function createMsgActions(content, role, elapsedTotal, tokens) {
         let timeText = '⏱ ' + elapsedTotal.toFixed(1) + ' 秒';
         if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
         timeEl.textContent = timeText;
+        // 鼠标悬停显示完整内容（截断时浏览器原生提示）
+        if (timeText) {
+            timeEl.title = timeText;
+        }
         container.appendChild(timeEl);
     }
 
-    // 用户消息 token 计数（左侧）
+    // 用户消息 token 计数 + 时间戳（左侧）
     if (role === 'user') {
         const tokensEl = document.createElement('span');
         tokensEl.className = 'user-tokens';
-        if (tokens > 0) tokensEl.textContent = formatTokens(tokens) + ' tokens';
+        let text = '';
+        if (tokens > 0) {
+            text = formatTokens(tokens) + ' tokens';
+        }
+        const timeText = formatSmartTime(createdAt);
+        if (text && timeText) {
+            text += ' · ' + timeText;
+        } else if (timeText) {
+            text = timeText;
+        }
+        tokensEl.textContent = text;
+        // 鼠标悬停显示完整内容（截断时浏览器原生提示）
+        if (text) {
+            tokensEl.title = text;
+        }
         container.appendChild(tokensEl);
     }
 
@@ -5264,6 +5337,7 @@ async function handleRegenerate(msgEl) {
         // 保存为新用户消息
         let newUserMsgId = 0;
         let regenerateTokens = 0;
+        let regenerateCreatedAt = null;
         if (activeSessionId !== null) {
             try {
                 const result = await window.go.main.App.SaveAIMessage(
@@ -5271,6 +5345,7 @@ async function handleRegenerate(msgEl) {
                 );
                 newUserMsgId = result?.msgID || 0;
                 regenerateTokens = result?.tokens || 0;
+                regenerateCreatedAt = result?.createdAt || null;
             } catch (_) { /* 静默 */ }
         }
 
@@ -5278,14 +5353,15 @@ async function handleRegenerate(msgEl) {
         addMessage(prevContent, 'user', undefined, undefined, undefined, regenerateTokens, newUserMsgId || undefined, undefined, undefined, false, false, regenerateMeta);
         const newUserMsgEl = messagesInnerEl.lastElementChild;
         if (newUserMsgEl) {
-            newUserMsgEl.appendChild(createMsgActions(prevContent, 'user', undefined, regenerateTokens));
+            newUserMsgEl.appendChild(createMsgActions(prevContent, 'user', undefined, regenerateTokens, regenerateCreatedAt));
             bindMsgContextMenu(newUserMsgEl, prevContent, 'user');
         }
         // 同步 push 到 chatHistory
         if (newUserMsgId) {
             chatHistory.push({
                 id: newUserMsgId, role: 'user', content: prevContent,
-                tokens: regenerateTokens, meta: regenerateMeta || ''
+                tokens: regenerateTokens, meta: regenerateMeta || '',
+                created_at: regenerateCreatedAt
             });
         }
 

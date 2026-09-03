@@ -21,17 +21,18 @@ import (
 
 // Message 表示 AI 对话中的一条消息
 type Message struct {
-	ID               uint    `json:"id"`
-	Role             string  `json:"role"`
-	Content          string  `json:"content"`
-	ReasoningContent string  `json:"reasoning_content"`
-	ThinkingElapsed  float64 `json:"thinking_elapsed"`
-	TotalElapsed     float64 `json:"total_elapsed"`
-	Tokens           int     `json:"tokens"`
-	SearchSources    string  `json:"search_sources"`
-	RecallCards      string  `json:"recall_cards"`
-	ToolCalls        string  `json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
-	Meta             string  `json:"meta"`       // 用户消息附加上下文 JSON（引用笔记/上传文件/技能等，不流向 LLM）
+	ID               uint      `json:"id"`
+	Role             string    `json:"role"`
+	Content          string    `json:"content"`
+	ReasoningContent string    `json:"reasoning_content"`
+	ThinkingElapsed  float64   `json:"thinking_elapsed"`
+	TotalElapsed     float64   `json:"total_elapsed"`
+	Tokens           int       `json:"tokens"`
+	SearchSources    string    `json:"search_sources"`
+	RecallCards      string    `json:"recall_cards"`
+	ToolCalls        string    `json:"tool_calls"` // Agent 模式工具调用链 JSON（[]toolCallRecord）
+	Meta             string    `json:"meta"`       // 用户消息附加上下文 JSON（引用笔记/上传文件/技能等，不流向 LLM）
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // AIConfig 表示 AI 服务配置
@@ -513,7 +514,7 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 	// 反转为 ASC 顺序
 	result := make([]Message, len(msgs))
 	for i, m := range msgs {
-		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls, Meta: m.Meta}
+		result[len(msgs)-1-i] = Message{ID: m.ID, Role: m.Role, Content: m.Content, ReasoningContent: m.ReasoningContent, ThinkingElapsed: m.ThinkingElapsed, TotalElapsed: m.TotalElapsed, Tokens: m.Tokens, SearchSources: m.SearchSources, RecallCards: m.RecallCards, ToolCalls: m.ToolCalls, Meta: m.Meta, CreatedAt: m.CreatedAt}
 	}
 
 	// 截断 RecallCards 的 Content 字段，减小 Wails 桥传输量；
@@ -633,9 +634,9 @@ func (a *AIService) UpdateAIMessageTokens(id uint, tokens int) error {
 	return err
 }
 
-// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID
+// SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID 和创建时间
 // 同时更新会话 updated_at，如果是首条用户消息则自动生成标题
-func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
+func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, time.Time, error) {
 	now := time.Now()
 	m := models.AIMessage{
 		SessionID:        sessionID,
@@ -653,7 +654,7 @@ func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
 	}
 	if err := a.db.Create(&m).Error; err != nil {
 		a.logger.Errorw("AIService.SaveAIMessage 失败", fastlog.Error(err))
-		return 0, err
+		return 0, now, err
 	}
 
 	// 更新会话 updated_at
@@ -675,7 +676,7 @@ func (a *AIService) SaveAIMessage(sessionID uint, msg Message) (uint, error) {
 		}
 	}
 
-	return m.ID, nil
+	return m.ID, m.CreatedAt, nil
 }
 
 // SaveAIMessages 保存一轮对话消息（user + assistant）到指定会话

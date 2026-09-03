@@ -2316,6 +2316,9 @@
     user-select: none;
     line-height: 26px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 /* ── 消息气泡操作栏（耗时 + token） ── */
@@ -3685,6 +3688,9 @@
     user-select: none;
     line-height: 26px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 /* ── 新建会话条目入场动画 ── */

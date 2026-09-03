@@ -2266,7 +2266,7 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			RecallCards:      result.RecallCards,
 			ToolCalls:        result.ToolCalls,
 		}
-		assistantMsgID, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
+		assistantMsgID, _, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
 		if saveErr != nil {
 			a.LogSvc.Logger.Errorw("保存 assistant 消息失败", fastlog.Error(saveErr))
 		}
@@ -2497,7 +2497,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 					TotalElapsed:     elapsedTotal,
 					Tokens:           assistantTokens,
 				}
-				assistantMsgID, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
+				assistantMsgID, _, saveErr := a.aiService.SaveAIMessage(sessionID, assistantMsg)
 				if saveErr != nil {
 					a.LogSvc.Logger.Errorw("Chat 保存 assistant 消息失败", fastlog.Error(saveErr))
 				}
@@ -2970,8 +2970,9 @@ func (a *App) UpdateAIMessageContent(id uint, content string) error {
 
 // SaveAIMessageResult SaveAIMessage 的返回结果
 type SaveAIMessageResult struct {
-	MsgID  uint `json:"msgID"`
-	Tokens int  `json:"tokens"`
+	MsgID     uint   `json:"msgID"`
+	Tokens    int    `json:"tokens"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // SaveAIMessage 保存单条 AI 消息到指定会话，返回消息 ID 和 token 数
@@ -2997,13 +2998,13 @@ func (a *App) SaveAIMessage(sessionID uint, content string, role string, meta st
 		Tokens:  tokens,
 		Meta:    meta,
 	}
-	msgID, err := a.aiService.SaveAIMessage(sessionID, msg)
+	msgID, createdAt, err := a.aiService.SaveAIMessage(sessionID, msg)
 	if err != nil {
 		a.LogSvc.Logger.Errorw("SaveAIMessage 失败", fastlog.Error(err))
 		return SaveAIMessageResult{}, err
 	}
 	a.LogSvc.Logger.Infow("SaveAIMessage 成功", fastlog.Uint("msgID", msgID), fastlog.Uint("sessionID", sessionID), fastlog.Int("meta_len", len(meta)))
-	return SaveAIMessageResult{MsgID: msgID, Tokens: tokens}, nil
+	return SaveAIMessageResult{MsgID: msgID, Tokens: tokens, CreatedAt: createdAt.Format(time.RFC3339)}, nil
 }
 
 // DeleteAIMessage 按 ID 删除单条 AI 消息
