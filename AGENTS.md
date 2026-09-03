@@ -554,24 +554,10 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
-36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md) 及记忆点 8
+36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md)。同轮作业新增 AI 模式描述注入：在 `CallAIStream`（Chat 模式）和 `CallAIAgentStream`（Agent/Plan 模式）中分别注入 `chatModeDescription`/`agentModeDescription`/`planModeDescription` 三套文案，让 AI 认知自身模式特点、适用场景与行为指引。
 
-## 记忆点 1：编辑器顶栏标题 + 全应用右键菜单体系统一 + 底部状态栏/卡片标签/标签管理弹窗重设计
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 一轮编辑器与全局 UI 体系改造：① 编辑器标题输入框从 editor-body 顶部**迁移到顶栏操作栏左侧**（双击编辑的伪静态文字）；② 编辑器正文顶部留白收紧 + CM6 聚焦虚线轮廓修复；③ 底部状态栏统一 40px 高度 + 按钮按压回弹；④ 首页卡片标签强制单行截断；⑤ **5 个右键菜单统一图标/间距/缩进体系**；⑥ 笔记右键菜单按用途重排分组；⑦ 标签「添加/移除」两弹窗合并为单一「管理标签」toggle 差量模式。 |
-| **顶栏标题（重要）** | [index.html](frontend/index.html) `#editorNoteTitle` 移入顶栏新增 `.editor-title-wrap`（左侧），`.editor-header` 改 `justify-content: space-between`。**复用原 input 而非双元素切换**——20+ 处 `els.editorNoteTitle.value` 读写（保存/快照/关闭确认/默认标题）数据流零改动。[editor.css](frontend/src/css/components/editor.css) 方案 A"纸面标题"：静态纯文字（1.05rem/650 字重/0.01em 字距/max-width 50% + ellipsis），hover 淡胶囊（仅编辑/新建模式），双击进编辑态=胶囊+accent 双层光环（外圈 22% 透明 + 内圈 1px 实线），查看模式零痕迹；全走 CSS 变量 + `color-mix` 适配 14 主题。[main.js](frontend/src/main.js) 新增双击进编辑（光标至末尾）/Enter 提交/Esc 取消恢复快照/blur 提交+空值回退 + `updateTitleTooltip()`（编辑态"双击编辑标题"、查看态全文）。新建默认标题 `YYYY-MM-DD HH:MM ☺️` 机制与后端"空标题不覆盖"语义不变。 |
-| **CM6 聚焦轮廓教训** | 编辑区聚焦时顶栏交界处出现"虚线"，曾误判为标题 hover 样式——真因是 **CM6 baseTheme 给 `.cm-editor.cm-focused` 画的 1px dotted 全局轮廓**（顶边恰在顶栏/编辑区交界）。修复：[cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js) jotTheme 补 `'&.cm-focused': { outline: 'none' }`（设置页预览/MCP 编辑器两个 CM6 实例早有此覆盖，唯独主编辑器 jotTheme 漏了）。同轮将 `.cm-content` 顶部 padding 归零、4px 留白移到 `.editor-textarea` 容器——留白放内容列会导致行号分割线比首行凸出。 |
-| **底部状态栏（重要）** | 原 `.editor-footer` 高度随模式/笔记类型在 26~45px 跳动（取消/保存按钮 `display:none` 脱离文档流不占高度）。统一 `min-height: 40px`；控件压扁进预算（40px-12px padding=28px）：`.editor-footer .btn` padding `4px 14px` + `line-height: 1`（≈22px）、`.editor-modes` 容器 `2px 3px` + `.mode-btn` `4px 12px` + `line-height: 1`（≈24px）。**教训：footer 控件继承 body `line-height: 1.6` 是高度膨胀主因**，压高度先统一 `line-height: 1` 再调 padding。另加按压回弹：`:active scale(0.92)` 0.12s + 松开 0.25s 过冲曲线。全程限定 `.editor-footer` 作用域，不污染全局 `.btn`。 |
-| **卡片标签单行** | [main-content.css](frontend/src/css/components/main-content.css) `.card-tags`：`nowrap + overflow: hidden + flex: 1`；`.card-tag`：`nowrap + ellipsis + max-width: 100%`（单个超长标签自身省略号）。渐隐 mask 曾实现后按需求移除（直接硬裁切）。[main.js](frontend/src/main.js) 标签 HTML 加 `title` 属性悬停看全文。卡片固定 190px 高下 footer 恒定单行。 |
-| **右键菜单体系统一（重要）** | **5 个菜单**（笔记首页/笔记本侧边栏/密码记录/AI 消息/AI 会话侧边栏）统一规格：图标 **14px / stroke 1.5** 线性风（同款 path 复用：置顶图钉/重命名铅笔/删除垃圾桶等）、**gap 8px**、着色 `opacity 0.72`（danger 0.9，不再用 color: muted）、**内容左缩进统一 16px**（容器 4px + 菜单项左右 12px；`.context-menu` 经 `padding: 4px` + `--ctx-inset: 12px` 达成）。笔记菜单按用途重排 4 组：打开（编辑/查看）→ 整理（置顶/移动到/管理标签）→ 输出（复制内容/导出/创建副本）→ 危险（删除），divider 6→3，「复制」改名「复制内容」防与「创建副本」混淆；置顶动态文案改写 `<span data-label>` 防止 `textContent` 覆盖抹掉图标。笔记本菜单（[sidebar.css](frontend/src/css/components/sidebar.css)）与密码菜单（[password-manager.css](frontend/src/css/components/password-manager.css)）`mkItem` 式加图标。 |
-| **标签管理弹窗 manage 模式（重要）** | 笔记右键菜单「添加标签/移除标签」两入口合并为单一「**管理标签**」（永远可点，删除满额/空标签禁用逻辑）。[main.js](frontend/src/main.js) `openBatchTagPicker('manage', ...)`：芯片变 toggle（已挂标签初始选中，快照存 `batchTagInitialSelected`），点击切换、实时 ≤3 拦截（提示先取消一个）；确认按钮差量计数「保存（n）」；`confirmBatchTagAction` 差量提交（先加后删 `BatchAddTagToNotes`/`BatchRemoveTagFromNotes`），无修改提示"未做任何修改"，成功按差量报「已添加 x 个、移除 y 个」。批量模式（工具栏批量添加/移除）保留原 add/remove 路径不动。**孤儿标签过滤**：快照过滤掉已不存在于标签库的 id，防止残留关联被计入差量误报"已移除"。**`MAX_NOTE_TAGS = 3` 常量**收拢全文件 6 处硬编码（编辑器选择/添加额度/批量额度/manage 上限），文案模板变量跟随。教训：manage 快照须与渲染/差量计算/按钮计数共用同一数据源，否则计数与提交错位。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（标题移位 + 笔记菜单重排/图标 + 笔记本菜单项）、[frontend/src/main.js](frontend/src/main.js)（标题交互 4 函数 + tooltip + 状态栏/标签/菜单/manage 弹窗/MAX_NOTE_TAGS）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（会话菜单图标 14px/1.5 + RESEND_ICON 描边统一）、[frontend/src/js/password-manager.js](frontend/src/js/password-manager.js)（菜单图标 ICONS 表 + mkItem 图标参数）、[frontend/src/js/cm6-syntax-highlight.js](frontend/src/js/cm6-syntax-highlight.js)（focus outline + content padding）、[frontend/src/css/components/editor.css](frontend/src/css/components/editor.css)（顶栏标题/状态栏/回弹）、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（卡片标签单行 + 菜单 flex/图标/缩进）、[frontend/src/css/components/sidebar.css](frontend/src/css/components/sidebar.css)、[frontend/src/css/components/password-manager.css](frontend/src/css/components/password-manager.css)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（AI 两菜单图标/间距/缩进） |
-
----
-
-## 记忆点 2：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
+## 记忆点 1：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -585,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 2：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 3：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 4：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +601,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 5：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -629,7 +615,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 6：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -642,7 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+## 记忆点 7：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -657,7 +643,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：用户消息发送时间显示 + 智能截断与悬停提示
+## 记忆点 8：用户消息发送时间显示 + 智能截断与悬停提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -669,7 +655,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
+## 记忆点 9：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -680,6 +666,14 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（`SessionToolMeta.Description` + `ListToolMetas` 提取 desc）、[app.go](app.go)（`GetAgentTools` 两段式 Label）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`forkSession`/`parseForkTitle`/`FORK_ICON`/右键菜单项/分组重排/菜单重复追加修复） |
 
 ---
+
+## 记忆点 10：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在 AI 系统提示词中注入当前模式描述（Chat/Agent/Plan 三种方案B文案），让 AI 具备模式自我认知。Chat 模式注入 `chatModeDescription`（纯文本对话，不调用工具，用户请求搜索笔记时建议切换到 Agent），Agent 模式注入 `agentModeDescription`（可调用工具完成任务），Plan 模式注入 `planModeDescription`（先计划后执行）。注入点在 `CallAIStream` 和 `CallAIAgentStream` 中，不修改 `buildAIContextInstruction` 签名。 |
+| **实现要点** | [app.go](app.go) 新增三个包级常量 `chatModeDescription`/`agentModeDescription`/`planModeDescription`。Chat 模式（`CallAIStream`）在 `buildAIContextInstruction` 结果末尾追加 `chatModeDescription`；Agent/Plan 模式（`CallAIAgentStream`）将 `sessCfg.LoadSessionConfig` 提前到 instruction 构建之前，在所有工具使用规范之后追加 `agentModeDescription`/`planModeDescription`（根据 `sessCfg.Mode` 判断）。Plan 模式描述注入 ReAct 循环的 Instruction 中，而非 `planGenSystemPrompt`（计划生成阶段已有独立角色定义）。 |
+| **涉及文件** | [app.go](app.go)（常量定义 + `CallAIStream` + `CallAIAgentStream`） |
 
 ## 十二、AGENTS.md 维护规范
 

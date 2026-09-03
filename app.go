@@ -62,6 +62,21 @@ var baseNormsBoundaries = "回答规范：" +
 	"\n3. 保持客观中立，不输出主观价值判断" + reasoningFramework
 var baseSystemPrompt = baseIdentity + "\n\n" + baseNormsBoundaries
 
+var chatModeDescription = "\n\n【当前模式 - Chat（对话模式）】\n" +
+	"特点：纯文本对话，不调用任何工具。\n" +
+	"适用场景：日常问答、头脑风暴、写作创作、翻译、代码审查、知识讨论。\n" +
+	"行为指引：直接回答用户问题，保持对话自然流畅。如果用户请求涉及搜索笔记或操作文件，礼貌告知当前模式不支持，建议切换到 Agent 模式。"
+
+var agentModeDescription = "\n\n【当前模式 - Agent（智能体模式）】\n" +
+	"特点：可调用工具执行任务（搜索本地笔记、联网搜索、管理笔记/笔记本/标签、反问澄清等）。\n" +
+	"适用场景：信息检索、笔记管理、数据查询、需要多步骤操作的任务。\n" +
+	"行为指引：优先使用工具完成任务，严格遵循本地知识优先、写操作确认等规范。如果用户只是闲聊，也可以直接对话。"
+
+var planModeDescription = "\n\n【当前模式 - Plan（计划模式）】\n" +
+	"特点：先制定计划，再逐步执行，支持复杂任务拆解。\n" +
+	"适用场景：需要多步骤执行的复杂任务（如批量修改笔记、跨模块操作）。\n" +
+	"行为指引：回答前先分析任务复杂度，生成结构化执行计划，按计划逐步执行。每步完成后检查进度，全部完成后总结。"
+
 type App struct {
 	ctx              context.Context
 	db               *gorm.DB
@@ -2138,6 +2153,8 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		// ── 组装 Instruction（系统提示词全文），内容与顺序对齐 Agent 流上下文注入 ──
 		// 基础上下文（身份层 + 技能/角色扮演/引用/追问/上传文件）由共享 helper 组装，
 		// Agent 模式在其后追加工具使用规范（Chat 模式直接用 helper 结果，不追加任何工具规范）
+		// 在构建 instruction 前先读取会话配置，以便获取当前模式注入模式描述
+		sessCfg := a.aiService.LoadSessionConfig(sessionID)
 		var instruction strings.Builder
 		instruction.WriteString(a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles))
 
@@ -2158,6 +2175,13 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 		instruction.WriteString("\n\n【工具使用规范 - 写操作强制确认】\n" +
 			"1. manage_note 的写操作（update/edit/pin/move/add_tag/remove_tag）执行前必须通过 ask_user 确认，用户同意后携带 confirm=true 执行。create 无需确认。\n" +
 			"2. 用户拒绝或撤回时不执行。\n")
+
+		// 当前模式描述注入：让 AI 认知自身所处模式，自动调整行为风格
+		if sessCfg.Mode == "plan" {
+			instruction.WriteString(planModeDescription)
+		} else {
+			instruction.WriteString(agentModeDescription)
+		}
 
 		// 历史消息转换：跳过 system（基础提示词已并入 Instruction），
 		// 截断后的 user/assistant 消息转为 agent.HistoryMessage
@@ -2184,9 +2208,6 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 					fastlog.String("raw", raw), fastlog.Error(err))
 			}
 		}
-
-		// 读取会话配置中的 Plan 模式标记
-		sessCfg := a.aiService.LoadSessionConfig(sessionID)
 
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
 		a.LogSvc.Logger.Debugw("AI Agent 流开始",
@@ -2431,7 +2452,7 @@ func (a *App) CallAIStream(streamGen int, sessionID uint, userText string, think
 	// 流式调用放进 goroutine，避免阻塞 Wails 事件循环
 	go func() {
 		// 组装系统消息：基础问答上下文（不注入任何工具使用规范，Chat 模式纯单次问答）
-		systemMsg := a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles)
+		systemMsg := a.buildAIContextInstruction(skillIds, roleplayNoteIDs, referencedNoteIDs, followUpRefContent, uploadedFiles) + chatModeDescription
 
 		// 历史消息转换：跳过 system（基础提示词已并入系统消息），
 		// 当前用户消息追加在末尾（若历史末条已是同内容则跳过，避免重复，与 Agent buildMessages 一致）
