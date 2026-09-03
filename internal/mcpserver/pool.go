@@ -38,8 +38,9 @@ type poolEntry struct {
 
 // SessionToolMeta 单条 MCP 工具元信息（供设置页展示与开关控制）。
 type SessionToolMeta struct {
-	ServerName string // 服务器名
-	FullName   string // 完整工具名，格式 mcp_{serverName}_{toolName}
+	ServerName  string // 服务器名
+	FullName    string // 完整工具名，格式 mcp_{serverName}_{toolName}
+	Description string // 工具描述（来自 MCP 服务器 ListTools 响应，可能为空）
 }
 
 // WarmupResult 预热/同步结果汇总，供前端一条通知展示。
@@ -346,8 +347,9 @@ func (p *Pool) ListToolMetas() []SessionToolMeta {
 				continue
 			}
 			metas = append(metas, SessionToolMeta{
-				ServerName: entry.sess.ServerName,
-				FullName:   info.Name,
+				ServerName:  entry.sess.ServerName,
+				FullName:    info.Name,
+				Description: info.Desc,
 			})
 		}
 	}

@@ -2576,6 +2576,14 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 		mcpTools := a.mcpPool.ListToolMetas()
 		for _, mt := range mcpTools {
 			label := mt.ServerName + " 的 " + strings.TrimPrefix(mt.FullName, "mcp_"+mt.ServerName+"_")
+			// 两段式：优先取 MCP 服务器原始描述（截断），不可用时回退到兜底拼接
+			if mt.Description != "" {
+				desc := strings.TrimSpace(mt.Description)
+				if runes := []rune(desc); len(runes) > 40 {
+					desc = string(runes[:40]) + "..."
+				}
+				label = desc
+			}
 			result = append(result, agent.ToolMeta{
 				Name:    mt.FullName,
 				Label:   label,
