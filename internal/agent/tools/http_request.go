@@ -230,7 +230,7 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 	} else {
 		// 文本按 rune 截断（支持中文），超长时追加提示，避免撑爆模型上下文窗口
 		text := string(body)
-		maxChars := getIntSetting(h.setting, "ai_http_max_chars", 5000, 50000)
+		maxChars := getIntSetting(h.setting, "ai_http_max_chars", 10000, 50000)
 		if runes := []rune(text); len(runes) > maxChars {
 			text = string(runes[:maxChars]) + "\n\n（内容过长，已截断）"
 		}

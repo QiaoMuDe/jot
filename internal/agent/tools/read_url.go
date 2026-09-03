@@ -119,7 +119,7 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", fmt.Errorf("读取链接失败: %w", err)
 	}
 
-	maxChars := getIntSetting(r.setting, "ai_read_url_max_chars", 5000, 50000)
+	maxChars := getIntSetting(r.setting, "ai_read_url_max_chars", 10000, 50000)
 	var b strings.Builder
 	for _, d := range docs {
 		if d == nil || strings.TrimSpace(d.Content) == "" {

@@ -213,9 +213,9 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "max_file_size", Value: "1"},
 		{Key: "ai_large_file_preview_threshold", Value: "10000"},
 		// read_url 工具网页正文截断上限（无前端 UI，仅初始化默认值，由 read_url 直接读取）
-		{Key: "ai_read_url_max_chars", Value: "5000"},
+		{Key: "ai_read_url_max_chars", Value: "10000"},
 		// http_request 工具响应体截断上限（无前端 UI，仅初始化默认值，由 http_request 直接读取）
-		{Key: "ai_http_max_chars", Value: "5000"},
+		{Key: "ai_http_max_chars", Value: "10000"},
 		{Key: "ai_agent_tools_disabled", Value: ""},
 		{Key: "ai_agent_max_iterations", Value: "20"},
 		{Key: "trash_cleanup_retention_days", Value: "30"},
