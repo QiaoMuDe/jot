@@ -53,6 +53,9 @@ let _loadingMore = false;      // 加载更多消息防重复
 let _oldestMsgId = 0;          // 当前已加载的最旧消息 ID（用于分页）
 let _scrollHandler = null;     // 滚动加载更多句柄，避免 switchSession 累积重复绑定
 let _editingMsgEl = null;      // 当前正在编辑的消息元素，防止同时编辑多条
+let _jumpDebounceTimer = null;  // 跳转防抖定时器
+let _jumpHighlightTimer = null; // 高亮清除定时器
+let _jumpCurrentIndex = -1;     // 上次跳转到的用户消息索引（-1=未初始化，从视口定位）
 
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
@@ -1247,6 +1250,18 @@ function bindEvents() {
         }
     });
 
+    // Alt+↑/↓ 跳转用户消息（仅 AI 助手视图有效）
+    document.addEventListener('keydown', (e) => {
+        // 兼容右 Alt（AltGr）在某些键盘布局下不设置 altKey 的问题
+        const isAlt = e.altKey || e.getModifierState?.('AltGraph');
+        if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && isAlt && !e.ctrlKey && !e.metaKey) {
+            if (window.state?.currentView !== 'ai-chat') return;
+            // 输入框/搜索框聚焦时禁用（避免干扰打字）
+            if (e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'INPUT') return;
+            e.preventDefault();
+            jumpToUserMessage(e.key === 'ArrowDown' ? 1 : -1);
+        }
+    });
 
     // AI 消息右键菜单项点击
     if (aiMsgContextMenu) {
@@ -3719,6 +3734,135 @@ function createWaitingHint() {
 }
 
 /**
+ * 跳转到上一条/下一条用户消息（Alt+↑/↓）
+ * @param {number} direction - 1 向下，-1 向上
+ */
+async function jumpToUserMessage(direction) {
+    // 防抖：300ms 内禁止重复触发
+    if (_jumpDebounceTimer) return;
+    _jumpDebounceTimer = setTimeout(() => { _jumpDebounceTimer = null; }, 300);
+
+    // 流式输出中禁止跳转
+    if (isStreaming) {
+        window.showNotification?.('回复进行中，无法跳转', 'warning');
+        return;
+    }
+
+    // 历史消息加载中禁止跳转，避免竞态
+    if (_loadingMore) return;
+
+    const userMessages = messagesInnerEl.querySelectorAll('.ai-msg-user');
+    if (userMessages.length === 0) {
+        _jumpCurrentIndex = -1;
+        window.showNotification?.('没有用户消息可供跳转', 'info');
+        return;
+    }
+
+    const total = userMessages.length;
+
+    // 确定当前索引：优先使用上次跳转的索引，首次使用从视口中心定位
+    let currentIndex;
+    if (_jumpCurrentIndex >= 0 && _jumpCurrentIndex < total) {
+        currentIndex = _jumpCurrentIndex;
+    } else {
+        const container = messagesEl;
+        const containerRect = container.getBoundingClientRect();
+        const containerCenter = containerRect.top + containerRect.height / 2;
+        currentIndex = 0;
+        let minDist = Infinity;
+        userMessages.forEach((el, i) => {
+            const rect = el.getBoundingClientRect();
+            const elCenter = rect.top + rect.height / 2;
+            const dist = Math.abs(elCenter - containerCenter);
+            if (dist < minDist) {
+                minDist = dist;
+                currentIndex = i;
+            }
+        });
+    }
+
+    // 向上跳转时，如果已在第一条用户消息且还有更多历史消息未加载，先加载
+    if (direction === -1 && currentIndex === 0 && _oldestMsgId > 0 && !_loadingMore) {
+        _loadingMore = true;
+        const prevScrollHeight = messagesEl.scrollHeight;
+        const prevUserCount = total;
+        try {
+            const olderMsgs = await window.go.main.App.LoadAISessionMessagesPaginated(activeSessionId, 6, _oldestMsgId);
+            if (olderMsgs && olderMsgs.length > 0) {
+                _oldestMsgId = olderMsgs[0].id;
+                const firstChild = messagesInnerEl.firstChild;
+                for (const msg of olderMsgs) {
+                    if (msg.role === 'user') {
+                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
+                        const userMsgEl = messagesInnerEl.lastElementChild;
+                        if (userMsgEl) {
+                            userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0, msg.created_at));
+                            bindMsgContextMenu(userMsgEl, msg.content, 'user');
+                        }
+                    } else if (msg.role === 'assistant') {
+                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined);
+                        el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
+                        bindMsgContextMenu(el, msg.content, 'assistant');
+                    }
+                }
+                const firstNewIdx = messagesInnerEl.children.length - olderMsgs.length;
+                const newChildren = Array.from(messagesInnerEl.children).slice(firstNewIdx);
+                for (const el of newChildren) {
+                    messagesInnerEl.insertBefore(el, firstChild);
+                }
+                messagesEl.style.scrollBehavior = 'auto';
+                messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
+                messagesEl.style.scrollBehavior = '';
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+                // 加载后更新索引：新用户消息插到前面，旧索引向后偏移
+                const newUserCount = messagesInnerEl.querySelectorAll('.ai-msg-user').length;
+                const addedUserCount = newUserCount - prevUserCount;
+                currentIndex += addedUserCount;
+            } else {
+                _oldestMsgId = 0;
+            }
+        } catch (_) { /* 静默 */ }
+        _loadingMore = false;
+    }
+
+    // 重新查询用户消息列表（加载后可能已变化），计算目标索引
+    const updatedUserMessages = messagesInnerEl.querySelectorAll('.ai-msg-user');
+    const updatedTotal = updatedUserMessages.length;
+
+    // 向下跳转时，已在最后一条则不再循环（避免拉取所有历史消息）
+    if (direction === 1 && currentIndex === updatedTotal - 1) {
+        window.showNotification?.('已是最后一条用户消息', 'info');
+        return;
+    }
+
+    // 向上跳转时，已在第一条且无更多历史消息，循环回最后一条
+    let targetIndex;
+    if (direction === -1 && currentIndex === 0) {
+        targetIndex = updatedTotal - 1;
+    } else {
+        targetIndex = currentIndex + direction;
+    }
+
+    // 滚动到目标消息
+    const targetEl = updatedUserMessages[targetIndex];
+    targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+    // 记住当前索引，供下次跳转使用
+    _jumpCurrentIndex = targetIndex;
+
+    // 清除旧高亮
+    document.querySelectorAll('.ai-msg-jump-target').forEach(el => el.classList.remove('ai-msg-jump-target'));
+    if (_jumpHighlightTimer) { clearTimeout(_jumpHighlightTimer); _jumpHighlightTimer = null; }
+
+    // 添加高亮闪烁动画
+    targetEl.classList.add('ai-msg-jump-target');
+    _jumpHighlightTimer = setTimeout(() => {
+        targetEl.classList.remove('ai-msg-jump-target');
+        _jumpHighlightTimer = null;
+    }, 1500);
+}
+
+/**
  * 滚动到底部（临时禁用 smooth scroll 避免动画）
  */
 function scrollToBottom() {
@@ -3744,6 +3888,9 @@ export function resetAIChatState() {
     activeSessionId = null;
     _oldestMsgId = 0;
     _loadingMore = false;
+    _jumpCurrentIndex = -1;
+    _jumpDebounceTimer = null;
+    _jumpHighlightTimer = null;
     hideAskPanel(); // 重置状态时收起 Agent 反问面板
     if (messagesEl) {
         messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');

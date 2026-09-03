@@ -2809,6 +2809,23 @@
     padding: 0 2px;
 }
 
+/* ── 用户消息跳转高亮 ── */
+.ai-msg-jump-target {
+    animation: ai-msg-jump-flash 1.5s ease-out;
+}
+
+@keyframes ai-msg-jump-flash {
+    0% {
+        box-shadow: 0 0 0 3px var(--accent);
+    }
+    50% {
+        box-shadow: 0 0 0 3px var(--accent), 0 0 12px color-mix(in srgb, var(--accent) 50%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
+
 /* ── 工具栏引用按钮 ── */
 .ai-chat-toolbar-btn {
     display: inline-flex;

@@ -7170,6 +7170,8 @@ function renderShortcutsPage() {
 
         { key: 'Ctrl + 0', desc: '锁屏（需先在设置中启用）' },
         { key: 'Ctrl + J', desc: 'AI 侧栏折叠/展开' },
+        { key: 'Alt + ↑', desc: 'AI 会话中跳转到上一条用户消息' },
+        { key: 'Alt + ↓', desc: 'AI 会话中跳转到下一条用户消息' },
     ];
     els.shortcutsBody.innerHTML = shortcuts.map(s => `
         <div class="shortcut-row">
