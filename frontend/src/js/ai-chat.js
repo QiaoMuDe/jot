@@ -232,41 +232,47 @@ let summaryHideTimer = null;
 // failed 状态条的自动隐藏定时器（新一轮事件到来时需清除，避免误隐藏 generating 状态条）
 let summaryFailedTimer = null;
 
-// 监听摘要状态事件（启动时注册一次，生命周期内持续生效）
-// 摘要压缩同步执行：generating 期间阻塞当前对话，failed 时后端中止本轮
-window.runtime?.EventsOn('ai:summary-status', function(data) {
-    // 诊断埋点：确认事件送达与 session 匹配（排查状态条不显示问题）
-    console.info('[summary-status]', data && data.status, 'event_sid=', data && data.session_id, 'active_sid=', activeSessionId);
-    if (!data || data.session_id !== activeSessionId) return;
+/**
+ * 注册摘要状态事件监听。
+ * 必须在 initAIChat（Wails runtime 已就绪）执行时注册，不能在模块顶层注册——
+ * 模块加载时 window.runtime 可能尚未注入，顶层注册会被静默跳过导致状态条永不显示。
+ * 生命周期内持续生效，仅注册一次。
+ */
+function setupSummaryStatusListener() {
+    window.runtime.EventsOn('ai:summary-status', function(data) {
+        // 诊断埋点：确认事件送达与 session 匹配（排查状态条不显示问题）
+        console.info('[summary-status]', data && data.status, 'event_sid=', data && data.session_id, 'active_sid=', activeSessionId);
+        if (!data || data.session_id !== activeSessionId) return;
 
-    if (data.status === 'generating') {
-        if (summaryHideTimer) { clearTimeout(summaryHideTimer); summaryHideTimer = null; }
-        if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
-        summaryStatusShownAt = Date.now();
-        showSummaryStatus('正在生成对话摘要…');
-    } else if (data.status === 'failed') {
-        // 摘要压缩失败：本轮对话已被后端中止（另有 stream-error 通知），
-        // 状态条短暂提示，用户重新发送时会再次触发摘要
-        showSummaryStatus('对话摘要生成失败，请重新发送消息');
-        if (summaryFailedTimer) clearTimeout(summaryFailedTimer);
-        summaryFailedTimer = setTimeout(hideSummaryStatus, 5000);
-    } else {
-        if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
-        // 保证状态条最短可见时长，太快完成时延迟隐藏
-        const elapsed = Date.now() - summaryStatusShownAt;
-        const wait = Math.max(0, SUMMARY_STATUS_MIN_VISIBLE - elapsed);
-        if (wait > 0) {
-            if (summaryHideTimer) clearTimeout(summaryHideTimer);
-            summaryHideTimer = setTimeout(hideSummaryStatus, wait);
+        if (data.status === 'generating') {
+            if (summaryHideTimer) { clearTimeout(summaryHideTimer); summaryHideTimer = null; }
+            if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
+            summaryStatusShownAt = Date.now();
+            showSummaryStatus('正在生成对话摘要…');
+        } else if (data.status === 'failed') {
+            // 摘要压缩失败：本轮对话已被后端中止（另有 stream-error 通知），
+            // 状态条短暂提示，用户重新发送时会再次触发摘要
+            showSummaryStatus('对话摘要生成失败，请重新发送消息');
+            if (summaryFailedTimer) clearTimeout(summaryFailedTimer);
+            summaryFailedTimer = setTimeout(hideSummaryStatus, 5000);
         } else {
-            hideSummaryStatus();
+            if (summaryFailedTimer) { clearTimeout(summaryFailedTimer); summaryFailedTimer = null; }
+            // 保证状态条最短可见时长，太快完成时延迟隐藏
+            const elapsed = Date.now() - summaryStatusShownAt;
+            const wait = Math.max(0, SUMMARY_STATUS_MIN_VISIBLE - elapsed);
+            if (wait > 0) {
+                if (summaryHideTimer) clearTimeout(summaryHideTimer);
+                summaryHideTimer = setTimeout(hideSummaryStatus, wait);
+            } else {
+                hideSummaryStatus();
+            }
+            if (data.status === 'done') {
+                // 压缩后 tail 回落，刷新使用率指示器（状态条延迟隐藏不影响刷新）
+                updateContextUsage();
+            }
         }
-        if (data.status === 'done') {
-            // 压缩后 tail 回落，刷新使用率指示器（状态条延迟隐藏不影响刷新）
-            updateContextUsage();
-        }
-    }
-});
+    });
+}
 
 /**
  * 在输入框上方显示摘要生成状态条
@@ -431,6 +437,9 @@ export async function initAIChat() {
 
     // 初始化拖拽上传
     initAiChatFileDrop();
+
+    // 注册摘要状态事件监听（必须在 runtime 就绪后注册，不能在模块顶层注册）
+    setupSummaryStatusListener();
 }
 
 /* ── 模式悬停提示（portal） ── */
