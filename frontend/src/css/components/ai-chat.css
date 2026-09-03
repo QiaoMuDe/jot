@@ -4178,7 +4178,6 @@
     align-items: center;
     gap: 8px;
     padding: 6px 14px;
-    margin: 4px 12px;
     border-radius: var(--radius-sm);
     background: color-mix(in srgb, var(--accent) 10%, transparent);
     color: var(--text-secondary);
@@ -4186,7 +4185,13 @@
     opacity: 0;
     max-height: 0;
     overflow: hidden;
-    transition: opacity 0.2s ease, max-height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+    transition: opacity 0.2s ease, max-height 0.2s ease, padding 0.2s ease;
+    position: absolute;
+    bottom: calc(8px + var(--input-h, 120px) + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    white-space: nowrap;
 }
 
 .ai-summary-status.active {

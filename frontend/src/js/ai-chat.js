@@ -286,7 +286,8 @@ function showSummaryStatus(text) {
         // 插入到输入框上方
         const inputArea = document.querySelector('#aiChatInputArea');
         if (inputArea) {
-            inputArea.parentNode.insertBefore(el, inputArea);
+            inputArea.parentNode.style.setProperty('--input-h', inputArea.offsetHeight + 'px');
+            inputArea.parentNode.appendChild(el);
         }
     }
     el.textContent = text;
@@ -748,6 +749,8 @@ function bindEvents() {
             if (polishBtn) {
                 polishBtn.disabled = !(inputEl && inputEl.value.trim().length > 0);
             }
+            // 停止时隐藏摘要生成状态条
+            hideSummaryStatus();
             try {
                 await window.go.main.App.CancelAIStream();
             } catch (_) {}
@@ -2448,6 +2451,8 @@ async function sendUserText(text) {
     if (userMsgId) {
         chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '' });
     }
+    // Phase 1: 用户消息发出后立即更新上下文使用率（含本条消息）
+    updateContextUsage();
     startStreaming(text, userMsgId);
     return true;
 }
@@ -5247,6 +5252,8 @@ async function handleRegenerate(msgEl) {
 
     // 再生（regenerate 不新建用户消息，userMsgID 传 0）
     if (!(await ensureAIReady('重新生成'))) return;
+    // Phase 1: 截断后更新上下文使用率
+    updateContextUsage();
     await startStreaming('', 0);
     scrollToBottom();
 }
@@ -5281,8 +5288,6 @@ async function handleResend(msgEl) {
         try {
             await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
         } catch (_) { /* 静默 */ }
-        // 截断后后端已重算会话 token 缓存，立即刷新右上角总 token 显示
-        updateContextUsage();
     }
 
     // 截断 chatHistory 缓冲区
@@ -5316,6 +5321,9 @@ async function handleResend(msgEl) {
     if (newUserMsgId) {
         chatHistory.push({ id: newUserMsgId, role: 'user', content: content, tokens: resendTokens, meta: resendMeta || '' });
     }
+
+    // Phase 1: 用户消息重发后立即更新上下文使用率（含本条消息）
+    updateContextUsage();
 
     // 重新发送
     if (!(await ensureAIReady('重新发送'))) return;
