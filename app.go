@@ -2547,7 +2547,7 @@ func (a *App) handleAICancelled(ctx context.Context, sessionID, userMsgID uint, 
 	}
 	accumulated, _ := a.aiService.SumSessionTokens(sessionID)
 	_ = a.aiService.UpdateSessionContextTokens(sessionID, accumulated)
-	runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]any{"status": "failed", "message": "用户取消"})
+	runtime.EventsEmit(a.ctx, "ai:summary-status", map[string]any{"status": "failed", "message": "用户取消", "session_id": sessionID})
 	runtime.EventsEmit(a.ctx, "ai:stream-done", streamGen, "", 0.0, 0.0, 0, 0, 0, 0, 0)
 	return true
 }

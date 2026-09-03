@@ -1266,9 +1266,6 @@ function bindEvents() {
                     return;
                 }
                 enterEditMode(msgEl, content);
-            } else if (action === 'resend') {
-                if (isStreaming) return;
-                if (msgEl) handleResend(msgEl);
             } else if (action === 'delete') {
                 if (isStreaming) return;
                 if (msgEl) handleDeleteMsg(msgEl);
@@ -3987,7 +3984,6 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     if (role === 'user') {
         items.push({ type: 'divider' });
         items.push({ action: 'edit', label: '编辑' });
-        items.push({ action: 'resend', label: '重新发送' });
     }
 
     if (role === 'assistant') {
@@ -4006,7 +4002,6 @@ function showAiMsgContextMenu(event, content, role, msgEl) {
     const actionIcons = {
         copy: COPY_ICON,
         edit: EDIT_ICON,
-        resend: RESEND_ICON,
         save: SAVE_ICON,
         regen: REGEN_ICON,
         followUp: FOLLOWUP_ICON,
@@ -5214,124 +5209,90 @@ async function handleRegenerate(msgEl) {
     const prevMsgId = +prevEl.dataset.msgId || 0;
     if (!prevMsgId) return;
 
-    // 移除该 AI 消息及之后的所有后续消息（DOM）
-    let nextEl = msgEl;
-    while (nextEl) {
-        const toRemove = nextEl;
-        nextEl = nextEl.nextElementSibling;
-        if (toRemove.classList.contains('ai-msg')) {
-            toRemove.remove();
+    // 获取前一条用户消息的文本
+    const prevContentDiv = prevEl.querySelector('.msg-content');
+    if (!prevContentDiv) return;
+    const prevTextEl = prevContentDiv.querySelector('.ai-msg-text');
+    const prevContent = prevTextEl ? prevTextEl.textContent : (prevContentDiv.textContent || '');
+
+    // 判断后续是否还有消息
+    const hasNext = msgEl.nextElementSibling !== null &&
+        msgEl.nextElementSibling.classList.contains('ai-msg');
+
+    if (!hasNext) {
+        // ── 情况 1：AI 消息是最后一条，原地重新生成 ──
+        // 删除该 AI 消息 DOM
+        msgEl.remove();
+
+        // 后端仅删除本条 AI 消息
+        try {
+            await window.go.main.App.DeleteAIMessage(msgId);
+        } catch (_) { /* 静默 */ }
+
+        // 从 chatHistory 移除
+        const idx = chatHistory.findIndex(m => m.id === msgId);
+        if (idx >= 0) chatHistory.splice(idx, 1);
+
+        // 同步前一条用户消息的 Meta
+        try {
+            const newMeta = buildUserMessageMeta();
+            await window.go.main.App.UpdateAIMessageMeta(prevMsgId, newMeta);
+            rerenderUserMessageChips(prevMsgId, newMeta);
+            const prevIdx = chatHistory.findIndex(m => m.id === prevMsgId);
+            if (prevIdx >= 0) chatHistory[prevIdx].meta = newMeta;
+        } catch (e) {
+            console.warn('UpdateAIMessageMeta 失败，不影响 LLM 调用', e);
         }
-    }
 
-    // 后端截断（保留前一条用户消息及之前的内容）
-    if (activeSessionId !== null) {
-        try {
-            await window.go.main.App.TruncateAISessionAfterMessage(activeSessionId, prevMsgId);
-        } catch (_) { /* 静默 */ }
-    }
+        // Phase 1: 更新上下文使用率
+        updateContextUsage();
 
-    // 截断 chatHistory 缓冲区
-    const idx = chatHistory.findIndex(m => m.id === msgId);
-    if (idx >= 0) {
-        chatHistory = chatHistory.slice(0, idx);
-    }
+        // 重新生成
+        if (!(await ensureAIReady('重新生成'))) return;
+        await startStreaming('', 0);
+    } else {
+        // ── 情况 2：AI 消息后面还有内容，直接作为新消息发送 ──
+        const regenerateMeta = buildUserMessageMeta();
 
-    // 同步前一条用户消息的 Meta：从当前工具栏状态派生后写回 DB，避免旧 chip 与新行为脱节
-    // 失败仅 warn，不阻塞 LLM 调用
-    try {
-        const newMeta = buildUserMessageMeta();
-        await window.go.main.App.UpdateAIMessageMeta(prevMsgId, newMeta);
-        rerenderUserMessageChips(prevMsgId, newMeta);
-        // 同步 chatHistory 缓冲区内该消息的 meta 字段
-        const prevIdx = chatHistory.findIndex(m => m.id === prevMsgId);
-        if (prevIdx >= 0) chatHistory[prevIdx].meta = newMeta;
-    } catch (e) {
-        console.warn('UpdateAIMessageMeta 失败，不影响 LLM 调用', e);
-    }
-
-    // 再生（regenerate 不新建用户消息，userMsgID 传 0）
-    if (!(await ensureAIReady('重新生成'))) return;
-    // Phase 1: 截断后更新上下文使用率
-    updateContextUsage();
-    await startStreaming('', 0);
-    scrollToBottom();
-}
-
-/**
- * 重新发送用户消息
- */
-async function handleResend(msgEl) {
-    if (!msgEl || !msgEl.parentNode || isStreaming) return;
-
-    const msgId = +msgEl.dataset.msgId || 0;
-    if (!msgId) return;
-
-    const contentDiv = msgEl.querySelector('.msg-content');
-    if (!contentDiv) return;
-    // 用户消息文本包在 .ai-msg-text 内，contentDiv.textContent 还会包含 chip 标签，需要排除
-    const textEl = contentDiv.querySelector('.ai-msg-text');
-    const content = textEl ? textEl.textContent : (contentDiv.textContent || '');
-
-    // 移除该消息及之后的所有后续消息（DOM）
-    let nextEl = msgEl;
-    while (nextEl) {
-        const toRemove = nextEl;
-        nextEl = nextEl.nextElementSibling;
-        if (toRemove.classList.contains('ai-msg')) {
-            toRemove.remove();
+        // 保存为新用户消息
+        let newUserMsgId = 0;
+        let regenerateTokens = 0;
+        if (activeSessionId !== null) {
+            try {
+                const result = await window.go.main.App.SaveAIMessage(
+                    activeSessionId, prevContent, 'user', regenerateMeta
+                );
+                newUserMsgId = result?.msgID || 0;
+                regenerateTokens = result?.tokens || 0;
+            } catch (_) { /* 静默 */ }
         }
+
+        // 添加新用户消息气泡
+        addMessage(prevContent, 'user', undefined, undefined, undefined, regenerateTokens, newUserMsgId || undefined, undefined, undefined, false, false, regenerateMeta);
+        const newUserMsgEl = messagesInnerEl.lastElementChild;
+        if (newUserMsgEl) {
+            newUserMsgEl.appendChild(createMsgActions(prevContent, 'user', undefined, regenerateTokens));
+            bindMsgContextMenu(newUserMsgEl, prevContent, 'user');
+        }
+        // 同步 push 到 chatHistory
+        if (newUserMsgId) {
+            chatHistory.push({
+                id: newUserMsgId, role: 'user', content: prevContent,
+                tokens: regenerateTokens, meta: regenerateMeta || ''
+            });
+        }
+
+        // Phase 1: 更新上下文使用率
+        updateContextUsage();
+
+        // 重新发送（不截断后续内容）
+        if (!(await ensureAIReady('重新发送'))) return;
+        await startStreaming(prevContent, newUserMsgId);
+
+        // 清空上传文件列表
+        uploadedFiles = [];
+        renderFileChips();
     }
-
-    // 后端截断（删除本条及之后的消息）
-    if (activeSessionId !== null) {
-        try {
-            await window.go.main.App.TruncateAISessionAtMessage(activeSessionId, msgId);
-        } catch (_) { /* 静默 */ }
-    }
-
-    // 截断 chatHistory 缓冲区
-    const idx = chatHistory.findIndex(m => m.id === msgId);
-    if (idx >= 0) {
-        chatHistory = chatHistory.slice(0, idx);
-    }
-
-    // 从当前工具栏状态派生本次重发消息的 Meta（与 sendUserText 一致）
-    const resendMeta = buildUserMessageMeta();
-
-    // 先保存用户消息到数据库，拿到 msgId 和 token 数
-    let newUserMsgId = 0;
-    let resendTokens = 0;
-    if (activeSessionId !== null) {
-        try {
-            const result = await window.go.main.App.SaveAIMessage(activeSessionId, content, 'user', resendMeta);
-            newUserMsgId = result?.msgID || 0;
-            resendTokens = result?.tokens || 0;
-        } catch (_) { /* 静默 */ }
-    }
-
-    // 重新添加用户消息气泡（带上 msgId、token 和 meta）
-    addMessage(content, 'user', undefined, undefined, undefined, resendTokens, newUserMsgId || undefined, undefined, undefined, false, false, resendMeta);
-    const newUserMsgEl = messagesInnerEl.lastElementChild;
-    if (newUserMsgEl) {
-        newUserMsgEl.appendChild(createMsgActions(content, 'user', undefined, resendTokens));
-        bindMsgContextMenu(newUserMsgEl, content, 'user');
-    }
-    // 同步 push 到 chatHistory（修复取消编辑/重新生成时 chip 丢失）
-    if (newUserMsgId) {
-        chatHistory.push({ id: newUserMsgId, role: 'user', content: content, tokens: resendTokens, meta: resendMeta || '' });
-    }
-
-    // Phase 1: 用户消息重发后立即更新上下文使用率（含本条消息）
-    updateContextUsage();
-
-    // 重新发送
-    if (!(await ensureAIReady('重新发送'))) return;
-    await startStreaming(content, newUserMsgId);
-
-    // 重新发送后清空上传文件列表（与 onSend 保持一致）
-    uploadedFiles = [];
-    renderFileChips();
 
     scrollToBottom();
 }
