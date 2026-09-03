@@ -81,6 +81,10 @@ let _launcherEl = null;
 let _launcherInput = null;
 let _launcherGrid = null;
 let _launcherEmpty = null;
+/** 缓存所有 launcher-item DOM 元素，避免每次过滤都 querySelectorAll */
+let _launcherItemEls = null;
+/** 过滤防抖定时器 */
+let _filterDebounceTimer = null;
 
 /**
  * 获取所有可见（未隐藏）的 item DOM 元素
@@ -131,7 +135,7 @@ function getPinyinKey(label) {
  */
 function filterItems(query) {
     if (!_launcherGrid) return;
-    const items = _launcherGrid.querySelectorAll('.launcher-item');
+    const items = _launcherItemEls || _launcherGrid.querySelectorAll('.launcher-item');
     const trimmed = query.trim().toLowerCase();
     // 去掉空白后用于拼音连续串匹配（如输入 "dai ban" 也能命中 "daiban..."）
     const compact = trimmed.replace(/\s+/g, '');
@@ -327,6 +331,8 @@ function renderLauncherItems() {
             <span class="launcher-item-label">${item.label}</span>
         </div>`
     ).join('');
+    // 缓存 item 元素列表，避免每次过滤都重新查询 DOM
+    _launcherItemEls = _launcherGrid.querySelectorAll('.launcher-item');
 }
 
 /**
@@ -371,6 +377,8 @@ function openLauncher() {
  * @param {Function} [onDone] - 离场动画完成后调用
  */
 function closeLauncher(onDone) {
+    // 清理过滤防抖定时器，避免关闭后仍执行无意义的过滤
+    clearTimeout(_filterDebounceTimer);
     if (!_launcherEl || !_launcherEl.classList.contains('visible')) {
         if (typeof onDone === 'function') onDone();
         return;
@@ -410,9 +418,12 @@ export function initLauncher() {
     // 渲染卡片
     renderLauncherItems();
 
-    // 输入框 input 事件：实时过滤
+    // 输入框 input 事件：实时过滤（带防抖，避免快速输入时频繁过滤）
     _launcherInput.addEventListener('input', () => {
-        filterItems(_launcherInput.value);
+        clearTimeout(_filterDebounceTimer);
+        _filterDebounceTimer = setTimeout(() => {
+            filterItems(_launcherInput.value);
+        }, 80);
     });
 
     // 输入框 keydown 事件：方向键导航

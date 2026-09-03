@@ -125,9 +125,10 @@
 .launcher-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
     gap: 10px;
     padding: 16px 18px 20px;
-    /* 固定 3 行高度：item(~84px) × 3 + gap(10px) × 2 + padding(16+20) = 308px */
+    /* 固定 3 行高度：item * 3 + gap * 2 + padding = 308px */
     height: 308px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -167,35 +168,7 @@
     transition: background 0.18s ease-out,
                 transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
                 border-color 0.18s ease-out;
-    animation: launcherItemIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    /* 每个 item stagger，通过 nth-child 设置 animation-delay */
 }
-
-@keyframes launcherItemIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* Stagger 延迟 */
-.launcher-item:nth-child(1)  { animation-delay: 0.00s; }
-.launcher-item:nth-child(2)  { animation-delay: 0.02s; }
-.launcher-item:nth-child(3)  { animation-delay: 0.04s; }
-.launcher-item:nth-child(4)  { animation-delay: 0.06s; }
-.launcher-item:nth-child(5)  { animation-delay: 0.08s; }
-.launcher-item:nth-child(6)  { animation-delay: 0.10s; }
-.launcher-item:nth-child(7)  { animation-delay: 0.12s; }
-.launcher-item:nth-child(8)  { animation-delay: 0.14s; }
-.launcher-item:nth-child(9)  { animation-delay: 0.16s; }
-.launcher-item:nth-child(10) { animation-delay: 0.18s; }
-.launcher-item:nth-child(11) { animation-delay: 0.20s; }
-.launcher-item:nth-child(12) { animation-delay: 0.22s; }
-.launcher-item:nth-child(13) { animation-delay: 0.24s; }
 
 /* 一般 hover */
 .launcher-item:hover {
