@@ -5,6 +5,7 @@ export namespace agent {
 	    Label: string;
 	    Enabled: boolean;
 	    PlanOnly: boolean;
+	    AlwaysOn: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolMeta(source);
@@ -16,6 +17,7 @@ export namespace agent {
 	        this.Label = source["Label"];
 	        this.Enabled = source["Enabled"];
 	        this.PlanOnly = source["PlanOnly"];
+	        this.AlwaysOn = source["AlwaysOn"];
 	    }
 	}
 

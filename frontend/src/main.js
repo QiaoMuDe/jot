@@ -9807,7 +9807,7 @@ function updateAgentToolsButtonText() {
     let enabledCount = 0;
     let totalCount = 0;
     agentToolsMeta.forEach((tool) => {
-        if (tool.PlanOnly) return; // 排除 Plan 模式专属工具
+        if (tool.PlanOnly || tool.AlwaysOn) return; // 排除 Plan 模式专属与常驻工具
         totalCount++;
         if (agentToolsDisabled.indexOf(tool.Name) === -1) enabledCount++;
     });
@@ -9819,8 +9819,8 @@ function updateAgentToolsButtonText() {
  */
 function updateSelectAllCheckboxState() {
     if (!agentToolsSelectAllCheckbox) return;
-    // 排除 Plan 模式专属工具后统计
-    const controllableTools = agentToolsMeta.filter(tool => !tool.PlanOnly);
+    // 排除 Plan 模式专属与常驻工具后统计
+    const controllableTools = agentToolsMeta.filter(tool => !tool.PlanOnly && !tool.AlwaysOn);
     if (controllableTools.length === 0) {
         agentToolsSelectAllCheckbox.checked = false;
         agentToolsSelectAllCheckbox.indeterminate = false;
@@ -9850,7 +9850,7 @@ function toggleSelectAllTools() {
     const shouldEnable = agentToolsSelectAllCheckbox.checked && !agentToolsSelectAllCheckbox.indeterminate;
 
     agentToolsMeta.forEach(tool => {
-        if (tool.PlanOnly) return; // Plan 模式专属工具不参与全选/全不选
+        if (tool.PlanOnly || tool.AlwaysOn) return; // Plan 模式专属与常驻工具不参与全选/全不选
         const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
         if (isEnabled === shouldEnable) return; // 状态未变，跳过
 
@@ -9880,8 +9880,8 @@ function toggleSelectAllTools() {
         }
     });
 
-    // 更新所有子 checkbox 的 UI 状态（排除 Plan 模式专属工具）
-    document.querySelectorAll('.ai-agent-tools-item:not(.is-plan-only) input[type="checkbox"]').forEach(cb => {
+    // 更新所有子 checkbox 的 UI 状态（排除 Plan 模式专属与常驻工具）
+    document.querySelectorAll('.ai-agent-tools-item:not(.is-plan-only):not(.is-always-on) input[type="checkbox"]').forEach(cb => {
         cb.checked = shouldEnable;
     });
 
@@ -10027,6 +10027,31 @@ function createAgentToolRow(tool) {
                 setTimeout(() => itemLabel.classList.remove('shake'), 400);
             }
             window.showNotification?.('此工具仅在 Plan 模式下可用，请切换到 Plan 模式', 'info');
+        });
+    }
+
+    // AlwaysOn 常驻工具：强制启用、不可禁用，点击抖动提示
+    if (tool.AlwaysOn) {
+        checkbox.checked = true;
+        checkbox.disabled = true;
+        // 前端状态清理：常驻工具不应出现在禁用集合（后端装配时也已豁免），
+        // 避免后续 saveSettings 把一条无效禁用项写回配置。
+        const alwaysOnIdx = agentToolsDisabled.indexOf(tool.Name);
+        if (alwaysOnIdx !== -1) agentToolsDisabled.splice(alwaysOnIdx, 1);
+        const alwaysOnDeIdx = agentToolsChanges.disabled.indexOf(tool.Name);
+        if (alwaysOnDeIdx !== -1) agentToolsChanges.disabled.splice(alwaysOnDeIdx, 1);
+        itemLabel.classList.add('is-always-on');
+        const hint = document.createElement('span');
+        hint.className = 'always-on-hint';
+        hint.textContent = '此工具始终可用，不可禁用';
+        itemLabel.appendChild(hint);
+        itemLabel.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!itemLabel.classList.contains('shake')) {
+                itemLabel.classList.add('shake');
+                setTimeout(() => itemLabel.classList.remove('shake'), 400);
+            }
+            window.showNotification?.('此工具为常驻能力，不可禁用', 'info');
         });
     }
 

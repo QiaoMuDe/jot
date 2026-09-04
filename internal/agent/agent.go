@@ -59,6 +59,7 @@ type Deps struct {
 	Notebook *services.NotebookService // Notebook 笔记本服务（manage_notebook 工具使用）
 	Tag      *services.TagService      // Tag 标签服务（manage_tag 工具使用）
 	Note     *services.NoteService     // Note 笔记服务（manage_note 工具使用）
+	Memory   *services.MemoryService   // 全局记忆服务（manage_memory 工具使用）
 	Stats    *services.StatsService    // Stats 数据统计聚合服务（get_stats 工具使用）
 	Logger   *fastlog.Logger
 	// MCPServerDB 外部 MCP 服务器配置的数据来源（数据库驱动）；

@@ -82,6 +82,24 @@ Go 包文档是工具清单的**唯一权威来源**，各补一行：
 
 大多数工具不需要设置此字段（零值 = 两种模式都可用）。
 
+### 第 5b 步：标记常驻不可禁用工具（可选）
+
+若工具是**核心能力，不允许用户在前端禁用**（如 `manage_memory` / `ask_user`），在 [tools/meta.go](internal/agent/tools/meta.go) 的 `BuiltinTools()` 中将该条目的 `AlwaysOn` 设为 `true`：
+
+```go
+{Name: "your_core_tool", Label: "说明", AlwaysOn: true},
+```
+
+`AlwaysOn` 的效果：
+- **后端**：读写 `ai_agent_tools_disabled` 的装配入口（[app.go](app.go) 的 `DisabledTools` 过滤处）会将该工具名从禁用集合中**强制剔除**（若配置残留则记 Warn 日志），保证任何配置/历史残留下模型都可见、可调用。
+- **前端**：设置页该工具 checkbox 置灰不可勾选（复用仅 Plan 模式的禁用样式），强制勾选、不参与"全选/全不选"，可配置时点击触发抖动提示。
+
+与 `PlanOnly` 的区别：
+- `PlanOnly` 限制"**仅 Plan 模式**可用"，Agent 模式不注册、模型不可见。
+- `AlwaysOn` 仅保证"**不可被禁用**"，工具本身在两种模式都正常注册、可用。
+
+> 使用原则：`AlwaysOn` 只用于"禁用即导致注入与工具割裂 / 失能"的系统级能力，勿滥用为非系统能力加锁。当前强制启用集合见 [tools/doc.go](internal/agent/tools/doc.go)。
+
 ### 第 6 步：按需在工具实现内维护动作文案（可选）
 
 工具状态条与历史明细直接展示英文工具名（recall_notes 等），无需维护中文名映射；若要在开始调用时展示具体动作（如"创建待办"），让工具实现可选接口 `ActionTextProvider`（`ActionText(argumentsInJSON string) string`），父包在 `tool_start` 时自动生成 `action_text` 下发前端，无需修改前端（见 §8）。此步可跳过。

@@ -29,11 +29,13 @@ type Request struct {
 // ToolMeta 内置工具清单条目（供前端工具清单展示）。
 // Enabled 表示当前是否启用（默认全部启用，按禁用集合过滤）。
 // PlanOnly 标记该工具仅在 Plan 模式下可用。
+// AlwaysOn 标记该工具为常驻/不可禁用，前端需置灰勾选并展示说明。
 type ToolMeta struct {
 	Name     string // 英文工具名
 	Label    string // 一行中文说明
 	Enabled  bool   // 当前是否启用
 	PlanOnly bool   // 仅 Plan 模式可用
+	AlwaysOn bool   // 常驻/不可禁用
 }
 
 // HistoryMessage 一条历史消息（DB 中的 user/assistant 消息，已由调用方截断）。

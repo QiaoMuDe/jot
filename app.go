@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,6 +91,7 @@ type App struct {
 	todoService      *services.TodoService
 	passwordService  *services.PasswordService
 	statsService     *services.StatsService
+	memoryService    *services.MemoryService
 	mcpServerService *services.MCPServerService
 	LogSvc           *services.LogService
 	aiStreamCancel   context.CancelFunc
@@ -169,6 +171,7 @@ func NewApp() *App {
 	todoService := services.NewTodoService(db, logSvc.Logger)
 	passwordService := services.NewPasswordService(db, logSvc.Logger)
 	statsService := services.NewStatsService(noteService, tagService, todoService, passwordService, aiService, database.DefaultDBPath)
+	memoryService := services.NewMemoryService(db, logSvc.Logger)
 
 	app := &App{
 		db:               db,
@@ -182,6 +185,7 @@ func NewApp() *App {
 		todoService:      todoService,
 		passwordService:  passwordService,
 		statsService:     statsService,
+		memoryService:    memoryService,
 		mcpServerService: services.NewMCPServerService(db),
 		LogSvc:           logSvc,
 	}
@@ -197,6 +201,7 @@ func NewApp() *App {
 		Notebook:       notebookService,
 		Tag:            tagService,
 		Note:           noteService,
+		Memory:         memoryService,
 		Stats:          statsService,
 		Logger:         logSvc.Logger,
 		MCPServerDB:    db,
@@ -2220,6 +2225,20 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			}
 		}
 
+		// AlwaysOn 豁免：常驻工具（如 manage_memory）即使出现在禁用集合也强制保留，
+		// 避免"记忆注入生效但写回工具被禁"的割裂。豁免集中在装配入口，不影响 GetAgentTools 展示。
+		var exempt []string
+		for _, m := range tools.BuiltinTools() {
+			if m.AlwaysOn && slices.Contains(disabledTools, m.Name) {
+				exempt = append(exempt, m.Name)
+				disabledTools = slices.DeleteFunc(disabledTools, func(n string) bool { return n == m.Name })
+			}
+		}
+		if len(exempt) > 0 {
+			a.LogSvc.Logger.Warnw("AlwaysOn 工具被禁用，强制保留（不可禁用）",
+				fastlog.String("tools", strings.Join(exempt, ",")))
+		}
+
 		// 调用 Agent 模块执行对话，事件流直接转发给前端（Agent 内部发 ai:stream-chunk / ai:tool-status）
 		a.LogSvc.Logger.Debugw("AI Agent 流开始",
 			fastlog.Int("history_count", len(history)),
@@ -2423,6 +2442,19 @@ func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, refe
 		tzName,
 		now.Format("-07:00"))
 
+	// 长期记忆注入：独立于会话摘要与笔记召回，跨会话持续生效。
+	// 仅注入每条记忆的 Summary（简短描述），不含 Content 详情；失败或为空时跳过，不阻断提问。
+	memories, err := a.memoryService.List()
+	if err != nil {
+		a.LogSvc.Logger.Warnw("长期记忆注入失败，已跳过", fastlog.Error(err))
+	} else if len(memories) > 0 {
+		instruction.WriteString("\n\n【长期记忆】以下是你对用户的长期记忆（可持续更新，供跨会话参考）：")
+		for i := range memories {
+			fmt.Fprintf(&instruction, "\n- id=%d. %s", memories[i].ID, memories[i].Summary)
+		}
+		instruction.WriteString("\n（以上仅列出记忆的简短描述。如需查看某条记忆的完整详情，可通过 manage_memory 工具的 get 动作按 id 查询。）")
+	}
+
 	return instruction.String()
 }
 
@@ -2601,7 +2633,7 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 	metas := tools.BuiltinTools()
 	result := make([]agent.ToolMeta, 0, len(metas))
 	for _, m := range metas {
-		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name], PlanOnly: m.PlanOnly})
+		result = append(result, agent.ToolMeta{Name: m.Name, Label: m.Label, Enabled: !disabledSet[m.Name], PlanOnly: m.PlanOnly, AlwaysOn: m.AlwaysOn})
 	}
 	// 追加已预热 MCP 服务器的工具（未预热时不显示，不阻塞等待）
 	if a.mcpPool != nil {
@@ -4140,6 +4172,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 	a.vectorService = services.NewVectorService(db, a.LogSvc.Logger)
 	a.todoService = services.NewTodoService(db, a.LogSvc.Logger)
 	a.passwordService = services.NewPasswordService(db, a.LogSvc.Logger)
+	a.memoryService = services.NewMemoryService(db, a.LogSvc.Logger)
 	a.mcpServerService = services.NewMCPServerService(db)
 	a.statsService = services.NewStatsService(a.noteService, a.tagService, a.todoService, a.passwordService, a.aiService, database.DefaultDBPath)
 	// 重建日志服务
@@ -4181,6 +4214,7 @@ func (a *App) rebuildServices(db *gorm.DB) {
 		Notebook:       a.notebookService,
 		Tag:            a.tagService,
 		Note:           a.noteService,
+		Memory:         a.memoryService,
 		Stats:          a.statsService,
 		Logger:         a.LogSvc.Logger,
 		MCPServerDB:    db,

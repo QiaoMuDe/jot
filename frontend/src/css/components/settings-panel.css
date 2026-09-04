@@ -1692,25 +1692,31 @@
   text-overflow: ellipsis;
 }
 
-/* Plan 模式专属工具禁用样式 */
-.ai-agent-tools-item.is-plan-only {
+/* Plan 模式专属 / AlwaysOn 常驻工具共用禁用样式 */
+.ai-agent-tools-item.is-plan-only,
+.ai-agent-tools-item.is-always-on {
   opacity: 0.55;
   cursor: not-allowed;
 }
 .ai-agent-tools-item.is-plan-only .ai-agent-tools-name,
-.ai-agent-tools-item.is-plan-only .ai-agent-tools-desc {
+.ai-agent-tools-item.is-plan-only .ai-agent-tools-desc,
+.ai-agent-tools-item.is-always-on .ai-agent-tools-name,
+.ai-agent-tools-item.is-always-on .ai-agent-tools-desc {
   color: var(--text-muted);
 }
-.ai-agent-tools-item.is-plan-only input[type="checkbox"] {
+.ai-agent-tools-item.is-plan-only input[type="checkbox"],
+.ai-agent-tools-item.is-always-on input[type="checkbox"] {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.plan-only-hint {
+/* 模式提示（仅 Plan 模式可用 / 常驻不可禁用）统一主题色、更醒目 */
+.plan-only-hint,
+.always-on-hint {
   font-size: 0.68rem;
-  color: var(--text-muted);
+  color: var(--accent);
   margin-left: 6px;
   font-style: italic;
-  opacity: 0.75;
+  font-weight: 600;
 }
 @keyframes plan-only-shake {
   0%, 100% { transform: translateX(0); }
@@ -1719,7 +1725,8 @@
   60% { transform: translateX(-3px); }
   80% { transform: translateX(2px); }
 }
-.ai-agent-tools-item.is-plan-only.shake {
+.ai-agent-tools-item.is-plan-only.shake,
+.ai-agent-tools-item.is-always-on.shake {
   animation: plan-only-shake 0.4s ease;
 }
 
