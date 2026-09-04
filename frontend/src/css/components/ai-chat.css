@@ -1422,6 +1422,50 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）：compact 变体 + 统计元素 ── */
+.ai-mode-tip.compact {
+    width: 260px;
+}
+
+/* 数值高亮：等宽数字防跳动 */
+.tip-val {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 思考/生成耗时占比条：两段 flex 按比例分宽 */
+.tip-timebar {
+    display: flex;
+    height: 6px;
+    margin: 7px 0 2px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--hover-bg);
+}
+.tip-timebar-seg.seg-thinking { width: 0; background: var(--warning); }
+.tip-timebar-seg.seg-generate { flex: 1; background: var(--success); }
+
+/* 占比条图例：色点 + 时长 */
+.tip-legend {
+    display: flex;
+    gap: 12px;
+}
+.tip-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.tip-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.tip-dot.dot-thinking { background: var(--warning); }
+.tip-dot.dot-generate { background: var(--success); }
+
 /* AI 回复期间锁定：置灰（不使用 pointer-events，保留点击以触发抖动提示） */
 #aiModeToggle.is-locked .ai-mode-btn,
 .ai-chat-search-toggle.is-locked,

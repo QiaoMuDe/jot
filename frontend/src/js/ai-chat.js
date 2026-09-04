@@ -22,6 +22,7 @@ let contextUsageArcEl = null;   // 环形进度弧（stroke-dashoffset 控制比
 let contextUsageTextEl = null;  // 百分比 + 上限文本
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
+let _hideMsgStatsTip = null;  // initModeTips 注入：收起消息统计悬停卡（resetAIChatState 用）
 let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
 let streamPlanData = null;    // 本轮流的执行计划（落库 plan，历史回放）
 let streamPlanCardEl = null;  // 实时计划卡片 DOM 引用（流式过程中动态更新）
@@ -480,9 +481,13 @@ function initModeTips() {
         if (tip) tipMap.set(btn, tip);
     });
     let activeBtn = null;
+    let activeTipEl = null;   // 消息统计卡当前显示的 tip（与 tipMap 体系独立，供 ResizeObserver 跟随）
+    let activeTrigger = null; // 消息统计卡当前触发元素
+    let showTimer = null;     // 悬停延迟计时器：快速划过按钮/圆环不弹卡
     const MARGIN = 8;   // tooltip 距视口边缘的安全边距
     const GAP = 9;      // tooltip 与按钮的间距
     const TIP_W = 248;  // 与 CSS 中 .ai-mode-tip 的 width 保持一致
+    const HOVER_DELAY = 300; // 悬停延迟：与消息统计卡一致，防止鼠标划过就显示
 
     /**
      * 定位 tooltip：水平居中于按钮（中心对齐），视口左/右缘不足时向内偏移防溢出；
@@ -492,11 +497,12 @@ function initModeTips() {
     const position = (btn, tip) => {
         const rect = btn.getBoundingClientRect();
         const tipH = tip.offsetHeight;
+        const tipW = tip.offsetWidth || TIP_W; // compact 变体等自定义宽度按实际值取
         const vw = window.innerWidth || document.documentElement.clientWidth;
         // 中心对齐，再按视口边缘 clamp
-        let left = rect.left + rect.width / 2 - TIP_W / 2;
+        let left = rect.left + rect.width / 2 - tipW / 2;
         if (left < MARGIN) left = MARGIN;
-        if (left + TIP_W > vw - MARGIN) left = Math.max(MARGIN, vw - MARGIN - TIP_W);
+        if (left + tipW > vw - MARGIN) left = Math.max(MARGIN, vw - MARGIN - tipW);
         const below = rect.top < tipH + GAP + MARGIN;
         const top = below ? rect.bottom + GAP : rect.top - GAP - tipH;
         tip.classList.toggle('below', below);
@@ -514,14 +520,23 @@ function initModeTips() {
         activeBtn = btn;
         requestAnimationFrame(() => tip.classList.add('visible')); // 下一帧加类，确保过渡生效
     };
+    // 悬停延迟调度：停留超过 HOVER_DELAY 才真正显示（mouseleave 取消）
+    const scheduleShow = btn => {
+        if (showTimer) clearTimeout(showTimer);
+        showTimer = setTimeout(() => {
+            showTimer = null;
+            show(btn);
+        }, HOVER_DELAY);
+    };
     const hide = () => {
+        if (showTimer) { clearTimeout(showTimer); showTimer = null; }
         if (!activeBtn) return;
         tipMap.get(activeBtn)?.classList.remove('visible');
         activeBtn = null;
     };
 
     toggle.querySelectorAll('.ai-mode-btn').forEach(btn => {
-        btn.addEventListener('mouseenter', () => show(btn));
+        btn.addEventListener('mouseenter', () => scheduleShow(btn));
         btn.addEventListener('mouseleave', hide);
     });
 
@@ -530,8 +545,157 @@ function initModeTips() {
     const usageTip = portal.querySelector('.ai-mode-tip[data-tip="context-usage"]');
     if (usageEl && usageTip) {
         tipMap.set(usageEl, usageTip);
-        usageEl.addEventListener('mouseenter', () => show(usageEl));
+        usageEl.addEventListener('mouseenter', () => scheduleShow(usageEl));
         usageEl.addEventListener('mouseleave', hide);
+    }
+
+    // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）：事件委托 + 单实例动态填充 ──
+    // 标签数量随消息增长，不逐条绑定；portal fixed 定位不随消息区滚动，滚动即隐藏
+    const aiStatsTip = portal.querySelector('.ai-mode-tip[data-tip="ai-msg-stats"]');
+    const userStatsTip = portal.querySelector('.ai-mode-tip[data-tip="user-msg-stats"]');
+    if ((aiStatsTip || userStatsTip) && messagesEl) {
+        const aiEls = {
+            elapsed: document.getElementById('aiMsgStatsElapsed'),
+            timebar: document.getElementById('aiMsgStatsTimebar'),
+            segThink: document.getElementById('aiMsgStatsSegThink'),
+            legend: document.getElementById('aiMsgStatsLegend'),
+            thinkVal: document.getElementById('aiMsgStatsThinkVal'),
+            genVal: document.getElementById('aiMsgStatsGenVal'),
+            tokens: document.getElementById('aiMsgStatsTokens'),
+            timeRow: document.getElementById('aiMsgStatsTimeRow'),
+            time: document.getElementById('aiMsgStatsTime'),
+            toolsRow: document.getElementById('aiMsgStatsToolsRow'),
+            tools: document.getElementById('aiMsgStatsTools'),
+            recallRow: document.getElementById('aiMsgStatsRecallRow'),
+            recall: document.getElementById('aiMsgStatsRecall'),
+        };
+        const userEls = {
+            timeRow: document.getElementById('aiUserStatsTimeRow'),
+            time: document.getElementById('aiUserStatsTime'),
+            tokens: document.getElementById('aiUserStatsTokens'),
+        };
+        let hoverTimer = null;
+
+        const hideMsgTip = () => {
+            if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+            if (activeTipEl) {
+                activeTipEl.classList.remove('visible');
+                activeTipEl = null;
+                activeTrigger = null;
+            }
+        };
+
+        const showMsgTip = (trigger, tip) => {
+            position(trigger, tip);
+            activeTipEl = tip;
+            activeTrigger = trigger;
+            requestAnimationFrame(() => tip.classList.add('visible'));
+        };
+
+        /** 按 msgId 查 chatHistory 条目（查不到则不弹卡，避免错误数据） */
+        const findMsgEntry = (trigger) => {
+            const msgEl = trigger.closest('.ai-msg');
+            const msgId = parseInt(msgEl?.dataset.msgId || '0');
+            if (!msgId) return null;
+            const idx = chatHistory.findIndex(m => m.id === msgId);
+            return idx >= 0 ? chatHistory[idx] : null;
+        };
+
+        /** 精确 token 值（千分位），配合 formatTokens 紧凑值展示 */
+        const exactTokens = (n) => n > 0 ? n.toLocaleString() : '—';
+
+        const fillAiTip = (entry) => {
+            const think = entry.thinking_elapsed || 0;
+            const total = entry.total_elapsed || 0;
+            const gen = Math.max(total - think, 0);
+            aiEls.elapsed.textContent = total > 0 ? total.toFixed(1) + ' 秒' : '—';
+            // 思考/生成拆分：无思考时长时隐藏占比条与图例，仅保留总耗时行
+            if (total > 0 && think > 0) {
+                aiEls.timebar.style.display = '';
+                aiEls.legend.style.display = '';
+                // 钳制到 100%：异常数据（思考耗时 > 总耗时）时不让分段溢出
+                aiEls.segThink.style.width = Math.min(think / total * 100, 100).toFixed(1) + '%';
+                aiEls.thinkVal.textContent = think.toFixed(1) + 's';
+                aiEls.genVal.textContent = gen.toFixed(1) + 's';
+            } else {
+                aiEls.timebar.style.display = 'none';
+                aiEls.legend.style.display = 'none';
+            }
+            aiEls.tokens.textContent = entry.tokens > 0
+                ? formatTokens(entry.tokens) + '（' + exactTokens(entry.tokens) + '）'
+                : '—';
+            // 回答时间：流式完成的消息 chatHistory 未落 created_at，缺数据时隐藏该行
+            const fullTime = formatFullTime(entry.created_at);
+            aiEls.timeRow.style.display = fullTime ? '' : 'none';
+            if (fullTime) aiEls.time.textContent = fullTime;
+            // 工具/召回统计：有则显示（tool_calls/recall_cards 为 JSON 字符串）
+            let toolsText = '';
+            if (entry.tool_calls) {
+                try {
+                    const recs = JSON.parse(entry.tool_calls);
+                    if (Array.isArray(recs)) {
+                        const names = {};
+                        recs.forEach(r => { if (r?.action === 'tool_start' && r.name) names[r.name] = true; });
+                        const calls = recs.filter(r => r?.action === 'tool_start').length;
+                        const distinct = Object.keys(names).length;
+                        if (calls > 0) toolsText = calls + ' 次 · ' + distinct + ' 个工具';
+                    }
+                } catch (_) { /* JSON 异常时忽略该行 */ }
+            }
+            aiEls.toolsRow.style.display = toolsText ? '' : 'none';
+            if (toolsText) aiEls.tools.textContent = toolsText;
+            let recallText = '';
+            if (entry.recall_cards) {
+                try {
+                    const cards = JSON.parse(entry.recall_cards);
+                    if (Array.isArray(cards) && cards.length > 0) recallText = cards.length + ' 篇';
+                } catch (_) { /* JSON 异常时忽略该行 */ }
+            }
+            aiEls.recallRow.style.display = recallText ? '' : 'none';
+            if (recallText) aiEls.recall.textContent = recallText;
+        };
+
+        const fillUserTip = (entry) => {
+            const fullTime = formatFullTime(entry.created_at);
+            userEls.timeRow.style.display = fullTime ? '' : 'none';
+            if (fullTime) userEls.time.textContent = fullTime;
+            // Token 显示与 AI 统计卡统一：紧凑值（精确值）
+            userEls.tokens.textContent = entry.tokens > 0
+                ? formatTokens(entry.tokens) + '（' + exactTokens(entry.tokens) + '）'
+                : '—';
+        };
+
+        messagesEl.addEventListener('mouseover', (e) => {
+            const target = e.target.closest('.ai-msg-time, .user-tokens');
+            if (!target) return;
+            // 委托绑定在 messagesEl（滚动容器，持久存在）上：
+            // resetAIChatState 会重建 .ai-chat-messages-inner，绑在内层会随重建失效
+            if (target === activeTrigger) return; // 已停留在当前触发元素上
+            const entry = findMsgEntry(target);
+            if (!entry) return; // 无 msgId / 无历史条目：不弹卡
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hideMsgTip();
+            hoverTimer = setTimeout(() => {
+                if (target.classList.contains('ai-msg-time')) {
+                    if (aiStatsTip) { fillAiTip(entry); showMsgTip(target, aiStatsTip); }
+                } else {
+                    if (userStatsTip) { fillUserTip(entry); showMsgTip(target, userStatsTip); }
+                }
+            }, HOVER_DELAY);
+        });
+        messagesEl.addEventListener('mouseout', (e) => {
+            const target = e.target.closest('.ai-msg-time, .user-tokens');
+            if (!target) return;
+            // 同一标签内部子节点间移动不算离开
+            const related = e.relatedTarget?.closest?.('.ai-msg-time, .user-tokens');
+            if (related === target) return;
+            hideMsgTip();
+        });
+        // 暴露给 resetAIChatState：恢复出厂/还原备份清空消息 DOM 时收起残留的统计卡
+        _hideMsgStatsTip = hideMsgTip;
+        // portal 为 fixed 定位：消息区滚动 / 窗口缩放时立即隐藏
+        messagesEl.addEventListener('scroll', hideMsgTip, { passive: true });
+        window.addEventListener('resize', hideMsgTip);
     }
 
     // 布局变化跟随：监听输入区尺寸（侧边栏折叠动画挤压 content → input-area 宽度变化、
@@ -539,6 +703,7 @@ function initModeTips() {
     if (window.ResizeObserver && inputAreaEl) {
         new ResizeObserver(() => {
             if (activeBtn) position(activeBtn, tipMap.get(activeBtn));
+            if (activeTipEl) position(activeTrigger, activeTipEl);
         }).observe(inputAreaEl);
     }
 }
@@ -584,6 +749,20 @@ function formatSmartTime(isoString) {
     }
     // 跨年：YYYY-MM-DD HH:MM
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hhmm;
+}
+
+/**
+ * 完整格式化时间戳（悬停统计卡用）：YYYY-MM-DD HH:MM:SS
+ * @param {string} isoString - ISO 8601 时间字符串
+ * @returns {string} 无效/空输入返回空串
+ */
+function formatFullTime(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+        + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 
 /** 更新历史对话压缩进度指示器（与后端摘要压缩同口径：摘要边界后 tail 估算 token / 预算） */
@@ -1851,7 +2030,7 @@ function prependOlderMessages(olderMsgs) {
     messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
     messagesEl.style.scrollBehavior = '';
     // 更新 chatHistory 缓冲区
-    chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+    chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '', created_at: msg.created_at || null })));
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -3692,8 +3871,10 @@ async function startStreaming(userText, userMsgID) {
                 lastUserEl.dataset.msgId = userMsgID;
                 const tokensEl = lastUserEl.querySelector('.user-tokens');
                 if (tokensEl && userMsgID) {
-                    // 从 chatHistory 中找到这条消息的 created_at
+                    // 从 chatHistory 中找到这条消息的 created_at，并把后端定稿的 token 数回写
+                    // （保存时的初始值是预估口径，悬停统计卡读 chatHistory，需与标签显示同步）
                     const idx = chatHistory.findIndex(m => m.id === userMsgID);
+                    if (idx >= 0 && userTokens > 0) chatHistory[idx].tokens = userTokens;
                     const createdAt = idx >= 0 ? chatHistory[idx].created_at : null;
                     let text = '';
                     if (userTokens > 0) {
@@ -3706,8 +3887,6 @@ async function startStreaming(userText, userMsgID) {
                         text = timeText;
                     }
                     tokensEl.textContent = text;
-                    // 同步悬停提示（与 createMsgActions 行为对齐）
-                    tokensEl.title = text;
                     tokensEl.style.display = '';
                 }
             }
@@ -3721,7 +3900,9 @@ async function startStreaming(userText, userMsgID) {
                 streamingEl.parentNode.removeChild(streamingEl);
             }
         } else {
-            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null, plan: streamPlanData ? JSON.stringify(streamPlanData) : null });
+            // created_at：stream-done 事件不带时间，消息此刻刚落库，以前端当前时间兜底
+            // （误差 <1 秒；切换会话重载后仍以后端时间为准）
+            chatHistory.push({ id: assistantMsgID, role: 'assistant', content: finalContent, tokens: assistantTokens, reasoning_content: streamingThinking || '', thinking_elapsed: elapsedThinking || 0, total_elapsed: elapsedTotal || 0, recall_cards: recallCards ? JSON.stringify(recallCards) : null, tool_calls: streamToolRecords.length > 0 ? JSON.stringify(streamToolRecords) : null, plan: streamPlanData ? JSON.stringify(streamPlanData) : null, created_at: new Date().toISOString() });
             updateContextUsage();
             streamingEl.appendChild(createMsgActions(finalContent, 'assistant', elapsedTotal, assistantTokens));
             bindMsgContextMenu(streamingEl, finalContent, 'assistant');
@@ -3813,8 +3994,12 @@ async function startStreaming(userText, userMsgID) {
             const lastUserMsgEl = messagesInnerEl.querySelector('.ai-msg-user:last-child');
             if (lastUserMsgEl) {
                 const tokensEl = lastUserMsgEl.querySelector('.user-tokens');
-                // 从 DOM 上找 msgId，然后从 chatHistory 找 created_at
+                // 从 DOM 上找 msgId，然后从 chatHistory 找 created_at，并回写后端定稿的 token 数
                 const msgId = parseInt(lastUserMsgEl.dataset.msgId || '0');
+                if (msgId && userTokens > 0) {
+                    const idx = chatHistory.findIndex(m => m.id === msgId);
+                    if (idx >= 0) chatHistory[idx].tokens = userTokens;
+                }
                 const createdAt = msgId ? (() => {
                     const idx = chatHistory.findIndex(m => m.id === msgId);
                     return idx >= 0 ? chatHistory[idx].created_at : null;
@@ -3831,8 +4016,6 @@ async function startStreaming(userText, userMsgID) {
                         text = timeText;
                     }
                     tokensEl.textContent = text;
-                    // 同步悬停提示（与 createMsgActions 行为对齐）
-                    tokensEl.title = text;
                 }
             }
         }
@@ -4205,8 +4388,6 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         let timeText = '⏱ ' + totalElapsed.toFixed(1) + ' 秒';
         if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
         timeEl.textContent = timeText;
-        // 鼠标悬停显示完整内容（与 createMsgActions 行为对齐）
-        timeEl.title = timeText;
         actionsEl.appendChild(timeEl);
         el.appendChild(actionsEl);
     }
@@ -4340,7 +4521,7 @@ async function jumpToUserMessage(direction) {
                 messagesEl.style.scrollBehavior = 'auto';
                 messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
                 messagesEl.style.scrollBehavior = '';
-                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '', created_at: msg.created_at || null })));
                 // 加载后更新索引：新用户消息插到前面，旧索引向后偏移
                 const newUserCount = messagesInnerEl.querySelectorAll('.ai-msg-user').length;
                 const addedUserCount = newUserCount - prevUserCount;
@@ -4411,6 +4592,7 @@ function scrollToBottom() {
  */
 export function resetAIChatState() {
     chatHistory = [];
+    _hideMsgStatsTip?.(); // 恢复出厂/还原备份时收起残留的消息统计悬停卡
     sessions = [];
     activeSessionId = null;
     _oldestMsgId = 0;
@@ -4944,10 +5126,6 @@ function createMsgActions(content, role, elapsedTotal, tokens, createdAt) {
         let timeText = '⏱ ' + elapsedTotal.toFixed(1) + ' 秒';
         if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
         timeEl.textContent = timeText;
-        // 鼠标悬停显示完整内容（截断时浏览器原生提示）
-        if (timeText) {
-            timeEl.title = timeText;
-        }
         container.appendChild(timeEl);
     }
 
@@ -4966,10 +5144,6 @@ function createMsgActions(content, role, elapsedTotal, tokens, createdAt) {
             text = timeText;
         }
         tokensEl.textContent = text;
-        // 鼠标悬停显示完整内容（截断时浏览器原生提示）
-        if (text) {
-            tokensEl.title = text;
-        }
         container.appendChild(tokensEl);
     }
 

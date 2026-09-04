@@ -2727,9 +2727,28 @@ console.log(greet("Jot"));
         <span class="ai-mode-tip-line"><em>当前：</em><span id="aiContextUsageTipDetail">—</span></span>
         <span class="ai-mode-tip-line">达到预算的 <span id="aiContextUsageTipTrigger">80%</span> 时自动压缩更早的历史（生成会话摘要）。</span>
     </div>
-    <!-- 用户消息 token+时间戳截断后的完整提示 -->
-    <div class="ai-mode-tip" data-tip="user-tokens-full">
-        <span class="ai-mode-tip-title" id="aiUserTokensFullTip"></span>
+    <!-- AI 消息统计卡（消息列表悬停触发，initModeTips 委托填充） -->
+    <div class="ai-mode-tip compact" data-tip="ai-msg-stats">
+        <span class="ai-mode-tip-title">回答统计</span>
+        <span class="ai-mode-tip-line"><em>总耗时：</em><span class="tip-val" id="aiMsgStatsElapsed">—</span></span>
+        <div class="tip-timebar" id="aiMsgStatsTimebar" aria-hidden="true">
+            <div class="tip-timebar-seg seg-thinking" id="aiMsgStatsSegThink"></div>
+            <div class="tip-timebar-seg seg-generate" id="aiMsgStatsSegGen"></div>
+        </div>
+        <span class="ai-mode-tip-line tip-legend" id="aiMsgStatsLegend">
+            <span class="tip-legend-item"><i class="tip-dot dot-thinking"></i>思考 <span class="tip-val" id="aiMsgStatsThinkVal">0s</span></span>
+            <span class="tip-legend-item"><i class="tip-dot dot-generate"></i>生成 <span class="tip-val" id="aiMsgStatsGenVal">0s</span></span>
+        </span>
+        <span class="ai-mode-tip-line"><em>Token 消耗：</em><span class="tip-val" id="aiMsgStatsTokens">—</span></span>
+        <span class="ai-mode-tip-line" id="aiMsgStatsTimeRow"><em>回答时间：</em><span class="tip-val" id="aiMsgStatsTime">—</span></span>
+        <span class="ai-mode-tip-line" id="aiMsgStatsToolsRow" style="display:none"><em>工具调用：</em><span class="tip-val" id="aiMsgStatsTools"></span></span>
+        <span class="ai-mode-tip-line" id="aiMsgStatsRecallRow" style="display:none"><em>召回笔记：</em><span class="tip-val" id="aiMsgStatsRecall"></span></span>
+    </div>
+    <!-- 用户消息统计卡（消息列表悬停触发，initModeTips 委托填充） -->
+    <div class="ai-mode-tip compact" data-tip="user-msg-stats">
+        <span class="ai-mode-tip-title">用户消息</span>
+        <span class="ai-mode-tip-line" id="aiUserStatsTimeRow"><em>发送时间：</em><span class="tip-val" id="aiUserStatsTime">—</span></span>
+        <span class="ai-mode-tip-line"><em>Token 消耗：</em><span class="tip-val" id="aiUserStatsTokens">—</span></span>
     </div>
 </div>
 
