@@ -3390,6 +3390,8 @@ async function startStreaming(userText, userMsgID) {
         item.el.classList.remove('is-warning');
         item.iconEl.innerHTML = svgIcon('x');
         item.textEl.textContent = fullLabel;
+        // 鼠标悬停查看完整失败原因
+        if (reason) item.textEl.title = '：失败：' + reason;
         setToolElapsed(item);
         _liveToolStats.fail++; // 流式统计：失败次数
         updateToolSummaryHeader();
@@ -3704,6 +3706,8 @@ async function startStreaming(userText, userMsgID) {
                         text = timeText;
                     }
                     tokensEl.textContent = text;
+                    // 同步悬停提示（与 createMsgActions 行为对齐）
+                    tokensEl.title = text;
                     tokensEl.style.display = '';
                 }
             }
@@ -3827,6 +3831,8 @@ async function startStreaming(userText, userMsgID) {
                         text = timeText;
                     }
                     tokensEl.textContent = text;
+                    // 同步悬停提示（与 createMsgActions 行为对齐）
+                    tokensEl.title = text;
                 }
             }
         }
@@ -4199,6 +4205,8 @@ function addMessage(content, role, reasoningContent, thinkingElapsed, totalElaps
         let timeText = '⏱ ' + totalElapsed.toFixed(1) + ' 秒';
         if (tokens > 0) timeText += ' · ' + formatTokens(tokens) + ' tokens';
         timeEl.textContent = timeText;
+        // 鼠标悬停显示完整内容（与 createMsgActions 行为对齐）
+        timeEl.title = timeText;
         actionsEl.appendChild(timeEl);
         el.appendChild(actionsEl);
     }
@@ -5003,6 +5011,8 @@ function renderRecallCards(el, cards) {
         var textSpan = document.createElement('span');
         textSpan.className = 'recall-cards-item-text';
         textSpan.textContent = card.title;
+        // 标题 CSS 截断时悬停查看完整内容
+        textSpan.title = card.title;
         titleRow.appendChild(textSpan);
         if (card.file_ext) {
             var extSpan = document.createElement('span');
@@ -5016,6 +5026,8 @@ function renderRecallCards(el, cards) {
             var snippet = document.createElement('div');
             snippet.className = 'recall-cards-snippet';
             snippet.textContent = card.content;
+            // 摘要 3 行 clamp 截断时悬停查看完整内容
+            snippet.title = card.content;
             item.appendChild(snippet);
         }
 
@@ -5485,11 +5497,15 @@ function renderToolCalls(el, toolCalls) {
             item.className = 'ai-tool-status-item is-error';
             iconEl.innerHTML = svgIcon('x');
             textEl.textContent = '：失败' + (g.reason ? '：' + detail(g.reason) : '');
+            // 鼠标悬停查看完整失败原因
+            if (g.reason) textEl.title = '：失败：' + g.reason;
         } else if (g.status === 'partial') {
             // 部分失败态：⚠️（仅 web_search 可能）
             item.className = 'ai-tool-status-item is-warning';
             iconEl.innerHTML = svgIcon('alert');
             textEl.textContent = '：部分来源失败' + (g.reason ? '：' + detail(g.reason) : '');
+            // 鼠标悬停查看完整原因
+            if (g.reason) textEl.title = '：部分来源失败：' + g.reason;
         } else {
             // 完成态：✓ + 工具名×次数 + 已完成
             item.className = 'ai-tool-status-item is-done';
