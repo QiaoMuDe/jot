@@ -1971,6 +1971,35 @@ func estimateUserTokens(messages []services.Message) int {
 // 用户重新发起对话时 truncateAIMessages 会再次触发摘要。
 var errSummaryCompactFailed = errors.New("会话摘要压缩失败")
 
+// selectAIContextTail 按摘要边界（boundaryMsgID，0 表示未摘要/存量旧数据）与预算，
+// 从 nonSystem 消息中选取 tail（轮次对齐、最后一条始终保留），并计算 tail 首条在
+// nonSystem 中的下标与 tail 的估算 token 和。
+// 该口径与 truncateAIMessages 的摘要触发同源，GetAIContextUsage 与摘要压缩共用，
+// 避免两处各自实现导致展示数值与真实压缩触发脱节。
+// 注意：因最后一条消息始终保留，tail 估算加上最后一条可能略超预算，并非严格 ≤ 预算。
+func selectAIContextTail(nonSystem []services.Message, boundaryMsgID uint, budget int) (tail []services.Message, tailStart int, tailTokens int, boundaryPos int) {
+	// 定位摘要边界下标（边界消息被删除时同样回退为 0，走全量路径）
+	boundaryPos = 0
+	if boundaryMsgID > 0 {
+		for i, m := range nonSystem {
+			if m.ID == boundaryMsgID {
+				boundaryPos = i + 1
+				break
+			}
+		}
+	}
+	// 边界之前的内容已由摘要覆盖，不参与窗口计算——否则压缩后 raw tail
+	// 仍接近满预算，会导致每轮都重复触发摘要压缩
+	rest := nonSystem[boundaryPos:]
+	tail, tailRestStart := services.SelectTailByTokenBudget(rest, budget)
+	tailStart = tailRestStart + boundaryPos
+	tailTokens = 0
+	for _, m := range tail {
+		tailTokens += services.EstimateTokens(m.Content)
+	}
+	return tail, tailStart, tailTokens, boundaryPos
+}
+
 // truncateAIMessages 加载会话消息并按 token 预算构建 LLM 输入：
 // system 消息 + 【历史对话摘要】 + tail（user/assistant 消息，轮次对齐）。
 // tail 估算 token 达预算 80% 时同步压缩摘要（旧摘要 + 待摘要区间 → 新摘要），
@@ -2005,28 +2034,10 @@ func (a *App) truncateAIMessages(ctx context.Context, sessionID uint, logLabel s
 		boundaryMsgID = session.SummaryUpToMsgID
 	}
 
-	// 定位摘要边界下标（边界=0 表示未摘要或存量旧数据，从头取全量历史；
-	// 边界消息被删除时同样回退为 0，走全量重摘要路径）
-	boundaryPos := 0
-	if boundaryMsgID > 0 {
-		for i, m := range nonSystem {
-			if m.ID == boundaryMsgID {
-				boundaryPos = i + 1
-				break
-			}
-		}
-	}
-
-	// 按预算从边界之后选取 tail（轮次对齐）。
+	// 按预算从摘要边界之后选取 tail（轮次对齐），计算起点与估算 token。
 	// 边界之前的内容已由摘要覆盖，不参与窗口计算——否则压缩后 raw tail
 	// 仍接近满预算，会导致每轮都重复触发摘要压缩
-	rest := nonSystem[boundaryPos:]
-	tail, tailRestStart := services.SelectTailByTokenBudget(rest, budget)
-	tailStart := tailRestStart + boundaryPos
-	tailTokens := 0
-	for _, m := range tail {
-		tailTokens += services.EstimateTokens(m.Content)
-	}
+	tail, tailStart, tailTokens, boundaryPos := selectAIContextTail(nonSystem, boundaryMsgID, budget)
 
 	// tail 达预算 × 触发比例（ai_context_summary_trigger_ratio，默认 80%）时压缩摘要：
 	// 保留最近 50% 预算的轮次，其余与旧摘要合并生成新摘要，边界推进到新 tail 起点
@@ -2906,17 +2917,18 @@ func (a *App) GetSessionContextTokens(sessionID uint) (int, error) {
 	return tokens, nil
 }
 
-// ContextUsage 上下文窗口使用率信息（与摘要压缩同口径）
+// ContextUsage 历史对话触发压缩进度信息（与摘要压缩同口径）
 type ContextUsage struct {
-	Used    int     `json:"used"`    // tail 估算 token 数
+	Used    int     `json:"used"`    // 摘要边界后 tail 的估算 token（历史对话触发压缩的参考规模）
 	Budget  int     `json:"budget"`  // 上下文 token 预算（ai_context_token_budget）
-	Percent float64 `json:"percent"` // 使用率百分比（保留 1 位小数）
+	Percent float64 `json:"percent"` // 压缩进度百分比（used/budget，保留 1 位小数；达 1 预算满）
 	Trigger float64 `json:"trigger"` // 摘要压缩触发比例（ai_context_summary_trigger_ratio）
 }
 
-// GetAIContextUsage 返回指定会话的当前上下文窗口使用率，供前端使用率指示器展示。
-// 与 truncateAIMessages 同口径：仅对摘要边界（SummaryUpToMsgID）之后的消息按
-// token 预算选取 tail 并估算 token，budget = ai_context_token_budget 设置值。
+// GetAIContextUsage 返回指定会话的历史对话触发压缩进度，供前端压缩进度指示器展示。
+// used 取摘要边界（SummaryUpToMsgID）之后、按预算选取的 tail 的估算 token，
+// 与 truncateAIMessages 的摘要触发同口径——反映"距自动压缩还有多远"，
+// 接近但可能略超预算（最后一条始终保留），因此不会出现大幅超载的歧义。
 func (a *App) GetAIContextUsage(sessionID uint) ContextUsage {
 	if sessionID == 0 {
 		return ContextUsage{}
@@ -2928,24 +2940,13 @@ func (a *App) GetAIContextUsage(sessionID uint) ContextUsage {
 			nonSystem = append(nonSystem, m)
 		}
 	}
-	// 摘要边界之后的消息才参与窗口计算（与 truncateAIMessages 一致）
-	boundaryPos := 0
+	boundaryMsgID := uint(0)
 	var session models.AISession
-	if err := a.db.First(&session, sessionID).Error; err == nil && session.SummaryUpToMsgID > 0 {
-		for i, m := range nonSystem {
-			if m.ID == session.SummaryUpToMsgID {
-				boundaryPos = i + 1
-				break
-			}
-		}
+	if err := a.db.First(&session, sessionID).Error; err == nil {
+		boundaryMsgID = session.SummaryUpToMsgID
 	}
-	rest := nonSystem[boundaryPos:]
 	budget := a.aiService.GetContextTokenBudget()
-	tail, _ := services.SelectTailByTokenBudget(rest, budget)
-	used := 0
-	for _, m := range tail {
-		used += services.EstimateTokens(m.Content)
-	}
+	_, _, used, _ := selectAIContextTail(nonSystem, boundaryMsgID, budget)
 	percent := 0.0
 	if budget > 0 {
 		percent = float64(used*1000/budget) / 10

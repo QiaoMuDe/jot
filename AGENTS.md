@@ -603,29 +603,29 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 5：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 压缩进度圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 上下文摘要机制从"条数窗口"整体重构为 **token 预算制**（新文件 [ai_context.go](internal/services/ai_context.go)）：`SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部选 tail（轮次对齐 + 单条超预算保护）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio` 默认 0.8，无 UI 设置键，测试可改库调小）时压缩 tail 头部旧消息（保留 ≤50% 预算）进摘要；**持久化摘要边界 `SummaryUpToMsgID` 替代 SummaryMsgCount**（按消息 ID 推进，解耦设置变更；tail 选取从边界之后开始，防"压缩后每轮重复触发"）。压缩**失败即中止本轮**（failed + stream-error，本轮不调 LLM，重发自动再触发）。旧键 `ai_context_window_size` / 旧列 `summary_msg_count` 经 [db.go](internal/database/db.go) `cleanupOrphanedData` 清理。 |
 | **Wails 事件派发教训（重要）** | **绑定方法返回前发出的 `runtime.EventsEmit` 不会实时送达前端，积压到方法返回后才派发**。摘要压缩（10s+）若在绑定方法体内同步执行，`generating` 状态条事件会延迟到压缩结束才到达，UI 全程无反馈（用户只见打字点动画）。**修复：`truncateAIMessages`（含压缩与事件发射）必须移入 `go func()` goroutine**（[app.go](app.go) `CallAIAgentStream`），与流式 chunk 事件同机制实时送达。该约束已写入 [AI_CONTEXT.md](internal/services/AI_CONTEXT.md)。 |
-| **前端使用率圆环（重要）** | 头部新增 SVG 双圆环进度组件（20px，`stroke-dashoffset` 驱动，三态色随语义变量：正常 accent / ≥触发比例 warning / >95% danger），日常仅显示"圆环 + 百分比"；悬停 tooltip 复用 `#aiModeTipPortal` 同款组件（`initModeTips` 泛化绑定，明细"已用 X / 128K tokens"1024 进制折算，阈值随触发比例动态化）。数据源 `GetAIContextUsage` 与压缩机制**严格同口径**（边界感知 tail token / 同一预算）。0% 时 dashoffset 取周长+1 防圆点伪影。 |
+| **前端压缩进度圆环（重要）** | 头部新增 SVG 双圆环进度组件（20px，`stroke-dashoffset` 驱动，三态色随语义变量：正常 accent / ≥触发比例 warning / >95% danger），日常仅显示"圆环 + 百分比"，`aria-label` 为"历史对话压缩进度"；悬停 tooltip 复用 `#aiModeTipPortal` 同款组件（`initModeTips` 泛化绑定，明细"当前 X / Y tokens"1024 进制折算 = 摘要边界后 tail 估算 / 预算，第二行"达到预算的 80% 时自动压缩更早的历史"，阈值随触发比例动态化）。数据源 `GetAIContextUsage` 与压缩机制**严格同口径**（边界感知 tail token / 同一预算，经公共 helper `selectAIContextTail` 与 `truncateAIMessages` 复用同一实现，防口径漂移）。0% 时 dashoffset 取周长+1 防圆点伪影。 |
 | **状态条与重试语义** | `ai:summary-status` generating/done/failed 三态；状态条 **700ms 最短可见**（生成过快时延迟隐藏保证反馈可感知，定时器互斥清理防误隐藏）；failed 显示"生成失败，请重新发送"5s + stream-error 通知，输入解锁复用既有 handler。摘要生成超时 30s→**90s**（40K token 区间慢网关实测 13s~30s+，30s 频繁超时）。 |
 | **测试与验证方法** | [ai_context_test.go](internal/services/ai_context_test.go) 覆盖 token 估算/选取/轮次对齐/边界推进/失败沿用旧摘要（httptest 模拟 OpenAI 全链路）。**调试技巧**：settings 表改 `ai_context_token_budget=12000` + `ai_context_summary_trigger_ratio=0.06`（约 720 token 触发），几轮对话即可走完压缩流程；日志观察 `compact_elapsed_ms` 字段（该字段存在即证明运行新代码）。前端热重载时注意：运行的应用若非 wails dev/最新构建，修复不会生效（曾因此误判修复无效）。 |
 | **涉及文件** | [internal/services/ai_context.go](internal/services/ai_context.go)（新）、[internal/services/ai_context_test.go](internal/services/ai_context_test.go)（新）、[internal/services/AI_CONTEXT.md](internal/services/AI_CONTEXT.md)（新，机制文档）、[app.go](app.go)（truncateAIMessages 重写 + GetAIContextUsage + 移入 goroutine）、[internal/models/ai_session.go](internal/models/ai_session.go)（SummaryUpToMsgID）、[internal/database/db.go](internal/database/db.go)（种子 + 清理清单）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md) §7、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/index.html](frontend/index.html)（圆环 + tooltip 复用） |
 
 ---
 
-## 记忆点 6：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+## 记忆点 6：上下文摘要状态条修复 + 回退功能 + 图标统一 + 压缩进度两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 修复上下文摘要状态条在输入框下方的显示问题，实现用户消息右键菜单"回退"功能，统一引用栏/用户消息图标风格，实现上下文使用率两阶段更新机制，以及修复停止时误报摘要失败等边界问题。 |
+| **变更概览** | 修复上下文摘要状态条在输入框下方的显示问题，实现用户消息右键菜单"回退"功能，统一引用栏/用户消息图标风格，实现压缩进度指示器两阶段更新机制，以及修复停止时误报摘要失败等边界问题。 |
 | **摘要状态条 z-index 修复（重要）** | 摘要状态条（`.ai-summary-status`）显示在输入框下方而非上方，根因是 CSS 定位与 z-index 层级问题。修复：`position: absolute; bottom: calc(8px + var(--input-h, 120px) + 8px); left: 50%; transform: translateX(-50%); z-index: 6; white-space: nowrap;`。[ai-chat.js](frontend/src/js/ai-chat.js) `showSummaryStatus` 将状态条追加到父容器并设置 `--input-h` CSS 变量。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
 | **停止按钮静默隐藏（重要）** | 点击停止按钮时，如果无摘要生成（从未收到 `generating` 事件），则不显示失败提示。`handleAICancelled` 仅当 `summaryStatusShownAt > 0` 时才发 `ai:summary-status:failed` 事件（带 `session_id` 字段），避免误报"摘要生成失败"。详见 [app.go](app.go) `handleAICancelled` |
 | **回退功能（重要）** | 用户消息右键菜单新增"回退"项（`handleRollback`），完整流程：弹出确认对话框（支持 ESC 关闭）→ 删除该消息起的后续 DOM 消息 → `TruncateAISessionAfterMessage` 截断数据库 → 恢复 `referencedNotes`/`activeSkills`/`roleplayNotes` 到输入区 chips → 调用 `saveCurrentSessionConfig()` 持久化状态 → `updateContextUsage()` 刷新。**关键教训**：`buildUserMessageMeta` 用 `id` 字段存技能 ID（非 `skillId`），`renderSkillChips` 是引用栏技能 chip 渲染入口。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
 | **图标统一（重要）** | 引用栏与用户消息气泡图标统一：引用栏技能使用统一闪电图标（`CHIP_ICON_SVG.skill`），文件使用回形针图标（`CHIP_ICON_SVG.file`）；用户消息气泡中 `type: skill` 使用闪电，`type: roleplay` 使用角色头像图标。详见 [ai-chat.js](frontend/src/js/ai-chat.js) `CHIP_ICON_SVG`、`renderSkillChips` |
-| **使用率两阶段更新** | 上下文使用率显示与摘要触发时序不一致（显示不包含刚发送的消息，但摘要触发检查包含）。修复：`sendUserText`/`handleResend`/`handleRegenerate` 中在消息保存/截断后立即调用 `updateContextUsage()`（Phase 1），AI 回复完成后再次调用（Phase 2），确保显示与触发判断口径一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
+| **压缩进度两阶段更新** | 压缩进度指示器显示与摘要触发时序不一致（显示不包含刚发送的消息，但摘要触发检查包含）。修复：`sendUserText`/`handleResend`/`handleRegenerate` 中在消息保存/截断后立即调用 `updateContextUsage()`（Phase 1），AI 回复完成后再次调用（Phase 2），确保显示与触发判断口径一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
 | **HTML 验证修复** | `npm run validate:html` 报 `prefer-native-element` 错误（line 1131:106）：在 [index.html](frontend/index.html) 中添加 `<!-- html-validate-disable-next prefer-native-element -->` 注释忽略该警告。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleRollback`/`showSummaryStatus`/`hideSummaryStatus`/`updateContextUsage`/`CHIP_ICON_SVG`/`renderSkillChips`/`sendUserText`/`handleResend`/`handleRegenerate`/右键菜单项）、[app.go](app.go)（`handleAICancelled` 事件补发）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-summary-status` 定位修复）、[frontend/index.html](frontend/index.html)（html-validate 忽略注释） |
 

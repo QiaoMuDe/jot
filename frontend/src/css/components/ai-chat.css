@@ -1416,6 +1416,12 @@
     color: var(--text-primary);
 }
 
+/* 压缩触发阈值数字：仅加粗强调，不额外配色以保持 tooltip 统一 */
+#aiContextUsageTipTrigger {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
 /* AI 回复期间锁定：置灰（不使用 pointer-events，保留点击以触发抖动提示） */
 #aiModeToggle.is-locked .ai-mode-btn,
 .ai-chat-search-toggle.is-locked,
@@ -3727,7 +3733,7 @@
     animation: slideInNew 0.3s var(--anim-easing-out) forwards;
 }
 
-/* ── 上下文使用率指示器（头部右侧：环形进度 + 百分比 + 上限标签） ── */
+/* ── 历史对话压缩进度指示器（头部右侧：环形进度 + 百分比 + 触发线标签） ── */
 .ai-context-usage {
     display: inline-flex;
     align-items: center;

@@ -17,7 +17,7 @@ let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
 let planPanelEl = null;       // #aiPlanPanel（Agent 执行计划面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
-let contextUsageEl = null;    // #aiChatContextUsage（上下文使用率指示器容器）
+let contextUsageEl = null;    // #aiChatContextUsage（历史对话压缩进度指示器容器）
 let contextUsageArcEl = null;   // 环形进度弧（stroke-dashoffset 控制比例）
 let contextUsageTextEl = null;  // 百分比 + 上限文本
 let polishBtn = null;         // #aiChatPolishBtn
@@ -286,7 +286,7 @@ function setupSummaryStatusListener() {
                 hideSummaryStatus();
             }
             if (data.status === 'done') {
-                // 压缩后 tail 回落，刷新使用率指示器（状态条延迟隐藏不影响刷新）
+                // 压缩后 tail 回落，刷新压缩进度指示器（状态条延迟隐藏不影响刷新）
                 updateContextUsage();
             }
         }
@@ -525,7 +525,7 @@ function initModeTips() {
         btn.addEventListener('mouseleave', hide);
     });
 
-    // 上下文使用率指示器（头部右侧圆环）：同款 tooltip 组件
+    // 历史对话压缩进度指示器（头部右侧圆环）：同款 tooltip 组件
     const usageEl = document.getElementById('aiChatContextUsage');
     const usageTip = portal.querySelector('.ai-mode-tip[data-tip="context-usage"]');
     if (usageEl && usageTip) {
@@ -586,7 +586,7 @@ function formatSmartTime(isoString) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + hhmm;
 }
 
-/** 更新上下文使用率指示器（与后端摘要压缩同口径：tail 估算 token / 预算） */
+/** 更新历史对话压缩进度指示器（与后端摘要压缩同口径：摘要边界后 tail 估算 token / 预算） */
 async function updateContextUsage() {
     if (!contextUsageEl) return;
     if (!activeSessionId) {
@@ -608,8 +608,10 @@ async function updateContextUsage() {
         const triggerPct = Math.round((usage.trigger ?? 0.8) * 100);
         contextUsageEl.classList.toggle('is-warning', pct >= triggerPct && pct <= 95);
         contextUsageEl.classList.toggle('is-critical', pct > 95);
-        contextUsageTextEl.textContent = pct + '%';
-        contextUsageEl.setAttribute('aria-valuenow', String(usage.percent));
+        // tail 含最后一条可能略超预算，展示与 aria 值收敛到 100%，避免出现 102% 等怪值；
+        // aria 与可见文本同用取整后的 pct，保证读屏读数与显示一致
+        contextUsageTextEl.textContent = Math.min(pct, 100) + '%';
+        contextUsageEl.setAttribute('aria-valuenow', String(Math.min(pct, 100)));
         // 悬停明细写入同款 portal tooltip（initModeTips 绑定显示），不再用原生 title
         const tipDetailEl = document.getElementById('aiContextUsageTipDetail');
         if (tipDetailEl) {
@@ -3009,7 +3011,7 @@ async function sendUserText(text) {
     if (userMsgId) {
         chatHistory.push({ id: userMsgId, role: 'user', content: text, tokens: userTokens, meta: userMeta || '', created_at: userCreatedAt });
     }
-    // Phase 1: 用户消息发出后立即更新上下文使用率（含本条消息）
+    // Phase 1: 用户消息发出后立即更新压缩进度（含本条消息）
     updateContextUsage();
     startStreaming(text, userMsgId);
     return true;
@@ -5993,7 +5995,7 @@ async function handleRegenerate(msgEl) {
             console.warn('UpdateAIMessageMeta 失败，不影响 LLM 调用', e);
         }
 
-        // Phase 1: 更新上下文使用率
+        // Phase 1: 更新压缩进度
         updateContextUsage();
 
         // 重新生成
@@ -6034,7 +6036,7 @@ async function handleRegenerate(msgEl) {
             });
         }
 
-        // Phase 1: 更新上下文使用率
+        // Phase 1: 更新压缩进度
         updateContextUsage();
 
         // 重新发送（不截断后续内容）
@@ -6141,7 +6143,7 @@ async function handleRollback(msgEl) {
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // 更新上下文使用率
+    // 更新压缩进度
     updateContextUsage();
 }
 

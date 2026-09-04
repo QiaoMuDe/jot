@@ -1132,7 +1132,7 @@
                         <h2 class="view-title" id="aiChatTitle">AI 助手</h2>
                         <div class="view-controls">
                             <!-- html-validate-disable-next prefer-native-element -->
-                            <span id="aiChatContextUsage" class="ai-context-usage" style="display:none;" role="progressbar" aria-label="上下文使用率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <span id="aiChatContextUsage" class="ai-context-usage" style="display:none;" role="progressbar" aria-label="历史对话压缩进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                                 <svg class="ai-context-usage-ring" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
                                     <circle class="ai-context-usage-track" cx="10" cy="10" r="8" fill="none" stroke-width="2.5"/>
                                     <circle class="ai-context-usage-arc" cx="10" cy="10" r="8" fill="none" stroke-width="2.5" stroke-linecap="round" transform="rotate(-90 10 10)"/>
@@ -2721,11 +2721,11 @@ console.log(greet("Jot"));
         <span class="ai-mode-tip-line"><em>特点：</em>执行前先自动生成结构化执行计划（按复杂度拆解为 1~10 步），前端弹出计划卡片；执行中逐步标记进行中/完成/跳过，可新增或调整步骤。</span>
         <span class="ai-mode-tip-line"><em>适用场景：</em>复杂多步骤任务，需要可视化步骤拆解与进度跟踪，或约束执行路径避免工具调用跑偏。</span>
     </div>
-    <!-- 上下文使用率指示器（头部右侧圆环）的同款悬停提示 -->
+    <!-- 历史对话压缩进度指示器（头部右侧圆环）的同款悬停提示 -->
     <div class="ai-mode-tip" data-tip="context-usage">
-        <span class="ai-mode-tip-title">上下文使用率</span>
-        <span class="ai-mode-tip-line"><em>已用：</em><span id="aiContextUsageTipDetail">—</span></span>
-        <span class="ai-mode-tip-line">达到上限 <span id="aiContextUsageTipTrigger">80%</span> 时自动压缩历史对话（生成会话摘要）。</span>
+        <span class="ai-mode-tip-title">历史对话压缩进度</span>
+        <span class="ai-mode-tip-line"><em>当前：</em><span id="aiContextUsageTipDetail">—</span></span>
+        <span class="ai-mode-tip-line">达到预算的 <span id="aiContextUsageTipTrigger">80%</span> 时自动压缩更早的历史（生成会话摘要）。</span>
     </div>
     <!-- 用户消息 token+时间戳截断后的完整提示 -->
     <div class="ai-mode-tip" data-tip="user-tokens-full">
