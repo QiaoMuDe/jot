@@ -1,4 +1,4 @@
-﻿# Jot 项目分析报告
+# Jot 项目分析报告
 
 > 项目类型: 桌面端卡片式笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ einocli 薄适配层（eino 库驱动，OpenAI 兼容）
@@ -550,28 +550,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 33. **Agent 显式规划 + AI 模式三态（create_plan/update_plan + Chat/Agent/Plan 切换）**：显式规划——后端两个规划工具（[plan.go](internal/agent/tools/plan.go)）+ `Context.PlanState` 跨轮保存 + `GenModelInput` 每轮注入计划状态/进度/ask_user 提醒 + 结果兜底（漏 create_plan 自动补建单步计划、漏 update_plan 自动补标 done）；前端 `#aiPlanPanel` 悬浮可折叠面板 + ask_user 互斥 + stream-done 清理。模式三态——`PlanMode bool` 重构为 `Mode string`（chat/agent/plan，默认 agent）：DB 存量迁移 + 孤儿列清理；Chat 不注入工具规范；`ToolMeta.PlanOnly`（create_plan/update_plan）按模式过滤注册；前端 `#aiModeToggle` 三按钮切换 + 设置页 PlanOnly 禁用展示。详见 [agent.go](internal/agent/agent.go)、[plan.go](internal/agent/tools/plan.go)、[context.go](internal/agent/tools/context.go)、[registry.go](internal/agent/registry.go)、[types.go](internal/agent/types.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[db.go](internal/database/db.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[TOOLS.md](internal/agent/TOOLS.md)
 
-34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节、设计决策与教训详见记忆点 4 及 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
+34. **HTTP API 调用工具 http_request + 共享 SSRF 防护客户端（ssrf.go 统一三层防护）**：新增 `http_request` 内置工具（面向 API/原始响应，不做解析加工；method 白名单 GET/POST/PUT/DELETE/PATCH，headers/body 可选，Content-Type/UA 有缺省，4xx/5xx 原样返回不算工具失败，二进制 Content-Type 只提示类型，`ai_http_max_chars` 截断，**日志禁止输出请求头**防密钥泄漏）。**抽出 [ssrf.go](internal/agent/tools/ssrf.go) 共享客户端**（read_url 与 http_request 共用）：三层防护——① validateHTTPURL 仅放行 http/https 公网地址；② CheckRedirect 逐跳 isPrivateHost（上限 10 次）；③ guardedDialContext 拨号期防护（解析全部 IP 逐个校验、**直连已校验 IP** 防 DNS rebinding、多 A 记录容灾）+ 传输层 1MB 响应体限长；**Transport 必须以 `DefaultTransport.Clone()` 为底座**（裸构造丢系统代理/HTTP2/TLS 默认配置，曾致环境变量代理失效）。isPrivateHost 加固：inet_aton 数值编码 IP 归一化 + 修复裸 IPv6（::1）漏判。**关键决策**：标准库不引三方库（自动重试对非幂等方法有重复副作用，重试由模型在 ReAct 循环承担）；内网/本机默认拒绝是业界主流；代理模式下第③层校验的是代理地址（已知权衡）。实现细节与设计决策详见 [ssrf.go](internal/agent/tools/ssrf.go)、[http_request.go](internal/agent/tools/http_request.go)、[ssrf_test.go](internal/agent/tools/ssrf_test.go)
 
 35. **导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底）**：修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。导入写入（创建/覆盖）时把笔记 `CreatedAt`/`UpdatedAt` 对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；时间对比前增加内容哈希兜底（`\r\n→\n`+TrimSpace 规范化后 SHA256，go-kit `hash.HashString`），一致直接 `skipped`，否则走 fileTime vs UpdatedAt 对比（`updated`/`conflict`/`skipped`）。**导入路径必须用 `CreateWithNotebookAt`/`UpdateWithTime` 对齐时间戳，禁用普通 `Update`/`Save`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；`ResolveImportConflict` 增加第 6 参 `fileTime`，前端冲突弹窗回传 `item.file_time`。UI 语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）。详见 [note_service.go](internal/services/note_service.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、规则文档 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)
 
 36. **系统提示词注入当前时间替代 get_current_time 工具（工具 16→15）**：移除内置时间工具（一次工具往返 + 长 Desc schema token + 强制调用规范的非确定性约束），在共享提示词组装 `buildAIContextInstruction`（[app.go](app.go)）末尾注入【环境信息】当前时间行（日期 + 星期 + 时分 + 时区名 + UTC 偏移），Chat/Agent 两模式共用——补齐 Chat 模式此前无任何真实时间来源的缺口，Agent 回答时间问题不再触发工具调用；注入置于 Instruction 尾部避免扰动前部稳定内容（利于前缀缓存）。同步精简 json 三件套 Desc 约 55%（曾评估合并为单工具 + action 参数被否决：三工具条件必填参数无法用 InferTool 反射表达，合并损害模型调用准确率）。详见 [json_tools.go](internal/agent/tools/json_tools.go)、[TOOLS.md](internal/agent/TOOLS.md)。同轮作业新增 AI 模式描述注入：在 `CallAIStream`（Chat 模式）和 `CallAIAgentStream`（Agent/Plan 模式）中分别注入 `chatModeDescription`/`agentModeDescription`/`planModeDescription` 三套文案，让 AI 认知自身模式特点、适用场景与行为指引。
 
+37. **AI 全局消息搜索（弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）**：侧栏内联标题过滤搜索整体改造为按钮触发的全局搜索弹窗（`#aiSearchModal` 复用 `.search-modal` 样式体系），检索所有历史会话的标题与消息内容。后端 [ai_service.go](internal/services/ai_service.go) `SearchAIChat`：标题命中不分页 Limit 20（`titleMatchTier` 精确度排序 完全相等>前缀>包含 + 独立 COUNT 真实总数 + **窗口函数 `ROW_NUMBER() OVER (PARTITION BY session_id ...)` 单查询批量取各会话最新消息摘要**防 N+1），消息命中分页（排除 system + JOIN 过滤软删除会话；**会话聚类排序** `COUNT(*) OVER (PARTITION BY session_id)` 命中条数多者靠前 → 会话内 `created_at DESC, id DESC` 全序兜底保证分页不重不漏；摘要 `INSTR/SUBSTR` 围绕关键词截取约 120 字符同 `noteThinSelect` 口径）。前端 [ai-chat.js](frontend/src/js/ai-chat.js)：200ms 防抖 + `_aiSearchSeq` 防竞态 + **打开与关闭都必须清输入防抖定时器**（否则关闭后空跑一次搜索，笔记弹窗 `closeSearchModal` 同款问题一并修复）+ 触底分页每页条数取笔记首页 `page_size` 设置（追加失败回滚页码防跳页漏数据）+ `jumpToMessage` 跨会话逐批加载更早历史定位高亮（滚动加载抽取为 `prependOlderMessages` 共用）。Ctrl+K 开/关切换（仅 AI 视图，流式期间 isStreaming 拦截三道防线：Ctrl+K/按钮/跳转）；全局 Ctrl+F 编辑器外改为搜索弹窗开关切换（编辑器内 CM6 面板不变）；快捷键说明页补 Ctrl+K。条目统一样式：上部会话名（ellipsis 截断）+ 时间，下部摘要行，无角色徽标无图标。详见 [ai_service.go](internal/services/ai_service.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[main.js](frontend/src/main.js)、[search-modal.css](frontend/src/css/components/search-modal.css)、[ai-chat.css](frontend/src/css/components/ai-chat.css)
 
-## 记忆点 1：HTTP API 调用工具 http_request + 共享 SSRF 防护客户端 ssrf.go（三层防护统一 + IP 归一化加固）
 
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增内置 Agent 工具 `http_request`（标准库 net/http 调用第三方 REST API，与 read_url 的"网页正文提取"分工：本工具面向 API/原始响应，不做任何解析加工），并抽出 read_url 与 http_request **共享的 SSRF 三层防护客户端**（[ssrf.go](internal/agent/tools/ssrf.go) 新文件），read_url 补齐拨号期 DNS rebinding 防护与响应体 1MB 限长；`isPrivateHost` 增加 inet_aton 数值编码 IP 归一化并修复裸 IPv6 漏判 bug。 |
-| **ssrf.go 共享防护客户端（核心）** | `newGuardedHTTPClient(timeout, guardDial)` 统一三层防护：① 调用方 `validateHTTPURL` 仅放行 http/https 公网地址；② `CheckRedirect` 对每个重定向目标逐跳 `isPrivateHost` 校验（上限 10 次）；③ `guardedDialContext` 拨号期防护——`LookupIPAddr` 解析出全部 IP 逐个黑名单校验（任一命中即整体拒绝）、**直连已校验 IP 而非原 addr**（防 DNS rebinding）、通过校验的公网 IP 依次尝试拨号（多 A 记录容灾）。`limitBodyTransport` 在传输层统一限长响应体 1MB（对透明解压后字节流生效，保留 Close）。**Transport 必须 `http.DefaultTransport.(*http.Transport).Clone()` 为底座**——裸构造 `&http.Transport{}` 会丢 `Proxy: ProxyFromEnvironment`（系统代理/环境变量代理失效）、HTTP/2、TLS 握手超时等默认配置，只覆写 `DialContext`。 |
-| **http_request 工具** | method 白名单 GET/POST/PUT/DELETE/PATCH（**PATCH 曾遗漏**，REST 更新资源主流方法，补齐时同步改 Info Enum + 校验 + 测试用例，原测试用 PATCH 当非法方法需改 TRACE）；headers/body 可选，Host 头跳过、body 实际发送且未指定 Content-Type 时默认 application/json、UA 缺省浏览器 UA；4xx/5xx 原样返回不算工具失败（模型依据状态码推理）；二进制 Content-Type（image/audio/video/octet-stream 等）不输出正文仅提示类型；`ai_http_max_chars` rune 截断（默认 5000 上限 50000，db.go 种子键）；重定向后输出"最终地址（跟随重定向后）"行（`resp.Request.URL` 与初始 URL 不同时）；**日志禁止输出请求头**（防 Authorization/API Key 泄漏）；ActionText "请求 GET url（截 30 字符）"。 |
-| **read_url / isPrivateHost 加固** | read_url 的 eino loader Client 换共享防护客户端（补第③层拨号期防护）；`isPrivateHost` 新增 `normalizeIPLiteral`——inet_aton 兼容写法归一化（`2130706433` 十进制、`0x7f000001` 十六进制、`0177.0.0.1` 八进制、`127.1` 末段吸收等不再绕过内网判定），仅当 `net.ParseIP` 失败时兜底调用；**修复既有 bug**：裸 IPv6 字面量（`::1`）被旧端口剥离逻辑从尾部截断成 ":" 漏判——改为单冒号才当 host:port 截断、多冒号无方括号视为裸 IPv6 直接判定。 |
-| **关键设计决策** | ① 标准库不引三方库：resty/retryablehttp 的自动重试有害——重试由模型在 ReAct 循环承担（带推理、不会重复副作用），HTTP 层盲目重试对 POST/PUT/DELETE 有重复副作用风险；SSRF 防护三方库也不提供。② 内网/本机默认拒绝是业界主流（Claude/Dify/OpenClaw 默认禁；MCP 官方 fetch 未禁被公认为漏洞，EC2 上可经提示词注入偷云元数据）；本地调用内网 API 的真实需求将来用"设置项 opt-in/白名单，默认关"模式实现。③ 已知权衡：配置系统代理时第③层校验的是代理地址而非目标主机（代理视为可信基础设施，写入 ssrf.go 文件头）。④ 测试注入缝 `buildClient(guardDial)` / `skipURLGuard`（跳过第①层内网拒绝）仅供同包测试访问 httptest 本机服务器，生产构造器零值全防护。 |
-| **测试与教训** | [ssrf_test.go](internal/agent/tools/ssrf_test.go)：共享客户端拨号防护（guardDial=true 拒绝 127.0.0.1 / false 可访问 httptest）、传输层 1MB 限长（服务端写 2MB）、isPrivateHost 编码归一化 12 用例；[http_request_test.go](internal/agent/tools/http_request_test.go)：方法校验/GET/POST 成功路径/截断/ActionText。教训：① 新测试驱动暴露裸 IPv6 漏判既有 bug，说明边界用例表（含 IPv6 各形式）值得写全；② 改 method 白名单时记得同步三处（Info Enum / 校验 switch / 测试非法用例）。 |
-| **涉及文件** | [internal/agent/tools/ssrf.go](internal/agent/tools/ssrf.go)（新）、[internal/agent/tools/http_request.go](internal/agent/tools/http_request.go)、[internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)（isPrivateHost 加固 + loader 换共享客户端）、[internal/agent/tools/ssrf_test.go](internal/agent/tools/ssrf_test.go)（新）、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/tools/doc.go](internal/agent/tools/doc.go)、[internal/database/db.go](internal/database/db.go)（ai_http_max_chars 种子） |
-
----
-
-## 记忆点 2：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
+## 记忆点 1：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +569,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 2：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -590,7 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 3：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +589,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 4：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -615,7 +603,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
+## 记忆点 5：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 使用率圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -628,7 +616,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
+## 记忆点 6：上下文摘要状态条修复 + 回退功能 + 图标统一 + 使用率两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -643,7 +631,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：用户消息发送时间显示 + 智能截断与悬停提示
+## 记忆点 7：用户消息发送时间显示 + 智能截断与悬停提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +643,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
+## 记忆点 8：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -667,13 +655,29 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
+## 记忆点 9：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | 在 AI 系统提示词中注入当前模式描述（Chat/Agent/Plan 三种方案B文案），让 AI 具备模式自我认知。Chat 模式注入 `chatModeDescription`（纯文本对话，不调用工具，用户请求搜索笔记时建议切换到 Agent），Agent 模式注入 `agentModeDescription`（可调用工具完成任务），Plan 模式注入 `planModeDescription`（先计划后执行）。注入点在 `CallAIStream` 和 `CallAIAgentStream` 中，不修改 `buildAIContextInstruction` 签名。 |
 | **实现要点** | [app.go](app.go) 新增三个包级常量 `chatModeDescription`/`agentModeDescription`/`planModeDescription`。Chat 模式（`CallAIStream`）在 `buildAIContextInstruction` 结果末尾追加 `chatModeDescription`；Agent/Plan 模式（`CallAIAgentStream`）将 `sessCfg.LoadSessionConfig` 提前到 instruction 构建之前，在所有工具使用规范之后追加 `agentModeDescription`/`planModeDescription`（根据 `sessCfg.Mode` 判断）。Plan 模式描述注入 ReAct 循环的 Instruction 中，而非 `planGenSystemPrompt`（计划生成阶段已有独立角色定义）。 |
 | **涉及文件** | [app.go](app.go)（常量定义 + `CallAIStream` + `CallAIAgentStream`） |
+
+---
+
+## 记忆点 10：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手侧栏内联标题过滤搜索（`#aiSessionSearch`，仅过滤已加载会话标题）整体改造为按钮触发的全局搜索弹窗（`#aiSearchModal`，复用笔记搜索弹窗 `.search-modal` 样式体系），检索全部历史会话的标题与消息内容；Ctrl+K 开/关切换（仅 AI 视图生效，流式期间拦截并通知）。检索范围含会话标题 + 消息正文，结果条目统一样式：上部左侧会话名（ellipsis 截断）+ 右侧时间，下部摘要行——**不区分消息/会话与提问/回答，无角色徽标无图标**。 |
+| **后端搜索接口（重要）** | [ai_service.go](internal/services/ai_service.go) `SearchAIChat(keyword, page, pageSize)` 返回两组结果：① **标题命中**：`LIKE ? ESCAPE '\'`（`escapeLike` 转义 `\ % _`），不分页 Limit 20，`TitleTotal` 用独立 COUNT 取真实总数（**不得用窗口 COUNT 受 Limit 截断影响**）；附带各会话最新一条非 system 消息摘要——**窗口函数 `ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC, id DESC)` 取 rn=1 单查询批量获取**（避免每会话一次 N+1 查询）；排序：SQL 先 `updated_at DESC, id DESC`，Go 侧 `titleMatchTier` 按精确度稳定排序（完全相等 3 > 前缀 2 > 包含 1，转小写与 LIKE 口径一致，同档保持时间序）。② **消息命中**：排除 system 角色 + JOIN 过滤软删除会话，分页；**会话聚类排序**：`COUNT(*) OVER (PARTITION BY session_id)` 命中条数多者整体靠前 → 会话内 `created_at DESC, id DESC` → `id` 倒序兜底（**无 `id` 兜底时同 created_at 顺序不定会分页漏/重**）。摘要同笔记 `noteThinSelect` 口径：SQL 层 `SUBSTR(content, MAX(1, INSTR(content, ?) - 40), 120)` 围绕关键词截取约 120 字符（INSTR 大小写敏感，未命中退化取前 120；单引号转义 `''`）。[app.go](app.go) `SearchAIChat` 绑定。 |
+| **前端弹窗（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) `openAiSearchModal`/`toggleAiSearchModal`/`closeAiSearchModal`/`aiSearchLoadPage`：200ms 输入防抖 + `_aiSearchSeq` 请求序号丢弃过期响应（双保险）；**打开与关闭都必须 `clearTimeout(_aiSearchInputTimer)`**——关闭后定时器仍会以残留关键词空跑一次后台搜索（笔记弹窗 `closeSearchModal` 同款问题已一并修复，教训：防抖定时器清理必须覆盖 open/close 两侧）；触底分页**每页条数取笔记首页 `page_size` 设置项**（`GetAllSettings` 异步获取，取不到保持默认 20）；**追加加载失败回滚页码**（catch 中 `_aiSearchPage -= 1`，带 seq 与页码双重守卫，防下次触底跳页漏数据，与笔记弹窗同口径）；首页搜索失败弹通知、追加失败静默防通知轰炸。键盘 ↑↓ 导航 + Enter 跳转（Enter 不触发新搜索）。 |
+| **消息跳转定位（重要）** | 点击结果 `jumpToMessage(sessionId, msgId)`：跨会话先 `switchSession`（默认只加载最近 6 条）；目标消息不在已加载窗口时**循环逐批 `LoadAISessionMessagesPaginated(sid, 50, _oldestMsgId)` 加载更早历史**直至找到或耗尽（`_oldestMsgId=0` 终止），定位后 `scrollIntoView` 居中 + 复用既有 `ai-msg-jump-target` 闪烁高亮。switchSession 原滚动上滑加载逻辑抽取为 `prependOlderMessages` 共用（防重复实现漂移）。标题命中条目点击同样定位到该会话最新消息。 |
+| **快捷键与流式拦截** | [main.js](frontend/src/main.js) `handleKeyboardNavigation`：Ctrl/Cmd+K → `toggleAiSearchModal`（`state.currentView === 'ai-chat'` 视图守卫，同 Ctrl+J 模式；已开则关，未开则开）；**全局 Ctrl+F 编辑器外同步改为搜索弹窗开关切换**（已开 `closeSearchModal`/未开 `openSearchModal`，编辑器内 CM6 面板与预览查找行为不变）；快捷键说明页补 `Ctrl + K` 行。流式拦截三道防线：`openAiSearchModal`/侧栏按钮/`jumpToMessage` 均在 `isStreaming` 时拦截，`showNotification('回复进行中，暂时无法搜索', 'warning')` + `setToggleLocked` 置灰按钮。 |
+| **滚动防劫持教训** | 弹窗列表初次滚动被拉回顶部：`renderResults` 每次重渲列表后无条件同步键盘选中态 + `scrollIntoView`，滚轮 hover 移动也触发选中切换并滚动——修复为**键盘导航（↑↓/Enter）时才同步选中与滚动，鼠标 hover 只做高亮不滚动**；且重渲仅在有关键词结果时执行。 |
+| **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`SearchAIChat` + `AISearchSessionHit`/`AISearchMessageHit`/`AISearchResult` + `titleMatchTier` + 摘要截取）、[app.go](app.go)（`SearchAIChat` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（弹窗模块 + `jumpToMessage` + `prependOlderMessages` 抽取 + 旧内联搜索整体移除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+K/Ctrl+F 分支 + 快捷键说明 + 笔记弹窗关闭清定时器）、[frontend/index.html](frontend/index.html)（侧栏搜索按钮 + `#aiSearchModal`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（AI 条目统一样式）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（搜索按钮样式） |
+
+---
 
 ## 十二、AGENTS.md 维护规范
 

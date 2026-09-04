@@ -35,11 +35,9 @@ let barsArea = null;          // #aiChatBarsArea（引用/技能/文件栏容器
 let mcpWarmupDone = false;
 
 // 状态
-let chatHistory = []; // 仅渲染缓冲区，不再发送给后端 
+let chatHistory = []; // 仅渲染缓冲区，不再发送给后端
 let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
-let sessionSearchQuery = '';
-let sessionSearchEl = null;
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
 let currentMode = 'agent';    // 'chat' | 'agent' | 'plan'
 // 窗口级标志，与 isStreaming 同步，供 main.js 全局拖拽系统读取
@@ -56,6 +54,24 @@ let _editingMsgEl = null;      // 当前正在编辑的消息元素，防止同�
 let _jumpDebounceTimer = null;  // 跳转防抖定时器
 let _jumpHighlightTimer = null; // 高亮清除定时器
 let _jumpCurrentIndex = -1;     // 上次跳转到的用户消息索引（-1=未初始化，从视口定位）
+
+// 全局搜索弹窗状态
+let aiSearchModalEl = null;         // #aiSearchModal
+let aiSearchModalInput = null;      // #aiSearchModalInput
+let aiSearchModalResults = null;    // #aiSearchModalResults
+let aiSearchModalEmpty = null;      // #aiSearchModalEmpty
+let aiSearchModalFooter = null;     // #aiSearchModalFooter
+let aiSearchModalCount = null;      // #aiSearchModalCount
+let aiSearchBtnEl = null;           // #aiChatSearchBtn
+let _aiSearchKeyword = '';          // 当前搜索关键词
+let _aiSearchPage = 1;              // 当前消息命中页码
+let _aiSearchMessageTotal = 0;      // 消息命中总数
+let _aiSearchHasMore = false;       // 是否还有更多消息命中
+let _aiSearchLoading = false;       // 加载中标志
+let _aiSearchSeq = 0;               // 请求序号，丢弃过期响应
+let _aiSearchSelectedIdx = -1;      // 键盘导航选中索引
+let _aiSearchInputTimer = null;     // 输入防抖定时器
+let _aiSearchPageSize = 20;         // 每页条数，跟随笔记首页分页设置项（page_size），打开弹窗时刷新
 
 // 更多操作下拉菜单
 let sessionMoreMenu = null;    // 更多操作下拉菜单元素
@@ -348,7 +364,7 @@ export async function initAIChat() {
     planPanelEl = document.getElementById('aiPlanPanel');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
-    sessionSearchEl = document.getElementById('aiSessionSearch');
+    aiSearchBtnEl = document.getElementById('aiChatSearchBtn');
     contextUsageEl = document.getElementById('aiChatContextUsage');
     contextUsageArcEl = contextUsageEl?.querySelector('.ai-context-usage-arc') || null;
     contextUsageTextEl = contextUsageEl?.querySelector('.ai-context-usage-text') || null;
@@ -977,13 +993,11 @@ function bindEvents() {
         toggleBtn.addEventListener('click', window.toggleAISessionSidebar);
     }
 
-    // 对话搜索
-    if (sessionSearchEl) {
-        sessionSearchEl.addEventListener('input', () => {
-            sessionSearchQuery = sessionSearchEl.value.trim().toLowerCase();
-            renderSessionList();
-        });
+    // 全局搜索：按钮唤起弹窗
+    if (aiSearchBtnEl) {
+        aiSearchBtnEl.addEventListener('click', openAiSearchModal);
     }
+    initAiSearchModal();
 
     // ── 模型选择器事件 ──
     if (modelTrigger && modelDropdown) {
@@ -1563,13 +1577,7 @@ function showAISessionRenameDialog(sessionId, currentTitle) {
 function renderSessionList() {
     if (!sessionListEl) return;
 
-    // 对话搜索过滤
-    let filteredSessions = sessions;
-    if (sessionSearchQuery) {
-        filteredSessions = sessions.filter(s => s.title.toLowerCase().includes(sessionSearchQuery));
-    }
-
-    if (filteredSessions.length === 0) {
+    if (sessions.length === 0) {
         sessionListEl.innerHTML = '<div class="ai-session-empty">暂无会话</div>';
         return;
     }
@@ -1578,14 +1586,14 @@ function renderSessionList() {
 
     // 找出置顶到非置顶的过渡索引（后端已排序: 置顶优先）
     let pinDividerIndex = -1;
-    for (let i = 0; i < filteredSessions.length - 1; i++) {
-        if (filteredSessions[i].is_pinned && !filteredSessions[i + 1].is_pinned) {
+    for (let i = 0; i < sessions.length - 1; i++) {
+        if (sessions[i].is_pinned && !sessions[i + 1].is_pinned) {
             pinDividerIndex = i;
             break;
         }
     }
 
-    filteredSessions.forEach((s, index) => {
+    sessions.forEach((s, index) => {
         const item = document.createElement('div');
         item.className = 'ai-session-item' + (s.id === activeSessionId ? ' active' : '');
         if (s.is_pinned) item.classList.add('pinned');
@@ -1601,16 +1609,7 @@ function renderSessionList() {
 
         const title = document.createElement('span');
         title.className = 'ai-session-item-title';
-        // 搜索关键词高亮
-        if (sessionSearchQuery && s.title.toLowerCase().includes(sessionSearchQuery)) {
-            const idx = s.title.toLowerCase().indexOf(sessionSearchQuery);
-            const before = s.title.substring(0, idx);
-            const match = s.title.substring(idx, idx + sessionSearchQuery.length);
-            const after = s.title.substring(idx + sessionSearchQuery.length);
-            title.innerHTML = before + '<mark class="ai-search-highlight">' + match + '</mark>' + after;
-        } else {
-            title.textContent = s.title;
-        }
+        title.textContent = s.title;
         title.title = s.title;
         item.appendChild(title);
 
@@ -1798,7 +1797,6 @@ async function switchSession(id) {
             if (messagesEl.scrollTop > 0) return;
             if (_oldestMsgId <= 0) return;
             _loadingMore = true;
-            const prevScrollHeight = messagesEl.scrollHeight;
             try {
                 const olderMsgs = await window.go.main.App.LoadAISessionMessagesPaginated(activeSessionId, 6, _oldestMsgId);
                 if (!olderMsgs || olderMsgs.length === 0) {
@@ -1806,42 +1804,466 @@ async function switchSession(id) {
                     _loadingMore = false;
                     return;
                 }
-                _oldestMsgId = olderMsgs[0].id;
-                // 记录当前第一个子元素作为锚点
-                const firstChild = messagesInnerEl.firstChild;
-                // 渲染新消息（addMessage 会追加到末尾）
-                for (const msg of olderMsgs) {
-                    if (msg.role === 'user') {
-                        addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
-                        const userMsgEl = messagesInnerEl.lastElementChild;
-                        if (userMsgEl) {
-                            userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0, msg.created_at));
-                            bindMsgContextMenu(userMsgEl, msg.content, 'user');
-                        }
-                    } else if (msg.role === 'assistant') {
-                        const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined);
-                        el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
-                        bindMsgContextMenu(el, msg.content, 'assistant');
-                    }
-                }
-                // 将新消息按原有 ASC 顺序移到列表顶部
-                const firstNewIdx = messagesInnerEl.children.length - olderMsgs.length;
-                const newChildren = Array.from(messagesInnerEl.children).slice(firstNewIdx);
-                for (const el of newChildren) {
-                    messagesInnerEl.insertBefore(el, firstChild);
-                }
-                // 恢复滚动位置
-                messagesEl.style.scrollBehavior = 'auto';
-                messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
-                messagesEl.style.scrollBehavior = '';
-                // 更新 chatHistory 缓冲区
-                chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+                prependOlderMessages(olderMsgs);
             } catch (_) { /* 静默 */ }
             _loadingMore = false;
         };
         messagesEl.addEventListener('scroll', _scrollHandler, { passive: true });
 
         inputEl?.focus();
+    } catch (_) { /* 静默失败 */ }
+}
+
+/**
+ * 渲染更早的一批历史消息并前插到列表顶部（滚动上滑加载与搜索跳转定位共用）
+ * 同时更新 _oldestMsgId 与 chatHistory 缓冲区，并恢复滚动位置避免视觉跳跃
+ */
+function prependOlderMessages(olderMsgs) {
+    _oldestMsgId = olderMsgs[0].id;
+    const prevScrollHeight = messagesEl.scrollHeight;
+    // 记录当前第一个子元素作为锚点
+    const firstChild = messagesInnerEl.firstChild;
+    // 渲染新消息（addMessage 会追加到末尾）
+    for (const msg of olderMsgs) {
+        if (msg.role === 'user') {
+            addMessage(msg.content, 'user', undefined, undefined, undefined, msg.tokens || 0, msg.id, undefined, undefined, true, true, msg.meta || '');
+            const userMsgEl = messagesInnerEl.lastElementChild;
+            if (userMsgEl) {
+                userMsgEl.appendChild(createMsgActions(msg.content, 'user', undefined, msg.tokens || 0, msg.created_at));
+                bindMsgContextMenu(userMsgEl, msg.content, 'user');
+            }
+        } else if (msg.role === 'assistant') {
+            const el = addMessage(msg.content, 'assistant', msg.reasoning_content || '', msg.thinking_elapsed || 0, msg.total_elapsed || 0, msg.tokens || 0, msg.id, msg.recall_cards, msg.tool_calls, true, true, undefined);
+            el.appendChild(createMsgActions(msg.content, 'assistant', 0, msg.tokens || 0));
+            bindMsgContextMenu(el, msg.content, 'assistant');
+        }
+    }
+    // 将新消息按原有 ASC 顺序移到列表顶部
+    const firstNewIdx = messagesInnerEl.children.length - olderMsgs.length;
+    const newChildren = Array.from(messagesInnerEl.children).slice(firstNewIdx);
+    for (const el of newChildren) {
+        messagesInnerEl.insertBefore(el, firstChild);
+    }
+    // 恢复滚动位置
+    messagesEl.style.scrollBehavior = 'auto';
+    messagesEl.scrollTop = messagesEl.scrollHeight - prevScrollHeight;
+    messagesEl.style.scrollBehavior = '';
+    // 更新 chatHistory 缓冲区
+    chatHistory.unshift(...olderMsgs.map(msg => ({ id: msg.id, role: msg.role, content: msg.content, tokens: msg.tokens || 0, reasoning_content: msg.reasoning_content || '', thinking_elapsed: msg.thinking_elapsed || 0, total_elapsed: msg.total_elapsed || 0, recall_cards: msg.recall_cards || null, tool_calls: msg.tool_calls || null, meta: msg.meta || '' })));
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AI 全局搜索弹窗（#aiSearchModal）
+   检索所有历史会话的标题与消息内容，交互模式与笔记全局搜索弹窗一致
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * HTML 转义（搜索弹窗局部用）
+ */
+function _aiEscapeHtml(text) {
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * 高亮关键词：先 HTML 转义文本，再包裹命中片段（与笔记搜索弹窗同口径）
+ */
+function _aiHighlight(text, kw) {
+    const escaped = _aiEscapeHtml(text);
+    if (!escaped || !kw) return escaped;
+    const re = new RegExp(String(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return escaped.replace(re, m => `<mark>${m}</mark>`);
+}
+
+/**
+ * 初始化搜索弹窗元素引用与事件（模块加载后由 initAIChat 调用一次）
+ */
+function initAiSearchModal() {
+    aiSearchModalEl = document.getElementById('aiSearchModal');
+    aiSearchModalInput = document.getElementById('aiSearchModalInput');
+    aiSearchModalResults = document.getElementById('aiSearchModalResults');
+    aiSearchModalEmpty = document.getElementById('aiSearchModalEmpty');
+    aiSearchModalFooter = document.getElementById('aiSearchModalFooter');
+    aiSearchModalCount = document.getElementById('aiSearchModalCount');
+    if (!aiSearchModalEl) return;
+    // 输入防抖
+    if (aiSearchModalInput) {
+        aiSearchModalInput.addEventListener('input', () => {
+            if (_aiSearchInputTimer) clearTimeout(_aiSearchInputTimer);
+            _aiSearchInputTimer = setTimeout(() => {
+                _aiSearchKeyword = aiSearchModalInput ? aiSearchModalInput.value.trim() : '';
+                _aiSearchPage = 1;
+                _aiSearchSelectedIdx = -1;
+                aiSearchLoadPage(1, false);
+            }, 200);
+        });
+    }
+    // 弹窗内键盘导航（capture 阶段，避免与全局快捷键冲突）
+    aiSearchModalEl.addEventListener('keydown', handleAiSearchKeydown, true);
+    // Esc 关闭（capture 阶段，优先于 main.js 全局 Esc 处理）
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!aiSearchModalEl || !aiSearchModalEl.classList.contains('visible')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        closeAiSearchModal();
+    }, true);
+    // 滚动触底加载更多
+    if (aiSearchModalResults) {
+        aiSearchModalResults.addEventListener('scroll', () => {
+            if (!_aiSearchHasMore || _aiSearchLoading) return;
+            const el = aiSearchModalResults;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+                _aiSearchPage += 1;
+                aiSearchLoadPage(_aiSearchPage, true);
+            }
+        });
+    }
+    // 点击遮罩关闭
+    aiSearchModalEl.addEventListener('click', (e) => {
+        if (e.target.classList.contains('search-modal-mask') || e.target === aiSearchModalEl) {
+            closeAiSearchModal();
+        }
+    });
+}
+
+/**
+ * 刷新每页条数（读取笔记首页分页设置项 page_size，失败时保持默认 20）
+ */
+async function _aiResolvePageSize() {
+    try {
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetAllSettings) {
+            const cfg = await window.go.main.App.GetAllSettings();
+            if (cfg && cfg.page_size > 0) {
+                _aiSearchPageSize = cfg.page_size;
+            }
+        }
+    } catch (_) { /* 静默，保持当前值 */ }
+}
+
+/**
+ * 打开搜索弹窗
+ */
+export function openAiSearchModal() {
+    if (!aiSearchModalEl) return;
+    // AI 回复期间拒绝打开搜索弹窗
+    if (isStreaming) {
+        window.showNotification?.('回复进行中，暂时无法搜索', 'warning');
+        return;
+    }
+    // 锁定 body 滚动
+    document.body.style.overflow = 'hidden';
+    // 刷新每页条数（跟随笔记首页分页设置项，非阻塞）
+    _aiResolvePageSize();
+    // 显示弹窗
+    aiSearchModalEl.classList.add('visible');
+    // 重置状态
+    _aiSearchSeq++; // 使关闭前未完成的旧请求失效
+    // 清除待触发的输入防抖定时器，避免残留关键词空跑一次后台搜索
+    if (_aiSearchInputTimer) { clearTimeout(_aiSearchInputTimer); _aiSearchInputTimer = null; }
+    _aiSearchKeyword = '';
+    _aiSearchPage = 1;
+    _aiSearchMessageTotal = 0;
+    _aiSearchHasMore = false;
+    _aiSearchLoading = false;
+    _aiSearchSelectedIdx = -1;
+    // 重置 UI
+    if (aiSearchModalInput) aiSearchModalInput.value = '';
+    if (aiSearchModalResults) aiSearchModalResults.innerHTML = '';
+    if (aiSearchModalEmpty) aiSearchModalEmpty.style.display = 'none';
+    if (aiSearchModalFooter) aiSearchModalFooter.style.display = 'none';
+    const emptyTitle = document.getElementById('aiSearchModalEmptyTitle');
+    const emptyDesc = document.getElementById('aiSearchModalEmptyDesc');
+    if (emptyTitle) emptyTitle.textContent = '开始搜索你的 AI 对话';
+    if (emptyDesc) emptyDesc.textContent = '输入关键字搜索会话标题或消息内容';
+    // 弹窗动画完成后聚焦输入框（transitionend + 500ms 兜底）
+    const focusInput = () => { if (aiSearchModalInput) aiSearchModalInput.focus(); };
+    const contentEl = aiSearchModalEl.querySelector('.search-modal-content');
+    if (contentEl) {
+        contentEl.addEventListener('transitionend', focusInput, { once: true });
+        setTimeout(focusInput, 500);
+    } else {
+        focusInput();
+    }
+}
+
+/**
+ * 关闭搜索弹窗
+ */
+function closeAiSearchModal() {
+    if (!aiSearchModalEl) return;
+    // 清除待触发的输入防抖定时器，避免关闭后空跑一次后台搜索
+    if (_aiSearchInputTimer) { clearTimeout(_aiSearchInputTimer); _aiSearchInputTimer = null; }
+    // 先解锁 body 滚动
+    document.body.style.overflow = '';
+    // 添加 closing class 触发退出动画
+    aiSearchModalEl.classList.add('closing');
+    setTimeout(() => {
+        aiSearchModalEl.classList.remove('visible');
+        aiSearchModalEl.classList.remove('closing');
+    }, 150);
+}
+
+/**
+ * 切换搜索弹窗开/关（供 Ctrl+K 复用：未开则开，已开则关）
+ */
+export function toggleAiSearchModal() {
+    if (aiSearchModalEl && aiSearchModalEl.classList.contains('visible')) {
+        closeAiSearchModal();
+        return;
+    }
+    openAiSearchModal();
+}
+
+/**
+ * 加载搜索分页（调用后端 SearchAIChat，含过期响应丢弃）
+ */
+async function aiSearchLoadPage(page, append) {
+    if (!aiSearchModalResults) return;
+    const seq = ++_aiSearchSeq;
+    _aiSearchLoading = true;
+    try {
+        const kw = _aiSearchKeyword;
+        let result = null;
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.SearchAIChat) {
+            result = await window.go.main.App.SearchAIChat(kw, page, _aiSearchPageSize);
+        } else {
+            console.warn('SearchAIChat 未绑定');
+        }
+        // 已有更新的请求发出，丢弃本次过期响应
+        if (seq !== _aiSearchSeq) return;
+        result = result || { sessions: [], messages: [], title_total: 0, message_total: 0 };
+        _aiSearchMessageTotal = result.message_total || 0;
+        const loaded = (page - 1) * _aiSearchPageSize + (result.messages || []).length;
+        _aiSearchHasMore = loaded < _aiSearchMessageTotal;
+        if (!append) aiSearchModalResults.innerHTML = '';
+        // 标题命中仅在第一页渲染（后端不分页，上限 20）
+        if (!append) renderAiSearchSessionHits(result.sessions || [], kw);
+        renderAiSearchMessageHits(result.messages || [], kw, append);
+        // 底部统计（只要有结果就固定显示）
+        if (aiSearchModalResults.children.length > 0) {
+            if (aiSearchModalCount) aiSearchModalCount.textContent = `共 ${result.title_total || 0} 个会话 · ${_aiSearchMessageTotal} 条消息`;
+            if (aiSearchModalFooter) aiSearchModalFooter.style.display = 'flex';
+        } else {
+            if (aiSearchModalFooter) aiSearchModalFooter.style.display = 'none';
+        }
+        // 空状态
+        if (aiSearchModalResults.children.length === 0 && page === 1) {
+            if (aiSearchModalEmpty) {
+                aiSearchModalEmpty.style.display = kw ? 'flex' : 'none';
+                if (kw) {
+                    const emptyTitle = document.getElementById('aiSearchModalEmptyTitle');
+                    const emptyDesc = document.getElementById('aiSearchModalEmptyDesc');
+                    if (emptyTitle) emptyTitle.textContent = '没有找到匹配的会话或消息';
+                    if (emptyDesc) emptyDesc.textContent = `试试换个关键词:「${kw}」`;
+                }
+            }
+        } else {
+            if (aiSearchModalEmpty) aiSearchModalEmpty.style.display = 'none';
+        }
+    } catch (err) {
+        console.error('[aiSearchModal] load page error:', err);
+        // 首页加载失败才提示（追加加载静默，避免滚动触底时通知轰炸）
+        if (!append) window.showNotification?.('搜索失败，请稍后重试', 'error');
+        // 追加加载失败时回退页码，避免下次触底跳页漏数据（与笔记搜索弹窗同口径）
+        if (append && seq === _aiSearchSeq && page > 1 && page === _aiSearchPage) {
+            _aiSearchPage -= 1;
+        }
+    } finally {
+        if (seq === _aiSearchSeq) _aiSearchLoading = false;
+    }
+}
+
+/**
+ * 渲染会话标题命中项（仅第一页，置顶于消息命中之前，样式与消息命中统一）
+ * 上部：会话名称（左，超出省略）+ 时间（右）；下部：会话最新一条消息摘要
+ */
+function renderAiSearchSessionHits(hits, kw) {
+    if (!aiSearchModalResults || !hits.length) return;
+    const frag = document.createDocumentFragment();
+    const baseIdx = aiSearchModalResults.children.length;
+    hits.forEach((hit, i) => {
+        const item = document.createElement('div');
+        item.className = 'search-modal-item';
+        item.dataset.sessionId = String(hit.id);
+        if (hit.message_id) item.dataset.msgId = String(hit.message_id);
+        item.dataset.idx = String(baseIdx + i);
+        item.style.animationDelay = '0ms';
+        // 上部：会话名称（左）+ 时间（右）
+        const top = document.createElement('div');
+        top.className = 'ai-search-item-top';
+        const sessionEl = document.createElement('span');
+        sessionEl.className = 'ai-search-item-session';
+        sessionEl.innerHTML = '<span>' + _aiHighlight(hit.title || '(无标题)', kw) + '</span>';
+        sessionEl.title = hit.title || '';
+        top.appendChild(sessionEl);
+        const timeEl = document.createElement('span');
+        timeEl.className = 'ai-search-item-time';
+        timeEl.textContent = hit.updated_at || '';
+        top.appendChild(timeEl);
+        item.appendChild(top);
+        // 下部：会话最新一条消息摘要（无消息时不渲染）
+        if (hit.snippet) {
+            const snippetEl = document.createElement('div');
+            snippetEl.className = 'search-modal-item-snippet';
+            snippetEl.innerHTML = _aiEscapeHtml(String(hit.snippet).replace(/\s+/g, ' ').trim());
+            item.appendChild(snippetEl);
+        }
+        // 点击：有最新消息则定位到该消息，否则仅切换会话
+        item.addEventListener('click', () => {
+            if (hit.message_id) {
+                jumpToMessage(hit.id, hit.message_id);
+            } else {
+                closeAiSearchModal();
+                switchSession(hit.id);
+            }
+        });
+        item.addEventListener('mouseenter', () => {
+            updateAiSearchSelected(parseInt(item.dataset.idx, 10), false);
+        });
+        frag.appendChild(item);
+    });
+    aiSearchModalResults.appendChild(frag);
+}
+
+/**
+ * 渲染消息内容命中项（分页追加，样式与会话命中统一）
+ * 上部：会话名称（左，超出省略）+ 时间（右）；下部：命中消息摘要（关键词高亮）
+ */
+function renderAiSearchMessageHits(hits, kw, append) {
+    if (!aiSearchModalResults || !hits.length) return;
+    const frag = document.createDocumentFragment();
+    const baseIdx = aiSearchModalResults.children.length;
+    hits.forEach((hit, i) => {
+        const item = document.createElement('div');
+        item.className = 'search-modal-item';
+        item.dataset.sessionId = String(hit.session_id);
+        item.dataset.msgId = String(hit.message_id);
+        item.dataset.idx = String(baseIdx + i);
+        item.style.animationDelay = '0ms';
+        // 上部：会话名称（左）+ 时间（右）
+        const top = document.createElement('div');
+        top.className = 'ai-search-item-top';
+        const sessionEl = document.createElement('span');
+        sessionEl.className = 'ai-search-item-session';
+        sessionEl.innerHTML = '<span>' + _aiEscapeHtml(hit.session_title || '(无标题)') + '</span>';
+        sessionEl.title = hit.session_title || '';
+        top.appendChild(sessionEl);
+        const timeEl = document.createElement('span');
+        timeEl.className = 'ai-search-item-time';
+        timeEl.textContent = hit.created_at || '';
+        top.appendChild(timeEl);
+        item.appendChild(top);
+        // 下部：命中消息摘要（后端已围绕关键词截取约 120 字符，仅做空白归一化）
+        const snippetEl = document.createElement('div');
+        snippetEl.className = 'search-modal-item-snippet';
+        const snippet = String(hit.snippet || '').replace(/\s+/g, ' ').trim();
+        snippetEl.innerHTML = _aiHighlight(snippet, kw);
+        item.appendChild(snippetEl);
+        item.addEventListener('click', () => {
+            jumpToMessage(hit.session_id, hit.message_id);
+        });
+        item.addEventListener('mouseenter', () => {
+            updateAiSearchSelected(baseIdx + i, false);
+        });
+        frag.appendChild(item);
+    });
+    aiSearchModalResults.appendChild(frag);
+}
+
+/**
+ * 弹窗内键盘导航与确认（↑↓ 移动选中项，Enter 跳转）
+ */
+function handleAiSearchKeydown(e) {
+    if (!aiSearchModalEl || !aiSearchModalEl.classList.contains('visible')) return;
+    const items = aiSearchModalResults ? aiSearchModalResults.querySelectorAll('.search-modal-item') : [];
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (items.length === 0) return;
+        const next = _aiSearchSelectedIdx < 0 ? 0 : (_aiSearchSelectedIdx + 1) % items.length;
+        updateAiSearchSelected(next);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (items.length === 0) return;
+        const prev = _aiSearchSelectedIdx <= 0 ? items.length - 1 : _aiSearchSelectedIdx - 1;
+        updateAiSearchSelected(prev);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = _aiSearchSelectedIdx >= 0 ? _aiSearchSelectedIdx : 0;
+        if (items[idx]) items[idx].click();
+    }
+}
+
+/**
+ * 更新弹窗内结果项的选中索引
+ * scroll=false 用于鼠标悬停（只更新选中态，不滚动，避免与滚轮滚动互相打架）
+ */
+function updateAiSearchSelected(idx, scroll = true) {
+    if (!aiSearchModalResults) return;
+    const items = aiSearchModalResults.querySelectorAll('.search-modal-item');
+    items.forEach((el, i) => {
+        el.classList.toggle('selected', i === idx);
+    });
+    _aiSearchSelectedIdx = idx;
+    // 仅滚动结果容器自身，把选中项滚入可视区（不用 scrollIntoView，避免波及祖先滚动容器）
+    if (scroll && items[idx]) {
+        const container = aiSearchModalResults;
+        const cRect = container.getBoundingClientRect();
+        const eRect = items[idx].getBoundingClientRect();
+        if (eRect.top < cRect.top) {
+            container.scrollTop -= cRect.top - eRect.top;
+        } else if (eRect.bottom > cRect.bottom) {
+            container.scrollTop += eRect.bottom - cRect.bottom;
+        }
+    }
+}
+
+/**
+ * 从搜索结果跳转到指定会话的目标消息：
+ * 跨会话时先切换会话；目标消息不在已加载窗口内时逐批加载更早历史（每批 50 条），
+ * 定位成功后滚动至视口中央并闪烁高亮（复用既有 ai-msg-jump-target 机制）
+ */
+async function jumpToMessage(sessionId, msgId) {
+    closeAiSearchModal();
+    if (isStreaming) {
+        window.showNotification?.('回复进行中，暂时无法跳转', 'warning');
+        return;
+    }
+    try {
+        if (sessionId !== activeSessionId) {
+            await switchSession(sessionId);
+        }
+        let target = messagesInnerEl ? messagesInnerEl.querySelector(`[data-msg-id="${msgId}"]`) : null;
+        // 目标消息不在已加载窗口内 → 逐批加载更早历史直到找到或耗尽
+        while (!target && _oldestMsgId > 0) {
+            const olderMsgs = await window.go.main.App.LoadAISessionMessagesPaginated(activeSessionId, 50, _oldestMsgId);
+            if (!olderMsgs || olderMsgs.length === 0) {
+                _oldestMsgId = 0;
+                break;
+            }
+            prependOlderMessages(olderMsgs);
+            target = messagesInnerEl.querySelector(`[data-msg-id="${msgId}"]`);
+        }
+        if (!target) {
+            window.showNotification?.('未找到该消息，可能已被删除', 'warning');
+            return;
+        }
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        // 清除旧高亮并闪烁目标消息
+        document.querySelectorAll('.ai-msg-jump-target').forEach(el => el.classList.remove('ai-msg-jump-target'));
+        if (_jumpHighlightTimer) { clearTimeout(_jumpHighlightTimer); _jumpHighlightTimer = null; }
+        target.classList.add('ai-msg-jump-target');
+        _jumpHighlightTimer = setTimeout(() => {
+            target.classList.remove('ai-msg-jump-target');
+            _jumpHighlightTimer = null;
+        }, 1500);
     } catch (_) { /* 静默失败 */ }
 }
 
@@ -6669,7 +7091,7 @@ function setToggleLocked(locked) {
     sidebarToggleBtn?.classList.toggle('is-locked', locked);
     sessionNewBtnEl?.classList.toggle('is-locked', locked);
     clearBtnEl?.classList.toggle('is-locked', locked);
-    if (sessionSearchEl) sessionSearchEl.disabled = locked;
+    if (aiSearchBtnEl) aiSearchBtnEl.disabled = locked;
 
     if (locked) {
         // 锁定同时收起可能已展开的下拉菜单

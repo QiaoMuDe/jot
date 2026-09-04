@@ -518,6 +518,10 @@ export function SaveSessionConfig(arg1, arg2) {
   return window['go']['main']['App']['SaveSessionConfig'](arg1, arg2);
 }
 
+export function SearchAIChat(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SearchAIChat'](arg1, arg2, arg3);
+}
+
 export function SearchNoteIDs(arg1, arg2, arg3) {
   return window['go']['main']['App']['SearchNoteIDs'](arg1, arg2, arg3);
 }

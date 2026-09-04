@@ -264,6 +264,8 @@ export function SaveMCPServer(arg1:models.MCPServer):Promise<void>;
 
 export function SaveSessionConfig(arg1:number,arg2:services.SessionConfig):Promise<void>;
 
+export function SearchAIChat(arg1:string,arg2:number,arg3:number):Promise<services.AISearchResult>;
+
 export function SearchNoteIDs(arg1:string,arg2:number,arg3:Array<number>):Promise<Array<number>>;
 
 export function SearchNotes(arg1:string,arg2:number,arg3:number,arg4:number,arg5:string,arg6:string,arg7:string,arg8:Array<number>):Promise<services.PaginatedResult>;

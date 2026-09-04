@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -278,6 +279,33 @@ type AISessionSummary struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// AISearchSessionHit 全局搜索的会话标题命中项（条目样式与消息命中统一）
+type AISearchSessionHit struct {
+	ID        uint   `json:"id"`
+	Title     string `json:"title"`
+	MessageID uint   `json:"message_id"` // 会话最新一条消息 ID（0=会话无消息）
+	Snippet   string `json:"snippet"`    // 最新消息前 120 字符（无消息为空）
+	UpdatedAt string `json:"updated_at"` // 格式 "2006-01-02 15:04"，与 GetAISessions 一致
+}
+
+// AISearchMessageHit 全局搜索的消息内容命中项
+type AISearchMessageHit struct {
+	SessionID    uint   `json:"session_id"`
+	SessionTitle string `json:"session_title"`
+	MessageID    uint   `json:"message_id"`
+	Role         string `json:"role"` // user / assistant（system 已排除）
+	Snippet      string `json:"snippet"`
+	CreatedAt    string `json:"created_at"` // 格式 "2006-01-02 15:04"
+}
+
+// AISearchResult 全局搜索结果（标题命中 + 消息命中分页）
+type AISearchResult struct {
+	Sessions     []AISearchSessionHit `json:"sessions"`
+	Messages     []AISearchMessageHit `json:"messages"`
+	TitleTotal   int64                `json:"title_total"`
+	MessageTotal int64                `json:"message_total"`
+}
+
 // GetAISessions 获取所有会话，置顶优先，然后按标题、更新时间排序，附带最后一条消息摘要
 func (a *AIService) GetAISessions() []AISessionSummary {
 	var sessions []models.AISession
@@ -312,6 +340,170 @@ func (a *AIService) GetAISessions() []AISessionSummary {
 		result = append(result, summary)
 	}
 	return result
+}
+
+// SearchAIChat 全局搜索 AI 会话标题与消息内容。
+// 标题命中不分页（上限 20 条，附带会话最新一条消息摘要），组内按匹配精确度（完全相等 > 前缀 > 包含）
+// 降序、同档按会话 updated_at 倒序排列；消息命中分页，组内按会话聚类：命中条数多的会话整体靠前，
+// 同会话内按消息 created_at 倒序、id 倒序兜底（保证全序，分页不重不漏）；
+// 消息摘要在 SQL 层围绕关键词首次出现位置截取：前 40 + 后 80（约 120 字符），
+// INSTR 未命中（INSTR=0）时退化为取前 120 字符（与笔记搜索 noteThinSelect 同口径）。
+func (a *AIService) SearchAIChat(keyword string, page, pageSize int) (*AISearchResult, error) {
+	result := &AISearchResult{
+		Sessions: make([]AISearchSessionHit, 0),
+		Messages: make([]AISearchMessageHit, 0),
+	}
+	kw := strings.TrimSpace(keyword)
+	if kw == "" {
+		return result, nil
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 30
+	}
+
+	likePattern := "%" + escapeLike(kw) + "%"
+
+	// 会话标题命中（GORM 软删除自动过滤），SQL 先按 updated_at/id 倒序取回，再在 Go 侧按匹配精确度稳定排序
+	var sessions []models.AISession
+	if err := a.db.Model(&models.AISession{}).
+		Where("title LIKE ? ESCAPE '\\'", likePattern).
+		Order("updated_at DESC, id DESC").
+		Limit(20).
+		Find(&sessions).Error; err != nil {
+		a.logger.Errorw("AIService.SearchAIChat 查会话标题失败", fastlog.Error(err))
+		return nil, err
+	}
+	lowerKw := strings.ToLower(kw)
+	sort.SliceStable(sessions, func(i, j int) bool {
+		ti := titleMatchTier(sessions[i].Title, lowerKw)
+		tj := titleMatchTier(sessions[j].Title, lowerKw)
+		if ti != tj {
+			return ti > tj
+		}
+		// 同档时保持 SQL 取回的 updated_at/id 倒序
+		return false
+	})
+
+	// 标题命中真实总数（不受下方 Limit(20) 截断影响，供前端底部统计展示）
+	if err := a.db.Model(&models.AISession{}).
+		Where("title LIKE ? ESCAPE '\\'", likePattern).
+		Count(&result.TitleTotal).Error; err != nil {
+		a.logger.Errorw("AIService.SearchAIChat 统计标题命中失败", fastlog.Error(err))
+		return nil, err
+	}
+
+	// 批量取各命中会话最新一条非 system 消息（窗口函数取每会话 rn=1，
+	// ORDER BY created_at DESC, id DESC 兜底保证同时间戳下选择确定）
+	latestBySession := make(map[uint]models.AIMessage, len(sessions))
+	if len(sessions) > 0 {
+		ids := make([]uint, 0, len(sessions))
+		for _, s := range sessions {
+			ids = append(ids, s.ID)
+		}
+		ranked := a.db.Model(&models.AIMessage{}).
+			Select("id, session_id, content, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC, id DESC) AS rn").
+			Where("session_id IN ? AND role != 'system'", ids)
+		var latestRows []struct {
+			ID        uint
+			SessionID uint
+			Content   string
+		}
+		if err := a.db.Table("(?) AS ranked", ranked).
+			Select("id, session_id, content").
+			Where("rn = 1").
+			Scan(&latestRows).Error; err != nil {
+			a.logger.Errorw("AIService.SearchAIChat 查会话最新消息失败", fastlog.Error(err))
+			return nil, err
+		}
+		for _, r := range latestRows {
+			latestBySession[r.SessionID] = models.AIMessage{ID: r.ID, Content: r.Content}
+		}
+	}
+
+	for _, s := range sessions {
+		hit := AISearchSessionHit{
+			ID:        s.ID,
+			Title:     s.Title,
+			UpdatedAt: s.UpdatedAt.Format("2006-01-02 15:04"),
+		}
+		// 该会话最新一条非 system 消息作为条目摘要（无消息时留空）
+		if latest, ok := latestBySession[s.ID]; ok {
+			hit.MessageID = latest.ID
+			hit.Snippet = truncateRunesForSearch(latest.Content, 120)
+		}
+		result.Sessions = append(result.Sessions, hit)
+	}
+
+	// 消息内容命中（排除 system 消息，JOIN 过滤已删除会话）
+	query := a.db.Table("ai_messages m").
+		Joins("JOIN ai_sessions s ON s.id = m.session_id AND s.deleted_at IS NULL").
+		Where("m.role != 'system'").
+		Where("m.content LIKE ? ESCAPE '\\'", likePattern)
+
+	if err := query.Count(&result.MessageTotal).Error; err != nil {
+		a.logger.Errorw("AIService.SearchAIChat 统计消息命中失败", fastlog.Error(err))
+		return nil, err
+	}
+
+	// 关键词嵌入 SQL 字面量需转义单引号（与 noteThinSelect 同口径）
+	literal := strings.ReplaceAll(kw, "'", "''")
+	snippetExpr := fmt.Sprintf("SUBSTR(m.content, MAX(1, INSTR(m.content, '%s') - 40), 120) AS snippet", literal)
+	var rows []struct {
+		ID        uint
+		SessionID uint
+		Title     string
+		Role      string
+		HitCount  int64
+		Snippet   string
+		CreatedAt time.Time
+	}
+	if err := query.
+		Select("m.id, m.session_id, m.role, s.title AS title, COUNT(*) OVER (PARTITION BY m.session_id) AS hit_count, " + snippetExpr + ", m.created_at").
+		Order("hit_count DESC, m.created_at DESC, m.id DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Scan(&rows).Error; err != nil {
+		a.logger.Errorw("AIService.SearchAIChat 查消息命中失败", fastlog.Error(err))
+		return nil, err
+	}
+	for _, r := range rows {
+		result.Messages = append(result.Messages, AISearchMessageHit{
+			SessionID:    r.SessionID,
+			SessionTitle: r.Title,
+			MessageID:    r.ID,
+			Role:         r.Role,
+			Snippet:      r.Snippet,
+			CreatedAt:    r.CreatedAt.Format("2006-01-02 15:04"),
+		})
+	}
+	return result, nil
+}
+
+// truncateRunesForSearch 按字符数截取文本用于摘要展示（超出部分直接丢弃）
+func truncateRunesForSearch(text string, limit int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= limit {
+		return string(runes)
+	}
+	return string(runes[:limit])
+}
+
+// titleMatchTier 标题匹配精确度分档：3=完全相等，2=以关键词开头，1=包含
+// （仅对 LIKE 已命中的标题调用，所有输入必然包含关键词，故无更低档位）
+// 比较统一转小写，与 SQLite LIKE 的 ASCII 大小写不敏感口径一致
+func titleMatchTier(title, lowerKeyword string) int {
+	lt := strings.ToLower(title)
+	switch {
+	case lt == lowerKeyword:
+		return 3
+	case strings.HasPrefix(lt, lowerKeyword):
+		return 2
+	default:
+		return 1
+	}
 }
 
 // CreateAISession 创建新会话，返回会话 ID，并自动创建默认配置

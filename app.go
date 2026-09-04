@@ -2806,6 +2806,18 @@ func (a *App) GetAISessions() []services.AISessionSummary {
 	return a.aiService.GetAISessions()
 }
 
+// SearchAIChat 全局搜索 AI 会话标题与消息内容（标题命中上限 20，消息命中分页）
+func (a *App) SearchAIChat(keyword string, page, pageSize int) (*services.AISearchResult, error) {
+	a.LogSvc.Logger.Debugw("SearchAIChat", fastlog.String("keyword", keyword), fastlog.Int("page", page), fastlog.Int("pageSize", pageSize))
+	result, err := a.aiService.SearchAIChat(keyword, page, pageSize)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("SearchAIChat 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("SearchAIChat 成功", fastlog.Int64("titleTotal", result.TitleTotal), fastlog.Int64("messageTotal", result.MessageTotal))
+	return result, nil
+}
+
 // TogglePinAISession 切换会话置顶状态
 func (a *App) TogglePinAISession(id uint) error {
 	a.LogSvc.Logger.Debugw("TogglePinAISession", fastlog.Uint("id", id))

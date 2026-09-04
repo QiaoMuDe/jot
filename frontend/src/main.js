@@ -31,7 +31,7 @@ import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
 
 // AI 对话页面模块
-import { initAIChat, onAIChatViewActivated, resetAIChatState } from './js/ai-chat.js';
+import { initAIChat, onAIChatViewActivated, resetAIChatState, toggleAiSearchModal } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';
@@ -6682,8 +6682,12 @@ async function handleKeyboardNavigation(e) {
             openSearchPanel(cmEditor);
             return;
         }
-        // 编辑器外:打开搜索弹窗(替代原 topbar 搜索框聚焦)
-        openSearchModal();
+        // 编辑器外:搜索弹窗开关切换(已开则关闭,未开则打开)
+        if (els.searchModal && els.searchModal.classList.contains('visible')) {
+            closeSearchModal();
+        } else {
+            openSearchModal();
+        }
         return;
     }
 
@@ -6719,6 +6723,13 @@ async function handleKeyboardNavigation(e) {
         if (typeof window.toggleAISessionSidebar === 'function') {
             window.toggleAISessionSidebar();
         }
+        return;
+    }
+
+    // Ctrl/Cmd+K: AI 助手全局搜索会话与消息（仅 AI 助手视图生效；已开则关闭）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && state.currentView === 'ai-chat') {
+        e.preventDefault();
+        toggleAiSearchModal();
         return;
     }
 
@@ -7170,6 +7181,7 @@ function renderShortcutsPage() {
 
         { key: 'Ctrl + 0', desc: '锁屏（需先在设置中启用）' },
         { key: 'Ctrl + J', desc: 'AI 侧栏折叠/展开' },
+        { key: 'Ctrl + K', desc: 'AI 助手内搜索会话与消息' },
         { key: 'Alt + ↑', desc: 'AI 会话中跳转到上一条用户消息' },
         { key: 'Alt + ↓', desc: 'AI 会话中跳转到下一条用户消息' },
     ];
@@ -7964,6 +7976,8 @@ function openSearchModal() {
  */
 function closeSearchModal() {
     if (!els.searchModal) return;
+    // 清除待触发的输入防抖定时器,避免关闭后空跑一次后台搜索
+    if (_searchModalInputTimer) { clearTimeout(_searchModalInputTimer); _searchModalInputTimer = null; }
     // 先立即解锁 body 滚动和关闭下拉（避免卡住）
     document.body.style.overflow = '';
     closeAllFilterDropdowns();

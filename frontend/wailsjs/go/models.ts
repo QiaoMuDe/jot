@@ -720,6 +720,85 @@ export namespace services {
 	        this.model = source["model"];
 	    }
 	}
+	export class AISearchMessageHit {
+	    session_id: number;
+	    session_title: string;
+	    message_id: number;
+	    role: string;
+	    snippet: string;
+	    created_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISearchMessageHit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.session_title = source["session_title"];
+	        this.message_id = source["message_id"];
+	        this.role = source["role"];
+	        this.snippet = source["snippet"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class AISearchSessionHit {
+	    id: number;
+	    title: string;
+	    message_id: number;
+	    snippet: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISearchSessionHit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.message_id = source["message_id"];
+	        this.snippet = source["snippet"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+	export class AISearchResult {
+	    sessions: AISearchSessionHit[];
+	    messages: AISearchMessageHit[];
+	    title_total: number;
+	    message_total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AISearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessions = this.convertValues(source["sessions"], AISearchSessionHit);
+	        this.messages = this.convertValues(source["messages"], AISearchMessageHit);
+	        this.title_total = source["title_total"];
+	        this.message_total = source["message_total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class AISessionSummary {
 	    id: number;
 	    title: string;

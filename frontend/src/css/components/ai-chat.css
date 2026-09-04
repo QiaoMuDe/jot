@@ -1452,8 +1452,9 @@
 #aiChatClearBtn.is-shaking {
     animation: ai-toggle-shake 0.4s ease;
 }
-#aiSessionSearch:disabled {
+#aiChatSearchBtn:disabled {
     opacity: 0.45;
+    cursor: not-allowed;
 }
 
 /* 模型选择器容器 */
@@ -2775,30 +2776,36 @@
     color: var(--text-primary);
 }
 
-/* ── 对话搜索 ── */
+/* ── 对话搜索（按钮触发全局搜索弹窗） ── */
 .ai-session-search-wrap {
     padding: 10px 10px 8px;
 }
 
-.ai-session-search {
+.ai-session-search-btn {
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 7px;
     padding: 7px 10px;
     border: 1px solid var(--border);
     border-radius: 5px;
     background: var(--bg-secondary);
-    color: var(--text);
-    font-size: 0.85rem;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.15s;
-}
-
-.ai-session-search:focus {
-    border-color: var(--accent);
-}
-
-.ai-session-search::placeholder {
     color: var(--text-muted);
+    font-size: 0.85rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.ai-session-search-btn svg {
+    flex-shrink: 0;
+}
+
+.ai-session-search-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
 }
 
 /* ── 搜索高亮 ── */
