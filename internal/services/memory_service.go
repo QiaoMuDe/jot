@@ -142,3 +142,13 @@ func (s *MemoryService) List() ([]models.AIMemory, error) {
 	}
 	return memories, nil
 }
+
+// Count 返回全部记忆条数（仅统计未删除），供数据统计概览与 get_stats 工具使用。
+func (s *MemoryService) Count() (int64, error) {
+	var n int64
+	if err := s.db.Model(&models.AIMemory{}).Count(&n).Error; err != nil {
+		s.logger.Errorw("MemoryService.Count 失败", fastlog.Error(err))
+		return 0, err
+	}
+	return n, nil
+}

@@ -844,6 +844,7 @@ export namespace services {
 	    total_todos: number;
 	    completed_todos: number;
 	    total_passwords: number;
+	    total_memories: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DataStats(source);
@@ -867,6 +868,7 @@ export namespace services {
 	        this.total_todos = source["total_todos"];
 	        this.completed_todos = source["completed_todos"];
 	        this.total_passwords = source["total_passwords"];
+	        this.total_memories = source["total_memories"];
 	    }
 	}
 	export class GeneratedPassword {

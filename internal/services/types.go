@@ -32,6 +32,7 @@ type DataStats struct {
 	TotalTodos      int64   `json:"total_todos"`
 	CompletedTodos  int64   `json:"completed_todos"`
 	TotalPasswords  int64   `json:"total_passwords"`
+	TotalMemories   int64   `json:"total_memories"`
 }
 
 // ImportResult 导入操作的结果

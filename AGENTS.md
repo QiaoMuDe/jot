@@ -558,18 +558,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 37. **AI 全局消息搜索（弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）**：侧栏内联标题过滤搜索整体改造为按钮触发的全局搜索弹窗（`#aiSearchModal` 复用 `.search-modal` 样式体系），检索所有历史会话的标题与消息内容。后端 [ai_service.go](internal/services/ai_service.go) `SearchAIChat`：标题命中不分页 Limit 20（`titleMatchTier` 精确度排序 完全相等>前缀>包含 + 独立 COUNT 真实总数 + **窗口函数 `ROW_NUMBER() OVER (PARTITION BY session_id ...)` 单查询批量取各会话最新消息摘要**防 N+1），消息命中分页（排除 system + JOIN 过滤软删除会话；**会话聚类排序** `COUNT(*) OVER (PARTITION BY session_id)` 命中条数多者靠前 → 会话内 `created_at DESC, id DESC` 全序兜底保证分页不重不漏；摘要 `INSTR/SUBSTR` 围绕关键词截取约 120 字符同 `noteThinSelect` 口径）。前端 [ai-chat.js](frontend/src/js/ai-chat.js)：200ms 防抖 + `_aiSearchSeq` 防竞态 + **打开与关闭都必须清输入防抖定时器**（否则关闭后空跑一次搜索，笔记弹窗 `closeSearchModal` 同款问题一并修复）+ 触底分页每页条数取笔记首页 `page_size` 设置（追加失败回滚页码防跳页漏数据）+ `jumpToMessage` 跨会话逐批加载更早历史定位高亮（滚动加载抽取为 `prependOlderMessages` 共用）。Ctrl+K 开/关切换（仅 AI 视图，流式期间 isStreaming 拦截三道防线：Ctrl+K/按钮/跳转）；全局 Ctrl+F 编辑器外改为搜索弹窗开关切换（编辑器内 CM6 面板不变）；快捷键说明页补 Ctrl+K。条目统一样式：上部会话名（ellipsis 截断）+ 时间，下部摘要行，无角色徽标无图标。详见 [ai_service.go](internal/services/ai_service.go)、[app.go](app.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[main.js](frontend/src/main.js)、[search-modal.css](frontend/src/css/components/search-modal.css)、[ai-chat.css](frontend/src/css/components/ai-chat.css)
 
-
-## 记忆点 1：导入时间对比规则重构（时间戳对齐文件 mtime + 内容哈希兜底 + 修复重导入误报冲突）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复重导入同一文件必误弹冲突窗（旧实现 `UpdatedAt`=导入时刻，永远比文件 mtime 新）。重构为时间戳对齐方案：导入写入（创建/覆盖）时把笔记时间戳对齐为文件的 `ModTime()`——时间戳本身成为同步基准，无需新增字段；并在时间对比前增加内容哈希兜底。取代旧时间对比机制描述（原记忆点 1 已删除），其余匹配/冲突弹窗/批量去重/导入锁机制不变。 |
-| **两级规则与实现（重要）** | ① 内容哈希一致（`\r\n→\n` + TrimSpace 规范化后 SHA256，go-kit `hash.HashString` 运行时计算不持久化）→ 直接 `skipped`（哈希失败降级纯时间对比）；② 否则时间对比：fileTime > UpdatedAt → `updated` 覆盖 / < → `conflict` 弹窗 / 相等 → `skipped`。后端 [note_service.go](internal/services/note_service.go) 新增 `CreateWithNotebookAt`/`UpdateWithTime`——**导入路径必须用它们，禁用普通 `Update`/`Save`/`CreateWithNotebook`（GORM 会把 UpdatedAt 刷成 now 破坏基准）**；[app.go](app.go) 新增 `importContentHash`，`ResolveImportConflict` 增加第 6 参 `fileTime int64`；[main.js](frontend/src/main.js) 冲突弹窗两处调用回传 `item.file_time`（wailsjs 绑定需同步）。UI 时间语义变化：导入笔记显示文件修改时间而非导入时刻（已确认接受）；已知取舍与演进方向见规则文档。 |
-| **规则文档** | 完整规则、场景决策表、代码索引与手动测试流程见 [.trae/documents/import-file-rules.md](.trae/documents/import-file-rules.md)，维护以该文档为准。 |
+38. **全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制**：新增跨会话持久记忆表 `a_memories`（`AIMemory`：`summary` 唯一摘要注入用 + `content` 详情 + 时间戳），用户在对话中让 AI 记住/遗忘长期偏好与事实；Agent 通过 `manage_memory` 工具增删改查列出（action 区分五动作；delete 用 `ids` 数组一次删多条；create 软删重建复活、update 部分更新；summary 唯一去重、content 超长截断）。**注入**：`buildAIContextInstruction` 末尾注入【长期记忆】段（仅 `summary`+真实 `id`，空/失败跳过，引导栏注管理记忆详情），Chat/Agent 共用。**AlwaysOn 机制**（新增 `ToolMeta.AlwaysOn` + `agent.ToolMeta` 透传）：`manage_memory`/`ask_user` 设为常驻不可禁用——后端装配点从 `ai_agent_tools_disabled` 强制剔除并记 Warn，前端置灰不可勾、不参与全选/全不选（复用 `is-plan-only` 样式 + 主题色提示）。**统计接入**：`MemoryService.Count` + `DataStats.TotalMemories`，数据概览信笺新增「AI 长期记忆」段、`get_stats` overview 增加「长期记忆：N 条」，均共用 `StatsService.GetDataStats` 单一事实源。详见 [ai_memory.go](internal/models/ai_memory.go)、[memory_service.go](internal/services/memory_service.go)、[manage_memory.go](internal/agent/tools/manage_memory.go)、[meta.go](internal/agent/tools/meta.go)、[app.go](app.go)、[stats_service.go](internal/services/stats_service.go)、[data-management.js](frontend/src/js/data-management.js)
 
 ---
 
-## 记忆点 2：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
+## 记忆点 1：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -578,7 +571,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
+## 记忆点 2：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -589,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
+## 记忆点 3：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +596,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 压缩进度圆环 + Wails 事件派发教训）
+## 记忆点 4：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 压缩进度圆环 + Wails 事件派发教训）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -616,7 +609,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 6：上下文摘要状态条修复 + 回退功能 + 图标统一 + 压缩进度两阶段更新
+## 记忆点 5：上下文摘要状态条修复 + 回退功能 + 图标统一 + 压缩进度两阶段更新
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -631,7 +624,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 7：用户消息发送时间显示 + 智能截断与悬停提示
+## 记忆点 6：用户消息发送时间显示 + 智能截断与悬停提示
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -643,7 +636,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
+## 记忆点 7：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -655,7 +648,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
+## 记忆点 8：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -665,7 +658,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
+## 记忆点 9：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -676,6 +669,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **快捷键与流式拦截** | [main.js](frontend/src/main.js) `handleKeyboardNavigation`：Ctrl/Cmd+K → `toggleAiSearchModal`（`state.currentView === 'ai-chat'` 视图守卫，同 Ctrl+J 模式；已开则关，未开则开）；**全局 Ctrl+F 编辑器外同步改为搜索弹窗开关切换**（已开 `closeSearchModal`/未开 `openSearchModal`，编辑器内 CM6 面板与预览查找行为不变）；快捷键说明页补 `Ctrl + K` 行。流式拦截三道防线：`openAiSearchModal`/侧栏按钮/`jumpToMessage` 均在 `isStreaming` 时拦截，`showNotification('回复进行中，暂时无法搜索', 'warning')` + `setToggleLocked` 置灰按钮。 |
 | **滚动防劫持教训** | 弹窗列表初次滚动被拉回顶部：`renderResults` 每次重渲列表后无条件同步键盘选中态 + `scrollIntoView`，滚轮 hover 移动也触发选中切换并滚动——修复为**键盘导航（↑↓/Enter）时才同步选中与滚动，鼠标 hover 只做高亮不滚动**；且重渲仅在有关键词结果时执行。 |
 | **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`SearchAIChat` + `AISearchSessionHit`/`AISearchMessageHit`/`AISearchResult` + `titleMatchTier` + 摘要截取）、[app.go](app.go)（`SearchAIChat` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（弹窗模块 + `jumpToMessage` + `prependOlderMessages` 抽取 + 旧内联搜索整体移除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+K/Ctrl+F 分支 + 快捷键说明 + 笔记弹窗关闭清定时器）、[frontend/index.html](frontend/index.html)（侧栏搜索按钮 + `#aiSearchModal`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（AI 条目统一样式）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（搜索按钮样式） |
+
+---
+
+## 记忆点 10：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 新增**跨会话全局记忆空间**：用户在对话中让 AI 保存/更新/删除长期偏好与重要事实（区别于会话摘要的窗口压缩与笔记召回——三者分工：摘要=会话内压缩、召回=查笔记、全局记忆=跨会话显式事实/偏好）。数据模型 [ai_memory.go](internal/models/ai_memory.go)：`AIMemory` 表 `a_memories`，字段 `summary`（简短描述，**唯一索引**，仅它注入系统提示词）+ `content`（详情）+ `CreatedAt`/`UpdatedAt`；注册进 [models.go](internal/database/models.go) 的 `AllModels`（启动建表 + 恢复出厂删表重建自动覆盖，无外键无需手工补删）。 |
+| **Agent 工具 manage_memory（重要）** | [manage_memory.go](internal/agent/tools/manage_memory.go) 一个工具五动作（action 参数：create/update/delete/get/list）。依赖注入：`agent.Deps.Memory`，**app.go 首次初始化装配极易漏传 `Memory` 导致 nil panic**（`Deps.Memory` 为 nil → 工具内 `memSvc` 空指针，用户报"invalid memory address"；两处 `NewAgentService` 与两处 `NewStatsService` 均须同步注入）。**create**：summary 必填（≤200 字符）、content 超长（>2000）截断并注明；不同名摘要已存在返回提示（含 id 引导 update）而非错误；命中软删记录（同摘要曾删除）复活并更新内容，保证可重建。**update**：部分更新——summary/content 留空则取原值保留；新 summary 撞另一条唯一约束映射为哨兵 `ErrMemorySummaryConflict` 友好报错（勿直接抛 DB 生硬错误）。**delete**：用 **`ids` 数组**一次删多条（从 `id` 升级，不兼容旧参），入口先过滤非法+去重再单轮统计，返回删除/失败条数。**get**：单条详情。 |
+| **注入（重要）** | [app.go](app.go) `buildAIContextInstruction` 末尾注入【长期记忆】段：仅注入每条 `summary` + 真实 `id`（`- id=N. 描述`），**不含 content**；为空或 List 失败时跳过、不阻断提问；随后追加引导语"如需查看某条记忆的完整详情，可通过 manage_memory 工具的 get 动作按 id 查询"。Chat/Agent 两模式共用（chat 无工具时记忆呈只读）。注入放提示词尾部避免扰动前部稳定内容（利于前缀缓存）。 |
+| **AlwaysOn 常驻机制（重要）** | 新增 `ToolMeta.AlwaysOn`（[meta.go](internal/agent/tools/meta.go)）+ `agent.ToolMeta` 透传；`manage_memory`/`ask_user` 设为 `AlwaysOn: true`——**不可被前端禁用**，防止"记忆注入生效但写回工具被禁"的割裂。后端：装配入口（[app.go](app.go) 例外过滤 `ai_agent_tools_disabled`）强制剔除该工具名并记 Warn；前端：设置页 checkbox 置灰不可勾、强制勾选、不参与全选/全不选（数据层与 DOM 选择器 `:not(.is-always-on)` 两处过滤须同步，复用 `is-plan-only` 禁用样式 + 主题色提示文案）。详见 [TOOLS.md](internal/agent/TOOLS.md) §5b。 |
+| **统计接入** | `MemoryService.Count`（仅未删除）+ `DataStats.TotalMemories`（`json:"total_memories"`），数据概览信笺 [data-management.js](frontend/src/js/data-management.js) 新增「🧠 AI 长期记忆」段（纳入 hasData 判定），`get_stats` overview 增加「长期记忆：N 条」，均共用 `StatsService.GetDataStats` 单一事实源，口径与页面一致。 |
+| **涉及文件** | [internal/models/ai_memory.go](internal/models/ai_memory.go)、[internal/database/models.go](internal/database/models.go)、[internal/services/memory_service.go](internal/services/memory_service.go)、[internal/agent/tools/manage_memory.go](internal/agent/tools/manage_memory.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/types.go](internal/agent/types.go)、[app.go](app.go)、[internal/services/stats_service.go](internal/services/stats_service.go)、[internal/services/types.go](internal/services/types.go)、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[internal/agent/TOOLS.md](internal/agent/TOOLS.md) |
 
 ---
 

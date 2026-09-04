@@ -40,6 +40,7 @@ export async function loadDataStats() {
     let avgResponseTime = 0, avgThinkingTime = 0, maxResponseTime = 0;
     let totalTodos = 0, completedTodos = 0;
     let totalPasswords = 0;
+    let totalMemories = 0;
     // AI 向量索引统计（笔记数 / 片段数 / 占用字节）
     let vecNoteCount = 0, vecChunkCount = 0, vecSizeBytes = 0;
 
@@ -61,6 +62,7 @@ export async function loadDataStats() {
                 totalTodos = stats.total_todos || 0;
                 completedTodos = stats.completed_todos || 0;
                 totalPasswords = stats.total_passwords || 0;
+                totalMemories = stats.total_memories || 0;
             }
         } else {
             console.warn('GetDataStats 未绑定');
@@ -98,7 +100,7 @@ export async function loadDataStats() {
         dateEl.textContent = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日`;
     }
 
-    const hasData = totalNotes > 0 || aiMessages > 0 || totalTodos > 0 || totalPasswords > 0;
+    const hasData = totalNotes > 0 || aiMessages > 0 || totalTodos > 0 || totalPasswords > 0 || totalMemories > 0;
 
     if (!hasData) {
         // 空数据占位
@@ -147,6 +149,12 @@ export async function loadDataStats() {
             <p class="letter-section-title">🔐 密码管理</p>
             <p>
                 你共安全保管了 <strong>${totalPasswords.toLocaleString()}</strong> 条密码记录。
+            </p>
+            <hr class="letter-divider">
+            <p class="letter-section-title">🧠 AI 长期记忆</p>
+            <p>
+                你已保存了 <strong>${totalMemories.toLocaleString()}</strong> 条长期记忆，
+                AI 会在后续对话中持续参考它们。
             </p>
             <hr class="letter-divider">
             <p class="letter-section-title">🤖 AI 统计数据</p>
