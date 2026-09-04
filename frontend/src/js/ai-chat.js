@@ -813,6 +813,9 @@ async function updateContextUsage() {
     }
 }
 
+// 暴露给外部（如设置页保存摘要压缩预算/触发比例后）主动刷新压缩进度指示器
+window.refreshAIContextUsage = updateContextUsage;
+
 /**
  * 绑定所有事件
  */
@@ -4976,6 +4979,8 @@ function hideEmptyState() {
     if (inputAreaEl) inputAreaEl.style.display = '';
     updateBarsAreaVisibility();
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = '';
+    // 对称恢复 showEmptyState 中隐藏的清空按钮，避免其永久消失
+    if (clearBtnEl) clearBtnEl.style.display = '';
     hideWelcome();
 }
 

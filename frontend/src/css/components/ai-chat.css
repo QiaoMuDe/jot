@@ -2846,11 +2846,22 @@
     text-align: left;
     cursor: pointer;
     box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     transition: border-color 0.15s, color 0.15s;
 }
 
 .ai-session-search-btn svg {
     flex-shrink: 0;
+}
+
+/* 侧边栏宽度动画时保持文本单行：min-width:0 允许收缩以触发省略号，避免文字换行把按钮压成竖条 */
+.ai-session-search-btn span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ai-session-search-btn:hover {

@@ -2531,6 +2531,15 @@ function repositionLogLevelIndicator() {
     indicator.style.width = `${segW}px`;
 }
 
+// AI 历史会话摘要压缩设置项的取值范围与默认值（与后端 ai_context.go 常量一致；预算以 K 为单位）
+const AI_BUDGET_MIN_K = 32;      // 预算下限（K）
+const AI_BUDGET_MAX_K = 512;     // 预算上限（K）
+const AI_BUDGET_DEFAULT_K = 128; // 预算默认值（K）
+const AI_RATIO_MIN = 0.1;        // 触发比例下限
+const AI_RATIO_MAX = 0.9;        // 触发比例上限
+const AI_RATIO_DEFAULT = 0.8;    // 触发比例默认值
+const AI_K_TOKENS = 1024;        // K → token 换算（前端按 K 显示，库存实际 token 数）
+
 async function initAISettings() {
 
     // ── 对话连接模块初始化（预设下拉、URL/Key、模型获取/选择共用同一套逻辑）──
@@ -2641,6 +2650,46 @@ async function initAISettings() {
             }
             await saveSettings();
             nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
+        });
+    }
+
+    // ── 摘要压缩预算保存 ──
+    const aiSummaryTokenBudget = document.getElementById('aiSummaryTokenBudget');
+    if (aiSummaryTokenBudget) {
+        aiSummaryTokenBudget.addEventListener('change', async () => {
+            let val = parseInt(aiSummaryTokenBudget.value);
+            if (isNaN(val) || val < AI_BUDGET_MIN_K) {
+                val = AI_BUDGET_DEFAULT_K;
+                aiSummaryTokenBudget.value = AI_BUDGET_DEFAULT_K;
+            }
+            if (val > AI_BUDGET_MAX_K) {
+                val = AI_BUDGET_MAX_K;
+                aiSummaryTokenBudget.value = AI_BUDGET_MAX_K;
+            }
+            await saveSettings();
+            nm.show('摘要压缩预算已保存（' + val + 'K）', 'success');
+            // 主动刷新 AI 对话压缩进度圆环，使其立即使用新预算
+            window.refreshAIContextUsage?.();
+        });
+    }
+
+    // ── 压缩触发比例保存 ──
+    const aiSummaryTriggerRatio = document.getElementById('aiSummaryTriggerRatio');
+    if (aiSummaryTriggerRatio) {
+        aiSummaryTriggerRatio.addEventListener('change', async () => {
+            let val = parseFloat(aiSummaryTriggerRatio.value);
+            if (isNaN(val) || val < AI_RATIO_MIN) {
+                val = AI_RATIO_DEFAULT;
+                aiSummaryTriggerRatio.value = AI_RATIO_DEFAULT;
+            }
+            if (val > AI_RATIO_MAX) {
+                val = AI_RATIO_MAX;
+                aiSummaryTriggerRatio.value = AI_RATIO_MAX;
+            }
+            await saveSettings();
+            nm.show('压缩触发比例已保存（' + val + '）', 'success');
+            // 主动刷新 AI 对话压缩进度圆环，使其立即使用新触发比例
+            window.refreshAIContextUsage?.();
         });
     }
 
@@ -11049,6 +11098,12 @@ async function loadSettings() {
         const agentMaxIterations = document.getElementById('aiAgentMaxIterations');
         if (agentMaxIterations) agentMaxIterations.value = cfg.ai_agent_max_iterations || 20;
 
+        const aiSummaryTokenBudget = document.getElementById('aiSummaryTokenBudget');
+        if (aiSummaryTokenBudget) aiSummaryTokenBudget.value = (cfg.ai_context_token_budget || AI_BUDGET_DEFAULT_K * AI_K_TOKENS) / AI_K_TOKENS;
+
+        const aiSummaryTriggerRatio = document.getElementById('aiSummaryTriggerRatio');
+        if (aiSummaryTriggerRatio) aiSummaryTriggerRatio.value = (cfg.ai_context_summary_trigger_ratio !== undefined && cfg.ai_context_summary_trigger_ratio !== null ? cfg.ai_context_summary_trigger_ratio : AI_RATIO_DEFAULT);
+
         const retentionDays = document.getElementById('trashCleanupRetentionDays');
         if (retentionDays) retentionDays.value = cfg.trash_cleanup_retention_days || 30;
 
@@ -11128,6 +11183,8 @@ async function saveSettings() {
             })(),
             ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
+            ai_context_token_budget: (parseInt(document.getElementById('aiSummaryTokenBudget')?.value) || AI_BUDGET_DEFAULT_K) * AI_K_TOKENS,
+            ai_context_summary_trigger_ratio: parseFloat(document.getElementById('aiSummaryTriggerRatio')?.value) || AI_RATIO_DEFAULT,
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
             ai_agent_max_iterations: parseInt(document.getElementById('aiAgentMaxIterations')?.value) || 20,

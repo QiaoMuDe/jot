@@ -18,15 +18,15 @@ const (
 	// DefaultContextTokenBudget 默认上下文 token 预算（128K）
 	DefaultContextTokenBudget = 131072
 	// MinContextTokenBudget 预算下限
-	MinContextTokenBudget = 4096
+	MinContextTokenBudget = 32768
 	// MaxContextTokenBudget 预算上限
-	MaxContextTokenBudget = 1048576
+	MaxContextTokenBudget = 524288
 	// DefaultSummaryTriggerRatio 默认的摘要压缩触发比例（tail 达预算 80%）
 	DefaultSummaryTriggerRatio = 0.8
-	// MinSummaryTriggerRatio 触发比例下限（调小便于测试压缩流程）
-	MinSummaryTriggerRatio = 0.05
+	// MinSummaryTriggerRatio 触发比例下限（设置页可配，低于该值视为非法并重置为默认值）
+	MinSummaryTriggerRatio = 0.1
 	// MaxSummaryTriggerRatio 触发比例上限
-	MaxSummaryTriggerRatio = 1.0
+	MaxSummaryTriggerRatio = 0.9
 	// CompactKeepRatio 压缩后保留最近该比例预算的 tail
 	CompactKeepRatio = 0.5
 	// SummaryRegionTokenCap 单次摘要生成的输入区间 token 上限（防止摘要调用自身超模型上下文）
@@ -65,7 +65,8 @@ func (a *AIService) GetContextTokenBudget() int {
 }
 
 // GetContextSummaryTriggerRatio 获取摘要压缩触发比例（设置键 ai_context_summary_trigger_ratio）。
-// 不存在或非法时返回默认值 0.8；clamp 范围 [0.05, 1.0]。
+// 该比例在 [MinSummaryTriggerRatio, MaxSummaryTriggerRatio] 即 [0.1, 0.9] 内合法，
+// 否则返回默认值 0.8（DefaultSummaryTriggerRatio）。
 func (a *AIService) GetContextSummaryTriggerRatio() float64 {
 	svc := NewSettingService(a.db)
 	val := svc.Get("ai_context_summary_trigger_ratio")

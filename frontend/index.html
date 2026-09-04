@@ -632,6 +632,22 @@
                                 <input type="number" id="aiAgentMaxIterations" class="settings-input" value="20" min="1" max="500" style="width:80px;" />
                             </div>
                         </div>
+                    <!-- 摘要压缩预算 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">摘要压缩预算</span>
+                        <span class="font-setting-desc">历史对话达到该 token 规模后触发摘要压缩（K）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSummaryTokenBudget" class="settings-input" value="128" min="32" max="512" style="width:90px;" />
+                        </div>
+                    </div>
+                    <!-- 压缩触发比例 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">压缩触发比例</span>
+                        <span class="font-setting-desc">tail 达预算该比例时触发压缩（0.1~0.9）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSummaryTriggerRatio" class="settings-input" value="0.8" min="0.1" max="0.9" step="0.05" style="width:90px;" />
+                        </div>
+                    </div>
                 </div>
 
                 <!-- MCP 服务器 -->

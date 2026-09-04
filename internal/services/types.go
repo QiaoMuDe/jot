@@ -83,36 +83,43 @@ type SettingsConfig struct {
 	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
 	ScreenLockPassword          string `json:"screen_lock_password"`
 	EditorWordWrap              bool   `json:"editor_word_wrap"`
+	// AIContextTokenBudget AI 上下文 token 预算，存实际 token 数（如 131072=128K）。
+	// 前端设置项按 K 显示（值=token/1024），保存时再 ×1024 落库。
+	AIContextTokenBudget int `json:"ai_context_token_budget"`
+	// AIContextSummaryTriggerRatio 摘要压缩触发比例：tail 达预算该比例时触发压缩（如 0.8）。
+	AIContextSummaryTriggerRatio float64 `json:"ai_context_summary_trigger_ratio"`
 }
 
 // GetAllSettings 从 SettingService 读取全部设置项
 func (s *SettingService) GetAllSettings() SettingsConfig {
 	cfg := SettingsConfig{
-		Theme:                       s.Get("theme"),
-		FontFamily:                  s.Get("font_family"),
-		FontSize:                    parseIntSetting(s.Get("font_size"), 16),
-		CodeHighlightTheme:          s.Get("code_highlight_theme"),
-		NoteOpenFullscreen:          parseBoolSetting(s.Get("note_open_fullscreen")),
-		SortOrder:                   s.Get("sort_order"),
-		PageSize:                    parseIntSetting(s.Get("page_size"), 20),
-		CMSyntaxHighlight:           parseBoolSetting(s.Get("cm_syntax_highlight")),
-		AIBaseURL:                   s.Get("ai_base_url"),
-		AIAPIKey:                    s.Get("ai_api_key"),
-		AIModel:                     s.Get("ai_model"),
-		AIEmbedBaseURL:              s.Get("ai_embed_base_url"),
-		AIEmbedAPIKey:               s.Get("ai_embed_api_key"),
-		AIEmbedModel:                s.Get("ai_embed_model"),
-		AIThinkingEnabled:           parseBoolSetting(s.Get("ai_thinking_enabled")),
-		AICardRecallLimit:           parseIntSetting(s.Get("ai_card_recall_limit"), 5),
-		MaxFileSize:                 parseIntSetting(s.Get("max_file_size"), 1),
-		AILargeFilePreviewThreshold: parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
-		AIAgentToolsDisabled:        s.Get("ai_agent_tools_disabled"),
-		AIAgentMaxIterations:        parseIntSetting(s.Get("ai_agent_max_iterations"), 20),
-		TrashCleanupRetentionDays:   parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
-		LogLevel:                    parseIntSetting(s.Get("log_level"), 1),
-		ScreenLockEnabled:           parseBoolSetting(s.Get("screen_lock_enabled")),
-		ScreenLockPassword:          s.Get("screen_lock_password"),
-		EditorWordWrap:              parseBoolSetting(s.Get("editor_word_wrap")),
+		Theme:                        s.Get("theme"),
+		FontFamily:                   s.Get("font_family"),
+		FontSize:                     parseIntSetting(s.Get("font_size"), 16),
+		CodeHighlightTheme:           s.Get("code_highlight_theme"),
+		NoteOpenFullscreen:           parseBoolSetting(s.Get("note_open_fullscreen")),
+		SortOrder:                    s.Get("sort_order"),
+		PageSize:                     parseIntSetting(s.Get("page_size"), 20),
+		CMSyntaxHighlight:            parseBoolSetting(s.Get("cm_syntax_highlight")),
+		AIBaseURL:                    s.Get("ai_base_url"),
+		AIAPIKey:                     s.Get("ai_api_key"),
+		AIModel:                      s.Get("ai_model"),
+		AIEmbedBaseURL:               s.Get("ai_embed_base_url"),
+		AIEmbedAPIKey:                s.Get("ai_embed_api_key"),
+		AIEmbedModel:                 s.Get("ai_embed_model"),
+		AIThinkingEnabled:            parseBoolSetting(s.Get("ai_thinking_enabled")),
+		AICardRecallLimit:            parseIntSetting(s.Get("ai_card_recall_limit"), 5),
+		MaxFileSize:                  parseIntSetting(s.Get("max_file_size"), 1),
+		AILargeFilePreviewThreshold:  parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
+		AIAgentToolsDisabled:         s.Get("ai_agent_tools_disabled"),
+		AIAgentMaxIterations:         parseIntSetting(s.Get("ai_agent_max_iterations"), 20),
+		TrashCleanupRetentionDays:    parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
+		LogLevel:                     parseIntSetting(s.Get("log_level"), 1),
+		ScreenLockEnabled:            parseBoolSetting(s.Get("screen_lock_enabled")),
+		ScreenLockPassword:           s.Get("screen_lock_password"),
+		EditorWordWrap:               parseBoolSetting(s.Get("editor_word_wrap")),
+		AIContextTokenBudget:         clampContextTokenBudget(parseIntSetting(s.Get("ai_context_token_budget"), DefaultContextTokenBudget)),
+		AIContextSummaryTriggerRatio: clampSummaryTriggerRatio(parseFloatSetting(s.Get("ai_context_summary_trigger_ratio"), DefaultSummaryTriggerRatio)),
 	}
 	cfg.AIAPIKey = DecodeB64(cfg.AIAPIKey)
 	cfg.AIEmbedAPIKey = DecodeB64(cfg.AIEmbedAPIKey)
@@ -161,6 +168,8 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.AIAgentMaxIterations > 500 {
 		cfg.AIAgentMaxIterations = 500
 	}
+	cfg.AIContextTokenBudget = clampContextTokenBudget(cfg.AIContextTokenBudget)
+	cfg.AIContextSummaryTriggerRatio = clampSummaryTriggerRatio(cfg.AIContextSummaryTriggerRatio)
 
 	cfg.AIAPIKey = EncodeB64(cfg.AIAPIKey)
 	cfg.AIEmbedAPIKey = EncodeB64(cfg.AIEmbedAPIKey)
@@ -178,31 +187,33 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	}
 
 	sets := map[string]string{
-		"theme":                           cfg.Theme,
-		"font_family":                     cfg.FontFamily,
-		"font_size":                       strconv.Itoa(cfg.FontSize),
-		"code_highlight_theme":            cfg.CodeHighlightTheme,
-		"note_open_fullscreen":            strconv.FormatBool(cfg.NoteOpenFullscreen),
-		"sort_order":                      cfg.SortOrder,
-		"page_size":                       strconv.Itoa(cfg.PageSize),
-		"cm_syntax_highlight":             strconv.FormatBool(cfg.CMSyntaxHighlight),
-		"ai_base_url":                     cfg.AIBaseURL,
-		"ai_api_key":                      cfg.AIAPIKey,
-		"ai_model":                        cfg.AIModel,
-		"ai_embed_base_url":               cfg.AIEmbedBaseURL,
-		"ai_embed_api_key":                cfg.AIEmbedAPIKey,
-		"ai_embed_model":                  cfg.AIEmbedModel,
-		"ai_thinking_enabled":             strconv.FormatBool(cfg.AIThinkingEnabled),
-		"ai_card_recall_limit":            strconv.Itoa(cfg.AICardRecallLimit),
-		"max_file_size":                   strconv.Itoa(cfg.MaxFileSize),
-		"ai_large_file_preview_threshold": strconv.Itoa(cfg.AILargeFilePreviewThreshold),
-		"ai_agent_tools_disabled":         cfg.AIAgentToolsDisabled,
-		"ai_agent_max_iterations":         strconv.Itoa(cfg.AIAgentMaxIterations),
-		"trash_cleanup_retention_days":    strconv.Itoa(cfg.TrashCleanupRetentionDays),
-		"log_level":                       strconv.Itoa(cfg.LogLevel),
-		"screen_lock_enabled":             strconv.FormatBool(cfg.ScreenLockEnabled),
-		"screen_lock_password":            cfg.ScreenLockPassword,
-		"editor_word_wrap":                strconv.FormatBool(cfg.EditorWordWrap),
+		"theme":                            cfg.Theme,
+		"font_family":                      cfg.FontFamily,
+		"font_size":                        strconv.Itoa(cfg.FontSize),
+		"code_highlight_theme":             cfg.CodeHighlightTheme,
+		"note_open_fullscreen":             strconv.FormatBool(cfg.NoteOpenFullscreen),
+		"sort_order":                       cfg.SortOrder,
+		"page_size":                        strconv.Itoa(cfg.PageSize),
+		"cm_syntax_highlight":              strconv.FormatBool(cfg.CMSyntaxHighlight),
+		"ai_base_url":                      cfg.AIBaseURL,
+		"ai_api_key":                       cfg.AIAPIKey,
+		"ai_model":                         cfg.AIModel,
+		"ai_embed_base_url":                cfg.AIEmbedBaseURL,
+		"ai_embed_api_key":                 cfg.AIEmbedAPIKey,
+		"ai_embed_model":                   cfg.AIEmbedModel,
+		"ai_thinking_enabled":              strconv.FormatBool(cfg.AIThinkingEnabled),
+		"ai_card_recall_limit":             strconv.Itoa(cfg.AICardRecallLimit),
+		"max_file_size":                    strconv.Itoa(cfg.MaxFileSize),
+		"ai_large_file_preview_threshold":  strconv.Itoa(cfg.AILargeFilePreviewThreshold),
+		"ai_agent_tools_disabled":          cfg.AIAgentToolsDisabled,
+		"ai_agent_max_iterations":          strconv.Itoa(cfg.AIAgentMaxIterations),
+		"trash_cleanup_retention_days":     strconv.Itoa(cfg.TrashCleanupRetentionDays),
+		"log_level":                        strconv.Itoa(cfg.LogLevel),
+		"screen_lock_enabled":              strconv.FormatBool(cfg.ScreenLockEnabled),
+		"screen_lock_password":             cfg.ScreenLockPassword,
+		"editor_word_wrap":                 strconv.FormatBool(cfg.EditorWordWrap),
+		"ai_context_token_budget":          strconv.Itoa(cfg.AIContextTokenBudget),
+		"ai_context_summary_trigger_ratio": strconv.FormatFloat(cfg.AIContextSummaryTriggerRatio, 'f', -1, 64),
 	}
 
 	for k, v := range sets {
@@ -225,4 +236,38 @@ func parseIntSetting(val string, defaultVal int) int {
 // parseBoolSetting 解析 bool 类型设置值，只认 "true" 为 true
 func parseBoolSetting(val string) bool {
 	return val == "true"
+}
+
+// parseFloatSetting 解析 float64 类型设置值，解析失败返回默认值
+func parseFloatSetting(val string, defaultVal float64) float64 {
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return f
+}
+
+// clampContextTokenBudget 将 AI 上下文 token 预算钳制到合法范围 [MinContextTokenBudget, MaxContextTokenBudget]；
+// 低于下限视为非法，重置为默认值 DefaultContextTokenBudget；高于上限取上限。
+// 与运行时 GetContextTokenBudget 口径一致，保证设置页展示与压缩逻辑取值一致。
+func clampContextTokenBudget(n int) int {
+	if n < MinContextTokenBudget {
+		return DefaultContextTokenBudget
+	}
+	if n > MaxContextTokenBudget {
+		return MaxContextTokenBudget
+	}
+	return n
+}
+
+// clampSummaryTriggerRatio 将摘要压缩触发比例钳制到合法范围 [MinSummaryTriggerRatio, MaxSummaryTriggerRatio]；
+// 低于下限视为非法，重置为默认值 DefaultSummaryTriggerRatio；高于上限取上限。
+func clampSummaryTriggerRatio(r float64) float64 {
+	if r < MinSummaryTriggerRatio {
+		return DefaultSummaryTriggerRatio
+	}
+	if r > MaxSummaryTriggerRatio {
+		return MaxSummaryTriggerRatio
+	}
+	return r
 }
