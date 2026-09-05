@@ -1711,6 +1711,10 @@ function applyFontSize(size) {
 
 
 function applyTheme(themeName) {
+    // 目标主题与当前生效主题一致时直接返回：避免触发不必要的
+    // View Transition / DOM 更新，与设置页入场动画叠加造成掉帧
+    if (document.documentElement.getAttribute('data-theme') === themeName) return;
+
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const apply = () => {
         document.documentElement.setAttribute('data-theme', themeName);
