@@ -1709,18 +1709,28 @@ function applyFontSize(size) {
 
 
 function applyTheme(themeName) {
-    document.documentElement.setAttribute('data-theme', themeName);
-    // 同步下拉菜单标签和选中态
-    if (els.themeLabel) {
-        els.themeLabel.textContent = themeLabels[themeName] || themeName;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const apply = () => {
+        document.documentElement.setAttribute('data-theme', themeName);
+        // 同步下拉菜单标签和选中态
+        if (els.themeLabel) {
+            els.themeLabel.textContent = themeLabels[themeName] || themeName;
+        }
+        if (els.themeDropdown) {
+            els.themeDropdown.querySelectorAll('.theme-select-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.themeValue === themeName);
+            });
+        }
+        // 更新代码高亮主题下拉菜单配对标记
+        updateCodeHighlightThemePairing(themeName);
+    };
+    if (!reduced && document.startViewTransition) {
+        // 原生 View Transition：整体 cross-fade，切换更连贯
+        document.startViewTransition(apply);
+    } else {
+        // 回落：直接切换，避免全局透明度淡出造成闪屏
+        apply();
     }
-    if (els.themeDropdown) {
-        els.themeDropdown.querySelectorAll('.theme-select-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.themeValue === themeName);
-        });
-    }
-    // 更新代码高亮主题下拉菜单配对标记
-    updateCodeHighlightThemePairing(themeName);
 }
 
 /**
@@ -1748,6 +1758,28 @@ function updateCodeHighlightThemePairing(themeName) {
  */
 function getCurrentTheme() {
     return document.documentElement.getAttribute('data-theme') || 'default';
+}
+
+/* 主题轮换快捷键的防抖冷却（毫秒），避免过频切换 */
+const THEME_SWITCH_COOLDOWN = 500;
+let lastThemeSwitchAt = 0;
+
+/**
+ * 按主题列表顺序轮换到下一个主题（全局快捷键 Ctrl/Cmd+Shift+T 触发）
+ */
+function cycleTheme() {
+    const now = Date.now();
+    if (now - lastThemeSwitchAt < THEME_SWITCH_COOLDOWN) return; // 防抖：冷却期内忽略
+    lastThemeSwitchAt = now;
+
+    const keys = Object.keys(themeLabels);
+    if (keys.length === 0) return;
+    const idx = keys.indexOf(getCurrentTheme());
+    const next = idx === -1 ? keys[0] : keys[(idx + 1) % keys.length];
+
+    applyTheme(next);
+    localStorage.setItem('jot_theme', next);
+    saveSettings(); // 静默持久化，不打扰用户，与主题选择一致
 }
 
 /**
@@ -6749,6 +6781,13 @@ async function handleKeyboardNavigation(e) {
         return;
     }
 
+    // Ctrl/Cmd+Shift+T: 全局轮换切换主题（带防抖，可在任意视图/输入框内触发）
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        cycleTheme();
+        return;
+    }
+
     // Ctrl/Cmd+N: 打开新建笔记（编辑器未打开时）
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
@@ -7219,6 +7258,7 @@ function renderShortcutsPage() {
         { key: 'Ctrl + H', desc: '编辑器内查找替换' },
         { key: 'Ctrl + L', desc: '编辑器切换纯文本/预览' },
         { key: 'Ctrl + P', desc: '打开启动器菜单' },
+        { key: 'Ctrl + Shift + T', desc: '轮换切换主题（带防抖）' },
         { key: 'Ctrl + E', desc: '编辑器内切换全屏' },
         { key: 'F11', desc: '切换窗口全屏' },
         { key: 'Ctrl + Q', desc: '退出程序' },
