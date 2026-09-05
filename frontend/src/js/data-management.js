@@ -303,7 +303,6 @@ export async function resetDatabase() {
     if (els.notebookSidebar) {
         els.notebookSidebar.classList.add('collapsed');
         localStorage.setItem('jot_sidebar_collapsed', 'true');
-        window.updateSidebarMenuItem();
     }
     // 重置后 activeNotebookId 设为新默认笔记本
     state.activeNotebookId = 1;

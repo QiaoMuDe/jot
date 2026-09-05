@@ -822,7 +822,6 @@ function switchView(view) {
         if (view !== 'grid' && !els.notebookSidebar?.classList.contains('collapsed')) {
             els.notebookSidebar.classList.add('collapsed');
             localStorage.setItem('jot_sidebar_collapsed', 'true');
-            updateSidebarMenuItem();
         }
 
         // 使用 requestAnimationFrame 确保 class 切换在下一渲染帧生效
@@ -5562,6 +5561,7 @@ window.searchByTag = function (tagId, tagName) {
  */
 function toggleBatchMode() {
     state.batchMode = !state.batchMode;
+    updateBatchFabTitle();
     const bar = els.batchBar;
 
     if (state.batchMode) {
@@ -6154,6 +6154,10 @@ function escapeHtml(text) {
  * 打开更多菜单
  */
 function openMoreMenu(menu) {
+    // 每次打开时按当前状态派生菜单项文字（展开/折叠侧栏、批量管理/退出管理），
+    // 与启动器 openLauncher 的派生逻辑一致，避免动作发生时急切更新
+    updateSidebarMenuItem();
+    updateBatchModeMenuItem();
     // 清除可能残留的离场标记
     menu.classList.remove('exiting');
     // 使用 CSS class 触发入场动画（moreMenuIn 由 CSS 控制）
@@ -6247,7 +6251,6 @@ function initEventListeners() {
                     if (els.notebookSidebar?.classList.contains('collapsed')) {
                         els.notebookSidebar.classList.remove('collapsed');
                         localStorage.setItem('jot_sidebar_collapsed', 'false');
-                        updateSidebarMenuItem();
                         updateNotebookSidebarToggleBtn();
                         // 此路径绕过 toggleSidebar，需手动刷新笔记本计数（否则展开后计数为旧值）
                         loadNotebooks();
@@ -6908,6 +6911,12 @@ async function handleKeyboardNavigation(e) {
         // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）
         const refModal = document.getElementById('aiNoteRefModal');
         if (refModal && refModal.style.display !== 'none') {
+            return;
+        }
+        // 更多菜单打开时：ESC 只关闭它，不继续执行导航/批量退出逻辑
+        // （避免 ESC 退出批量模式后菜单项文字停留在“退出管理”的陈旧状态）
+        if (els.moreMenu && els.moreMenu.classList.contains('active')) {
+            closeMoreMenu(els.moreMenu);
             return;
         }
         // 启动器打开时关闭它
@@ -7972,7 +7981,6 @@ async function toggleSidebar() {
     if (wasCollapsed && !isCollapsed) {
         await loadNotebooks();
     }
-    updateSidebarMenuItem();
     updateNotebookSidebarToggleBtn();
 }
 
@@ -8003,6 +8011,36 @@ function updateNotebookSidebarToggleBtn() {
 }
 
 /**
+ * 同步更多菜单“批量管理”项文字：批量管理 ↔ 退出管理
+ * 参照启动器逻辑，在菜单打开时按当前状态派生，而非动作发生时急切更新
+ */
+function updateBatchModeMenuItem() {
+    const menuItem = els.moreMenu?.querySelector('[data-action="batch-mode"]');
+    if (!menuItem) return;
+    // 结构为 <svg>…</svg>批量管理，仅更新末尾文本节点、保留图标。
+    // 从后往前取最后一个文本节点，避免结构重排（如新增缩进空白）时误写空白节点
+    let textNode = null;
+    for (let i = menuItem.childNodes.length - 1; i >= 0; i--) {
+        if (menuItem.childNodes[i].nodeType === Node.TEXT_NODE) {
+            textNode = menuItem.childNodes[i];
+            break;
+        }
+    }
+    if (textNode) {
+        textNode.textContent = state.batchMode ? '退出管理' : '批量管理';
+    }
+}
+
+/**
+ * 同步浮动批量按钮提示（常显按钮，状态变化时立即更新，参照 updateNotebookSidebarToggleBtn）
+ */
+function updateBatchFabTitle() {
+    if (els.fabBatch) {
+        els.fabBatch.title = state.batchMode ? '退出管理' : '批量管理';
+    }
+}
+
+/**
  * 恢复侧栏折叠状态（默认收起）
  */
 function restoreSidebarState() {
@@ -8013,7 +8051,6 @@ function restoreSidebarState() {
             const sidebar = els.notebookSidebar;
             if (sidebar) sidebar.classList.add('collapsed');
         }
-        updateSidebarMenuItem();
         updateNotebookSidebarToggleBtn();
     } catch (e) {}
 }
@@ -12038,7 +12075,6 @@ window.loadTags = loadTags;
 window.loadNotebooks = loadNotebooks;
 window.switchView = switchView;
 window.openEditor = openEditor;
-window.updateSidebarMenuItem = updateSidebarMenuItem;
 window.undoDelete = undoDelete;
 window.loadSettings = loadSettings;
 window.saveSettings = saveSettings;

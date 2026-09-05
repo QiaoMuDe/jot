@@ -196,7 +196,6 @@ function executeAction(action) {
                     if (els.notebookSidebar?.classList.contains('collapsed')) {
                         els.notebookSidebar.classList.remove('collapsed');
                         localStorage.setItem('jot_sidebar_collapsed', 'false');
-                        if (win.updateSidebarMenuItem) win.updateSidebarMenuItem();
                         if (win.updateNotebookSidebarToggleBtn) win.updateNotebookSidebarToggleBtn();
                         // 此路径绕过 toggleSidebar，需手动刷新笔记本计数（否则展开后计数为旧值）
                         if (win.loadNotebooks) win.loadNotebooks();
@@ -364,6 +363,14 @@ function openLauncher() {
         sidebarToggleEl.querySelector('.launcher-item-label').textContent = label;
         sidebarToggleEl.querySelector('.launcher-item-icon').innerHTML = isCollapsed ? expandSvg : collapseSvg;
         sidebarToggleEl.dataset.label = label;
+    }
+
+    // 根据批量管理模式状态更新 batch-mode 项的标签
+    const batchModeEl = _launcherGrid?.querySelector('[data-action="batch-mode"]');
+    if (batchModeEl) {
+        const batchLabel = window.state?.batchMode ? '退出管理' : '批量管理';
+        batchModeEl.querySelector('.launcher-item-label').textContent = batchLabel;
+        batchModeEl.dataset.label = batchLabel;
     }
 
     // 通过 requestAnimationFrame 确保 display 生效后再触发动画
