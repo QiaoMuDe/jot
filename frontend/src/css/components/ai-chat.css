@@ -2494,8 +2494,8 @@
     align-items: center;
     width: 100%;
     /* 底部细边框：与消息列表做视觉区分（豆包同款），滚动条顶端即顶到这条线；
-       45% 透明度降低对比度，弱化存在感 */
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+       20% 透明度，比窗口栏边框（45%）更浅，形成"窗口深、标题浅"的层级 */
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 20%, transparent);
     /* 上下对称内边距：标题栏内容（按钮/标题/用量环）垂直居中 */
     padding: 6px 16px 6px;
     margin-bottom: 0;
