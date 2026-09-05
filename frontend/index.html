@@ -172,6 +172,10 @@
                                 <div class="toc-body" id="tocBody"></div>
                             </div>
                             <div id="mdRendered" class="md-rendered" style="display:none"></div>
+                            <!-- 统一加载覆盖层（打开笔记的数据加载阶段，覆盖编辑/预览两容器） -->
+                            <div class="editor-loading" id="editorLoading" style="display:none">
+                                <span class="editor-loading-spinner"></span>
+                            </div>
                         </div>
                     </div>
                     <!-- 查找/替换条（body 与 footer 之间） -->
@@ -190,7 +194,7 @@
                             <span class="replace-hint" id="replaceHint" style="display:none;">请切换到纯文本模式</span>
                         </div>
                     </div>
-                    <div class="editor-footer">
+                    <div class="editor-footer" id="editorFooter">
                         <div class="editor-footer-left">
                             <span class="word-count" id="editorWordCount"></span>
                             <span class="file-ext" id="editorFileExt"></span>

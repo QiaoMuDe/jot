@@ -354,6 +354,33 @@
   to   { opacity: 1; }
 }
 
+/* ── 统一加载覆盖层（打开笔记时的数据加载反馈，覆盖编辑/预览两容器） ── */
+.editor-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card-bg);
+  transition: opacity 0.2s ease-out;
+}
+.editor-loading.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.editor-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: editorSpin 0.7s linear infinite;
+}
+@keyframes editorSpin {
+  to { transform: rotate(360deg); }
+}
+
 .editor-input {
   width: 100%;
   padding: 2px 20px;
@@ -405,32 +432,6 @@
 @keyframes cmFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-/* ── 编辑器骨架屏（CM6 内容加载前的 shimmer 占位） ── */
-.editor-skeleton {
-    padding: 0 4px;
-}
-.editor-skeleton-line {
-    height: 14px;
-    margin-bottom: 12px;
-    border-radius: 4px;
-    background: linear-gradient(90deg,
-        var(--border) 25%,
-        var(--hover-bg) 50%,
-        var(--border) 75%
-    );
-    background-size: 200% 100%;
-    animation: skeletonPulse 1.5s ease-in-out infinite;
-}
-.editor-skeleton-line:nth-child(1) { width: 92%; }
-.editor-skeleton-line:nth-child(2) { width: 78%; }
-.editor-skeleton-line:nth-child(3) { width: 85%; }
-.editor-skeleton-line:nth-child(4) { width: 60%; }
-
-@keyframes skeletonPulse {
-    0%, 100% { background-position: 200% 0; }
-    50% { background-position: -200% 0; }
 }
 
 /* ==========================================================================
@@ -848,6 +849,15 @@
   font-size: 0.688rem;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* 状态栏加载期统一态：内容未就绪时底部仅显示「加载中…」（字数位），
+   其余副内容（扩展名 / M-T 切换按钮 / 右侧时间与按钮组）整体隐藏；
+   加载完成后移除本类一次性恢复 */
+.editor-footer.status-loading .file-ext,
+.editor-footer.status-loading .editor-modes,
+.editor-footer.status-loading .editor-footer-right {
+  display: none;
 }
 
 /* 文件后缀显示 */

@@ -509,6 +509,7 @@ const els = {
     editorCancelBtn: $('editorCancelBtn'),
     editorSaveBtn: $('editorSaveBtn'),
     mdRendered: $('mdRendered'),
+    editorLoading: $('editorLoading'),
     editorModeBtns: document.querySelectorAll('.mode-btn'),
     editorModes: $('editorModes'),
     editorTypeToggle: $('editorTypeToggle'),
@@ -588,6 +589,7 @@ const els = {
     editorWordCount: $('editorWordCount'),
     editorFileExt: $('editorFileExt'),
     editorEditTime: $('editorEditTime'),
+    editorFooter: document.getElementById('editorFooter'),
     editorPanes: document.querySelector('.editor-panes'),
     tocSidebar: $('tocSidebar'),
     tocBody: $('tocBody'),
@@ -3736,6 +3738,7 @@ function updateWordCount() {
     const charCount = content.length;
     const wordCount = content.replace(/[\s]/g, '').length;
     els.editorWordCount.textContent = `${wordCount} 个字数 | ${charCount} 个字符`;
+    // 注：状态栏从加载期到真实的切换统一在 hideEditorLoading 时完成（与内容区 loading 收起同步）
 }
 
 /** 更新状态栏文件后缀显示 */
@@ -3930,7 +3933,9 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     // 文件后缀和模式切换
     let ext = (noteData && noteData.file_ext) || '.txt';
     let isMd = ext === '.md';
-    els.editorModes.style.display = isMd ? '' : 'none';
+    // 数据未就绪：模式切换按钮（M/T）与状态栏一律不显示，统一由阶段二数据就绪后按真实 ext 恢复，
+    // 避免依赖 noteData 预判导致的加载期不一致（部分入口显示/隐藏分布不均）
+    els.editorModes.style.display = 'none';
     updateFileExtDisplay(ext);
     if (els.tocToggleBtn)
         els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
@@ -3946,26 +3951,20 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     els.mdRendered.innerHTML = '';
     _lastPreviewContent = '';
 
-    // 查看模式：预览状态显示（数据在阶段二填充）
-    if (isReadOnly && noteData) {
-        els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
-        if (!isMd) {
-            els.mdRendered.style.display = 'none';
-            _setPreviewLayout(false);
-            _closeToc();
-        } else {
-            els.editorOverlay.dataset.mode = 'preview';
-            els.editorModeBtns.forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.mode === 'preview');
-            });
-            els.mdRendered.innerHTML = '<p class="md-empty">暂无内容</p>';
-            _setPreviewLayout(false);
-            _closeToc();
-            // 内容在阶段二加载后触发 updatePreview
-        }
-    } else {
-        els.editorEditTime.textContent = '';
-        switchEditorMode('edit');
+    // 数据未就绪，先隐藏残留的编辑时间，具体显示模式统一在阶段二数据就绪后一次性判定
+    els.editorEditTime.textContent = '';
+
+    // 数据未就绪：底部状态栏进入统一加载态——仅显示占位「加载中…」（字数位），
+    // 扩展名 / M-T 切换按钮 / 右侧时间与按钮整体隐藏；加载完成后移除 footer 类一次性恢复
+    els.editorWordCount.textContent = '加载中…';
+    if (els.editorFooter) els.editorFooter.classList.add('status-loading');
+
+    // ── 立即显示统一加载层（覆盖编辑/预览两容器，作为打开笔记的数据加载反馈） ──
+    if (els.editorLoading) {
+        els.editorLoading.style.display = 'flex';
+        els.editorLoading.classList.remove('hidden');
+        // 每次新打开都清除上次可能残留的"等待预览首次渲染"标志，防止被后续 updatePreview 误消费
+        _editorLoadingPendingPreview = false;
     }
 
     // 标题输入监听（先移除再按需添加：closeEditor 清理被跳过时防止监听器重复绑定导致 onEditorInput 双调）
@@ -3980,19 +3979,9 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     // 每次 openEditor 均为"新打开"：重置从查看模式进入编辑的标志（closeEditor 清理被跳过时避免残留旧值）
     state.enteredFromViewMode = false;
 
-    // ── 立即显示面板 + 骨架屏（不等数据加载） ──
+    // ── 立即显示面板（内容在数据加载完成后填充，不等数据加载） ──
     els.mainContent.style.overflow = 'hidden';
     els.viewEditor.classList.add('active');
-
-    // 在 CM6 挂载点显示骨架屏 shimmer
-    const contentArea = document.getElementById('editorNoteContent');
-    contentArea.innerHTML = ''
-        + '<div class="editor-skeleton">'
-        + '<div class="editor-skeleton-line"></div>'
-        + '<div class="editor-skeleton-line"></div>'
-        + '<div class="editor-skeleton-line"></div>'
-        + '<div class="editor-skeleton-line"></div>'
-        + '</div>';
 
     // 启动入场动画
     const overlay = els.editorOverlay;
@@ -4101,20 +4090,11 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
             ext = loadedExt;
             isMd = ext === '.md';
             updateFileExtDisplay(ext);
-            els.editorModes.style.display = isMd ? '' : 'none';
             if (els.tocToggleBtn)
                 els.tocToggleBtn.classList.toggle('show-in-preview', isMd);
             if (els.editorTypeToggle) {
                 els.editorTypeToggle.textContent = isMd ? 'M' : 'T';
                 els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
-            }
-            if (isReadOnly && isMd) {
-                els.editorOverlay.dataset.mode = 'preview';
-                els.editorModeBtns.forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.mode === 'preview');
-                });
-                _setPreviewLayout(false);
-                _closeToc();
             }
         }
         // 查看模式更新编辑时间
@@ -4125,14 +4105,18 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         renderTagSelector(isReadOnly);
     }
 
-    // 移除骨架屏
+    // 数据已就绪：无条件按真实 ext 恢复模式切换按钮（M/T）显示（加载期统一隐藏过）
+    els.editorModes.style.display = isMd ? '' : 'none';
+
+    // 清空挂载点残余内容，准备挂载 CM6
+    const contentArea = document.getElementById('editorNoteContent');
     contentArea.innerHTML = '';
 
     // 初始化 CM6（已拿到内容）
     const useSyntaxHighlight = els.mdHighlightToggle.checked;
     const enableWordWrap = els.editorWordWrapToggle?.checked || false;
     initCodeMirror(contentArea, editorContent, isReadOnly, useSyntaxHighlight, ext, codeHighlightTheme, enableWordWrap);
-    updateWordCount();
+    // 状态栏真实化统一推迟到 hideEditorLoading（loading 真正收起）时执行，与内容区 loading 同步
 
     // 编辑模式下记录快照
     if (!isReadOnly && state.editingNoteId) {
@@ -4144,19 +4128,25 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         };
     }
 
-    // 查看模式：Markdown 预览（CM6 就绪后刷新）
-    // 大文件自动切换纯文本模式：内容长度超过大文件预览阈值（ai_large_file_preview_threshold）时跳过预览
-    if (isReadOnly && isMd && els.editorOverlay.dataset.mode === 'preview') {
+    // ── 数据已就绪：一次性确定最终显示模式（避免"先预览后切回"的闪烁） ──
+    // 模式判定延迟到此，仅设置一次：大文件/纯文本/非只读 → CM6（edit），
+    // 小 markdown + 只读 → 预览（preview，switchEditorMode 内部触发 updatePreview 渲染）
+    if (isReadOnly && isMd) {
         const largeFileThreshold = parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000;
         if (editorContent.length > largeFileThreshold) {
-            // 内容过长，自动切换为纯文本模式
+            // 内容过长：纯文本模式（CM6），不进入预览（switchEditorMode('edit') 内部已处理布局/TOC 关闭）
             switchEditorMode('edit');
-            _setPreviewLayout(false);
-            _closeToc();
             window.showNotification?.('笔记内容超过纯文本预览阈值，已自动切换为纯文本模式', 'info');
+            hideEditorLoading();
         } else {
-            updatePreview();
+            // 预览：统一加载层保持到 Worker 首次渲染完成后才隐藏，避免"转圈又转圈"
+            switchEditorMode('preview');
+            _editorLoadingPendingPreview = true;
         }
+    } else {
+        // 纯文本笔记 / 非只读编辑
+        switchEditorMode('edit');
+        hideEditorLoading();
     }
 
     // 新建笔记时自动聚焦
@@ -4164,6 +4154,31 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
         window.focus();
         cmEditor?.focus();
     }
+}
+
+/** 统一加载层是否正等待预览首次渲染完成（打开预览时置位，渲染完成/关闭后复位） */
+let _editorLoadingPendingPreview = false;
+
+/** 预览首次渲染完成后隐藏统一加载层（一次性消费；仅打开预览场景置位时生效） */
+function finalizePreviewOpening() {
+    if (!_editorLoadingPendingPreview) return;
+    _editorLoadingPendingPreview = false;
+    hideEditorLoading();
+}
+
+/** 隐藏统一加载层（淡出后移除，避免残留不可见占位） */
+function hideEditorLoading() {
+    const el = els.editorLoading;
+    if (!el) return;
+    // 状态栏与内容区同步真实化：loading 真正收起时移除状态栏加载态，一次性恢复
+    // 真实字数、扩展名、切换按钮、时间与按钮组，避免"状态栏先行、内容区仍在 loading"的错位
+    updateWordCount();
+    if (els.editorFooter) els.editorFooter.classList.remove('status-loading');
+    el.classList.add('hidden');
+    const remove = () => { el.style.display = 'none'; };
+    // 淡出动画结束后移除；transitionend 可能不触发（如样式/跳帧异常），用 setTimeout 兜底
+    el.addEventListener('transitionend', remove, { once: true });
+    setTimeout(remove, 300);
 }
 
 /** 预览渲染处理中标志，防重复请求 */
@@ -4197,6 +4212,7 @@ function initPreviewWorker() {
                 console.error('Preview Worker:', error);
                 els.mdRendered.innerHTML = '<p class="md-error">渲染失败</p>';
                 _previewWorkerLoading = false;
+                finalizePreviewOpening();
                 return;
             }
             // 在 innerHTML 替换前捕获 loading 元素引用，用于后续交叉淡出
@@ -4222,6 +4238,8 @@ function initPreviewWorker() {
             _ensureTocReady();  // 确保 TOC 状态正确
             // 内容淡入动画
             _applyPreviewFadeIn();
+            // 打开预览场景：内容已写入，释放统一加载层
+            finalizePreviewOpening();
             // 交叉淡入：把之前捕获的 loading 元素转为 absolute 覆盖层置于内容上方，平滑淡出
             if (oldLoading) {
                 oldLoading.style.position = 'absolute';
@@ -4794,6 +4812,7 @@ function updatePreview(content) {
         _setPreviewLayout(false);
         _closeToc();
         if (els.tocBody) els.tocBody.innerHTML = '';
+        finalizePreviewOpening();
         return;
     }
     // 内容未变化则跳过重复渲染（哈希缓存）
@@ -4802,6 +4821,7 @@ function updatePreview(content) {
         // （场景：编辑模式内切"预览"、查看→编辑→查看等，内容未变但 TOC 被之前操作移除了）
         _setPreviewLayout(true);
         _ensureTocReady();
+        finalizePreviewOpening();
         return;
     }
     _lastPreviewContent = content;
@@ -4829,6 +4849,7 @@ function updatePreview(content) {
     if (_previewFindBarVisible && _previewSearchQuery) {
         runPreviewSearch(_previewSearchQuery);
     }
+    finalizePreviewOpening();
 }
 
 /**
@@ -4876,8 +4897,8 @@ function switchEditorMode(mode) {
         _closeToc();
         closePreviewFindBar();
     }
-    // 切换模式时关闭查找/替换条（CM6 search 自管理）
-    if (cmEditor) {
+    // 编辑模式将焦点交给 CM6；预览模式不抢焦点（保持预览区交互，焦点留在用户当前操作区）
+    if (mode === 'edit' && cmEditor) {
         cmEditor.focus();
     }
 }
@@ -5169,8 +5190,9 @@ function closeEditor() {
         state._editSnapshot = null;
         state._defaultNewNoteTitle = null;
         state._titleBeforeEdit = null;
-        // 字数归零
+        // 字数归零并退出状态栏加载态（一次性恢复 status 为常态）
         els.editorWordCount.textContent = '';
+        if (els.editorFooter) els.editorFooter.classList.remove('status-loading');
         // 清除文件后缀显示
         els.editorFileExt.textContent = '';
         // 重置 Markdown 渲染/编辑显示状态
@@ -5178,6 +5200,12 @@ function closeEditor() {
         els.mdRendered.style.display = 'none';
         els.mdRendered.innerHTML = '';
         _lastPreviewContent = '';
+        // 复位统一加载层（防打开后立刻关闭时残留覆盖层）
+        if (els.editorLoading) {
+            els.editorLoading.style.display = 'none';
+            els.editorLoading.classList.remove('hidden');
+        }
+        _editorLoadingPendingPreview = false;
         delete els.editorOverlay.dataset.mode;
         // 重置 TOC 状态
         _tocScrollBound = false;

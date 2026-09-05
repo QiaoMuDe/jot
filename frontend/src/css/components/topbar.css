@@ -220,9 +220,9 @@ button :only-child:is(svg) {
   transform: translateX(2px);
 }
 
-/* 更多菜单 - exiting 离场状态 */
+/* 更多菜单 - exiting 离场状态（调慢以完整展示菜单项点击回弹，避免过早关闭截断动画） */
 #moreMenu.exiting {
-    animation: moreMenuOut 0.15s ease-in forwards;
+    animation: moreMenuOut 0.25s ease-in forwards;
 }
 
 .dropdown-item {
@@ -254,6 +254,16 @@ button :only-child:is(svg) {
 
 .dropdown-item:hover svg {
   opacity: 0.85;
+}
+
+/* 「更多」菜单项点击回弹：按下用短快曲线立即压缩，松手用过冲曲线弹回原位 */
+#moreMenu .dropdown-item {
+  transition: background 0.1s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+#moreMenu .dropdown-item:active {
+  transform: scale(0.94);
+  transition: transform 0.05s ease-out;
 }
 
 .dropdown-divider {
