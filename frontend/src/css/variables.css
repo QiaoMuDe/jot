@@ -49,6 +49,10 @@
                         color var(--anim-duration-slow) ease-out,
                         border-color var(--anim-duration-slow) ease-out,
                         box-shadow var(--anim-duration-slow) ease-out;
+
+    /* 消息统计条占比色兜底（思考条/生成条；各主题具体取值在下方各主题块内维护） */
+    --tip-think: #d97706;      /* 思考条 */
+    --tip-generate: #16a34a;   /* 生成条 */
 }
 
 /* ===== 默认主题（温暖极简） ===== */
@@ -99,6 +103,8 @@
     /* 语义色 */
     --success: #16a34a;
     --warning: #d97706;
+    --tip-think: #d97706;      /* 思考条 */
+    --tip-generate: #16a34a;   /* 生成条 */
     --warning-bg: #fffbeb;
     --warning-border: #fde68a;
     --warning-text: #92400e;
@@ -163,6 +169,8 @@
     /* 语义色 */
     --success: #16a34a;
     --warning: #d97706;
+    --tip-think: #d97706;      /* 思考条 */
+    --tip-generate: #16a34a;   /* 生成条 */
     --warning-bg: #fffbeb;
     --warning-border: #fde68a;
     --warning-text: #92400e;
@@ -227,6 +235,8 @@
     /* 语义色 */
     --success: #4ade80;
     --warning: #fbbf24;
+    --tip-think: #fbbf24;      /* 思考条 */
+    --tip-generate: #4ade80;   /* 生成条 */
     --warning-bg: rgba(251, 191, 36, 0.1);
     --warning-border: rgba(251, 191, 36, 0.25);
     --warning-text: #fde68a;
@@ -291,6 +301,8 @@
     /* 语义色 */
     --success: #16a34a;
     --warning: #d97706;
+    --tip-think: #d97706;      /* 思考条 */
+    --tip-generate: #16a34a;   /* 生成条 */
     --warning-bg: #fffbeb;
     --warning-border: #fde68a;
     --warning-text: #92400e;
@@ -355,6 +367,8 @@
     /* 语义色 */
     --success: #9ECE6A;
     --warning: #E0AF68;
+    --tip-think: #ff9e64;      /* 思考条 */
+    --tip-generate: #9ece6a;   /* 生成条 */
     --warning-bg: rgba(224, 175, 104, 0.1);
     --warning-border: rgba(224, 175, 104, 0.25);
     --warning-text: #F0D5A8;
@@ -417,6 +431,8 @@
     --shadow-xl: 0 12px 36px rgba(44, 74, 62, 0.12);
     --success: #4A8C5C;
     --warning: #F9A825;
+    --tip-think: #d97706;      /* 思考条 */
+    --tip-generate: #2e7d32;   /* 生成条 */
     --warning-bg: #FFF8E1;
     --warning-border: #FFE082;
     --warning-text: #8D6E00;
@@ -476,6 +492,8 @@
   --shadow-xl: 0 12px 36px rgba(76, 79, 105, 0.12);
   --success: #40A02B;
   --warning: #DF8E1D;
+  --tip-think: #d97706;      /* 思考条 */
+  --tip-generate: #40a02b;   /* 生成条 */
   --warning-bg: #FEF9E7;
   --warning-border: #F5E6A3;
   --warning-text: #8A6A00;
@@ -535,6 +553,8 @@
   --shadow-xl: 0 12px 36px rgba(60, 56, 54, 0.12);
   --success: #98971A;
   --warning: #D79921;
+  --tip-think: #b45309;      /* 思考条 */
+  --tip-generate: #2e7d32;   /* 生成条 */
   --warning-bg: #FFFBE6;
   --warning-border: #F5E6A3;
   --warning-text: #8A6A00;
@@ -594,6 +614,8 @@
   --shadow-xl: 0 12px 36px rgba(0, 0, 0, 0.34);
   --success: #50FA7B;
   --warning: #F1FA8C;
+  --tip-think: #ffb86c;      /* 思考条 */
+  --tip-generate: #50fa7b;   /* 生成条 */
   --warning-bg: rgba(241, 250, 140, 0.1);
   --warning-border: rgba(241, 250, 140, 0.25);
   --warning-text: #F5F0C8;
@@ -653,6 +675,8 @@
   --shadow-xl: 0 12px 36px rgba(139, 126, 200, 0.12);
   --success: #059669;
   --warning: #D97706;
+  --tip-think: #d97706;      /* 思考条 */
+  --tip-generate: #059669;   /* 生成条 */
   --warning-bg: rgba(217, 119, 6, 0.08);
   --warning-border: rgba(217, 119, 6, 0.2);
   --warning-text: #92400E;
@@ -712,6 +736,8 @@
   --shadow-xl: 0 12px 36px rgba(58, 53, 50, 0.12);
   --success: #6A8E4A;
   --warning: #B8922E;
+  --tip-think: #b45309;      /* 思考条 */
+  --tip-generate: #2f7d32;   /* 生成条 */
   --warning-bg: rgba(184, 146, 46, 0.08);
   --warning-border: rgba(184, 146, 46, 0.2);
   --warning-text: #8C6E22;

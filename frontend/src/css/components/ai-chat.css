@@ -1443,8 +1443,8 @@
     overflow: hidden;
     background: var(--hover-bg);
 }
-.tip-timebar-seg.seg-thinking { width: 0; background: var(--warning); }
-.tip-timebar-seg.seg-generate { flex: 1; background: var(--success); }
+.tip-timebar-seg.seg-thinking { width: 0; background: var(--tip-think); }
+.tip-timebar-seg.seg-generate { flex: 1; background: var(--tip-generate); }
 
 /* 占比条图例：色点 + 时长 */
 .tip-legend {
@@ -1463,8 +1463,8 @@
     border-radius: 50%;
     display: inline-block;
 }
-.tip-dot.dot-thinking { background: var(--warning); }
-.tip-dot.dot-generate { background: var(--success); }
+.tip-dot.dot-thinking { background: var(--tip-think); }
+.tip-dot.dot-generate { background: var(--tip-generate); }
 
 /* AI 回复期间锁定：置灰（不使用 pointer-events，保留点击以触发抖动提示） */
 #aiModeToggle.is-locked .ai-mode-btn,
