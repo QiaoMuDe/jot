@@ -13,6 +13,13 @@
     overflow-y: hidden;
 }
 
+/* 日历面板贴到窗口底缘：抵消 .view 的 padding-bottom（底部空白带像底栏遮挡），
+   底部呼吸感由 .calendar-sidebar / .calendar-notes-panel 自身的 padding-bottom 提供。
+   双类选择器确保特异性高于上方 #viewCalendar.view 的 padding 简写，不依赖源顺序 */
+#viewCalendar.view.active {
+    padding-bottom: 0;
+}
+
 /* 日历视图标题右侧缩进，避免因面板延伸到窗口右侧导致标题贴边 */
 #viewCalendar .view-header {
     padding-right: 32px;

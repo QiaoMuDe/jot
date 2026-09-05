@@ -15,6 +15,13 @@
   overflow-y: hidden;
 }
 
+/* 面板滚动区贴到窗口底缘：抵消 .view 的 padding-bottom（底部空白带像底栏遮挡信笺），
+   底部呼吸感由 .data-panels 自身的 padding-bottom 提供。
+   双类选择器确保特异性高于上方 #viewData.view 的 padding 简写，不依赖源顺序 */
+#viewData.view.active {
+  padding-bottom: 0;
+}
+
 .data-content {
   flex: 1;
   display: flex;

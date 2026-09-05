@@ -400,17 +400,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ## 六、补充分析
 
-### 6.1 性能关键点
-
-| 关键点 | 现状 | 评估 |
-|--------|------|------|
-| **数据库查询** | GORM + SQLite，分页查询 | ✅ 满足笔记本规模 |
-| **前端渲染** | 卡片网格渲染 | ✅ 性能良好 |
-| **AI 流式输出** | 基于 Wails Events 逐块推送，不阻塞 UI | ✅ 体验优秀 |
-| **CM6 编辑器** | 仅初始化当前编辑的笔记 | ✅ 性能良好 |
-| **多会话切换** | 切换时从后端加载对应会话的消息，采用一次性同步渲染（无 yield）+ 同步滚动（`scroll-behavior: auto` 临时禁用），浏览器只绘制一次最终状态，彻底消除视觉跳跃。后端 `LoadAISessionMessagesPaginated` 在返回前端前已截断 `RecallCards`/`SearchSources` 的 Content 为 200 字，减小 Wails 桥传输量和 DOM 渲染开销 | ✅ 切换瞬间完成，无任何中间状态闪烁 |
-
-### 6.2 异常处理分析
+### 6.1 异常处理分析
 
 | 异常场景 | 处理方式 |
 |----------|----------|
@@ -422,25 +412,13 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **流式连接中断** | 前端监听 `ai:stream-error` 事件，显示错误提示 |
 | **会话/消息查询失败** | 返回空列表 + 控制台错误日志，不阻断 UI |
 
-### 6.3 安全分析
+### 6.2 安全分析
 
 | 风险点 | 评估 |
 |--------|------|
 | **本地数据库** | SQLite 文件本地存储，无远程访问风险 |
 | **API Key 存储** | Base64 编码存储在 DB 中，带 `(zk)` 前缀标识，前端读写均为解码后明文。仅防肉眼查看，非真实加密 |
 | **XSS 风险** | AI 回复经 `marked.parse()` 渲染，`marked` 默认 Sanitize |
-
-### 6.4 数据库优化
-
-| 优化项 | 配置 | 说明 |
-|--------|------|------|
-| **WAL 模式** | `PRAGMA journal_mode=WAL` | 允许并发读取，写入不阻塞读取，显著提升多线程场景性能 |
-| **busy_timeout** | `PRAGMA busy_timeout=5000` | 忙等待超时 5 秒，避免 "database is locked" 错误 |
-| **synchronous** | `PRAGMA synchronous=NORMAL` | WAL 模式下 NORMAL 级别安全且性能比 FULL 快得多 |
-| **cache_size** | `PRAGMA cache_size=-8000` | 8MB 页面缓存（负值表示 KB 单位） |
-- 初始化位置：`internal/database/db.go` 的 `InitDB()` 函数中，`SetMaxOpenConns(1)` 之后
-- PRAGMA 执行失败不影响初始化流程（忽略错误），由调用方统一处理错误日志
-- 导入/还原场景需清理 WAL 残留文件（`-wal`/`-shm`），防止旧文件干扰新数据库，清理逻辑在 `app.go` 的 `replaceDatabase()` 函数中
 
 ---
 
@@ -542,7 +520,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 29. **全局 MCP 连接池与预热机制（http/sse/stdio 常驻复用，替代每轮重建连）**：[pool.go](internal/mcpserver/pool.go) `mcpserver.Pool` 按 Name 持有预热会话（stdio 子进程常驻）：`Warmup`（并发 3 槽位，**per-name in-flight 信号串行化同名建连**防并发重复拉进程）/`Reconcile`（关不在列表条目 + 预热剩余）/`WarmupOne`（发消息兜底现场连接）/`getOrCreate`（指纹 `serverFingerprint` 变化自动关旧重连）/`Close`/`CloseAll`；**断线自动重连**——`Session.callTool` 检测连接类错误自动重建一次并重试，Close 后拒绝重连；`Session` 加锁保护 cli 替换。装配：agent.go `Deps.MCPPool`，Run 时统一 `Pool.Session` + `WarmupOne` 兜底，**移除每轮 OpenSession + defer Close**；app.go `WarmupMCPServers()`（内部 Reconcile）+ shutdown/rebuildServices 关旧池；前端首次进入 AI 助手预热（`mcpWarmupDone` 防重复）+ 设置页操作后同步预热，汇总一条通知。详见 [pool.go](internal/mcpserver/pool.go)、[tools.go](internal/mcpserver/tools.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
-30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 9）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
+30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 3）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
 
 31. **密码管理功能页（列表/详情分离传输 + Base64 编码 + 修复 + 样式打磨）**：独立视图。后端：`PasswordRecord` 模型（name/username/password/url/note + GORM 软删除）、`PasswordService`（CRUD+Search+BatchDelete）、7 个 Wails 绑定。**传输安全分离**：列表返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），密码不出现在列表；详情 `GetPasswordRecord(id)` 解码明文。**编码**：Base64 + `(zk)` 前缀（可逆编码非加密），存量无前缀值原样返回，启动自动迁移。**前端**：三栏布局 + 防抖搜索（250ms）+ 高亮 `<mark>` + 添加/编辑对话框 + 详情（掩码+显隐）+ 一键复制（clipboard+execCommand 降级）+ 打开链接 + 右键菜单 + 批量操作 + ESC 层级关闭。**修复**：Enter 连按守卫、`pmLoadSeq` 代际防乱序、`escapeLike` 转义、模板残留改 createElement。详见 [password_service.go](internal/services/password_service.go)、[password_record.go](internal/models/password_record.go)、[crypto.go](internal/services/crypto.go)、[password-manager.js](frontend/src/js/password-manager.js)、[password-manager.css](frontend/src/css/components/password-manager.css)
 
@@ -560,83 +538,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 38. **全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制**：新增跨会话持久记忆表 `a_memories`（`AIMemory`：`summary` 唯一摘要注入用 + `content` 详情 + 时间戳），用户在对话中让 AI 记住/遗忘长期偏好与事实；Agent 通过 `manage_memory` 工具增删改查列出（action 区分五动作；delete 用 `ids` 数组一次删多条；create 软删重建复活、update 部分更新；summary 唯一去重、content 超长截断）。**注入**：`buildAIContextInstruction` 末尾注入【长期记忆】段（仅 `summary`+真实 `id`，空/失败跳过，引导栏注管理记忆详情），Chat/Agent 共用。**AlwaysOn 机制**（新增 `ToolMeta.AlwaysOn` + `agent.ToolMeta` 透传）：`manage_memory`/`ask_user` 设为常驻不可禁用——后端装配点从 `ai_agent_tools_disabled` 强制剔除并记 Warn，前端置灰不可勾、不参与全选/全不选（复用 `is-plan-only` 样式 + 主题色提示）。**统计接入**：`MemoryService.Count` + `DataStats.TotalMemories`，数据概览信笺新增「AI 长期记忆」段、`get_stats` overview 增加「长期记忆：N 条」，均共用 `StatsService.GetDataStats` 单一事实源。详见 [ai_memory.go](internal/models/ai_memory.go)、[memory_service.go](internal/services/memory_service.go)、[manage_memory.go](internal/agent/tools/manage_memory.go)、[meta.go](internal/agent/tools/meta.go)、[app.go](app.go)、[stats_service.go](internal/services/stats_service.go)、[data-management.js](frontend/src/js/data-management.js)
 
----
-
-## 记忆点 1：笔记属性弹窗（右键菜单只读属性查看 + GetNoteProperties API）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 笔记右键菜单新增"属性"项（放在第一组"查看"之后，不放删除附近），打开仿资源管理器风格的只读属性弹窗：类型/位置/大小/字符数/行数/标签/置顶/创建时间/修改时间/状态。后端新增 `GetNoteProperties`（[app.go](app.go)）+ `GetNoteWithRelations`（[note_service.go](internal/services/note_service.go)，`Unscoped` 支持回收站笔记、预加载 Tags+Notebook）；统计（字节数/字符数/行数）后端算好，content 全文不出后端。 |
-| **实现要点** | 前端弹窗静态骨架在 [index.html](frontend/index.html)（`#notePropertiesOverlay`），`.note-properties-*` 样式在 [modals.css](frontend/src/css/components/modals.css)（对齐现有 overlay+visible 模式）；[main.js](frontend/src/main.js) `showNoteProperties` 每次实时调 API 填充，"已删除"状态红色强调。**Esc 关闭走全局 Escape 分发链**（与导入冲突弹窗等一致，分支位于全局 keydown 处理中），本地只保留关闭按钮 + 遮罩点击。 |
+39. **内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定）**：全局 `.view { padding: 24px 32px }` 在内部滚动容器型视图（`#mainContent:has(#viewX.active) { scrollbar-gutter: auto; overflow-y: hidden }` 家族共 6 个）上的副作用——padding-bottom: 24px 把内部滚动容器裁切线抬高到窗口底缘上方 24px，底部露出 `--bg` 空白带，内容滚动时像被"底栏"遮挡。修复写法：`#viewX.view.active { padding-bottom: 0 }`——**必须用双类选择器（特异性 (2,1,0)）**，勿用单类 `#viewX.active`（与同文件 `#viewX.view` 的 padding 简写特异性同为 (1,1,0)，靠源顺序取胜，规则重排会静默失效）。已修：viewData/viewSettings/viewCalendar（本轮）+ viewTodo/viewPasswordManager（此前）；viewAiChat `padding: 0` 全清无需处理；直接滚动型 viewGrid/viewTrash/viewEditor 的 padding-bottom 是正常收尾留白不抵消。底部呼吸感由内部容器自身 20px padding 提供。**新增内部滚动型视图时必须同步加此抵消规则**。详见 [.trae/documents/fix-view-padding-bottom-bar.md](.trae/documents/fix-view-padding-bottom-bar.md)
 
 ---
 
-## 记忆点 2：系统提示词注入当前时间替代 get_current_time 工具（Chat/Agent 共用环境信息 + 工具 16→15 + JSON 工具 Desc 精简）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 移除内置工具 `get_current_time`（一次工具往返延迟 + 长 Desc schema token + 依赖提示词强制调用规范的非确定性约束），改为共享系统提示词组装函数 `buildAIContextInstruction`（[app.go](app.go)）末尾注入一行【环境信息】当前时间（日期 + 中文星期 + 时分 + 时区名 + UTC 偏移，桌面应用本地时区即用户时区）。Chat 与 Agent 两模式共用：补齐 Chat 模式此前无任何真实时间来源（只能靠模型训练知识瞎猜）的缺口，Agent 模式回答时间问题不再触发工具调用。内置工具 16 → 15。 |
-| **实现要点** | 注入位于技能提示词之后、`return` 之前（Instruction 尾部：不扰动前部稳定内容、利于提示词前缀缓存）；`now.Zone()` 取时区名 + `Format("-07:00")` 取 UTC 偏移，中文星期数组内联 app.go（不复用 tools 包未导出变量）。同步删除：current_time.go、registry.go 注册行、meta.go 展示条目（前端工具开关列表自动少一项）、Agent 提示词"时间工具强制调用"规范段、两个 doc.go 工具清单、TOOLS.md 引用（§1 架构树 + §4.2 无参模板的文件引用 + §4.3 命名示例改 read_url）。用户设置 `ai_agent_tools_disabled` 中的残留工具名按未知名忽略，无需迁移。 |
-| **相关决策** | ① 不采用"注入 + 保留工具"混合方案：应用无"运行中反复获取秒级时间"的场景，保留工具徒增 schema token 与冗余调用风险；将来若引入子代理，在子代理提示词同样注入一行即可。② 曾评估将 json_validate/json_format/json_extract 合并为单工具 + action 参数，否决——三工具参数形状差异大（path 仅 extract 必填），InferTool 反射无法表达条件必填，合并损害模型调用准确率；改为精简三个工具 Desc（删除"适用场景 ①②③"枚举，保留功能定义 + 关键参数写法 + 互相引导边界，约减 55%，每次请求省约 300 token）。 |
-| **涉及文件** | [app.go](app.go)、[registry.go](internal/agent/registry.go)、[meta.go](internal/agent/tools/meta.go)、[json_tools.go](internal/agent/tools/json_tools.go)、[doc.go](internal/agent/doc.go)、[tools/doc.go](internal/agent/tools/doc.go)、[TOOLS.md](internal/agent/TOOLS.md)、[mcpserver/tools_test.go](internal/mcpserver/tools_test.go)（测试假工具 get_current_time 改名 ping 避免混淆）、[README.md](README.md) 与 playground/landing 展示口径（16→15）。方案详见 [.trae/documents/plan-inject-current-time-remove-time-tool.md](.trae/documents/plan-inject-current-time-remove-time-tool.md) |
-
----
-
-## 记忆点 3：ask_user 多问题反问（单次调用 1-3 问 + 前端三段式面板 + Windows 文字渲染/滚动条教训）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | ask_user 从单问题升级为单次调用携带 `questions` 数组（1-3 条，每题独立 options 2-6 个 + single/multiple 选择模式），相关联信息合并为一次提问；前端反问面板重写为三段式布局（固定头部 / 中部列表滚动 / 固定底部按钮）；**会话等待机制零改动**——仍是一次 ClaimAsk 抢占 + 一次 WaitForAnswer 阻塞 + 一个答案投递，仅答案从单条文本变为多条拼装文本。 |
-| **后端要点** | [ask_user.go](internal/agent/tools/ask_user.go)：schema 用 eino `ElemInfo`+`SubParams` 表达对象数组（**该表示法不支持 minItems/maxItems**，1-3 上限靠 `maxAskUserQuestions=3` 运行时校验 + Desc 文字双重约束）；保留旧单字段 question/options/selection 兜底解析（模型偶发回退旧格式）；逐题校验（问句非空/500 rune、选项 200 rune）→ `normalizeAskUserOptions` 去空去重取 6 项 → **先校验后 ClaimAsk**（参数错误不占反问名额）；`ActionText` 多问显示"向用户提问（共N问）：首问"；事件负载双格式（questions 数组 + 旧顶层字段取首条）。 |
-| **答案映射协议（重要）** | 前端约定：单问题 = 原始答案文本；多问题 = 每题一行（`答案1\n答案2`，行内禁止换行，输入框 maxlength=500 与后端 `maxToolShortText` 截断对齐——**曾用全局 20000 上限，长答案会被后端静默截断**）。`buildAskUserAnswerText`：行数与问题数一致时逐题映射"问题→用户回答"列表回填模型；不匹配时整体兜底为单条答案（防御性防错配）。 |
-| **前端面板** | [ai-chat.js](frontend/src/js/ai-chat.js) `showAskPanel` 重写：多问题渲染表单分组（编号标题 + 各组单选互斥/多选勾选 + 各组"其他"自定义输入），底部唯一「确认提交」右对齐；缺题提交时 `scrollIntoView` 滚到视野中央再抖动（**只抖动不滚动时缺的题可能在滚动区外，用户看不到**）；单问题保留旧交互（单选点击即发、无分组样式）；事件解析兼容新旧双格式。 |
-| **Windows 渲染教训（重要）** | ① **滚动不能放在圆角面板自身**（`border-radius` + `overflow-y:auto` 合成滚动层在 Windows 显示缩放下对文字做纹理重采样导致发糊），必须滚动内部矩形容器（应用其他列表均为矩形裁剪所以清晰）；② **动画去掉 `both` 填充**——结束后 transform 残留把面板永久提升为 GPU 合成层，超高触发滚动后文字丢子像素抗锯齿；③ **字号用整数 px**，`0.92em` 类小数像素（≈12.88px）在 Windows 发虚；④ **`scrollbar-color` 可继承**——面板在 `#mainContent` 内会继承其"默认透明"滚动条颜色导致滚动条隐形，悬浮面板需显式声明常显样式（thin + thumb 常显）；⑤ 水平内边距从面板下沉到 header/body/footer 内部，让滚动条贴住面板右边框。 |
-| **相关决策** | ① 单次调用带 questions 数组而非并行多条 ask_user：ClaimAsk 互斥设计无需改动（并行方案需计数抢占 + 答案按问题 ID 路由 + 多面板互相覆盖，复杂度高收益低）；② 面板高度封顶 `min(420px, 60vh)` 而非弹性撑满（小窗口回退防溢出），超出部分列表内部滚动，头部问题与底部按钮固定可见。 |
-| **涉及文件** | [ask_user.go](internal/agent/tools/ask_user.go)、[meta.go](internal/agent/tools/meta.go)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-ask-body` 滚动区 + `.ai-ask-qgroup` 分组样式） |
-
----
-
-## 记忆点 4：AI 上下文 token 预算压缩重构（边界持久化 + 失败即中止 + 压缩进度圆环 + Wails 事件派发教训）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 上下文摘要机制从"条数窗口"整体重构为 **token 预算制**（新文件 [ai_context.go](internal/services/ai_context.go)）：`SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部选 tail（轮次对齐 + 单条超预算保护）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio` 默认 0.8，无 UI 设置键，测试可改库调小）时压缩 tail 头部旧消息（保留 ≤50% 预算）进摘要；**持久化摘要边界 `SummaryUpToMsgID` 替代 SummaryMsgCount**（按消息 ID 推进，解耦设置变更；tail 选取从边界之后开始，防"压缩后每轮重复触发"）。压缩**失败即中止本轮**（failed + stream-error，本轮不调 LLM，重发自动再触发）。旧键 `ai_context_window_size` / 旧列 `summary_msg_count` 经 [db.go](internal/database/db.go) `cleanupOrphanedData` 清理。 |
-| **Wails 事件派发教训（重要）** | **绑定方法返回前发出的 `runtime.EventsEmit` 不会实时送达前端，积压到方法返回后才派发**。摘要压缩（10s+）若在绑定方法体内同步执行，`generating` 状态条事件会延迟到压缩结束才到达，UI 全程无反馈（用户只见打字点动画）。**修复：`truncateAIMessages`（含压缩与事件发射）必须移入 `go func()` goroutine**（[app.go](app.go) `CallAIAgentStream`），与流式 chunk 事件同机制实时送达。该约束已写入 [AI_CONTEXT.md](internal/services/AI_CONTEXT.md)。 |
-| **前端压缩进度圆环（重要）** | 头部新增 SVG 双圆环进度组件（20px，`stroke-dashoffset` 驱动，三态色随语义变量：正常 accent / ≥触发比例 warning / >95% danger），日常仅显示"圆环 + 百分比"，`aria-label` 为"历史对话压缩进度"；悬停 tooltip 复用 `#aiModeTipPortal` 同款组件（`initModeTips` 泛化绑定，明细"当前 X / Y tokens"1024 进制折算 = 摘要边界后 tail 估算 / 预算，第二行"达到预算的 80% 时自动压缩更早的历史"，阈值随触发比例动态化）。数据源 `GetAIContextUsage` 与压缩机制**严格同口径**（边界感知 tail token / 同一预算，经公共 helper `selectAIContextTail` 与 `truncateAIMessages` 复用同一实现，防口径漂移）。0% 时 dashoffset 取周长+1 防圆点伪影。 |
-| **状态条与重试语义** | `ai:summary-status` generating/done/failed 三态；状态条 **700ms 最短可见**（生成过快时延迟隐藏保证反馈可感知，定时器互斥清理防误隐藏）；failed 显示"生成失败，请重新发送"5s + stream-error 通知，输入解锁复用既有 handler。摘要生成超时 30s→**90s**（40K token 区间慢网关实测 13s~30s+，30s 频繁超时）。 |
-| **测试与验证方法** | [ai_context_test.go](internal/services/ai_context_test.go) 覆盖 token 估算/选取/轮次对齐/边界推进/失败沿用旧摘要（httptest 模拟 OpenAI 全链路）。**调试技巧**：settings 表改 `ai_context_token_budget=12000` + `ai_context_summary_trigger_ratio=0.06`（约 720 token 触发），几轮对话即可走完压缩流程；日志观察 `compact_elapsed_ms` 字段（该字段存在即证明运行新代码）。前端热重载时注意：运行的应用若非 wails dev/最新构建，修复不会生效（曾因此误判修复无效）。 |
-| **涉及文件** | [internal/services/ai_context.go](internal/services/ai_context.go)（新）、[internal/services/ai_context_test.go](internal/services/ai_context_test.go)（新）、[internal/services/AI_CONTEXT.md](internal/services/AI_CONTEXT.md)（新，机制文档）、[app.go](app.go)（truncateAIMessages 重写 + GetAIContextUsage + 移入 goroutine）、[internal/models/ai_session.go](internal/models/ai_session.go)（SummaryUpToMsgID）、[internal/database/db.go](internal/database/db.go)（种子 + 清理清单）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md) §7、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)、[frontend/index.html](frontend/index.html)（圆环 + tooltip 复用） |
-
----
-
-## 记忆点 5：上下文摘要状态条修复 + 回退功能 + 图标统一 + 压缩进度两阶段更新
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 修复上下文摘要状态条在输入框下方的显示问题，实现用户消息右键菜单"回退"功能，统一引用栏/用户消息图标风格，实现压缩进度指示器两阶段更新机制，以及修复停止时误报摘要失败等边界问题。 |
-| **摘要状态条 z-index 修复（重要）** | 摘要状态条（`.ai-summary-status`）显示在输入框下方而非上方，根因是 CSS 定位与 z-index 层级问题。修复：`position: absolute; bottom: calc(8px + var(--input-h, 120px) + 8px); left: 50%; transform: translateX(-50%); z-index: 6; white-space: nowrap;`。[ai-chat.js](frontend/src/js/ai-chat.js) `showSummaryStatus` 将状态条追加到父容器并设置 `--input-h` CSS 变量。详见 [ai-chat.css](frontend/src/css/components/ai-chat.css) |
-| **停止按钮静默隐藏（重要）** | 点击停止按钮时，如果无摘要生成（从未收到 `generating` 事件），则不显示失败提示。`handleAICancelled` 仅当 `summaryStatusShownAt > 0` 时才发 `ai:summary-status:failed` 事件（带 `session_id` 字段），避免误报"摘要生成失败"。详见 [app.go](app.go) `handleAICancelled` |
-| **回退功能（重要）** | 用户消息右键菜单新增"回退"项（`handleRollback`），完整流程：弹出确认对话框（支持 ESC 关闭）→ 删除该消息起的后续 DOM 消息 → `TruncateAISessionAfterMessage` 截断数据库 → 恢复 `referencedNotes`/`activeSkills`/`roleplayNotes` 到输入区 chips → 调用 `saveCurrentSessionConfig()` 持久化状态 → `updateContextUsage()` 刷新。**关键教训**：`buildUserMessageMeta` 用 `id` 字段存技能 ID（非 `skillId`），`renderSkillChips` 是引用栏技能 chip 渲染入口。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **图标统一（重要）** | 引用栏与用户消息气泡图标统一：引用栏技能使用统一闪电图标（`CHIP_ICON_SVG.skill`），文件使用回形针图标（`CHIP_ICON_SVG.file`）；用户消息气泡中 `type: skill` 使用闪电，`type: roleplay` 使用角色头像图标。详见 [ai-chat.js](frontend/src/js/ai-chat.js) `CHIP_ICON_SVG`、`renderSkillChips` |
-| **压缩进度两阶段更新** | 压缩进度指示器显示与摘要触发时序不一致（显示不包含刚发送的消息，但摘要触发检查包含）。修复：`sendUserText`/`handleResend`/`handleRegenerate` 中在消息保存/截断后立即调用 `updateContextUsage()`（Phase 1），AI 回复完成后再次调用（Phase 2），确保显示与触发判断口径一致。详见 [ai-chat.js](frontend/src/js/ai-chat.js) |
-| **HTML 验证修复** | `npm run validate:html` 报 `prefer-native-element` 错误（line 1131:106）：在 [index.html](frontend/index.html) 中添加 `<!-- html-validate-disable-next prefer-native-element -->` 注释忽略该警告。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`handleRollback`/`showSummaryStatus`/`hideSummaryStatus`/`updateContextUsage`/`CHIP_ICON_SVG`/`renderSkillChips`/`sendUserText`/`handleResend`/`handleRegenerate`/右键菜单项）、[app.go](app.go)（`handleAICancelled` 事件补发）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-summary-status` 定位修复）、[frontend/index.html](frontend/index.html)（html-validate 忽略注释） |
-
----
-
-## 记忆点 6：用户消息发送时间显示 + 智能截断与悬停提示
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 用户消息气泡底部增加发送时间显示（复用 `AIMessage.CreatedAt` 字段），采用智能格式化规则（今天→`HH:MM`、今年内→`MM-DD HH:MM`、跨年→`YYYY-MM-DD HH:MM`）；时间与 token 数同行显示，超出气泡宽度时截断省略号，悬停显示完整内容。AI 消息的耗时/token 脚标同步应用相同的截断+悬停方案。 |
-| **后端数据链路（重要）** | [services/ai_service.go](internal/services/ai_service.go) `Message` 结构体新增 `CreatedAt time.Time json:"created_at"` 字段；`LoadAISessionMessagesPaginated` 转换时赋值 `CreatedAt: m.CreatedAt`；`SaveAIMessage` 返回值改为 `(uint, time.Time, error)` 同时返回消息 ID 和创建时间。[app.go](app.go) `SaveAIMessageResult` 新增 `CreatedAt string json:"createdAt"`，填入 `createdAt.Format(time.RFC3339)`，两处保存 assistant 消息的调用同步适配新签名。 |
-| **前端时间渲染（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增 `formatSmartTime(isoStr)` 工具函数：解析 ISO 字符串后按天/年边界智能格式化。`createMsgActions` 新增 `createdAt` 参数，拼接 token + 时间显示到 `.user-tokens` 元素。`loadSession` 的 chatHistory map 保存 `created_at: msg.created_at`，`sendUserText` 从后端 `result.createdAt` 获取并传递/保存，`handleRegenerate` 同理。**修复关键 bug**：AI 回复完成后更新用户消息 token 数时（`updateUserMessageTokens`/`updateMsgActions`）覆盖了时间——修复为从 `chatHistory` 读取 `created_at` 重新拼接完整内容。 |
-| **截断与悬停（重要）** | [ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-msg-user .user-tokens` 和 `.ai-msg-time` 均添加 `overflow: hidden; text-overflow: ellipsis; min-width: 0;`，超出气泡宽度时自动截断省略号。[ai-chat.js](frontend/src/js/ai-chat.js) 创建元素时设置 `title` 属性为完整文本内容，鼠标悬停时浏览器原生 tooltip 显示完整信息（截断和不截断时均显示）。 |
-| **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`Message.CreatedAt` + `SaveAIMessage` 返回值 + `LoadAISessionMessagesPaginated` 赋值）、[app.go](app.go)（`SaveAIMessageResult.CreatedAt` + 两处 assistant 消息调用适配）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`formatSmartTime`/`createMsgActions`/`loadSession`/`sendUserText`/`handleRegenerate`/`updateUserMessageTokens` 更新）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.user-tokens` + `.ai-msg-time` 截断样式） |
-
----
-
-## 记忆点 7：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
+## 记忆点 1：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -648,7 +554,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 8：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
+## 记忆点 2：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -658,7 +564,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 9：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
+## 记忆点 3：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -672,7 +578,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 10：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
+## 记忆点 4：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -685,14 +591,26 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
+## 记忆点 5：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 数据管理页（数据概览信笺）与设置页（展开预设下拉出现滚动条时）底部出现"假底栏"遮挡内容。排查确认根因：全局 `.view { padding: 24px 32px }`（[main-content.css](frontend/src/css/components/main-content.css)）在"内部滚动容器"型视图上的副作用——`padding-bottom: 24px` 把内部滚动容器的裁切线抬高到窗口底缘上方 24px，下方露出一条 `--bg` 色空白带，内容滚动时像被底栏遮挡（浏览器实测裁切线 645.2px / 窗口高 669px，差值 23.8px）。待办清单与密码管理此前已按同思路修复过，本轮补齐漏修页面。 |
+| **排查矩阵（6 个内部滚动型视图）** | 判定特征：`#mainContent:has(#viewX.active) { scrollbar-gutter: auto; overflow-y: hidden }` 家族共 6 个。本轮修复 3 个：viewData（数据管理）/ viewSettings（设置）/ viewCalendar（日历，排查中新确认——右侧 `.calendar-notes-list` 内部滚动，同款裁切线 + 空白带）；此前已修 2 个：viewTodo（[todo.css](frontend/src/css/components/todo.css)）/ viewPasswordManager（[password-manager.css](frontend/src/css/components/password-manager.css)）；无需处理 1 个：viewAiChat（`#viewAiChat.view { padding: 0 }` 全清自管布局）。`#mainContent` 直接滚动型视图（viewGrid 笔记首页 / viewTrash 回收站 / viewEditor 编辑器）的 padding-bottom 是可滚到的正常收尾留白，**不得抵消**。 |
+| **修复模式（重要）** | 在各视图对应组件 CSS 中新增 `#viewX.view.active { padding-bottom: 0 }`（[data-view.css](frontend/src/css/components/data-view.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[calendar.css](frontend/src/css/components/calendar.css)）+ 注释说明。**特异性加固**：不用单类 `#viewX.active`——它与同文件已有的 `#viewX.view { padding: 24px 0 24px 32px }` 简写特异性同为 (1,1,0)，靠源顺序取胜，未来规则重排会静默失效；改用双类 `#viewX.view.active`（(2,1,0) 稳赢；激活态元素恒持有 view+active 两个 class，匹配不受影响）。底部呼吸感由各内部滚动容器自身 padding（20px：`.data-panels` / `.settings-panel` / `.calendar-notes-panel`）提供，无需额外补偿。**新增内部滚动型视图时必须同步加此抵消规则**。 |
+| **验证方法** | Vite dev + 浏览器测量：激活目标视图后测 `.data-panels` / `.settings-panels` / `.calendar-notes-panel` 的 `getBoundingClientRect().bottom` ≈ `window.innerHeight`（修复前差 23.8px，修复后 <1px）；窗口最底部 `elementFromPoint` 采样应命中内部滚动容器而非 `DIV.view.active`；另测 viewGrid 的 paddingBottom 仍为 24px 确认未波及直接滚动视图。 |
+| **涉及文件** | [frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（根因所在）。方案详见 [.trae/documents/fix-view-padding-bottom-bar.md](.trae/documents/fix-view-padding-bottom-bar.md) |
+
+---
+
 ## 十二、AGENTS.md 维护规范
 
 1. **第 1-12 章反映项目当前状态**，代码发生结构性变化时更新（新增模块/架构重构图/重要功能/文件行数统计等）
-2. **记忆点顺序**：编号 1（最旧）→ 10（最新），从上到下按时间升序排列。新增记忆点时严格执行以下三步：
+2. **记忆点顺序**：编号 1（最旧）→ 5（最新），从上到下按时间升序排列。新增记忆点时严格执行以下三步：
    - **第一步**：删除最旧的条目（即 `记忆点 1`）
-   - **第二步**：将剩余条目顺移重新编号（原 2→1、原 3→2、……、原 10→9）
-   - **第三步**：在末尾追加新条目作为 `记忆点 10`
-3. **上限 10 条**，不得超出。禁止在顶部或中间插入新条目，新条目只追加在末尾
+   - **第二步**：将剩余条目顺移重新编号（原 2→1、原 3→2、……、原 5→4）
+   - **第三步**：在末尾追加新条目作为 `记忆点 5`
+3. **上限 5 条**，不得超出。禁止在顶部或中间插入新条目，新条目只追加在末尾
 4. **详细的变更记录请写在 `.trae/specs/` 或 `.trae/documents/` 中**，AGENTS.md 仅作为快速参考
 5. **更新关键文件统计**时，用 `Measure-Object -Line`（Windows）或 `wc -l`（Linux/macOS）获取实际行数
 6. **第 八 章"待优化点"** 中的"已实现"列表仅在重大功能完成时归档，小修改不必追加条目
