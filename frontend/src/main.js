@@ -9720,15 +9720,28 @@ function initCodeHighlightThemeSettings() {
 
 let _codePreviewInited = false;
 let _codePreviewEditor = null;
+// 当前已构建 / 已请求的代码高亮主题；用于在 loadSettings 里跳过"主题未变"的重复重建
+let _previewRequestedTheme = null;
 
 function initCodePreview() {
     if (_codePreviewInited) return;
     _codePreviewInited = true;
+    _previewRequestedTheme = codeHighlightTheme;
 
     const container = document.getElementById('codePreview');
     if (!container) return;
 
-    buildCodePreview(container, codeHighlightTheme);
+    // CM6 预览的创建（含语法高亮）较重，延后到空闲时执行，
+    // 避免进入设置页的首帧在主线程上同步构建造成卡顿。
+    const build = () => {
+        if (!document.getElementById('codePreview')) return; // 容器已被移除则跳过
+        buildCodePreview(container, codeHighlightTheme);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(build, { timeout: 300 });
+    } else {
+        setTimeout(build, 0);
+    }
 }
 
 function buildCodePreview(container, themeName) {
@@ -11109,11 +11122,13 @@ async function loadSettings() {
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
         applyAIHighlightTheme(codeHighlightTheme);
         applyCodeHighlightThemeUI(codeHighlightTheme);
-        // 同步重建预览代码块（覆盖再次进入设置页时 _codePreviewInited 守卫跳过的问题）
+        // 代码高亮主题与当前预览请求的主题一致时跳过重建（避免每次进入设置页重复 new CM6 造成卡顿）；
+        // 仅当主题发生变化时才同步重建。首次构建由 initCodePreview 在空闲时完成。
         if (_codePreviewInited) {
             const container = document.getElementById('codePreview');
-            if (container) {
+            if (container && codeHighlightTheme !== _previewRequestedTheme) {
                 buildCodePreview(container, codeHighlightTheme);
+                _previewRequestedTheme = codeHighlightTheme;
             }
         }
 
