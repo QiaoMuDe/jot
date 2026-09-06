@@ -106,6 +106,8 @@ export function ExportDataWithDialog():Promise<string>;
 
 export function ExportNoteAsMarkdown(arg1:number):Promise<string>;
 
+export function ExportNotebookAsMarkdown(arg1:number):Promise<string>;
+
 export function FetchAIModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GeneratePasswords(arg1:services.PasswordGenOptions):Promise<Array<services.GeneratedPassword>>;

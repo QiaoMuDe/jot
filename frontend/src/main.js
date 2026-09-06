@@ -7737,6 +7737,7 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
 
     menu.innerHTML = `
         <div class="notebook-context-item${isDefault ? ' disabled' : ''}" data-action="rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>${isDefault ? '默认笔记本' : '重命名'}</div>
+        <div class="notebook-context-item" data-action="export"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出全部笔记</div>
         <div class="notebook-context-item danger${isDefault ? ' disabled' : ''}" data-action="delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>${isDefault ? '不可删除' : '删除'}</div>
     `;
     document.body.appendChild(menu);
@@ -7782,6 +7783,14 @@ function showNotebookContextMenu(event, notebookId, notebookName) {
 
         if (action === 'rename') {
             showRenameNotebookDialog(notebookId, notebookName);
+        } else if (action === 'export') {
+            try {
+                const result = await window.go.main.App.ExportNotebookAsMarkdown(notebookId);
+                if (result && result !== '已取消') nm.show(result, 'success');
+            } catch (err) {
+                nm.show('导出失败', 'error');
+                console.error('导出失败:', err);
+            }
         } else if (action === 'delete') {
             showDeleteNotebookDialog(notebookId, notebookName);
         }

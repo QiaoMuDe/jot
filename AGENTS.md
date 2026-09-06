@@ -160,7 +160,7 @@ jot/                                    # 项目根目录
 | **笔记 CRUD** | 创建/更新/查询/删除笔记 | `services/note_service.go` | 标题/内容/颜色/ID | Note 对象/错误 |
 | **笔记搜索** | 标题+内容 LIKE 模糊搜索，支持 3 种排序（updated_at/created_at/title，均 pinned DESC 优先）| `note_service.go:Search()` | 关键词/分页/sortBy 参数 | 笔记列表+总数 |
 | **笔记置顶** | 切换置顶状态 | `note_service.go:TogglePin()` | 笔记 ID | 更新后的笔记 |
-| **回收站** | 软删除/查看/恢复/永久删除 | `note_service.go:Delete/GetTrash/Restore/PermanentDelete` | 笔记 ID | 操作结果 |
+| **回收站** | 软删除/查看/恢复/永久删除；**硬删除（单条/清空）联动清理不再被引用的孤儿图片** | `note_service.go:Delete/GetTrash/Restore/PermanentDelete` + `app.go:extractImageFilenames/deleteImagesIfUnreferenced` | 笔记 ID | 操作结果 |
 | **批量回收站操作** | 全部恢复/全部清空 | `note_service.go:RestoreAll/EmptyTrash` | — | 操作结果 |
 | **标签管理** | 标签 CRUD | `services/tag_service.go` | 名称/颜色/ID | Tag 对象 |
 | **笔记标签关联** | 为笔记添加/移除标签 | `tag_service.go:AddTagToNote/RemoveTagFromNote` | 笔记ID+标签ID | 操作结果 |
@@ -168,6 +168,8 @@ jot/                                    # 项目根目录
 | **数据统计** | 统计笔记总数/回收站数/标签数 | `note_service.go:GetStats()` + `tag_service.go:Count()` | — | DataStats 对象 |
 | **数据导出为 .db** | 导出为 SQLite 数据库文件（VACUUM INTO + fs.CopyEx）| `app.go:ExportDataWithDialog()` | — | "导出成功" 提示 |
 | **数据导入** | 从 JSON 文件导入笔记（跳过同名） | `note_service.go:ImportFromJSON()` | JSON 字节数组 | ImportResult 对象 |
+| **导出笔记 Markdown（含图片）** | 单条/笔记本批量导出 `.md` + 同名 `.md.assets/` 图片目录（引用改相对路径，保留 uuid 原始文件名，重名序号，失败隔离统计）| `app.go:ExportNoteAsMarkdown/ExportNotebookAsMarkdown/exportNoteContentWithImages` | 笔记ID/笔记本ID | 导出路径+统计消息 |
+| **导入 Markdown（携带图片）** | 拖拽/选择 .md 导入时自动复制本地图片到 `~/.jot/images/` 并改内部引用（互联网链接跳过、`/images/` 幂等跳过、缺失保留）| `app.go:processImportImages` + `processImportFile` | 文件列表 | ImportResult 对象 |
 | **前端卡片渲染** | 卡片网格展示 | `frontend/src/main.js` | 笔记数据数组 | DOM 渲染 |
 | **前端编辑器** | 笔记编辑模态框（CM6 编辑器，支持行号/撤销重做/查找替换/Tab缩进/自动补全/自动闭合括号/Markdown 语法高亮） | `frontend/src/main.js` | 笔记数据/用户输入 | 保存/取消 |
 | **前端查找替换** | CM6 search panel，Ctrl+F 查找 / Ctrl+H 查找替换，选中内容自动填充搜索框，预览模式自动切回编辑模式搜索 | `frontend/src/main.js:handleKeyboardNavigation()` | 搜索关键词 | 搜索面板匹配导航 |
@@ -520,7 +522,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 29. **全局 MCP 连接池与预热机制（http/sse/stdio 常驻复用，替代每轮重建连）**：[pool.go](internal/mcpserver/pool.go) `mcpserver.Pool` 按 Name 持有预热会话（stdio 子进程常驻）：`Warmup`（并发 3 槽位，**per-name in-flight 信号串行化同名建连**防并发重复拉进程）/`Reconcile`（关不在列表条目 + 预热剩余）/`WarmupOne`（发消息兜底现场连接）/`getOrCreate`（指纹 `serverFingerprint` 变化自动关旧重连）/`Close`/`CloseAll`；**断线自动重连**——`Session.callTool` 检测连接类错误自动重建一次并重试，Close 后拒绝重连；`Session` 加锁保护 cli 替换。装配：agent.go `Deps.MCPPool`，Run 时统一 `Pool.Session` + `WarmupOne` 兜底，**移除每轮 OpenSession + defer Close**；app.go `WarmupMCPServers()`（内部 Reconcile）+ shutdown/rebuildServices 关旧池；前端首次进入 AI 助手预热（`mcpWarmupDone` 防重复）+ 设置页操作后同步预热，汇总一条通知。详见 [pool.go](internal/mcpserver/pool.go)、[tools.go](internal/mcpserver/tools.go)、[agent.go](internal/agent/agent.go)、[app.go](app.go)、[main.js](frontend/src/main.js)、[ai-chat.js](frontend/src/js/ai-chat.js)
 
-30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示（教训详见记忆点 3）。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
+30. **AI 上下文 token 预算窗口 + 持久化摘要边界（替代旧条数窗口 + SummaryMsgCount）**：上下文构建从"固定条数滑动窗口"重构为 **token 预算制**。[ai_context.go](internal/services/ai_context.go) `SelectTailByTokenBudget` 按预算 `ai_context_token_budget`（默认 128K）从尾部累计 `EstimateTokens` 选取 tail（**轮次对齐**：边界回退到 user 消息起点；单条超预算消息强制保留）；tail 达 **预算 × 触发比例**（`ai_context_summary_trigger_ratio`，默认 0.8，clamp [0.05,1.0]，测试时可改小）时 `CompactSessionSummary` 把 tail 头部旧消息（保留区 ≤50% 预算，`SelectKeepTailByTokenBudget`）合并旧摘要生成新摘要，**持久化摘要边界 `SummaryUpToMsgID`**（按消息 ID 推进，解耦预算/窗口设置变更；boundary 前内容视为已摘要，tail 选取从边界之后开始，避免"压缩后每轮重复触发"）。**失败即中止**：压缩失败发 `ai:summary-status:failed` + `stream-error`，本轮不调 LLM，用户重发时自动再触发（无重试状态机）。**Wails 事件派发约束**：`truncateAIMessages` 必须在 goroutine 内执行——绑定方法返回前发出的 EventsEmit 积压到方法返回才派发，会导致状态条延迟到压缩结束才显示。摘要生成超时 90s（40K token 区间 + 慢网关实测 13s~30s+）。详见 [ai_context.go](internal/services/ai_context.go)、[AI_CONTEXT.md](internal/services/AI_CONTEXT.md)、[app.go](app.go)（truncateAIMessages）、[EVENTS.md](internal/agent/EVENTS.md) §7
 
 31. **密码管理功能页（列表/详情分离传输 + Base64 编码 + 修复 + 样式打磨）**：独立视图。后端：`PasswordRecord` 模型（name/username/password/url/note + GORM 软删除）、`PasswordService`（CRUD+Search+BatchDelete）、7 个 Wails 绑定。**传输安全分离**：列表返回 `PasswordListItem` DTO（仅 ID/名称/用户名/URL），密码不出现在列表；详情 `GetPasswordRecord(id)` 解码明文。**编码**：Base64 + `(zk)` 前缀（可逆编码非加密），存量无前缀值原样返回，启动自动迁移。**前端**：三栏布局 + 防抖搜索（250ms）+ 高亮 `<mark>` + 添加/编辑对话框 + 详情（掩码+显隐）+ 一键复制（clipboard+execCommand 降级）+ 打开链接 + 右键菜单 + 批量操作 + ESC 层级关闭。**修复**：Enter 连按守卫、`pmLoadSeq` 代际防乱序、`escapeLike` 转义、模板残留改 createElement。详见 [password_service.go](internal/services/password_service.go)、[password_record.go](internal/models/password_record.go)、[crypto.go](internal/services/crypto.go)、[password-manager.js](frontend/src/js/password-manager.js)、[password-manager.css](frontend/src/css/components/password-manager.css)
 
@@ -540,21 +542,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 39. **内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定）**：全局 `.view { padding: 24px 32px }` 在内部滚动容器型视图（`#mainContent:has(#viewX.active) { scrollbar-gutter: auto; overflow-y: hidden }` 家族共 6 个）上的副作用——padding-bottom: 24px 把内部滚动容器裁切线抬高到窗口底缘上方 24px，底部露出 `--bg` 空白带，内容滚动时像被"底栏"遮挡。修复写法：`#viewX.view.active { padding-bottom: 0 }`——**必须用双类选择器（特异性 (2,1,0)）**，勿用单类 `#viewX.active`（与同文件 `#viewX.view` 的 padding 简写特异性同为 (1,1,0)，靠源顺序取胜，规则重排会静默失效）。已修：viewData/viewSettings/viewCalendar（本轮）+ viewTodo/viewPasswordManager（此前）；viewAiChat `padding: 0` 全清无需处理；直接滚动型 viewGrid/viewTrash/viewEditor 的 padding-bottom 是正常收尾留白不抵消。底部呼吸感由内部容器自身 20px padding 提供。**新增内部滚动型视图时必须同步加此抵消规则**。详见 [.trae/documents/fix-view-padding-bottom-bar.md](.trae/documents/fix-view-padding-bottom-bar.md)
 
----
-
-## 记忆点 1：AI 消息分叉功能 + MCP 工具描述从服务器获取 + AI 消息右键菜单分组调整
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三处改动：① AI 消息右键菜单新增"分叉"功能，复制选中消息及之前消息到新会话，标题递增编号，长标题 20 字符截断，复制会话配置，侧边栏自动刷新；② MCP Agent 工具描述改为从 MCP 服务器动态获取（两段式：MCP desc 优先取前 40 字符，空则兜底拼接"服务器名 的 工具名"）；③ AI 消息右键菜单按方案 B 重新分组（保存为笔记/分叉/追问此条回复一组，重新生成单独一组，删除独立）。 |
-| **分叉功能（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) `forkSession()`：获取右键消息 ID → `LoadAISessionMessages` 筛选到该消息为止 → 复制会话配置（模型/深度思考/搜索源/Mode/引用笔记/技能/角色扮演）→ `CreateAISession` → `RenameAISession`（`parseForkTitle` 递增编号 `(1)` `(2)`... + 20 字符截断）→ `SaveAIMessages` → `SaveSessionConfig` → `switchSession` + `loadSessionList` + `updateChatTitle`。右键菜单项 `FORK_ICON`（git-branch SVG），菜单位置在"保存为笔记"和"重新生成"之间。修复右键菜单重复追加 bug（`closeAiMsgContextMenu` 定时器取消后清空 `innerHTML`）。分叉后侧边栏展开时刷新列表。 |
-| **MCP 工具描述两段式（重要）** | [pool.go](internal/mcpserver/pool.go) `SessionToolMeta` 增加 `Description` 字段，`ListToolMetas` 从 `t.Info(ctx).Desc` 提取描述。[app.go](app.go) `GetAgentTools` 两段式构造 Label：`mt.Description` 非空时取前 40 rune（`[...]` 中英文安全），超长追加 `"..."`；空时回退 `"{ServerName} 的 {toolName}"` 拼接。内置工具不受影响，仍使用 `meta.go` 硬编码中文描述。 |
-| **右键菜单分组调整** | [ai-chat.js](frontend/src/js/ai-chat.js) AI 消息右键菜单按方案 B 重新分组：`复制` → `保存为笔记` / `分叉` / `追问此条回复`（同一组）→ `重新生成`（单独一组）→ `删除`。消除原来中间组杂糅（保存为笔记/分叉/重新生成三种不同性质操作混放）的问题。 |
-| **涉及文件** | [internal/mcpserver/pool.go](internal/mcpserver/pool.go)（`SessionToolMeta.Description` + `ListToolMetas` 提取 desc）、[app.go](app.go)（`GetAgentTools` 两段式 Label）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`forkSession`/`parseForkTitle`/`FORK_ICON`/右键菜单项/分组重排/菜单重复追加修复） |
+40. **笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片**：导出 `笔记名.md` 时同步生成 `笔记名.md.assets/` 复制引用的 `/images/` 图片（**保留 uuid_原名.ext 原始文件名**，Typora 约定），引用改写相对路径；导入 .md 时反向把本地图片复制进 `~/.jot/images/` 改回内部 URL（URL 跳过、`/images/` 幂等跳过、缺失保留）；`PermanentDeleteNote`/`EmptyTrash` 硬删后按引用文件名增量清理孤儿图片（检查范围含回收站 `Unscoped`，软删除/定时清理不动）。公共逻辑在 [app.go](app.go) `exportNoteContentWithImages`/`processImportImages`/`deleteImagesIfUnreferenced`。
 
 ---
 
-## 记忆点 2：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
+## 记忆点 1：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -564,7 +556,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
+## 记忆点 2：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -578,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
+## 记忆点 3：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +583,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
+## 记忆点 4：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,6 +592,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **修复模式（重要）** | 在各视图对应组件 CSS 中新增 `#viewX.view.active { padding-bottom: 0 }`（[data-view.css](frontend/src/css/components/data-view.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[calendar.css](frontend/src/css/components/calendar.css)）+ 注释说明。**特异性加固**：不用单类 `#viewX.active`——它与同文件已有的 `#viewX.view { padding: 24px 0 24px 32px }` 简写特异性同为 (1,1,0)，靠源顺序取胜，未来规则重排会静默失效；改用双类 `#viewX.view.active`（(2,1,0) 稳赢；激活态元素恒持有 view+active 两个 class，匹配不受影响）。底部呼吸感由各内部滚动容器自身 padding（20px：`.data-panels` / `.settings-panel` / `.calendar-notes-panel`）提供，无需额外补偿。**新增内部滚动型视图时必须同步加此抵消规则**。 |
 | **验证方法** | Vite dev + 浏览器测量：激活目标视图后测 `.data-panels` / `.settings-panels` / `.calendar-notes-panel` 的 `getBoundingClientRect().bottom` ≈ `window.innerHeight`（修复前差 23.8px，修复后 <1px）；窗口最底部 `elementFromPoint` 采样应命中内部滚动容器而非 `DIV.view.active`；另测 viewGrid 的 paddingBottom 仍为 24px 确认未波及直接滚动视图。 |
 | **涉及文件** | [frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（根因所在）。方案详见 [.trae/documents/fix-view-padding-bottom-bar.md](.trae/documents/fix-view-padding-bottom-bar.md) |
+
+---
+
+## 记忆点 5：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除联动清理孤儿图片 + 笔记本批量导出
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三块改动打通"导出→导入"图片闭环并治理图片残留：① **导出携带图片**（单条 + 笔记本批量）：导出 `笔记名.md` 的同时在同目录生成 `笔记名.md.assets/`，把内容中引用的 `/images/` 图片原样复制进去（**保留 uuid_原名.ext 原始文件名**），引用改写为相对路径 `笔记名.md.assets/文件名`（Typora 生态通用约定，外部工具可直接显示）；② **导入携带图片**（`processImportImages`）：导入 .md 时把相对/绝对本地路径图片复制进 `~/.jot/images/` 并改回内部 URL；③ **回收站硬删除联动清理孤儿图片**：永久删除/清空回收站后，按引用文件名增量清理不再被任何剩余笔记引用的图片（软删除不动，可恢复）。 |
+| **导出（重要）** | 公共函数 [app.go](app.go) `exportNoteContentWithImages(note, targetPath) (content string, exported, missing int)`——单条 `ExportNoteAsMarkdown` 与批量 `ExportNotebookAsMarkdown` 共用。要点：**仅 `.md` 且内容含 `/images/` 才处理**（.txt 不动）；正则 `!\[[^\]]*\]\(/images/([^)]+)\)` 提取引用并按文件名去重，捕获组含 `"title"` 后缀时先用 `strings.Index(filename, "\"")` 截断（否则误判图片不存在且不改写）；`os.MkdirAll(targetPath+".assets")` 失败或图片缺失时**保留原引用**不阻断导出（missing 计数，提示语区分）；`strings.Replace(s, "/images/"+filename, assetsBase+"/"+filename, 1)` 只改图片语法内引用；文件名防路径穿越 `ContainsAny(name, \/\)` 跳过；目录创建移到循环外一次调用。批量 `ExportNotebookAsMarkdown(notebookID)`：先查笔记（空则提示不弹目录）→ `OpenDirectoryDialog` 选父目录（取消返回"已取消"）→ `sanitizeFilename(笔记本名)` 建子目录平铺导出 → 重名追加序号 `标题 (2).md`（`fileExists` 用 `err == nil \|\| !os.IsNotExist(err)` 语义，仅"明确不存在"视为不存在）→ 单篇失败不中断，返回汇总 `导出完成：n 篇成功（含 x 张图片），m 篇失败`。前端笔记本右键菜单新增「导出全部笔记」项（[main.js](frontend/src/main.js) `data-action="export"`，点击调 `ExportNotebookAsMarkdown` 后 `nm.show` 汇总）。 |
+| **导入（重要）** | [app.go](app.go) `processImportImages(content, mdDir)` 在 [app.go](app.go) `processImportFile` 内容读取后、哈希对比前调用（仅 `fileExt == ".md"` 且含 `![`），处理后的内容统一供哈希/冲突/覆盖/创建下游使用。正则 `!\[[^\]]*\]\(([^)]+)\)` 扫描，`raw` 按空格拆出 pathPart 与可选 title；判断顺序：含 `://` 或 `data:` → 互联网链接保留；`/images/` 开头 → jot 内部引用跳过（**幂等**，二次导入不重复复制、内容哈希稳定）；本地路径基于 md 目录解析 `os.Stat` 存在 → `SaveImageFromPath` 复制 → 引用改写为 `/images/xxx`（title 保留）；不存在 → 保留原引用记日志。**替换用 `raw` 完整子串**（`strings.Replace(s, raw, newURL+strings.TrimPrefix(raw, pathPart), 1)`）——`pathPart` 在 alt 与路径同名时（`![foo.png](foo.png)`）会替换错位置。同路径 map 缓存去重只复制一次。 |
+| **回收站清理（重要）** | [app.go](app.go) `extractImageFilenames(content)` 提取引用文件名（title 截断 + 去重 + 防路径穿越），`deleteImagesIfUnreferenced(filenames, includeTrash)` 对每个文件名用 `instr(content, ?) > 0` 存在性查询（`Unscoped` 含回收站，精确匹配无通配符转义问题），未被引用则 `os.Remove`（失败仅记日志）。`PermanentDeleteNote`：删前取 content → 硬删 → 增量清理（includeTrash=true，回收站其他笔记引用同一图不得删）；`EmptyTrash`：清空前聚合回收站笔记引用 → 清空 → 增量清理（includeTrash=false）。软删除 `DeleteNote` 不动图片；定时清理 `CleanExpiredTrash` 后有 `CleanupOrphanImages` 全量兜底无需重复处理。 |
+| **涉及文件** | [app.go](app.go)（`ExportNoteAsMarkdown`/`exportNoteContentWithImages`/`ExportNotebookAsMarkdown`/`fileExists`/`processImportImages`/`processImportFile`/`PermanentDeleteNote`/`EmptyTrash`/`extractImageFilenames`/`deleteImagesIfUnreferenced`）、[frontend/src/main.js](frontend/src/main.js)（笔记本右键菜单「导出全部笔记」） |
 
 ---
 

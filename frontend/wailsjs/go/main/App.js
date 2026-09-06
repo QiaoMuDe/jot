@@ -202,6 +202,10 @@ export function ExportNoteAsMarkdown(arg1) {
   return window['go']['main']['App']['ExportNoteAsMarkdown'](arg1);
 }
 
+export function ExportNotebookAsMarkdown(arg1) {
+  return window['go']['main']['App']['ExportNotebookAsMarkdown'](arg1);
+}
+
 export function FetchAIModels(arg1, arg2) {
   return window['go']['main']['App']['FetchAIModels'](arg1, arg2);
 }

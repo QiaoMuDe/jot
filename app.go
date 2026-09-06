@@ -436,6 +436,61 @@ func (a *App) imageDirPath() (string, error) {
 	return config.SubDir(config.DirImages)
 }
 
+// extractImageFilenames 提取内容中引用的 /images/ 图片文件名（去重、防路径穿越）
+func extractImageFilenames(content string) []string {
+	imgRe := regexp.MustCompile(`!\[[^\]]*\]\(/images/([^)]+)\)`)
+	seen := make(map[string]bool)
+	var names []string
+	for _, m := range imgRe.FindAllStringSubmatch(content, -1) {
+		name := m[1]
+		if idx := strings.Index(name, `"`); idx > 0 {
+			name = strings.TrimSpace(name[:idx])
+		}
+		if name == "" || seen[name] || strings.ContainsAny(name, `/\`) {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	return names
+}
+
+// deleteImagesIfUnreferenced 删除不再被任何剩余笔记（含回收站）引用的图片文件。
+// 回收站中的引用同样视为有效引用，避免笔记恢复后图片缺失。
+// 删除失败仅记日志，返回成功删除数量。
+func (a *App) deleteImagesIfUnreferenced(filenames []string) int {
+	if len(filenames) == 0 {
+		return 0
+	}
+	imageDir, err := config.SubDir(config.DirImages)
+	if err != nil {
+		a.LogSvc.Logger.Warnw("deleteImagesIfUnreferenced: 获取图片目录失败", fastlog.Error(err))
+		return 0
+	}
+	// 逐文件名查询剩余笔记（含回收站）中是否仍引用该图片：
+	// 用 SQLite instr 精确匹配（大小写敏感、无通配符转义问题），避免全量加载所有笔记内容
+	deleted := 0
+	for _, name := range filenames {
+		var count int64
+		if err := a.db.Unscoped().Model(&models.Note{}).
+			Where("instr(content, ?) > 0", "/images/"+name).
+			Count(&count).Error; err != nil {
+			a.LogSvc.Logger.Warnw("deleteImagesIfUnreferenced: 查询引用失败，保留图片", fastlog.String("filename", name), fastlog.Error(err))
+			continue
+		}
+		if count > 0 {
+			continue // 仍被引用，保留
+		}
+		if err := os.Remove(filepath.Join(imageDir, name)); err == nil {
+			deleted++
+			a.LogSvc.Logger.Infow("deleteImagesIfUnreferenced: 删除孤儿图片", fastlog.String("filename", name))
+		} else {
+			a.LogSvc.Logger.Debugw("deleteImagesIfUnreferenced: 删除图片失败", fastlog.String("filename", name), fastlog.Error(err))
+		}
+	}
+	return deleted
+}
+
 // ==================== Note 相关绑定方法 ====================
 
 // CreateNote 创建一条新笔记，归入指定笔记本
@@ -519,12 +574,21 @@ func (a *App) DeleteNote(id uint) error {
 	return nil
 }
 
-// PermanentDeleteNote 永久删除指定笔记（从数据库彻底移除）
+// PermanentDeleteNote 永久删除指定笔记（从数据库彻底移除），并联动清理该笔记引用的孤儿图片
 func (a *App) PermanentDeleteNote(id uint) error {
 	a.LogSvc.Logger.Debugw("PermanentDeleteNote", fastlog.Uint("id", id))
+	// 删除前取出内容，用于删除后清理其引用的孤儿图片（笔记不存在时内容为空，无影响）
+	var content string
+	_ = a.db.Unscoped().Model(&models.Note{}).Where("id = ?", id).Select("content").Take(&content).Error
+
 	if err := a.noteService.PermanentDelete(id); err != nil {
 		a.LogSvc.Logger.Errorw("PermanentDeleteNote 失败", fastlog.Error(err))
 		return err
+	}
+	// 联动清理该笔记引用且不再被任何剩余笔记（含回收站）引用的图片
+	if names := extractImageFilenames(content); len(names) > 0 {
+		deleted := a.deleteImagesIfUnreferenced(names)
+		a.LogSvc.Logger.Infow("PermanentDeleteNote 清理孤儿图片", fastlog.Int("deleted", deleted))
 	}
 	a.LogSvc.Logger.Infow("PermanentDeleteNote 成功", fastlog.Uint("id", id))
 	return nil
@@ -795,12 +859,22 @@ func (a *App) RestoreAllNotes() error {
 	return nil
 }
 
-// EmptyTrash 永久清空回收站中所有笔记
+// EmptyTrash 永久清空回收站中所有笔记，并联动清理其引用的孤儿图片
 func (a *App) EmptyTrash() error {
 	a.LogSvc.Logger.Debugw("EmptyTrash")
+	// 清空前聚合回收站笔记内容，用于清空后清理其引用的孤儿图片
+	var contents []string
+	_ = a.db.Unscoped().Model(&models.Note{}).Where("deleted_at IS NOT NULL").Pluck("content", &contents).Error
+	allTrashContent := strings.Join(contents, "\n")
+
 	if err := a.noteService.EmptyTrash(); err != nil {
 		a.LogSvc.Logger.Errorw("EmptyTrash 失败", fastlog.Error(err))
 		return err
+	}
+	// 联动清理回收站笔记引用且不再被任何剩余笔记（含回收站）引用的图片
+	if names := extractImageFilenames(allTrashContent); len(names) > 0 {
+		deleted := a.deleteImagesIfUnreferenced(names)
+		a.LogSvc.Logger.Infow("EmptyTrash 清理孤儿图片", fastlog.Int("deleted", deleted))
 	}
 	a.LogSvc.Logger.Infow("EmptyTrash 成功")
 	return nil
@@ -3268,6 +3342,8 @@ func (a *App) GetVersion() string {
 }
 
 // ExportNoteAsMarkdown 导出单条笔记为 Markdown 文件，弹出保存对话框让用户选择路径
+// 笔记中引用的 /images/ 图片会一并复制到同级 "文件名.md.assets/" 目录，并将引用改写为相对路径，
+// 为后续"导出笔记一并导入"提供还原基础（保留原始图片文件名，导入时直接写回图片目录即可）
 func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 	a.LogSvc.Logger.Debugw("ExportNoteAsMarkdown", fastlog.Uint("id", id))
 	note, err := a.noteService.GetByID(id)
@@ -3292,13 +3368,164 @@ func (a *App) ExportNoteAsMarkdown(id uint) (string, error) {
 		return "已取消", nil
 	}
 
-	if err := os.WriteFile(filePath, []byte(note.Content), 0644); err != nil {
+	// 携带图片导出：图片复制到同级 "文件名.assets/" 目录并改写为相对路径
+	content, exported, missing := a.exportNoteContentWithImages(note, filePath)
+
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		a.LogSvc.Logger.Errorw("ExportNoteAsMarkdown 失败", fastlog.Error(err))
 		return "", fmt.Errorf("写入文件失败: %w", err)
 	}
 
-	a.LogSvc.Logger.Infow("ExportNoteAsMarkdown 成功")
-	return "导出成功：" + filePath, nil
+	a.LogSvc.Logger.Infow("ExportNoteAsMarkdown 成功", fastlog.Int("exported", exported), fastlog.Int("missing", missing))
+	msg := "导出成功：" + filePath
+	switch {
+	case exported > 0 && missing > 0:
+		msg += fmt.Sprintf("（含 %d 张图片，%d 张未能导出）", exported, missing)
+	case exported > 0:
+		msg += fmt.Sprintf("（含 %d 张图片）", exported)
+	case missing > 0:
+		msg += fmt.Sprintf("（%d 张图片未能导出）", missing)
+	}
+	return msg, nil
+}
+
+// exportNoteContentWithImages 处理单篇笔记的图片引用：把笔记中引用的 /images/ 图片复制到
+// targetPath 同级 "文件名.assets/" 目录，并将引用改写为相对路径；复制失败的图片保留原路径并统计数量。
+// 仅 .md 笔记处理；.txt 保留原内容。不负责写目标文件，由调用方决定目标路径。
+func (a *App) exportNoteContentWithImages(note *models.Note, targetPath string) (content string, exported, missing int) {
+	content = note.Content
+	// 仅 .md 笔记携带图片导出；.txt 保留原内容（与导入侧 processImportImages 仅处理 .md 保持一致）
+	if note.FileExt == ".md" && strings.Contains(content, "/images/") {
+		imgRe := regexp.MustCompile(`!\[[^\]]*\]\(/images/([^)]+)\)`)
+		if imgRe.MatchString(content) {
+			imageDir, dirErr := config.SubDir(config.DirImages)
+			if dirErr != nil {
+				a.LogSvc.Logger.Warnw("导出笔记：获取图片目录失败，按纯文本导出", fastlog.Error(dirErr))
+				return
+			}
+			assetsDir := targetPath + ".assets"
+			assetsBase := filepath.Base(assetsDir)
+			seen := make(map[string]bool)
+			// 提前创建图片目录（幂等），避免循环内重复调用；失败则按纯文本导出
+			if mkErr := os.MkdirAll(assetsDir, 0755); mkErr != nil {
+				a.LogSvc.Logger.Errorw("导出笔记：创建图片目录失败，按纯文本导出", fastlog.String("dir", assetsDir), fastlog.Error(mkErr))
+				content = note.Content
+				return
+			}
+			content = imgRe.ReplaceAllStringFunc(content, func(s string) string {
+				m := imgRe.FindStringSubmatch(s)
+				filename := m[1]
+				// 拆分可选的 "title" 后缀，与导入侧 processImportImages 保持一致
+				if idx := strings.Index(filename, `"`); idx > 0 {
+					filename = strings.TrimSpace(filename[:idx])
+				}
+				// 防路径穿越：文件名必须不含路径分隔符
+				if strings.ContainsAny(filename, `/\`) {
+					return s
+				}
+				if !seen[filename] {
+					seen[filename] = true
+					data, readErr := os.ReadFile(filepath.Join(imageDir, filename))
+					if readErr != nil {
+						missing++
+						a.LogSvc.Logger.Warnw("导出笔记：图片不存在，保留原路径",
+							fastlog.String("filename", filename), fastlog.Error(readErr))
+						return s
+					}
+					if writeErr := os.WriteFile(filepath.Join(assetsDir, filename), data, 0644); writeErr != nil {
+						missing++
+						a.LogSvc.Logger.Errorw("导出笔记：写入图片失败", fastlog.String("filename", filename), fastlog.Error(writeErr))
+						return s
+					}
+					exported++
+				}
+				// 改写为相对路径：/images/xxx → 文件名.assets/xxx
+				return strings.Replace(s, "/images/"+filename, assetsBase+"/"+filename, 1)
+			})
+		}
+	}
+	return
+}
+
+// fileExists 判断文件或目录是否存在（仅"明确不存在"视为不存在，stat 异常视为存在以避免覆盖）
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil || !os.IsNotExist(err)
+}
+
+// ExportNotebookAsMarkdown 批量导出笔记本下全部未删除笔记为 Markdown 到所选父目录下的 "笔记本名/" 子目录，
+// 每篇笔记的 /images/ 图片复制到同级 "文件名.assets/" 目录并将引用改写为相对路径，
+// 与单条导出格式一致，保证"导出笔记一并导入"闭环
+func (a *App) ExportNotebookAsMarkdown(notebookID uint) (string, error) {
+	a.LogSvc.Logger.Debugw("ExportNotebookAsMarkdown", fastlog.Uint("notebookID", notebookID))
+	// 校验笔记本存在
+	var notebook models.Notebook
+	if err := a.db.Where("id = ? AND deleted_at IS NULL", notebookID).Take(&notebook).Error; err != nil {
+		a.LogSvc.Logger.Errorw("ExportNotebookAsMarkdown 笔记本不存在", fastlog.Uint("notebookID", notebookID), fastlog.Error(err))
+		return "", fmt.Errorf("笔记本不存在: %w", err)
+	}
+	// 查询该笔记本下全部未删除笔记（含 content）
+	var notes []models.Note
+	if err := a.db.Where("notebook_id = ? AND deleted_at IS NULL", notebookID).Find(&notes).Error; err != nil {
+		a.LogSvc.Logger.Errorw("ExportNotebookAsMarkdown 查询笔记失败", fastlog.Error(err))
+		return "", err
+	}
+	if len(notes) == 0 {
+		return "该笔记本下没有笔记", nil
+	}
+	// 选择父目录
+	parentDir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择导出目录",
+	})
+	if err != nil {
+		return "", err
+	}
+	if parentDir == "" {
+		return "已取消", nil
+	}
+	// 用笔记本名新建子目录
+	nbDir := filepath.Join(parentDir, sanitizeFilename(notebook.Name))
+	if err := os.MkdirAll(nbDir, 0755); err != nil {
+		a.LogSvc.Logger.Errorw("ExportNotebookAsMarkdown 创建目录失败", fastlog.String("dir", nbDir), fastlog.Error(err))
+		return "", fmt.Errorf("创建目录失败: %w", err)
+	}
+	// 逐篇导出：文件名重名时追加序号，单篇失败不中断整批
+	ok, failed, imgExported, imgMissing := 0, 0, 0, 0
+	for i := range notes {
+		note := &notes[i]
+		baseName := sanitizeFilename(note.Title)
+		targetPath := filepath.Join(nbDir, baseName+note.FileExt)
+		for seq := 2; fileExists(targetPath); seq++ {
+			targetPath = filepath.Join(nbDir, fmt.Sprintf("%s (%d)%s", baseName, seq, note.FileExt))
+		}
+		content, exp, mis := a.exportNoteContentWithImages(note, targetPath)
+		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+			failed++
+			a.LogSvc.Logger.Errorw("ExportNotebookAsMarkdown 写入笔记失败", fastlog.String("path", targetPath), fastlog.Error(err))
+			continue
+		}
+		ok++
+		imgExported += exp
+		imgMissing += mis
+	}
+	// 汇总消息
+	msg := fmt.Sprintf("导出完成：%d 篇成功", ok)
+	if failed > 0 {
+		msg += fmt.Sprintf("，%d 篇失败", failed)
+	}
+	if imgExported > 0 {
+		msg += fmt.Sprintf("（含 %d 张图片", imgExported)
+		if imgMissing > 0 {
+			msg += fmt.Sprintf("，%d 张未能导出", imgMissing)
+		}
+		msg += "）"
+	} else if imgMissing > 0 {
+		msg += fmt.Sprintf("（%d 张图片未能导出）", imgMissing)
+	}
+	a.LogSvc.Logger.Infow("ExportNotebookAsMarkdown 成功",
+		fastlog.Int("exported_notes", ok), fastlog.Int("failed_notes", failed),
+		fastlog.Int("exported_images", imgExported), fastlog.Int("missing_images", imgMissing))
+	return msg, nil
 }
 
 // ExportAISessionAsMarkdown 导出 AI 对话为 Markdown 文件
@@ -3885,6 +4112,57 @@ func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	return results
 }
 
+// processImportImages 处理导入内容中的本地图片引用：把存在的本地图片复制到
+// ~/.jot/images/ 并将引用改写为 /images/xxx 内部 URL。
+// baseDir 为导入文件所在目录，用于解析相对路径。
+// 互联网 URL（含 data:）与缺失图片保留原样。
+func (a *App) processImportImages(content string, baseDir string) string {
+	imgRe := regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
+	cache := make(map[string]string) // 已复制的本地路径 → /images/xxx，同路径去重
+	return imgRe.ReplaceAllStringFunc(content, func(s string) string {
+		m := imgRe.FindStringSubmatch(s)
+		raw := m[1] // 可能是 `path "title"` 或 `path`
+		pathPart := raw
+		if idx := strings.Index(raw, `"`); idx > 0 {
+			pathPart = strings.TrimSpace(raw[:idx]) // 拆分可选的 "title" 后缀，路径允许含空格
+		}
+		// 互联网 URL / data URI → 保留原样
+		if strings.Contains(pathPart, "://") || strings.HasPrefix(pathPart, "data:") {
+			return s
+		}
+		// 已是 jot 内部引用 → 保留（幂等，避免重复处理）
+		if strings.HasPrefix(pathPart, "/images/") {
+			return s
+		}
+		// 解析为本地路径：绝对路径直接用，相对路径基于导入文件所在目录
+		localPath := pathPart
+		if !filepath.IsAbs(localPath) {
+			localPath = filepath.Join(baseDir, localPath)
+		}
+		localPath = filepath.Clean(localPath)
+		// 图片不存在 → 保留原引用
+		info, err := os.Stat(localPath)
+		if err != nil || info.IsDir() {
+			a.LogSvc.Logger.Debugw("processImportImages: 图片不存在，保留原引用",
+				fastlog.String("path", pathPart), fastlog.Error(err))
+			return s
+		}
+		// 复制到文件服务器（同路径只复制一次）
+		newURL, ok := cache[localPath]
+		if !ok {
+			newURL, err = a.SaveImageFromPath(localPath)
+			if err != nil {
+				a.LogSvc.Logger.Warnw("processImportImages: 复制图片失败", fastlog.String("path", pathPart), fastlog.Error(err))
+				return s
+			}
+			cache[localPath] = newURL
+		}
+		// 只替换路径部分，保留 alt 与 title。
+		// 用 raw 完整子串替换（在 s 中唯一），避免 alt 文本与路径同名时替换错位置
+		return strings.Replace(s, raw, newURL+strings.TrimPrefix(raw, pathPart), 1)
+	})
+}
+
 // importContentHash 计算导入内容的规范化哈希（统一换行符 + 去首尾空白），
 // 用于导入时快速判断笔记内容与文件内容是否一致。
 func importContentHash(s string) (string, error) {
@@ -3977,6 +4255,11 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 			return result
 		}
 		content = string(data)
+	}
+
+	// 4.5 处理 .md 内容中的本地图片引用：存在则复制到文件服务器并改写引用
+	if fileExt == ".md" && strings.Contains(content, "![") {
+		content = a.processImportImages(content, filepath.Dir(path))
 	}
 
 	// 5. 查找已有匹配笔记（按标题+后缀+笔记本）
