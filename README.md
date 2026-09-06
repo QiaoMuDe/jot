@@ -1,10 +1,10 @@
 <div align="center">
 
-# Jot — 卡片式笔记桌面应用
+# Jot — 会思考的卡片笔记
 
 ![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?style=flat-square&logo=go) ![Wails](https://img.shields.io/badge/Wails-v2.12.0-DF367C?style=flat-square&logo=wails) ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite) ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-轻量级卡片式笔记桌面应用，基于 Wails v2 构建，Go + 原生 Web 技术栈，数据本地存储。内置 AI Agent 智能体与本地语义检索，让笔记不仅能记，更能被理解。
+轻量级会思考的卡片笔记，基于 Wails v2 构建，Go + 原生 Web 技术栈，数据本地存储。内置 AI Agent 智能体与本地语义检索，让笔记不仅能记，更能被理解。
 
 [✨ 特性](#-特性) · [🛠️ 技术栈](#️-技术栈) · [🚀 快速开始](#-快速开始) · [🔗 仓库](https://gitee.com/MM-Q/jot.git)
 

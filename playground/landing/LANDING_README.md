@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-Jot 落地页（landing page），单页静态网站，用于介绍 Jot 卡片式笔记桌面应用。采用纯原生 HTML/CSS/JS 构建，无框架依赖，通过 JSON 配置文件管理媒体资源。
+Jot 落地页（landing page），单页静态网站，用于介绍 Jot 会思考的卡片笔记。采用纯原生 HTML/CSS/JS 构建，无框架依赖，通过 JSON 配置文件管理媒体资源。
 
 ---
 
@@ -65,8 +65,8 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 | 区块 | section id | 说明 |
 |------|-----------|------|
 | 导航栏 | `#navbar` | 固定顶部，滚动后毛玻璃效果 |
-| Hero | `#hero` | 深色全屏首屏，背景网格 + 光晕粒子动画 |
-| 特性 | `#features` | 9 张毛玻璃卡片（笔记网格/AI 助手/编辑器/智能检索/标签/联网能力/数据管理/本地存储/异构导入），hover 浮起，滚动入场动画 |
+| Hero | `#hero` | 深色全屏首屏：星野粒子网络（鼠标连线/排斥）+ 旋转轨道环 + 预加载进度条 + 打字机字幕 + 标题逐字 reveal |
+| 特性 | `#features` | 9 张直角 HUD 卡片（笔记网格/AI 助手/编辑器/智能检索/标签/联网能力/数据管理/本地存储/异构导入），3D 倾斜 + 光标光晕 + 四角括号撑开发光，错帧弹簧入场 |
 | 智能检索 | `#ai-recall` | 向量语义 + 关键词双通道工作流 SVG 动画 + 3 个要点 |
 | Agent 智能体 | `#agent` | Chat/Agent/Plan 三态说明 + 16 个工具徽章（含 `manage_memory` 长期记忆工具）+ 6 个要点 |
 | 异构转换 | `#file-import` | 支持格式徽章 + 清洗转换流程 SVG + 3 个要点 |
@@ -83,40 +83,49 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 ### CSS 变量（`:root`）
 
 ```css
---primary: #2563EB;          /* 主色（蓝色） */
---primary-light: #3B82F6;
---primary-dark: #1D4ED8;
---accent: #F97316;           /* 强调色（橙色） */
---bg: #F8FAFC;               /* 浅色背景 */
---bg-dark: #0F172A;          /* 深色背景 */
---text: #1E293B;             /* 正文色 */
---text-light: #64748B;       /* 辅助文字色 */
---radius: 16px;              /* 圆角 */
---radius-lg: 24px;           /* 大圆角 */
---ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* 弹性缓动 */
---ease-out: cubic-bezier(0.16, 1, 0.3, 1);         /* 出缓动 */
---max-width: 1200px;         /* 内容区最大宽度 */
---nav-height: 72px;          /* 导航栏高度 */
+--bg0: #05080f;               /* 深空底色 */
+--bg1: #0a1120;               /* 次级底色 */
+--panel: #0d1626;             /* 面板/卡片底 */
+--line: rgba(148,203,255,.10);        /* 细描边（HUD 靶框） */
+--line-strong: rgba(62,231,255,.28);  /* 强描边 */
+--cyan: #3ee7ff;              /* 主青（强调光/连接线） */
+--cyan-soft: rgba(62,231,255,.14);
+--amber: #ffc46b;             /* 强调琥珀 */
+--ink: #dbeafe;               /* 主文字 */
+--ink-dim: #8aa3c4;           /* 次级文字 */
+--ink-faint: #5b7196;         /* 弱文字 */
+--font-display: 'Orbitron','Noto Sans SC',sans-serif;  /* 展示字体 */
+--font-body: 'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
+--nav-h: 72px;                /* 导航栏高度 */
+--maxw: 1180px;               /* 内容区最大宽度 */
+--ease: cubic-bezier(.22,.9,.32,1);      /* 默认缓动 */
+--ease-spring: cubic-bezier(.34,1.56,.64,1);  /* 弹性过冲（入场/角撑开/按钮回弹） */
+--radius: 2px;                /* HUD 直角 */
+--radius-lg: 6px;             /* 大直角 */
 ```
 
 ### 动画规范
 
-- **入场动画**：使用 `.reveal` 类 + IntersectionObserver，初始 `opacity: 0; transform: translateY(30px)`，进入视口后变为 `visible`（`opacity: 1; transform: translateY(0)`），缓动 `var(--ease-out)`，时长 0.7s
-- **hover 效果**：translateY(-6px) 浮起 + 阴影加深，缓动 `var(--ease-out)`，时长 0.35s
-- **点击效果**：`transform: scale(0.96)` 或 `scale(0.98)`，即时反馈
-- **尊重无障碍**：`@media (prefers-reduced-motion: reduce)` 时禁用所有动画
-- **Lightbox 动画**：淡入 0.3s + 缩放弹入 0.35s（`var(--ease-spring)`）
+- **入场动画（普通元素）**：`.reveal` 类 + IntersectionObserver，初始 `opacity: 0; transform: translateY(34px)`，进视口后 `.in` 过渡到可见，缓动 `var(--ease)`，时长 .9s；可用 `.r1`~`.r9` 类做错帧延迟
+- **特性卡**：`translateY(44px) scale(.985)` → `none`，`var(--ease-spring)` 弹簧过冲 + 按索引错帧（r1~r9）
+- **Hero 标题**：逐字 `.cl` reveal（上浮 + 去模糊 + 弹簧），每字 `70ms` 错帧；`--i` 控制时序
+- **hover 效果**：按钮 `translateY(-2px)` + 青光阴影；特性卡 3D 倾斜 + 角括号 `scale(1.18)` 撑开发光
+- **点击效果**：所有按钮 `.btn:active` → `transform: scale(.96)`，即时反馈 + 回弹
+- **光带**：CTA 面板 `.sweep` 半透明青光带 `5.5s` 无限横向扫过
+- **粒子网络**：Hero canvas 星野连线，鼠标进入产生琥珀连线 + 粒子排斥（`initStars`）
+- **尊重无障碍**：`@media (prefers-reduced-motion: reduce)` 禁用所有动画
+- **Lightbox/视频弹窗**：淡入 0.3s + 缩放弹入 0.35s（`var(--ease-spring)`）
 
 ### 按钮样式
 
-- `.btn-primary`：蓝色填充 + 阴影，hover 上浮 + 阴影加深
-- `.btn-secondary`：半透明毛玻璃边框，hover 增加透明度
-- 所有按钮点击：`scale(0.96)` 收缩
+- `.btn-primary`：青色描边 + 渐变上下缘，`::after` 光带扫过（shine），hover 上浮 + 青光阴影
+- `.btn-ghost`：细描边，hover 描边+文字变青 + 青色微光
+- 所有按钮点击 `.btn:active`：`scale(0.96)` 收缩
 
 ### 响应式断点
 
-- **768px**：导航栏隐藏非 CTA 链接，特性网格降单列，截图网格降单列，视频网格降单列，统计网格 2 列，Lightbox / 视频弹窗内边距缩小
-- **480px**：Hero 标题缩小，统计数字缩小
+- **768px**：导航栏隐藏非 CTA 链接，特性网格降单列，截图网格降单列，视频网格降单列，Lightbox / 视频弹窗内边距缩小
+- **480px**：Hero 标题缩小
 - **769px ~ 1024px**：特性网格 2 列
 
 ---
@@ -152,7 +161,7 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 当前截图使用 `landing/images/` 目录下的本地图片（`1.jpg` ~ `4.jpg`），按 `media.json` 中 `screenshots` 数组的顺序对应（当前目录仅含占位文件，真实素材待补充）。替换截图时：
 1. 将新截图放入 `landing/images/` 目录（文件名保持不变，或同步修改 `media.json` 的 `src`）
 2. 建议尺寸：宽 800px × 高 500px（16:9 比例）
-3. 占位图可临时使用 `https://via.placeholder.com/800x500/...` 在线地址，上线前替换为本地图片
+3. 建议直接放入真实界面截图（深色主题应用截图为佳，与页面风格统一）；上线前务必用本地图片
 
 ### 视频管理
 
@@ -176,12 +185,11 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 - **增加视频**：将视频文件放入 `landing/videos/` 目录，在 `videos` 数组中新增一个对象，`src` 写相对路径 `videos/xxx.mp4`
 - **删除视频**：删除数组中对应对象，再删除对应视频文件
 - **修改视频**：改对应对象的字段即可，`src` 可指向本地路径或外部 URL
-- **封面图**：`poster` 可选。不填时页面加载后**自动截取视频 1 秒处的画面**作为预览图，无需手动准备封面；视频不存在或截帧失败时回退深色渐变 + 播放按钮
+- **封面图**：`poster` 建议填写，指向 `images/` 下的封面帧；缺失时卡片仅显示播放键 + 深色渐变底（无自动截帧）
 - **格式建议**：mp4（H.264 编码）兼容性最好；建议控制单个视频体积在几十 MB 以内
 
 **封面与播放逻辑**：
-- 未配置 `poster` 的视频，**页面加载即主动截帧**生成预览图（隐藏 video 预加载元数据 → seek 到 1 秒 → canvas 截帧），截帧成功后替换卡片封面；配置了 `poster` 的优先显示配置图
-- 主动截帧失败时，**打开视频后自动补截一次**作为兜底（`autoCapturePoster`）
+- **`poster` 为必填**：main.js 直接读取 `item.poster` 作为封面 `<img>`（无自动截帧功能）。封面缺失时卡片仅显示居中播放键 + 深色渐变底
 - 点击视频卡片弹出居中播放器（仅播放时才真正加载视频），关闭弹窗后自动暂停并释放资源
 
 ---
@@ -209,7 +217,7 @@ go build -o jot-landing serve.go   # 编译单文件二进制（无需 go.mod）
 ## 技术约束
 
 - 纯原生技术栈：无 Vue/React 等框架，无 jQuery 等库依赖
-- 字体：Inter（Google Fonts），已预连字体 CDN
+- 字体：展示用 **Orbitron**（`.hero-en`/kicker/序号等），正文用 **Noto Sans SC**（Google Fonts），已预连字体 CDN
 - 图标：全部使用内联 SVG，无图标字体依赖
 - 浏览器兼容：现代浏览器（Chrome/Firefox/Edge/Safari），不支持 IE
 - 所有代码使用 ES5 语法（`var` / `function`），避免 ES6+ 语法，确保广泛兼容

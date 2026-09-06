@@ -1,6 +1,6 @@
 # Jot 项目分析报告
 
-> 项目类型: 桌面端卡片式笔记应用（类小米笔记）
+> 项目类型: 桌面端会思考的卡片笔记应用（类小米笔记）
 > 技术栈: Wails v2 + Go + GORM + SQLite + 原生 HTML/CSS/JS + CodeMirror 6（编辑器）+ einocli 薄适配层（eino 库驱动，OpenAI 兼容）
 
 ---
