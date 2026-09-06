@@ -4685,6 +4685,9 @@ function showEmptyState() {
     if (clearBtnEl) clearBtnEl.style.display = 'none';
     // 侧栏仍可见但禁用操作
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = 'none';
+    // 空状态（未配置）下同时隐藏侧栏折叠/展开按钮，避免拦截面出现可点击残留
+    const sidebarToggleBtn = document.getElementById('aiSidebarToggle');
+    if (sidebarToggleBtn) sidebarToggleBtn.style.display = 'none';
     // 重置标题和 Token 显示
     const titleEl = document.getElementById('aiChatTitle');
     if (titleEl) titleEl.textContent = 'AI 助手';
@@ -4979,6 +4982,9 @@ function hideEmptyState() {
     if (inputAreaEl) inputAreaEl.style.display = '';
     updateBarsAreaVisibility();
     if (sessionNewBtnEl) sessionNewBtnEl.style.display = '';
+    // 对称恢复 showEmptyState 中隐藏的侧栏折叠/展开按钮
+    const sidebarToggleBtn = document.getElementById('aiSidebarToggle');
+    if (sidebarToggleBtn) sidebarToggleBtn.style.display = '';
     // 对称恢复 showEmptyState 中隐藏的清空按钮，避免其永久消失
     if (clearBtnEl) clearBtnEl.style.display = '';
     hideWelcome();
