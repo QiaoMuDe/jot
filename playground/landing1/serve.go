@@ -1,0 +1,153 @@
+// Jot 落地页单文件服务器（静态资源已通过 go:embed 嵌入二进制）
+//
+// 全部静态资源（HTML/CSS/JS/图片/视频/JSON）在编译时打包进二进制，
+// 部署时只需拷贝一个文件，无需携带任何静态目录、无需安装任何运行时。
+// 仅使用标准库，无需 go.mod。
+//
+// 用法：
+//
+//	go run serve.go                  # 默认端口 8123，自动打开浏览器
+//	go run serve.go -port 9000       # 指定端口
+//	go run serve.go -no-open         # 不自动打开浏览器
+//	go run serve.go -host 0.0.0.0    # 局域网/公网可访问
+//
+// 部署：
+//
+//	go build -o jot-landing serve.go # 编译单文件二进制（无需 go.mod）
+//	./jot-landing                    # 任意目录均可运行
+//
+// 注意：静态资源已内嵌，更新素材（如替换 videos/ 下的视频）后需要重新编译生效。
+package main
+
+import (
+	"compress/gzip"
+	"embed"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os/exec"
+	"path"
+	"runtime"
+	"strings"
+)
+
+const defaultPort = 8123
+
+//go:embed index.html css js images videos media.json
+var staticFiles embed.FS
+
+// openBrowser 调用系统默认浏览器打开指定 URL（跨平台支持 Windows/macOS/Linux）。
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		return exec.Command("open", url).Start()
+	default:
+		return exec.Command("xdg-open", url).Start()
+	}
+}
+
+// cacheControl 按文件类型设置缓存策略：
+//   - 媒体/图片/字体：长缓存（24h），避免重复下载，再次打开时从缓存秒开
+//   - HTML/CSS/JS：no-cache（每次验证是否更新，304 快速响应）
+//
+// 视频已做 fast start 处理（moov atom 在文件开头），浏览器请求开头即可获取
+// 元数据并边下边播，配合长缓存再次打开时从缓存读取，无需重新下载。
+func cacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ext := strings.ToLower(path.Ext(r.URL.Path))
+		switch ext {
+		case ".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mp3", ".wav",
+			".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico",
+			".woff", ".woff2", ".ttf", ".eot":
+			// 媒体/图片/字体：长缓存 24h
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		default:
+			// HTML/CSS/JS：每次验证是否更新（304 响应无 body，极快）
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// gzipResponseWriter 包装 gzip.Writer，让 http.FileServer 的输出经过 gzip 压缩。
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
+
+// gzipMiddleware 对文本类文件（HTML/CSS/JS/JSON 等）做 gzip 压缩，减少传输体积。
+// 图片/视频等已是压缩格式，再 gzip 无效甚至可能变大，因此不压缩。
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 客户端不支持 gzip 或 HEAD 请求，直接透传
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") || r.Method == http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// 只压缩文本类文件
+		ext := strings.ToLower(path.Ext(r.URL.Path))
+		switch ext {
+		case ".html", ".css", ".js", ".json", ".svg", ".txt", ".xml":
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Del("Content-Length") // gzip 后长度变化，删除避免不匹配
+			gz := gzip.NewWriter(w)
+			defer func() { _ = gz.Close() }()
+			next.ServeHTTP(&gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
+		default:
+			// 图片/视频等已压缩格式：不压缩
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+// listen 监听指定地址端口；端口被占用时自动顺延为系统分配的可用端口。
+func listen(host string, port int) (net.Listener, int) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		fmt.Printf("[提示] 端口 %d 已被占用，已改用系统自动分配的端口\n", port)
+		listener, err = net.Listen("tcp", fmt.Sprintf("%s:0", host))
+		if err != nil {
+			log.Fatalf("监听失败: %v", err)
+		}
+	}
+	actualPort := listener.Addr().(*net.TCPAddr).Port
+	return listener, actualPort
+}
+
+func main() {
+	// 解析命令行参数
+	host := flag.String("host", "127.0.0.1", "监听地址（默认 127.0.0.1）")
+	port := flag.Int("port", defaultPort, "监听端口（默认 8123）")
+	noOpen := flag.Bool("no-open", false, "不自动打开浏览器")
+	flag.Parse()
+
+	listener, actualPort := listen(*host, *port)
+	defer func() { _ = listener.Close() }()
+
+	url := fmt.Sprintf("http://%s:%d/index.html", *host, actualPort)
+	fmt.Println("====================================================")
+	fmt.Println("  Jot 落地页预览服务器已启动（静态资源已内嵌）")
+	fmt.Printf("  访问地址 : %s\n", url)
+	fmt.Println("  按 Ctrl+C 停止服务")
+	fmt.Println("====================================================")
+
+	// 自动打开浏览器预览
+	if !*noOpen {
+		if err := openBrowser(url); err != nil {
+			fmt.Printf("[提示] 自动打开浏览器失败: %v\n", err)
+		}
+	}
+
+	// 提供内嵌的静态文件服务（缓存策略 + 文本 gzip 压缩）
+	log.Fatal(http.Serve(listener, cacheControl(gzipMiddleware(http.FileServer(http.FS(staticFiles))))))
+}
