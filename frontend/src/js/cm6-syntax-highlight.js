@@ -167,6 +167,8 @@ export const jotTheme = EditorView.theme({
         padding: '0 6px 0 8px',
         display: 'flex',
         alignItems: 'center',
+        // flex 布局下需显式右对齐，否则数字被推到左侧、与正文之间留出空白
+        justifyContent: 'flex-end',
     },
     '.cm-foldGutter .cm-gutterElement': {
         color: 'var(--text-muted)',
