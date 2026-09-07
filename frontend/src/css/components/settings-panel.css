@@ -347,7 +347,9 @@
 }
 
 .tag-add-form .settings-input {
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
 }
 
 .tag-add-footer {
@@ -418,13 +420,6 @@
     background: var(--accent-lighter);
     color: var(--accent);
     box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
-}
-
-/* ── Divider ── */
-.tag-divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 0;
 }
 
 /* ── Tag Grid ── */
