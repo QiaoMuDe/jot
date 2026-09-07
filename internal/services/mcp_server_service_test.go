@@ -3,6 +3,7 @@ package services
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -41,19 +42,22 @@ func TestListEmpty(t *testing.T) {
 	}
 }
 
-// TestListSortOrder 验证按 sort_order, id 升序返回。
-func TestListSortOrder(t *testing.T) {
+// TestListSortByUpdatedAt 验证按 updated_at 降序返回（新的在前），时间相同按 id 降序。
+func TestListSortByUpdatedAt(t *testing.T) {
 	db := newMCPServerTestDB(t)
 	svc := NewMCPServerService(db)
 
-	if err := svc.Save(&models.MCPServer{Name: "b", Transport: "stdio", Command: "echo", SortOrder: 2}); err != nil {
-		t.Fatalf("保存 b 失败: %v", err)
+	base := time.Now()
+	// 显式指定各记录的更新时间，避免连续保存产生相同时间导致断言不稳定
+	recs := []models.MCPServer{
+		{Name: "b", Transport: "stdio", Command: "echo", UpdatedAt: base.Add(-30 * time.Minute)},
+		{Name: "a", Transport: "stdio", Command: "echo", UpdatedAt: base.Add(-time.Hour)},
+		{Name: "c", Transport: "stdio", Command: "echo", UpdatedAt: base.Add(-10 * time.Minute)},
 	}
-	if err := svc.Save(&models.MCPServer{Name: "a", Transport: "stdio", Command: "echo", SortOrder: 1}); err != nil {
-		t.Fatalf("保存 a 失败: %v", err)
-	}
-	if err := svc.Save(&models.MCPServer{Name: "c", Transport: "stdio", Command: "echo", SortOrder: 1}); err != nil {
-		t.Fatalf("保存 c 失败: %v", err)
+	for _, r := range recs {
+		if err := svc.Save(&r); err != nil {
+			t.Fatalf("保存 %s 失败: %v", r.Name, err)
+		}
 	}
 
 	servers, err := svc.List()
@@ -64,8 +68,8 @@ func TestListSortOrder(t *testing.T) {
 		t.Fatalf("列表长度 = %d, want 3", len(servers))
 	}
 	got := []string{servers[0].Name, servers[1].Name, servers[2].Name}
-	if got[0] != "a" || got[1] != "c" || got[2] != "b" {
-		t.Errorf("排序结果 = %v, want [a c b]（sort_order 升序，同序按 id 升序）", got)
+	if got[0] != "c" || got[1] != "b" || got[2] != "a" {
+		t.Errorf("排序结果 = %v, want [c b a]（updated_at 降序，新的在前）", got)
 	}
 }
 

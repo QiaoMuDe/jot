@@ -20,10 +20,10 @@ func NewMCPServerService(db *gorm.DB) *MCPServerService {
 	return &MCPServerService{db: db}
 }
 
-// List 按 sort_order, id 升序返回全部 MCP 服务器
+// List 按更新时间降序返回全部 MCP 服务器（新的在前），时间相同按 id 降序保持稳定
 func (s *MCPServerService) List() ([]models.MCPServer, error) {
 	var servers []models.MCPServer
-	if err := s.db.Order("sort_order asc, id asc").Find(&servers).Error; err != nil {
+	if err := s.db.Order("updated_at desc, id desc").Find(&servers).Error; err != nil {
 		return nil, err
 	}
 	return servers, nil
