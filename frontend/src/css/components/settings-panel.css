@@ -1745,7 +1745,7 @@
   margin-bottom: 14px;
 }
 
-/* 头部右侧三按钮组：分享全部 / 导入 / 添加服务器（10px 间距 toolbar 约定） */
+/* 头部右侧四按钮组：添加 / 分享全部 / 导入 / 管理（10px 间距 toolbar 约定） */
 .mcp-server-head-actions {
   display: flex;
   align-items: center;
@@ -1753,7 +1753,7 @@
   flex-shrink: 0;
 }
 
-/* 头部三按钮统一样式：分享 / 导入 / 添加（2 字，inline-flex 防换行 + 等宽，min-width 保证三个按钮视觉一致） */
+/* 头部四按钮统一样式：添加 / 分享 / 导入 / 管理（2 字，inline-flex 防换行 + 等宽，min-width 保证按钮视觉一致） */
 .mcp-server-head-actions .btn {
   min-width: 64px;
   display: inline-flex;
@@ -1782,25 +1782,82 @@
   background: var(--input-bg);
 }
 
-/* 列表条目：卡片式一行布局（左 info / 右 actions），间距与 .ai-setting-item 协调 */
+/* 折叠/初始隐藏：显式覆盖 display:flex，避免 hidden 属性被上述 display 覆盖而失效占位 */
+.mcp-server-list[hidden] {
+  display: none !important;
+}
+
+/* 加入分隔线后取消条目间 gap，让条目与分隔线紧密相连（贴近预设列表风格） */
+.mcp-server-list:not(:empty) {
+  gap: 0;
+}
+
+/* MCP 列表展开动画：点击「管理」滑入展开（高度对齐容器实际 max-height） */
+.mcp-server-list.open {
+  animation: mcpMgrSlideDown 250ms ease-out both;
+}
+
+@keyframes mcpMgrSlideDown {
+  from {
+    opacity: 0;
+    transform: scaleY(0.95);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+    max-height: 320px;
+  }
+}
+
+/* 列表条目：与预设配置条目一致的无背景 + 底部细分隔线布局，透出容器 input-bg */
 .mcp-server-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: border-color var(--anim-duration-fast) ease-out,
-              box-shadow var(--anim-duration-fast) ease-out,
-              background var(--anim-duration-fast) ease-out;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: background var(--anim-duration-fast) ease-out;
 }
 
 .mcp-server-item:hover {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: var(--hover-bg);
-  box-shadow: var(--shadow-sm);
+}
+
+/* MCP 条目插入动画：仅滑动+淡入，不限制高度，避免预设动画的 max-height 截断 */
+.mcp-item-insert {
+  animation: mcpItemInsert 300ms ease-out both;
+}
+
+@keyframes mcpItemInsert {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* MCP 条目删除动画：仅滑动+淡出，不塌陷高度 */
+.mcp-item-delete-out {
+  animation: mcpItemDeleteOut 280ms ease-in forwards;
+}
+
+@keyframes mcpItemDeleteOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
 }
 
 .mcp-server-item-info {

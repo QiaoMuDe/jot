@@ -3376,6 +3376,29 @@ function renderPresetMgrList(anchorRow) {
     });
 }
 
+// 测试预设配置连通性（管理列表行内按钮，逻辑与编辑对话框一致）
+async function testPresetProfileConnection(p, btn) {
+    const baseURL = (p.base_url || '').trim();
+    const apiKey = (p.api_key || '').trim();
+    if (!baseURL) {
+        nm.show('请先填写 API 地址', 'warning');
+        return;
+    }
+    setBtnLoading(btn, true);
+    try {
+        const ok = await window.go.main.App.TestAIConnection(baseURL, apiKey);
+        if (ok) {
+            nm.show(`「${p.name}」连接成功`, 'success');
+        } else {
+            nm.show(`「${p.name}」连接失败，请检查地址和 Key 是否匹配`, 'warning');
+        }
+    } catch (e) {
+        nm.show(`「${p.name}」连接失败: ${e.message || e}`, 'error');
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
 // 创建单行预设列表条目 DOM 元素（带编辑/删除事件绑定）
 function createPresetRowElement(p) {
     const row = document.createElement('div');
@@ -3402,9 +3425,19 @@ function createPresetRowElement(p) {
     // 操作区
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn btn-sm btn-save';
+    testBtn.textContent = '测试';
+    testBtn.title = '测试该配置的 API 连通性';
+    testBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:52px;white-space:nowrap;flex-shrink:0;';
+    testBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        testPresetProfileConnection(p, testBtn);
+    });
     const editBtn = document.createElement('button');
     editBtn.className = 'btn btn-sm btn-save';
     editBtn.textContent = '编辑';
+    editBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:52px;white-space:nowrap;flex-shrink:0;';
     editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         openEditProfileModal(p.id, p.name, p.base_url, p.api_key);
@@ -3412,10 +3445,12 @@ function createPresetRowElement(p) {
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-sm btn-danger';
     delBtn.textContent = '删除';
+    delBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:52px;white-space:nowrap;flex-shrink:0;';
     delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteProfile(p.id, p.name, row);
     });
+    actions.appendChild(testBtn);
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
     row.appendChild(info);
@@ -10194,6 +10229,9 @@ function createAgentToolRow(tool) {
 /** 当前 MCP 服务器列表缓存（来自后端 GetMCPServers） */
 let mcpServers = [];
 
+/** MCP 服务器管理列表是否展开（默认折叠，点「管理」展开） */
+let mcpMgrExpanded = false;
+
 /** MCP 服务器表单模式：create 新增 / edit 编辑 */
 let mcpFormMode = 'create';
 /** 编辑模式下的服务器 ID（新增时为 0） */
@@ -10473,7 +10511,11 @@ async function handleMCPImport() {
         // 全部成功:关对话框 + 刷新列表与全局池（silent: 静默预热,避免与"已导入 N 条"通知冗余）
         closeMCPImportDialog();
         try {
-            await loadMCPServers();
+            // 收集成功导入的服务器名，让这些新增行播放「插入动画」（与单个添加一致），既有行保持静默
+            const importedNames = safeResults
+                .filter(r => r && r.ok && r.name)
+                .map(r => r.name);
+            await loadMCPServers(importedNames.length ? importedNames : undefined);
             await warmupMCPServers({ silent: true });
         } catch (e) { /* 刷新失败不影响主通知 */ }
     } catch (e) {
@@ -10492,30 +10534,108 @@ async function handleMCPImport() {
 
 /**
  * 从后端加载 MCP 服务器列表并渲染
+ * @param {string|string[]} [insertName] - 展开态下对 name（单个或数组）匹配的新增条目播插入动画（复用 renderMCPServerList）；
+ *        注意：折叠态仅更新缓存不渲染，此时传入的 insertName 会被丢弃，待展开时走全量入场动画（仍有动画，行为可接受）
  */
-async function loadMCPServers() {
+async function loadMCPServers(insertName) {
     try {
         mcpServers = (await window.go.main.App.GetMCPServers()) || [];
-        renderMCPServerList();
+        // 折叠态仅更新缓存，不渲染（insertName 也随之丢弃）；展开态才刷新列表
+        if (mcpMgrExpanded) renderMCPServerList(insertName);
     } catch (e) {
         nm.show('获取 MCP 服务器列表失败', 'error');
     }
 }
 
 /**
- * 渲染服务器列表；空列表显示空态
+ * 关闭 MCP 服务器管理列表（收起动画 + 隐藏）
+ * 供「管理」按钮折叠与 switchSettingsTab 切换面板时复用
  */
-function renderMCPServerList() {
+function closeMCPServerMgrList() {
+    const listEl = document.getElementById('mcpServerList');
+    const btn = document.getElementById('mcpServerMgrBtn');
+    if (!listEl || !btn) return;
+    if (!mcpMgrExpanded) return;
+    mcpMgrExpanded = false;
+    listEl.classList.remove('open', 'closing');
+    // Web Animations API 驱动收起（与预设 closePresetMgrList 一致）
+    const anim = listEl.animate([
+        { opacity: 1, transform: 'scaleY(1)', filter: 'blur(0)', maxHeight: '320px', paddingTop: '12px', paddingBottom: '12px' },
+        { opacity: 0, transform: 'scaleY(0.95)', filter: 'blur(2px)', maxHeight: '0', paddingTop: '0', paddingBottom: '0' }
+    ], { duration: 280, easing: 'ease-in-out', fill: 'both', transformOrigin: 'top center' });
+    anim.onfinish = () => {
+        anim.cancel(); // 撤销 fill，恢复 CSS 默认 padding
+        listEl.hidden = true;
+        btn.textContent = '管理';
+    };
+}
+
+/**
+ * 「管理」按钮：展开/折叠 MCP 服务器列表
+ */
+function toggleMCPServerMgr() {
+    const listEl = document.getElementById('mcpServerList');
+    const btn = document.getElementById('mcpServerMgrBtn');
+    if (!listEl || !btn) return;
+
+    if (mcpMgrExpanded) {
+        closeMCPServerMgrList();
+    } else {
+        // 展开：先渲染再添加滑入动画
+        mcpMgrExpanded = true;
+        listEl.hidden = false;
+        renderMCPServerList();
+        requestAnimationFrame(() => {
+            listEl.classList.add('open');
+            listEl.scrollTop = 0; // 列表回到顶部
+            // 将展开的列表滚动到视口内可见，避免用户手动下拖
+            listEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        btn.textContent = '收起';
+    }
+}
+
+/**
+ * 渲染服务器列表；空列表显示空态
+ * @param {string|string[]} [insertName] - 传入单个 name 或 name 数组：对匹配的条目播放「插入动画」，其余静默渲染；
+ *        省略（undefined）则全部条目逐行入场
+ */
+function renderMCPServerList(insertName) {
     const listEl = document.getElementById('mcpServerList');
     const emptyEl = document.getElementById('mcpServerEmpty');
     if (!listEl || !emptyEl) return;
     listEl.innerHTML = '';
     if (!mcpServers.length) {
+        // 空态：隐藏列表框（避免残留空边框），仅显示 emptyEl 空态
         emptyEl.hidden = false;
+        listEl.hidden = true;
         return;
     }
     emptyEl.hidden = true;
-    mcpServers.forEach((srv) => listEl.appendChild(buildMCPServerItem(srv)));
+    listEl.hidden = false;
+    const isBulk = Array.isArray(insertName);
+    mcpServers.forEach((srv, index) => {
+        const item = buildMCPServerItem(srv);
+        const isInsert = isBulk
+            ? insertName.includes(srv.name)
+            : (insertName && srv.name === insertName);
+        if (isInsert) {
+            // 新增条目：初始淡出 → 下一帧播插入动画（禁用高度相关内联，避免塌陷）
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-30px)';
+            requestAnimationFrame(() => item.classList.add('mcp-item-insert'));
+            item.addEventListener('animationend', () => {
+                item.classList.remove('mcp-item-insert');
+                item.style.opacity = '';
+                item.style.transform = '';
+            }, { once: true });
+        } else if (!isBulk && !insertName) {
+            // 默认全量：条目逐行入场（stagger）
+            item.classList.add('preset-row-enter');
+            item.style.animationDelay = `${index * 50}ms`;
+        }
+        listEl.appendChild(item);
+    });
 }
 
 /**
@@ -10526,6 +10646,7 @@ function renderMCPServerList() {
 function buildMCPServerItem(srv) {
     const item = document.createElement('div');
     item.className = 'mcp-server-item';
+    item.dataset.serverId = srv.id; // 供删除动画定位对应行
 
     // ── 信息区：名称（+ 传输徽标）横排，描述另起一行 ──
     const info = document.createElement('div');
@@ -10675,13 +10796,40 @@ async function testMCPServer(srv, btn) {
 async function deleteMCPServer(srv) {
     const ok = await showConfirmDialog(`确定删除 MCP 服务器「${srv.name}」？`, '删除');
     if (!ok) return;
+    // 先播放删除滑出动画
+    const rowEl = document.querySelector(`.mcp-server-item[data-server-id="${srv.id}"]`);
+    if (rowEl) {
+        rowEl.classList.remove('preset-row-enter', 'preset-row-insert', 'mcp-item-insert');
+        rowEl.classList.add('mcp-item-delete-out');
+        await new Promise(resolve => {
+            rowEl.addEventListener('animationend', resolve, { once: true });
+        });
+    }
     try {
         await window.go.main.App.DeleteMCPServer(srv.id);
-        await loadMCPServers();
+        // 移除缓存与对应行 DOM，避免全量重渲染闪烁；列表趋空时显示空态
+        mcpServers = mcpServers.filter(s => s.id !== srv.id);
+        if (rowEl && rowEl.parentNode) {
+            rowEl.remove();
+        }
+        const emptyEl = document.getElementById('mcpServerEmpty');
+        if (!mcpServers.length) {
+            // 列表趋空：隐藏列表框（避免残留空边框），仅显示空态
+            const listEl = document.getElementById('mcpServerList');
+            if (emptyEl) emptyEl.hidden = false;
+            if (listEl) listEl.hidden = true;
+        }
         nm.show(`已删除「${srv.name}」`, 'success');
         // 同步预热池：删除后关闭该服务器连接
         await warmupMCPServers();
     } catch (e) {
+        // 删除失败：恢复缓存，撤销删除动画类并清掉动画写入的内联样式，让该行重新可见
+        mcpServers.push(srv);
+        if (rowEl) {
+            rowEl.classList.remove('mcp-item-delete-out');
+            rowEl.style.opacity = '';
+            rowEl.style.transform = '';
+        }
         nm.show(`删除失败：${mcpErrMsg(e)}`, 'error');
     }
 }
@@ -10959,7 +11107,9 @@ async function saveMCPServerForm() {
     try {
         await window.go.main.App.SaveMCPServer(payload);
         closeMCPServerForm(true); // 保存成功后跳过未保存修改确认
-        await loadMCPServers();
+        // 新增时在展开态下对刚添加的行播放插入动画，其余静默渲染
+        const insertName = mcpFormMode === 'create' ? name : undefined;
+        await loadMCPServers(insertName);
         nm.show(mcpFormMode === 'create' ? 'MCP 服务器已添加' : 'MCP 服务器已更新', 'success');
         // 同步预热池：新增/编辑后预热（配置变更自动重连）
         await warmupMCPServers();
@@ -11070,6 +11220,15 @@ function initMCPServerSettings() {
     // 保存按钮 → 保存表单
     const saveBtn = document.getElementById('mcpServerFormSaveBtn');
     if (saveBtn) saveBtn.addEventListener('click', saveMCPServerForm);
+
+    // 管理按钮 → 展开/折叠服务器列表
+    const mgrBtn = document.getElementById('mcpServerMgrBtn');
+    if (mgrBtn) {
+        if (!mgrBtn._mgrBound) {
+            mgrBtn._mgrBound = true;
+            mgrBtn.addEventListener('click', toggleMCPServerMgr);
+        }
+    }
 
     // 分享全部按钮 → 复制全部服务器配置为 JSON
     // B6: 点击时现取(缓存为空时调 GetMCPServers),避免面板首开未加载时返回空
@@ -11378,6 +11537,8 @@ function switchSettingsTab(panelName) {
     closeAgentToolsMgrList();
     // 切换面板时关闭预设管理列表（对话链接 / 嵌入链接两处共用同一容器）
     closePresetMgrList();
+    // 切换面板时关闭 MCP 服务器管理列表（若已展开）
+    closeMCPServerMgrList();
     // 切换面板时关闭 MCP 服务器表单对话框
     closeMCPServerForm();
 
