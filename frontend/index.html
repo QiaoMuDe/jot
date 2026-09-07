@@ -613,6 +613,30 @@
                         </div>
                     </div>
 
+                    <!-- 上下文 -->
+                    <div class="ai-group-header" style="margin-top:20px;">
+                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7v10c0 1.66 4 3 9 3s9-1.34 9-3V7"/><path d="M4 7c0 1.66 4 3 9 3s9-1.34 9-3"/><path d="M4 7c0-1.66 4-3 9-3s9 1.34 9 3"/>
+                        </svg>
+                        <span class="ai-group-title">上下文</span>
+                    </div>
+                    <!-- 摘要压缩预算 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">摘要压缩预算</span>
+                        <span class="font-setting-desc">历史对话达到该 token 规模后触发摘要压缩（K）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSummaryTokenBudget" class="settings-input" value="128" min="32" max="512" style="width:90px;" />
+                        </div>
+                    </div>
+                    <!-- 压缩触发比例 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">压缩触发比例</span>
+                        <span class="font-setting-desc">tail 达预算该比例时触发压缩（0.1~0.9）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSummaryTriggerRatio" class="settings-input" value="0.8" min="0.1" max="0.9" step="0.05" style="width:90px;" />
+                        </div>
+                    </div>
+
                     <!-- MCP 服务器 -->
                     <div class="ai-group-header" style="margin-top:20px;">
                         <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -637,30 +661,6 @@
                         </svg>
                         <span class="mcp-server-empty-text">尚未配置 MCP 服务器</span>
                         <span class="mcp-server-empty-hint">点击「添加服务器」开始配置外部工具</span>
-                    </div>
-
-                    <!-- 上下文 -->
-                    <div class="ai-group-header" style="margin-top:20px;">
-                        <svg class="ai-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 7v10c0 1.66 4 3 9 3s9-1.34 9-3V7"/><path d="M4 7c0 1.66 4 3 9 3s9-1.34 9-3"/><path d="M4 7c0-1.66 4-3 9-3s9 1.34 9 3"/>
-                        </svg>
-                        <span class="ai-group-title">上下文</span>
-                    </div>
-                    <!-- 摘要压缩预算 -->
-                    <div class="ai-setting-item">
-                        <span class="ai-setting-label">摘要压缩预算</span>
-                        <span class="font-setting-desc">历史对话达到该 token 规模后触发摘要压缩（K）</span>
-                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
-                            <input type="number" id="aiSummaryTokenBudget" class="settings-input" value="128" min="32" max="512" style="width:90px;" />
-                        </div>
-                    </div>
-                    <!-- 压缩触发比例 -->
-                    <div class="ai-setting-item">
-                        <span class="ai-setting-label">压缩触发比例</span>
-                        <span class="font-setting-desc">tail 达预算该比例时触发压缩（0.1~0.9）</span>
-                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
-                            <input type="number" id="aiSummaryTriggerRatio" class="settings-input" value="0.8" min="0.1" max="0.9" step="0.05" style="width:90px;" />
-                        </div>
                     </div>
 
                     <!-- MCP 服务器表单对话框 -->

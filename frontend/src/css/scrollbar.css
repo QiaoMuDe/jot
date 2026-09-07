@@ -35,13 +35,14 @@
 .ai-chat-messages::-webkit-scrollbar-button,
 .preset-mgr-list::-webkit-scrollbar-button,
 .agent-tools-mgr-list::-webkit-scrollbar-button,
+.mcp-server-list::-webkit-scrollbar-button,
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-button {
     width: 0 !important;
     height: 0 !important;
     display: none !important;
 }
 
-/* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出 */
+/* 主内容区：滑块在滚动时显示，静止 1 秒后自动淡出（MCP 列表除外，见下方专属规则） */
 #mainContent::-webkit-scrollbar-thumb,
 .settings-panels::-webkit-scrollbar-thumb,
 .data-panels::-webkit-scrollbar-thumb,
@@ -90,8 +91,29 @@
 .ai-chat-messages::-webkit-scrollbar-track,
 .preset-mgr-list::-webkit-scrollbar-track,
 .agent-tools-mgr-list::-webkit-scrollbar-track,
+.mcp-server-list::-webkit-scrollbar-track,
 .code-preview .cm-editor .cm-scroller::-webkit-scrollbar-track {
     background: transparent;
+}
+
+/* MCP 服务器列表：滚动条始终显示，不参与上方淡出机制。
+   用 !important 防止任何其它规则/WebView2 overlay 弱化；拖动时保持可见 */
+.mcp-server-list {
+    scrollbar-gutter: stable;
+}
+.mcp-server-list::-webkit-scrollbar-thumb,
+.mcp-server-list:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb) !important;
+    transition: background 0.2s ease;
+}
+.mcp-server-list::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover) !important;
+}
+
+/* Firefox / 标准属性兜底，防止继承 invisible scrollbar */
+.mcp-server-list {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-width: thin;
 }
 
 /* Firefox */
