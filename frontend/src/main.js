@@ -6578,19 +6578,6 @@ function initEventListeners() {
     els.viewAbout.addEventListener('click', (e) => {
         if (e.target === els.viewAbout) closeAbout();
     });
-    els.aboutProjectLink.addEventListener('click', async () => {
-        try {
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenProjectURL) {
-                await window.go.main.App.OpenProjectURL('https://gitee.com/MM-Q/jot.git');
-            } else {
-                // 后端未绑定时使用替代方案
-                window.open('https://gitee.com/MM-Q/jot.git', '_blank');
-            }
-        } catch (err) {
-            console.error('打开项目地址失败:', err);
-        }
-    });
-
     // 快捷键关闭按钮
     els.shortcutsCloseBtn.addEventListener('click', closeShortcuts);
     els.shortcutsView.addEventListener('click', (e) => {
