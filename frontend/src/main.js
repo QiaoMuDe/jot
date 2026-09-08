@@ -11557,6 +11557,11 @@ function switchSettingsTab(panelName) {
     // 如果已经是激活状态，不做任何事
     if (targetPanel.classList.contains('active') && targetItem.classList.contains('active')) return;
 
+    // 进入 AI 设置面板时预热 MCP 连接池，使 Agent 工具列表中的 MCP 工具立即可见
+    if (panelName === 'ai') {
+        warmupMCPServers();
+    }
+
     // 更新侧边栏导航激活态
     nav.querySelectorAll('.settings-nav-item').forEach(item => item.classList.remove('active'));
     targetItem.classList.add('active');
