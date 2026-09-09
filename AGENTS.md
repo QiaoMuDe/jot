@@ -544,19 +544,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 40. **笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片**：导出 `笔记名.md` 时同步生成 `笔记名.md.assets/` 复制引用的 `/images/` 图片（**保留 uuid_原名.ext 原始文件名**，Typora 约定），引用改写相对路径；导入 .md 时反向把本地图片复制进 `~/.jot/images/` 改回内部 URL（URL 跳过、`/images/` 幂等跳过、缺失保留）；`PermanentDeleteNote`/`EmptyTrash` 硬删后按引用文件名增量清理孤儿图片（检查范围含回收站 `Unscoped`，软删除/定时清理不动）。公共逻辑在 [app.go](app.go) `exportNoteContentWithImages`/`processImportImages`/`deleteImagesIfUnreferenced`。
 
----
-
-## 记忆点 1：AI 模式描述注入（Chat/Agent/Plan 三态 self-awareness + 模式切换引导）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 在 AI 系统提示词中注入当前模式描述（Chat/Agent/Plan 三种方案B文案），让 AI 具备模式自我认知。Chat 模式注入 `chatModeDescription`（纯文本对话，不调用工具，用户请求搜索笔记时建议切换到 Agent），Agent 模式注入 `agentModeDescription`（可调用工具完成任务），Plan 模式注入 `planModeDescription`（先计划后执行）。注入点在 `CallAIStream` 和 `CallAIAgentStream` 中，不修改 `buildAIContextInstruction` 签名。 |
-| **实现要点** | [app.go](app.go) 新增三个包级常量 `chatModeDescription`/`agentModeDescription`/`planModeDescription`。Chat 模式（`CallAIStream`）在 `buildAIContextInstruction` 结果末尾追加 `chatModeDescription`；Agent/Plan 模式（`CallAIAgentStream`）将 `sessCfg.LoadSessionConfig` 提前到 instruction 构建之前，在所有工具使用规范之后追加 `agentModeDescription`/`planModeDescription`（根据 `sessCfg.Mode` 判断）。Plan 模式描述注入 ReAct 循环的 Instruction 中，而非 `planGenSystemPrompt`（计划生成阶段已有独立角色定义）。 |
-| **涉及文件** | [app.go](app.go)（常量定义 + `CallAIStream` + `CallAIAgentStream`） |
+41. **read_url 分页读取改造（offset/length + stateless 无缓存）+ P2/P3 修复 + 单测**：read_url 从"单次整页截断"升级为分页读取——新增可选 `offset`（缺省 0）与 `length`（缺省 `ai_read_url_max_chars`=10000、显式上限 maxSectionLen=100000），全文按 rune 偏移切片返回"第 X-Y 字符（共 N 字符）"，未读完追加"（内容未完，如需继续请以 offset=%d 调用）"续读提示，offset 越界报"已全部读取完毕"停止翻页；**刻意无缓存**（对齐官方 MCP Fetch stateless：每轮整页重抓再切片，内容稳定性与效率由 ReAct 循环承担）；`\n\n` 分隔符仅在文档之间插入（不残留尾部空行，total 精确）。**P2/P3**：offset/length 校验前移到抓取前（非法参数零抓取）、越界错误带 `read_url 的` 前缀、`offset < 0 || offset >= total` 双判断防巨型 offset 溢出、`skipURLGuard` 注入缝（对齐 http_request 范式）。**单测** [read_url_test.go](internal/agent/tools/read_url_test.go) 7 子用例（首段/跨分界续读/末段截尾/越界精确边界/巨型 offset/非法参数零抓取）；[http_request_test.go](internal/agent/tools/http_request_test.go) 截断测试 5000→10000 同步（a920045 改默认值后未同步的既有失败，教训：改默认值须同步测试断言）。详见 [read_url.go](internal/agent/tools/read_url.go)、[read_url_test.go](internal/agent/tools/read_url_test.go)、[http_request_test.go](internal/agent/tools/http_request_test.go)。
 
 ---
 
-## 记忆点 2：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
+## 记忆点 1：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -570,7 +562,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
+## 记忆点 2：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -583,7 +575,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
+## 记忆点 3：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -595,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除联动清理孤儿图片 + 笔记本批量导出
+## 记忆点 4：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,6 +596,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **导入（重要）** | [app.go](app.go) `processImportImages(content, mdDir)` 在 [app.go](app.go) `processImportFile` 内容读取后、哈希对比前调用（仅 `fileExt == ".md"` 且含 `![`），处理后的内容统一供哈希/冲突/覆盖/创建下游使用。正则 `!\[[^\]]*\]\(([^)]+)\)` 扫描，`raw` 按空格拆出 pathPart 与可选 title；判断顺序：含 `://` 或 `data:` → 互联网链接保留；`/images/` 开头 → jot 内部引用跳过（**幂等**，二次导入不重复复制、内容哈希稳定）；本地路径基于 md 目录解析 `os.Stat` 存在 → `SaveImageFromPath` 复制 → 引用改写为 `/images/xxx`（title 保留）；不存在 → 保留原引用记日志。**替换用 `raw` 完整子串**（`strings.Replace(s, raw, newURL+strings.TrimPrefix(raw, pathPart), 1)`）——`pathPart` 在 alt 与路径同名时（`![foo.png](foo.png)`）会替换错位置。同路径 map 缓存去重只复制一次。 |
 | **回收站清理（重要）** | [app.go](app.go) `extractImageFilenames(content)` 提取引用文件名（title 截断 + 去重 + 防路径穿越），`deleteImagesIfUnreferenced(filenames, includeTrash)` 对每个文件名用 `instr(content, ?) > 0` 存在性查询（`Unscoped` 含回收站，精确匹配无通配符转义问题），未被引用则 `os.Remove`（失败仅记日志）。`PermanentDeleteNote`：删前取 content → 硬删 → 增量清理（includeTrash=true，回收站其他笔记引用同一图不得删）；`EmptyTrash`：清空前聚合回收站笔记引用 → 清空 → 增量清理（includeTrash=false）。软删除 `DeleteNote` 不动图片；定时清理 `CleanExpiredTrash` 后有 `CleanupOrphanImages` 全量兜底无需重复处理。 |
 | **涉及文件** | [app.go](app.go)（`ExportNoteAsMarkdown`/`exportNoteContentWithImages`/`ExportNotebookAsMarkdown`/`fileExists`/`processImportImages`/`processImportFile`/`PermanentDeleteNote`/`EmptyTrash`/`extractImageFilenames`/`deleteImagesIfUnreferenced`）、[frontend/src/main.js](frontend/src/main.js)（笔记本右键菜单「导出全部笔记」） |
+
+---
+
+## 记忆点 5：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | read_url 从"单次整页截断"升级为分页读取：新增可选参数 `offset`（起始字符位置，缺省 0）与 `length`（单次读取字符数，缺省 `ai_read_url_max_chars`=10000，显式传入上限 `maxSectionLen`=100000）。全文按 rune 偏移切片，返回"第 X-Y 字符（共 N 字符）"，未读完时追加"（内容未完，如需继续请以 offset=%d 调用）"续读提示；offset 越界返回"read_url 的 offset 超出内容范围（共 N 字符，已全部读取完毕）"让模型停止翻页。**刻意无缓存**：对齐官方 MCP Fetch 的 stateless 设计，每轮整页重抓再切片——动态页面偏移可能微小漂移，由 ReAct 循环承担（相邻段可能有极小重叠/缺失，静态文章页无感）。 |
+| **实现要点** | [read_url.go](internal/agent/tools/read_url.go)：① offset/length 校验（负数/非整数）**前移到抓取之前**，非法参数零抓取直接报错；② 切片越界判断 `offset < 0 \|\| offset >= total` 双条件（巨型 offset 经 int 转换溢出为负一并按越界处理）；③ 全文拼接 `\n\n` 分隔符仅在文档之间插入，不残留尾部空行（total 精确等于正文长度，无"幻影末段"）；④ 越界错误带 `read_url 的` 工具名前缀（与同包错误风格一致）。**测试注入缝**：新增 `skipURLGuard` 字段（对齐 [http_request.go](internal/agent/tools/http_request.go) 既有范式），true 时跳过 `validateHTTPURL` 内网拒绝与拨号期校验，仅供测试经 `InvokableRun` 访问 httptest 本机服务器，生产构造器不设置、内网防护零影响。 |
+| **配套测试** | [read_url_test.go](internal/agent/tools/read_url_test.go) 新增 7 子用例（httptest 本机服务器 + skipURLGuard）：首段从开头读并提示续读、按 offset 续读中间段（跨甲/乙分界验证切片）、末段截到末尾不再提示、offset 越界报已读完（精确边界 offset=total）、巨型 offset 溢出防护、非法参数在抓取前被拒绝（原子计数器断言服务端零请求）。[http_request_test.go](internal/agent/tools/http_request_test.go) 截断测试同步 5000→10000——提交 a920045 提高 `ai_http_max_chars` 默认值后测试未同步的既有失败（教训：**改默认值必须同步更新相关测试断言**）。 |
+| **涉及文件** | [internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/read_url_test.go](internal/agent/tools/read_url_test.go)、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go) |
 
 ---
 
