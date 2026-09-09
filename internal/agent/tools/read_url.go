@@ -2,8 +2,10 @@ package tools
 
 // 本文件实现 read_url 网页链接读取工具：模型在 ReAct 循环中发现用户消息
 // 包含链接或要求阅读网页时调用，内部基于 eino-ext 官方 URL Document Loader
-// 抓取网页并提取正文（默认 HTML 解析器，取 body 内容），按 ai_read_url_max_chars
-// 设置截断后返回给模型。仅放行 http/https，避免 file:// 等本地路径读取。
+// 抓取网页并提取正文（默认 HTML 解析器，取 body 内容），支持按 offset/length
+// 分页读取长网页：拼接全文后按 rune 偏移切片返回，并携带起止位置与总字符数，
+// 模型可依据返回的结尾位置继续翻页直至读完。仅放行 http/https，避免 file://
+// 等本地路径读取。
 // SSRF 三层防护复用 ssrf.go 的共享客户端（含拨号期 DNS rebinding 校验与
 // 响应体 1MB 限长）；isPrivateHost 额外做 inet_aton 数值编码 IP 归一化。
 
@@ -12,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,21 +42,30 @@ const browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 type readURLTool struct {
 	setting *services.SettingService // 读取输出最大字符数设置（复用 ai_read_url_max_chars）
 	ctx     *Context                 // 事件发射、日志
+
+	// skipURLGuard 测试注入缝：true 时跳过 validateHTTPURL 的内网/本机拒绝，
+	// 仅供同包测试经 InvokableRun 访问 httptest 本机服务器（零值为 false，生产
+	// 构造器不设置，内网防护不受影响）。
+	skipURLGuard bool
 }
 
 // 编译期断言：确保 readURLTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*readURLTool)(nil)
 
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
-// 展示被读取的链接（截断防超长），解析失败或为空时回退通用文案。
+// 展示被读取的链接与起始位置（截断防超长），解析失败或为空时回退通用文案。
 func (r *readURLTool) ActionText(argumentsInJSON string) string {
 	var args struct {
-		URL string `json:"url"`
+		URL    string  `json:"url"`
+		Offset float64 `json:"offset"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "阅读网页链接"
 	}
 	if args.URL = strings.TrimSpace(args.URL); args.URL != "" {
+		if args.Offset > 0 {
+			return fmt.Sprintf("阅读链接 %s 第 %d 字符起", TruncateRunes(args.URL, 30), int(args.Offset))
+		}
 		return "阅读链接 " + TruncateRunes(args.URL, 30)
 	}
 	return "阅读网页链接"
@@ -63,39 +75,78 @@ func (r *readURLTool) ActionText(argumentsInJSON string) string {
 func (r *readURLTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "read_url",
-		Desc: "读取网页链接（URL）的内容并返回正文。当用户消息中包含链接、或要求阅读/总结/提取某个网页的内容时调用；也可在搜索工具返回结果不够深入时进一步打开搜索结果中的链接。注意：仅支持 http/https 链接；动态渲染（JS）的页面可能只能拿到部分内容。",
+		Desc: "读取网页链接（URL）的内容并返回正文。当用户消息中包含链接、或要求阅读/总结/提取某个网页的内容时调用；也可在搜索工具返回结果不够深入时进一步打开搜索结果中的链接。注意：仅支持 http/https 链接；动态渲染（JS）的页面可能只能拿到部分内容。长网页可分页读取：首次调用省略 offset 从开头读，返回含\"第 X-Y 字符（共 N 字符）\"，续读时以上一段结尾位置 Y 作为 offset 调用；offset 超出内容范围表示已全部读完。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
 				Desc:     "要读取的网页链接，必须是 http/https 开头的完整 URL",
 				Required: true,
 			},
+			"offset": {
+				Type:     schema.Number,
+				Desc:     "起始字符位置，从 0 开始；首次阅读可省略，续读时传上一段返回的结尾位置（必须小于内容总字符数）",
+				Required: false,
+			},
+			"length": {
+				Type:     schema.Number,
+				Desc:     "本次读取的字符数，可选；缺省取 ai_read_url_max_chars 设置，上限 100000",
+				Required: false,
+			},
 		}),
 	}, nil
 }
 
-// InvokableRun 执行链接读取：校验 URL → 构建 loader（超时 + 浏览器 UA）→
-// 加载并提取正文 → 按设置截断后返回。错误路径（参数缺失 / 非法 scheme /
-// 抓取失败 / 空正文 / 用户取消）返回 error 经 WrapWithError 回填模型继续推理。
+// InvokableRun 执行链接读取：校验 URL → 校验 offset/length → 构建 loader
+// （超时 + 浏览器 UA）→ 加载并拼接全部正文 → 按 rune 切片返回（携带起止位置
+// 与总字符数，模型据此翻页）。错误路径（参数缺失 / 非法 scheme / 抓取失败 /
+// offset 越界 / 空正文 / 用户取消）返回 error 经 WrapWithError 回填模型继续推理。
 func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	var args struct {
-		URL string `json:"url"`
+		URL    string  `json:"url"`
+		Offset float64 `json:"offset"`
+		Length float64 `json:"length"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 read_url 参数失败: %w", err)
 	}
 
-	// 1. 校验 URL：仅放行 http/https 完整链接
-	target, err := validateHTTPURL(args.URL)
-	if err != nil {
-		return "", err
+	// 1. 校验 URL：仅放行 http/https 完整链接（测试注入缝 skipURLGuard 跳过内网拒绝）
+	target := strings.TrimSpace(args.URL)
+	if !r.skipURLGuard {
+		var err error
+		if target, err = validateHTTPURL(args.URL); err != nil {
+			return "", err
+		}
 	}
 
-	// 2. 构建 loader：默认 HTML 解析器提取正文；复用共享防护客户端（SSRF 三层
+	// 2. 校验 offset/length（对齐 read_note_section）：offset 默认 0，须为 >=0
+	//    整数；length 缺省取设置，须为 >=0 整数，上限 maxSectionLen。放在抓取
+	//    之前，非法参数直接报错，避免白费一次整页抓取
+	if args.Offset < 0 {
+		return "", errors.New("read_url 的 offset 须为 >=0 的整数")
+	}
+	if args.Offset != math.Trunc(args.Offset) {
+		return "", errors.New("read_url 的 offset 须为整数")
+	}
+	if args.Length < 0 {
+		return "", errors.New("read_url 的 length 须为 >=0 的整数")
+	}
+	if args.Length != math.Trunc(args.Length) {
+		return "", errors.New("read_url 的 length 须为整数")
+	}
+	length := int(args.Length)
+	if length <= 0 {
+		length = getIntSetting(r.setting, "ai_read_url_max_chars", 10000, 50000)
+	}
+	if length > maxSectionLen {
+		length = maxSectionLen
+	}
+
+	// 3. 构建 loader：默认 HTML 解析器提取正文；复用共享防护客户端（SSRF 三层
 	//    防护，含拨号期 DNS rebinding 校验与响应体限长，见 ssrf.go），浏览器 UA
-	//    规避 403。
+	//    规避 403。测试经 skipURLGuard 一并跳过拨号期校验，放行本机地址
 	loader, err := urlLoader.NewLoader(ctx, &urlLoader.LoaderConfig{
-		Client: newGuardedHTTPClient(readURLTimeout, true),
+		Client: newGuardedHTTPClient(readURLTimeout, !r.skipURLGuard),
 		RequestBuilder: func(ctx context.Context, src document.Source, _ ...document.LoaderOption) (*http.Request, error) {
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URI, nil)
 			if err != nil {
@@ -110,7 +161,7 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", fmt.Errorf("创建 URL Loader 失败: %w", err)
 	}
 
-	// 3. 加载文档并提取正文（可能返回多个 document，全部拼接后按上限截断）
+	// 4. 加载文档并提取正文：可能返回多个 document，全部拼接成全文（分页切片源）
 	docs, err := loader.Load(ctx, document.Source{URI: target})
 	if err != nil {
 		if ctx.Err() != nil {
@@ -119,34 +170,55 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		return "", fmt.Errorf("读取链接失败: %w", err)
 	}
 
-	maxChars := getIntSetting(r.setting, "ai_read_url_max_chars", 10000, 50000)
 	var b strings.Builder
 	for _, d := range docs {
-		if d == nil || strings.TrimSpace(d.Content) == "" {
+		if d == nil {
 			continue
 		}
-		if b.Len() >= maxChars {
-			break
+		trimmed := strings.TrimSpace(d.Content)
+		if trimmed == "" {
+			continue
 		}
-		b.WriteString(strings.TrimSpace(d.Content))
-		b.WriteString("\n\n")
+		// 分隔符仅在文档之间插入，避免正文尾部残留空行污染偏移语义
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(trimmed)
 	}
 	if b.Len() == 0 {
 		return "", errors.New("未能从该链接提取到正文内容（可能页面为空或为动态渲染页面）")
 	}
 
-	// 4. 按 rune 截断（支持中文），超长时追加截断提示，避免撑爆模型上下文窗口
-	text := b.String()
-	if runes := []rune(text); len(runes) > maxChars {
-		text = string(runes[:maxChars]) + "\n\n（内容过长，已截断）"
+	// 5. 按 rune 偏移切片（支持中文）；offset 越界视为已读完，回填模型停止翻页。
+	//    巨型 offset 经 int 转换可能溢出为负，一并按越界处理
+	runes := []rune(b.String())
+	total := len(runes)
+	offset := int(args.Offset)
+	if offset < 0 || offset >= total {
+		return "", fmt.Errorf("read_url 的 offset 超出内容范围（共 %d 字符，已全部读取完毕）", total)
+	}
+	end := offset + length
+	if end > total {
+		end = total
+	}
+	section := string(runes[offset:end])
+
+	// 6. 组织返回：携带起止位置与总字符数，未读完时提示续读 offset
+	msg := fmt.Sprintf("以下为链接 %s 第 %d-%d 字符的内容（共 %d 字符）：\n%s",
+		target, offset+1, end, total, section)
+	if end < total {
+		msg += fmt.Sprintf("\n（内容未完，如需继续请以 offset=%d 调用）", end)
 	}
 
 	if r.ctx != nil && r.ctx.Logger != nil {
 		r.ctx.Logger.Debugw("Agent read_url 调用",
 			fastlog.String("url", target),
-			fastlog.Int("chars", len([]rune(text))))
+			fastlog.Int("offset", offset),
+			fastlog.Int("end", end),
+			fastlog.Int("total", total),
+			fastlog.Int("chars", len([]rune(section))))
 	}
-	return fmt.Sprintf("以下为链接 %s 的内容：\n%s", target, text), nil
+	return msg, nil
 }
 
 // validateHTTPURL 校验并规范化 URL：仅放行 http/https scheme，其余（file://、

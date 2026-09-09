@@ -218,15 +218,15 @@ func TestHTTPRequestSuccessPath(t *testing.T) {
 }
 
 // TestHTTPRequestTruncation 验证响应体超长时按设置截断（nil setting 回退默认
-// 5000），截断提示追加在末尾。
+// 10000），截断提示追加在末尾。
 func TestHTTPRequestTruncation(t *testing.T) {
-	long := strings.Repeat("好", 6000) // 6000 rune > 默认上限 5000
+	long := strings.Repeat("好", 12000) // 12000 rune > 默认上限 10000
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(long))
 	}))
 	defer srv.Close()
 
-	// setting 为 nil：getIntSetting 回退默认 5000；skipURLGuard 放行本机地址
+	// setting 为 nil：getIntSetting 回退默认 10000；skipURLGuard 放行本机地址
 	h := &httpRequestTool{skipURLGuard: true}
 	out, err := h.invoke(context.Background(), h.buildClient(false), httpRequestArgs{URL: srv.URL})
 	if err != nil {
@@ -235,11 +235,11 @@ func TestHTTPRequestTruncation(t *testing.T) {
 	if !strings.Contains(out, "（内容过长，已截断）") {
 		t.Errorf("输出应包含截断提示，实际:\n%s", out)
 	}
-	// 截断后保留 5000 rune 前缀，不含第 5001 个字符起的内容
-	if !strings.Contains(out, strings.Repeat("好", 5000)) {
-		t.Error("输出应包含前 5000 字符正文")
+	// 截断后保留 10000 rune 前缀，不含第 10001 个字符起的内容
+	if !strings.Contains(out, strings.Repeat("好", 10000)) {
+		t.Error("输出应包含前 10000 字符正文")
 	}
-	if strings.Contains(out, strings.Repeat("好", 5001)) {
-		t.Error("输出不应包含超过 5000 字符的正文")
+	if strings.Contains(out, strings.Repeat("好", 10001)) {
+		t.Error("输出不应包含超过 10000 字符的正文")
 	}
 }
