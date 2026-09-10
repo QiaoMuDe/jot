@@ -500,7 +500,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 			APIKey:  aiCfg.APIKey,
 			Model:   aiCfg.Model,
 			BaseURL: aiCfg.BaseURL,
-			Timeout: 60 * time.Second,
+			Timeout: 5 * time.Minute,
 		}
 		// 深度思考开启时设置 reasoning_effort=high（OpenAI 标准参数，DeepSeek V4 / Qwen3 兼容端点支持）
 		if req.ThinkingEnabled {
