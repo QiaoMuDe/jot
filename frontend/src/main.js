@@ -8784,6 +8784,7 @@ async function init() {
     await Promise.all([loadSettings().catch(() => {}), loadNotebooks().catch(() => {})]);
     await initSortSettings();
     initAISettings();
+    initChatAgentTools();
     // 先恢复侧栏折叠状态
     restoreSidebarState();
     // 确保 activeNotebookId 有值（默认为 1）
@@ -9896,22 +9897,17 @@ let agentToolsChanges = { enabled: [], disabled: [] };
 let agentToolsMgrExpanded = false;
 let agentToolsMgrContainer = null;
 let agentToolsSelectAllCheckbox = null;
+// AI 助手工具栏「Agent 工具」浮层展开状态（与设置页复用同一份 agentTools 全局状态）
+let chatAgentToolsExpanded = false;
+let chatAgentToolsCloseTimer = null;
 
 /**
  * 关闭设置页「Agent 工具」管理面板（收起动画结束后移除容器，返回 Promise）
  */
 function closeAgentToolsMgrList() {
     agentToolsMgrExpanded = false;
-    // 关闭面板时汇总本次会话的工具启停变更，提示一次
-    const enCount = agentToolsChanges.enabled.length;
-    const deCount = agentToolsChanges.disabled.length;
-    if (enCount > 0 || deCount > 0) {
-        const parts = [];
-        if (deCount > 0) parts.push(`禁用 ${deCount} 个工具`);
-        if (enCount > 0) parts.push(`启用 ${enCount} 个工具`);
-        nm.show(`工具配置已保存：${parts.join('，')}`, 'success');
-        agentToolsChanges = { enabled: [], disabled: [] };
-    }
+    // 关闭面板时汇总本次会话的工具启停变更，提示一次（即时保存已完成，此处仅提示）
+    reportAgentToolsChanges();
     if (!agentToolsMgrContainer) {
         // 无容器时仍需复位按钮态
         const btn = document.getElementById('aiAgentToolsBtn');
@@ -9948,6 +9944,308 @@ function closeAgentToolsMgrList() {
             }
             resolve();
         };
+    });
+}
+
+/**
+ * 汇总本次会话内 Agent 工具启停变更并提示一次（设置面板与 AI 助手浮层共用；即时保存已完成）
+ */
+function reportAgentToolsChanges() {
+    const enCount = agentToolsChanges.enabled.length;
+    const deCount = agentToolsChanges.disabled.length;
+    if (enCount > 0 || deCount > 0) {
+        const parts = [];
+        if (deCount > 0) parts.push(`禁用 ${deCount} 个工具`);
+        if (enCount > 0) parts.push(`启用 ${enCount} 个工具`);
+        nm.show(`工具配置已保存：${parts.join('，')}`, 'success');
+        agentToolsChanges = { enabled: [], disabled: [] };
+    }
+}
+
+/* ===== AI 助手工具栏「Agent 工具」浮层（复用设置页同一份全局工具状态与保存逻辑） ===== */
+
+/**
+ * 初始化 AI 助手工具栏「Agent 工具」按钮与浮层：点击展开勾选列表、外点/ESC 关闭，
+ * 并由 ai-chat.js 的 syncModeToggle 按模式控制可见性（chat 隐藏，agent/plan 显示）。
+ */
+function initChatAgentTools() {
+    const btn = document.getElementById('aiChatAgentToolsBtn');
+    const wrap = document.getElementById('aiChatAgentToolsWrap');
+    if (!btn || !wrap) return;
+
+    // 跨模块可见性回调：供 ai-chat.js 的 syncModeToggle 调用
+    window.__setAiChatAgentToolsVis = (visible) => {
+        wrap.hidden = !visible;
+        if (!visible && chatAgentToolsExpanded) closeChatAgentToolsList();
+    };
+    // 跨模块关闭回调：供 AI 模式下流式锁定时收起浮层
+    window.__closeAiChatAgentToolsList = () => closeChatAgentToolsList();
+    // 默认 agent 模式可见
+    wrap.hidden = false;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 流式锁定：抖动提示且不展开（与其它工具栏按钮锁定行为一致）
+        if (btn.classList.contains('is-locked')) {
+            btn.classList.remove('is-shaking');
+            void btn.offsetWidth;
+            btn.classList.add('is-shaking');
+            btn.addEventListener('animationend', () => btn.classList.remove('is-shaking'), { once: true });
+            window.showNotification?.('回复进行中，暂时无法调整工具', 'warning');
+            return;
+        }
+        if (chatAgentToolsExpanded) {
+            closeChatAgentToolsList();
+        } else {
+            renderChatAgentToolsList();
+        }
+        btn.classList.toggle('open', chatAgentToolsExpanded);
+        btn.setAttribute('aria-expanded', String(chatAgentToolsExpanded));
+    });
+
+    // 点击页面其它区域（排除按钮/wrap 自身）关闭浮层
+    document.addEventListener('click', (e) => {
+        if (!chatAgentToolsExpanded) return;
+        if (wrap.contains(e.target)) return;
+        closeChatAgentToolsList();
+    });
+    // 按 ESC 关闭浮层
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && chatAgentToolsExpanded) closeChatAgentToolsList();
+    });
+}
+
+/**
+ * 渲染 AI 助手「Agent 工具」浮层。
+ * 独立于设置页工具管理样式，面向对话内快速选择：头部（标题+关闭）、分组工具行（名称+副标题+角标）、底部全选/计数。
+ * 仍复用同一份 agentToolsMeta/agentToolsDisabled/agentToolsChanges 全局状态与即时保存，改任一入口全局生效。
+ */
+function renderChatAgentToolsList() {
+    // 取消挂起的关闭定时器并清掉 .closing，避免快速连点时关闭的同步清空把刚渲染的列表抹掉
+    if (chatAgentToolsCloseTimer) {
+        clearTimeout(chatAgentToolsCloseTimer);
+        chatAgentToolsCloseTimer = null;
+    }
+    const dropdown = document.getElementById('aiChatAgentToolsDropdown');
+    if (!dropdown) return;
+    chatAgentToolsExpanded = true;
+    dropdown.classList.remove('closing');
+    if (!dropdown.classList.contains('open')) {
+        requestAnimationFrame(() => {
+            if (chatAgentToolsExpanded) dropdown.classList.add('open');
+        });
+    }
+    dropdown.innerHTML = '';
+
+    // 分组：可使用 / 仅 Plan 专属 / 常驻
+    const groups = [
+        { key: 'normal', label: null, tools: [] },
+        { key: 'plan', label: '仅 Plan 模式', tools: [] },
+        { key: 'always', label: '常驻', tools: [] },
+    ];
+    agentToolsMeta.forEach((tool) => {
+        if (tool.PlanOnly) groups[1].tools.push(tool);
+        else if (tool.AlwaysOn) groups[2].tools.push(tool);
+        else groups[0].tools.push(tool);
+    });
+    const selectable = groups[0].tools; // 参与全选的可选工具
+
+    // 启用状态与变更记录（与设置页一致的全局字典，即时保存）
+    const isEnabled = (tool) => agentToolsDisabled.indexOf(tool.Name) === -1;
+    const applyTool = (tool, enabled) => {
+        if (enabled) {
+            const idx = agentToolsDisabled.indexOf(tool.Name);
+            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
+            const di = agentToolsChanges.disabled.indexOf(tool.Name);
+            if (di !== -1) agentToolsChanges.disabled.splice(di, 1);
+            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) agentToolsChanges.enabled.push(tool.Name);
+        } else {
+            if (agentToolsDisabled.indexOf(tool.Name) === -1) agentToolsDisabled.push(tool.Name);
+            const ei = agentToolsChanges.enabled.indexOf(tool.Name);
+            if (ei !== -1) agentToolsChanges.enabled.splice(ei, 1);
+            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) agentToolsChanges.disabled.push(tool.Name);
+        }
+    };
+
+    /* ---- 头部：标题 + 副标题 + 关闭 ---- */
+    const head = document.createElement('div');
+    head.className = 'ai-chat-agent-tools-head';
+    const headTitle = document.createElement('span');
+    headTitle.className = 'ai-chat-agent-tools-head-title';
+    headTitle.textContent = 'Agent 工具';
+    const headSub = document.createElement('span');
+    headSub.className = 'ai-chat-agent-tools-head-sub';
+    headSub.textContent = '在本次对话中启用所需能力';
+    const headClose = document.createElement('button');
+    headClose.type = 'button';
+    headClose.className = 'ai-chat-agent-tools-close';
+    headClose.title = '关闭';
+    headClose.innerHTML = '&times;';
+    headClose.addEventListener('click', closeChatAgentToolsList);
+    head.appendChild(headTitle);
+    head.appendChild(headSub);
+    head.appendChild(headClose);
+    dropdown.appendChild(head);
+
+    /* ---- 工具列表体（内层裁剪横向抖动，外层滚动） ---- */
+    const body = document.createElement('div');
+    body.className = 'ai-chat-agent-tools-body';
+    const bodyInner = document.createElement('div');
+    bodyInner.className = 'ai-chat-agent-tools-body-inner';
+    body.appendChild(bodyInner);
+
+    // 底部全选/计数
+    const foot = document.createElement('div');
+    foot.className = 'ai-chat-agent-tools-foot';
+    const selectAllEl = document.createElement('button');
+    selectAllEl.type = 'button';
+    selectAllEl.className = 'ai-chat-agent-tools-select-all';
+    const countEl = document.createElement('span');
+    countEl.className = 'ai-chat-agent-tools-count';
+    foot.appendChild(selectAllEl);
+    foot.appendChild(countEl);
+
+    const refreshSummary = () => {
+        const en = selectable.filter(isEnabled).length;
+        const total = selectable.length;
+        countEl.textContent = `已启用 ${en}/${total}`;
+        const allEnabled = total > 0 && en === total;
+        selectAllEl.textContent = allEnabled ? '取消全选' : '全选';
+        selectAllEl.disabled = total === 0;
+        // 同步可选工具行的勾选态（全选/取消全选后即时更新）
+        selectable.forEach((t, i) => {
+            if (normalInputs[i]) normalInputs[i].checked = isEnabled(t);
+        });
+    };
+    selectAllEl.addEventListener('click', () => {
+        const allEnabled = selectable.length > 0 && selectable.filter(isEnabled).length === selectable.length;
+        selectable.forEach((t) => applyTool(t, !allEnabled));
+        saveSettings();
+        refreshSummary();
+    });
+
+    const normalInputs = [];
+    groups.forEach((group) => {
+        if (group.tools.length === 0) return;
+        if (group.label) {
+            const labelEl = document.createElement('div');
+            labelEl.className = 'ai-chat-agent-tools-group';
+            labelEl.textContent = group.label;
+            bodyInner.appendChild(labelEl);
+        }
+        group.tools.forEach((tool, ti) => {
+            const row = document.createElement('label');
+            row.className = 'ai-chat-agent-tools-item';
+            row.style.animationDelay = `${ti * 24}ms`;
+            if (group.key === 'plan') row.classList.add('is-plan-only');
+            if (group.key === 'always') row.classList.add('is-always-on');
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = group.key === 'always' ? true : isEnabled(tool);
+            if (group.key !== 'normal') cb.disabled = true;
+
+            const info = document.createElement('span');
+            info.className = 'ai-chat-agent-tools-info';
+            const nameLine = document.createElement('span');
+            nameLine.className = 'ai-chat-agent-tools-name-line';
+            const name = document.createElement('span');
+            name.className = 'ai-chat-agent-tools-name';
+            name.textContent = tool.Name;
+            nameLine.appendChild(name);
+            if (group.key === 'plan') {
+                const badge = document.createElement('span');
+                badge.className = 'ai-chat-agent-tools-badge is-plan';
+                badge.textContent = '仅 Plan';
+                nameLine.appendChild(badge);
+            } else if (group.key === 'always') {
+                const badge = document.createElement('span');
+                badge.className = 'ai-chat-agent-tools-badge is-always';
+                badge.textContent = '常驻';
+                nameLine.appendChild(badge);
+            }
+            const desc = document.createElement('span');
+            desc.className = 'ai-chat-agent-tools-desc';
+            desc.textContent = tool.Label || '';
+            info.appendChild(nameLine);
+            info.appendChild(desc);
+
+            row.appendChild(cb);
+            row.appendChild(info);
+
+            if (group.key === 'normal') {
+                normalInputs.push(cb);
+                cb.addEventListener('change', () => {
+                    applyTool(tool, cb.checked);
+                    saveSettings();
+                    refreshSummary();
+                });
+            } else {
+                row.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // 行内 animationDelay 是入场 stagger 用的；先清零，抖动不被其延迟
+                    row.style.animationDelay = '0ms';
+                    if (!row.classList.contains('shake')) {
+                        row.classList.add('shake');
+                        setTimeout(() => row.classList.remove('shake'), 400);
+                    }
+                    window.showNotification?.(
+                        group.key === 'plan' ? '此工具仅在 Plan 模式下可用，请切换到 Plan 模式' : '此工具为常驻能力，不可禁用',
+                        'info'
+                    );
+                });
+            }
+
+            bodyInner.appendChild(row);
+        });
+    });
+
+    dropdown.appendChild(body);
+    dropdown.appendChild(foot);
+    refreshSummary();
+
+    const btn = document.getElementById('aiChatAgentToolsBtn');
+    if (btn) {
+        btn.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+    }
+}
+
+/**
+ * 关闭 AI 助手「Agent 工具」浮层：汇总提示本次改动，收起动画后清空内容并复位按钮态
+ */
+function closeChatAgentToolsList() {
+    const dropdown = document.getElementById('aiChatAgentToolsDropdown');
+    const btn = document.getElementById('aiChatAgentToolsBtn');
+    if (!chatAgentToolsExpanded) {
+        if (btn) {
+            btn.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+        return Promise.resolve();
+    }
+    chatAgentToolsExpanded = false;
+    reportAgentToolsChanges();
+    if (!dropdown) {
+        if (btn) {
+            btn.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+        }
+        return Promise.resolve();
+    }
+    dropdown.classList.remove('open');
+    dropdown.classList.add('closing');
+    return new Promise((resolve) => {
+        chatAgentToolsCloseTimer = setTimeout(() => {
+            chatAgentToolsCloseTimer = null;
+            dropdown.classList.remove('closing');
+            dropdown.innerHTML = '';
+            if (btn) {
+                btn.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+            resolve();
+        }, 180);
     });
 }
 

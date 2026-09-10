@@ -546,23 +546,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 41. **read_url 分页读取改造（offset/length + stateless 无缓存）+ P2/P3 修复 + 单测**：read_url 从"单次整页截断"升级为分页读取——新增可选 `offset`（缺省 0）与 `length`（缺省 `ai_read_url_max_chars`=10000、显式上限 maxSectionLen=100000），全文按 rune 偏移切片返回"第 X-Y 字符（共 N 字符）"，未读完追加"（内容未完，如需继续请以 offset=%d 调用）"续读提示，offset 越界报"已全部读取完毕"停止翻页；**刻意无缓存**（对齐官方 MCP Fetch stateless：每轮整页重抓再切片，内容稳定性与效率由 ReAct 循环承担）；`\n\n` 分隔符仅在文档之间插入（不残留尾部空行，total 精确）。**P2/P3**：offset/length 校验前移到抓取前（非法参数零抓取）、越界错误带 `read_url 的` 前缀、`offset < 0 || offset >= total` 双判断防巨型 offset 溢出、`skipURLGuard` 注入缝（对齐 http_request 范式）。**单测** [read_url_test.go](internal/agent/tools/read_url_test.go) 7 子用例（首段/跨分界续读/末段截尾/越界精确边界/巨型 offset/非法参数零抓取）；[http_request_test.go](internal/agent/tools/http_request_test.go) 截断测试 5000→10000 同步（a920045 改默认值后未同步的既有失败，教训：改默认值须同步测试断言）。详见 [read_url.go](internal/agent/tools/read_url.go)、[read_url_test.go](internal/agent/tools/read_url_test.go)、[http_request_test.go](internal/agent/tools/http_request_test.go)。
 
----
-
-## 记忆点 1：AI 全局消息搜索（按钮触发弹窗 + 会话聚类排序 + Ctrl+K 开关 + 消息跳转定位）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手侧栏内联标题过滤搜索（`#aiSessionSearch`，仅过滤已加载会话标题）整体改造为按钮触发的全局搜索弹窗（`#aiSearchModal`，复用笔记搜索弹窗 `.search-modal` 样式体系），检索全部历史会话的标题与消息内容；Ctrl+K 开/关切换（仅 AI 视图生效，流式期间拦截并通知）。检索范围含会话标题 + 消息正文，结果条目统一样式：上部左侧会话名（ellipsis 截断）+ 右侧时间，下部摘要行——**不区分消息/会话与提问/回答，无角色徽标无图标**。 |
-| **后端搜索接口（重要）** | [ai_service.go](internal/services/ai_service.go) `SearchAIChat(keyword, page, pageSize)` 返回两组结果：① **标题命中**：`LIKE ? ESCAPE '\'`（`escapeLike` 转义 `\ % _`），不分页 Limit 20，`TitleTotal` 用独立 COUNT 取真实总数（**不得用窗口 COUNT 受 Limit 截断影响**）；附带各会话最新一条非 system 消息摘要——**窗口函数 `ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC, id DESC)` 取 rn=1 单查询批量获取**（避免每会话一次 N+1 查询）；排序：SQL 先 `updated_at DESC, id DESC`，Go 侧 `titleMatchTier` 按精确度稳定排序（完全相等 3 > 前缀 2 > 包含 1，转小写与 LIKE 口径一致，同档保持时间序）。② **消息命中**：排除 system 角色 + JOIN 过滤软删除会话，分页；**会话聚类排序**：`COUNT(*) OVER (PARTITION BY session_id)` 命中条数多者整体靠前 → 会话内 `created_at DESC, id DESC` → `id` 倒序兜底（**无 `id` 兜底时同 created_at 顺序不定会分页漏/重**）。摘要同笔记 `noteThinSelect` 口径：SQL 层 `SUBSTR(content, MAX(1, INSTR(content, ?) - 40), 120)` 围绕关键词截取约 120 字符（INSTR 大小写敏感，未命中退化取前 120；单引号转义 `''`）。[app.go](app.go) `SearchAIChat` 绑定。 |
-| **前端弹窗（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js) `openAiSearchModal`/`toggleAiSearchModal`/`closeAiSearchModal`/`aiSearchLoadPage`：200ms 输入防抖 + `_aiSearchSeq` 请求序号丢弃过期响应（双保险）；**打开与关闭都必须 `clearTimeout(_aiSearchInputTimer)`**——关闭后定时器仍会以残留关键词空跑一次后台搜索（笔记弹窗 `closeSearchModal` 同款问题已一并修复，教训：防抖定时器清理必须覆盖 open/close 两侧）；触底分页**每页条数取笔记首页 `page_size` 设置项**（`GetAllSettings` 异步获取，取不到保持默认 20）；**追加加载失败回滚页码**（catch 中 `_aiSearchPage -= 1`，带 seq 与页码双重守卫，防下次触底跳页漏数据，与笔记弹窗同口径）；首页搜索失败弹通知、追加失败静默防通知轰炸。键盘 ↑↓ 导航 + Enter 跳转（Enter 不触发新搜索）。 |
-| **消息跳转定位（重要）** | 点击结果 `jumpToMessage(sessionId, msgId)`：跨会话先 `switchSession`（默认只加载最近 6 条）；目标消息不在已加载窗口时**循环逐批 `LoadAISessionMessagesPaginated(sid, 50, _oldestMsgId)` 加载更早历史**直至找到或耗尽（`_oldestMsgId=0` 终止），定位后 `scrollIntoView` 居中 + 复用既有 `ai-msg-jump-target` 闪烁高亮。switchSession 原滚动上滑加载逻辑抽取为 `prependOlderMessages` 共用（防重复实现漂移）。标题命中条目点击同样定位到该会话最新消息。 |
-| **快捷键与流式拦截** | [main.js](frontend/src/main.js) `handleKeyboardNavigation`：Ctrl/Cmd+K → `toggleAiSearchModal`（`state.currentView === 'ai-chat'` 视图守卫，同 Ctrl+J 模式；已开则关，未开则开）；**全局 Ctrl+F 编辑器外同步改为搜索弹窗开关切换**（已开 `closeSearchModal`/未开 `openSearchModal`，编辑器内 CM6 面板与预览查找行为不变）；快捷键说明页补 `Ctrl + K` 行。流式拦截三道防线：`openAiSearchModal`/侧栏按钮/`jumpToMessage` 均在 `isStreaming` 时拦截，`showNotification('回复进行中，暂时无法搜索', 'warning')` + `setToggleLocked` 置灰按钮。 |
-| **滚动防劫持教训** | 弹窗列表初次滚动被拉回顶部：`renderResults` 每次重渲列表后无条件同步键盘选中态 + `scrollIntoView`，滚轮 hover 移动也触发选中切换并滚动——修复为**键盘导航（↑↓/Enter）时才同步选中与滚动，鼠标 hover 只做高亮不滚动**；且重渲仅在有关键词结果时执行。 |
-| **涉及文件** | [internal/services/ai_service.go](internal/services/ai_service.go)（`SearchAIChat` + `AISearchSessionHit`/`AISearchMessageHit`/`AISearchResult` + `titleMatchTier` + 摘要截取）、[app.go](app.go)（`SearchAIChat` 绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（弹窗模块 + `jumpToMessage` + `prependOlderMessages` 抽取 + 旧内联搜索整体移除）、[frontend/src/main.js](frontend/src/main.js)（Ctrl+K/Ctrl+F 分支 + 快捷键说明 + 笔记弹窗关闭清定时器）、[frontend/index.html](frontend/index.html)（侧栏搜索按钮 + `#aiSearchModal`）、[frontend/src/css/components/search-modal.css](frontend/src/css/components/search-modal.css)（AI 条目统一样式）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（搜索按钮样式） |
+42. **AI 聊天输入栏「工具」浮层按钮（Agent 工具启停双入口）**：AI 助手输入工具栏「深度思考」右侧新增工具按钮（图标+`工具`文字，复用 `.ai-chat-toolbar-btn`，无数量文案），点击展开浮层勾选本对话框 Agent 工具——与设置页**共用同一份全局列表**（`agentToolsMeta`/`agentToolsDisabled`/`agentToolsChanges`）双入口双向同步；chat 模式隐藏、Agent/Plan 显示（`syncModeToggle`→`window.__setAiChatAgentToolsVis`），流式回复置灰锁定 + 收起浮层。前端 [main.js](frontend/src/main.js) `initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`；样式自成一族 `.ai-chat-agent-tools-*`（不复用设置面板样式）。**关键设计**：勾选即 `saveSettings()` 即时保存，关闭浮层 `reportAgentToolsChanges()` 汇总提示（抽出共用）；工具按 normal/plan(PlanOnly 只读)/always(AlwaysOn 只读) 分组，参与全选仅 normal；**滚动条默认隐藏**需显式 `scrollbar-color: var(--scrollbar-thumb) transparent`，抖动裁剪用 `overflow-x: clip`（`hidden` 会连带压制同容器垂直滚动条渲染）、外层滚动/内层裁抖动层级分离；**快速连点竞态**——打开前 `clearTimeout(chatAgentToolsCloseTimer)` + `.open` 的 rAF 加 `if(chatAgentToolsExpanded)` 守卫；聊天 close 不得误改设置面板 `agentToolsSelectAllCheckbox` 全局。详见 [ai-chat.js](frontend/src/js/ai-chat.js)（`setToggleLocked` L7270）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-*`）。
 
 ---
 
-## 记忆点 2：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
+## 记忆点 1：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -575,7 +563,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
+## 记忆点 2：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +575,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
+## 记忆点 3：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -599,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
+## 记忆点 4：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -607,6 +595,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **实现要点** | [read_url.go](internal/agent/tools/read_url.go)：① offset/length 校验（负数/非整数）**前移到抓取之前**，非法参数零抓取直接报错；② 切片越界判断 `offset < 0 \|\| offset >= total` 双条件（巨型 offset 经 int 转换溢出为负一并按越界处理）；③ 全文拼接 `\n\n` 分隔符仅在文档之间插入，不残留尾部空行（total 精确等于正文长度，无"幻影末段"）；④ 越界错误带 `read_url 的` 工具名前缀（与同包错误风格一致）。**测试注入缝**：新增 `skipURLGuard` 字段（对齐 [http_request.go](internal/agent/tools/http_request.go) 既有范式），true 时跳过 `validateHTTPURL` 内网拒绝与拨号期校验，仅供测试经 `InvokableRun` 访问 httptest 本机服务器，生产构造器不设置、内网防护零影响。 |
 | **配套测试** | [read_url_test.go](internal/agent/tools/read_url_test.go) 新增 7 子用例（httptest 本机服务器 + skipURLGuard）：首段从开头读并提示续读、按 offset 续读中间段（跨甲/乙分界验证切片）、末段截到末尾不再提示、offset 越界报已读完（精确边界 offset=total）、巨型 offset 溢出防护、非法参数在抓取前被拒绝（原子计数器断言服务端零请求）。[http_request_test.go](internal/agent/tools/http_request_test.go) 截断测试同步 5000→10000——提交 a920045 提高 `ai_http_max_chars` 默认值后测试未同步的既有失败（教训：**改默认值必须同步更新相关测试断言**）。 |
 | **涉及文件** | [internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/read_url_test.go](internal/agent/tools/read_url_test.go)、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go) |
+
+---
+
+## 记忆点 5：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手输入工具栏「深度思考」右侧新增「工具」按钮（工具钳图标 + `工具` 文字，复用 `.ai-chat-toolbar-btn`，无数量文案），点击展开浮层勾选本次对话可用的 Agent 工具。与设置页 Agent 工具管理**共用同一份全局列表**（`agentToolsMeta` + `agentToolsDisabled` + `agentToolsChanges`），形成双入口双向同步（改任意一侧另一侧同步）。样式自成一族 `.ai-chat-agent-tools-*`，**不复用设置面板的 `.ai-agent-tools-item`/`.agent-tools-mgr-header`**——初版复用被反馈"很丑"后整体重写。 |
+| **前端入口与非复用样式（重要）** | [main.js](frontend/src/main.js) `initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`/`reportAgentToolsChanges`（抽取共用，设置面板与聊天共用）；模式可见性经 `window.__setAiChatAgentToolsVis` 由 [ai-chat.js](frontend/src/js/ai-chat.js) `syncModeToggle` 驱动（chat 隐藏、Agent/Plan 显示）；流式锁 `setToggleLocked` 置 `.is-locked` + 点击震动/`showNotification('回复进行中，暂时无法调整工具','warning')` 拦截 + 经 `window.__closeAiChatAgentToolsList` 收起已展开浮层。浮层三段式 flex：head（标题+副标题+右上 `×`）/body（滚动列表，**内层 `.ai-chat-agent-tools-body-inner` 裁横向抖动**）/foot（底部「全选/取消全选」文字链接 + `已启用 n/m` 计数）。工具分三组：normal（可用）/plan（`ToolMeta.PlanOnly`，置灰只读 `.is-plan-only`）/always（`AlwaysOn` 常驻，置灰只读 `.is-always-on` 角标）；参与全选的仅 normal 组。 |
+| **保存与勾选（重要）** | 勾选即 `saveSettings()` **即时保存**（方案 A，与设置页一致），关闭浮层时 `reportAgentToolsChanges()` 汇总提示。全选用文字链接而非 checkbox——**聊天 closeChatAgentToolsList 里不得重置设置面板的 `agentToolsSelectAllCheckbox` 全局引用**（初版从设置面板 close 原样拷贝该行：`agentToolsSelectAllCheckbox` 是 settings 面板全选 checkbox 的共享全局，聊天里无 checkbox 却置 null，会在"设置面板管理列表开着同时关闭聊天浮层"时使设置全选永久失效；已删除）。同理空态兜底：工具为空时应提示"暂无工具"。 |
+| **滚动条与横向裁剪（重要）** | ① 全局 `#mainContent` 默认 `scrollbar-color: transparent transparent` 让子容器滚动条默认隐藏——浮层必须显式 `scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent`（与技能下拉同一套常显写法）才会显示。② **`overflow-x` 用 `clip` 而非 `hidden`**：`hidden` 与部分 runtime（Wails WebView2）组合会连带压制同容器 `overflow-y:auto` 的滚动条渲染；且抖动用 `translateX(±4px)` 会瞬时超出内容宽度触发水平滚动条盖住末行。修复为层级分离：外层 `.ai-chat-agent-tools-body` 只 `overflow-y:auto`（滚动条正常），内层 `.ai-chat-agent-tools-body-inner` `overflow-x:clip` 裁抖动——既保末行不被水平滚动条盖住，又不压制右侧滚动条。 |
+| **按钮高度统一与竞态（重要）** | 整排工具栏按钮高度一致性：`<button>` 默认 `line-height: normal` 不随父级继承（与相邻 `<div>` 按钮继承全局 1.6 不同致矮一截），需 `.ai-chat-toolbar-btn { line-height: inherit }`；模型选择触发器 padding/font-size 对齐 `3px`/`0.78rem` 档。**快速连点竞态两处防护**（教训）：① 关闭是异步的（Promise + 180ms `setTimeout` 清空）——打开前必须 `clearTimeout(chatAgentToolsCloseTimer)` 取消挂起的关闭定时器并移除 `.closing`，否则挂起定时器会把刚渲染的列表清空、只留一个带阴影的空壳（黑阴影条，再点才出现）；② `.open` 用 `requestAnimationFrame` 追加时须 `if (chatAgentToolsExpanded)` 守卫，防同帧"开→关"补上过期 `.open`。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`/`reportAgentToolsChanges`/可见性回调/`chatAgentToolsCloseTimer`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`syncModeToggle` 调可见性 + `setToggleLocked` L7270 锁工具按钮）、[frontend/index.html](frontend/index.html)（`#aiChatAgentToolsBtn` + `#aiChatAgentToolsDropdown`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-*` 浮层 + 工具栏高度统一） |
 
 ---
 

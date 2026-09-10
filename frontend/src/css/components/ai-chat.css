@@ -1576,6 +1576,254 @@
     position: relative;
 }
 
+/* Agent 工具选择 — 工具栏按钮 + 浮层下拉（仅 Agent/Plan 模式显示） */
+.ai-chat-agent-tools-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.ai-chat-agent-tools-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: -8px;
+    width: 300px;
+    max-height: 360px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+    transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 浮层头部：标题 + 副标题 + 关闭 */
+.ai-chat-agent-tools-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 8px 12px 7px;
+    border-bottom: 1px solid var(--border);
+}
+.ai-chat-agent-tools-head-title {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.ai-chat-agent-tools-head-sub {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-chat-agent-tools-close {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ai-chat-agent-tools-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+/* 工具列表体（内部滚动） */
+.ai-chat-agent-tools-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* 覆盖 #mainContent 全局 scrollbar-color: transparent 的默认隐藏，
+       按下拉组件惯例常显 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+    padding: 4px 0;
+}
+/* 内层只裁剪横向抖动（overflow-x: clip 不产生水平滚动条），
+   竖向往外层滚 → 外层不把 overflow-x 设为非 visible，竖向滚动条才能正常渲染 */
+.ai-chat-agent-tools-body-inner {
+    overflow-x: clip;
+}
+.ai-chat-agent-tools-body::-webkit-scrollbar {
+    width: 6px;
+}
+.ai-chat-agent-tools-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+.ai-chat-agent-tools-body::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+.ai-chat-agent-tools-body::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+/* 分组标签 */
+.ai-chat-agent-tools-group {
+    padding: 7px 12px 3px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+/* 工具行：checkbox + 信息列（名称行 + 副标题） */
+.ai-chat-agent-tools-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    cursor: pointer;
+    animation: chatToolsItemIn 0.18s ease both;
+}
+@keyframes chatToolsItemIn {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: none; }
+}
+.ai-chat-agent-tools-item:hover {
+    background: var(--hover-bg);
+}
+.ai-chat-agent-tools-item input[type="checkbox"] {
+    flex-shrink: 0;
+    accent-color: var(--accent);
+}
+.ai-chat-agent-tools-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.ai-chat-agent-tools-name-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.ai-chat-agent-tools-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-chat-agent-tools-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-chat-agent-tools-badge {
+    flex-shrink: 0;
+    font-size: 0.6rem;
+    line-height: 1;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+.ai-chat-agent-tools-badge.is-plan {
+    color: var(--accent);
+    border-color: var(--accent);
+    opacity: 0.75;
+}
+.ai-chat-agent-tools-badge.is-always {
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
+/* 锁定行（仅 Plan / 常驻） */
+.ai-chat-agent-tools-item.is-plan-only,
+.ai-chat-agent-tools-item.is-always-on {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.ai-chat-agent-tools-item.shake {
+    animation: agentToolsShake 0.4s ease;
+}
+@keyframes agentToolsShake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-4px); }
+    40%      { transform: translateX(4px); }
+    60%      { transform: translateX(-3px); }
+    80%      { transform: translateX(2px); }
+}
+
+/* 底部：全选 + 计数 */
+.ai-chat-agent-tools-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+}
+.ai-chat-agent-tools-select-all {
+    font-size: 0.72rem;
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+.ai-chat-agent-tools-select-all:hover {
+    text-decoration: underline;
+}
+.ai-chat-agent-tools-select-all:disabled {
+    color: var(--text-muted);
+    cursor: default;
+    text-decoration: none;
+    opacity: 0.6;
+}
+.ai-chat-agent-tools-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.ai-chat-agent-tools-dropdown.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+@keyframes agentToolsDropdownOut {
+    0%   { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(6px) scale(0.93); }
+}
+
+.ai-chat-agent-tools-dropdown.closing {
+    animation: agentToolsDropdownOut 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    transition: none !important;
+}
+
 .ai-chat-skills-dropdown {
     position: absolute;
     bottom: calc(100% + 4px);
@@ -1940,8 +2188,9 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 12px;
-    font-size: 0.8rem;
+    /* 垂直内边距与字号同其它工具栏按钮（深度思考/工具/更多技能）对齐，保证高度统一 */
+    padding: 3px 12px;
+    font-size: 0.78rem;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -2914,7 +3163,8 @@
     /* transform 用 spring 缓动：按下回弹效果（见下方 :active 规则） */
     transition: background 0.15s, color 0.15s, transform 0.18s var(--anim-easing-spring);
     font-family: inherit;
-    line-height: 1.4;
+    /* <button> 默认 line-height:normal 不随父级继承，显式继承全局行高（同「深度思考/模型选择」的 div），保证工具栏按钮高度统一 */
+    line-height: inherit;
 }
 
 .ai-chat-toolbar-btn:hover {

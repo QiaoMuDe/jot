@@ -7267,6 +7267,7 @@ function setToggleLocked(locked) {
     modelTrigger?.classList.toggle('is-locked', locked);
     skillsBtn?.classList.toggle('is-locked', locked);
     addBtn?.classList.toggle('is-locked', locked);
+    document.getElementById('aiChatAgentToolsBtn')?.classList.toggle('is-locked', locked);
 
     // 会话侧栏：折叠 + 锁定
     const sidebar = document.querySelector('.ai-session-sidebar');
@@ -7301,6 +7302,7 @@ function setToggleLocked(locked) {
         if (modelDropdown) modelDropdown.classList.remove('open');
         closeSkillsDropdown();
         if (addDropdown) addDropdown.classList.remove('open');
+        window.__closeAiChatAgentToolsList?.();
     }
 }
 
@@ -7323,6 +7325,8 @@ function syncModeToggle() {
     btns.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === currentMode);
     });
+    // 同步工具栏「Agent 工具」按钮可见性（chat 隐藏，agent/plan 显示）
+    window.__setAiChatAgentToolsVis?.(currentMode !== 'chat');
 }
 
 /**
