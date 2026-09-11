@@ -370,6 +370,8 @@ function switchEditorReadOnly(readOnly) {
     }
     // 刷新星号：新建/编辑模式记录快照（不脏）或切回查看/关闭清空快照（不脏）
     refreshDirtyStar();
+    // 切回查看模式：刷新「最近编辑」时间（内联保存后取最新，直接编辑切查看时补显）
+    if (readOnly) updateEditorEditTime();
 }
 
 /**
@@ -391,6 +393,15 @@ function isEditorDirty() {
 /** 根据是否存在未保存改动，切换标题区星号(.editor-dirty)显隐 */
 function refreshDirtyStar() {
     els.editorTitleWrap?.classList.toggle('editor-dirty', isEditorDirty());
+}
+
+/** 查看模式「最近编辑」时间刷新：取当前已保存笔记的最新 updated_at 显示；无笔记或未记录则留空 */
+function updateEditorEditTime() {
+    if (state.editingNoteId == null || !state._editUpdatedAt) {
+        els.editorEditTime.textContent = '';
+        return;
+    }
+    els.editorEditTime.textContent = '最近编辑 ' + formatTime(state._editUpdatedAt);
 }
 
 /**
@@ -426,6 +437,7 @@ const state = {
     currentView: 'grid',       // grid | search | settings | data | trash | todo
     _isFullscreen: false,
     editingNoteId: null,        // null = 新建, number = 编辑
+    _editUpdatedAt: null,       // 当前打开笔记已保存的最新编辑时间（查看模式「最近编辑」显示用）
     selectedTags: [],
     searchKeyword: '',
     searchSource: 'input',      // 'input' | 'tag' — 搜索触发来源
@@ -1151,6 +1163,7 @@ async function updateNote(id) {
             await window.go.main.App.UpdateNote(id, title, content, els.editorFileExt.textContent);
             // 更新笔记标签：先移除所有，再添加选中的
             const note = await window.go.main.App.GetNote(id);
+            if (note) state._editUpdatedAt = note.updated_at || note.created_at || null;
             if (note && note.tags) {
                 for (const t of note.tags) {
                     try { await window.go.main.App.RemoveTagFromNote(id, t.id); } catch (e) {}
@@ -4159,9 +4172,10 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
                 els.editorTypeToggle.title = isMd ? '切换为纯文本格式' : '切换为 Markdown 格式';
             }
         }
-        // 查看模式更新编辑时间
-        if (isReadOnly && !els.editorEditTime.textContent) {
-            els.editorEditTime.textContent = '最近编辑 ' + formatTime(noteData.updated_at || noteData.created_at);
+        // 记录当前已保存的最新编辑时间；查看模式刷新「最近编辑」显示
+        state._editUpdatedAt = noteData?.updated_at || noteData?.created_at || null;
+        if (isReadOnly) {
+            updateEditorEditTime();
         }
         // 重绘标签选择器（校正并行加载时序：非缓存笔记的 state.selectedTags 可能在 loadTagsForEditor 之后才填充）
         renderTagSelector(isReadOnly);
@@ -6379,11 +6393,13 @@ function initEventListeners() {
         }
 
         // 有变更：保存 + 通知 + 切回查看模式
+        let latestUpdatedAt = null;
         if (title && window.go?.main?.App?.UpdateNote) {
             try {
                 await window.go.main.App.UpdateNote(noteId, title, content, els.editorFileExt.textContent);
                 // 更新标签：先移除所有标签再重新添加选中的
                 const note = await window.go.main.App.GetNote(noteId);
+                latestUpdatedAt = note?.updated_at || note?.created_at || null;
                 if (note?.tags) {
                     for (const t of note.tags) {
                         try { await window.go.main.App.RemoveTagFromNote(noteId, t.id); } catch (e) {}
@@ -6403,8 +6419,10 @@ function initEventListeners() {
             cached.title = title;
             cached.content = content;
             cached.file_ext = els.editorFileExt.textContent;
-            cached.updated_at = new Date().toISOString();
+            cached.updated_at = latestUpdatedAt || new Date().toISOString();
         }
+        // 记录最新编辑时间，供切回查看模式时「最近编辑」显示
+        state._editUpdatedAt = latestUpdatedAt || new Date().toISOString();
         state._editSnapshot = null;
         // 内联切回查看模式，不重建 CM6 实例，避免闪烁
         switchEditorReadOnly(true);

@@ -548,22 +548,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 42. **AI 聊天输入栏「工具」浮层按钮（Agent 工具启停双入口）**：AI 助手输入工具栏「深度思考」右侧新增工具按钮（图标+`工具`文字，复用 `.ai-chat-toolbar-btn`，无数量文案），点击展开浮层勾选本对话框 Agent 工具——与设置页**共用同一份全局列表**（`agentToolsMeta`/`agentToolsDisabled`/`agentToolsChanges`）双入口双向同步；chat 模式隐藏、Agent/Plan 显示（`syncModeToggle`→`window.__setAiChatAgentToolsVis`），流式回复置灰锁定 + 收起浮层。前端 [main.js](frontend/src/main.js) `initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`；样式自成一族 `.ai-chat-agent-tools-*`（不复用设置面板样式）。**关键设计**：勾选即 `saveSettings()` 即时保存，关闭浮层 `reportAgentToolsChanges()` 汇总提示（抽出共用）；工具按 normal/plan(PlanOnly 只读)/always(AlwaysOn 只读) 分组，参与全选仅 normal；**滚动条默认隐藏**需显式 `scrollbar-color: var(--scrollbar-thumb) transparent`，抖动裁剪用 `overflow-x: clip`（`hidden` 会连带压制同容器垂直滚动条渲染）、外层滚动/内层裁抖动层级分离；**快速连点竞态**——打开前 `clearTimeout(chatAgentToolsCloseTimer)` + `.open` 的 rAF 加 `if(chatAgentToolsExpanded)` 守卫；聊天 close 不得误改设置面板 `agentToolsSelectAllCheckbox` 全局。详见 [ai-chat.js](frontend/src/js/ai-chat.js)（`setToggleLocked` L7270）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-*`）。
 
----
-
-## 记忆点 1：全局记忆空间 + manage_memory 工具 + AlwaysOn 常驻机制
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 新增**跨会话全局记忆空间**：用户在对话中让 AI 保存/更新/删除长期偏好与重要事实（区别于会话摘要的窗口压缩与笔记召回——三者分工：摘要=会话内压缩、召回=查笔记、全局记忆=跨会话显式事实/偏好）。数据模型 [ai_memory.go](internal/models/ai_memory.go)：`AIMemory` 表 `a_memories`，字段 `summary`（简短描述，**唯一索引**，仅它注入系统提示词）+ `content`（详情）+ `CreatedAt`/`UpdatedAt`；注册进 [models.go](internal/database/models.go) 的 `AllModels`（启动建表 + 恢复出厂删表重建自动覆盖，无外键无需手工补删）。 |
-| **Agent 工具 manage_memory（重要）** | [manage_memory.go](internal/agent/tools/manage_memory.go) 一个工具五动作（action 参数：create/update/delete/get/list）。依赖注入：`agent.Deps.Memory`，**app.go 首次初始化装配极易漏传 `Memory` 导致 nil panic**（`Deps.Memory` 为 nil → 工具内 `memSvc` 空指针，用户报"invalid memory address"；两处 `NewAgentService` 与两处 `NewStatsService` 均须同步注入）。**create**：summary 必填（≤200 字符）、content 超长（>2000）截断并注明；不同名摘要已存在返回提示（含 id 引导 update）而非错误；命中软删记录（同摘要曾删除）复活并更新内容，保证可重建。**update**：部分更新——summary/content 留空则取原值保留；新 summary 撞另一条唯一约束映射为哨兵 `ErrMemorySummaryConflict` 友好报错（勿直接抛 DB 生硬错误）。**delete**：用 **`ids` 数组**一次删多条（从 `id` 升级，不兼容旧参），入口先过滤非法+去重再单轮统计，返回删除/失败条数。**get**：单条详情。 |
-| **注入（重要）** | [app.go](app.go) `buildAIContextInstruction` 末尾注入【长期记忆】段：仅注入每条 `summary` + 真实 `id`（`- id=N. 描述`），**不含 content**；为空或 List 失败时跳过、不阻断提问；随后追加引导语"如需查看某条记忆的完整详情，可通过 manage_memory 工具的 get 动作按 id 查询"。Chat/Agent 两模式共用（chat 无工具时记忆呈只读）。注入放提示词尾部避免扰动前部稳定内容（利于前缀缓存）。 |
-| **AlwaysOn 常驻机制（重要）** | 新增 `ToolMeta.AlwaysOn`（[meta.go](internal/agent/tools/meta.go)）+ `agent.ToolMeta` 透传；`manage_memory`/`ask_user` 设为 `AlwaysOn: true`——**不可被前端禁用**，防止"记忆注入生效但写回工具被禁"的割裂。后端：装配入口（[app.go](app.go) 例外过滤 `ai_agent_tools_disabled`）强制剔除该工具名并记 Warn；前端：设置页 checkbox 置灰不可勾、强制勾选、不参与全选/全不选（数据层与 DOM 选择器 `:not(.is-always-on)` 两处过滤须同步，复用 `is-plan-only` 禁用样式 + 主题色提示文案）。详见 [TOOLS.md](internal/agent/TOOLS.md) §5b。 |
-| **统计接入** | `MemoryService.Count`（仅未删除）+ `DataStats.TotalMemories`（`json:"total_memories"`），数据概览信笺 [data-management.js](frontend/src/js/data-management.js) 新增「🧠 AI 长期记忆」段（纳入 hasData 判定），`get_stats` overview 增加「长期记忆：N 条」，均共用 `StatsService.GetDataStats` 单一事实源，口径与页面一致。 |
-| **涉及文件** | [internal/models/ai_memory.go](internal/models/ai_memory.go)、[internal/database/models.go](internal/database/models.go)、[internal/services/memory_service.go](internal/services/memory_service.go)、[internal/agent/tools/manage_memory.go](internal/agent/tools/manage_memory.go)、[internal/agent/tools/meta.go](internal/agent/tools/meta.go)、[internal/agent/registry.go](internal/agent/registry.go)、[internal/agent/types.go](internal/agent/types.go)、[app.go](app.go)、[internal/services/stats_service.go](internal/services/stats_service.go)、[internal/services/types.go](internal/services/types.go)、[frontend/src/js/data-management.js](frontend/src/js/data-management.js)、[frontend/src/main.js](frontend/src/main.js)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[internal/agent/TOOLS.md](internal/agent/TOOLS.md) |
+43. **编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复**：进入编辑/新建模式记录 `state._editSnapshot` 基准，标题/正文/标签/扩展名任一未保存改动则在标题前显示 `*`（`.editor-dirty`，记事本式），保存/切回查看/关闭消失；三处散落的 `snapshot` 脏比较（`updateNote`/`closeEditorSafe`/`editorViewBtn`）收敛为单一 `isEditorDirty()`（快照 null→false 短路）。查看模式「最近编辑」时间修复两缺陷（保存后切查看不更新、直接编辑切查看空白）——`state._editUpdatedAt` + `updateEditorEditTime()`，`switchEditorReadOnly(true)` 切回查看时刷新、`openEditor` 阶段二记录、`viewBtn`/`updateNote` 保存后从 `GetNote` 取真实 `updated_at`。底部状态栏取消/保存按钮 `padding` 4→6px、`.editor-footer` padding 上下 6→3px + `min-height` 40→34px，按钮更饱满贴边且编辑/查看两模式下状态栏高度恒定（内容低于 min-height 由 min-height 主导，切换不撑高）。详见 [main.js](frontend/src/main.js)、[index.html](frontend/index.html)、[editor.css](frontend/src/css/components/editor.css)、[.trae/documents/unify-dirty-check.md](.trae/documents/unify-dirty-check.md)。
 
 ---
 
-## 记忆点 2：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
+## 记忆点 1：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -575,7 +564,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
+## 记忆点 2：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +576,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
+## 记忆点 3：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -598,7 +587,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
+## 记忆点 4：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -608,6 +597,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **滚动条与横向裁剪（重要）** | ① 全局 `#mainContent` 默认 `scrollbar-color: transparent transparent` 让子容器滚动条默认隐藏——浮层必须显式 `scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent`（与技能下拉同一套常显写法）才会显示。② **`overflow-x` 用 `clip` 而非 `hidden`**：`hidden` 与部分 runtime（Wails WebView2）组合会连带压制同容器 `overflow-y:auto` 的滚动条渲染；且抖动用 `translateX(±4px)` 会瞬时超出内容宽度触发水平滚动条盖住末行。修复为层级分离：外层 `.ai-chat-agent-tools-body` 只 `overflow-y:auto`（滚动条正常），内层 `.ai-chat-agent-tools-body-inner` `overflow-x:clip` 裁抖动——既保末行不被水平滚动条盖住，又不压制右侧滚动条。 |
 | **按钮高度统一与竞态（重要）** | 整排工具栏按钮高度一致性：`<button>` 默认 `line-height: normal` 不随父级继承（与相邻 `<div>` 按钮继承全局 1.6 不同致矮一截），需 `.ai-chat-toolbar-btn { line-height: inherit }`；模型选择触发器 padding/font-size 对齐 `3px`/`0.78rem` 档。**快速连点竞态两处防护**（教训）：① 关闭是异步的（Promise + 180ms `setTimeout` 清空）——打开前必须 `clearTimeout(chatAgentToolsCloseTimer)` 取消挂起的关闭定时器并移除 `.closing`，否则挂起定时器会把刚渲染的列表清空、只留一个带阴影的空壳（黑阴影条，再点才出现）；② `.open` 用 `requestAnimationFrame` 追加时须 `if (chatAgentToolsExpanded)` 守卫，防同帧"开→关"补上过期 `.open`。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`/`reportAgentToolsChanges`/可见性回调/`chatAgentToolsCloseTimer`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`syncModeToggle` 调可见性 + `setToggleLocked` L7270 锁工具按钮）、[frontend/index.html](frontend/index.html)（`#aiChatAgentToolsBtn` + `#aiChatAgentToolsDropdown`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-*` 浮层 + 工具栏高度统一） |
+
+---
+
+## 记忆点 5：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 编辑器"查看/编辑/新建"模式下对"未保存改动"的感知与底部信息修复：① **未保存改动标题星号**——进入非只读模式时对标题/正文/标签/扩展名记录 `state._editSnapshot` 基准，任一改动未保存则标题前显示 `*`（`.editor-dirty`，记事本式提示），保存/切回查看/关闭时消失；② **统一脏比较**——把散落在 `updateNote`/`closeEditorSafe`/`editorViewBtn` 三处的手工 `snapshot` 比较收敛为单一 [isEditorDirty()](frontend/src/main.js)；③ **查看模式「最近编辑」时间**——修复两处缺陷（查看→编辑→保存→切回查看时间不更新；直接编辑切查看时间空白），根因是时间只在"查看模式打开且为空时"设置一次、切换/保存从不刷新。 |
+| **脏比较统一（重要）** | `isEditorDirty()`（快照 null→false 短路）+ `refreshDirtyStar()`。比较口径唯一来源 = `title`/`content` trim、`tags` `[...].sort()`+`JSON.stringify`、`fileExt` 三项。三处保存入口统一为 `if (!isEditorDirty()) { close/switch; return; }`：`updateNote`（保存按钮，无改动跳过保存直接关闭）、`closeEditorSafe` 编辑分支（无改动直接关闭，快照缺失同样直接关闭等价）、`editorViewBtn`（无改动静默切回查看、不弹通知）。`handleAppExit` 退出兜底**有意保留**简化判断（只关心文档内容/后缀、不含标签）——原语义是"仅改标签不在退出时提示"，未统一避免行为漂移。三处入口的"快照缺失"分支实际不可达（仅编辑已有笔记时触发），替换后语义等价。 |
+| **最近编辑时间（重要）** | `state._editUpdatedAt` + `updateEditorEditTime()`（唯一写入 `editorEditTime`，无笔记/未记录留空）。装配：① `switchEditorReadOnly(true)` 切回查看时刷新（覆盖两缺陷路径）；② `openEditor` 阶段二先记录 `noteData.updated_at || created_at`、查看模式打开时刷新（替代原 `if (isReadOnly && !textContent)` 一次性逻辑）；③ `viewBtn` 内联保存后从 `GetNote` 取真实 DB `updated_at` 更新（`new Date()` 兜底）并同步 `cached.updated_at`，`updateNote` 同理。`.editor-edit-time` 仅在 `.editor-view-mode` 下 CSS 显示。 |
+| **星号样式与状态栏（次要）** | [index.html](frontend/index.html) `.editor-title-wrap` 内置 `<span class="editor-dirty-star">*</span>`（`aria-hidden` + `user-select:none`）；[editor.css](frontend/src/css/components/editor.css) 星号默认隐藏、`.editor-dirty` 下显示、`color: var(--accent)`（随 14 主题自适应）。底部状态栏取消/保存按钮 `padding` 4px→6px（约 24px 高）、`.editor-footer` padding 上下 6px→3px + `min-height` 40→34px——按钮更饱满贴边，且编辑/查看两模式下状态栏高度恒定（内容低于 min-height 由 min-height 主导，切换不撑高）。 |
+| **涉及文件** | [main.js](frontend/src/main.js)（`isEditorDirty`/`refreshDirtyStar`/`updateEditorEditTime`/`state._editUpdatedAt`/`openEditor`/`switchEditorReadOnly`/`updateNote`/`closeEditorSafe`/`editorViewBtn`）、[index.html](frontend/index.html)（`editorTitleWrap` + `.editor-dirty-star`）、[editor.css](frontend/src/css/components/editor.css)（`.editor-dirty-star`/`.editor-footer`/`.editor-footer-btns .btn`）。脏比较统一方案详见 [.trae/documents/unify-dirty-check.md](.trae/documents/unify-dirty-check.md) |
 
 ---
 
