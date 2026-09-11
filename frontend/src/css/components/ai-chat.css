@@ -1216,6 +1216,98 @@
     }
 }
 
+/* ── 斜杠引用模式（.has-slash）：菜单弹出时仅让输入坞轻微上浮 ── */
+.ai-chat-composer.has-slash {
+    transform: translateY(-2px);
+}
+
+/* ── 斜杠搜索笔记菜单：绝对定位浮在输入坞上方 ── */
+.ai-chat-slash-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 6;
+    width: min(460px, calc(100% - 32px));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    max-height: 340px;
+    overflow-y: auto;
+    /* 最多 5 条，正常高度不会溢出，隐藏滚动条避免右侧出现竖条 */
+    scrollbar-width: none;
+    background: var(--card-bg);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-elevated), 0 16px 40px -8px var(--shadow-dropdown), 0 32px 72px -20px var(--shadow-modal);
+    animation: ai-slash-menu-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: bottom left;
+}
+.ai-chat-slash-menu::-webkit-scrollbar {
+    display: none;
+}
+@keyframes ai-slash-menu-pop {
+    0% { opacity: 0; transform: translateY(6px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ai-chat-slash-hint {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--card-bg);
+    padding: 6px 14px 4px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+    flex-shrink: 0;
+}
+.ai-chat-slash-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+}
+.ai-chat-slash-item + .ai-chat-slash-item {
+    border-top: 1px solid color-mix(in srgb, currentColor 6%, transparent);
+}
+.ai-chat-slash-item:hover,
+.ai-chat-slash-item.active {
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+    border-left-color: var(--accent);
+}
+.ai-chat-slash-item-icon {
+    display: flex;
+    align-items: center;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.ai-chat-slash-item-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-chat-slash-item-notebook {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ai-chat-slash-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
 /* 边框动态流光：仅聚焦时沿边框流动的微弱光带（配合光晕扩散营造氛围） */
 @property --composer-flow-angle {
     syntax: '<angle>';
@@ -1231,8 +1323,8 @@
     padding: 1px;
     background: conic-gradient(
         from var(--composer-flow-angle),
-        transparent 0deg 300deg,
-        color-mix(in srgb, var(--accent) 65%, transparent) 335deg,
+        transparent 0deg 290deg,
+        color-mix(in srgb, var(--accent) 92%, transparent) 345deg,
         transparent 360deg
     );
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);

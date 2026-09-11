@@ -106,6 +106,14 @@ let _aiDragCounter = 0;
 let aiChatContent = null;       // .ai-chat-content
 let aiChatDropOverlay = null;   // #aiChatDropOverlay
 
+// 斜杠搜索笔记菜单状态
+let slashMenuEl = null;         // #aiChatSlashMenu
+let slashOpen = false;          // 菜单是否显示
+let slashResults = [];          // [{ id, title, notebook_name }]
+let slashActiveIdx = -1;        // 高亮索引
+let slashTimer = null;          // 搜索 debounce 定时器
+let slashQuerySeq = 0;          // 搜索请求序号，用于丢弃过期的异步结果
+
 // 笔记引用选择浮层 DOM
 let refChips = null;            // #aiChatRefChips
 let refModal = null;            // #aiNoteRefModal
@@ -336,6 +344,7 @@ export async function initAIChat() {
     messagesEl = document.getElementById('aiChatMessages');
     messagesInnerEl = messagesEl.querySelector('.ai-chat-messages-inner');
     inputEl = document.getElementById('aiChatInput');
+    slashMenuEl = document.getElementById('aiChatSlashMenu');
     sendBtnEl = document.getElementById('aiChatSendBtn');
     emptyEl = document.getElementById('aiChatEmpty');
     welcomeEl = document.getElementById('aiChatWelcome');
@@ -926,7 +935,21 @@ function bindEvents() {
         });
         inputEl.addEventListener('keydown', onInputKeydown);
         inputEl.addEventListener('input', autoResizeInput);
+        // 斜杠搜索笔记触发检测
+        inputEl.addEventListener('input', handleSlashInput);
+        // 失焦兜底关闭（延迟以允许菜单内点击完成）
+        inputEl.addEventListener('blur', () => setTimeout(closeSlashMenu, 150));
     }
+
+    // 点击菜单外部关闭斜杠菜单（捕获阶段，先于输入框 blur 处理）
+    document.addEventListener('pointerdown', (e) => {
+        if (!slashOpen || !slashMenuEl) return;
+        const withinMenu = slashMenuEl.contains(e.target);
+        const withinInput = inputEl?.contains(e.target);
+        if (!withinMenu && !withinInput) {
+            closeSlashMenu();
+        }
+    }, true);
 
     // 发送按钮
     if (sendBtnEl) {
@@ -2632,6 +2655,34 @@ function parseForkTitle(title) {
  * 输入框键盘事件
  */
 function onInputKeydown(e) {
+    // 斜杠菜单打开时优先接管方向键/Enter/Esc
+    if (slashOpen) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            if (slashResults.length === 0) return;
+            e.preventDefault();
+            const delta = e.key === 'ArrowDown' ? 1 : -1;
+            slashActiveIdx = (slashActiveIdx + delta + slashResults.length) % slashResults.length;
+            renderSlashResults();
+            return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (slashActiveIdx >= 0 && slashActiveIdx < slashResults.length) {
+                selectSlashNote(slashActiveIdx);
+            } else {
+                // 无可用结果：关闭菜单并放行正常发送（避免 Enter 被吞、消息发不出去）
+                closeSlashMenu();
+                onSend();
+            }
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation(); // 阻止冒泡到 main.js 全局 ESC，避免误切回笔记首页
+            closeSlashMenu();
+            return;
+        }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault();
         onSend();
@@ -7007,6 +7058,170 @@ function removeRefNote(id) {
     }
     updateRefChips();
     saveCurrentSessionConfig();
+}
+
+/* ── 斜杠搜索笔记菜单 ─────────────────────────────────────────── */
+
+/**
+ * 从"光标所在行"提取斜杠搜索词。
+ * 规则：行首或空白后紧跟 /关键词（关键词不含空白、延续到光标）。
+ * 即 `/搭建`、`内容 /搭建` 均可触发；`你好/搭建` 及 `内容 / ` 不触发。
+ * @returns {{ keyword: string, slashPos: number } | null}
+ *          match 为 null 表示当前没有可触发的斜杠词
+ */
+function extractSlashToken(tail, tailStart) {
+    const m = /(?:^|\s)\/([^\s]+)$/.exec(tail);
+    if (!m) return null;
+    // 斜杠在行内的绝对位置：匹配起点相对偏移 + 匹配串中 '/' 相对其前缀(空格/行首)的偏移
+    const slashPos = tailStart + m.index + (m[0].length - m[1].length - 1);
+    return { keyword: m[1], slashPos };
+}
+
+/**
+ * 输入框 input 事件触发检测：光标所在行末尾以 /词 结尾时打开搜索菜单
+ */
+function handleSlashInput() {
+    if (!inputEl || !slashMenuEl) return;
+    // 流式回复期间禁止触发新的斜杠菜单
+    if (isStreaming) {
+        closeSlashMenu();
+        return;
+    }
+    const caret = inputEl.selectionStart;
+    const prefix = inputEl.value.slice(0, caret);
+    const tailStart = prefix.lastIndexOf('\n') + 1;
+    const tail = prefix.slice(tailStart);
+    const token = extractSlashToken(tail, tailStart);
+    if (token) {
+        openSlashMenu(token.keyword);
+    } else {
+        closeSlashMenu();
+    }
+}
+
+/**
+ * 打开斜杠搜索菜单并 debounce 搜索
+ */
+function openSlashMenu(query) {
+    if (!slashMenuEl) return;
+    // 递增序号：丢弃过期的异步搜索结果（防快速连续输入导致旧结果覆盖新关键词）
+    slashQuerySeq = (slashQuerySeq || 0) + 1;
+    const seq = slashQuerySeq;
+    slashOpen = true;
+    slashActiveIdx = -1;
+    slashMenuEl.style.display = 'flex';
+    // 输入坞进入"斜杠引用模式"：轻微上浮
+    slashMenuEl.closest('.ai-chat-composer')?.classList.add('has-slash');
+    // 先渲染提示行，结果异步到达
+    slashMenuEl.innerHTML = '<div class="ai-chat-slash-hint">按 ↑↓ 选择 · Enter 引用 · Esc 关闭</div>';
+    clearTimeout(slashTimer);
+    slashTimer = setTimeout(async () => {
+        let res;
+        try {
+            res = await window.go.main.App.SlashSearchNotes(query, 5);
+        } catch (_) {
+            res = [];
+        }
+        if (seq !== slashQuerySeq) return; // 已有更新的查询，本次结果作废
+        slashResults = res || [];
+        // 默认高亮第 0 项（有结果时）
+        slashActiveIdx = slashResults.length > 0 ? 0 : -1;
+        renderSlashResults();
+    }, 200);
+}
+
+/**
+ * 渲染斜杠菜单结果列表
+ */
+function renderSlashResults() {
+    if (!slashMenuEl || !slashOpen) return;
+    let html = '<div class="ai-chat-slash-hint">按 ↑↓ 选择 · Enter 引用 · Esc 关闭</div>';
+    if (slashResults.length === 0) {
+        html += '<div class="ai-chat-slash-empty">未找到笔记</div>';
+    } else {
+        html += slashResults.map((n, idx) => {
+            const title = _aiEscapeHtml(n.title || '无标题');
+            const notebook = _aiEscapeHtml(n.notebook_name || '');
+            return `<div class="ai-chat-slash-item${idx === slashActiveIdx ? ' active' : ''}" data-index="${idx}">
+                <span class="ai-chat-slash-item-icon">${DOC_ICON}</span>
+                <span class="ai-chat-slash-item-title" title="${title}">${title}</span>
+                ${notebook ? `<span class="ai-chat-slash-item-notebook">${notebook}</span>` : ''}
+            </div>`;
+        }).join('');
+    }
+    slashMenuEl.innerHTML = html;
+    // 绑定点击选择
+    slashMenuEl.querySelectorAll('.ai-chat-slash-item').forEach(item => {
+        item.addEventListener('click', () => {
+            selectSlashNote(parseInt(item.dataset.index, 10));
+        });
+    });
+    // 滚动高亮项进入视图
+    const active = slashMenuEl.querySelector('.ai-chat-slash-item.active');
+    active?.scrollIntoView({ block: 'nearest' });
+}
+
+/**
+ * 选中笔记：清除输入框 /词 文字并入引用栏
+ */
+async function selectSlashNote(idx) {
+    const note = slashResults[idx];
+    if (!note || !inputEl) return;
+    // 1) 清除输入框里的 /关键词（仅删斜杠词本体，保留其前的文字与空格）
+    const caret = inputEl.selectionStart;
+    const prefix = inputEl.value.slice(0, caret);
+    const tailStart = prefix.lastIndexOf('\n') + 1;
+    const tail = prefix.slice(tailStart);
+    const token = extractSlashToken(tail, tailStart);
+    if (!token) {
+        // 兜底：未匹配到合法斜杠词，不修改输入直接关闭
+        closeSlashMenu();
+        return;
+    }
+    // 记录被删的斜杠词，供引用失败时恢复
+    const removedText = inputEl.value.slice(token.slashPos, caret);
+    inputEl.value = inputEl.value.slice(0, token.slashPos) + inputEl.value.slice(caret);
+    inputEl.selectionStart = inputEl.selectionEnd = token.slashPos;
+    // 2) 并入引用栏（复用引用确认链路）
+    try {
+        const refContext = await window.go.main.App.GetNoteRefContext([note.id]);
+        if (refContext && refContext.notes) {
+            const ids = refContext.notes.map(n => n.id);
+            const keepNotes = referencedNotes.filter(n => !ids.includes(n.id));
+            referencedNotes = [...keepNotes, ...refContext.notes];
+        }
+    } catch (e) {
+        console.error('selectSlashNote 引用失败:', e);
+        // 引用失败：恢复斜杠词并重开菜单，避免用户误以为已引用成功
+        inputEl.value = inputEl.value.slice(0, token.slashPos) + removedText + inputEl.value.slice(token.slashPos);
+        inputEl.selectionStart = inputEl.selectionEnd = token.slashPos + removedText.length;
+        openSlashMenu(token.keyword);
+        inputEl.focus();
+        return;
+    }
+    // 3) 关闭菜单、重渲染、持久化
+    closeSlashMenu();
+    updateRefChips();
+    await saveCurrentSessionConfig();
+    inputEl.focus();
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/**
+ * 关闭斜杠搜索菜单
+ */
+function closeSlashMenu() {
+    clearTimeout(slashTimer);
+    slashTimer = null;
+    slashOpen = false;
+    slashResults = [];
+    slashActiveIdx = -1;
+    // 退出斜杠引用模式
+    if (slashMenuEl) {
+        slashMenuEl.closest('.ai-chat-composer')?.classList.remove('has-slash');
+        slashMenuEl.style.display = 'none';
+        slashMenuEl.innerHTML = '';
+    }
 }
 
 /**

@@ -558,6 +558,10 @@ export function SetSortOrder(arg1) {
   return window['go']['main']['App']['SetSortOrder'](arg1);
 }
 
+export function SlashSearchNotes(arg1, arg2) {
+  return window['go']['main']['App']['SlashSearchNotes'](arg1, arg2);
+}
+
 export function SwitchProfile(arg1, arg2) {
   return window['go']['main']['App']['SwitchProfile'](arg1, arg2);
 }

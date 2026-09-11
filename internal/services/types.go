@@ -57,6 +57,13 @@ type NoteRefContext struct {
 	Context string        `json:"context"`
 }
 
+// SlashNoteResult 斜杠搜索下拉的轻量笔记条目，仅返回展示所需字段，避免拉取全文内容片段
+type SlashNoteResult struct {
+	ID           uint   `json:"id"`
+	Title        string `json:"title"`
+	NotebookName string `json:"notebook_name"`
+}
+
 // SettingsConfig 设置页全部配置项的统一结构体
 type SettingsConfig struct {
 	Theme                       string `json:"theme"`

@@ -1151,6 +1151,22 @@ export namespace services {
 	        this.ai_context_summary_trigger_ratio = source["ai_context_summary_trigger_ratio"];
 	    }
 	}
+	export class SlashNoteResult {
+	    id: number;
+	    title: string;
+	    notebook_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SlashNoteResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.notebook_name = source["notebook_name"];
+	    }
+	}
 	export class VectorModelCount {
 	    model: string;
 	    chunkCount: number;

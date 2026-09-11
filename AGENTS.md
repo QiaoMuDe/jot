@@ -550,21 +550,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 43. **编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复**：进入编辑/新建模式记录 `state._editSnapshot` 基准，标题/正文/标签/扩展名任一未保存改动则在标题前显示 `*`（`.editor-dirty`，记事本式），保存/切回查看/关闭消失；三处散落的 `snapshot` 脏比较（`updateNote`/`closeEditorSafe`/`editorViewBtn`）收敛为单一 `isEditorDirty()`（快照 null→false 短路）。查看模式「最近编辑」时间修复两缺陷（保存后切查看不更新、直接编辑切查看空白）——`state._editUpdatedAt` + `updateEditorEditTime()`，`switchEditorReadOnly(true)` 切回查看时刷新、`openEditor` 阶段二记录、`viewBtn`/`updateNote` 保存后从 `GetNote` 取真实 `updated_at`。底部状态栏取消/保存按钮 `padding` 4→6px、`.editor-footer` padding 上下 6→3px + `min-height` 40→34px，按钮更饱满贴边且编辑/查看两模式下状态栏高度恒定（内容低于 min-height 由 min-height 主导，切换不撑高）。详见 [main.js](frontend/src/main.js)、[index.html](frontend/index.html)、[editor.css](frontend/src/css/components/editor.css)、[.trae/documents/unify-dirty-check.md](.trae/documents/unify-dirty-check.md)。
 
----
-
-## 记忆点 1：内部滚动型视图"底栏"遮挡修复（.view padding-bottom 抵消约定 + 特异性加固）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 数据管理页（数据概览信笺）与设置页（展开预设下拉出现滚动条时）底部出现"假底栏"遮挡内容。排查确认根因：全局 `.view { padding: 24px 32px }`（[main-content.css](frontend/src/css/components/main-content.css)）在"内部滚动容器"型视图上的副作用——`padding-bottom: 24px` 把内部滚动容器的裁切线抬高到窗口底缘上方 24px，下方露出一条 `--bg` 色空白带，内容滚动时像被底栏遮挡（浏览器实测裁切线 645.2px / 窗口高 669px，差值 23.8px）。待办清单与密码管理此前已按同思路修复过，本轮补齐漏修页面。 |
-| **排查矩阵（6 个内部滚动型视图）** | 判定特征：`#mainContent:has(#viewX.active) { scrollbar-gutter: auto; overflow-y: hidden }` 家族共 6 个。本轮修复 3 个：viewData（数据管理）/ viewSettings（设置）/ viewCalendar（日历，排查中新确认——右侧 `.calendar-notes-list` 内部滚动，同款裁切线 + 空白带）；此前已修 2 个：viewTodo（[todo.css](frontend/src/css/components/todo.css)）/ viewPasswordManager（[password-manager.css](frontend/src/css/components/password-manager.css)）；无需处理 1 个：viewAiChat（`#viewAiChat.view { padding: 0 }` 全清自管布局）。`#mainContent` 直接滚动型视图（viewGrid 笔记首页 / viewTrash 回收站 / viewEditor 编辑器）的 padding-bottom 是可滚到的正常收尾留白，**不得抵消**。 |
-| **修复模式（重要）** | 在各视图对应组件 CSS 中新增 `#viewX.view.active { padding-bottom: 0 }`（[data-view.css](frontend/src/css/components/data-view.css)、[settings-panel.css](frontend/src/css/components/settings-panel.css)、[calendar.css](frontend/src/css/components/calendar.css)）+ 注释说明。**特异性加固**：不用单类 `#viewX.active`——它与同文件已有的 `#viewX.view { padding: 24px 0 24px 32px }` 简写特异性同为 (1,1,0)，靠源顺序取胜，未来规则重排会静默失效；改用双类 `#viewX.view.active`（(2,1,0) 稳赢；激活态元素恒持有 view+active 两个 class，匹配不受影响）。底部呼吸感由各内部滚动容器自身 padding（20px：`.data-panels` / `.settings-panel` / `.calendar-notes-panel`）提供，无需额外补偿。**新增内部滚动型视图时必须同步加此抵消规则**。 |
-| **验证方法** | Vite dev + 浏览器测量：激活目标视图后测 `.data-panels` / `.settings-panels` / `.calendar-notes-panel` 的 `getBoundingClientRect().bottom` ≈ `window.innerHeight`（修复前差 23.8px，修复后 <1px）；窗口最底部 `elementFromPoint` 采样应命中内部滚动容器而非 `DIV.view.active`；另测 viewGrid 的 paddingBottom 仍为 24px 确认未波及直接滚动视图。 |
-| **涉及文件** | [frontend/src/css/components/data-view.css](frontend/src/css/components/data-view.css)、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)、[frontend/src/css/components/calendar.css](frontend/src/css/components/calendar.css)、[frontend/src/css/components/main-content.css](frontend/src/css/components/main-content.css)（根因所在）。方案详见 [.trae/documents/fix-view-padding-bottom-bar.md](.trae/documents/fix-view-padding-bottom-bar.md) |
+44. **AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）**：输入框光标所在行行首或空白后键 ` /词` 弹搜索下拉，选中即**清斜杠词本体**并把笔记并入 `referencedNotes` 引用栏（复用 `GetNoteRefContext`→去重→`updateRefChips`→`saveCurrentSessionConfig` 同一链路）。后端专用轻量 `SlashSearchNotes` 仅 LEFT JOIN notebooks 取 id/title/notebook_name（**复用通用 SearchNotes 被否**：noteThinSelect 每次 SUBSTR 算内容片段 + Count + Preload 对高频联想是浪费），排序列加 `notes.` 前缀防联表歧义；前端浮层左对齐、提示行 sticky、隐藏滚动条、`.has-slash` 仅 `translateY(-2px)` 上浮（光环/流光试验均被否）。**关键设计**：`extractSlashToken` 统一正则（触发检测与清除定位共用，防漂移）；箭头循环高亮、Enter 引用/空结果放行 `onSend()`、Esc `stopPropagation` 阻断 main.js 全局 ESC 切页；`slashQuerySeq` 序号丢弃过期搜索（竞态）；引用失败恢复斜杠词重开菜单；标题用 `_aiEscapeHtml` 完整转义。详见 [ai-chat.js](frontend/src/js/ai-chat.js)（`handleSlashInput`/`openSlashMenu`/`selectSlashNote`）、[note_service.go](internal/services/note_service.go)（`SlashSearchNotes`）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-slash-*`）。
 
 ---
 
-## 记忆点 2：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
+## 记忆点 1：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -576,7 +566,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
+## 记忆点 2：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -587,7 +577,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
+## 记忆点 3：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -600,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
+## 记忆点 4：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -609,6 +599,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **最近编辑时间（重要）** | `state._editUpdatedAt` + `updateEditorEditTime()`（唯一写入 `editorEditTime`，无笔记/未记录留空）。装配：① `switchEditorReadOnly(true)` 切回查看时刷新（覆盖两缺陷路径）；② `openEditor` 阶段二先记录 `noteData.updated_at || created_at`、查看模式打开时刷新（替代原 `if (isReadOnly && !textContent)` 一次性逻辑）；③ `viewBtn` 内联保存后从 `GetNote` 取真实 DB `updated_at` 更新（`new Date()` 兜底）并同步 `cached.updated_at`，`updateNote` 同理。`.editor-edit-time` 仅在 `.editor-view-mode` 下 CSS 显示。 |
 | **星号样式与状态栏（次要）** | [index.html](frontend/index.html) `.editor-title-wrap` 内置 `<span class="editor-dirty-star">*</span>`（`aria-hidden` + `user-select:none`）；[editor.css](frontend/src/css/components/editor.css) 星号默认隐藏、`.editor-dirty` 下显示、`color: var(--accent)`（随 14 主题自适应）。底部状态栏取消/保存按钮 `padding` 4px→6px（约 24px 高）、`.editor-footer` padding 上下 6px→3px + `min-height` 40→34px——按钮更饱满贴边，且编辑/查看两模式下状态栏高度恒定（内容低于 min-height 由 min-height 主导，切换不撑高）。 |
 | **涉及文件** | [main.js](frontend/src/main.js)（`isEditorDirty`/`refreshDirtyStar`/`updateEditorEditTime`/`state._editUpdatedAt`/`openEditor`/`switchEditorReadOnly`/`updateNote`/`closeEditorSafe`/`editorViewBtn`）、[index.html](frontend/index.html)（`editorTitleWrap` + `.editor-dirty-star`）、[editor.css](frontend/src/css/components/editor.css)（`.editor-dirty-star`/`.editor-footer`/`.editor-footer-btns .btn`）。脏比较统一方案详见 [.trae/documents/unify-dirty-check.md](.trae/documents/unify-dirty-check.md) |
+
+---
+
+## 记忆点 5：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 聊天输入框支持 `/关键词` 斜杠触发"搜索笔记 → 引用到引用栏"的快捷流：光标所在行行首或空白后键入 `/词` 弹出搜索下拉，↑↓/Enter/Esc 或点击选择笔记，选中后清除斜杠词并把笔记并入 `referencedNotes` 引用栏（与引用选择浮层 `confirmNoteSelection` 复用同一链路 `GetNoteRefContext` → 去重并入 → `updateRefChips` → `saveCurrentSessionConfig` 持久化）。 |
+| **触发与匹配（重要）** | [extractSlashToken](frontend/src/js/ai-chat.js) 为统一提取函数（`handleSlashInput` 触发检测与 `selectSlashNote` 清除定位**共用同一正则** `/(?:^|\s)\/([^\s]+)$/`，防两处漂移）。规则：**行首或空白后**紧跟 `/关键词`（关键词不含空白、延续到光标）才触发——`/搭建`、`内容 /搭建` 均触发；`你好/搭建`（斜杠前是文字）、`内容 / `（关键词空）、输入框失焦、AI 流式回复中（`isStreaming`）均不触发。**清除只删斜杠词本体**：用 `/` 绝对位置 `slashPos = tailStart + m.index + (m[0].length - m[1].length - 1)` 截取 `[slashPos, caret)`，保留斜杠前的正文与空格。 |
+| **检索与浮层（重要）** | 后端专用轻量方法 `NoteService.SlashSearchNotes(keyword, limit)`（首版复用通用 `SearchNotes` 被否——其 `noteThinSelect` 每次 `SUBSTR(content, INSTR(...))` 算内容片段 + `Count` 总数 + `Preload("Tags")`，对每 200ms 触发的联想是浪费）：仅 `LEFT JOIN notebooks` 取 `id/title/COALESCE(name,'')`，不算内容片段、无 Count/Preload；排序列全部加 `notes.` 前缀防联表歧义；只需"标题命中优先 + 置顶 + 更新"一层 CASE。`SlashNoteResult{id,title,notebook_name}` 于 [types.go](internal/services/types.go)，Wails 绑定 [app.go](app.go) `SlashSearchNotes`。前端 `openSlashMenu` debounce 200ms 调 `SlashSearchNotes(query, 5)`（**最多 5 条**）；`#aiChatSlashMenu` 浮于 composer 上方，左对齐 `left:0`（非居中），提示行 `.ai-chat-slash-hint` 用 `position:sticky` 固定顶部、列表整体隐藏滚动条（`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`）；输入坞 `.has-slash` **仅 `translateY(-2px)` 上浮**（曾试验光环呼吸/沿边流光加亮，均被否）。 |
+| **键盘与防护（重要）** | 菜单打开时 `onInputKeydown` 优先接管：↑↓ 循环高亮（结果空时放行原光标移动）、Enter 引用选中项 / **空结果时关闭菜单并放行 `onSend()`**（否则 Enter 被吞、消息发不出）、Esc 关闭并 `e.stopPropagation()` **阻断冒泡到 main.js 全局 ESC**（否则整页切回笔记首页；`handleKeyboardNavigation` 是 document 冒泡注册，textarea 先跑 `stopPropagation` 即可拦截）。**竞态治理**：`slashQuerySeq` 序号自增 + debounce 回调捕获序号，返回时 `seq !== slashQuerySeq` 则丢弃（防快速连续输入旧结果覆盖新关键词）。**引用失败回滚**：`catch` 处恢复被删斜杠词并把光标复位、重开菜单，避免误以为已引用。标题/笔记本名用 `_aiEscapeHtml` 完整转义（`& < > " '`）入 innerHTML。 |
+| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`SlashSearchNotes`）、[internal/services/types.go](internal/services/types.go)（`SlashNoteResult`）、[app.go](app.go)（绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`extractSlashToken`/`handleSlashInput`/`openSlashMenu`/`renderSlashResults`/`selectSlashNote`/`closeSlashMenu`/`slashQuerySeq` + `onInputKeydown` 接管）、[frontend/index.html](frontend/index.html)（`#aiChatSlashMenu`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-slash-*` + `.has-slash`） |
 
 ---
 

@@ -737,6 +737,17 @@ func (a *App) SearchNotes(keyword string, page, pageSize int, notebookID uint, s
 	}, nil
 }
 
+// SlashSearchNotes 斜杠搜索下拉的轻量笔记搜索，仅返回 id/title/笔记本名
+func (a *App) SlashSearchNotes(keyword string, limit int) ([]services.SlashNoteResult, error) {
+	a.LogSvc.Logger.Debugw("SlashSearchNotes", fastlog.String("keyword", keyword), fastlog.Int("limit", limit))
+	results, err := a.noteService.SlashSearchNotes(keyword, limit)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("SlashSearchNotes 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return results, nil
+}
+
 // SearchNoteIDs 按筛选条件返回所有匹配笔记 ID（不分页），用于全选功能
 func (a *App) SearchNoteIDs(keyword string, notebookID uint, tagIDs []uint) ([]uint, error) {
 	a.LogSvc.Logger.Debugw("SearchNoteIDs", fastlog.String("keyword", keyword), fastlog.Uint("notebookID", notebookID), fastlog.Int("tagCount", len(tagIDs)))

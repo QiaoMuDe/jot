@@ -284,6 +284,8 @@ export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
 export function SetSortOrder(arg1:string):Promise<void>;
 
+export function SlashSearchNotes(arg1:string,arg2:number):Promise<Array<services.SlashNoteResult>>;
+
 export function SwitchProfile(arg1:string,arg2:number):Promise<void>;
 
 export function TestAIBaseURL(arg1:string,arg2:string):Promise<boolean>;

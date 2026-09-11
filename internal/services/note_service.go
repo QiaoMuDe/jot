@@ -399,6 +399,38 @@ func (s *NoteService) SearchByNotebook(keyword string, page, pageSize int, noteb
 	return notes, total, nil
 }
 
+// SlashSearchNotes 斜杠下拉的轻量笔记搜索：仅返回 id/title/笔记本名，
+// 不计算全文内容片段（对比 Search 的 noteThinSelect），用于输入框高频联想。
+// 排序只做"标题命中优先"（标题以关键词开头最靠前），再按置顶、最近更新兜底。
+func (s *NoteService) SlashSearchNotes(keyword string, limit int) ([]SlashNoteResult, error) {
+	if strings.TrimSpace(keyword) == "" {
+		return []SlashNoteResult{}, nil
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 8
+	}
+	esc := escapeLike(keyword)
+	like := "%" + esc + "%"
+
+	results := []SlashNoteResult{}
+	err := s.db.Table("notes").
+		Select("notes.id, notes.title, COALESCE(notebooks.name, '') as notebook_name").
+		Joins("LEFT JOIN notebooks ON notes.notebook_id = notebooks.id").
+		Where("notes.deleted_at IS NULL").
+		Where(`notes.title LIKE ? ESCAPE '\' OR notes.content LIKE ? ESCAPE '\'`, like, like).
+		Order(clause.OrderBy{Expression: clause.Expr{
+			SQL:  `CASE WHEN notes.title LIKE ? ESCAPE '\' THEN 0 ELSE 1 END, notes.pinned DESC, notes.updated_at DESC`,
+			Vars: []interface{}{esc + "%"},
+		}}).
+		Limit(limit).
+		Scan(&results).Error
+	if err != nil {
+		s.logger.Errorw("NoteService.SlashSearchNotes 失败", fastlog.Error(err))
+		return nil, err
+	}
+	return results, nil
+}
+
 // SearchNoteIDs 按关键词/标签搜索并返回所有匹配笔记 ID（不分页）
 func (s *NoteService) SearchNoteIDs(keyword string, tagIDs []uint) ([]uint, error) {
 	var ids []uint
