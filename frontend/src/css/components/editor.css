@@ -109,10 +109,27 @@
   max-width: 50%;
   margin-right: 12px;
   display: flex;
+  align-items: center;
+}
+
+/* 星号（记事本式"未保存改动"标记）：默认隐藏，标题相对打开快照有改动时由 .editor-dirty 类显示 */
+.editor-dirty-star {
+  display: none;
+  color: var(--accent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-right: 2px;
+  flex: 0 0 auto;
+  user-select: none;
+}
+.editor-title-wrap.editor-dirty .editor-dirty-star {
+  display: inline;
 }
 
 /* 顶栏内标题输入框：纸面标题风格——静态纯文字，hover 淡胶囊，编辑态胶囊+accent 光环 */
 .editor-title-wrap .editor-input {
+  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
   padding: 3px 8px;

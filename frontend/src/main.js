@@ -368,6 +368,29 @@ function switchEditorReadOnly(readOnly) {
     } else {
         state._editSnapshot = null;
     }
+    // 刷新星号：新建/编辑模式记录快照（不脏）或切回查看/关闭清空快照（不脏）
+    refreshDirtyStar();
+}
+
+/**
+ * 是否存在未保存改动：当前输入相对_editSnapshot(打开编辑器时记录)有任何差异即视为脏。
+ * 快照在新建与编辑已有笔记的非只读模式下建立(openEditor L4160 / switchEditorReadOnly L362)，
+ * 查看模式快照为 null，恒不脏。
+ * @returns {boolean}
+ */
+function isEditorDirty() {
+    const snapshot = state._editSnapshot;
+    if (!snapshot) return false;
+    const title = els.editorNoteTitle.value.trim();
+    const content = getEditorContent().trim();
+    const tagsChanged = JSON.stringify([...state.selectedTags].sort()) !== JSON.stringify(snapshot.tags);
+    const extChanged = els.editorFileExt.textContent !== snapshot.fileExt;
+    return title !== snapshot.title || content !== snapshot.content || tagsChanged || extChanged;
+}
+
+/** 根据是否存在未保存改动，切换标题区星号(.editor-dirty)显隐 */
+function refreshDirtyStar() {
+    els.editorTitleWrap?.classList.toggle('editor-dirty', isEditorDirty());
 }
 
 /**
@@ -498,6 +521,7 @@ const els = {
     editorOverlay: $('editorOverlay'),
     editorTitle: $('editorTitle'),
     editorNoteTitle: $('editorNoteTitle'),
+    editorTitleWrap: $('editorTitleWrap'),
     editorNoteContent: $('editorNoteContent'),
     tagSelector: $('tagSelector'),
     editorCloseBtn: $('editorCloseBtn'),
@@ -1116,16 +1140,10 @@ async function updateNote(id) {
     // 保存前捕获当前编辑的笔记：保存完成时若用户已切换到其他笔记则不关闭编辑器
     const editingIdAtStart = state.editingNoteId;
 
-    // 脏检测：有快照且内容无变更 → 跳过保存直接关闭
-    const snapshot = state._editSnapshot;
-    if (snapshot) {
-        const currentTags = [...state.selectedTags].sort();
-        const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
-        const extChanged = els.editorFileExt.textContent !== snapshot.fileExt;
-        if (title === snapshot.title && content === snapshot.content && !tagsChanged && !extChanged) {
-            closeEditor();
-            return;
-        }
+    // 脏检测：无未保存改动 → 跳过保存直接关闭
+    if (!isEditorDirty()) {
+        closeEditor();
+        return;
     }
 
     try {
@@ -3871,6 +3889,8 @@ async function saveFileExt() {
 		const enableWordWrap = els.editorWordWrapToggle?.checked || false;
 		initCodeMirror(container, content, isReadOnly, useSyntaxHighlight, value, codeHighlightTheme, enableWordWrap);
     }
+    // 扩展名变化 → 刷新未保存改动星号
+    refreshDirtyStar();
 }
 
 /** 快速切换笔记类型（.md ↔ .txt），更新按钮显示并保存到后端 */
@@ -3925,6 +3945,10 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     const mySeq = ++editorOpSeq;
     state.editingNoteId = noteId || null;
     state.selectedTags = [];
+    // 每次打开先清空快照并隐藏星号，避免从"有改动的编辑状态"直接切换笔记时残留上一笔记的星号/快照
+    // （isEditorDirty 在快照为 null 时短路，不依赖 cmEditor 内容）
+    state._editSnapshot = null;
+    refreshDirtyStar();
 
     const isReadOnly = readOnly && noteId != null;
     let noteData = null;
@@ -4156,14 +4180,15 @@ async function openEditor(noteId, readOnly, startFullscreen, hideEditBtn) {
     initCodeMirror(contentArea, editorContent, isReadOnly, useSyntaxHighlight, ext, codeHighlightTheme, enableWordWrap);
     // 状态栏真实化统一推迟到 hideEditorLoading（loading 真正收起）时执行，与内容区 loading 同步
 
-    // 编辑模式下记录快照
-    if (!isReadOnly && state.editingNoteId) {
+    // 新建与编辑模式均记录快照（作为"未保存改动"星号的基准；查看模式不记录）
+    if (!isReadOnly) {
         state._editSnapshot = {
             title: els.editorNoteTitle.value.trim(),
             content: getEditorContent().trim(),
             tags: [...state.selectedTags].sort(),
             fileExt: els.editorFileExt.textContent
         };
+        refreshDirtyStar();
     }
 
     // ── 数据已就绪：一次性确定最终显示模式（避免"先预览后切回"的闪烁） ──
@@ -5076,6 +5101,8 @@ function onEditorInput() {
     if (els.editorOverlay.dataset.mode === 'preview') {
         debouncedUpdatePreview();
     }
+    // 标题/正文输入 → 刷新未保存改动星号
+    refreshDirtyStar();
 }
 
 // 防抖预览更新
@@ -5226,6 +5253,7 @@ function closeEditor() {
         state.editingNoteId = null;
         state.selectedTags = [];
         state._editSnapshot = null;
+        refreshDirtyStar(); // 关闭编辑器：强制隐藏未保存改动星号
         state._defaultNewNoteTitle = null;
         state._titleBeforeEdit = null;
         // 字数归零并退出状态栏加载态（一次性恢复 status 为常态）
@@ -5279,19 +5307,8 @@ async function closeEditorSafe() {
             return;
         }
     } else {
-        // 编辑模式：有快照且无改动 → 直接关闭
-        const snapshot = state._editSnapshot;
-        if (snapshot) {
-            const currentTitle = els.editorNoteTitle.value.trim();
-            const currentContent = getEditorContent().trim();
-            const currentTags = [...state.selectedTags].sort();
-            const tagsChanged = JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags);
-            const extChanged = els.editorFileExt.textContent !== snapshot.fileExt;
-            if (currentTitle === snapshot.title && currentContent === snapshot.content && !tagsChanged && !extChanged) {
-                closeEditor();
-                return;
-            }
-        } else {
+        // 编辑模式：无未保存改动 → 直接关闭
+        if (!isEditorDirty()) {
             closeEditor();
             return;
         }
@@ -5569,6 +5586,8 @@ window.toggleEditorTag = function (tagId, el) {
     // 点击脉冲动画
     el.classList.add('clicked');
     setTimeout(() => el.classList.remove('clicked'), 250);
+    // 标签变化 → 刷新未保存改动星号
+    refreshDirtyStar();
 };
 
 /**
@@ -6347,19 +6366,13 @@ function initEventListeners() {
         const noteId = state.editingNoteId;
         if (!noteId) return;
 
-        const snapshot = state._editSnapshot;
         const title = els.editorNoteTitle.value.trim();
         const content = getEditorContent().trim();
-        const currentTags = [...state.selectedTags].sort();
-
-        // 变更检测：无修改则静默切回查看模式
-        const tagsChanged = snapshot ? JSON.stringify(currentTags) !== JSON.stringify(snapshot.tags) : true;
-        const extChanged = snapshot ? els.editorFileExt.textContent !== snapshot.fileExt : true;
-        const hasChanged = !snapshot || title !== snapshot.title || content !== snapshot.content || tagsChanged || extChanged;
 
         state.enteredFromViewMode = false;
 
-        if (!hasChanged) {
+        // 无未保存改动 → 静默切回查看模式
+        if (!isEditorDirty()) {
             // 无变更：直接切回查看模式，不弹通知（内联切换，避免闪烁）
             switchEditorReadOnly(true);
             return;
