@@ -19,7 +19,7 @@ var assets embed.FS
 func themeBG(theme string) (uint8, uint8, uint8) {
 	switch theme {
 	case "dark":
-		return 13, 13, 13
+		return 24, 24, 28
 	case "tokyo-night":
 		return 26, 27, 38
 	case "dracula":
