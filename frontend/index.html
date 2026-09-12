@@ -449,19 +449,19 @@
                             <button id="presetMgrBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">管理</button>
                         </div>
                     </div>
-                    <!-- Base URL -->
+                    <!-- Base URL（只读：由配置预设回填，禁止手动编辑） -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">API 地址</span>
                         <div class="ai-setting-control" style="max-width:none;">
-                            <input type="text" id="aiBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
+                            <input type="text" id="aiBaseURL" class="settings-input" placeholder="由配置预设填充" readonly />
                             <button id="aiTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                         </div>
                     </div>
-                    <!-- API Key -->
+                    <!-- API Key（只读：由配置预设回填，禁止手动编辑） -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">API Key</span>
                         <div class="ai-setting-control" style="max-width:none;">
-                            <input type="password" id="aiAPIKey" class="settings-input" placeholder="sk-..." autocomplete="off" />
+                            <input type="password" id="aiAPIKey" class="settings-input" placeholder="由配置预设填充" autocomplete="off" readonly />
                             <button id="aiAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                 <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -516,19 +516,19 @@
                             <button id="aiEmbedPresetMgrBtn" class="btn btn-sm btn-save" style="white-space:nowrap;flex-shrink:0;">管理</button>
                         </div>
                     </div>
-                    <!-- Base URL -->
+                    <!-- Base URL（只读：由配置预设回填，禁止手动编辑） -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">API 地址</span>
                         <div class="ai-setting-control" style="max-width:none;">
-                            <input type="text" id="aiEmbedBaseURL" class="settings-input" placeholder="https://api.openai.com/v1" />
+                            <input type="text" id="aiEmbedBaseURL" class="settings-input" placeholder="由配置预设填充" readonly />
                             <button id="aiEmbedTestURLBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">测试</button>
                         </div>
                     </div>
-                    <!-- API Key -->
+                    <!-- API Key（只读：由配置预设回填，禁止手动编辑） -->
                     <div class="ai-setting-item">
                         <span class="ai-setting-label">API Key</span>
                         <div class="ai-setting-control" style="max-width:none;">
-                            <input type="password" id="aiEmbedAPIKey" class="settings-input" placeholder="sk-..." autocomplete="off" />
+                            <input type="password" id="aiEmbedAPIKey" class="settings-input" placeholder="由配置预设填充" autocomplete="off" readonly />
                             <button id="aiEmbedAPIKeyToggle" class="btn btn-sm btn-save" style="flex-shrink:0;width:40px;height:36px;display:flex;align-items:center;justify-content:center;padding:0;" title="显示/隐藏">
                                 <svg class="toggle-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>

@@ -556,19 +556,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：笔记导入导出图片闭环（.md + .assets 相对引用）+ 回收站硬删除清理孤儿图片 + 笔记本批量导出
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三块改动打通"导出→导入"图片闭环并治理图片残留：① **导出携带图片**（单条 + 笔记本批量）：导出 `笔记名.md` 的同时在同目录生成 `笔记名.md.assets/`，把内容中引用的 `/images/` 图片原样复制进去（**保留 uuid_原名.ext 原始文件名**），引用改写为相对路径 `笔记名.md.assets/文件名`（Typora 生态通用约定，外部工具可直接显示）；② **导入携带图片**（`processImportImages`）：导入 .md 时把相对/绝对本地路径图片复制进 `~/.jot/images/` 并改回内部 URL；③ **回收站硬删除联动清理孤儿图片**：永久删除/清空回收站后，按引用文件名增量清理不再被任何剩余笔记引用的图片（软删除不动，可恢复）。 |
-| **导出（重要）** | 公共函数 [app.go](app.go) `exportNoteContentWithImages(note, targetPath) (content string, exported, missing int)`——单条 `ExportNoteAsMarkdown` 与批量 `ExportNotebookAsMarkdown` 共用。要点：**仅 `.md` 且内容含 `/images/` 才处理**（.txt 不动）；正则 `!\[[^\]]*\]\(/images/([^)]+)\)` 提取引用并按文件名去重，捕获组含 `"title"` 后缀时先用 `strings.Index(filename, "\"")` 截断（否则误判图片不存在且不改写）；`os.MkdirAll(targetPath+".assets")` 失败或图片缺失时**保留原引用**不阻断导出（missing 计数，提示语区分）；`strings.Replace(s, "/images/"+filename, assetsBase+"/"+filename, 1)` 只改图片语法内引用；文件名防路径穿越 `ContainsAny(name, \/\)` 跳过；目录创建移到循环外一次调用。批量 `ExportNotebookAsMarkdown(notebookID)`：先查笔记（空则提示不弹目录）→ `OpenDirectoryDialog` 选父目录（取消返回"已取消"）→ `sanitizeFilename(笔记本名)` 建子目录平铺导出 → 重名追加序号 `标题 (2).md`（`fileExists` 用 `err == nil \|\| !os.IsNotExist(err)` 语义，仅"明确不存在"视为不存在）→ 单篇失败不中断，返回汇总 `导出完成：n 篇成功（含 x 张图片），m 篇失败`。前端笔记本右键菜单新增「导出全部笔记」项（[main.js](frontend/src/main.js) `data-action="export"`，点击调 `ExportNotebookAsMarkdown` 后 `nm.show` 汇总）。 |
-| **导入（重要）** | [app.go](app.go) `processImportImages(content, mdDir)` 在 [app.go](app.go) `processImportFile` 内容读取后、哈希对比前调用（仅 `fileExt == ".md"` 且含 `![`），处理后的内容统一供哈希/冲突/覆盖/创建下游使用。正则 `!\[[^\]]*\]\(([^)]+)\)` 扫描，`raw` 按空格拆出 pathPart 与可选 title；判断顺序：含 `://` 或 `data:` → 互联网链接保留；`/images/` 开头 → jot 内部引用跳过（**幂等**，二次导入不重复复制、内容哈希稳定）；本地路径基于 md 目录解析 `os.Stat` 存在 → `SaveImageFromPath` 复制 → 引用改写为 `/images/xxx`（title 保留）；不存在 → 保留原引用记日志。**替换用 `raw` 完整子串**（`strings.Replace(s, raw, newURL+strings.TrimPrefix(raw, pathPart), 1)`）——`pathPart` 在 alt 与路径同名时（`![foo.png](foo.png)`）会替换错位置。同路径 map 缓存去重只复制一次。 |
-| **回收站清理（重要）** | [app.go](app.go) `extractImageFilenames(content)` 提取引用文件名（title 截断 + 去重 + 防路径穿越），`deleteImagesIfUnreferenced(filenames, includeTrash)` 对每个文件名用 `instr(content, ?) > 0` 存在性查询（`Unscoped` 含回收站，精确匹配无通配符转义问题），未被引用则 `os.Remove`（失败仅记日志）。`PermanentDeleteNote`：删前取 content → 硬删 → 增量清理（includeTrash=true，回收站其他笔记引用同一图不得删）；`EmptyTrash`：清空前聚合回收站笔记引用 → 清空 → 增量清理（includeTrash=false）。软删除 `DeleteNote` 不动图片；定时清理 `CleanExpiredTrash` 后有 `CleanupOrphanImages` 全量兜底无需重复处理。 |
-| **涉及文件** | [app.go](app.go)（`ExportNoteAsMarkdown`/`exportNoteContentWithImages`/`ExportNotebookAsMarkdown`/`fileExists`/`processImportImages`/`processImportFile`/`PermanentDeleteNote`/`EmptyTrash`/`extractImageFilenames`/`deleteImagesIfUnreferenced`）、[frontend/src/main.js](frontend/src/main.js)（笔记本右键菜单「导出全部笔记」） |
-
----
-
-## 记忆点 2：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
+## 记忆点 1：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +567,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
+## 记忆点 2：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
+## 记忆点 3：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
+## 记忆点 4：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -613,6 +601,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **检索与浮层（重要）** | 后端专用轻量方法 `NoteService.SlashSearchNotes(keyword, limit)`（首版复用通用 `SearchNotes` 被否——其 `noteThinSelect` 每次 `SUBSTR(content, INSTR(...))` 算内容片段 + `Count` 总数 + `Preload("Tags")`，对每 200ms 触发的联想是浪费）：仅 `LEFT JOIN notebooks` 取 `id/title/COALESCE(name,'')`，不算内容片段、无 Count/Preload；排序列全部加 `notes.` 前缀防联表歧义；只需"标题命中优先 + 置顶 + 更新"一层 CASE。`SlashNoteResult{id,title,notebook_name}` 于 [types.go](internal/services/types.go)，Wails 绑定 [app.go](app.go) `SlashSearchNotes`。前端 `openSlashMenu` debounce 200ms 调 `SlashSearchNotes(query, 5)`（**最多 5 条**）；`#aiChatSlashMenu` 浮于 composer 上方，左对齐 `left:0`（非居中），提示行 `.ai-chat-slash-hint` 用 `position:sticky` 固定顶部、列表整体隐藏滚动条（`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`）；输入坞 `.has-slash` **仅 `translateY(-2px)` 上浮**（曾试验光环呼吸/沿边流光加亮，均被否）。 |
 | **键盘与防护（重要）** | 菜单打开时 `onInputKeydown` 优先接管：↑↓ 循环高亮（结果空时放行原光标移动）、Enter 引用选中项 / **空结果时关闭菜单并放行 `onSend()`**（否则 Enter 被吞、消息发不出）、Esc 关闭并 `e.stopPropagation()` **阻断冒泡到 main.js 全局 ESC**（否则整页切回笔记首页；`handleKeyboardNavigation` 是 document 冒泡注册，textarea 先跑 `stopPropagation` 即可拦截）。**竞态治理**：`slashQuerySeq` 序号自增 + debounce 回调捕获序号，返回时 `seq !== slashQuerySeq` 则丢弃（防快速连续输入旧结果覆盖新关键词）。**引用失败回滚**：`catch` 处恢复被删斜杠词并把光标复位、重开菜单，避免误以为已引用。标题/笔记本名用 `_aiEscapeHtml` 完整转义（`& < > " '`）入 innerHTML。 |
 | **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`SlashSearchNotes`）、[internal/services/types.go](internal/services/types.go)（`SlashNoteResult`）、[app.go](app.go)（绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`extractSlashToken`/`handleSlashInput`/`openSlashMenu`/`renderSlashResults`/`selectSlashNote`/`closeSlashMenu`/`slashQuerySeq` + `onInputKeydown` 接管）、[frontend/index.html](frontend/index.html)（`#aiChatSlashMenu`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-slash-*` + `.has-slash`） |
+
+---
+
+## 记忆点 5：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 三块改动统一配置流与交互规范：① **AI 连接 URL/Key 输入框只读化**——设置页对话/嵌入两模块共 4 个输入框（`aiBaseURL`/`aiAPIKey`/`aiEmbedBaseURL`/`aiEmbedAPIKey`）加 `readonly`，产品语义收敛为"预设驱动"：输入框仅作展示与测试，配置写入只剩两条路径（预设切换 `SwitchProfile` 后端持久化后前端回填展示；测试/获取模型按钮的兜底 `saveSettings`）；② **hover 边框三档渐进规范**——5 处控件 hover 边框从 `--accent-light`（默认主题 `#FDE68A` 对 `#F0EBE0` 暖白底仅 1.05:1，肉眼不可见）改为中间档 `color-mix(in srgb, var(--accent) 70%, var(--border))`，与静止态 `--border`、open/active 态纯 `var(--accent)` 形成清晰层级；③ **恢复出厂补种机制排查**（未改代码，架构知识）——`ResetDatabase` 删表重建后经 `reconnectDB → database.InitDB` 重建连接，`InitDB` 末尾种子逻辑会重新插入内置 MCP 模板与内置 API 预设，"恢复出厂后 MCP 管理还有内容"是补种而非清理遗漏。 |
+| **只读化（重要）** | [index.html](frontend/index.html) 4 个输入框加 `readonly`（用 readonly 而非 disabled：可聚焦、**可复制 Key**、读屏不跳过）；placeholder 统一改"由配置预设填充"（原 `https://api.openai.com/v1`/`sk-...` 暗示可输入）；HTML 注释标明"只读：由配置预设回填，禁止手动编辑"。[settings-panel.css](frontend/src/css/components/settings-panel.css) 新增 `.settings-input[readonly]` 只读展示态（`--bg-secondary` 底 + 次级文字 + `cursor:default`，`:focus` 覆盖不亮 accent 边框；特异性 (0,3,0) > `.settings-input:focus` (0,2,0)，全 12 主题均有依赖变量）。[main.js](frontend/src/main.js) `initApiConnectionModule` 删除手动编辑死代码（URL `change`/`input` 自动保存 + 斜杠结尾校验、Key `change` 自动保存）；空 URL 提示改"请先选择配置预设"（原"请先填写 API 地址"在只读后成死胡同；对话/嵌入共用函数一处改两模块生效；预设弹窗内与管理列表行内的同型提示不适用此文案，保留原文案）。校验职责收敛：预设弹窗保存自带非空+斜杠校验，只读值源自预设故校验链路闭环。`resetApiKeyVisibility`（Key 显隐切换）与 readonly 不冲突。 |
+| **hover 三档渐进（重要）** | 通用约定：**UI 控件 hover 边框禁用 `--accent-light`**（各亮色主题该值均为浅色调，作边框对比度不足；初版 5 处直接改纯 `var(--accent)` 后 hover 与 open/active 边框层级弱化，复查改为 color-mix 中间档）。五处落地：[dropdowns.css](frontend/src/css/components/dropdowns.css)（`.font-family-trigger`/`.theme-select-trigger`）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-note-ref-filter-btn`）、[search-modal.css](frontend/src/css/components/search-modal.css)（`.search-modal-filter-btn`）、[md-reference.css](frontend/src/css/components/md-reference.css)（`.md-ref-toc-item`）。默认主题验证：静止 `#D0C8B8` → hover ≈`#D68F3B` → open `#D97706` 三档可辨。 |
+| **恢复出厂补种（重要）** | `ResetDatabase`（[app.go](app.go)）DropTable 全部表（含 `mcp_servers`，注册于 [models.go](internal/database/models.go) `AllModels`）→ `reconnectDB`（[app.go](app.go)，为解决 glebarez/sqlite 驱动 DropTable 后连接失效）内部调 `database.InitDB`（[db.go](internal/database/db.go)），其末尾种子逻辑 `InitBuiltinMCPServers` 重新插入 6 个内置 MCP 模板（tavily/anysearch/zhihu_search/zhihu_global/zhihu_hot/context7，禁用态 + `<your-api-key>` 占位符，[builtin_mcp_servers.go](internal/database/builtin_mcp_servers.go)）、`InitBuiltinProfiles` 重新插入内置 API 预设——与首次安装的"出厂状态"一致，用户自建数据确实已清。**教训**：`InitDB` 承担"建库 + 种子"双重职责，`reconnectDB` 为共用函数（导入恢复等场景也走），未来若要求"恢复出厂后 MCP/预设为空"需把 `InitDB` 拆分 connect/seed 两段或给 reconnectDB 加跳过种子开关，不可直接改共用路径；`InitBuiltinPrompts`/`InitDefaultTags`/`InitDefaultSettings` 目前在 `ResetDatabase` 与 `InitDB` 中双重执行（幂等冗余）。前端善后链路健康：`resetDatabase`（[data-management.js](frontend/src/js/data-management.js)）→ `reloadSettings` → `loadSettings` → `loadMCPServers` 刷新缓存。 |
+| **涉及文件** | [frontend/index.html](frontend/index.html)（readonly + placeholder + 注释）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（只读态）、[frontend/src/main.js](frontend/src/main.js)（删监听 + 空值文案）、[frontend/src/css/components/dropdowns.css](frontend/src/css/components/dropdowns.css)/[ai-chat.css](frontend/src/css/components/ai-chat.css)/[search-modal.css](frontend/src/css/components/search-modal.css)/[md-reference.css](frontend/src/css/components/md-reference.css)（hover 中间档）、[app.go](app.go)/[internal/database/db.go](internal/database/db.go)（补种机制，未改） |
 
 ---
 

@@ -175,7 +175,7 @@
 }
 .search-modal-filter-btn:hover {
     background: var(--hover-bg);
-    border-color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
 }
 .search-modal-filter-btn:active {
     transform: scale(0.98);

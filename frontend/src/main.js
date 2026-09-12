@@ -2418,8 +2418,8 @@ function setBtnLoading(btn, loading) {
 
 /**
  * 初始化 API 连接模块（对话/嵌入共用）
- * 负责：测试连通性、Key 显隐、获取模型、模型下拉交互、
- *       URL/Key 自动保存、预设下拉展开/关闭。
+ * 负责：测试连通性、Key 显隐、获取模型、模型下拉交互、预设下拉展开/关闭。
+ * URL/Key 输入框为只读展示态（index.html 加 readonly），仅由预设切换回填，不提供手动编辑。
  * @param {Object} m - 模块配置对象
  *   { baseURL, apiKey, apiKeyToggle, testBtn, fetchBtn,
  *     modelTrigger, modelDropdown, modelLabel, modelSearch,
@@ -2447,7 +2447,7 @@ function initApiConnectionModule(m) {
             const url = m.baseURL.value.trim();
             const key = m.apiKey.value.trim();
             if (!url) {
-                nm.show('请先填写 API 地址', 'warning');
+                nm.show('请先选择配置预设', 'warning');
                 return;
             }
             setBtnLoading(m.testBtn, true);
@@ -2492,7 +2492,7 @@ function initApiConnectionModule(m) {
             const url = m.baseURL.value.trim();
             const key = m.apiKey.value.trim();
             if (!url) {
-                nm.show('请先填写 API 地址', 'warning');
+                nm.show('请先选择配置预设', 'warning');
                 return;
             }
             setBtnLoading(m.fetchBtn, true);
@@ -2525,45 +2525,8 @@ function initApiConnectionModule(m) {
         onSelect: m.onModelChange || saveModuleConfig,
     });
 
-    // ── 自动保存 ▸ URL 输入完成 ──
-    if (m.baseURL) {
-        m.baseURL.addEventListener('change', async () => {
-            const url = m.baseURL.value.trim();
-            if (url.endsWith('/')) {
-                m.baseURL.classList.add('input-error');
-                nm.show('API 地址不能以斜杠结尾', 'error');
-                return;
-            }
-            if (!url) {
-                nm.show('请先填写 API 地址', 'warning');
-                return;
-            }
-            await saveSettings();
-            nm.show('AI 配置已保存', 'success');
-            if (m.onSettingsSaved) m.onSettingsSaved();
-        });
-        // 用户修正后自动移除错误样式；从斜杠错误态恢复时立即自动保存一次（无需再次失焦）
-        m.baseURL.addEventListener('input', async () => {
-            if (!m.baseURL.value.trim().endsWith('/')) {
-                const wasError = m.baseURL.classList.contains('input-error');
-                m.baseURL.classList.remove('input-error');
-                if (wasError) {
-                    await saveSettings();
-                    nm.show('AI 配置已保存', 'success');
-                    if (m.onSettingsSaved) m.onSettingsSaved();
-                }
-            }
-        });
-    }
-
-    // ── 自动保存 ▸ Key 输入完成 ──
-    if (m.apiKey) {
-        m.apiKey.addEventListener('change', async () => {
-            await saveSettings();
-            nm.show('AI 配置已保存', 'success');
-            if (m.onSettingsSaved) m.onSettingsSaved();
-        });
-    }
+    // URL/Key 输入框为只读展示态（index.html 加 readonly），手动编辑与自动保存路径已移除；
+    // 配置写入仅发生在预设切换（后端 SwitchProfile 持久化，前端回填展示）及测试/获取模型按钮的兜底保存
 
     // ── 预设下拉展开/关闭 ──
     if (m.presetTrigger && m.presetDropdown) {

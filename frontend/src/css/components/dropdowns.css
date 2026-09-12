@@ -22,7 +22,7 @@
 }
 
 .font-family-trigger:hover {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
 }
 
 .font-family-trigger.open {
@@ -264,7 +264,7 @@
 }
 
 .theme-select-trigger:hover {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
 }
 
 .theme-select-trigger.open {

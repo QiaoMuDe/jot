@@ -581,6 +581,18 @@
   background: var(--card-bg);
 }
 
+/* 只读展示态：AI 连接的 URL/Key 由配置预设切换回填，禁止手动编辑（仍可聚焦复制） */
+.settings-input[readonly] {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.settings-input[readonly]:focus {
+  border-color: var(--border);
+  background: var(--bg-secondary);
+}
+
 /* 隐藏密码输入框浏览器原生的显示/清除按钮 */
 .settings-input[type="password"]::-ms-reveal,
 .settings-input[type="password"]::-ms-clear {
