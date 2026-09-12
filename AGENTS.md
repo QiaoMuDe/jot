@@ -636,3 +636,4 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
     - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）
 11. **禁止维护实际文件行数**：`AGENTS.md` 中不得出现 `（~XXX 行）` 类标记，文件名后也无需标注行数，避免频繁维护。
 12. **数据模型维护规范**：**新增或修改数据模型（models 包中的 struct）时，必须同步维护 [internal/database/models.go](internal/database/models.go) 的 `AllModels` 注册表**（按"子表在前"顺序追加/调整），[db.go](internal/database/db.go) 的 `InitDB` 建表与 [app.go](app.go) 的 `ResetDatabase` 重置出厂均引用该唯一注册点，无需也不得在其他地方单独维护模型列表。若新增无 model struct 的表（如多对多关联表），需在 `ResetDatabase` 中补显式 `DROP TABLE IF EXISTS` 语句。
+13. **Agent 事件与工具维护参考**：AI 助手模块的交互事件协议与工具开发各有独立权威文档，维护 `internal/agent` 相关功能时按需参考 —— [internal/agent/EVENTS.md](internal/agent/EVENTS.md)（agent 前后端交互事件协议）与 [internal/agent/TOOLS.md](internal/agent/TOOLS.md)（agent 工具开发与维护流程）。
