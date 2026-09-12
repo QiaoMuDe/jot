@@ -1735,12 +1735,26 @@ function applyFontSize(size) {
 /* ===== 主题设置函数 ===== */
 
 /**
- * 应用指定主题
- * @param {string} themeName - 'default' | 'light' | 'dark'
+ * 同步主题 UI 标签与下拉菜单选中态（不触发重绘动画）
+ * 供 applyTheme 与 loadSettings 共用；无条件刷新，避免同主题短路时界面停留在初始值
+ * @param {string} themeName - 主题 key
  */
-
+function syncThemeUI(themeName) {
+    if (els.themeLabel) {
+        els.themeLabel.textContent = themeLabels[themeName] || themeName;
+    }
+    if (els.themeDropdown) {
+        els.themeDropdown.querySelectorAll('.theme-select-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.themeValue === themeName);
+        });
+    }
+}
 
 function applyTheme(themeName) {
+    // 标签与选中态无条件同步（即使目标主题已是当前生效主题，也需据此刷新，
+    // 否则从初始化路径调用时界面会停留在 index.html 硬编码的初始值）
+    syncThemeUI(themeName);
+
     // 目标主题与当前生效主题一致时直接返回：避免触发不必要的
     // View Transition / DOM 更新，与设置页入场动画叠加造成掉帧
     if (document.documentElement.getAttribute('data-theme') === themeName) return;
@@ -1748,15 +1762,6 @@ function applyTheme(themeName) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const apply = () => {
         document.documentElement.setAttribute('data-theme', themeName);
-        // 同步下拉菜单标签和选中态
-        if (els.themeLabel) {
-            els.themeLabel.textContent = themeLabels[themeName] || themeName;
-        }
-        if (els.themeDropdown) {
-            els.themeDropdown.querySelectorAll('.theme-select-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.themeValue === themeName);
-            });
-        }
         // 更新代码高亮主题下拉菜单配对标记
         updateCodeHighlightThemePairing(themeName);
     };
