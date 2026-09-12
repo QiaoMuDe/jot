@@ -3712,7 +3712,7 @@
     transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 .ai-note-ref-filter-btn:hover {
-    border-color: var(--accent-light);
+    border-color: var(--accent);
     background: var(--hover-bg);
 }
 .ai-note-ref-filter-btn.active {

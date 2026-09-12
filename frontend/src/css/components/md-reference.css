@@ -506,7 +506,7 @@
 }
 .md-ref-toc-item:hover {
     background: rgba(var(--accent-rgb), 0.1);
-    border-color: var(--accent-light);
+    border-color: var(--accent);
     color: var(--accent);
 }
 .md-ref-toc-item.active {
