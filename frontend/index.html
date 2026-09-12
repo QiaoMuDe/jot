@@ -7,25 +7,36 @@
     <script>
         // 在首次渲染前从 localStorage 同步恢复主题，避免 CSS 加载延迟导致的闪烁
         (function() {
-            var theme = localStorage.getItem('jot_theme');
-            if (theme) {
-                document.documentElement.setAttribute('data-theme', theme);
-            }
-            // 在完整 CSS 加载前注入关键背景色（与 Go 端 BackgroundColour、CSS --bg 一致）
+            // criticalColors key 集合即有效主题名单（与 theme-config.js themeLabels 同步维护）
             var criticalColors = {
                 'default':           ['#F2EDE3','#FCF9F2'],
-                'light':             ['#FAFAFA','#FFFFFF'],
-                'dark':              ['#18181C','#1C1C20'],
-                'nord':              ['#ECEFF4','#FFFFFF'],
+                'light':             ['#F4F4F7','#FFFFFF'],
+                'dark':              ['#0F0F12','#141418'],
+                'nord':              ['#E4E9F0','#FAFBFD'],
                 'tokyo-night':       ['#1A1B26','#1F2335'],
-                'catppuccin-latte':  ['#EFF1F5','#FFFFFF'],
-                'gruvbox-light':     ['#FBF1C7','#F9F5D7'],
-                'dracula':           ['#282A36','#21222C'],
-                'eye-protection':    ['#C7EDCC','#D8F5DD'],
-                'quiet-light':       ['#F5F5F5','#FFFFFF'],
-                'ysgrifennwr':       ['#F5EDDA','#FAF4E3'],
+                'catppuccin-latte':  ['#EDE7E5','#F8F2EF'],
+                'gruvbox-light':     ['#F0E8C9','#F8F2D8'],
+                'dracula':           ['#1A1B25','#16171F'],
+                'eye-protection':    ['#E4ECD9','#EFF3E6'],
+                'quiet-light':       ['#F0EAEC','#F9F4F4'],
+                'ysgrifennwr':       ['#F0E5D0','#F8F0DB'],
+                'mono':              ['#F5F5F5','#FFFFFF'],
             };
-            var c = criticalColors[theme] || criticalColors['default'];
+            // 有效性兜底：criticalColors 的 key 集合作为有效集
+            var validKeys = Object.keys(criticalColors);
+            // localStorage 在隐私模式 / 配额满 / 安全策略下可能抛错
+            // getItem 失败 → stored=null（fallback 到 default）
+            // setItem 失败 → 忽略（下次启动会再尝试）
+            var stored = null;
+            try { stored = localStorage.getItem('jot_theme'); } catch (e) { /* 隐私模式等 */ }
+            var theme = (stored && validKeys.indexOf(stored) !== -1) ? stored : 'default';
+            // 修正无效值：立即写回 localStorage，避免后续 applyTheme 再次校正
+            if (stored !== theme) {
+                try { localStorage.setItem('jot_theme', theme); } catch (e) { /* 写入失败 */ }
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+            // 在完整 CSS 加载前注入关键背景色（与 Go 端 BackgroundColour、CSS --bg 一致）
+            var c = criticalColors[theme];
             var style = document.createElement('style');
             style.textContent = ':root{--bg:' + c[0] + ';--topbar-bg:' + c[1] + '}';
             document.head.appendChild(style);

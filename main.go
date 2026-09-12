@@ -19,25 +19,27 @@ var assets embed.FS
 func themeBG(theme string) (uint8, uint8, uint8) {
 	switch theme {
 	case "dark":
-		return 24, 24, 28
+		return 15, 15, 18
 	case "tokyo-night":
 		return 26, 27, 38
 	case "dracula":
-		return 40, 42, 54
+		return 26, 27, 37
 	case "catppuccin-latte":
-		return 239, 241, 245
+		return 237, 231, 229
 	case "gruvbox-light":
-		return 251, 241, 199
+		return 240, 232, 201
 	case "nord":
-		return 236, 239, 244
+		return 228, 233, 240
 	case "light":
-		return 250, 250, 250
+		return 244, 244, 247
 	case "eye-protection":
-		return 199, 237, 204
+		return 228, 236, 217
 	case "quiet-light":
-		return 245, 245, 245
+		return 240, 234, 236
 	case "ysgrifennwr":
-		return 245, 237, 218
+		return 240, 229, 208
+	case "mono":
+		return 245, 245, 245
 	default: // "default" 主题
 		return 242, 237, 227
 	}

@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<title>主题配色预览 V2 - 真正差异化方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #1a1a1f;
+    color: #e4e4e8;
+    line-height: 1.5;
+  }
+  .page {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+  .page-header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 32px 20px;
+    background: linear-gradient(135deg, #2a2a32, #1f1f25);
+    border-radius: 16px;
+    border: 1px solid #333339;
+  }
+  .page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #fbbf24, #f97316, #ec4899, #06b6d4);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient 6s ease infinite;
+  }
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .page-header p {
+    color: #9ca3af;
+    font-size: 14px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .page-header .changelog {
+    margin-top: 20px;
+    padding: 14px 18px;
+    background: rgba(251, 191, 36, 0.08);
+    border-left: 3px solid #fbbf24;
+    border-radius: 0 8px 8px 0;
+    text-align: left;
+    font-size: 13px;
+    color: #d1d5db;
+    line-height: 1.7;
+  }
+  .page-header .changelog strong { color: #fbbf24; }
+
+  /* ========== 色板总览 ========== */
+  .palette-overview {
+    background: #232328;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 36px;
+    border: 1px solid #333339;
+  }
+  .palette-overview h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e4e4e8;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .palette-overview h2::before {
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: #fbbf24;
+    border-radius: 2px;
+  }
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .palette-item {
+    background: #2a2a30;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #38383f;
+    transition: transform 0.2s;
+  }
+  .palette-item:hover {
+    transform: translateY(-2px);
+  }
+  .palette-item.is-new {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 1px #22c55e inset;
+  }
+  .palette-item.is-keep {
+    border-color: #fbbf24;
+    box-shadow: 0 0 0 1px #fbbf24 inset;
+  }
+  .palette-swatches {
+    display: flex;
+    height: 48px;
+  }
+  .palette-swatches span {
+    flex: 1;
+  }
+  .palette-meta {
+    padding: 10px 12px;
+  }
+  .palette-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e8;
+    margin-bottom: 2px;
+  }
+  .palette-tag {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+  .palette-tag.new-tag {
+    color: #22c55e;
+    font-weight: 500;
+  }
+  .palette-tag.keep-tag {
+    color: #fbbf24;
+    font-weight: 500;
+  }
+
+  /* ========== 主题展示区 ========== */
+  .themes {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .theme-section {
+    border-radius: 16px;
+    overflow: hidden;
+    background: #232328;
+    border: 1px solid #333339;
+  }
+  .theme-section.is-new {
+    border: 2px solid #22c55e;
+    box-shadow: 0 0 24px rgba(34, 197, 94, 0.12);
+  }
+  .theme-section.is-keep {
+    border: 2px solid #fbbf24;
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.12);
+  }
+  .theme-header {
+    padding: 18px 24px;
+    background: linear-gradient(135deg, #2a2a32, #1f1f27);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    border-bottom: 1px solid #333339;
+  }
+  .theme-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #e4e4e8;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .theme-header h2 .new-badge {
+    background: #22c55e;
+    color: #052e10;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .theme-header h2 .keep-badge {
+    background: #fbbf24;
+    color: #1a1a1a;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .theme-header h2 .delta {
+    font-size: 12px;
+    color: #9ca3af;
+    font-weight: 400;
+  }
+  .theme-info {
+    font-size: 12px;
+    color: #9ca3af;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .theme-info span strong {
+    color: #d1d5db;
+    font-weight: 500;
+  }
+
+  /* ========== 主题应用样机 ========== */
+  .mock {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: 360px;
+    font-size: 13px;
+  }
+  .mock-sidebar {
+    padding: 16px 12px;
+    overflow: hidden;
+  }
+  .mock-sidebar h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+    margin-bottom: 10px;
+    padding: 0 8px;
+  }
+  .mock-sidebar ul {
+    list-style: none;
+  }
+  .mock-sidebar li {
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    font-size: 12px;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mock-sidebar li.active {
+    font-weight: 600;
+  }
+  .mock-sidebar li::before {
+    content: "📁";
+    font-size: 11px;
+    opacity: 0.7;
+  }
+  .mock-content {
+    display: flex;
+    flex-direction: column;
+  }
+  .mock-topbar {
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid;
+  }
+  .mock-topbar .title {
+    font-weight: 600;
+    font-size: 14px;
+    flex: 1;
+  }
+  .mock-body {
+    flex: 1;
+    padding: 16px;
+    overflow: hidden;
+  }
+  .mock-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .mock-card {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid;
+  }
+  .mock-card h5 {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .mock-card p {
+    font-size: 11px;
+    line-height: 1.55;
+    opacity: 0.75;
+  }
+  .mock-card .tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .mock-card .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .mock-input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid;
+    font-size: 12px;
+    margin-bottom: 10px;
+    font-family: inherit;
+  }
+  .mock-buttons {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .mock-btn {
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid;
+    cursor: default;
+    font-family: inherit;
+  }
+  .mock-btn.primary {
+    border: none;
+    color: white;
+    font-weight: 500;
+  }
+  .mock-code {
+    font-family: "SF Mono", "Cascadia Code", Consolas, Monaco, monospace;
+    font-size: 11px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid;
+    line-height: 1.65;
+  }
+  .mock-code .kw { font-weight: 600; }
+  .mock-code .str { opacity: 0.85; }
+  .mock-code .com { opacity: 0.6; font-style: italic; }
+  .mock-code .fn { font-weight: 500; }
+
+  /* ========== 分类标题 ========== */
+  .category-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fbbf24;
+    margin: 32px 0 16px;
+    padding: 10px 14px;
+    background: rgba(251, 191, 36, 0.08);
+    border-left: 3px solid #fbbf24;
+    border-radius: 0 6px 6px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .category-title.existing {
+    color: #9ca3af;
+    background: rgba(156, 163, 175, 0.08);
+    border-left-color: #6b7280;
+  }
+
+  /* ========== 维度说明 ========== */
+  .dimensions {
+    background: #232328;
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 36px;
+    border: 1px solid #333339;
+  }
+  .dimensions h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e4e4e8;
+    margin-bottom: 12px;
+  }
+  .dimensions table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .dimensions th, .dimensions td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #2a2a30;
+  }
+  .dimensions th {
+    color: #9ca3af;
+    font-weight: 500;
+  }
+  .dimensions td { color: #d1d5db; }
+  .dimensions .empty { color: #22c55e; font-weight: 500; }
+
+  .page-footer {
+    margin-top: 48px;
+    padding: 20px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 12px;
+    background: #1f1f25;
+    border-radius: 10px;
+    border: 1px solid #2a2a30;
+  }
+  .page-footer strong { color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-header">
+    <h1>主题配色预览 V2 · 真正差异化</h1>
+    <p>基于上一轮反馈，重新审视空缺维度后产出的 7 个新方向。重点是跳出"换色相"的思路，从饱和度、纯度、装饰强度、文化意象等维度找差异化。</p>
+    <div class="changelog">
+      <strong>V2 变更：</strong>删除与现有重叠的 9 个旧方案（琥珀暮光/暮光紫/极简/海岸/报纸/水墨/常青/玫松/海洋）<br/>
+      <strong>保留：</strong>极夜 Carbon（你已认可）<br/>
+      <strong>新增 6 个：</strong>黑金 Noir · 合成波 Synthwave · 极光 Aurora · 樱粉 Sakura · 波普 Pop · 单色 Mono
+    </div>
+  </div>
+
+  <!-- ========== 维度说明 ========== -->
+  <div class="dimensions">
+    <h3>为什么之前的方案撞车？盘点现有主题的维度覆盖：</h3>
+    <table>
+      <tr>
+        <th>维度</th>
+        <th>现有 11 主题状态</th>
+        <th>真正空缺</th>
+      </tr>
+      <tr>
+        <td>饱和度</td>
+        <td>全部低饱和（纸感/柔和）</td>
+        <td class="empty">高饱和 / 霓虹 / 荧光 → Synthwave / Pop</td>
+      </tr>
+      <tr>
+        <td>纯度</td>
+        <td>全部有彩色调</td>
+        <td class="empty">完全无彩色 → Mono</td>
+      </tr>
+      <tr>
+        <td>底色纯度</td>
+        <td>全部带色调（紫/蓝/棕）</td>
+        <td class="empty">真正纯黑 → Carbon / Noir</td>
+      </tr>
+      <tr>
+        <td>装饰强度</td>
+        <td>全部细边、轻量风格</td>
+        <td class="empty">粗黑边 / 高对比 → Pop</td>
+      </tr>
+      <tr>
+        <td>文化意象</td>
+        <td>西式 + 纸感占满</td>
+        <td class="empty">赛博 / 东方樱 → Synthwave / Sakura</td>
+      </tr>
+      <tr>
+        <td>暗色色相</td>
+        <td>单色（蓝紫/紫/琥珀）</td>
+        <td class="empty">多色相 / 极光 → Aurora</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ========== 色板速览 ========== -->
+  <div class="palette-overview">
+    <h2>7 个主题色板速览</h2>
+    <div class="palette-grid">
+
+      <div class="palette-item is-keep">
+        <div class="palette-swatches">
+          <span style="background:#0A0A0A"></span>
+          <span style="background:#131313"></span>
+          <span style="background:#A8E063"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">极夜 Carbon</div>
+          <div class="palette-tag keep-tag">✓ 保留 · 用户认可</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#0F0F0F"></span>
+          <span style="background:#161616"></span>
+          <span style="background:#D4AF37"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">黑金 Noir</div>
+          <div class="palette-tag new-tag">NEW · 极夜高贵版</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#1A0B2E"></span>
+          <span style="background:#FF6EC7"></span>
+          <span style="background:#00F0FF"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">合成波 Synthwave</div>
+          <div class="palette-tag new-tag">NEW · 80s 赛博朋克</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#0B1929"></span>
+          <span style="background:#00FFA3"></span>
+          <span style="background:#BD00FF"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">极光 Aurora</div>
+          <div class="palette-tag new-tag">NEW · 暗底多色</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#FDF2F2"></span>
+          <span style="background:#FFFFFF"></span>
+          <span style="background:#E91E63"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">樱粉 Sakura</div>
+          <div class="palette-tag new-tag">NEW · 粉色主色</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#FFFFFF"></span>
+          <span style="background:#FFD600"></span>
+          <span style="background:#FF1744"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">波普 Pop</div>
+          <div class="palette-tag new-tag">NEW · 孟菲斯高对比</div>
+        </div>
+      </div>
+
+      <div class="palette-item is-new">
+        <div class="palette-swatches">
+          <span style="background:#F5F5F5"></span>
+          <span style="background:#FFFFFF"></span>
+          <span style="background:#1A1A1A"></span>
+        </div>
+        <div class="palette-meta">
+          <div class="palette-name">单色 Mono</div>
+          <div class="palette-tag new-tag">NEW · 纯灰度无彩色</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== 主题详情 ========== -->
+  <div class="category-title">▶ 暗色（补饱和度 / 极光 / 高贵）</div>
+  <div class="themes">
+
+    <!-- ========== 极夜 Carbon (保留) ========== -->
+    <div class="theme-section is-keep">
+      <div class="theme-header">
+        <h2>极夜 Carbon <span class="keep-badge">✓ 保留</span> <span class="delta">— 用户已认可</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> carbon</span>
+          <span><strong>背景:</strong> #0A0A0A</span>
+          <span><strong>强调:</strong> #A8E063</span>
+          <span><strong>差异化:</strong> 真正纯黑 + 冷峻绿</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#0A0A0A; color:#E4E4E4;">
+        <div class="mock-sidebar" style="background:#131313; border-right:1px solid #1F1F1F;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>项目文档</li>
+            <li style="background:#1F1F1F;">技术笔记</li>
+            <li>代码仓库</li>
+            <li>会议纪要</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#0F0F0F; border-color:#1F1F1F;">
+            <span class="title">技术笔记</span>
+            <button class="mock-btn" style="background:#1A1A1A; color:#A8A8A8; border-color:#262626;">搜索</button>
+            <button class="mock-btn primary" style="background:#A8E063; color:#0A0A0A;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#0F0F0F; color:#E4E4E4; border-color:#262626;" value="Pure black, pure focus — 极简到底。" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background:#A8E063; color:#0A0A0A;">保存</button>
+              <button class="mock-btn" style="background:#1A1A1A; color:#A8A8A8; border-color:#262626;">取消</button>
+              <button class="mock-btn" style="background:#1A1A1A; color:#A8A8A8; border-color:#262626;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#131313; border-color:#1F1F1F;">
+                <h5>⚙️ 系统设计</h5>
+                <p>容器化部署的关键是镜像体积优化…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1F1F1F; color:#A8E063;">devops</span>
+                  <span class="tag" style="background:#1F1F1F; color:#A8E063;">笔记</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#131313; border-color:#1F1F1F;">
+                <h5>💾 数据库</h5>
+                <p>索引的选择性是查询性能的关键因素…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1F1F1F; color:#A8E063;">SQL</span>
+                  <span class="tag" style="background:#1F1F1F; color:#A8E063;">性能</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#0F0F0F; color:#E4E4E4; border-color:#262626;">
+              <span class="kw" style="color:#A8E063;">$</span> <span style="color:#C8C8C8;">npm run</span> <span class="str" style="color:#C8E090;">build</span> <span class="com" style="color:#5A5A5A;"># 极简命令行</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 黑金 Noir ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>黑金 Noir <span class="new-badge">NEW</span> <span class="delta">— 极夜的高贵版，24K 金高亮</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> noir</span>
+          <span><strong>背景:</strong> #0F0F0F</span>
+          <span><strong>强调:</strong> #D4AF37</span>
+          <span><strong>差异化:</strong> 极夜底色 + 24K 金高亮，电影质感</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#0F0F0F; color:#F0EAD6;">
+        <div class="mock-sidebar" style="background:#161616; border-right:1px solid #262626;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>经典摘录</li>
+            <li style="background:#262626;">文学笔记</li>
+            <li>哲学随笔</li>
+            <li>观影记录</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#131313; border-color:#262626;">
+            <span class="title">文学笔记</span>
+            <button class="mock-btn" style="background:#1F1F1F; color:#B8B0A0; border-color:#333333;">搜索</button>
+            <button class="mock-btn primary" style="background:#D4AF37; color:#0F0F0F;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#131313; color:#F0EAD6; border-color:#333333;" value="黄金的笔触，写在午夜的纸上。" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background:#D4AF37; color:#0F0F0F;">保存</button>
+              <button class="mock-btn" style="background:#1F1F1F; color:#B8B0A0; border-color:#333333;">取消</button>
+              <button class="mock-btn" style="background:#1F1F1F; color:#B8B0A0; border-color:#333333;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#161616; border-color:#262626;">
+                <h5>✨ 卡夫卡手记</h5>
+                <p>一本书应当是凿开我们心中冰海的斧头…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#262626; color:#D4AF37;">文学</span>
+                  <span class="tag" style="background:#262626; color:#D4AF37;">摘录</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#161616; border-color:#262626;">
+                <h5>🎬 黑白电影</h5>
+                <p>《卡里加里博士的小屋》：光与影的极端…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#262626; color:#D4AF37;">影评</span>
+                  <span class="tag" style="background:#262626; color:#D4AF37;">默片</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#131313; color:#F0EAD6; border-color:#333333;">
+              <span class="com" style="color:#7A6E4A;">// 黄金时代，永恒主题</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 合成波 Synthwave ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>合成波 Synthwave <span class="new-badge">NEW</span> <span class="delta">— 80s 赛博朋克，高饱和霓虹</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> synthwave</span>
+          <span><strong>背景:</strong> #1A0B2E</span>
+          <span><strong>主调:</strong> 霓虹粉 #FF6EC7 / 霓虹青 #00F0FF</span>
+          <span><strong>差异化:</strong> 现有零高饱和，霓虹双色</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#1A0B2E; color:#F0E5FF;">
+        <div class="mock-sidebar" style="background:#241434; border-right:1px solid #3D2050;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>🚀 创意</li>
+            <li style="background:#3D2050; color:#00F0FF; text-shadow: 0 0 8px #00F0FF;">📼 复古游戏</li>
+            <li>🎸 音乐</li>
+            <li>🎬 影集</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#1F0F30; border-color:#3D2050;">
+            <span class="title" style="text-shadow: 0 0 12px #FF6EC7; color:#FF6EC7;">复古游戏</span>
+            <button class="mock-btn" style="background:#2A1A40; color:#00F0FF; border-color:#3D2050;">搜索</button>
+            <button class="mock-btn primary" style="background: linear-gradient(90deg, #FF6EC7, #00F0FF); color:#0F0820; box-shadow: 0 0 12px rgba(255,110,199,0.4);">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#2A1A40; color:#F0E5FF; border-color:#3D2050; box-shadow: 0 0 0 1px rgba(255,110,199,0.2) inset;" value="在霓虹与磁带之间，时光倒流…" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background: linear-gradient(90deg, #FF6EC7, #00F0FF); color:#0F0820; box-shadow: 0 0 12px rgba(255,110,199,0.4);">保存</button>
+              <button class="mock-btn" style="background:transparent; color:#00F0FF; border-color:#00F0FF; box-shadow: 0 0 8px rgba(0,240,255,0.3) inset;">取消</button>
+              <button class="mock-btn" style="background:transparent; color:#FF6EC7; border-color:#FF6EC7;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#241434; border-color:#3D2050; box-shadow: 0 0 16px rgba(255,110,199,0.08);">
+                <h5 style="color:#FF6EC7; text-shadow: 0 0 8px rgba(255,110,199,0.5);">🕹️ Hot Pursuit</h5>
+                <p>1986 年的公路追逐，像一场电子梦…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#3D2050; color:#00F0FF; text-shadow: 0 0 6px rgba(0,240,255,0.5);">Racing</span>
+                  <span class="tag" style="background:#3D2050; color:#FF6EC7;">Retro</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#241434; border-color:#3D2050; box-shadow: 0 0 16px rgba(0,240,255,0.08);">
+                <h5 style="color:#00F0FF; text-shadow: 0 0 8px rgba(0,240,255,0.5);">🎵 Synth FM</h5>
+                <p>合成器的黄昏，是 80s 最美的余晖…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#3D2050; color:#00F0FF;">Music</span>
+                  <span class="tag" style="background:#3D2050; color:#FF6EC7;">Vapor</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#0F0820; color:#F0E5FF; border:1px solid #FF6EC7; box-shadow: 0 0 12px rgba(255,110,199,0.15);">
+              <span class="kw" style="color:#FF6EC7; text-shadow: 0 0 6px rgba(255,110,199,0.5);">function</span> <span class="fn" style="color:#00F0FF; text-shadow: 0 0 6px rgba(0,240,255,0.5);">neon</span>() {
+              <span class="kw" style="color:#FF6EC7;">return</span> <span class="str" style="color:#FFD600;">"outrun"</span>;
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 极光 Aurora ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>极光 Aurora <span class="new-badge">NEW</span> <span class="delta">— 暗底多色相，渐变极光</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> aurora</span>
+          <span><strong>背景:</strong> #0B1929</span>
+          <span><strong>主调:</strong> 极光绿 #00FFA3 / 极光紫 #BD00FF</span>
+          <span><strong>差异化:</strong> 暗色无多色相，渐变高亮</span>
+        </div>
+      </div>
+      <div class="mock" style="background: linear-gradient(180deg, #0B1929 0%, #0F2238 100%); color:#E0F0FF;">
+        <div class="mock-sidebar" style="background:#0F2238; border-right:1px solid #1A3550;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>科学观察</li>
+            <li style="background: linear-gradient(90deg, rgba(0,255,163,0.15), rgba(189,0,255,0.15));">极地科考</li>
+            <li>天文笔记</li>
+            <li>自然摄影</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#0D1E33; border-color:#1A3550;">
+            <span class="title" style="background: linear-gradient(90deg, #00FFA3, #BD00FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700;">极地科考</span>
+            <button class="mock-btn" style="background:#112740; color:#A0C0E0; border-color:#1A3550;">搜索</button>
+            <button class="mock-btn primary" style="background: linear-gradient(90deg, #00FFA3, #BD00FF); color:#0B1929;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#112740; color:#E0F0FF; border:1px solid #1A3550;" value="在 -40°C 的夜空下，极光开始舞蹈…" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background: linear-gradient(90deg, #00FFA3, #BD00FF); color:#0B1929;">保存</button>
+              <button class="mock-btn" style="background:#112740; color:#00FFA3; border-color:#00FFA3;">取消</button>
+              <button class="mock-btn" style="background:#112740; color:#BD00FF; border-color:#BD00FF;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#0F2238; border-color:#1A3550; border-top: 2px solid #00FFA3;">
+                <h5 style="color:#00FFA3;">🛰️ 极光预报</h5>
+                <p>KP 指数 7，极光可见范围向南扩展至北纬 45°…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1A3550; color:#00FFA3;">数据</span>
+                  <span class="tag" style="background:#1A3550; color:#BD00FF;">观测</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#0F2238; border-color:#1A3550; border-top: 2px solid #BD00FF;">
+                <h5 style="color:#BD00FF;">❄️ 极昼记录</h5>
+                <p>太阳不再落下，时间失去了边界感…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1A3550; color:#00FFA3;">日记</span>
+                  <span class="tag" style="background:#1A3550; color:#BD00FF;">极地</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#0D1E33; color:#E0F0FF; border:1px solid #1A3550;">
+              <span class="kw" style="color:#00FFA3;">const</span> <span style="color:#E0F0FF;">aurora</span> = { <span style="color:#00FFA3;">green</span>: <span class="str" style="color:#C8FFD8;">"active"</span>, <span style="color:#BD00FF;">purple</span>: <span class="str" style="color:#E0C8FF;">"dancing"</span> };
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== 亮色主题 ========== -->
+  <div class="category-title">▶ 亮色（补高饱和 / 单色 / 粉色）</div>
+  <div class="themes">
+
+    <!-- ========== 樱粉 Sakura ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>樱粉 Sakura <span class="new-badge">NEW</span> <span class="delta">— 现有零粉色主色亮色</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> sakura</span>
+          <span><strong>背景:</strong> #FDF2F2</span>
+          <span><strong>强调:</strong> #E91E63 (樱花粉)</span>
+          <span><strong>差异化:</strong> 现有亮色无粉色主色</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#FDF2F2; color:#2A1A1F;">
+        <div class="mock-sidebar" style="background:#FFFFFF; border-right:1px solid #F5D5D5;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>日常手账</li>
+            <li style="background:#FFE5EC;">生活点滴</li>
+            <li>读书摘录</li>
+            <li>观影清单</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#FFF8F8; border-color:#F5D5D5;">
+            <span class="title">生活点滴</span>
+            <button class="mock-btn" style="background:#FFE5EC; color:#2A1A1F; border-color:#F5D5D5;">搜索</button>
+            <button class="mock-btn primary" style="background:#E91E63;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#FFFFFF; color:#2A1A1F; border-color:#F5D5D5;" value="春风一吹，樱花就落满了窗台。" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background:#E91E63;">保存</button>
+              <button class="mock-btn" style="background:#FFE5EC; color:#2A1A1F; border-color:#F5D5D5;">取消</button>
+              <button class="mock-btn" style="background:#FFE5EC; color:#2A1A1F; border-color:#F5D5D5;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#FFFFFF; border-color:#F5D5D5;">
+                <h5>🌸 樱花季</h5>
+                <p>花瓣落下的速度，是每秒五厘米…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#FFE5EC; color:#C2185B;">生活</span>
+                  <span class="tag" style="background:#FFE5EC; color:#C2185B;">春天</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#FFFFFF; border-color:#F5D5D5;">
+                <h5>🍰 甜品记录</h5>
+                <p>草莓奶油，粉色甜，是少女的颜色…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#FFE5EC; color:#C2185B;">美食</span>
+                  <span class="tag" style="background:#FFE5EC; color:#C2185B;">记录</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#FFFFFF; color:#2A1A1F; border-color:#F5D5D5;">
+              <span class="kw" style="color:#E91E63;">const</span> <span style="color:#2A1A1F;">spring</span> = <span class="str" style="color:#C2185B;">"🌸"</span>;
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 波普 Pop ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>波普 Pop <span class="new-badge">NEW</span> <span class="delta">— 孟菲斯高对比，现有零高饱和亮色</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> pop</span>
+          <span><strong>背景:</strong> #FFFFFF</span>
+          <span><strong>主调:</strong> #FF1744 红 / #FFD600 黄 / #2962FF 蓝</span>
+          <span><strong>差异化:</strong> 粗黑边 + 三原色，高饱和工具化</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#FFFFFF; color:#000000;">
+        <div class="mock-sidebar" style="background:#FFD600; border-right:3px solid #000000;">
+          <h4 style="color:#000000; opacity:1;">笔记本</h4>
+          <ul>
+            <li style="background:#FFFFFF; border:2px solid #000000; margin: 4px 4px 4px 0;">📌 产品</li>
+            <li style="background:#FF1744; color:#FFFFFF; border:2px solid #000000; margin: 4px 4px 4px 0; font-weight:700;">🚀 创意</li>
+            <li style="background:#2962FF; color:#FFFFFF; border:2px solid #000000; margin: 4px 4px 4px 0;">💡 想法</li>
+            <li style="background:#FFFFFF; border:2px solid #000000; margin: 4px 4px 4px 0;">📋 任务</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#FFFFFF; border-bottom:3px solid #000000;">
+            <span class="title" style="font-weight:900; text-transform:uppercase; letter-spacing:-0.02em;">创意</span>
+            <button class="mock-btn" style="background:#FFFFFF; color:#000000; border:2px solid #000000; font-weight:700;">搜索</button>
+            <button class="mock-btn primary" style="background:#FF1744; color:#FFFFFF; border:2px solid #000000; font-weight:700; box-shadow: 4px 4px 0 #000000;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#FFFFFF; color:#000000; border:3px solid #000000; font-weight:500; box-shadow: 4px 4px 0 #FFD600;" value="大胆、强烈、不拘一格。" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background:#FF1744; color:#FFFFFF; border:2px solid #000000; font-weight:700; box-shadow: 4px 4px 0 #000000;">保存</button>
+              <button class="mock-btn" style="background:#FFD600; color:#000000; border:2px solid #000000; font-weight:700;">取消</button>
+              <button class="mock-btn" style="background:#2962FF; color:#FFFFFF; border:2px solid #000000; font-weight:700;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#FFD600; border:3px solid #000000; box-shadow: 6px 6px 0 #FF1744;">
+                <h5 style="color:#000000; font-weight:800;">🎯 BIG IDEA</h5>
+                <p style="color:#000000; opacity:0.85;">用色彩打破常规，让每个想法都跳出来…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#000000; color:#FFD600; font-weight:700;">灵感</span>
+                  <span class="tag" style="background:#FF1744; color:#FFFFFF; font-weight:700;">BOLD</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#2962FF; border:3px solid #000000; box-shadow: 6px 6px 0 #FFD600; color:#FFFFFF;">
+                <h5 style="color:#FFFFFF; font-weight:800;">⚡ 行动</h5>
+                <p style="color:#FFFFFF; opacity:0.9;">想法再好，不执行就是零…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#FFFFFF; color:#2962FF; font-weight:700;">执行</span>
+                  <span class="tag" style="background:#FFD600; color:#000000; font-weight:700;">TODO</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#000000; color:#FFFFFF; border:3px solid #FF1744; box-shadow: 6px 6px 0 #FFD600;">
+              <span class="kw" style="color:#FF1744; font-weight:900;">PRINT</span> <span class="str" style="color:#FFD600; font-weight:700;">"POP!"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 单色 Mono ========== -->
+    <div class="theme-section is-new">
+      <div class="theme-header">
+        <h2>单色 Mono <span class="new-badge">NEW</span> <span class="delta">— 纯灰度无彩色，现有零覆盖</span></h2>
+        <div class="theme-info">
+          <span><strong>key:</strong> mono</span>
+          <span><strong>背景:</strong> #F5F5F5</span>
+          <span><strong>强调:</strong> #1A1A1A (纯黑/深灰)</span>
+          <span><strong>差异化:</strong> 完全无彩色，灰度主题</span>
+        </div>
+      </div>
+      <div class="mock" style="background:#F5F5F5; color:#1A1A1A;">
+        <div class="mock-sidebar" style="background:#FFFFFF; border-right:1px solid #D0D0D0;">
+          <h4>笔记本</h4>
+          <ul>
+            <li>工作记录</li>
+            <li style="background:#1A1A1A; color:#FFFFFF;">会议纪要</li>
+            <li>项目文档</li>
+            <li>每日复盘</li>
+          </ul>
+        </div>
+        <div class="mock-content">
+          <div class="mock-topbar" style="background:#FFFFFF; border-color:#D0D0D0;">
+            <span class="title">会议纪要</span>
+            <button class="mock-btn" style="background:#F0F0F0; color:#1A1A1A; border-color:#D0D0D0;">搜索</button>
+            <button class="mock-btn primary" style="background:#1A1A1A; color:#FFFFFF;">+ 新建</button>
+          </div>
+          <div class="mock-body">
+            <input class="mock-input" style="background:#FAFAFA; color:#1A1A1A; border-color:#D0D0D0;" value="没有色彩干扰，只有文字本身。" readonly>
+            <div class="mock-buttons">
+              <button class="mock-btn primary" style="background:#1A1A1A; color:#FFFFFF;">保存</button>
+              <button class="mock-btn" style="background:#F0F0F0; color:#1A1A1A; border-color:#D0D0D0;">取消</button>
+              <button class="mock-btn" style="background:#F0F0F0; color:#1A1A1A; border-color:#D0D0D0;">标签</button>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card" style="background:#FFFFFF; border-color:#D0D0D0;">
+                <h5>📝 黑白笔记</h5>
+                <p>灰度的世界，反而更看清细节…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1A1A1A; color:#FFFFFF;">工作</span>
+                  <span class="tag" style="background:#E0E0E0; color:#1A1A1A;">会议</span>
+                </div>
+              </div>
+              <div class="mock-card" style="background:#FFFFFF; border-color:#D0D0D0;">
+                <h5>📋 行动项</h5>
+                <p>无干扰，专注于内容本身…</p>
+                <div class="tags">
+                  <span class="tag" style="background:#1A1A1A; color:#FFFFFF;">TODO</span>
+                  <span class="tag" style="background:#E0E0E0; color:#1A1A1A;">行动</span>
+                </div>
+              </div>
+            </div>
+            <div class="mock-code" style="background:#FAFAFA; color:#1A1A1A; border-color:#D0D0D0;">
+              <span class="com" style="color:#707070;">// 纯灰度，零干扰</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ========== 现有主题参照 ========== -->
+  <div class="category-title existing">▷ 现有主题参照（仅作"重复度验证"参照）</div>
+  <div class="themes">
+    <div class="theme-section">
+      <div class="theme-header">
+        <h2>default 现有</h2>
+        <div class="theme-info">
+          <span>暖纸感 + 琥珀</span>
+        </div>
+      </div>
+      <div style="padding: 16px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: #9ca3af;">
+        <span style="display:inline-block; width:32px; height:32px; background:#F2EDE3; border-radius:6px; border:1px solid #444;"></span>
+        <span style="display:inline-block; width:32px; height:32px; background:#D97706; border-radius:6px;"></span>
+        <span>— 用于对比"为什么新主题不应该也是米色+琥珀"</span>
+      </div>
+    </div>
+    <div class="theme-section">
+      <div class="theme-header">
+        <h2>dark 现有</h2>
+        <div class="theme-info">
+          <span>深灰 + 琥珀</span>
+        </div>
+      </div>
+      <div style="padding: 16px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: #9ca3af;">
+        <span style="display:inline-block; width:32px; height:32px; background:#18181C; border-radius:6px; border:1px solid #444;"></span>
+        <span style="display:inline-block; width:32px; height:32px; background:#F59E0B; border-radius:6px;"></span>
+        <span>— 用于对比"为什么新暗色不应该再选琥珀"</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <p><strong>7 个主题</strong>：1 个保留（极夜）+ 6 个全新方向</p>
+    <p style="margin-top:8px;">🟡 黄边 = 保留 · 🟢 绿边 = 新增建议落地</p>
+    <p style="margin-top:8px;">所有"重复"主题已删除 — 这一版的 7 个方向与现有 11 个主题<strong>零色相重叠</strong></p>
+  </div>
+</div>
+</body>
+</html>

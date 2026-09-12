@@ -5,7 +5,7 @@ import mermaid from 'mermaid';
 import { EventsOn, Quit, WindowFullscreen, WindowIsFullscreen, WindowIsMaximised, WindowMinimise, WindowToggleMaximise, WindowUnfullscreen } from '../wailsjs/runtime/runtime.js';
 import './css/index.css';
 import { applyAIHighlightTheme } from './js/hljs-themes.js';
-import { codeHighlightThemePairing, isDarkTheme, themeLabels } from './js/theme-config.js';
+import { codeHighlightThemePairing, isDarkTheme, resolveTheme, themeLabels } from './js/theme-config.js';
 
 // CodeMirror 6 导入
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
@@ -11600,6 +11600,23 @@ function initMCPServerSettings() {
 async function loadSettings() {
     try {
         const cfg = await window.go.main.App.GetAllSettings();
+
+        // --- 主题校验 + 兜底 ---
+        // 在拿到 cfg 之后、写入 localStorage / 应用之前校验：无效值改为 'default'，
+        // 并用修正后的完整 cfg 落库（保留其他设置项的原值），最后通知用户
+        const { name: validTheme, corrected } = resolveTheme(cfg.theme);
+        if (corrected) {
+            const invalidTheme = cfg.theme; // 保留原值供通知显示
+            cfg.theme = validTheme;
+            // fire-and-forget：异步持久化到后端，失败仅 console.error
+            // 前端 localStorage + DOM 已被本函数下方 + inline 脚本两处修正，
+            // 即使后端保存失败，本次会话仍能正常使用，下次启动会再次触发兜底
+            window.go.main.App.SaveAllSettings(cfg)
+                .catch(e => console.error('修正主题并保存设置失败:', e));
+            // 空值/非字符串时显示 (空值) 避免出现 主题""已失效 之类的丑陋文案
+            const displayTheme = invalidTheme ? `"${invalidTheme}"` : '"(空值)"';
+            nm.show(`主题${displayTheme}已失效，已恢复为默认主题`, 'warning');
+        }
 
         // --- 主题 ---
         localStorage.setItem('jot_theme', cfg.theme);

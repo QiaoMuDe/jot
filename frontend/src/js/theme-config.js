@@ -13,6 +13,7 @@ export const themeLabels = {
     'eye-protection': '护眼',
     'dark': '深色',
     'dracula': '德古拉',
+    'mono': '单色',
 };
 
 /** 系统主题 → 推荐代码高亮主题配对映射 */
@@ -28,6 +29,7 @@ export const codeHighlightThemePairing = {
     'tokyo-night': 'github-dark',
     'dark': 'github-dark',
     'eye-protection': 'github-light',
+    'mono': 'one-light',
 };
 
 /** 系统主题 → Mermaid 明暗主题映射（true=暗色, false=亮色） */
@@ -43,4 +45,16 @@ export const isDarkTheme = {
     'eye-protection': false,
     'dark': true,
     'dracula': true,
+    'mono': false,
 };
+
+/**
+ * 校验主题名是否在 themeLabels 有效清单中
+ * @param {string} themeName
+ * @returns {{ name: string, corrected: boolean }} 校正后的主题名 + 是否发生了修正
+ */
+export function resolveTheme(themeName) {
+    // hasOwnProperty 防御 themeName 是 __proto__ / constructor 等原型键时的污染
+    const valid = themeName && Object.prototype.hasOwnProperty.call(themeLabels, themeName);
+    return { name: valid ? themeName : 'default', corrected: !valid };
+}

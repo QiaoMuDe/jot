@@ -192,8 +192,8 @@
 
 /* ===== 暗色主题 ===== */
 [data-theme="dark"] {
-    --bg: #18181C;
-    --card-bg: #222226;
+    --bg: #0F0F12;
+    --card-bg: #1A1A1F;
     --text-primary: #E4E4E8;
     --text-secondary: #9C9CA8;
     --text-muted: #6E6E7A;
@@ -203,12 +203,12 @@
     --accent-lighter: #78350F;
     --selection-bg: rgba(var(--accent-rgb), 0.45);
     --accent-dark: #FBBF24;
-    --border: #2D2D33;
-    --divider: #2D2D33;
+    --border: #25252B;
+    --divider: #1F1F25;
     --danger: #F87171;
-    --hover-bg: #2A2A30;
-    --topbar-bg: #1C1C20;
-    --input-bg: #2A2A30;
+    --hover-bg: #1F1F25;
+    --topbar-bg: #141418;
+    --input-bg: #1A1A1F;
     --more-menu-bg: rgba(26,26,26,0.95);
     --overlay-bg: rgba(0, 0, 0, 0.7);
     --toast-bg: #2D2A24;
@@ -223,7 +223,7 @@
     --scrollbar-track: rgba(255, 255, 255, 0.04);
     --tag-delete-bg: rgba(255, 255, 255, 0.25);
     --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
-    --bg-secondary: #1C1C22;
+    --bg-secondary: #15151B;
     --text-tertiary: #555560;
 
     /* 基础阴影 */
@@ -573,8 +573,8 @@
 }
 
 [data-theme="dracula"] {
-  --bg: #232530;
-  --card-bg: #21222C;
+  --bg: #1A1B25;
+  --card-bg: #181923;
   --text-primary: #F8F8F2;
   --text-secondary: #989AB0;
   --text-muted: #6272A4;
@@ -584,11 +584,11 @@
   --accent-lighter: #35364A;
   --selection-bg: rgba(var(--accent-rgb), 0.45);
   --accent-dark: #D6ACFF;
-  --border: #44475A;
-  --divider: #44475A;
-  --hover-bg: #3E4054;
-  --topbar-bg: #21222C;
-    --input-bg: #3E4054;
+  --border: #363746;
+  --divider: #2A2B3B;
+  --hover-bg: #2A2B3A;
+  --topbar-bg: #16171F;
+    --input-bg: #2A2B3A;
     --more-menu-bg: rgba(33,34,44,0.95);
     --overlay-bg: rgba(0, 0, 0, 0.7);
   --toast-bg: #21222C;
@@ -604,7 +604,7 @@
   --scrollbar-track: rgba(255, 255, 255, 0.03);
   --tag-delete-bg: rgba(255, 255, 255, 0.2);
   --tag-delete-hover-bg: rgba(255, 255, 255, 0.4);
-  --bg-secondary: #1E1F2B;
+  --bg-secondary: #14151E;
   --text-tertiary: #404254;
 
   /* 基础阴影 */
@@ -753,6 +753,72 @@
   --shadow-dropdown: 0 4px 16px rgba(58, 53, 50, 0.08);
   --shadow-modal: 0 8px 32px rgba(58, 53, 50, 0.12);
   --shadow-toast: 0 12px 48px rgba(58, 53, 50, 0.15);
+}
+
+/* mono 主题：单色 — 纯灰度无彩色 */
+[data-theme="mono"] {
+  --bg: #F5F5F5;
+  --card-bg: #FFFFFF;
+  --text-primary: #1A1A1A;
+  --text-secondary: #707070;
+  --text-muted: #909090;
+  --accent: #1A1A1A;
+  --accent-rgb: 26, 26, 26;
+  --accent-light: #E0E0E0;
+  --accent-lighter: #F0F0F0;
+  --selection-bg: rgba(var(--accent-rgb), 0.20);
+  --accent-dark: #000000;
+  --border: #D0D0D0;
+  --divider: #E0E0E0;
+  --danger: #4A4A4A;
+  --hover-bg: #F0F0F0;
+  --topbar-bg: #FFFFFF;
+  --input-bg: #FAFAFA;
+  --more-menu-bg: #FFFFFF;
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+  --toast-bg: #1A1A1A;
+  --toast-text: #FFFFFF;
+  --danger-bg: #E8E8E8;
+  --danger-border: #C0C0C0;
+  --success-bg: #F0F0F0;
+  --success-border: #D0D0D0;
+  --success-text: #1A1A1A;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.40);
+  --scrollbar-track: rgba(0, 0, 0, 0.03);
+  --tag-delete-bg: rgba(0, 0, 0, 0.15);
+  --tag-delete-hover-bg: rgba(0, 0, 0, 0.30);
+  --bg-secondary: #E8E8E8;
+  --text-tertiary: #B0B0B0;
+
+  /* 基础阴影（中性灰） */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.09);
+  --shadow-xl: 0 12px 36px rgba(0, 0, 0, 0.12);
+
+  /* 语义色（用灰度深浅区分） */
+  --success: #4A4A4A;
+  --warning: #707070;
+  --tip-think: #707070;      /* 思考条 */
+  --tip-generate: #4A4A4A;   /* 生成条 */
+  --warning-bg: #F0F0F0;
+  --warning-border: #D0D0D0;
+  --warning-text: #1A1A1A;
+  --error: #1A1A1A;
+  --error-bg: #E8E8E8;
+  --error-border: #C0C0C0;
+  --error-text: #1A1A1A;
+  --info: #5A5A5A;
+  --info-bg: #F0F0F0;
+  --info-border: #D0D0D0;
+  --info-text: #1A1A1A;
+
+  /* 分层阴影 */
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-toast: 0 12px 48px rgba(0, 0, 0, 0.15);
 }
 
 
