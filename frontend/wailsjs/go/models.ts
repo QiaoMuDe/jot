@@ -1113,6 +1113,7 @@ export namespace services {
 	    screen_lock_enabled: boolean;
 	    screen_lock_password: string;
 	    editor_word_wrap: boolean;
+	    editor_scroll_past_end: boolean;
 	    ai_context_token_budget: number;
 	    ai_context_summary_trigger_ratio: number;
 	
@@ -1147,6 +1148,7 @@ export namespace services {
 	        this.screen_lock_enabled = source["screen_lock_enabled"];
 	        this.screen_lock_password = source["screen_lock_password"];
 	        this.editor_word_wrap = source["editor_word_wrap"];
+	        this.editor_scroll_past_end = source["editor_scroll_past_end"];
 	        this.ai_context_token_budget = source["ai_context_token_budget"];
 	        this.ai_context_summary_trigger_ratio = source["ai_context_summary_trigger_ratio"];
 	    }

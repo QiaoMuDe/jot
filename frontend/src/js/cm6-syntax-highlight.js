@@ -136,7 +136,9 @@ export const jotTheme = EditorView.theme({
     '.cm-content': {
         caretColor: 'var(--accent)',
         // 顶部 0：顶部留白由 .editor-textarea 容器统一提供，使行号分割线与首行顶对齐
-        padding: '0 24px 40vh 0',
+        // 底部 0：滚动严格止于内容末尾（1.85 行高的半行距自带约 8px 视觉缓冲，与顶部 8px 留白对称）；
+        // 「滚动超出内容」开启时由 scrollPastEnd 扩展注入内联 padding-bottom 接管尾部空间
+        padding: '0 24px 0 0',
         fontFamily: 'var(--font-family)',
         fontSize: '1rem',
     },

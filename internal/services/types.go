@@ -91,6 +91,7 @@ type SettingsConfig struct {
 	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
 	ScreenLockPassword          string `json:"screen_lock_password"`
 	EditorWordWrap              bool   `json:"editor_word_wrap"`
+	EditorScrollPastEnd         bool   `json:"editor_scroll_past_end"`
 	// AIContextTokenBudget AI 上下文 token 预算，存实际 token 数（如 131072=128K）。
 	// 前端设置项按 K 显示（值=token/1024），保存时再 ×1024 落库。
 	AIContextTokenBudget int `json:"ai_context_token_budget"`
@@ -126,6 +127,7 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		ScreenLockEnabled:            parseBoolSetting(s.Get("screen_lock_enabled")),
 		ScreenLockPassword:           s.Get("screen_lock_password"),
 		EditorWordWrap:               parseBoolSetting(s.Get("editor_word_wrap")),
+		EditorScrollPastEnd:          parseBoolSetting(s.Get("editor_scroll_past_end")),
 		AIContextTokenBudget:         clampContextTokenBudget(parseIntSetting(s.Get("ai_context_token_budget"), DefaultContextTokenBudget)),
 		AIContextSummaryTriggerRatio: clampSummaryTriggerRatio(parseFloatSetting(s.Get("ai_context_summary_trigger_ratio"), DefaultSummaryTriggerRatio)),
 	}
@@ -220,6 +222,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"screen_lock_enabled":              strconv.FormatBool(cfg.ScreenLockEnabled),
 		"screen_lock_password":             cfg.ScreenLockPassword,
 		"editor_word_wrap":                 strconv.FormatBool(cfg.EditorWordWrap),
+		"editor_scroll_past_end":           strconv.FormatBool(cfg.EditorScrollPastEnd),
 		"ai_context_token_budget":          strconv.Itoa(cfg.AIContextTokenBudget),
 		"ai_context_summary_trigger_ratio": strconv.FormatFloat(cfg.AIContextSummaryTriggerRatio, 'f', -1, 64),
 	}

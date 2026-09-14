@@ -62,6 +62,7 @@ marked.use(alert());
  */
 let cmEditor = null;
 let cmReadOnlyCompartment = null;
+let cmScrollCompartment = null; // 「滚动超出内容」动态扩展挂载点（每次 initCodeMirror 重建）
 let _mcpImportEditor = null;
 
 /**
@@ -93,6 +94,7 @@ let codeHighlightTheme = 'monokai-dimmed';
 function initCodeMirror(container, content = '', readOnly = false, useSyntaxHighlight = true, fileExt = '.md', themeName = 'monokai-dimmed', enableWordWrap = false) {
     // 每次初始化创建新的 Compartment（旧实例销毁后旧 compartment 随之失效）
     cmReadOnlyCompartment = new Compartment();
+    cmScrollCompartment = new Compartment();
     const extensions = [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -104,7 +106,6 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         indentOnInput(),
         foldGutter(),
         placeholder('在此输入笔记内容...'),
-        scrollPastEnd(),
         keymap.of([
             ...defaultKeymap,
             ...historyKeymap,
@@ -137,6 +138,8 @@ function initCodeMirror(container, content = '', readOnly = false, useSyntaxHigh
         EditorView.contentAttributes.of({ spellcheck: 'true' }),
         jotTheme,
         cmReadOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
+        // 「滚动超出内容」开关：开启时允许滚过最后一行（文末约一屏空白），关闭时滚动止于内容末尾
+        cmScrollCompartment.of(els.editorScrollPastEndToggle?.checked ? scrollPastEnd() : []),
         // 监听内容变化以触发自动保存和字数更新
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
@@ -240,6 +243,24 @@ function setCMReadOnly(readOnly) {
 }
 // 暴露给其他模块（editor-actions.js 的 AI 写作锁定输入使用）
 window.setCMReadOnly = setCMReadOnly;
+
+/** 上次应用的「滚动超出内容」状态（null=未应用过），用于跳过等价重复应用 */
+let _lastEditorScrollSetting = null;
+
+/**
+ * 应用「滚动超出内容」设置：动态重配置编辑器扩展（即时生效，无需重建实例）
+ * 状态与上次相同时直接跳过（loadSettings 每次进入设置页都会执行，避免对已开编辑器做冗余 reconfigure）
+ * @param {boolean} enabled - 是否允许滚动超出内容
+ */
+function applyEditorScrollSetting(enabled) {
+    if (enabled === _lastEditorScrollSetting) return;
+    _lastEditorScrollSetting = enabled;
+    if (cmEditor && cmScrollCompartment) {
+        cmEditor.dispatch({
+            effects: cmScrollCompartment.reconfigure(enabled ? scrollPastEnd() : [])
+        });
+    }
+}
 
 /**
  * 更新标题输入框的 tooltip 文案
@@ -556,6 +577,7 @@ const els = {
     mdHighlightToggle: $('mdHighlightToggle'),
     noteOpenFullscreenToggle: $('noteOpenFullscreenToggle'),
     editorWordWrapToggle: $('editorWordWrapToggle'),
+    editorScrollPastEndToggle: $('editorScrollPastEndToggle'),
     newTagName: $('newTagName'),
     newTagColor: $('newTagColor'),
     addTagBtn: $('addTagBtn'),
@@ -6508,6 +6530,17 @@ function initEventListeners() {
         nm.show('设置已保存', 'success');
     });
 
+    // 滚动超出内容开关：即时生效并保存（按保存结果分支提示，失败时不误报成功）
+    els.editorScrollPastEndToggle.addEventListener('change', async () => {
+        applyEditorScrollSetting(els.editorScrollPastEndToggle.checked);
+        const ok = await saveSettings();
+        if (ok) {
+            nm.show('设置已保存', 'success');
+        } else {
+            nm.show('设置保存失败，请重试', 'error');
+        }
+    });
+
     // 右键菜单：点击其他区域关闭
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('click', () => closeMoreMenu(els.moreMenu));
@@ -11627,6 +11660,8 @@ async function loadSettings() {
 
         // --- 自动换行 checkbox ---
         if (els.editorWordWrapToggle) els.editorWordWrapToggle.checked = cfg.editor_word_wrap;
+        if (els.editorScrollPastEndToggle) els.editorScrollPastEndToggle.checked = cfg.editor_scroll_past_end;
+        applyEditorScrollSetting(cfg.editor_scroll_past_end);
 
         // --- 代码高亮主题 ---
         codeHighlightTheme = cfg.code_highlight_theme || 'monokai-dimmed';
@@ -11769,6 +11804,7 @@ async function loadSettings() {
 
 /**
  * 从前端 DOM 收集所有设置，一次性保存到后端
+ * @returns {Promise<boolean>} 保存是否成功（供调用方分支提示，失败时内部已 console.error）
  */
 async function saveSettings() {
     try {
@@ -11811,6 +11847,7 @@ async function saveSettings() {
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,
             screen_lock_enabled: document.getElementById('screenLockToggle')?.classList.contains('active') || false,
             editor_word_wrap: els.editorWordWrapToggle?.checked || false,
+            editor_scroll_past_end: els.editorScrollPastEndToggle?.checked || false,
         };
         // 嵌入模型变更检测：换模型后库中旧模型向量无法被当前模型检索，保存成功后提示重建索引
         let oldEmbedModel = '';
@@ -11821,8 +11858,10 @@ async function saveSettings() {
         if (oldEmbedModel && cfg.ai_embed_model && oldEmbedModel !== cfg.ai_embed_model) {
             window.showNotification(`嵌入模型已从「${oldEmbedModel}」变更为「${cfg.ai_embed_model}」，建议在数据管理中重建向量索引`, 'warning', 5000);
         }
+        return true;
     } catch (e) {
         console.error('保存设置失败:', e);
+        return false;
     }
 }
 

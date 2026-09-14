@@ -223,6 +223,8 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "screen_lock_enabled", Value: "false"},
 		{Key: "screen_lock_password", Value: ""},
 		{Key: "editor_word_wrap", Value: "false"},
+		// 编辑器「滚动超出内容」（默认关闭：滚动止于内容末尾）
+		{Key: "editor_scroll_past_end", Value: "false"},
 		// AI 上下文 token 预算（默认 128K），tail 达触发比例时摘要压缩
 		{Key: "ai_context_token_budget", Value: "131072"},
 		// 摘要压缩触发比例（无前端 UI，tail 达预算该比例时触发，调小便于测试）
