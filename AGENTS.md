@@ -557,19 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 编辑器"查看/编辑/新建"模式下对"未保存改动"的感知与底部信息修复：① **未保存改动标题星号**——进入非只读模式时对标题/正文/标签/扩展名记录 `state._editSnapshot` 基准，任一改动未保存则标题前显示 `*`（`.editor-dirty`，记事本式提示），保存/切回查看/关闭时消失；② **统一脏比较**——把散落在 `updateNote`/`closeEditorSafe`/`editorViewBtn` 三处的手工 `snapshot` 比较收敛为单一 [isEditorDirty()](frontend/src/main.js)；③ **查看模式「最近编辑」时间**——修复两处缺陷（查看→编辑→保存→切回查看时间不更新；直接编辑切查看时间空白），根因是时间只在"查看模式打开且为空时"设置一次、切换/保存从不刷新。 |
-| **脏比较统一（重要）** | `isEditorDirty()`（快照 null→false 短路）+ `refreshDirtyStar()`。比较口径唯一来源 = `title`/`content` trim、`tags` `[...].sort()`+`JSON.stringify`、`fileExt` 三项。三处保存入口统一为 `if (!isEditorDirty()) { close/switch; return; }`：`updateNote`（保存按钮，无改动跳过保存直接关闭）、`closeEditorSafe` 编辑分支（无改动直接关闭，快照缺失同样直接关闭等价）、`editorViewBtn`（无改动静默切回查看、不弹通知）。`handleAppExit` 退出兜底**有意保留**简化判断（只关心文档内容/后缀、不含标签）——原语义是"仅改标签不在退出时提示"，未统一避免行为漂移。三处入口的"快照缺失"分支实际不可达（仅编辑已有笔记时触发），替换后语义等价。 |
-| **最近编辑时间（重要）** | `state._editUpdatedAt` + `updateEditorEditTime()`（唯一写入 `editorEditTime`，无笔记/未记录留空）。装配：① `switchEditorReadOnly(true)` 切回查看时刷新（覆盖两缺陷路径）；② `openEditor` 阶段二先记录 `noteData.updated_at || created_at`、查看模式打开时刷新（替代原 `if (isReadOnly && !textContent)` 一次性逻辑）；③ `viewBtn` 内联保存后从 `GetNote` 取真实 DB `updated_at` 更新（`new Date()` 兜底）并同步 `cached.updated_at`，`updateNote` 同理。`.editor-edit-time` 仅在 `.editor-view-mode` 下 CSS 显示。 |
-| **星号样式与状态栏（次要）** | [index.html](frontend/index.html) `.editor-title-wrap` 内置 `<span class="editor-dirty-star">*</span>`（`aria-hidden` + `user-select:none`）；[editor.css](frontend/src/css/components/editor.css) 星号默认隐藏、`.editor-dirty` 下显示、`color: var(--accent)`（随 14 主题自适应）。底部状态栏取消/保存按钮 `padding` 4px→6px（约 24px 高）、`.editor-footer` padding 上下 6px→3px + `min-height` 40→34px——按钮更饱满贴边，且编辑/查看两模式下状态栏高度恒定（内容低于 min-height 由 min-height 主导，切换不撑高）。 |
-| **涉及文件** | [main.js](frontend/src/main.js)（`isEditorDirty`/`refreshDirtyStar`/`updateEditorEditTime`/`state._editUpdatedAt`/`openEditor`/`switchEditorReadOnly`/`updateNote`/`closeEditorSafe`/`editorViewBtn`）、[index.html](frontend/index.html)（`editorTitleWrap` + `.editor-dirty-star`）、[editor.css](frontend/src/css/components/editor.css)（`.editor-dirty-star`/`.editor-footer`/`.editor-footer-btns .btn`）。脏比较统一方案详见 [.trae/documents/unify-dirty-check.md](.trae/documents/unify-dirty-check.md) |
-
----
-
-## 记忆点 2：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
+## 记忆点 1：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +569,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
+## 记忆点 2：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
+## 记忆点 3：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
+## 记忆点 4：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,6 +599,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **实现要点（重要）** | ① `MESSAGES` 通用池从 `startTypewriter` 局部常量提升为模块级 const（`pickWelcomeMessage` 引用它；首版留在函数内曾触发 ESLint no-undef，模块级声明须在使用点之前）；② 入场动画定时器用模块级 `welcomeEnterTimer` 管理（与 `typewriterTimer` 同模式）：`showWelcome` 开头 `clearTimeout`——`switchSession`/`loadSession` 对空会话无重入拦截，450ms 内连续两次 `showWelcome` 时旧 pending timeout 会把新加的 `.entering` 提前移除、截断第二次动画（代码审查确认的边界，仅视觉影响）；③ `@media (prefers-reduced-motion: reduce)` 禁用 `.entering` 动画（class-driven 动画约定）；④ 动画 to 态与元素自然态一致（opacity:1 / translateY:0），无 fill 也无闪烁；打字机光标 `cursor-blink` 作用于 `.ai-chat-welcome-text::after`，与容器动画不冲突。 |
 | **产品决策（重要）** | 快捷指令卡片（4 个精选技能 chip：翻译/内容摘要/文本润色/深度研究，点击 = 激活技能 + 填入示例 prompt 不自动发送）曾获批准并完整实现（`WELCOME_SUGGESTIONS` + `renderWelcomeChips` + index.html 挂载点 + `.ai-chat-welcome-chip` 胶囊样式），随后用户明确要求移除——已全部回退并 grep 验证零残留（`welcomeChips`/`WELCOME_SUGGESTIONS`/`renderWelcomeChips` 等标识符清零）。**后续不要主动再次提议此功能**；若用户重提，完整方案见 [.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md](.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md)。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`TIME_GREETINGS`/`pickWelcomeMessage`/`MESSAGES` 提升模块级/`showWelcome` 入场动画块/`welcomeEnterTimer`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-welcome` padding 上移、`@keyframes welcome-fade-up`、`.ai-chat-welcome.entering`、reduced-motion 块） |
+
+---
+
+## 记忆点 5：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 两块改动：① **悬停卡家族扩展**——AI 聊天 `.ai-mode-tip` portal 悬停卡体系（单实例卡 + initModeTips 委托 300ms 延迟）从 3 卡扩到 5 卡：工具调用明细行（失败/部分失败）的原生 `title` 替换为 `data-tip="tool-record"` 卡（`dataset.tipText/tipStatus/tipTool`），召回笔记条目（`.recall-cards-item`）的原生 `title` 替换为 `data-tip="recall-note"` 卡（`dataset.recallTitle/recallContent`）；卡片均用 `.ai-mode-tip.wide`（340px）变体，正文 `.ai-tip-fulltext`（`pre-wrap` + `break-word`）完整展示；② **召回 Content 预览截断双路径统一**——实时路径 [agent.go](internal/agent/agent.go) 序列化 `Result.RecallCards` 前、历史路径 [ai_service.go](internal/services/ai_service.go) `LoadAISessionMessagesPaginated` 读取时，统一走 `TruncateRecallCardsPreview(cards, RecallPreviewMaxLen=200)`（[recall_service.go](internal/services/recall_service.go)），前端不再截断，悬停卡完整展示 200 字预览。 |
+| **实现要点（重要）** | ① **工具行收起钩子分工**——`buildToolStatusRows` 开头调用独立注入的 `_hideToolReasonTip`（仅当当前卡是工具原因卡才收起），与 `resetAIChatState` 用的全量收起 `_hideMsgHoverTip` 职责分离：工具行流式重建高频，无条件全量收起会连带打断用户正在查看的消息统计卡；行重建会取消 300ms 挂起 timer，故委托分支的 `setTimeout` 回调需 `target.isConnected` 守卫（消息已删则放弃弹卡，防失效坐标弹到视口左上角）；② **`LoadAISessionMessages`（全量）有意不截断**——它服务 `CallAIStream` 上下文构建与 `forkSession` 消息复制（截断会丢数据），勿"顺手统一"；③ **position() 视口底部 clamp**——正文从 8 行 clamp 改为完整展示后，长卡（工具原因上限 `tools.MaxResultLen`=500 字符，约 400px 高）在矮窗口向下弹会底部溢出，below 分支补 `if (top + tipH > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - tipH)`（卡片 pointer-events:none，覆盖触发行无交互副作用；`vh` 须与 `vw` 同处定义，否则 eslint no-undef 且 below 时直接 ReferenceError）；④ `TruncateRecallCardsPreview` 截断时置 `card.Truncated = true`（字段语义对齐），按 rune 计数、幂等，返回新切片不污染 `Collector.Cards`。 |
+| **产品决策（重要）** | 预览截断统一收敛到后端（前端完整显示），用户明确要求"实时与历史两条路径都截取、前端完整显示 200 字预览"；工具失败原因正文上限沿用后端既有 `MaxResultLen=500` 截断，前端不二次截断。portal 层 `pointer-events: none` 保持卡片纯展示（不可悬入/滚动），无需 mouseout contains/mouseleave 保持逻辑。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`itemEl` dataset/`fillToolTip`/`fillRecallTip`/`position` 底部 clamp/`_hideToolReasonTip`）、[frontend/index.html](frontend/index.html)（`tool-record`/`recall-note` 两卡）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-mode-tip.wide`/`.ai-tip-fulltext`）、[internal/agent/agent.go](internal/agent/agent.go)（序列化前截断）、[internal/services/recall_service.go](internal/services/recall_service.go)（`RecallPreviewMaxLen` + `Truncated` 置位）、[internal/services/ai_service.go](internal/services/ai_service.go)（引用常量）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md)（`RecallCards` 截断语义说明） |
 
 ---
 

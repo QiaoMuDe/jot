@@ -880,7 +880,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		}
 	}
 	if len(toolCtx.Collector.Cards) > 0 {
-		if b, err := json.Marshal(toolCtx.Collector.Cards); err == nil {
+		// Content 截断为预览长度后再落库/下发，与历史回放读取路径（GetMessages）保持一致
+		cards := services.TruncateRecallCardsPreview(toolCtx.Collector.Cards, services.RecallPreviewMaxLen)
+		if b, err := json.Marshal(cards); err == nil {
 			result.RecallCards = string(b)
 		}
 	}

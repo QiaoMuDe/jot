@@ -41,6 +41,11 @@ func MergeRecallCards(lists ...[]RecallCard) []RecallCard {
 	return merged
 }
 
+// RecallPreviewMaxLen 召回卡片 Content 预览截断长度（字符数）。
+// Agent 实时汇总（agent.go 序列化 RecallCards）与历史回放读取（ai_service.go LoadAISessionMessagesPaginated）统一使用，
+// 保证两条路径下前端拿到的 Content 一致，前端悬停卡完整展示该预览。
+const RecallPreviewMaxLen = 200
+
 // TruncateRecallCardsPreview 截断召回卡片列表的 Content 字段用于前端预览
 func TruncateRecallCardsPreview(cards []RecallCard, maxLen int) []RecallCard {
 	if maxLen <= 0 {
@@ -51,6 +56,7 @@ func TruncateRecallCardsPreview(cards []RecallCard, maxLen int) []RecallCard {
 		runes := []rune(card.Content)
 		if len(runes) > maxLen {
 			card.Content = string(runes[:maxLen])
+			card.Truncated = true
 		}
 		result[i] = card
 	}

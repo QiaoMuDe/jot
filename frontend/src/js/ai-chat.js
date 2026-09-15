@@ -22,7 +22,8 @@ let contextUsageArcEl = null;   // 环形进度弧（stroke-dashoffset 控制比
 let contextUsageTextEl = null;  // 百分比 + 上限文本
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
-let _hideMsgStatsTip = null;  // initModeTips 注入：收起消息统计悬停卡（resetAIChatState 用）
+let _hideMsgHoverTip = null;  // initModeTips 注入：收起全部悬停卡（resetAIChatState 用）
+let _hideToolReasonTip = null; // initModeTips 注入：仅收起工具原因卡（工具行重建用，不连带统计卡）
 let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
 let streamPlanData = null;    // 本轮流的执行计划（落库 plan，历史回放）
 let streamPlanCardEl = null;  // 实时计划卡片 DOM 引用（流式过程中动态更新）
@@ -508,12 +509,15 @@ function initModeTips() {
         const tipH = tip.offsetHeight;
         const tipW = tip.offsetWidth || TIP_W; // compact 变体等自定义宽度按实际值取
         const vw = window.innerWidth || document.documentElement.clientWidth;
+        const vh = window.innerHeight || document.documentElement.clientHeight;
         // 中心对齐，再按视口边缘 clamp
         let left = rect.left + rect.width / 2 - tipW / 2;
         if (left < MARGIN) left = MARGIN;
         if (left + tipW > vw - MARGIN) left = Math.max(MARGIN, vw - MARGIN - tipW);
         const below = rect.top < tipH + GAP + MARGIN;
-        const top = below ? rect.bottom + GAP : rect.top - GAP - tipH;
+        let top = below ? rect.bottom + GAP : rect.top - GAP - tipH;
+        // 向下弹放不下时上移贴底，防长正文卡尾部被视口裁剪（卡片 pointer-events: none，覆盖触发行无交互副作用）
+        if (below && top + tipH > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - tipH);
         tip.classList.toggle('below', below);
         tip.style.left = left + 'px';
         tip.style.top = top + 'px';
@@ -558,11 +562,14 @@ function initModeTips() {
         usageEl.addEventListener('mouseleave', hide);
     }
 
-    // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）：事件委托 + 单实例动态填充 ──
-    // 标签数量随消息增长，不逐条绑定；portal fixed 定位不随消息区滚动，滚动即隐藏
+    // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）+ 工具调用失败原因卡 + 召回笔记卡：
+    // 事件委托 + 单实例动态填充；标签数量随消息增长，不逐条绑定；
+    // portal fixed 定位不随消息区滚动，滚动即隐藏
     const aiStatsTip = portal.querySelector('.ai-mode-tip[data-tip="ai-msg-stats"]');
     const userStatsTip = portal.querySelector('.ai-mode-tip[data-tip="user-msg-stats"]');
-    if ((aiStatsTip || userStatsTip) && messagesEl) {
+    const toolTip = portal.querySelector('.ai-mode-tip[data-tip="tool-record"]');
+    const recallTip = portal.querySelector('.ai-mode-tip[data-tip="recall-note"]');
+    if ((aiStatsTip || userStatsTip || toolTip || recallTip) && messagesEl) {
         const aiEls = {
             elapsed: document.getElementById('aiMsgStatsElapsed'),
             timebar: document.getElementById('aiMsgStatsTimebar'),
@@ -582,6 +589,15 @@ function initModeTips() {
             timeRow: document.getElementById('aiUserStatsTimeRow'),
             time: document.getElementById('aiUserStatsTime'),
             tokens: document.getElementById('aiUserStatsTokens'),
+        };
+        const toolEls = {
+            title: document.getElementById('aiToolTipTitle'),
+            name: document.getElementById('aiToolTipName'),
+            reason: document.getElementById('aiToolTipReason'),
+        };
+        const recallEls = {
+            title: document.getElementById('aiRecallTipTitle'),
+            content: document.getElementById('aiRecallTipContent'),
         };
         let hoverTimer = null;
 
@@ -674,34 +690,71 @@ function initModeTips() {
                 : '—';
         };
 
+        /** 工具调用失败原因卡：标题随状态（error→失败 / partial→部分来源失败），正文完整原因 */
+        const fillToolTip = (trigger) => {
+            const isError = trigger.dataset.tipStatus === 'error';
+            toolEls.title.textContent = isError ? '调用失败' : '部分来源失败';
+            toolEls.title.className = 'ai-mode-tip-title ' + (isError ? 'is-error' : 'is-warning');
+            toolEls.name.textContent = trigger.dataset.tipTool || '—';
+            toolEls.reason.textContent = trigger.dataset.tipText;
+        };
+
+        /** 召回笔记悬停卡：标题行完整标题，内容行完整摘要（无内容时隐藏该行） */
+        const fillRecallTip = (trigger) => {
+            recallEls.title.textContent = trigger.dataset.recallTitle || '—';
+            const content = trigger.dataset.recallContent || '';
+            recallEls.content.textContent = content;
+            recallEls.content.style.display = content ? '' : 'none';
+        };
+
         messagesEl.addEventListener('mouseover', (e) => {
-            const target = e.target.closest('.ai-msg-time, .user-tokens');
+            const target = e.target.closest('.ai-msg-time, .user-tokens, .ai-tool-status-item, .recall-cards-item');
             if (!target) return;
             // 委托绑定在 messagesEl（滚动容器，持久存在）上：
             // resetAIChatState 会重建 .ai-chat-messages-inner，绑在内层会随重建失效
             if (target === activeTrigger) return; // 已停留在当前触发元素上
-            const entry = findMsgEntry(target);
-            if (!entry) return; // 无 msgId / 无历史条目：不弹卡
             if (hoverTimer) clearTimeout(hoverTimer);
             hideMsgTip();
+            // 召回笔记条目：行 dataset 携带完整标题/内容，条目不重建无需重建收起
+            if (target.classList.contains('recall-cards-item')) {
+                if (!recallTip) return;
+                hoverTimer = setTimeout(() => {
+                    if (!target.isConnected) return; // 倒计时期间条目随消息删除：放弃弹卡
+                    fillRecallTip(target); showMsgTip(target, recallTip);
+                }, HOVER_DELAY);
+                return;
+            }
+            // 工具调用行：行 dataset 携带失败原因（无则不弹卡），不需要消息条目
+            if (target.classList.contains('ai-tool-status-item')) {
+                if (!toolTip || !target.dataset.tipText) return;
+                hoverTimer = setTimeout(() => {
+                    if (!target.isConnected) return; // 倒计时期间行被整表重建：放弃弹卡
+                    fillToolTip(target); showMsgTip(target, toolTip);
+                }, HOVER_DELAY);
+                return;
+            }
+            const entry = findMsgEntry(target);
+            if (!entry) return; // 无 msgId / 无历史条目：不弹卡
             hoverTimer = setTimeout(() => {
                 if (target.classList.contains('ai-msg-time')) {
                     if (aiStatsTip) { fillAiTip(entry); showMsgTip(target, aiStatsTip); }
-                } else {
-                    if (userStatsTip) { fillUserTip(entry); showMsgTip(target, userStatsTip); }
+                } else if (userStatsTip) {
+                    fillUserTip(entry); showMsgTip(target, userStatsTip);
                 }
             }, HOVER_DELAY);
         });
         messagesEl.addEventListener('mouseout', (e) => {
-            const target = e.target.closest('.ai-msg-time, .user-tokens');
+            const target = e.target.closest('.ai-msg-time, .user-tokens, .ai-tool-status-item, .recall-cards-item');
             if (!target) return;
             // 同一标签内部子节点间移动不算离开
-            const related = e.relatedTarget?.closest?.('.ai-msg-time, .user-tokens');
+            const related = e.relatedTarget?.closest?.('.ai-msg-time, .user-tokens, .ai-tool-status-item, .recall-cards-item');
             if (related === target) return;
             hideMsgTip();
         });
-        // 暴露给 resetAIChatState：恢复出厂/还原备份清空消息 DOM 时收起残留的统计卡
-        _hideMsgStatsTip = hideMsgTip;
+        // 暴露给 resetAIChatState：DOM 清空时收起全部残留的悬停卡
+        _hideMsgHoverTip = hideMsgTip;
+        // 暴露给 buildToolStatusRows：工具行重建时仅收起工具原因卡，不连带正在查看的统计卡
+        _hideToolReasonTip = () => { if (activeTipEl === toolTip) hideMsgTip(); };
         // portal 为 fixed 定位：消息区滚动 / 窗口缩放时立即隐藏
         messagesEl.addEventListener('scroll', hideMsgTip, { passive: true });
         window.addEventListener('resize', hideMsgTip);
@@ -4503,7 +4556,7 @@ function scrollToBottom() {
  */
 export function resetAIChatState() {
     chatHistory = [];
-    _hideMsgStatsTip?.(); // 恢复出厂/还原备份时收起残留的消息统计悬停卡
+    _hideMsgHoverTip?.(); // 恢复出厂/还原备份时收起残留的消息统计/工具原因/召回笔记悬停卡
     sessions = [];
     activeSessionId = null;
     _oldestMsgId = 0;
@@ -5147,6 +5200,9 @@ function renderRecallCards(el, cards) {
     cards.forEach(function(card) {
         var item = document.createElement('div');
         item.className = 'recall-cards-item';
+        // 完整标题/内容挂行 dataset 供同款悬停卡读取（替代原生 title）
+        item.dataset.recallTitle = card.title || '';
+        if (card.content) item.dataset.recallContent = card.content;
         item.addEventListener('click', function() {
             window.openEditor(card.id, true, false, true);
         });
@@ -5160,8 +5216,6 @@ function renderRecallCards(el, cards) {
         var textSpan = document.createElement('span');
         textSpan.className = 'recall-cards-item-text';
         textSpan.textContent = card.title;
-        // 标题 CSS 截断时悬停查看完整内容
-        textSpan.title = card.title;
         titleRow.appendChild(textSpan);
         if (card.file_ext) {
             var extSpan = document.createElement('span');
@@ -5175,8 +5229,6 @@ function renderRecallCards(el, cards) {
             var snippet = document.createElement('div');
             snippet.className = 'recall-cards-snippet';
             snippet.textContent = card.content;
-            // 摘要 3 行 clamp 截断时悬停查看完整内容
-            snippet.title = card.content;
             item.appendChild(snippet);
         }
 
@@ -5646,6 +5698,7 @@ function rebuildToolSummaryHeader(summaryEl, records) {
 /** 逐记录渲染明细列表：失败的置前（逐条各自原因）、正常（成功）聚合置后、实时 running 置顶；
     顺序即优先级（异常最优先可见），header 徽标计数与可见行一致。写入既有的 listEl */
 function buildToolStatusRows(listEl, records, isLive) {
+    _hideToolReasonTip?.(); // 行即将整表重建：仅收起悬停中失败原因卡（不连带统计卡），避免残留悬浮
     listEl.innerHTML = '';
     var errs = [], parts = [], oks = [], runs = [];
     records.forEach(function(r) {
@@ -5661,22 +5714,28 @@ function buildToolStatusRows(listEl, records, isLive) {
         return ((end - rec.startAt) / 1000).toFixed(1) + 's';
     }
     function itemEl(rec) {
-        var cls = 'is-active', icon = 'search', text = '：' + (rec.action_text || '执行'), title = '';
+        var cls = 'is-active', icon = 'search', text = '：' + (rec.action_text || '执行'), hasReason = false;
         if (rec.status === 'error') {
             cls = 'is-error'; icon = 'x';
             var re = rec.result || '';
             text = '：失败' + (re ? '：' + (re.length > 40 ? re.slice(0, 40) + '…' : re) : '');
-            if (re) title = '：失败：' + rec.result;
+            hasReason = re.length > 0;
         } else if (rec.status === 'partial') {
             cls = 'is-warning'; icon = 'alert';
             var pe = rec.result || '';
             text = '：部分来源失败' + (pe ? '：' + (pe.length > 40 ? pe.slice(0, 40) + '…' : pe) : '');
-            if (pe) title = '：部分来源失败：' + rec.result;
+            hasReason = pe.length > 0;
         } else if (rec.status === 'ok') {
             cls = 'is-done'; icon = 'check'; text = '：已完成';
         }
         var item = document.createElement('div');
         item.className = 'ai-tool-status-item ' + cls;
+        // 失败/部分失败：完整原因挂行 dataset 供同款悬停卡读取（替代原生 title）
+        if (hasReason) {
+            item.dataset.tipText = rec.result;
+            item.dataset.tipStatus = rec.status;
+            item.dataset.tipTool = getToolLabel(rec.name);
+        }
         var iconEl = document.createElement('span');
         iconEl.className = 'ai-tool-status-icon';
         iconEl.innerHTML = svgIcon(icon);
@@ -5686,7 +5745,6 @@ function buildToolStatusRows(listEl, records, isLive) {
         var textEl = document.createElement('span');
         textEl.className = 'ai-tool-status-text';
         textEl.textContent = text;
-        if (title) textEl.title = title;
         var timeEl = document.createElement('span');
         timeEl.className = 'ai-tool-status-time';
         timeEl.textContent = timeText(rec);

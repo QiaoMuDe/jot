@@ -131,7 +131,7 @@ Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generate
 
 Agent 最终结果汇总时由 [app.go](app.go) `CallAIAgentStream` 发射，参数 `(streamGen, RecallCards, ToolCalls, Plan, ReasoningContent)`，随后紧接正常路径的 `ai:stream-done`。
 
-- `RecallCards`：`services.RecallCard` 数组（`recall_notes` 本地向量召回卡片，前端 `renderRecallCards` 展示，历史回放同）。
+- `RecallCards`：`services.RecallCard` 数组（`recall_notes` 本地向量召回卡片，前端 `renderRecallCards` 展示，历史回放同；`Content` 在序列化前截断为 `RecallPreviewMaxLen`=200 字符预览，截断卡片携带 `truncated=true`）。
 - `ToolCalls`：工具调用链（前端折叠明细）。
 - `Plan`：本轮执行计划 JSON（`Result.Plan`，历史回放 `renderPlanCard` 渲染；为 `null` 表示无计划）。
 - `ReasoningContent`：思考链。

@@ -1527,12 +1527,28 @@
     width: 260px;
 }
 
+/* 加宽变体：正文展示整段预览文本的卡（工具失败原因/召回笔记），加宽减少行数 */
+.ai-mode-tip.wide {
+    width: 340px;
+}
+
 /* 数值高亮：等宽数字防跳动 */
 .tip-val {
     color: var(--text-primary);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
+
+/* ── 悬停卡完整正文：保留换行，完整展示预览文本（工具失败原因卡/召回笔记卡共用）。
+      Content 均为后端预览截断后的定长文本（召回 200 字 / 工具原因 500 字），无需前端截断 ── */
+.ai-tip-fulltext {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 标题随状态着色（与明细行失败/部分失败色一致） */
+#aiToolTipTitle.is-error { color: var(--danger, #e5484d); }
+#aiToolTipTitle.is-warning { color: var(--warning, #d97706); }
 
 /* 思考/生成耗时占比条：两段 flex 按比例分宽 */
 .tip-timebar {

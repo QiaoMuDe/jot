@@ -716,7 +716,7 @@ func (a *AIService) LoadAISessionMessagesPaginated(sessionID uint, limit int, be
 		if result[i].RecallCards != "" {
 			var cards []RecallCard
 			if err := json.Unmarshal([]byte(result[i].RecallCards), &cards); err == nil {
-				cards = TruncateRecallCardsPreview(cards, 200)
+				cards = TruncateRecallCardsPreview(cards, RecallPreviewMaxLen)
 				if b, err := json.Marshal(cards); err == nil {
 					result[i].RecallCards = string(b)
 				}
