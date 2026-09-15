@@ -555,20 +555,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手输入工具栏「深度思考」右侧新增「工具」按钮（工具钳图标 + `工具` 文字，复用 `.ai-chat-toolbar-btn`，无数量文案），点击展开浮层勾选本次对话可用的 Agent 工具。与设置页 Agent 工具管理**共用同一份全局列表**（`agentToolsMeta` + `agentToolsDisabled` + `agentToolsChanges`），形成双入口双向同步（改任意一侧另一侧同步）。样式自成一族 `.ai-chat-agent-tools-*`，**不复用设置面板的 `.ai-agent-tools-item`/`.agent-tools-mgr-header`**——初版复用被反馈"很丑"后整体重写。 |
-| **前端入口与非复用样式（重要）** | [main.js](frontend/src/main.js) `initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`/`reportAgentToolsChanges`（抽取共用，设置面板与聊天共用）；模式可见性经 `window.__setAiChatAgentToolsVis` 由 [ai-chat.js](frontend/src/js/ai-chat.js) `syncModeToggle` 驱动（chat 隐藏、Agent/Plan 显示）；流式锁 `setToggleLocked` 置 `.is-locked` + 点击震动/`showNotification('回复进行中，暂时无法调整工具','warning')` 拦截 + 经 `window.__closeAiChatAgentToolsList` 收起已展开浮层。浮层三段式 flex：head（标题+副标题+右上 `×`）/body（滚动列表，**内层 `.ai-chat-agent-tools-body-inner` 裁横向抖动**）/foot（底部「全选/取消全选」文字链接 + `已启用 n/m` 计数）。工具分三组：normal（可用）/plan（`ToolMeta.PlanOnly`，置灰只读 `.is-plan-only`）/always（`AlwaysOn` 常驻，置灰只读 `.is-always-on` 角标）；参与全选的仅 normal 组。 |
-| **保存与勾选（重要）** | 勾选即 `saveSettings()` **即时保存**（方案 A，与设置页一致），关闭浮层时 `reportAgentToolsChanges()` 汇总提示。全选用文字链接而非 checkbox——**聊天 closeChatAgentToolsList 里不得重置设置面板的 `agentToolsSelectAllCheckbox` 全局引用**（初版从设置面板 close 原样拷贝该行：`agentToolsSelectAllCheckbox` 是 settings 面板全选 checkbox 的共享全局，聊天里无 checkbox 却置 null，会在"设置面板管理列表开着同时关闭聊天浮层"时使设置全选永久失效；已删除）。同理空态兜底：工具为空时应提示"暂无工具"。 |
-| **滚动条与横向裁剪（重要）** | ① 全局 `#mainContent` 默认 `scrollbar-color: transparent transparent` 让子容器滚动条默认隐藏——浮层必须显式 `scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent`（与技能下拉同一套常显写法）才会显示。② **`overflow-x` 用 `clip` 而非 `hidden`**：`hidden` 与部分 runtime（Wails WebView2）组合会连带压制同容器 `overflow-y:auto` 的滚动条渲染；且抖动用 `translateX(±4px)` 会瞬时超出内容宽度触发水平滚动条盖住末行。修复为层级分离：外层 `.ai-chat-agent-tools-body` 只 `overflow-y:auto`（滚动条正常），内层 `.ai-chat-agent-tools-body-inner` `overflow-x:clip` 裁抖动——既保末行不被水平滚动条盖住，又不压制右侧滚动条。 |
-| **按钮高度统一与竞态（重要）** | 整排工具栏按钮高度一致性：`<button>` 默认 `line-height: normal` 不随父级继承（与相邻 `<div>` 按钮继承全局 1.6 不同致矮一截），需 `.ai-chat-toolbar-btn { line-height: inherit }`；模型选择触发器 padding/font-size 对齐 `3px`/`0.78rem` 档。**快速连点竞态两处防护**（教训）：① 关闭是异步的（Promise + 180ms `setTimeout` 清空）——打开前必须 `clearTimeout(chatAgentToolsCloseTimer)` 取消挂起的关闭定时器并移除 `.closing`，否则挂起定时器会把刚渲染的列表清空、只留一个带阴影的空壳（黑阴影条，再点才出现）；② `.open` 用 `requestAnimationFrame` 追加时须 `if (chatAgentToolsExpanded)` 守卫，防同帧"开→关"补上过期 `.open`。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`initChatAgentTools`/`renderChatAgentToolsList`/`closeChatAgentToolsList`/`reportAgentToolsChanges`/可见性回调/`chatAgentToolsCloseTimer`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`syncModeToggle` 调可见性 + `setToggleLocked` L7270 锁工具按钮）、[frontend/index.html](frontend/index.html)（`#aiChatAgentToolsBtn` + `#aiChatAgentToolsDropdown`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-*` 浮层 + 工具栏高度统一） |
-
----
-
-## 记忆点 2：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
+## 记忆点 1：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +567,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
+## 记忆点 2：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
+## 记忆点 3：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,13 +591,24 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
+## 记忆点 4：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
 
 | 记忆点 | 内容 |
 |--------|------|
 | **变更概览** | markitdown 库正式从项目内本地副本抽离为独立维护库 `gitee.com/MM-Q/doc2md` v1.0.0（包名仍为 `markitdown`，导出 API 与原用法完全兼容）。切换内容：① [internal/converter/converter.go](internal/converter/converter.go) import 由 `github.com/conductor-oss/markitdown` 改为 `gitee.com/MM-Q/doc2md`（别名 `markitdownlib` 保留，转换逻辑零改动）；② [go.mod](go.mod) 删除 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 指令，`go get` 引入 doc2md v1.0.0 + `go mod tidy` 清理旧依赖（html-to-markdown/extrame/xls 等内嵌库专属间接依赖随之移除）；③ 整个 `internal/markitdown/` 目录删除（约 55 个文件，含独立 go.mod/cmd/testdata/golden/LICENSE）；④ [app.go](app.go) 4 处注释 markitdown→doc2md。 |
 | **实现要点（重要）** | ① **API 兼容零迁移**：`New`/`ConvertReader`/`StreamInfo`（Extension/Filename/LocalPath 同名字段）/`IsUnsupportedFormat`/`Result.Markdown` 一一对应，唯一使用方 converter.go 仅换 import；② **行为保持不变**：`officeExtensions` 支持范围（.docx/.xlsx/.xls/.pptx/.pdf/.epub）、60s 超时、panic 拦截、错误翻译全保留，不扩大支持范围（ZIP 已弃用约定、纯文本走二进制检测兜底）；③ **PDFium 修复已上游化**：原本地副本的 `Stdout/Stderr: io.Discard` 修复（防 wails GUI 构建无控制台句柄时 wazero 调 `GetFileType` 报错）已包含在 doc2md v1.0.0 的 converter_pdf_pdfium.go（L31-32），PDF 转换不受影响（已核实）；④ 验证：`go build ./...` + `go vet ./...` 通过 + 全项目 grep 无 conductor-oss 残留；纯 Go 依赖切换无需重跑 `wails build`，前端不受影响。 |
 | **涉及文件** | [internal/converter/converter.go](internal/converter/converter.go)（import 切换）、[go.mod](go.mod)（删 replace + 新依赖 `gitee.com/MM-Q/doc2md v1.0.0`）、[app.go](app.go)（4 处注释更新）、`internal/markitdown/`（整目录删除） |
+
+---
+
+## 记忆点 5：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手空对话欢迎区（`#aiChatWelcome`）三处增强：① **时段问候**——打字机选词按当前小时加权：[ai-chat.js](frontend/src/js/ai-chat.js) 新增 `TIME_GREETINGS` 四个时段池（morning 5-11 / afternoon 11-18 / evening 18-23 / lateNight 23-5 点）+ `pickWelcomeMessage()` 统一选词入口（60% 概率选时段池、40% 选通用池），打字机初始选词与擦完重选都走它，语气贴合时段；② **入场过渡**——`showWelcome` 给欢迎容器加 `.entering` 播 `welcome-fade-up`（fade-in-up 0.35s ease-out），450ms 后 JS 移除 class，**不写 fill** 规避 WebView2 残留复合层（沿用 MCP 列表塌陷教训）；③ **位置上移**——[ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-chat-welcome` 底部 padding 16px→96px（数值越大越靠上，用户可调）。 |
+| **实现要点（重要）** | ① `MESSAGES` 通用池从 `startTypewriter` 局部常量提升为模块级 const（`pickWelcomeMessage` 引用它；首版留在函数内曾触发 ESLint no-undef，模块级声明须在使用点之前）；② 入场动画定时器用模块级 `welcomeEnterTimer` 管理（与 `typewriterTimer` 同模式）：`showWelcome` 开头 `clearTimeout`——`switchSession`/`loadSession` 对空会话无重入拦截，450ms 内连续两次 `showWelcome` 时旧 pending timeout 会把新加的 `.entering` 提前移除、截断第二次动画（代码审查确认的边界，仅视觉影响）；③ `@media (prefers-reduced-motion: reduce)` 禁用 `.entering` 动画（class-driven 动画约定）；④ 动画 to 态与元素自然态一致（opacity:1 / translateY:0），无 fill 也无闪烁；打字机光标 `cursor-blink` 作用于 `.ai-chat-welcome-text::after`，与容器动画不冲突。 |
+| **产品决策（重要）** | 快捷指令卡片（4 个精选技能 chip：翻译/内容摘要/文本润色/深度研究，点击 = 激活技能 + 填入示例 prompt 不自动发送）曾获批准并完整实现（`WELCOME_SUGGESTIONS` + `renderWelcomeChips` + index.html 挂载点 + `.ai-chat-welcome-chip` 胶囊样式），随后用户明确要求移除——已全部回退并 grep 验证零残留（`welcomeChips`/`WELCOME_SUGGESTIONS`/`renderWelcomeChips` 等标识符清零）。**后续不要主动再次提议此功能**；若用户重提，完整方案见 [.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md](.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md)。 |
+| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`TIME_GREETINGS`/`pickWelcomeMessage`/`MESSAGES` 提升模块级/`showWelcome` 入场动画块/`welcomeEnterTimer`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-welcome` padding 上移、`@keyframes welcome-fade-up`、`.ai-chat-welcome.entering`、reduced-motion 块） |
 
 ---
 

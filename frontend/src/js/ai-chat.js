@@ -5042,6 +5042,7 @@ function hideEmptyState() {
 }
 
 let typewriterTimer = null;
+let welcomeEnterTimer = null;  // 入场动画 class 移除定时器（与 typewriterTimer 同管理模式）
 
 /**
  * 显示空对话欢迎语
@@ -5069,6 +5070,20 @@ function showWelcome() {
     updateBarsAreaVisibility();
     updateChatTitle();
     startTypewriter();
+
+    // 入场过渡：fade-in-up，播完即移除 class（不留 fill 残留复合层）
+    if (welcomeEnterTimer !== null) {
+        clearTimeout(welcomeEnterTimer);
+        welcomeEnterTimer = null;
+    }
+    welcomeEl.classList.remove('entering');
+    // 强制 reflow 以便重复添加时也能重放动画
+    void welcomeEl.offsetWidth;
+    welcomeEl.classList.add('entering');
+    welcomeEnterTimer = setTimeout(() => {
+        welcomeEl.classList.remove('entering');
+        welcomeEnterTimer = null;
+    }, 450);
 }
 
 /**
@@ -5081,6 +5096,77 @@ function hideWelcome() {
     stopTypewriter();
 }
 
+// 通用欢迎文案池：与分时段池（TIME_GREETINGS）按权重混合随机
+const MESSAGES = [
+    '有什么我能帮你的吗？',
+    '今天想写点什么？',
+    '有什么想法，随时告诉我',
+    '开始记录你的灵感吧',
+    '准备好了就告诉我',
+    '随便聊聊也可以',
+    // ── 引导对话 ──
+    '想聊点什么？',
+    '最近有什么新鲜事？',
+    '有什么难题需要我帮忙吗？',
+    '来吧，说出你的想法',
+    '我在听，慢慢说',
+    '今天过得怎么样？',
+    '从随便一句话开始也行',
+    '想到什么就问什么',
+    '别客气，尽管开口',
+    // ── 引导写作 / 记录 ──
+    '把今天的想法记下来吧',
+    '有没有想记录的心情？',
+    '随手记下此刻的灵感',
+    '灵感稍纵即逝，快记下来',
+    '给今天留点文字吧',
+    '写什么都行，先写下来',
+    // ── 欢迎 / 期待 ──
+    '很高兴见到你',
+    '新的一天，新的记录',
+    '想写什么就写什么',
+];
+
+/**
+ * 分时段欢迎文案池：按当前小时加权选用，语气贴合时段
+ */
+const TIME_GREETINGS = {
+    morning: [   // 5-11 点
+        '早上好，新的一天，新的记录',
+        '今天想写点什么？',
+        '从一句话开始今天吧',
+    ],
+    afternoon: [ // 11-18 点
+        '下午好，有什么我能帮忙的？',
+        '随手记下此刻的灵感',
+        '想聊点什么？',
+    ],
+    evening: [   // 18-23 点
+        '晚上好，今天过得怎么样？',
+        '给今天留点文字吧',
+        '有什么想法，随时告诉我',
+    ],
+    lateNight: [ // 23-5 点
+        '夜深了，灵感正浓',
+        '还没休息？慢慢说，我在听',
+        '把今晚的念头记下来吧',
+    ],
+};
+
+/**
+ * 按时段加权选欢迎语：约 60% 概率选时段池，40% 选通用池（MESSAGES）
+ */
+function pickWelcomeMessage() {
+    const hour = new Date().getHours();
+    const poolKey = hour >= 5 && hour < 11 ? 'morning'
+        : hour >= 11 && hour < 18 ? 'afternoon'
+        : hour >= 18 && hour < 23 ? 'evening'
+        : 'lateNight';
+    // 0/1 → 0.6 概率走时段池
+    const pool = Math.random() < 0.6 ? TIME_GREETINGS[poolKey] : MESSAGES;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
 /**
  * 打字机效果 :逐字打印 → 暂停 → 逐字擦除 → 循环
  */
@@ -5088,37 +5174,7 @@ function startTypewriter() {
     const el = welcomeEl?.querySelector('.ai-chat-welcome-text');
     if (!el) return;
 
-    const MESSAGES = [
-        '有什么我能帮你的吗？',
-        '今天想写点什么？',
-        '有什么想法，随时告诉我',
-        '开始记录你的灵感吧',
-        '准备好了就告诉我',
-        '随便聊聊也可以',
-        // ── 引导对话 ──
-        '想聊点什么？',
-        '最近有什么新鲜事？',
-        '有什么难题需要我帮忙吗？',
-        '来吧，说出你的想法',
-        '我在听，慢慢说',
-        '今天过得怎么样？',
-        '从随便一句话开始也行',
-        '想到什么就问什么',
-        '别客气，尽管开口',
-        // ── 引导写作 / 记录 ──
-        '把今天的想法记下来吧',
-        '有没有想记录的心情？',
-        '随手记下此刻的灵感',
-        '灵感稍纵即逝，快记下来',
-        '给今天留点文字吧',
-        '写什么都行，先写下来',
-        // ── 欢迎 / 期待 ──
-        '很高兴见到你',
-        '新的一天，新的记录',
-        '想写什么就写什么',
-    ];
-
-    let text = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+    let text = pickWelcomeMessage();
     let i = 0, erasing = false;
 
     function tick() {
@@ -5135,8 +5191,8 @@ function startTypewriter() {
                 el.textContent = text.substring(0, --i);
                 typewriterTimer = setTimeout(tick, 40);
             } else {
-                // 擦完重新选一条随机消息
-                text = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+                // 擦完重新选一条（按时段加权）
+                text = pickWelcomeMessage();
                 erasing = false;
                 typewriterTimer = setTimeout(tick, 1500);
             }

@@ -2662,7 +2662,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px 36px;
+    /* 底部加大内边距，使打字机欢迎语整体上移（数值越大越靠上） */
+    padding: 16px 36px 96px 36px;
 }
 
 .ai-chat-welcome-text {
@@ -2686,6 +2687,28 @@
     margin-left: 3px;
     vertical-align: text-bottom;
     animation: cursor-blink 0.6s step-end infinite;
+}
+
+/* 入场过渡：fade-in-up，播完由 JS 移除 .entering（不用 fill，避免 WebView2 残留复合层） */
+@keyframes welcome-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-chat-welcome.entering {
+    animation: welcome-fade-up 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-chat-welcome.entering {
+        animation: none;
+    }
 }
 
 /* ── 错误消息 ── */
