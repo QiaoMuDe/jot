@@ -3,11 +3,11 @@
 // 职责：
 //   - 工具实现（read_url / http_request / recall_notes /
 //     json_validate / json_format / json_extract / manage_todo /
-//     manage_notebook / manage_tag / manage_memory / manage_note / get_stats / ask_user /
+//     manage_notebook / manage_tag / manage_memory / browse_notes / manage_note / get_stats / ask_user /
 //     create_plan / update_plan）每文件一个，
 //     均提供导出构造器（NewReadURL / NewHTTP / NewRecallNotes /
 //     MustJSONValidate / MustJSONFormat / MustJSONExtract / NewManageTodo /
-//     NewManageNotebook / NewManageTag / NewManageMemory / NewManageNote / NewGetStats / NewAskUser /
+//     NewManageNotebook / NewManageTag / NewManageMemory / NewBrowseNotes / NewManageNote / NewGetStats / NewAskUser /
 //     NewCreatePlan / NewUpdatePlan），
 //     由父包 agent 的 registry.go 统一装配与注册。
 //   - 共享上下文类型（EmitFn / Record / Collector / Context / WrapWithError）定义于

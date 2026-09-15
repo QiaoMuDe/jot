@@ -1,7 +1,7 @@
 # Agent 工具开发与维护指南
 
 > 本指南面向 `internal/agent` 模块的后续维护者：如何**新增**、**维护**、**注册**和**编写** Agent 工具，以及必须遵守的规范。
-> 适用对象：`recall_notes` / `read_url` / `manage_note` / `get_stats` / `ask_user` 等 ReAct 循环中模型可调用的工具（完整清单见 §6）。
+> 适用对象：`recall_notes` / `read_url` / `browse_notes` / `manage_note` / `get_stats` / `ask_user` 等 ReAct 循环中模型可调用的工具（完整清单见 §6）。
 
 ---
 
@@ -15,7 +15,8 @@ internal/agent/                    父包（Agent 对话链路）
 ├── doc.go                         包级说明文档
 └── tools/                         工具子包（每文件一个工具，完整清单见 §6）
     ├── context.go                 共享上下文：Context / Record / Collector / WrapWithError
-    ├── manage_note.go             带依赖 + ActionText 的复杂工具参考（create/list/view/...）
+    ├── browse_notes.go             只读读工具（list 搜索 / view 读全文，ActionText 参考）
+    ├── manage_note.go             写/管理工具参考（create/update/edit/pin/move/tags）
     ├── plan.go                    规划工具实现（create_plan / update_plan）
     └── doc.go                     子包说明文档（工具清单，需同步维护）
 
@@ -371,7 +372,7 @@ var getToolLabel = function(name) { return name || '工具'; };
 
 ### 8.3 在工具实现内维护动作文案
 
-若要在开始调用时展示具体动作（如 manage_note 的"创建笔记"、recall_notes 的"检索本地笔记"），让工具在自己的 .go 文件里实现可选接口 `ActionTextProvider`：
+若要在开始调用时展示具体动作（如 browse_notes 的"列出笔记"、manage_note 的"创建笔记"、recall_notes 的"检索本地笔记"），让工具在自己的 .go 文件里实现可选接口 `ActionTextProvider`：
 
 ```go
 // ActionTextProvider 可选接口：提供开始调用时的中文动作文案。
@@ -383,7 +384,7 @@ type ActionTextProvider interface {
 
 实现要点：
 
-- 工具在自己的 .go 文件实现 `ActionText(argumentsInJSON string) string`：解析 arguments JSON 中的 action / 关键参数，返回中文文案（如 manage_note 的 create → "创建笔记"、recall_notes → "检索本地笔记"）。
+- 工具在自己的 .go 文件实现 `ActionText(argumentsInJSON string) string`：解析 arguments JSON 中的 action / 关键参数，返回中文文案（如 browse_notes 的 list → "列出笔记"、manage_note 的 create → "创建笔记"、recall_notes → "检索本地笔记"）。
 - **解析失败返回 ""**：前端回退显示"执行"。
 - **action 未命中返回 "执行"**：给出明确的兜底文案。
 - 父包在 `tool_start` 时按工具名自动调用 `ActionText`，把结果放进 `Record.ActionText`（json 字段 `action_text`）随 `ai:tool-status` 下发，**无需改动前端**。
