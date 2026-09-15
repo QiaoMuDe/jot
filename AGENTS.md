@@ -25,9 +25,8 @@ jot/                                    # 项目根目录
 │   │   │   └── tools/                      # 内置工具实现（manage_note/ask_user/plan/recall_notes/read_url/http_request/read_note_section/json 三件套/manage_notebook/manage_tag/manage_todo/get_stats 共 15 个）
 │   ├── aierrors/                       # AI 错误分类（errors.go：auth_error/rate_limit/server_error 等 11 类）
 │   ├── config/                         # 路径工具（JotHomeDir/SubDir，~/.jot 下 data/backup/images/logs/mcp 五子目录）
-│   ├── converter/                      # markitdown 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
+│   ├── converter/                      # doc2md 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
 │   ├── einocli/                        # eino 薄适配层（chat.go/embedding.go/types.go，OpenAI 兼容客户端封装）
-│   ├── markitdown/                     # 从 Go module cache 克隆的 markitdown 库本地副本（含 PDFium Stdout/Stderr Discard 修复）
 │   ├── database/                       # SQLite 初始化 + 种子数据
 │   │   ├── db.go                       # SQLite 初始化（glebarez/sqlite 驱动，底层 modernc.org/sqlite v1.51）+ WAL + 优化 PRAGMA + DefaultDBPath() + blank import 注册 sqlite-vec 扩展 + 孤儿列清理
 │   │   ├── models.go                   # GORM 模型 AutoMigrate 注册入口
@@ -149,7 +148,7 @@ jot/                                    # 项目根目录
 | **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
 | **内置 MCP 服务器** | 内置 MCP 服务器模板（Tavily/AnySearch/知乎三服务/Context7），InitDB 时按 Name 去重增量插入 | `database/builtin_mcp_servers.go` | GORM |
 | **路径工具** | `~/.jot` 根目录统一解析（data/backup/images/logs/mcp 五个子目录），数据库默认路径 `~/.jot/data/jot.db` | `internal/config/config.go:JotHomeDir()/SubDir()`，`database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
-| **办公文件转换器** | 封装 markitdown 库，将 .docx/.pdf/.xlsx 等 7 种办公文件转为 Markdown 文本，带 60s 超时保护 | `internal/converter/converter.go` | github.com/conductor-oss/markitdown
+| **办公文件转换器** | 封装 doc2md 库，将 .docx/.pdf/.xlsx 等 7 种办公文件转为 Markdown 文本，带 60s 超时保护 | `internal/converter/converter.go` | gitee.com/MM-Q/doc2md
 
 ### 2.2 业务核心模块
 
@@ -494,7 +493,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 15. **启动器网格（Launcher Grid）+ 拼音搜索**：新增 `Ctrl+P` 触发的全屏浮层启动器，13 个功能项 3 列网格布局。**pinyin-pro 拼音搜索**：`import { pinyin } from 'pinyin-pro'`（v3.29.3），懒计算 + Map 缓存拼音索引（`{ full: 全拼连续串, initials: 首字母串 }`），三路降级匹配（中文原文 `includes` → 全拼 `includes` → 首字母 `includes`），输入 `compact = trimmed.replace(/\s+/g, '')` 支持空格分词（如 "s z t" 或 "she zhi" 均命中"设置"）。**ES module 函数暴露**：launcher 调用的操作函数（`toggleSidebar`/`openShortcuts`/`showAbout` 等）需手动 `window.xxx = xxx` 暴露。**离场动画**：`executeAction` 先调 `closeLauncher(callback)` 等 `transitionend` 完成后再执行操作——离场涉及 mask 和 panel 共 4 条过渡属性，`transitionend` 会冒泡 4 次，需 `_closed` 守卫防止重复触发。**键盘导航**：四方向（ArrowUp/Down 按列跳转+首尾循环/ArrowLeft/Right 逐项+Tab 拦截），首次导航 `_selectedIndex === -1` 时直接跳第一项。动画用 `requestAnimationFrame` 双阶段，离场加 300ms `setTimeout` 保底。详见 [launcher.js](frontend/src/js/launcher.js)、[launcher.css](frontend/src/css/components/launcher.css)
 
-16. **markitdown 库本地克隆 + Wails 构建 PDF 转换修复**：将 `github.com/conductor-oss/markitdown` 从 Go module cache 克隆到 `internal/markitdown` 进行本地维护，通过 `go.mod` replace 指令引用。修复 `wails build` 后 PDF 转换失败问题——根因是 Wails GUI 构建缺少有效控制台句柄，wazero 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误。修复方案：在 `initPdfiumPool()` 的 `webassembly.Config` 中添加 `Stdout: io.Discard` 和 `Stderr: io.Discard`，避免 wazero 对无效句柄调用 `GetFileType`。详见 [internal/markitdown/converter_pdf_pdfium.go](internal/markitdown/converter_pdf_pdfium.go)、[go.mod](go.mod)
+16. **markitdown 库本地克隆 + Wails 构建 PDF 转换修复（已由独立库取代）**：曾将 `github.com/conductor-oss/markitdown` 从 Go module cache 克隆到 `internal/markitdown` 本地维护（go.mod replace 引用）。修复 `wails build` 后 PDF 转换失败——根因是 Wails GUI 构建缺少有效控制台句柄，wazero 初始化 PDFium WebAssembly 时调用 `GetFileType /dev/stdout` 返回无效句柄错误，修复方案为 `webassembly.Config` 添加 `Stdout/Stderr: io.Discard`。**现状**：该库已抽离为独立库 `gitee.com/MM-Q/doc2md`（PDFium 修复已随上游化，见其 `converter_pdf_pdfium.go`），项目删除本地副本与 replace 指令，`internal/converter/converter.go` 直接 import 独立库。详见 [go.mod](go.mod)
 
 17. **全屏模式顶栏分割线隐藏**：编辑器进入全屏模式（`.editor-panel.fullscreen`）时，通过纯 CSS `:has()` 选择器（`.main-content-area:has(.editor-panel.fullscreen) #topbar`）将顶栏底部 `border-bottom-color` 设为 `transparent`，使顶栏与编辑器面板在视觉上融为一体，无分割线更加宽阔沉浸。利用 topbar 已有的 `transition: border-color 0.3s ease-out` 实现平滑淡出/恢复。零 JS 改动，纯 CSS 实现。详见 [editor.css](frontend/src/css/components/editor.css)
 
@@ -556,18 +555,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：read_url 分页读取改造（offset/length 切片 + stateless 无缓存 + 注入缝与单测）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | read_url 从"单次整页截断"升级为分页读取：新增可选参数 `offset`（起始字符位置，缺省 0）与 `length`（单次读取字符数，缺省 `ai_read_url_max_chars`=10000，显式传入上限 `maxSectionLen`=100000）。全文按 rune 偏移切片，返回"第 X-Y 字符（共 N 字符）"，未读完时追加"（内容未完，如需继续请以 offset=%d 调用）"续读提示；offset 越界返回"read_url 的 offset 超出内容范围（共 N 字符，已全部读取完毕）"让模型停止翻页。**刻意无缓存**：对齐官方 MCP Fetch 的 stateless 设计，每轮整页重抓再切片——动态页面偏移可能微小漂移，由 ReAct 循环承担（相邻段可能有极小重叠/缺失，静态文章页无感）。 |
-| **实现要点** | [read_url.go](internal/agent/tools/read_url.go)：① offset/length 校验（负数/非整数）**前移到抓取之前**，非法参数零抓取直接报错；② 切片越界判断 `offset < 0 \|\| offset >= total` 双条件（巨型 offset 经 int 转换溢出为负一并按越界处理）；③ 全文拼接 `\n\n` 分隔符仅在文档之间插入，不残留尾部空行（total 精确等于正文长度，无"幻影末段"）；④ 越界错误带 `read_url 的` 工具名前缀（与同包错误风格一致）。**测试注入缝**：新增 `skipURLGuard` 字段（对齐 [http_request.go](internal/agent/tools/http_request.go) 既有范式），true 时跳过 `validateHTTPURL` 内网拒绝与拨号期校验，仅供测试经 `InvokableRun` 访问 httptest 本机服务器，生产构造器不设置、内网防护零影响。 |
-| **配套测试** | [read_url_test.go](internal/agent/tools/read_url_test.go) 新增 7 子用例（httptest 本机服务器 + skipURLGuard）：首段从开头读并提示续读、按 offset 续读中间段（跨甲/乙分界验证切片）、末段截到末尾不再提示、offset 越界报已读完（精确边界 offset=total）、巨型 offset 溢出防护、非法参数在抓取前被拒绝（原子计数器断言服务端零请求）。[http_request_test.go](internal/agent/tools/http_request_test.go) 截断测试同步 5000→10000——提交 a920045 提高 `ai_http_max_chars` 默认值后测试未同步的既有失败（教训：**改默认值必须同步更新相关测试断言**）。 |
-| **涉及文件** | [internal/agent/tools/read_url.go](internal/agent/tools/read_url.go)、[internal/agent/tools/read_url_test.go](internal/agent/tools/read_url_test.go)、[internal/agent/tools/http_request_test.go](internal/agent/tools/http_request_test.go) |
-
----
-
-## 记忆点 2：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
+## 记忆点 1：AI 聊天 Agent 工具浮层按钮（工具栏双入口启停 + 组分级清单 + 滚动/竞态治理）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +568,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
+## 记忆点 2：编辑器未保存改动感知（标题星号 + 统一脏比较）+ 查看模式「最近编辑」时间修复
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -592,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
+## 记忆点 3：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,7 +592,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
+## 记忆点 4：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -613,6 +601,16 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **hover 三档渐进（重要）** | 通用约定：**UI 控件 hover 边框禁用 `--accent-light`**（各亮色主题该值均为浅色调，作边框对比度不足；初版 5 处直接改纯 `var(--accent)` 后 hover 与 open/active 边框层级弱化，复查改为 color-mix 中间档）。五处落地：[dropdowns.css](frontend/src/css/components/dropdowns.css)（`.font-family-trigger`/`.theme-select-trigger`）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-note-ref-filter-btn`）、[search-modal.css](frontend/src/css/components/search-modal.css)（`.search-modal-filter-btn`）、[md-reference.css](frontend/src/css/components/md-reference.css)（`.md-ref-toc-item`）。默认主题验证：静止 `#D0C8B8` → hover ≈`#D68F3B` → open `#D97706` 三档可辨。 |
 | **恢复出厂补种（重要）** | `ResetDatabase`（[app.go](app.go)）DropTable 全部表（含 `mcp_servers`，注册于 [models.go](internal/database/models.go) `AllModels`）→ `reconnectDB`（[app.go](app.go)，为解决 glebarez/sqlite 驱动 DropTable 后连接失效）内部调 `database.InitDB`（[db.go](internal/database/db.go)），其末尾种子逻辑 `InitBuiltinMCPServers` 重新插入 6 个内置 MCP 模板（tavily/anysearch/zhihu_search/zhihu_global/zhihu_hot/context7，禁用态 + `<your-api-key>` 占位符，[builtin_mcp_servers.go](internal/database/builtin_mcp_servers.go)）、`InitBuiltinProfiles` 重新插入内置 API 预设——与首次安装的"出厂状态"一致，用户自建数据确实已清。**教训**：`InitDB` 承担"建库 + 种子"双重职责，`reconnectDB` 为共用函数（导入恢复等场景也走），未来若要求"恢复出厂后 MCP/预设为空"需把 `InitDB` 拆分 connect/seed 两段或给 reconnectDB 加跳过种子开关，不可直接改共用路径；`InitBuiltinPrompts`/`InitDefaultTags`/`InitDefaultSettings` 目前在 `ResetDatabase` 与 `InitDB` 中双重执行（幂等冗余）。前端善后链路健康：`resetDatabase`（[data-management.js](frontend/src/js/data-management.js)）→ `reloadSettings` → `loadSettings` → `loadMCPServers` 刷新缓存。 |
 | **涉及文件** | [frontend/index.html](frontend/index.html)（readonly + placeholder + 注释）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（只读态）、[frontend/src/main.js](frontend/src/main.js)（删监听 + 空值文案）、[frontend/src/css/components/dropdowns.css](frontend/src/css/components/dropdowns.css)/[ai-chat.css](frontend/src/css/components/ai-chat.css)/[search-modal.css](frontend/src/css/components/search-modal.css)/[md-reference.css](frontend/src/css/components/md-reference.css)（hover 中间档）、[app.go](app.go)/[internal/database/db.go](internal/database/db.go)（补种机制，未改） |
+
+---
+
+## 记忆点 5：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | markitdown 库正式从项目内本地副本抽离为独立维护库 `gitee.com/MM-Q/doc2md` v1.0.0（包名仍为 `markitdown`，导出 API 与原用法完全兼容）。切换内容：① [internal/converter/converter.go](internal/converter/converter.go) import 由 `github.com/conductor-oss/markitdown` 改为 `gitee.com/MM-Q/doc2md`（别名 `markitdownlib` 保留，转换逻辑零改动）；② [go.mod](go.mod) 删除 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 指令，`go get` 引入 doc2md v1.0.0 + `go mod tidy` 清理旧依赖（html-to-markdown/extrame/xls 等内嵌库专属间接依赖随之移除）；③ 整个 `internal/markitdown/` 目录删除（约 55 个文件，含独立 go.mod/cmd/testdata/golden/LICENSE）；④ [app.go](app.go) 4 处注释 markitdown→doc2md。 |
+| **实现要点（重要）** | ① **API 兼容零迁移**：`New`/`ConvertReader`/`StreamInfo`（Extension/Filename/LocalPath 同名字段）/`IsUnsupportedFormat`/`Result.Markdown` 一一对应，唯一使用方 converter.go 仅换 import；② **行为保持不变**：`officeExtensions` 支持范围（.docx/.xlsx/.xls/.pptx/.pdf/.epub）、60s 超时、panic 拦截、错误翻译全保留，不扩大支持范围（ZIP 已弃用约定、纯文本走二进制检测兜底）；③ **PDFium 修复已上游化**：原本地副本的 `Stdout/Stderr: io.Discard` 修复（防 wails GUI 构建无控制台句柄时 wazero 调 `GetFileType` 报错）已包含在 doc2md v1.0.0 的 converter_pdf_pdfium.go（L31-32），PDF 转换不受影响（已核实）；④ 验证：`go build ./...` + `go vet ./...` 通过 + 全项目 grep 无 conductor-oss 残留；纯 Go 依赖切换无需重跑 `wails build`，前端不受影响。 |
+| **涉及文件** | [internal/converter/converter.go](internal/converter/converter.go)（import 切换）、[go.mod](go.mod)（删 replace + 新依赖 `gitee.com/MM-Q/doc2md v1.0.0`）、[app.go](app.go)（4 处注释更新）、`internal/markitdown/`（整目录删除） |
 
 ---
 
@@ -630,12 +628,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 7. **所有文件引用必须使用相对路径**（从项目根目录开始，如 `frontend/src/js/ai-chat.js`），禁止使用绝对路径（如 `file:///d:/.../frontend/...`），确保项目克隆到任意机器后链接仍然有效，且不泄露本地目录结构
 8. **ESC 快捷键统一在全局 `handleKeyboardNavigation` 函数（[main.js](frontend/src/main.js)）中处理**，不要在模块或组件中单独注册 ESC 监听器（如密码弹窗、确认对话框、自定义浮层等），确保快捷键入口集中、行为可控、避免冲突
 9. **系统主题维护**：新增或修改系统主题，参照权威文档 [frontend/src/css/theme-maintenance.md](frontend/src/css/theme-maintenance.md) 执行即可
-10. **设置页新增设置项流程**：如需在设置页新增一个设置项（如 toggle/输入框/下拉菜单），需依次修改以下 4 个文件共 7-8 处——
-    - **[internal/database/db.go](internal/database/db.go)**：在 `InitDefaultSettings` 的 defaults 列表末尾添加该设置的 key 和默认值（增量插入，仅对新用户生效）
-    - **[internal/services/types.go](internal/services/types.go)**：三处——① `SettingsConfig` 结构体新增对应类型字段（bool/int/string）；② `GetAllSettings()` 中初始化读取映射（`parseBoolSetting`/`parseIntSetting`/`s.Get()`）；③ `SaveAllSettings()` 的 `sets` map 中新增写入映射（`strconv.FormatBool`/`strconv.Itoa`/直接赋值）
-    - **[frontend/index.html](frontend/index.html)**：在对应设置分区卡片内新增 HTML 控件（参考现有 toggle/输入框/下拉菜单的结构和 class）
-    - **[frontend/src/main.js](frontend/src/main.js)**：三至四处——④ `els` 对象中注册元素引用（`$('elementId')`）；⑤ `loadSettings()` 中读取 `cfg.xxx` 同步到 DOM；⑥ `saveSettings()` 的 `cfg` 对象中收集 DOM 值；⑦ 若需要自动保存，在事件绑定区域添加 `addEventListener('change', ...)` 调用 `saveSettings()` + 通知
-    - 注意：CM6 编辑器相关设置（如 `initCodeMirror` 参数）需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）
+10. **设置页新增/修改/删除设置项流程**：参照权威文档 [frontend/src/css/components/settings-maintenance.md](frontend/src/css/components/settings-maintenance.md) 执行（4 文件 7-8 处全链路 + 无 UI 后端项简化流程 + 删除时孤儿键清理 + 易漏项清单）。CM6 编辑器相关设置需在所有调用点透传（`openEditor`/`applyFileExt`/`toggleFileExt`/`applyCodeHighlightTheme` 共 4 处）
 11. **禁止维护实际文件行数**：`AGENTS.md` 中不得出现 `（~XXX 行）` 类标记，文件名后也无需标注行数，避免频繁维护。
 12. **数据模型维护规范**：**新增或修改数据模型（models 包中的 struct）时，必须同步维护 [internal/database/models.go](internal/database/models.go) 的 `AllModels` 注册表**（按"子表在前"顺序追加/调整），[db.go](internal/database/db.go) 的 `InitDB` 建表与 [app.go](app.go) 的 `ResetDatabase` 重置出厂均引用该唯一注册点，无需也不得在其他地方单独维护模型列表。若新增无 model struct 的表（如多对多关联表），需在 `ResetDatabase` 中补显式 `DROP TABLE IF EXISTS` 语句。
 13. **Agent 事件与工具维护参考**：AI 助手模块的交互事件协议与工具开发各有独立权威文档，维护 `internal/agent` 相关功能时按需参考 —— [internal/agent/EVENTS.md](internal/agent/EVENTS.md)（agent 前后端交互事件协议）与 [internal/agent/TOOLS.md](internal/agent/TOOLS.md)（agent 工具开发与维护流程）。

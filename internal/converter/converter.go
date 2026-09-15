@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	markitdownlib "github.com/conductor-oss/markitdown"
+	markitdownlib "gitee.com/MM-Q/doc2md"
 )
 
 var (

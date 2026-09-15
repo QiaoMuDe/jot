@@ -1892,7 +1892,7 @@ func (a *App) ReadAIChatFiles(paths []string) []AIChatFileResult {
 }
 
 // readAIChatFiles 内部方法：校验、读取一组文件（按钮上传和拖拽上传共用），支持并发处理。
-// 纯文本文件直接读取内容；办公文件通过 markitdown 转换为 Markdown 文本返回。
+// 纯文本文件直接读取内容；办公文件通过 doc2md 转换为 Markdown 文本返回。
 // 上传过程中通过 Wails Events 发射进度事件（import:ai-progress）。
 func (a *App) readAIChatFiles(paths []string) []AIChatFileResult {
 	a.LogSvc.Logger.Debugw("readAIChatFiles", fastlog.Int("file_count", len(paths)))
@@ -1966,7 +1966,7 @@ func (a *App) processAIChatFile(path string, maxSize int64) AIChatFileResult {
 
 	// 4. 文件类型判定与内容读取
 	if converter.IsOfficeFile(path) {
-		// 办公文件 → markitdown 转换
+		// 办公文件 → doc2md 转换
 		a.LogSvc.Logger.Debugw("processAIChatFile: 转换办公文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))
 		mdText, err := converter.ConvertToMarkdown(path)
 		if err != nil {
@@ -4056,7 +4056,7 @@ type AIChatFileResult struct {
 
 // ImportFiles 批量导入拖拽文件为笔记（归入指定笔记本），支持并发处理。
 // 纯文本文件（.txt/.md/.json 等）直接读取（保留原后缀）；办公文件（.docx/.pdf/.xlsx 等）通过
-// markitdown 转换为 Markdown 后以 .md 后缀创建笔记；不支持的格式返回错误。
+// doc2md 转换为 Markdown 后以 .md 后缀创建笔记；不支持的格式返回错误。
 // 导入过程中通过 Wails Events 发射进度事件（import:progress）。
 func (a *App) ImportFiles(paths []string, notebookID uint) []FileImportResult {
 	a.LogSvc.Logger.Debugw("ImportFiles", fastlog.Int("file_count", len(paths)), fastlog.Uint("notebookID", notebookID))
@@ -4230,7 +4230,7 @@ func (a *App) processImportFile(path string, maxSize int64, notebookID uint, tit
 	var content string
 
 	if converter.IsOfficeFile(path) {
-		// 办公文件 → markitdown 转换；内容已是标准 Markdown，后缀统一改为 .md，
+		// 办公文件 → doc2md 转换；内容已是标准 Markdown，后缀统一改为 .md，
 		// 使前端 Markdown 能力（预览/语法高亮/TOC 等）对该笔记全部生效。
 		fileExt = ".md"
 		a.LogSvc.Logger.Debugw("processImportFile: 转换办公文件", fastlog.String("path", path), fastlog.Int64("size", info.Size()))

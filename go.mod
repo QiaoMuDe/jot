@@ -3,6 +3,7 @@ module jot
 go 1.26.0
 
 require (
+	gitee.com/MM-Q/doc2md v1.0.0
 	gitee.com/MM-Q/fastlog v1.6.2
 	gitee.com/MM-Q/go-kit v0.0.24
 	gitee.com/MM-Q/verman v0.0.19
@@ -10,7 +11,6 @@ require (
 	github.com/cloudwego/eino-ext/components/document/loader/url v0.0.0-20260811022947-b9cfa8f1c5c6
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17
-	github.com/conductor-oss/markitdown v0.0.1
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-ego/gse v1.0.2
@@ -133,6 +133,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-// replace github.com/wailsapp/wails/v2 v2.12.0 => D:\AppData\gopath\pkg\mod
-replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown
