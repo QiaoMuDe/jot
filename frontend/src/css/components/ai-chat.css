@@ -673,6 +673,14 @@
     color: var(--warning, #d97706);
 }
 
+/* 失败行强调：长调用链中突出（柔性浅红底 + 工具名着色），非 color-only（含 ✗ 图标与文案） */
+.ai-tool-status-item.is-error {
+    background: var(--error-bg);
+}
+.ai-tool-status-item.is-error .ai-tool-status-name {
+    color: var(--danger, #e5484d);
+}
+
 /* AI 消息内联 SVG 图标（Feather 线条风格，随 currentColor 着色） */
 .ai-inline-icon {
     flex-shrink: 0;
