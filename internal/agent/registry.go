@@ -194,7 +194,6 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"manage_tag", tools.WrapWithError("manage_tag", tools.NewManageTag(p.deps.Tag, p.ctx), p.ctx)},
 		{"manage_memory", tools.WrapWithError("manage_memory", tools.NewManageMemory(p.deps.Memory, p.ctx), p.ctx)},
 		{"manage_note", tools.WrapWithError("manage_note", tools.NewManageNote(p.deps.Note, p.deps.Tag, p.deps.Setting, p.ctx), p.ctx)},
-		{"read_note_section", tools.WrapWithError("read_note_section", tools.NewReadNoteSection(p.deps.Note, p.deps.Setting, p.ctx), p.ctx)},
 		{"get_stats", tools.WrapWithError("get_stats", tools.NewGetStats(p.deps.Stats, p.deps.Vector, p.ctx), p.ctx)},
 		{"ask_user", tools.WrapWithError("ask_user", tools.NewAskUser(p.ctx), p.ctx)},
 		{"create_plan", tools.WrapWithError("create_plan", tools.NewCreatePlan(p.ctx), p.ctx)},

@@ -119,7 +119,7 @@ func (r *readURLTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		}
 	}
 
-	// 2. 校验 offset/length（对齐 read_note_section）：offset 默认 0，须为 >=0
+	// 2. 校验 offset/length（对齐 manage_note view 的分段读取）：offset 默认 0，须为 >=0
 	//    整数；length 缺省取设置，须为 >=0 整数，上限 maxSectionLen。放在抓取
 	//    之前，非法参数直接报错，避免白费一次整页抓取
 	if args.Offset < 0 {

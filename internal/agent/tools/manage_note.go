@@ -14,8 +14,9 @@ package tools
 //     返回"共 n 条、第 x/y 页"，列表只展示当前页条目；当页未展示完时提示可翻页；
 //   - view：查看笔记全文（ids 笔记编号数组必填，通常传 [id]，来自列表中的 [数字] 编号；内容超过
 //     ai_large_file_preview_threshold 设置（解析失败或<=0 时缺省 10000）时截断，
-//     并给出 read_note_section 工具的续读指引（id/offset 参数）；line_numbers=true
-//     时输出带「行 N: 」行号前缀，作为行级编辑（edit 的 line_start/line_end）的寻址坐标）；
+//     并返回续读指引；通过 offset/length 参数分段续读（offset 缺省 0=首段，续读时
+//     传上一段结尾位置）；line_numbers=true 时输出带「行 N: 」行号前缀，作为行级编辑
+//     （edit 的 line_start/line_end）的寻址坐标，分段续读行号与首段连续）；
 //   - update：更新笔记标题/扩展名（ids 笔记编号数组必填，通常传 [id]；title / file_ext 至少提供一个，
 //     非空才更新对应字段，不碰正文）；
 //   - edit：编辑笔记正文（ids 笔记编号数组必填，通常传 [id]；双模式互斥——find 非空为片段替换，
@@ -23,8 +24,8 @@ package tools
 //     该片段），find 优先精确匹配、因空白/换行差异未命中时自动按空白归一化匹配兜底，
 //     replace_all=true 时替换全部出现（与 count 互斥）；line_start 非 0 为行级
 //     替换模式，把第 line_start 行到第 line_end 行（缺省等于 line_start）的区间
-//     替换为 replace，replace 为空字符串即删除该区间行，行号来自 view/read_note_section
-//     的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义）；
+//     替换为 replace，replace 为空字符串即删除该区间行，行号来自 view 的 line_numbers=true
+//     输出；line_start 大于笔记总行数时为末尾追加语义）；
 //   - pin：置顶/取消置顶笔记（ids 笔记编号数组必填，切换置顶状态）；
 //   - move：移动笔记到目标笔记本（ids 笔记编号数组必填，notebook_id 必填目标笔记本，支持批量）；
 //   - add_tag / remove_tag：给笔记添加/移除标签（ids 笔记编号数组必填，tag_id 必填、正整数，支持批量）。
@@ -166,7 +167,7 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_note",
-		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 ids 笔记编号数组，通常传 [id]；内容过长时会截断并可要求分段查看；如需按行编辑正文，请传 line_numbers=true，输出将带「行 N: 」行号前缀，行号即 edit 行级替换的寻址坐标，注意行号前缀不属于正文，复制片段用于 find 时不要包含行号）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 view/read_note_section 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；view/update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag 支持批量操作。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
+		Desc: "管理用户笔记库。当用户要求创建笔记、列出/搜索笔记、查看笔记全文、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，manage_note 用于结构化操作笔记库。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；list=列出/搜索笔记（可用 keyword 标题/内容关键字过滤，tag_ids 多标签 AND 过滤，start_date/end_date 按更新时间范围过滤，sort_by 排序（updated_at/created_at/title，缺省 updated_at），page 页码与 pageSize 每页条数（缺省 10、上限 50）分页查看）；view=查看笔记全文（需提供 ids 笔记编号数组，通常传 [id]；内容过长时会截断，可通过 offset/length 参数分段续读——截断结果中会给出下段的 offset，直接再调用 view 并携带该 offset 即可继续读取；如需按行编辑正文，请传 line_numbers=true，输出将带「行 N: 」行号前缀，行号即 edit 行级替换的寻址坐标，且 offset 续读时行号与之连续，注意行号前缀不属于正文，复制片段用于 find 时不要包含行号）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 view 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；view/update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag 支持批量操作。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。返回笔记列表或操作结果，列表中的编号 [数字] 可用于后续 view/update/edit/pin/move/add_tag/remove_tag。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -211,7 +212,7 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"line_start": {
 				Type:     schema.Number,
-				Desc:     "行级替换的起始行号（从 1 开始，行号须来自 view/read_note_section 的 line_numbers=true 输出），仅 action=edit 行级替换时使用（与 find 互斥）；大于笔记总行数时为末尾追加语义",
+				Desc:     "行级替换的起始行号（从 1 开始，行号须来自 view 的 line_numbers=true 输出），仅 action=edit 行级替换时使用（与 find 互斥）；大于笔记总行数时为末尾追加语义",
 				Required: false,
 			},
 			"line_end": {
@@ -221,7 +222,17 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"line_numbers": {
 				Type:     schema.Boolean,
-				Desc:     "是否在 view/read_note_section 输出中带「行 N: 」行号前缀（作为行级编辑的寻址坐标），缺省 false（不带行号，便于直接复制原文片段用于 find）",
+				Desc:     "是否在 view 输出中带「行 N: 」行号前缀（作为行级编辑的寻址坐标），缺省 false（不带行号，便于直接复制原文片段用于 find）",
+				Required: false,
+			},
+			"offset": {
+				Type:     schema.Number,
+				Desc:     "起始字符位置，仅 action=view 时使用，缺省 0（从开头读取首段）；笔记内容过长被截断后，可传上一段返回的结尾位置分段续读，此时不再按阈值截断而是从该位置读取",
+				Required: false,
+			},
+			"length": {
+				Type:     schema.Number,
+				Desc:     "本次读取的字符数，仅 action=view 时使用，缺省取 ai_large_file_preview_threshold 设置，上限 100000，超出自动截到内容末尾",
 				Required: false,
 			},
 			"notebook_id": {
@@ -300,6 +311,8 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		LineStart   float64   `json:"line_start"`
 		LineEnd     float64   `json:"line_end"`
 		LineNumbers bool      `json:"line_numbers"`
+		Offset      float64   `json:"offset"`
+		Length      float64   `json:"length"`
 		NotebookID  float64   `json:"notebook_id"`
 		TagIDs      []float64 `json:"tag_ids"`
 		Keyword     string    `json:"keyword"`
@@ -357,7 +370,7 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	case "list":
 		return m.listNotes(args.Keyword, int(args.Page), int(args.PageSize), int(args.NotebookID), args.SortBy, args.StartDate, args.EndDate, args.TagIDs)
 	case "view":
-		return m.viewNote(args.IDs, args.LineNumbers)
+		return m.viewNote(args.IDs, args.LineNumbers, int(args.Offset), int(args.Length))
 	case "update":
 		return m.updateNote(args.IDs, args.Title, args.FileExt)
 	case "edit":
@@ -520,12 +533,14 @@ func (m *manageNoteTool) listNotes(keyword string, page, pageSize int, notebookI
 	return b.String(), nil
 }
 
-// viewNote 查看笔记全文：ids 必填，通常只传一个元素 [id]；内容超过 notePreviewThreshold
-// （缺省 10000）时用 TruncateRunes 截断，并返回总字符数与 read_note_section 续读指引
-// （模型可据此携带 id/offset 调用 read_note_section 读取后续分段）。
-// lineNumbers 为 true 时输出带「行 N: 」行号前缀（1-based），作为 edit 行级替换的
-// 寻址坐标；行号前缀不属于正文，复制片段用于 find 时须去掉行号。
-func (m *manageNoteTool) viewNote(ids []float64, lineNumbers bool) (string, error) {
+// viewNote 查看笔记全文：ids 必填，通常只传一个元素 [id]。支持按 offset/length 分段续读：
+// offset 缺省 0（从开头读取首段），offset=0 时若内容超过 notePreviewThreshold（缺省 10000），
+// 仅显示前段并返回总字符数与续读指引（提示继续调用 view、携带 offset=当前结尾）；
+// offset>0 时从该位置读取后续分段，length 缺省取 notePreviewThreshold、上限 maxSectionLen，
+// 超出自动截到内容末尾。lineNumbers 为 true 时输出带「行 N: 」行号前缀（1-based，起始行号为
+// offset 前换行数 + 1，保证分段续读行号与首段全局连续），作为 edit 行级替换的寻址坐标；
+// 行号前缀不属于正文，复制片段用于 find 时须去掉行号。
+func (m *manageNoteTool) viewNote(ids []float64, lineNumbers bool, offset, length int) (string, error) {
 	noteIDs := resolveNoteIDs(ids)
 	if len(noteIDs) == 0 {
 		return "", errors.New("manage_note 查看笔记缺少有效的 ids")
@@ -539,31 +554,57 @@ func (m *manageNoteTool) viewNote(ids []float64, lineNumbers bool) (string, erro
 		return "", err
 	}
 
-	total := len([]rune(content))
+	runes := []rune(content)
+	total := len(runes)
 	totalLines := len(splitNoteLines(content))
-	threshold := notePreviewThreshold(m.setting)
-	truncated := false
-	if total > threshold {
-		content = TruncateRunes(content, threshold)
-		truncated = true
+	if offset < 0 {
+		return "", errors.New("manage_note 查看笔记的 offset 须为 >=0 的整数")
 	}
-	displayedLines := totalLines
+	// 越界校验：常规笔记 offset>=total 已全部读完；空笔记（total==0）仅放行 offset==0 的
+	// 空内容查看，其余 offset 一律视作超出，避免对空切片按 offset 取址触发 panic。
+	if offset >= total && (total > 0 || offset > 0) {
+		return "", fmt.Errorf("manage_note 查看笔记的 offset 超出内容范围（共 %d 字符，已全部读取完毕）", total)
+	}
+	// 单段长度：模型未指定时取预览阈值设置；指定时校验上限
+	if length <= 0 {
+		length = notePreviewThreshold(m.setting)
+	}
+	if length > maxSectionLen {
+		length = maxSectionLen
+	}
+	end := offset + length
+	if end > total {
+		end = total
+	}
+
+	section := string(runes[offset:end])
+	truncated := end < total
+	display := section
 	if lineNumbers {
-		content = numberLines(content, 1)
-		if truncated {
-			// 从行号化后的内容提取已显示行数（最后一个「行 N:」前缀）
-			displayedLines = extractLastLineNum(content)
+		// 全局起始行号：offset 前换行数 + 1，保证分段续读行号连续
+		startLine := 1
+		for i := 0; i < offset; i++ {
+			if runes[i] == '\n' {
+				startLine++
+			}
 		}
+		display = numberLines(section, startLine)
 	}
 	if truncated {
-		content += fmt.Sprintf("\n\n（内容共 %d 字符 / %d 行，已显示前 %d 字符 / %d 行。如需继续阅读，可调用 read_note_section 工具，参数 id=%d, offset=%d；如需按行编辑，可让 read_note_section 带 line_numbers=true 获取全局行号）",
-			total, totalLines, threshold, displayedLines, id, threshold)
+		// 本段实际展示的行数（按可读行拆分），用于续读提示中的行数信息
+		sectionLines := len(splitNoteLines(section))
+		display += fmt.Sprintf("\n\n（内容共 %d 字符 / %d 行，已显示前 %d 字符 / %d 行。如需继续阅读，可继续调用本工具的 view，offset=%d（length 保持缺省即可）；如需按行编辑，可让 view 带 line_numbers=true 获取全局行号）",
+			total, totalLines, end, sectionLines, end)
 	}
-	return fmt.Sprintf("笔记 #%d 内容：\n%s", id, content), nil
+	return fmt.Sprintf("笔记 #%d 内容：\n%s", id, display), nil
 }
 
+// maxSectionLen 单次读取笔记内容的最大字符数上限（view 的 length 参数上限），
+// 防止模型一次请求超长内容撑爆上下文窗口；read_url.go 亦复用本常量。
+const maxSectionLen = 100000
+
 // notePreviewThreshold 读取大文件预览阈值设置 ai_large_file_preview_threshold
-// （解析失败或 <=0 时缺省 10000），供 view / read_note_section 共用。
+// （解析失败或 <=0 时缺省 10000），供 view 读取单段的缺省长度使用。
 func notePreviewThreshold(setting *services.SettingService) int {
 	const def = 10000
 	if setting == nil {
@@ -611,8 +652,8 @@ func (m *manageNoteTool) updateNote(ids []float64, title, fileExt string) (strin
 //     替换为 replace（缺省空字符串即删除该片段）；find 优先精确匹配，因空白/换行差异
 //     未命中时自动按空白归一化匹配兜底；replace_all=true 时替换全部出现（与 count 互斥）；
 //   - 行级模式：line_start 非 0 时，把第 line_start 行到第 line_end 行（缺省等于 line_start）
-//     的区间替换为 replace（空字符串即删除该区间行），行号来自 view/read_note_section
-//     的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义。
+//     的区间替换为 replace（空字符串即删除该区间行），行号来自 view 的 line_numbers=true
+//     输出；line_start 大于笔记总行数时为末尾追加语义。
 //
 // 只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段
 // 定位时用行级替换。
@@ -884,31 +925,6 @@ func replaceAllFragments(current, find, replace string) (string, int) {
 	return out, count
 }
 
-// extractLastLineNum 从行号化文本（"行 N: ..."）中提取最后一个行号。
-// 用于 viewNote 截断时推算已显示行数。
-func extractLastLineNum(numbered string) int {
-	// 从末尾向前找最后一个「行 」前缀
-	idx := strings.LastIndex(numbered, "行 ")
-	if idx < 0 {
-		return 0
-	}
-	// 提取数字部分
-	numStr := ""
-	for i := idx + len("行 "); i < len(numbered); i++ {
-		ch := numbered[i]
-		if ch >= '0' && ch <= '9' {
-			numStr += string(ch)
-		} else {
-			break
-		}
-	}
-	n := 0
-	for _, ch := range numStr {
-		n = n*10 + int(ch-'0')
-	}
-	return n
-}
-
 // lineEditPreview 从 newContent 中提取替换区域的上下文预览（前 1 行 + 替换区域 + 后 1 行），
 // 用行号格式化，总长限 maxPreviewLen 字符。无内容时返回空串。
 func lineEditPreview(newContent string, replacedLine, newTotal int) string {
@@ -1060,8 +1076,8 @@ func splitNoteLines(content string) []string {
 
 // replaceLines 把正文中第 start 行到第 end 行（1-based，含端点）替换为 replace 文本
 // （replace 为空字符串即删除该区间行）。返回新正文、被替换的行数、原总行数。
-// 行号越界（start<1、end>总行数、start>end）返回错误；行号来自 view/read_note_section
-// 的 line_numbers=true 输出。\r\n 的 \r 在逐行内容中被保留，重建时随行还原。
+// 行号越界（start<1、end>总行数、start>end）返回错误；行号来自 view 的 line_numbers=true
+// 输出。\r\n 的 \r 在逐行内容中被保留，重建时随行还原。
 func replaceLines(content string, start, end int, replace string) (string, int, int, error) {
 	lines := splitNoteLines(content)
 	total := len(lines)
@@ -1102,7 +1118,7 @@ func replaceLines(content string, start, end int, replace string) (string, int, 
 }
 
 // numberLines 将内容按行拆分并加「行 N: 」行号前缀（1-based，startLine 为第一行的行号，
-// 供 read_note_section 续读时保持全局行号），返回带行号的文本；内容为空返回空串。
+// 供 view 分段续读时保持全局行号），返回带行号的文本；内容为空返回空串。
 // 行号前缀仅作寻址坐标，不属于正文——复制片段用于 find 时须去掉行号前缀。
 func numberLines(content string, startLine int) string {
 	if content == "" {

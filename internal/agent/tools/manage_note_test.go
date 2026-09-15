@@ -264,29 +264,6 @@ func TestEditNoteModeValidation(t *testing.T) {
 	})
 }
 
-// TestExtractLastLineNum 验证从行号化文本提取最后一个行号。
-func TestExtractLastLineNum(t *testing.T) {
-	cases := []struct {
-		name  string
-		input string
-		want  int
-	}{
-		{"空串", "", 0},
-		{"单行", "行 1: hello", 1},
-		{"多行", "行 1: a\n行 2: b\n行 3: c", 3},
-		{"无行号", "hello world", 0},
-		{"大行号", "行 999: text", 999},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got := extractLastLineNum(c.input)
-			if got != c.want {
-				t.Errorf("extractLastLineNum(%q) = %d, want %d", c.input, got, c.want)
-			}
-		})
-	}
-}
-
 // TestLineEditPreview 验证行级替换的上下文预览。
 func TestLineEditPreview(t *testing.T) {
 	content := "第一行\n第二行\n第三行\n第四行\n第五行"
