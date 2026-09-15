@@ -60,7 +60,10 @@ func (c *Client) Chat(ctx context.Context, messages []Message, thinkingEnabled b
 		return "", "", errors.New("没有有效消息可发送")
 	}
 
-	cm, err := c.newChatModel(ctx)
+	// 非流式调用均为确定性任务（优化表达、会话摘要），统一使用低采样温度
+	// 避免模型随机漂移导致同一输入时好时坏（如把润色输入当作问题回答）
+	temperature := float32(0.2)
+	cm, err := c.newChatModel(ctx, &temperature)
 	if err != nil {
 		return "", "", err
 	}
@@ -97,10 +100,11 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 		return
 	}
 
-	cm, err := c.newChatModel(ctx)
+	// 流式对话为开放式生成，保持服务端默认采样温度（nil）
+	cm, err := c.newChatModel(ctx, nil)
 	if err != nil {
 		if callbacks.OnError != nil {
-			callbacks.OnError(classifyErrorString(err))
+			classifyErrorString(err)
 		}
 		return
 	}
@@ -166,11 +170,13 @@ func (c *Client) Stream(ctx context.Context, messages []Message, thinkingEnabled
 }
 
 // newChatModel 创建 eino OpenAI ChatModel
-func (c *Client) newChatModel(ctx context.Context) (*openai.ChatModel, error) {
+// temperature 为 nil 时使用服务端默认采样温度
+func (c *Client) newChatModel(ctx context.Context, temperature *float32) (*openai.ChatModel, error) {
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:  c.APIKey,
-		BaseURL: c.BaseURL,
-		Model:   c.Model,
+		APIKey:      c.APIKey,
+		BaseURL:     c.BaseURL,
+		Model:       c.Model,
+		Temperature: temperature,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建 ChatModel 失败: %w", err)
