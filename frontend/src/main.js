@@ -10086,22 +10086,7 @@ function renderChatAgentToolsList() {
     groups[1].tools.sort((a, b) => a.Name.localeCompare(b.Name));
     const selectable = [...groups[0].tools, ...groups[1].tools]; // 参与全选的可选工具（内置普通 + MCP）
 
-    // 启用状态与变更记录（与设置页一致的全局字典，即时保存）
-    const isEnabled = (tool) => agentToolsDisabled.indexOf(tool.Name) === -1;
-    const applyTool = (tool, enabled) => {
-        if (enabled) {
-            const idx = agentToolsDisabled.indexOf(tool.Name);
-            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
-            const di = agentToolsChanges.disabled.indexOf(tool.Name);
-            if (di !== -1) agentToolsChanges.disabled.splice(di, 1);
-            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) agentToolsChanges.enabled.push(tool.Name);
-        } else {
-            if (agentToolsDisabled.indexOf(tool.Name) === -1) agentToolsDisabled.push(tool.Name);
-            const ei = agentToolsChanges.enabled.indexOf(tool.Name);
-            if (ei !== -1) agentToolsChanges.enabled.splice(ei, 1);
-            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) agentToolsChanges.disabled.push(tool.Name);
-        }
-    };
+    const isEnabled = (tool) => agentToolsDisabled.indexOf(tool.Name) === -1; // 启用状态（与设置页一致的全局字典）
 
     /* ---- 头部：标题 + 副标题 + 关闭 ---- */
     const head = document.createElement('div');
@@ -10156,7 +10141,7 @@ function renderChatAgentToolsList() {
     };
     selectAllEl.addEventListener('click', () => {
         const allEnabled = selectable.length > 0 && selectable.filter(isEnabled).length === selectable.length;
-        selectable.forEach((t) => applyTool(t, !allEnabled));
+        selectable.forEach((t) => applyAgentTool(t, !allEnabled));
         saveSettings();
         refreshSummary();
     });
@@ -10176,7 +10161,7 @@ function renderChatAgentToolsList() {
                 const toggleGroup = () => {
                     const tools = group.tools;
                     const allEnabled = tools.length > 0 && tools.every(isEnabled);
-                    tools.forEach((t) => applyTool(t, !allEnabled));
+                    tools.forEach((t) => applyAgentTool(t, !allEnabled));
                     saveSettings();
                     refreshSummary();
                     updateAgentToolsButtonText();
@@ -10221,7 +10206,7 @@ function renderChatAgentToolsList() {
             if (group.key === 'normal' || group.key === 'mcp') {
                 inputByName.set(tool.Name, cb);
                 cb.addEventListener('change', () => {
-                    applyTool(tool, cb.checked);
+                    applyAgentTool(tool, cb.checked);
                     saveSettings();
                     refreshSummary();
                     updateAgentToolsButtonText();
@@ -10352,30 +10337,7 @@ function toggleSelectAllTools() {
         const isEnabled = agentToolsDisabled.indexOf(tool.Name) === -1;
         if (isEnabled === shouldEnable) return; // 状态未变，跳过
 
-        if (shouldEnable) {
-            // 启用：从禁用列表移除
-            const idx = agentToolsDisabled.indexOf(tool.Name);
-            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
-            // 记录变更
-            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
-                agentToolsChanges.enabled.push(tool.Name);
-            }
-            // 清除相反方向的变更记录
-            const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
-            if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
-        } else {
-            // 禁用：加入禁用列表
-            if (agentToolsDisabled.indexOf(tool.Name) === -1) {
-                agentToolsDisabled.push(tool.Name);
-            }
-            // 记录变更
-            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
-                agentToolsChanges.disabled.push(tool.Name);
-            }
-            // 清除相反方向的变更记录
-            const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
-            if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
-        }
+        applyAgentTool(tool, shouldEnable);
     });
 
     // 更新所有子 checkbox 的 UI 状态（排除 Plan 模式专属与常驻工具）
@@ -10448,14 +10410,91 @@ function renderAgentToolsMgrList() {
     header.appendChild(closeBtn);
     agentToolsMgrContainer.appendChild(header);
 
-    // 工具行列表
-    agentToolsMeta.forEach((tool, index) => {
-        const row = createAgentToolRow(tool);
-        row.style.animationDelay = `${index * 30}ms`;
-        agentToolsMgrContainer.appendChild(row);
+    // 分组：内置 / MCP 扩展 / 仅 Plan 模式 / 常驻（可勾选组在上，锁定展示组垫底）
+    const groups = [
+        { key: 'normal', label: '内置', tools: [], rows: [] }, // rows: [{tool, checkbox}] 供盲切后同步勾选态
+        { key: 'mcp', label: 'MCP 扩展', tools: [], rows: [] },
+        { key: 'plan', label: '仅 Plan 模式', tools: [], rows: [] },
+        { key: 'always', label: '常驻', tools: [], rows: [] },
+    ];
+    agentToolsMeta.forEach((tool) => {
+        if (tool.PlanOnly) groups[2].tools.push(tool);
+        else if (tool.AlwaysOn) groups[3].tools.push(tool);
+        else if (tool.MCPServer) groups[1].tools.push(tool);
+        else groups[0].tools.push(tool);
+    });
+    // 后端 pool 以 map 遍历返回、顺序不稳定，MCP 组内按工具名排序保证展示稳定
+    groups[1].tools.sort((a, b) => a.Name.localeCompare(b.Name));
+    let firstGroupRendered = false; // 标记已渲染的首个非空组标签（CSS 去顶距，紧贴面板头部）
+
+    groups.forEach((group, gi) => {
+        if (group.tools.length === 0) return;
+        const isSelectable = group.key === 'normal' || group.key === 'mcp';
+        const labelEl = document.createElement('div');
+        labelEl.className = 'agent-tools-mgr-group' + (isSelectable ? ' is-selectable' : '') + (firstGroupRendered ? '' : ' first');
+        firstGroupRendered = true;
+        labelEl.textContent = group.label;
+        // 可勾选组（内置/MCP）标签盲切该组全部工具开关，随状态切换全选/取消全选
+        if (isSelectable) {
+            labelEl.setAttribute('role', 'button');
+            labelEl.tabIndex = 0;
+            const toggleGroup = () => {
+                const allEnabled = group.tools.length > 0 && group.tools.every((t) => agentToolsDisabled.indexOf(t.Name) === -1);
+                group.tools.forEach((t) => applyAgentTool(t, !allEnabled));
+                // 同步该组每行 checkbox 勾选态
+                group.rows.forEach(({ tool, checkbox }) => { checkbox.checked = agentToolsDisabled.indexOf(tool.Name) === -1; });
+                updateAgentToolsButtonText();
+                updateSelectAllCheckboxState();
+                saveSettings();
+            };
+            labelEl.addEventListener('click', toggleGroup);
+            labelEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleGroup();
+                }
+            });
+        }
+        agentToolsMgrContainer.appendChild(labelEl);
+
+        group.tools.forEach((tool, ti) => {
+            const row = createAgentToolRow(tool);
+            row.style.animationDelay = `${(gi * 7 + ti) * 30}ms`;
+            group.rows.push({ tool, checkbox: row.querySelector('input[type="checkbox"]') });
+            agentToolsMgrContainer.appendChild(row);
+        });
     });
 
     updateAgentToolsButtonText();
+}
+
+/**
+ * 应用单个 Agent 工具的启用/禁用状态（唯一写入入口）。
+ * 改写 agentToolsDisabled 持久化集合，并去重、互斥地记录 agentToolsChanges。
+ */
+function applyAgentTool(tool, enabled) {
+    if (enabled) {
+        // 启用 → 从禁用列表移除
+        const idx = agentToolsDisabled.indexOf(tool.Name);
+        if (idx !== -1) agentToolsDisabled.splice(idx, 1);
+        // 记录变更（去重，与禁用记录互斥）
+        const di = agentToolsChanges.disabled.indexOf(tool.Name);
+        if (di !== -1) agentToolsChanges.disabled.splice(di, 1);
+        if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
+            agentToolsChanges.enabled.push(tool.Name);
+        }
+    } else {
+        // 禁用 → 加入禁用列表
+        if (agentToolsDisabled.indexOf(tool.Name) === -1) {
+            agentToolsDisabled.push(tool.Name);
+        }
+        // 记录变更（去重，与启用记录互斥）
+        const ei = agentToolsChanges.enabled.indexOf(tool.Name);
+        if (ei !== -1) agentToolsChanges.enabled.splice(ei, 1);
+        if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
+            agentToolsChanges.disabled.push(tool.Name);
+        }
+    }
 }
 
 /**
@@ -10471,28 +10510,7 @@ function createAgentToolRow(tool) {
     checkbox.type = 'checkbox';
     checkbox.checked = isEnabled;
     checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-            // 启用 → 从禁用列表移除
-            const idx = agentToolsDisabled.indexOf(tool.Name);
-            if (idx !== -1) agentToolsDisabled.splice(idx, 1);
-            // 记录变更（去重，与禁用记录互斥）
-            const deIdx = agentToolsChanges.disabled.indexOf(tool.Name);
-            if (deIdx !== -1) agentToolsChanges.disabled.splice(deIdx, 1);
-            if (agentToolsChanges.enabled.indexOf(tool.Name) === -1) {
-                agentToolsChanges.enabled.push(tool.Name);
-            }
-        } else {
-            // 禁用 → 加入禁用列表
-            if (agentToolsDisabled.indexOf(tool.Name) === -1) {
-                agentToolsDisabled.push(tool.Name);
-            }
-            // 记录变更（去重，与启用记录互斥）
-            const enIdx = agentToolsChanges.enabled.indexOf(tool.Name);
-            if (enIdx !== -1) agentToolsChanges.enabled.splice(enIdx, 1);
-            if (agentToolsChanges.disabled.indexOf(tool.Name) === -1) {
-                agentToolsChanges.disabled.push(tool.Name);
-            }
-        }
+        applyAgentTool(tool, checkbox.checked);
         updateAgentToolsButtonText();
         updateSelectAllCheckboxState();
         saveSettings();

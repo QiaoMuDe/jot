@@ -1804,11 +1804,14 @@
     letter-spacing: 0.04em;
     color: var(--text-muted);
     border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+    border-radius: 6px; /* 组标签（含 hover/active 背景与聚焦 outline）统一圆角 */
 }
 /* 可勾选分组（内置/MCP）标签整行可盲切全选/取消全选：hover/active 反馈提升可发现性 */
 .ai-chat-agent-tools-group.is-selectable {
     cursor: pointer;
     user-select: none;
+    transform: translateZ(0); /* 触发 GPU 合成，让缩放不抖动 */
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); /* 弹性回弹 */
 }
 .ai-chat-agent-tools-group.is-selectable:hover {
     background: var(--hover-bg);
@@ -1819,6 +1822,7 @@
     outline-offset: -1px;
 }
 .ai-chat-agent-tools-group.is-selectable:active {
+    transform: scale(0.97);
     background: color-mix(in srgb, var(--hover-bg) 80%, var(--accent));
 }
 

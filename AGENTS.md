@@ -557,19 +557,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：AI 输入框斜杠搜索笔记引用（`/关键词` 触发下拉 → 复用引用链路选入）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 聊天输入框支持 `/关键词` 斜杠触发"搜索笔记 → 引用到引用栏"的快捷流：光标所在行行首或空白后键入 `/词` 弹出搜索下拉，↑↓/Enter/Esc 或点击选择笔记，选中后清除斜杠词并把笔记并入 `referencedNotes` 引用栏（与引用选择浮层 `confirmNoteSelection` 复用同一链路 `GetNoteRefContext` → 去重并入 → `updateRefChips` → `saveCurrentSessionConfig` 持久化）。 |
-| **触发与匹配（重要）** | [extractSlashToken](frontend/src/js/ai-chat.js) 为统一提取函数（`handleSlashInput` 触发检测与 `selectSlashNote` 清除定位**共用同一正则** `/(?:^|\s)\/([^\s]+)$/`，防两处漂移）。规则：**行首或空白后**紧跟 `/关键词`（关键词不含空白、延续到光标）才触发——`/搭建`、`内容 /搭建` 均触发；`你好/搭建`（斜杠前是文字）、`内容 / `（关键词空）、输入框失焦、AI 流式回复中（`isStreaming`）均不触发。**清除只删斜杠词本体**：用 `/` 绝对位置 `slashPos = tailStart + m.index + (m[0].length - m[1].length - 1)` 截取 `[slashPos, caret)`，保留斜杠前的正文与空格。 |
-| **检索与浮层（重要）** | 后端专用轻量方法 `NoteService.SlashSearchNotes(keyword, limit)`（首版复用通用 `SearchNotes` 被否——其 `noteThinSelect` 每次 `SUBSTR(content, INSTR(...))` 算内容片段 + `Count` 总数 + `Preload("Tags")`，对每 200ms 触发的联想是浪费）：仅 `LEFT JOIN notebooks` 取 `id/title/COALESCE(name,'')`，不算内容片段、无 Count/Preload；排序列全部加 `notes.` 前缀防联表歧义；只需"标题命中优先 + 置顶 + 更新"一层 CASE。`SlashNoteResult{id,title,notebook_name}` 于 [types.go](internal/services/types.go)，Wails 绑定 [app.go](app.go) `SlashSearchNotes`。前端 `openSlashMenu` debounce 200ms 调 `SlashSearchNotes(query, 5)`（**最多 5 条**）；`#aiChatSlashMenu` 浮于 composer 上方，左对齐 `left:0`（非居中），提示行 `.ai-chat-slash-hint` 用 `position:sticky` 固定顶部、列表整体隐藏滚动条（`scrollbar-width:none` + `::-webkit-scrollbar{display:none}`）；输入坞 `.has-slash` **仅 `translateY(-2px)` 上浮**（曾试验光环呼吸/沿边流光加亮，均被否）。 |
-| **键盘与防护（重要）** | 菜单打开时 `onInputKeydown` 优先接管：↑↓ 循环高亮（结果空时放行原光标移动）、Enter 引用选中项 / **空结果时关闭菜单并放行 `onSend()`**（否则 Enter 被吞、消息发不出）、Esc 关闭并 `e.stopPropagation()` **阻断冒泡到 main.js 全局 ESC**（否则整页切回笔记首页；`handleKeyboardNavigation` 是 document 冒泡注册，textarea 先跑 `stopPropagation` 即可拦截）。**竞态治理**：`slashQuerySeq` 序号自增 + debounce 回调捕获序号，返回时 `seq !== slashQuerySeq` 则丢弃（防快速连续输入旧结果覆盖新关键词）。**引用失败回滚**：`catch` 处恢复被删斜杠词并把光标复位、重开菜单，避免误以为已引用。标题/笔记本名用 `_aiEscapeHtml` 完整转义（`& < > " '`）入 innerHTML。 |
-| **涉及文件** | [internal/services/note_service.go](internal/services/note_service.go)（`SlashSearchNotes`）、[internal/services/types.go](internal/services/types.go)（`SlashNoteResult`）、[app.go](app.go)（绑定）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`extractSlashToken`/`handleSlashInput`/`openSlashMenu`/`renderSlashResults`/`selectSlashNote`/`closeSlashMenu`/`slashQuerySeq` + `onInputKeydown` 接管）、[frontend/index.html](frontend/index.html)（`#aiChatSlashMenu`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-slash-*` + `.has-slash`） |
-
----
-
-## 记忆点 2：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
+## 记忆点 1：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +569,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
+## 记忆点 2：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +579,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
+## 记忆点 3：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -602,7 +590,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
+## 记忆点 4：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,6 +598,18 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **实现要点（重要）** | ① **工具行收起钩子分工**——`buildToolStatusRows` 开头调用独立注入的 `_hideToolReasonTip`（仅当当前卡是工具原因卡才收起），与 `resetAIChatState` 用的全量收起 `_hideMsgHoverTip` 职责分离：工具行流式重建高频，无条件全量收起会连带打断用户正在查看的消息统计卡；行重建会取消 300ms 挂起 timer，故委托分支的 `setTimeout` 回调需 `target.isConnected` 守卫（消息已删则放弃弹卡，防失效坐标弹到视口左上角）；② **`LoadAISessionMessages`（全量）有意不截断**——它服务 `CallAIStream` 上下文构建与 `forkSession` 消息复制（截断会丢数据），勿"顺手统一"；③ **position() 视口底部 clamp**——正文从 8 行 clamp 改为完整展示后，长卡（工具原因上限 `tools.MaxResultLen`=500 字符，约 400px 高）在矮窗口向下弹会底部溢出，below 分支补 `if (top + tipH > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - tipH)`（卡片 pointer-events:none，覆盖触发行无交互副作用；`vh` 须与 `vw` 同处定义，否则 eslint no-undef 且 below 时直接 ReferenceError）；④ `TruncateRecallCardsPreview` 截断时置 `card.Truncated = true`（字段语义对齐），按 rune 计数、幂等，返回新切片不污染 `Collector.Cards`。 |
 | **产品决策（重要）** | 预览截断统一收敛到后端（前端完整显示），用户明确要求"实时与历史两条路径都截取、前端完整显示 200 字预览"；工具失败原因正文上限沿用后端既有 `MaxResultLen=500` 截断，前端不二次截断。portal 层 `pointer-events: none` 保持卡片纯展示（不可悬入/滚动），无需 mouseout contains/mouseleave 保持逻辑。 |
 | **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`itemEl` dataset/`fillToolTip`/`fillRecallTip`/`position` 底部 clamp/`_hideToolReasonTip`）、[frontend/index.html](frontend/index.html)（`tool-record`/`recall-note` 两卡）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-mode-tip.wide`/`.ai-tip-fulltext`）、[internal/agent/agent.go](internal/agent/agent.go)（序列化前截断）、[internal/services/recall_service.go](internal/services/recall_service.go)（`RecallPreviewMaxLen` + `Truncated` 置位）、[internal/services/ai_service.go](internal/services/ai_service.go)（引用常量）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md)（`RecallCards` 截断语义说明） |
+
+---
+
+## 记忆点 5：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | AI 助手输入框工具浮层与设置页 Agent 工具管理面板统一为**四分组**展示（内置 → MCP 扩展 → 仅 Plan 模式 → 常驻），组标签支持**盲切**（内置/MCP 组整行点击=组内全选/取消全选），并带弹性按压回弹与圆角反馈。分组判定（`PlanOnly`优先于 `AlwaysOn`/`MCPServer`）：`PlanOnly`→仅Plan、`AlwaysOn`→常驻、`MCPServer`→MCP扩展、否则内置。仅内置/MCP 可勾选组标签可盲切；仅 Plan/常驻为锁演示组（纯展示、行置灰+禁用勾选）。空组自动跳过（无 MCP 时 MCP 扩展组不渲染）。MCP 组内按 `Name.localeCompare` 排序保证展示稳定（后端 pool map 遍历无序）。 |
+| **状态写入统一（重要）** | AI 浮层 `applyTool` 与设置页 `applyAgentTool` 两份相似实现**已合并**为模块级共享函数 `applyAgentTool(tool, enabled)`（[main.js](frontend/src/main.js)），作为 Agent 工具启停的**唯一写入口**：同时维护 `agentToolsDisabled` 持久化集合与 `agentToolsChanges` 变更记录（去重 + 反向清空）。所有入口（AI 浮层单行 checkbox / 组盲切 / 全选 / 设置页单行 / 设置页组盲切 / `toggleSelectAllTools` 全局全选）统一收敛到它，避免多份不同步的复制代码。设置页原 `toggleSelectAllTools` 内联写逻辑改调 `applyAgentTool`（保留 `isEnabled===shouldEnable` 提前 return 与 Plan/常驻跳过）。 |
+| **分组渲染与盲切（重要）** | AI 浮层 [renderChatAgentToolsList](frontend/src/main.js) 与设置页 `renderAgentToolsMgrList` 各自构造 `groups` 四元组（`{key,label,tools,rows}` 等），`groups[1].tools.sort` 前置于 MCP 排序。可勾选组标签：`role="button"` + `tabIndex=0`，`click` / Enter / 空格触发 `toggleGroup`（`tools.every(isEnabled)` 判 `allEnabled` → 逐工具 `applyAgentTool(t,!allEnabled)` → 手动同步 `group.rows` 各行 checkbox → `updateAgentToolsButtonText/updateSelectAllCheckboxState/saveSettings`）。盲切手动设 `checkbox.checked` **不触发 change 事件**、不至复制执行 update/save，靠组标签处末尾手动同步。设置页用 `firstGroupRendered` 标记**首个非空组**加 `.first` 类去顶距（`display:flex` 容器下`:first-child` 永远命中 header，故用 JS 标记真实首组）。 |
+| **样式规范（重要）** | 组标签样式：`.agent-tools-mgr-group`（设置页，settings-panel.css）/`.ai-chat-agent-tools-group`（AI 浮层，ai-chat.css）——`border-bottom` hairline 35% 半透明分隔线（弱化避免压过头部实色边框，全 12 主题用 `color-mix(in srgb, var(--border) 35%, transparent)`）、`border-radius: 6px`圆角（hover/active 背景与 `:focus-visible` outline 自动跟随圆角）、`transform: translateZ(0)` GPU 合成防抖 + `transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1)` 弹性回弹、`:active` 缩放（AI 浮层 `scale(0.97)` 明显 / 设置页 `scale(0.99)` 轻微——设置页对比度更灵敏因行更宽、同百分比绝对位移更大）。菜单项/组标签的「按压缩小+弹性回弹」为项目统一交互范式。 |
+| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`renderChatAgentToolsList`/`renderAgentToolsMgrList`/共享 `applyAgentTool`/`toggleSelectAllTools` 收敛）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-group` 圆角+回弹）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（`.agent-tools-mgr-group`/`.first`/`.is-selectable`）、[internal/agent/types.go](internal/agent/types.go)（`ToolMeta.MCPServer`）/ [app.go](app.go)（`GetAgentTools` 填充 `MCPServer`） |
 
 ---
 
