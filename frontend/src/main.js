@@ -10049,7 +10049,7 @@ function initChatAgentTools() {
 
 /**
  * 渲染 AI 助手「Agent 工具」浮层。
- * 独立于设置页工具管理样式，面向对话内快速选择：头部（标题+关闭）、分组工具行（名称+副标题+角标）、底部全选/计数。
+ * 独立于设置页工具管理样式，面向对话内快速选择：头部（标题+关闭）、分组工具行（名称+副标题两行）、底部全选/计数。
  * 仍复用同一份 agentToolsMeta/agentToolsDisabled/agentToolsChanges 全局状态与即时保存，改任一入口全局生效。
  */
 function renderChatAgentToolsList() {
@@ -10069,18 +10069,22 @@ function renderChatAgentToolsList() {
     }
     dropdown.innerHTML = '';
 
-    // 分组：可使用 / 仅 Plan 专属 / 常驻
+    // 分组：内置 / MCP 扩展 / 仅 Plan 专属 / 常驻（可勾选组在上，锁定展示组垫底）
     const groups = [
-        { key: 'normal', label: null, tools: [] },
+        { key: 'normal', label: '内置', tools: [] },
+        { key: 'mcp', label: 'MCP 扩展', tools: [] },
         { key: 'plan', label: '仅 Plan 模式', tools: [] },
         { key: 'always', label: '常驻', tools: [] },
     ];
     agentToolsMeta.forEach((tool) => {
-        if (tool.PlanOnly) groups[1].tools.push(tool);
-        else if (tool.AlwaysOn) groups[2].tools.push(tool);
+        if (tool.PlanOnly) groups[2].tools.push(tool);
+        else if (tool.AlwaysOn) groups[3].tools.push(tool);
+        else if (tool.MCPServer) groups[1].tools.push(tool);
         else groups[0].tools.push(tool);
     });
-    const selectable = groups[0].tools; // 参与全选的可选工具
+    // 后端 pool 以 map 遍历返回、顺序不稳定，MCP 组内按工具名排序保证展示稳定
+    groups[1].tools.sort((a, b) => a.Name.localeCompare(b.Name));
+    const selectable = [...groups[0].tools, ...groups[1].tools]; // 参与全选的可选工具（内置普通 + MCP）
 
     // 启用状态与变更记录（与设置页一致的全局字典，即时保存）
     const isEnabled = (tool) => agentToolsDisabled.indexOf(tool.Name) === -1;
@@ -10145,8 +10149,9 @@ function renderChatAgentToolsList() {
         selectAllEl.textContent = allEnabled ? '取消全选' : '全选';
         selectAllEl.disabled = total === 0;
         // 同步可选工具行的勾选态（全选/取消全选后即时更新）
-        selectable.forEach((t, i) => {
-            if (normalInputs[i]) normalInputs[i].checked = isEnabled(t);
+        selectable.forEach((t) => {
+            const input = inputByName.get(t.Name);
+            if (input) input.checked = isEnabled(t);
         });
     };
     selectAllEl.addEventListener('click', () => {
@@ -10156,13 +10161,35 @@ function renderChatAgentToolsList() {
         refreshSummary();
     });
 
-    const normalInputs = [];
+    const inputByName = new Map(); // 可勾选工具 checkbox 按名索引（内置普通 + MCP）
     groups.forEach((group) => {
         if (group.tools.length === 0) return;
+        const isSelectable = group.key === 'normal' || group.key === 'mcp';
         if (group.label) {
             const labelEl = document.createElement('div');
-            labelEl.className = 'ai-chat-agent-tools-group';
+            labelEl.className = 'ai-chat-agent-tools-group' + (isSelectable ? ' is-selectable' : '');
             labelEl.textContent = group.label;
+            // 方案 B：点击整行盲切该组全部工具开关（无文字提示，仅可勾选组参与）
+            if (isSelectable) {
+                labelEl.setAttribute('role', 'button');
+                labelEl.tabIndex = 0;
+                const toggleGroup = () => {
+                    const tools = group.tools;
+                    const allEnabled = tools.length > 0 && tools.every(isEnabled);
+                    tools.forEach((t) => applyTool(t, !allEnabled));
+                    saveSettings();
+                    refreshSummary();
+                    updateAgentToolsButtonText();
+                    updateSelectAllCheckboxState();
+                };
+                labelEl.addEventListener('click', toggleGroup);
+                labelEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleGroup();
+                    }
+                });
+            }
             bodyInner.appendChild(labelEl);
         }
         group.tools.forEach((tool, ti) => {
@@ -10175,42 +10202,30 @@ function renderChatAgentToolsList() {
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = group.key === 'always' ? true : isEnabled(tool);
-            if (group.key !== 'normal') cb.disabled = true;
+            if (group.key === 'plan' || group.key === 'always') cb.disabled = true;
 
             const info = document.createElement('span');
             info.className = 'ai-chat-agent-tools-info';
-            const nameLine = document.createElement('span');
-            nameLine.className = 'ai-chat-agent-tools-name-line';
             const name = document.createElement('span');
             name.className = 'ai-chat-agent-tools-name';
             name.textContent = tool.Name;
-            nameLine.appendChild(name);
-            if (group.key === 'plan') {
-                const badge = document.createElement('span');
-                badge.className = 'ai-chat-agent-tools-badge is-plan';
-                badge.textContent = '仅 Plan';
-                nameLine.appendChild(badge);
-            } else if (group.key === 'always') {
-                const badge = document.createElement('span');
-                badge.className = 'ai-chat-agent-tools-badge is-always';
-                badge.textContent = '常驻';
-                nameLine.appendChild(badge);
-            }
             const desc = document.createElement('span');
             desc.className = 'ai-chat-agent-tools-desc';
             desc.textContent = tool.Label || '';
-            info.appendChild(nameLine);
+            info.appendChild(name);
             info.appendChild(desc);
 
             row.appendChild(cb);
             row.appendChild(info);
 
-            if (group.key === 'normal') {
-                normalInputs.push(cb);
+            if (group.key === 'normal' || group.key === 'mcp') {
+                inputByName.set(tool.Name, cb);
                 cb.addEventListener('change', () => {
                     applyTool(tool, cb.checked);
                     saveSettings();
                     refreshSummary();
+                    updateAgentToolsButtonText();
+                    updateSelectAllCheckboxState();
                 });
             } else {
                 row.addEventListener('click', (e) => {
@@ -11485,6 +11500,10 @@ async function refreshAgentToolsMeta() {
     // 如果工具管理面板已展开，重新渲染
     if (agentToolsMgrExpanded) {
         renderAgentToolsMgrList();
+    }
+    // AI 助手工具浮层展开中时同步重渲染，使新增/移除的 MCP 工具即时出现
+    if (chatAgentToolsExpanded) {
+        renderChatAgentToolsList();
     }
 }
 

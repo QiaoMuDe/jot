@@ -1703,7 +1703,7 @@
     bottom: calc(100% + 4px);
     left: -8px;
     width: 300px;
-    max-height: 360px;
+    max-height: 440px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1774,7 +1774,7 @@
        按下拉组件惯例常显 */
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) transparent;
-    padding: 4px 0;
+    padding: 0;
 }
 /* 内层只裁剪横向抖动（overflow-x: clip 不产生水平滚动条），
    竖向往外层滚 → 外层不把 overflow-x 设为非 visible，竖向滚动条才能正常渲染 */
@@ -1796,21 +1796,38 @@
     background: var(--scrollbar-thumb-hover);
 }
 
-/* 分组标签 */
+/* 分组标签：随内容滚动，hairline 底边线作为组边界（半透明弱化，避免压过头部边框）（上下 4px 对称，文字居中） */
 .ai-chat-agent-tools-group {
-    padding: 7px 12px 3px;
+    padding: 4px 12px;
     font-size: 0.65rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     color: var(--text-muted);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+}
+/* 可勾选分组（内置/MCP）标签整行可盲切全选/取消全选：hover/active 反馈提升可发现性 */
+.ai-chat-agent-tools-group.is-selectable {
+    cursor: pointer;
+    user-select: none;
+}
+.ai-chat-agent-tools-group.is-selectable:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+.ai-chat-agent-tools-group.is-selectable:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+    outline-offset: -1px;
+}
+.ai-chat-agent-tools-group.is-selectable:active {
+    background: color-mix(in srgb, var(--hover-bg) 80%, var(--accent));
 }
 
-/* 工具行：checkbox + 信息列（名称行 + 副标题） */
+/* 工具行：checkbox + 信息列（名称行 + 副标题行，压缩间距控制行高） */
 .ai-chat-agent-tools-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 12px;
+    padding: 4px 12px;
     cursor: pointer;
     animation: chatToolsItemIn 0.18s ease both;
 }
@@ -1825,18 +1842,13 @@
     flex-shrink: 0;
     accent-color: var(--accent);
 }
+/* 信息列：名称在上、描述在下（副标题式） */
 .ai-chat-agent-tools-info {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 1px;
-}
-.ai-chat-agent-tools-name-line {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
 }
 .ai-chat-agent-tools-name {
     font-size: 0.8rem;
@@ -1853,24 +1865,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-.ai-chat-agent-tools-badge {
-    flex-shrink: 0;
-    font-size: 0.6rem;
-    line-height: 1;
-    font-weight: 600;
-    padding: 2px 5px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-}
-.ai-chat-agent-tools-badge.is-plan {
-    color: var(--accent);
-    border-color: var(--accent);
-    opacity: 0.75;
-}
-.ai-chat-agent-tools-badge.is-always {
-    color: var(--text-muted);
-    border-color: var(--border);
 }
 
 /* 锁定行（仅 Plan / 常驻） */

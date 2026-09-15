@@ -2734,9 +2734,10 @@ func (a *App) GetAgentTools() []agent.ToolMeta {
 				label = desc
 			}
 			result = append(result, agent.ToolMeta{
-				Name:    mt.FullName,
-				Label:   label,
-				Enabled: !disabledSet[mt.FullName],
+				Name:      mt.FullName,
+				Label:     label,
+				Enabled:   !disabledSet[mt.FullName],
+				MCPServer: mt.ServerName,
 			})
 		}
 	}

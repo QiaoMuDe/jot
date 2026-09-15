@@ -6,6 +6,7 @@ export namespace agent {
 	    Enabled: boolean;
 	    PlanOnly: boolean;
 	    AlwaysOn: boolean;
+	    MCPServer: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolMeta(source);
@@ -18,6 +19,7 @@ export namespace agent {
 	        this.Enabled = source["Enabled"];
 	        this.PlanOnly = source["PlanOnly"];
 	        this.AlwaysOn = source["AlwaysOn"];
+	        this.MCPServer = source["MCPServer"];
 	    }
 	}
 
