@@ -42,6 +42,7 @@ let activeSessionId = null;    // null = 新会话尚未保存
 let sessions = [];             // 侧栏会话列表
 let isStreaming = false;       // 正在流式输出时禁止切换/发送
 let currentMode = 'agent';    // 'chat' | 'agent' | 'plan'
+let approvalMode = 'confirm_every'; // 'confirm_every' | 'auto' | 'review'，会话级执行审批模式
 // 窗口级标志，与 isStreaming 同步，供 main.js 全局拖拽系统读取
 window.__aiStreaming = false;
 let aiMsgContextMenu = null;   // AI 消息右键菜单
@@ -472,6 +473,9 @@ export async function initAIChat() {
 
     // 模式悬停提示（portal 挂载 body，脱离输入区层叠上下文保证置顶）
     initModeTips();
+
+    // 执行审批模式选择器（顶栏按钮 + 下拉，含显隐/开关/保存）
+    initApprovalPicker();
 
     // 一次性初始化 Marked 选项 (高亮在 renderMarkdown 中用 hljs.highlightElement 后处理) 
     marked.setOptions({
@@ -2003,6 +2007,9 @@ async function switchSession(id) {
                 // 读取 mode 并同步切换按钮
                 currentMode = config.mode || 'agent';
                 syncModeToggle();
+                // 读取审批模式并同步组件选中态
+                approvalMode = config.approval_mode || 'confirm_every';
+                syncApprovalToggle();
             }
         } catch (_) {}
 
@@ -7590,6 +7597,8 @@ function syncModeToggle() {
     });
     // 同步工具栏「Agent 工具」按钮可见性（chat 隐藏，agent/plan 显示）
     window.__setAiChatAgentToolsVis?.(currentMode !== 'chat');
+    // 同步「执行审批」组件可见性（与工具按钮一致，chat 隐藏，agent/plan 显示）
+    window.__setAiChatApprovalVis?.(currentMode !== 'chat');
 }
 
 /**
@@ -7620,8 +7629,119 @@ async function saveCurrentSessionConfig() {
             enabled_skills: JSON.stringify(activeSkills),
             recall_notebook_ids: JSON.stringify(Array.from(recallNotebookIds)),
             mode: currentMode, // 必须携带：后端按全量覆写保存，漏传会把 Plan 标记清空
+            approval_mode: approvalMode, // 必须携带：后端按全量覆写保存，漏传会回退默认
         });
     } catch (_) {}
+}
+
+/* ── 执行审批模式选择器（顶栏按钮 + 下拉选项）── */
+
+const APPROVAL_MODE_LABEL = { confirm_every: '手动审批', auto: '完全访问', review: '自动审批' };
+let approvalDropdownExpanded = false;
+let approvalDropdownTimer = null;
+
+/**
+ * 初始化审批模式选择器：
+ * - 提供跨模块可见性回调 window.__setAiChatApprovalVis，供 syncModeToggle 按模式显隐（chat 隐藏）。
+ * - 顶栏按钮开关下拉；外点 / ESC 关闭；选项点击即切换并持久化。
+ */
+function initApprovalPicker() {
+    const btn = document.getElementById('aiChatApprovalBtn');
+    const wrap = document.getElementById('aiChatApprovalWrap');
+    if (!btn || !wrap) return;
+
+    // 跨模块可见性回调（ai-chat.js syncModeToggle 调用）
+    window.__setAiChatApprovalVis = (visible) => {
+        wrap.hidden = !visible;
+        if (!visible) closeApprovalDropdown();
+    };
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (approvalDropdownExpanded) {
+            closeApprovalDropdown();
+        } else {
+            openApprovalDropdown();
+        }
+    });
+
+    // 点击页面其它区域（排除自身）关闭浮层
+    document.addEventListener('click', (e) => {
+        if (!approvalDropdownExpanded) return;
+        if (wrap.contains(e.target)) return;
+        closeApprovalDropdown();
+    });
+    // 按 ESC 关闭浮层
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && approvalDropdownExpanded) closeApprovalDropdown();
+    });
+
+    // 选项选择：写入全局态、刷新选中、立即持久化并关闭
+    const dropdown = document.getElementById('aiChatApprovalDropdown');
+    dropdown?.addEventListener('click', (e) => {
+        const opt = e.target.closest('.ai-approval-option');
+        if (!opt) return;
+        const value = opt.dataset.value;
+        if (!value) return;
+        closeApprovalDropdown();
+        if (value === approvalMode) return;
+        approvalMode = value;
+        syncApprovalToggle();
+        saveApprovalMode();
+        // 切换提示（含风险语义：完全访问为警示级）
+        window.showNotification?.(`审批模式已切换为「${APPROVAL_MODE_LABEL[approvalMode]}」`, value === 'auto' ? 'warning' : 'success');
+    });
+
+    syncApprovalToggle();
+}
+
+/** 开合下拉（带一致的开/合过渡类，与 agent 工具浮层风格统一） */
+function openApprovalDropdown() {
+    if (approvalDropdownTimer) { clearTimeout(approvalDropdownTimer); approvalDropdownTimer = null; }
+    const dropdown = document.getElementById('aiChatApprovalDropdown');
+    const btn = document.getElementById('aiChatApprovalBtn');
+    if (!dropdown) return;
+    approvalDropdownExpanded = true;
+    dropdown.classList.remove('closing');
+    requestAnimationFrame(() => { if (approvalDropdownExpanded) dropdown.classList.add('open'); });
+    btn?.classList.add('open');
+    btn?.setAttribute('aria-expanded', 'true');
+}
+
+function closeApprovalDropdown() {
+    if (!approvalDropdownExpanded) return;
+    approvalDropdownExpanded = false;
+    const dropdown = document.getElementById('aiChatApprovalDropdown');
+    const btn = document.getElementById('aiChatApprovalBtn');
+    if (dropdown) dropdown.classList.add('closing');
+    btn?.classList.remove('open');
+    btn?.setAttribute('aria-expanded', 'false');
+    if (approvalDropdownTimer) clearTimeout(approvalDropdownTimer);
+    approvalDropdownTimer = setTimeout(() => dropdown?.classList.remove('open', 'closing'), 200);
+}
+
+/** 按当前 approvalMode 同步下拉选中态与按钮标签 */
+function syncApprovalToggle() {
+    const dropdown = document.getElementById('aiChatApprovalDropdown');
+    dropdown?.querySelectorAll('.ai-approval-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.value === approvalMode);
+    });
+    const label = document.getElementById('aiChatApprovalLabel');
+    if (label) label.textContent = APPROVAL_MODE_LABEL[approvalMode] || '手动审批';
+}
+
+/**
+ * 单独保存当前审批模式到会话配置（仿 saveCurrentMode）。
+ */
+async function saveApprovalMode() {
+    if (!activeSessionId) return;
+    try {
+        const cfg = await window.go.main.App.LoadSessionConfig(activeSessionId);
+        cfg.approval_mode = approvalMode;
+        await window.go.main.App.SaveSessionConfig(activeSessionId, cfg);
+    } catch (e) {
+        console.error('保存审批模式失败:', e);
+    }
 }
 
 /**

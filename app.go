@@ -222,6 +222,11 @@ func (a *App) startup(ctx context.Context) {
 		a.LogSvc.Logger.Errorw("创建图片目录失败", fastlog.Error(err))
 	}
 
+	// 确保 AI 助手工作目录存在（文件/命令工具唯一可写根目录）
+	if err := config.EnsureWorkspaceDir(); err != nil {
+		a.LogSvc.Logger.Errorw("创建工作目录失败", fastlog.Error(err))
+	}
+
 	// 确保默认笔记本存在（首次启动自动创建）
 	if err := a.notebookService.EnsureDefaultNotebook(); err != nil {
 		a.LogSvc.Logger.Errorw("初始化默认笔记本失败", fastlog.Error(err))

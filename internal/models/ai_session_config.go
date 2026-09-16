@@ -11,4 +11,5 @@ type AISessionConfig struct {
 	RoleplayNotes     string `gorm:"type:text;default:''" json:"roleplay_notes"`
 	RecallNotebookIDs string `gorm:"type:text" json:"recall_notebook_ids"`
 	Mode              string `gorm:"size:10;default:'agent'" json:"mode"`
+	ApprovalMode      string `gorm:"size:20;default:'confirm_every'" json:"approval_mode"`
 }

@@ -24,7 +24,7 @@ jot/                                    # 项目根目录
 │   │   ├── TOOLS.md / EVENTS.md        # 工具文档 / 事件文档
 │   │   │   └── tools/                      # 内置工具实现（browse_notes/manage_note/ask_user/recall_notes/read_url/http_request/json 三件套/manage_todo/manage_notebook/manage_tag/manage_memory/get_stats/create_plan/update_plan 共 16 个）
 │   ├── aierrors/                       # AI 错误分类（errors.go：auth_error/rate_limit/server_error 等 11 类）
-│   ├── config/                         # 路径工具（JotHomeDir/SubDir，~/.jot 下 data/backup/images/logs/mcp 五子目录）
+│   ├── config/                         # 路径工具（JotHomeDir/SubDir，~/.jot 下 data/backup/images/logs/mcp/workspace 六子目录）
 │   ├── converter/                      # doc2md 封装：办公文件转 Markdown（7 种格式 + 60s 超时）
 │   ├── einocli/                        # eino 薄适配层（chat.go/embedding.go/types.go，OpenAI 兼容客户端封装）
 │   ├── database/                       # SQLite 初始化 + 种子数据
@@ -46,7 +46,7 @@ jot/                                    # 项目根目录
 │   │   ├── password_record.go / todo.go  # 密码记录 / 待办实体
 │   │   ├── note_vector.go              # NoteVector 实体（笔记切块向量索引，按 note_id+chunk_index 索引）
 │   │   ├── ai_session.go               # AI 会话实体（标题/置顶/时间戳/摘要 SummaryContent/摘要边界 SummaryUpToMsgID）
-│   │   ├── ai_session_config.go        # AI 会话操作栏配置（模型/深度思考/搜索源/Mode 三态/卡片召回/引用/技能，与 AISession 一对一）
+│   │   ├── ai_session_config.go        # AI 会话操作栏配置（模型/深度思考/搜索源/Mode 三态/卡片召回/引用/技能/审批模式 ApprovalMode，与 AISession 一对一）
 │   │   ├── ai_message.go               # AI 消息实体（角色/内容/思维链/Meta chip 字段，外键关联 SessionID）
 │   │   ├── ai_prompt.go                # AI 提示词实体（技能提示词数据库存储）
 │   │   ├── api_profile.go              # API 配置预设实体（名称/服务商/URL/Key，无 is_builtin）
@@ -147,7 +147,7 @@ jot/                                    # 项目根目录
 | **字体枚举** | Windows GDI EnumFontFamiliesW 系统字体枚举 | `fontutil/fonts_windows.go` | gdi32.dll / user32.dll (syscall) |
 | **配置存储** | KV 结构配置读写（字体偏好等） | `services/setting_service.go` | GORM |
 | **内置 MCP 服务器** | 内置 MCP 服务器模板（Tavily/AnySearch/知乎三服务/Context7），InitDB 时按 Name 去重增量插入 | `database/builtin_mcp_servers.go` | GORM |
-| **路径工具** | `~/.jot` 根目录统一解析（data/backup/images/logs/mcp 五个子目录），数据库默认路径 `~/.jot/data/jot.db` | `internal/config/config.go:JotHomeDir()/SubDir()`，`database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
+| **路径工具** | `~/.jot` 根目录统一解析（data/backup/images/logs/mcp/workspace 六个子目录，workspace 为 AI 代理执行工作目录），数据库默认路径 `~/.jot/data/jot.db` | `internal/config/config.go:JotHomeDir()/SubDir()/WorkspaceDir()/EnsureWorkspaceDir()`，`database/db.go:DefaultDBPath()` | `os.UserHomeDir()` |
 | **办公文件转换器** | 封装 doc2md 库，将 .docx/.pdf/.xlsx 等 7 种办公文件转为 Markdown 文本，带 60s 超时保护 | `internal/converter/converter.go` | gitee.com/MM-Q/doc2md
 
 ### 2.2 业务核心模块
@@ -555,21 +555,11 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 46. **browse_notes 读工具拆分 + manage_note 收窄为写/管理**：从 `manage_note` 把只读动作 `list`/`view` 拆出，独立为新工具 [`browse_notes`](internal/agent/tools/browse_notes.go)（浏览/阅读笔记库，list 搜索 + view 按 id/offset/length 读全文，line_numbers 全局行号供 edit 行级替换），只依赖 note + setting（list/view 不触 tag）；`manage_note` **保持原名**、收窄为纯写/管理（create/update/edit/pin/move/add_tag/remove_tag），移除 list/view 及 9 个读参数（keyword/date/sort/page/pageSize/line_numbers/offset/length），参数 24→15。共享包级函数（resolveNoteIDs/splitNoteLines/numberLines/notePreviewThreshold/maxSectionLen）留在 manage_note.go 被 browse_notes 复用。**命名/边界设计**：读工具刻意用 `browse_notes` 而非 search/recall/query，避免与向量召回 `recall_notes` 语义重叠致模型选型纠结；工具总数 15→16（registry 实测当前固定工具 16 个，含 manage_memory、create_plan/update_plan 两枚），仍在行业推荐 ≤15-16 内。管理工具名未变 + browse_notes 为全新名 → **无需迁移 `ai_agent_tools_disabled`**（未改工具名仅新增）。docs：registry.go/meta.go/doc.go/agent doc.go/TOOLS.md/AGENTS.md 全部同步。设计决策详见 [.trae/documents/split-browse-notes-from-manage-note.md](.trae/documents/split-browse-notes-from-manage-note.md)。
 
----
-
-## 记忆点 1：AI 连接配置只读化（预设驱动统一）+ hover 边框三档渐进 + 恢复出厂补种机制
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | 三块改动统一配置流与交互规范：① **AI 连接 URL/Key 输入框只读化**——设置页对话/嵌入两模块共 4 个输入框（`aiBaseURL`/`aiAPIKey`/`aiEmbedBaseURL`/`aiEmbedAPIKey`）加 `readonly`，产品语义收敛为"预设驱动"：输入框仅作展示与测试，配置写入只剩两条路径（预设切换 `SwitchProfile` 后端持久化后前端回填展示；测试/获取模型按钮的兜底 `saveSettings`）；② **hover 边框三档渐进规范**——5 处控件 hover 边框从 `--accent-light`（默认主题 `#FDE68A` 对 `#F0EBE0` 暖白底仅 1.05:1，肉眼不可见）改为中间档 `color-mix(in srgb, var(--accent) 70%, var(--border))`，与静止态 `--border`、open/active 态纯 `var(--accent)` 形成清晰层级；③ **恢复出厂补种机制排查**（未改代码，架构知识）——`ResetDatabase` 删表重建后经 `reconnectDB → database.InitDB` 重建连接，`InitDB` 末尾种子逻辑会重新插入内置 MCP 模板与内置 API 预设，"恢复出厂后 MCP 管理还有内容"是补种而非清理遗漏。 |
-| **只读化（重要）** | [index.html](frontend/index.html) 4 个输入框加 `readonly`（用 readonly 而非 disabled：可聚焦、**可复制 Key**、读屏不跳过）；placeholder 统一改"由配置预设填充"（原 `https://api.openai.com/v1`/`sk-...` 暗示可输入）；HTML 注释标明"只读：由配置预设回填，禁止手动编辑"。[settings-panel.css](frontend/src/css/components/settings-panel.css) 新增 `.settings-input[readonly]` 只读展示态（`--bg-secondary` 底 + 次级文字 + `cursor:default`，`:focus` 覆盖不亮 accent 边框；特异性 (0,3,0) > `.settings-input:focus` (0,2,0)，全 12 主题均有依赖变量）。[main.js](frontend/src/main.js) `initApiConnectionModule` 删除手动编辑死代码（URL `change`/`input` 自动保存 + 斜杠结尾校验、Key `change` 自动保存）；空 URL 提示改"请先选择配置预设"（原"请先填写 API 地址"在只读后成死胡同；对话/嵌入共用函数一处改两模块生效；预设弹窗内与管理列表行内的同型提示不适用此文案，保留原文案）。校验职责收敛：预设弹窗保存自带非空+斜杠校验，只读值源自预设故校验链路闭环。`resetApiKeyVisibility`（Key 显隐切换）与 readonly 不冲突。 |
-| **hover 三档渐进（重要）** | 通用约定：**UI 控件 hover 边框禁用 `--accent-light`**（各亮色主题该值均为浅色调，作边框对比度不足；初版 5 处直接改纯 `var(--accent)` 后 hover 与 open/active 边框层级弱化，复查改为 color-mix 中间档）。五处落地：[dropdowns.css](frontend/src/css/components/dropdowns.css)（`.font-family-trigger`/`.theme-select-trigger`）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-note-ref-filter-btn`）、[search-modal.css](frontend/src/css/components/search-modal.css)（`.search-modal-filter-btn`）、[md-reference.css](frontend/src/css/components/md-reference.css)（`.md-ref-toc-item`）。默认主题验证：静止 `#D0C8B8` → hover ≈`#D68F3B` → open `#D97706` 三档可辨。 |
-| **恢复出厂补种（重要）** | `ResetDatabase`（[app.go](app.go)）DropTable 全部表（含 `mcp_servers`，注册于 [models.go](internal/database/models.go) `AllModels`）→ `reconnectDB`（[app.go](app.go)，为解决 glebarez/sqlite 驱动 DropTable 后连接失效）内部调 `database.InitDB`（[db.go](internal/database/db.go)），其末尾种子逻辑 `InitBuiltinMCPServers` 重新插入 6 个内置 MCP 模板（tavily/anysearch/zhihu_search/zhihu_global/zhihu_hot/context7，禁用态 + `<your-api-key>` 占位符，[builtin_mcp_servers.go](internal/database/builtin_mcp_servers.go)）、`InitBuiltinProfiles` 重新插入内置 API 预设——与首次安装的"出厂状态"一致，用户自建数据确实已清。**教训**：`InitDB` 承担"建库 + 种子"双重职责，`reconnectDB` 为共用函数（导入恢复等场景也走），未来若要求"恢复出厂后 MCP/预设为空"需把 `InitDB` 拆分 connect/seed 两段或给 reconnectDB 加跳过种子开关，不可直接改共用路径；`InitBuiltinPrompts`/`InitDefaultTags`/`InitDefaultSettings` 目前在 `ResetDatabase` 与 `InitDB` 中双重执行（幂等冗余）。前端善后链路健康：`resetDatabase`（[data-management.js](frontend/src/js/data-management.js)）→ `reloadSettings` → `loadSettings` → `loadMCPServers` 刷新缓存。 |
-| **涉及文件** | [frontend/index.html](frontend/index.html)（readonly + placeholder + 注释）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（只读态）、[frontend/src/main.js](frontend/src/main.js)（删监听 + 空值文案）、[frontend/src/css/components/dropdowns.css](frontend/src/css/components/dropdowns.css)/[ai-chat.css](frontend/src/css/components/ai-chat.css)/[search-modal.css](frontend/src/css/components/search-modal.css)/[md-reference.css](frontend/src/css/components/md-reference.css)（hover 中间档）、[app.go](app.go)/[internal/database/db.go](internal/database/db.go)（补种机制，未改） |
+47. **AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）**：为 AI 助手后续文件操作/命令执行工具奠基，本轮三类纯增量改动（未接执行逻辑，approval_mode 仅落地为存储字段供后续接入）。**工作目录**：[config.go](internal/config/config.go) 新增 `DirWorkspace` 常量 + `WorkspaceDir()`（`~/.jot/workspace/`）+ `EnsureWorkspaceDir()`（`MkdirAll` 幂等），[app.go](app.go) 启动时调用；未来所有文件工具与命令执行的强制边界即此目录（路径归一化 `filepath.Clean` + 前缀校验，落出拒绝）。**审批模式字段**：模型 [ai_session_config.go](internal/models/ai_session_config.go) 新增 GORM 列 `ApprovalMode`（`approval_mode`，默认 `confirm_every`）；传输/存取 [ai_service.go](internal/services/ai_service.go) `SessionConfig` 加字段、`SaveSessionConfig` **空新建/切换默认值不覆写**（会话默认 `confirm_every` 需迁移式写入，见 `approvalModeOrDefault` 兜底）、`LoadSessionConfig` 兜底默认；默认配置创建也写入 `confirm_every`。前端加载/保存 [ai-chat.js](frontend/src/js/ai-chat.js) 同步字段。**前端审批选择器**：[index.html](frontend/index.html) 顶栏新增「审批」按钮 + 下拉浮层（三选项：手动审批 confirm_every / 自动审批 review / 完全访问 auto，完全访问用 `--warning` 警示色，激活项右侧绿色对勾）；[ai-chat.js](frontend/src/js/ai-chat.js) `initApprovalPicker`/`syncApprovalToggle`/`saveApprovalMode`——Agent/Plan 显示、chat 隐藏、外点/ESC 关闭、**切换即持久化 + 调 `showNotification` 提示**（手动/自动 success、完全访问 warning）；样式 [ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-approval-*`（主题自适应）。后续将接：文件工具（read_file/write_file/list_dir）+ 命令工具（run_command）+ 按模式的审批暂停/续跑机制（需引入**异步等待用户确认**，挑战现 wrappedTool 同步调用模型）。详见 [config.go](internal/config/config.go)、[app.go](app.go)、[ai_session_config.go](internal/models/ai_session_config.go)、[ai_service.go](internal/services/ai_service.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[index.html](frontend/index.html)、[ai-chat.css](frontend/src/css/components/ai-chat.css)。
 
 ---
 
-## 记忆点 2：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
+## 记忆点 1：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -579,7 +569,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
+## 记忆点 2：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -590,7 +580,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
+## 记忆点 3：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -601,7 +591,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
+## 记忆点 4：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -610,6 +600,17 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **分组渲染与盲切（重要）** | AI 浮层 [renderChatAgentToolsList](frontend/src/main.js) 与设置页 `renderAgentToolsMgrList` 各自构造 `groups` 四元组（`{key,label,tools,rows}` 等），`groups[1].tools.sort` 前置于 MCP 排序。可勾选组标签：`role="button"` + `tabIndex=0`，`click` / Enter / 空格触发 `toggleGroup`（`tools.every(isEnabled)` 判 `allEnabled` → 逐工具 `applyAgentTool(t,!allEnabled)` → 手动同步 `group.rows` 各行 checkbox → `updateAgentToolsButtonText/updateSelectAllCheckboxState/saveSettings`）。盲切手动设 `checkbox.checked` **不触发 change 事件**、不至复制执行 update/save，靠组标签处末尾手动同步。设置页用 `firstGroupRendered` 标记**首个非空组**加 `.first` 类去顶距（`display:flex` 容器下`:first-child` 永远命中 header，故用 JS 标记真实首组）。 |
 | **样式规范（重要）** | 组标签样式：`.agent-tools-mgr-group`（设置页，settings-panel.css）/`.ai-chat-agent-tools-group`（AI 浮层，ai-chat.css）——`border-bottom` hairline 35% 半透明分隔线（弱化避免压过头部实色边框，全 12 主题用 `color-mix(in srgb, var(--border) 35%, transparent)`）、`border-radius: 6px`圆角（hover/active 背景与 `:focus-visible` outline 自动跟随圆角）、`transform: translateZ(0)` GPU 合成防抖 + `transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1)` 弹性回弹、`:active` 缩放（AI 浮层 `scale(0.97)` 明显 / 设置页 `scale(0.99)` 轻微——设置页对比度更灵敏因行更宽、同百分比绝对位移更大）。菜单项/组标签的「按压缩小+弹性回弹」为项目统一交互范式。 |
 | **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（`renderChatAgentToolsList`/`renderAgentToolsMgrList`/共享 `applyAgentTool`/`toggleSelectAllTools` 收敛）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-agent-tools-group` 圆角+回弹）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（`.agent-tools-mgr-group`/`.first`/`.is-selectable`）、[internal/agent/types.go](internal/agent/types.go)（`ToolMeta.MCPServer`）/ [app.go](app.go)（`GetAgentTools` 填充 `MCPServer`） |
+
+---
+
+## 记忆点 5：AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 为 AI 助手后续文件操作/命令执行工具奠基，本轮三类纯增量改动（**未接任何执行逻辑**，`approval_mode` 仅落地为存储字段供后续接入，运行行为零变化）：**工作目录** [config.go](internal/config/config.go) 新增 `DirWorkspace` 常量 + `WorkspaceDir()` + `EnsureWorkspaceDir()`（[app.go](app.go) 启动时调用，`MkdirAll` 幂等）——未来所有文件/命令工具的强制边界即 `~/.jot/workspace/`（路径 `filepath.Clean` + 前缀校验，落出拒绝）；**审批模式字段** `approval_mode` 默认 `confirm_every`；**前端审批选择器** AI 助手顶栏「审批」下拉（Agent/Plan 显示、chat 隐藏）。三选项：手动审批 confirm_every / 自动审批 review / 完全访问 auto。 |
+| **审批模式存取（重要）** | 模型 [ai_session_config.go](internal/models/ai_session_config.go) 新增 GORM 列 `ApprovalMode`；[ai_service.go](internal/services/ai_service.go) `SessionConfig` 加字段、`SaveSessionConfig` **空值不覆写**（`ApprovalMode==""` 时保留库中原值，防加载态空字段把已有模式冲掉）、`LoadSessionConfig` 经 `approvalModeOrDefault` 兜底（空/非法回落默认 `confirm_every`）；新建默认配置也写入 `confirm_every`（非零字段首存语义）。前端 [ai-chat.js](frontend/src/js/ai-chat.js) 加载/保存同步该字段（`getSessionConfig` 读、`saveApprovalMode` 写）。**决策**：采用「默认值 + 空值不覆写 + 读兜底」三重保证，旧库无列/旧会话无值均安全回落到手动审批，待后续工具执行逻辑按此模式开关审批暂停。 |
+| **前端选择器（重要）** | [index.html](frontend/index.html) 顶栏新增「审批」按钮 + `.ai-approval-dropdown` 下拉浮层（结构：顶部说明行 + 三选项，每项「图标列 + 名称/描述 + 右侧激活对勾」）；[ai-chat.js](frontend/src/js/ai-chat.js) `initApprovalPicker`/`syncApprovalToggle`/`saveApprovalMode`——`syncModeToggle`→显隐（chat 隐藏）、外点/ESC 关闭（ESC 统一走全局 `handleKeyboardNavigation`）、**切换即 `saveApprovalMode` 持久化并调 `showNotification` 提示**（手动/自动 success、完全访问 warning——危险模式需醒目提醒）。**样式要点**（[ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-approval-*`）：`--warning` 警示色用于"完全访问"的图标与激活文本；激活项右侧绿色对勾；**激活态与悬停态几何高度严格一致**（对勾绝对定位不参与布局、描述 `nowrap`+省略号、图标抽为独立 `.ai-approval-icon` 列垂直居中于整条）；下拉容器 `gap: 2px` 避免激活/悬停背景块相连。 |
+| **涉及文件** | [internal/config/config.go](internal/config/config.go)（`DirWorkspace`/`WorkspaceDir`/`EnsureWorkspaceDir`）、[app.go](app.go)（启动创建 workspace）、[internal/models/ai_session_config.go](internal/models/ai_session_config.go)（`ApprovalMode` 列）、[internal/services/ai_service.go](internal/services/ai_service.go)（`approvalModeOrDefault`/存取兜底）、[frontend/index.html](frontend/index.html)（审批按钮+下拉）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`initApprovalPicker`/`syncApprovalToggle`/`saveApprovalMode`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-approval-*`） |
 
 ---
 

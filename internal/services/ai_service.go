@@ -52,6 +52,7 @@ type SessionConfig struct {
 	RoleplayNotes     string `json:"roleplay_notes"`
 	RecallNotebookIDs string `json:"recall_notebook_ids"`
 	Mode              string `json:"mode"`
+	ApprovalMode      string `json:"approval_mode"`
 }
 
 // AIService 封装 AI 相关的业务逻辑操作
@@ -538,6 +539,7 @@ func (a *AIService) CreateDefaultSessionConfig(sessionID uint) error {
 		RoleplayNotes:     cfg.RoleplayNotes,
 		RecallNotebookIDs: cfg.RecallNotebookIDs,
 		Mode:              "agent",
+		ApprovalMode:      "confirm_every",
 	}
 	if err := a.db.Create(&record).Error; err != nil {
 		a.logger.Errorw("AIService.CreateDefaultSessionConfig 失败", fastlog.Error(err))
@@ -560,6 +562,10 @@ func (a *AIService) SaveSessionConfig(sessionID uint, cfg SessionConfig) error {
 	// （空值在 LoadSessionConfig 侧由 modeOrDefault 兜底为 agent，一旦误写即无法恢复）
 	if cfg.Mode != "" {
 		assign["mode"] = cfg.Mode
+	}
+	// approval_mode 为空时不覆写：防止调用方漏传该字段导致已选项被静默清空
+	if cfg.ApprovalMode != "" {
+		assign["approval_mode"] = cfg.ApprovalMode
 	}
 	err := a.db.Where("session_id = ?", sessionID).Assign(assign).FirstOrCreate(&models.AISessionConfig{SessionID: sessionID}).Error
 	if err != nil {
@@ -584,6 +590,7 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 				RoleplayNotes:     "[]",
 				RecallNotebookIDs: "[]",
 				Mode:              "agent",
+				ApprovalMode:      "confirm_every",
 			}
 		}
 	}
@@ -595,7 +602,16 @@ func (a *AIService) LoadSessionConfig(sessionID uint) SessionConfig {
 		RoleplayNotes:     record.RoleplayNotes,
 		RecallNotebookIDs: record.RecallNotebookIDs,
 		Mode:              modeOrDefault(record.Mode),
+		ApprovalMode:      approvalModeOrDefault(record.ApprovalMode),
 	}
+}
+
+// approvalModeOrDefault 兼容历史数据：空/非法值一律视为 confirm_every。
+func approvalModeOrDefault(m string) string {
+	if m != "confirm_every" && m != "auto" && m != "review" {
+		return "confirm_every"
+	}
+	return m
 }
 
 // modeOrDefault 兼容历史数据：空/非法值一律视为 agent（Plan 由初始化数据库时的一次性迁移兜底）

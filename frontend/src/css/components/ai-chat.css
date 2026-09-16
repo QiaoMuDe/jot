@@ -2034,6 +2034,145 @@
     margin-left: auto;
 }
 
+/* ── 执行审批模式选择器（顶栏按钮 + 下拉选项，参考 Trae 审批模式设计）── */
+.ai-chat-approval-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.ai-chat-approval-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: -8px;
+    width: 264px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+    transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ai-chat-approval-dropdown.open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.ai-chat-approval-dropdown.closing {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+    pointer-events: none;
+}
+
+/* 头部说明行 */
+.ai-approval-header {
+    padding: 8px 12px 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* 选项：整体行布局，图标列左对齐并垂直居中于整个条目（图标+描述块）；
+   悬停/激活态仅改背景与颜色，几何尺寸不变；右侧对勾绝对定位 */
+.ai-approval-option {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 32px 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+
+.ai-approval-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.ai-approval-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ai-approval-name {
+    display: flex;
+    align-items: center;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.ai-approval-desc {
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ai-approval-check {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+/* 悬停与激活：仅背景/文字色变化，几何尺寸不变 */
+.ai-approval-option:hover {
+    background: var(--hover-bg);
+}
+
+.ai-approval-option:hover .ai-approval-icon {
+    color: var(--accent);
+}
+
+.ai-approval-option.active {
+    background: var(--hover-bg);
+}
+
+.ai-approval-option.active .ai-approval-name,
+.ai-approval-option.active .ai-approval-icon {
+    color: var(--accent);
+}
+
+.ai-approval-option.active .ai-approval-check {
+    opacity: 1;
+}
+
+/* 完全访问（危险选项）：图标常驻警告色 */
+.ai-approval-option.is-warning .ai-approval-icon {
+    color: var(--warning);
+}
+
+.ai-approval-option.is-warning:hover .ai-approval-name,
+.ai-approval-option.is-warning:hover .ai-approval-icon,
+.ai-approval-option.is-warning.active .ai-approval-name,
+.ai-approval-option.is-warning.active .ai-approval-icon {
+    color: var(--warning);
+}
+
 /* ── 翻译 chip 双语言布局 ── */
 .ai-chat-skill-chip-translate {
     display: inline-flex;

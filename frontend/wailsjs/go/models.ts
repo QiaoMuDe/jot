@@ -1073,6 +1073,7 @@ export namespace services {
 	    roleplay_notes: string;
 	    recall_notebook_ids: string;
 	    mode: string;
+	    approval_mode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionConfig(source);
@@ -1087,6 +1088,7 @@ export namespace services {
 	        this.roleplay_notes = source["roleplay_notes"];
 	        this.recall_notebook_ids = source["recall_notebook_ids"];
 	        this.mode = source["mode"];
+	        this.approval_mode = source["approval_mode"];
 	    }
 	}
 	export class SettingsConfig {
