@@ -16,6 +16,7 @@
 | `ai:stream-error` | 流错误 | `error` JSON、token 估算 | 展示错误态 |
 | `ai:tool-status` | 工具调用各阶段 | `tools.Record` JSON（`tool_start`/`tool_result`/`tool_error`/`tool_partial`） | 状态条 + 历史明细 |
 | `ai:ask-user` | 模型发起反问 | `{question, options, selection}` JSON | 弹出反问面板并阻塞等待 |
+| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / run_command 执行）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
 | `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 | 空字符串 | 显示计划生成状态文案（轮换文案，重试不额外通知） |
 | `ai:plan-created` | `create_plan` 调用成功 / 预规划完成 | `{goal, steps}` JSON | 弹出计划面板 |
 | `ai:plan-updated` | `update_plan` 调用成功 / 结果兜底 | `{step_id, status, result, steps}` JSON | 刷新计划面板 |
@@ -67,11 +68,40 @@
 
 ---
 
-## 5. 规划事件（`ai:plan-generating` / `ai:plan-created` / `ai:plan-updated`）
+## 5. 审批交互事件（`ai:tool-approval`）
+
+工作目录危险操作（`write_file` 覆盖已存在文件 / `run_command` **每次执行**）真正执行前，经 `Context.Approver`（`tools.Approver`）请求用户审批。父包 `agentSession`（[agent.go](internal/agent/agent.go) 的 `RequestApproval`）在抢占审批名额后发射此事件并**阻塞等待**用户决定，工具暂停执行、ReAct 循环挂起；决定经 `ApproveToolCall` 投递后同轮恢复（不落库、不新开一轮）。
+
+负载为 JSON 字符串：
+
+```json
+{"tool": "write_file", "summary": "覆盖文件：a.txt", "approval_id": 1, "critical": false}
+```
+
+- `tool`：请求审批的工具名（`write_file` / `run_command`）。
+- `summary`：操作的中文摘要（如"覆盖文件：xxx"/"执行命令：rm -rf …"），供前端审批面板展示。
+- `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved)` **必须原样回传**，后端据此防串审（不一致报错）。
+- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**（后端即使 `auto`/`review` 模式也会阻塞确认，作为最后防线）。
+
+**审批模式门控**（由后端依据会话配置 `approval_mode` 决定，事件仅在真正需要阻塞时才发射）：
+- `confirm_every`：`critical` 任意 → 都需阻塞确认。
+- `review` / `auto`：`critical=true` → 仍阻塞确认；`critical=false`（覆盖已存在文件等常规危险操作）→ 自动放行，不发射事件。
+
+**回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error`）：
+- `approved=true`：批准，工具返回 nil 继续执行，循环恢复。
+- `approved=false`：拒绝，工具以中文错误文本（"用户拒绝了本次操作…"）返回，经 `WrapWithError` 落成 `tool_error` 记录并回填模型继续推理（不中断循环）。
+- 无等待中的审批 / `approval_id` 不匹配 → 返回中文错误，前端应提示并刷新（不重复投递）。
+- 会话在审批等待期间被停止/释放 → ctx 取消，工具以 `ctx.Err()` 返回，循环随终止。
+
+事件在请求"真正阻塞确认"时发射；`review`/`auto` 且 `critical=false` 自动放行时不发射。并行危险操作（模型同轮多条）仅一条发射并阻塞，其余直接返回错误（防整轮挂起）。前端在切换会话 / 清空会话 / 停止 / `stream-done` / `stream-error` 时应隐藏审批面板并清理本会话的待回传 `approval_id`。
+
+---
+
+## 6. 规划事件（`ai:plan-generating` / `ai:plan-created` / `ai:plan-updated`）
 
 `create_plan` / `update_plan` 是允许工具内部直接 `ctx.Emit` 事件的例外（与 `ask_user` 并列），用于向前端展示执行计划卡片。这两个工具同时也会产生标准的 `ai:tool-status` 事件（`tool_start` / `tool_result`），规划事件是额外的独立通道。
 
-### 5.0 `ai:plan-generating`（Plan-and-Exec 预规划状态）
+### 6.0 `ai:plan-generating`（Plan-and-Exec 预规划状态）
 
 Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generatePlan()`（单独 LLM 调用生成执行计划）前发射此事件，通知前端预规划阶段开始。首次负载为空字符串。
 
@@ -80,7 +110,7 @@ Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generate
 - `generatePlan()` 完成后由 `ai:plan-created` 事件接替渲染计划面板；所有重试均失败时由 `ai:stream-error` 接替展示错误。
 - Agent 模式下不发射此事件。
 
-### 5.1 `ai:plan-created`
+### 6.1 `ai:plan-created`
 
 `create_plan` 工具调用成功后发射；**Plan-and-Exec 预规划阶段**（`generatePlan()` 成功）也会发射同样的事件。负载为 JSON 字符串：
 
@@ -98,7 +128,7 @@ Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generate
 - `goal`：计划目标描述（字符串）
 - `steps`：步骤列表，每项含 `id`（1-based 编号）、`description`（步骤描述）、`status`（初始均为 `"pending"`）
 
-### 5.2 `ai:plan-updated`
+### 6.2 `ai:plan-updated`
 
 `update_plan` 工具调用成功后发射；**结果兜底**（模型漏调 `update_plan` 时 [agent.go](internal/agent/agent.go) 汇总处自动补标未完成步骤）也会发射。负载为 JSON 字符串：
 
@@ -120,14 +150,14 @@ Plan 模式下，[agent.go](internal/agent/agent.go) `Run()` 在调用 `generate
 - `result`：步骤执行结果摘要（可为空串）
 - `steps`：完整步骤列表快照（前端据此刷新计划卡片）
 
-### 5.3 前端消费要点
+### 6.3 前端消费要点
 
 - 负载**不含 `goal` 字段**：前端需将增量合并到已有数据（`Object.assign({}, streamPlanData, payload)`），直接覆盖会丢失标题。
 - `ai:tool-status` 用于状态条展示（与其他工具一致），规划事件用于渲染计划面板，两类事件需同时处理。
 
 ---
 
-## 6. 结果汇总事件（`ai:agent-result`）
+## 7. 结果汇总事件（`ai:agent-result`）
 
 Agent 最终结果汇总时由 [app.go](app.go) `CallAIAgentStream` 发射，参数 `(streamGen, RecallCards, ToolCalls, Plan, ReasoningContent)`，随后紧接正常路径的 `ai:stream-done`。
 
@@ -138,7 +168,7 @@ Agent 最终结果汇总时由 [app.go](app.go) `CallAIAgentStream` 发射，参
 
 ---
 
-## 7. 摘要状态事件（`ai:summary-status`）
+## 8. 摘要状态事件（`ai:summary-status`）
 
 会话摘要压缩状态，由 [app.go](../../app.go) `truncateAIMessages` 路径发射，参数为 map：
 
@@ -154,7 +184,7 @@ Agent 最终结果汇总时由 [app.go](app.go) `CallAIAgentStream` 发射，参
 
 ---
 
-## 8. 其他事件（非 Agent 链路）
+## 9. 其他事件（非 Agent 链路）
 
 - `ai:aiop-chunk` / `ai:aiop-done` / `ai:aiop-error`：AI 一站式处理（AIOP）链路的流式推送与终态通知（fire-and-forget，无返回值），参数 `(streamGen, content)` 等。
 - 非事件类：工具元信息（`GetAgentTools`）、会话/消息 CRUD 等走 Wails 方法调用，不经事件通道。

@@ -3122,6 +3122,16 @@ func (a *App) AnswerAskUser(sessionID uint, answer string) error {
 	return a.AgentSvc.AnswerAskUser(sessionID, answer)
 }
 
+// ApproveToolCall 投递用户对工作目录危险操作（write_file/run_command）的审批决定，
+// 恢复同一轮 ReAct 循环（工具同轮返回，不落库、不新开一轮）。
+// approvalID 为 ai:tool-approval 事件下发的审批编号，供后端校验防串审。
+func (a *App) ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error {
+	if a.AgentSvc == nil {
+		return errors.New("agent 服务未就绪")
+	}
+	return a.AgentSvc.ApproveToolCall(sessionID, approvalID, approved)
+}
+
 // UpdateAIMessageContent 更新指定 AI 消息的内容
 func (a *App) UpdateAIMessageContent(id uint, content string) error {
 	a.LogSvc.Logger.Debugw("UpdateAIMessageContent", fastlog.Uint("id", id))

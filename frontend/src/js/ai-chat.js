@@ -15,6 +15,7 @@ let clearBtnEl = null;        // #aiChatClearBtn
 let stopBtnEl = null;         // #aiChatStopBtn
 let askPanelEl = null;        // #aiAskPanel（Agent 反问面板）
 let planPanelEl = null;       // #aiPlanPanel（Agent 执行计划面板）
+let approvalPanelEl = null;   // #aiToolApprovalPanel（Agent 工具执行审批面板）
 let sessionListEl = null;     // #aiSessionList
 let sessionNewBtnEl = null;   // #aiSessionNewBtn
 let contextUsageEl = null;    // #aiChatContextUsage（历史对话压缩进度指示器容器）
@@ -387,6 +388,7 @@ export async function initAIChat() {
     stopBtnEl = document.getElementById('aiChatStopBtn');
     askPanelEl = document.getElementById('aiAskPanel');
     planPanelEl = document.getElementById('aiPlanPanel');
+    approvalPanelEl = document.getElementById('aiToolApprovalPanel');
     sessionListEl = document.getElementById('aiSessionList');
     sessionNewBtnEl = document.getElementById('aiSessionNewBtn');
     aiSearchBtnEl = document.getElementById('aiChatSearchBtn');
@@ -1060,6 +1062,7 @@ function bindEvents() {
             window.__aiStreaming = false;
             setToggleLocked(false); // 停止后恢复模式/深度思考切换
             hideAskPanel();
+            hideApprovalPanel();
             // 立即移除当前 streaming 气泡（无论处于搜索还是 LLM 阶段）
             const streamingBubble = messagesInnerEl.querySelector('.ai-msg-assistant:last-child');
             if (streamingBubble) {
@@ -3344,7 +3347,7 @@ async function startStreaming(userText, userMsgID) {
 
     // 清除该事件名下所有旧监听器, 防止残留
     // （Wails v2 EventsOff 每次只接受一个事件名，逐个清除）
-    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user', 'ai:plan-generating', 'ai:plan-created', 'ai:plan-updated'].forEach(function(name) {
+    ['ai:stream-done', 'ai:stream-error', 'ai:stream-chunk', 'ai:stream-thinking', 'ai:tool-status', 'ai:agent-result', 'ai:ask-user', 'ai:tool-approval', 'ai:plan-generating', 'ai:plan-created', 'ai:plan-updated'].forEach(function(name) {
         window.runtime.EventsOff(name);
     });
 
@@ -3362,6 +3365,7 @@ async function startStreaming(userText, userMsgID) {
     //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
     hideAskPanel();
     hidePlanPanel();
+    hideApprovalPanel();
     streamPlanData = null; // 清空上一轮计划缓存（新轮 plan-created 到达时会重新赋值）
 
     const streamingEl = document.createElement('div');
@@ -3757,6 +3761,24 @@ async function startStreaming(userText, userMsgID) {
     });
     unsubs.push(unsubAskUser);
 
+    // ── Agent 工具执行审批暂停（ai:tool-approval） ──
+    // 当 AI 在 ReAct 循环中发起危险操作（写文件覆盖 → write_file /
+    // powershell/bash 命中黑名单 → run_command / 其它敏感工具）时，
+    // 后端暂停执行并发射该事件（负载含 tool / summary / approval_id / critical），
+    // 在此弹出审批面板；用户「允许/拒绝」后经 ApproveToolCall 同轮回传解锁后端。
+    // 同一时间只保留一个待审批：新事件到来时若面板已开，直接用新负载替换旧的
+    //（后端并发时会拒绝多余的审批，故后续审批事件覆盖 / 忽略均由后端裁决）。
+    const unsubToolApproval = window.runtime.EventsOn('ai:tool-approval', (evtGen, data) => {
+        if (!isAgentFlow) return;
+        if (evtGen !== myGen) return; // 属于旧流, 丢弃
+        if (!activeSessionId) return; // 无会话在交互, 忽略（覆盖空串/0）
+        let payload = null;
+        try { payload = typeof data === 'string' ? JSON.parse(data) : data; } catch (_) { return; }
+        if (!payload || typeof payload.approval_id !== 'number') return;
+        showApprovalPanel(payload);
+    });
+    unsubs.push(unsubToolApproval);
+
     // ── Agent 模式结构化结果回传（ai:agent-result，先于 stream-done 到达） ──
     // 后端在流结束后把召回卡片 / 工具调用链 / 思考链 一并回传，
     // 填充 recallCards / streamToolRecords，
@@ -3807,6 +3829,7 @@ async function startStreaming(userText, userMsgID) {
         setToggleLocked(false); // 回复完成后恢复模式/深度思考切换
         hideAskPanel(); // 防御性收起反问面板（正常流程面板已在提交答案时收起）
         hidePlanPanel(); // 收起执行计划面板
+        hideApprovalPanel(); // 收起工具审批面板（流结束即不再有待审批项）
         streamPlanData = null; // 清除本轮计划缓存，避免新对话 ask_user 恢复时误显示旧计划
 
         // 恢复发送按钮, 隐藏停止按钮
@@ -3949,6 +3972,7 @@ async function startStreaming(userText, userMsgID) {
         setToggleLocked(false); // 出错后恢复模式/深度思考切换
         hideAskPanel();
         hidePlanPanel(); // 报错时收起执行计划面板
+        hideApprovalPanel(); // 报错时收起工具审批面板
         streamPlanData = null; // 清除本轮计划缓存
         // 恢复发送按钮, 隐藏停止按钮
         if (stopBtnEl) stopBtnEl.style.display = 'none';
@@ -5619,6 +5643,142 @@ function hidePlanPanel() {
     if (!planPanelEl) return;
     planPanelEl.innerHTML = '';
     planPanelEl.style.display = 'none';
+}
+
+/* ── Agent 工具执行审批面板（ai:tool-approval） ── */
+
+/** 危险工具 → 中文可读名（读原样工具名作为兜底） */
+const APPROVAL_TOOL_LABEL = {
+    read_file: '读取文件',
+    write_file: '写入文件',
+    edit_file: '编辑文件',
+    run_command: '执行命令',
+    powershell: 'PowerShell 命令',
+    bash: 'Bash 命令',
+    shell_exec: '执行命令',
+    mkdir: '创建目录',
+    delete_file: '删除文件'
+};
+
+/**
+ * 显示 Agent 工具执行审批面板（ai:tool-approval）。
+ * 后端在 ReAct 循环中发起危险操作时暂停执行并发射事件，本面板给出
+ * 工具名、操作描述与「允许/拒绝」按钮；用户决策后经 ApproveToolCall
+ * 同轮回传解锁后端。面板展示期间不可通过关闭按钮/ESC/外点取消（后端正阻塞等待）。
+ * 若已有面板打开，再次调用会用新负载直接替换内容（同一时间仅一个待审批）。
+ * @param {object} payload - { tool, summary, approval_id, critical }
+ */
+function showApprovalPanel(payload) {
+    if (!approvalPanelEl) return;
+    hideAskPanel(); // 审批期间临时收起反问面板，避免两个浮层重叠
+    hidePlanPanel(); // 审批期间临时收起计划面板，避免两个浮层重叠
+
+    const toolName = payload.tool || '未知工具';
+    const toolLabel = APPROVAL_TOOL_LABEL[toolName] || toolName;
+    const isCritical = !!payload.critical;
+    const approvalId = payload.approval_id;
+
+    approvalPanelEl.innerHTML = '';
+    approvalPanelEl.classList.toggle('is-critical', isCritical);
+    // 无障碍：面板为模态告知（各一种结果），声明 dialog 语义并来自动播报内容变化
+    approvalPanelEl.setAttribute('role', 'alertdialog');
+    approvalPanelEl.setAttribute('aria-label', 'AI 请求执行操作，请允许或拒绝');
+    approvalPanelEl.setAttribute('aria-live', 'assertive');
+
+    // 头部：标题 + 工具名标签
+    const header = document.createElement('div');
+    header.className = 'ai-approval-header';
+    const title = document.createElement('div');
+    title.className = 'ai-approval-title';
+    title.textContent = 'AI 请求执行操作';
+    const tool = document.createElement('div');
+    tool.className = 'ai-approval-tool';
+    tool.textContent = toolLabel;
+    tool.title = toolName; // 悬停查看原始工具名
+    header.appendChild(title);
+    header.appendChild(tool);
+    approvalPanelEl.appendChild(header);
+
+    // 高风险提示条（critical=true）
+    if (isCritical) {
+        const critical = document.createElement('div');
+        critical.className = 'ai-approval-critical';
+        critical.textContent = '高风险操作，无法绕过确认';
+        approvalPanelEl.appendChild(critical);
+    }
+
+    // 操作描述
+    const summary = document.createElement('div');
+    summary.className = 'ai-approval-summary';
+    summary.textContent = payload.summary || '（无详细描述）';
+    approvalPanelEl.appendChild(summary);
+
+    // 按钮行：拒绝 + 允许
+    const actions = document.createElement('div');
+    actions.className = 'ai-approval-actions';
+
+    let submitting = false; // 防重复提交（快速双点击）
+    const disabledBy = (btn) => {
+        const denyBtn = actions.querySelector('.ai-approval-btn.deny');
+        const allowBtn = actions.querySelector('.ai-approval-btn.allow');
+        if (denyBtn) denyBtn.disabled = btn !== denyBtn;
+        if (allowBtn) allowBtn.disabled = btn !== allowBtn;
+    };
+
+    const denyBtn = document.createElement('button');
+    denyBtn.type = 'button';
+    denyBtn.className = 'ai-approval-btn deny';
+    denyBtn.textContent = '拒绝';
+    denyBtn.addEventListener('click', async () => {
+        if (submitting) return;
+        submitting = true;
+        disabledBy(denyBtn);
+        try {
+            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, false);
+            hideApprovalPanel();
+            window.showNotification?.(`已拒绝该操作${isCritical ? '（高风险）' : ''}`, 'warning', 3000);
+        } catch (e) {
+            window.showNotification?.('审批提交失败: ' + (e.message || e), 'error', 5000);
+            submitting = false; // 保留面板，允许重试
+            disabledBy(null);
+        }
+    });
+
+    const allowBtn = document.createElement('button');
+    allowBtn.type = 'button';
+    allowBtn.className = 'ai-approval-btn allow';
+    allowBtn.textContent = '允许';
+    allowBtn.addEventListener('click', async () => {
+        if (submitting) return;
+        submitting = true;
+        disabledBy(allowBtn);
+        try {
+            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, true);
+            hideApprovalPanel();
+        } catch (e) {
+            window.showNotification?.('审批提交失败: ' + (e.message || e), 'error', 5000);
+            submitting = false; // 保留面板，允许重试
+            disabledBy(null);
+        }
+    });
+
+    actions.appendChild(denyBtn);
+    actions.appendChild(allowBtn);
+    approvalPanelEl.appendChild(actions);
+
+    approvalPanelEl.style.display = '';
+    // 无关闭按钮、不监听 ESC/外点取消：后端正阻塞等待，必须显式允许/拒绝
+}
+
+/**
+ * 收起工具执行审批面板。
+ * 面板应在审批提交成功、流结束/报错/停止时被主动隐藏（防御性调用）。
+ */
+function hideApprovalPanel() {
+    if (!approvalPanelEl) return;
+    approvalPanelEl.innerHTML = '';
+    approvalPanelEl.classList.remove('is-critical');
+    approvalPanelEl.style.display = 'none';
 }
 
 /**

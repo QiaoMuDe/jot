@@ -94,6 +94,17 @@ type AskWaiter interface {
 	WaitForAnswer(ctx context.Context) (string, error)
 }
 
+// Approver 工作目录工具（write_file/run_command）的审批拦截器：由父包 agentSession
+// 注入，供危险操作在真正执行前请求用户批准。critical=true 表示命令黑名单命中
+// （即使 auto 模式也必须确认，作为不可绕过的最后防线）；critical=false 表示常规
+// 危险操作（如覆盖已存在文件），仅 confirm_every 模式需要确认，review/auto 模式自动放行。
+type Approver interface {
+	// RequestApproval 请求用户审批并阻塞等待决定；返回 nil=批准，
+	// 非 nil 错误文本=被拒绝（工具直接返回该错误，供回填模型）；
+	// ctx 取消（停止/会话释放）返回 ctx.Err()。
+	RequestApproval(ctx context.Context, toolName, summary string, critical bool) error
+}
+
 // PlanStep 单个计划步骤。
 type PlanStep struct {
 	ID          int    `json:"id"`          // 步骤编号（1-based）
@@ -119,6 +130,11 @@ type Context struct {
 	Logger    *fastlog.Logger
 	AskWaiter AskWaiter // 非 nil 时 ask_user 工具阻塞等待用户回答（同轮续答）
 	PlanState *Plan     // 规划工具状态：create_plan 写入、update_plan 更新、GenModelInputFunc 读取注入
+
+	// Approver 工作目录工具（write_file/run_command 等）的审批钩子，非 nil 时
+	// 危险操作（覆盖已存在文件 / 命中命令黑名单）在真正执行前需取得用户批准。
+	// critical=true（黑名单命中）即使 auto/review 模式也必须确认，不可绕过。
+	Approver Approver
 
 	// SkippedPlanUpdate 标记上一轮是否执行了工具但未调用 update_plan，
 	// 供 GenModelInput 钩子判断是否需要注入催促提醒。由 agent 事件循环设置，

@@ -30,5 +30,9 @@ func BuiltinTools() []ToolMeta {
 		{Name: "ask_user", Label: "向用户发起澄清提问（1-3 个问题，单选/多选）", AlwaysOn: true},
 		{Name: "create_plan", Label: "制定执行计划（拆解目标为步骤列表）", PlanOnly: true},
 		{Name: "update_plan", Label: "更新执行计划（标记步骤完成/跳过/新增）", PlanOnly: true},
+		{Name: "read_file", Label: "读取工作目录内的文件（支持分页续读）"},
+		{Name: "write_file", Label: "在工作目录内创建/覆盖/追加写入文件"},
+		{Name: "list_dir", Label: "列出工作目录内的目录结构（支持深度控制）"},
+		{Name: "run_command", Label: "在工作目录内执行系统命令（不支持 shell 语法）"},
 	}
 }

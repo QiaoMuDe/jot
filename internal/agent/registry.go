@@ -199,6 +199,10 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"ask_user", tools.WrapWithError("ask_user", tools.NewAskUser(p.ctx), p.ctx)},
 		{"create_plan", tools.WrapWithError("create_plan", tools.NewCreatePlan(p.ctx), p.ctx)},
 		{"update_plan", tools.WrapWithError("update_plan", tools.NewUpdatePlan(p.ctx), p.ctx)},
+		{"read_file", tools.WrapWithError("read_file", tools.NewReadFile(p.ctx), p.ctx)},
+		{"write_file", tools.WrapWithError("write_file", tools.NewWriteFile(p.ctx), p.ctx)},
+		{"list_dir", tools.WrapWithError("list_dir", tools.NewListDir(p.ctx), p.ctx)},
+		{"run_command", tools.WrapWithError("run_command", tools.NewRunCommand(p.ctx), p.ctx)},
 	}
 	filtered := make([]tool.BaseTool, 0, len(all))
 	for _, n := range all {

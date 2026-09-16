@@ -100,6 +100,22 @@ type agentSession struct {
 	chatModel  *openai.ChatModel  // 缓存的 ChatModel 客户端（跨消息复用）
 	chatFP     string             // ChatModel 指纹（BaseURL/APIKey/Model/深度思考）
 	lastSeen   time.Time          // 最近使用时间（LRU 淘汰依据）
+
+	approveCh         chan bool            // 工具审批决定投递通道（容量 1，true=批准/false=拒绝）
+	approvePending    bool                 // 当前是否有审批在等待用户决定
+	approveMu         sync.Mutex           // 保护 approvePending / pendingApprovalID
+	approvalID        uint64               // 审批编号自增计数（每次审批分配唯一 id）
+	pendingApprovalID uint64               // 当前待处理审批的 id（ApproveToolCall 校验用）
+	emit              func(string, string) // 会话级事件发射函数（Run 注入，供 ai:tool-approval 用；为 nil 则跳过发射仅日志）
+	// loadApprovalMode 返回当前会话的审批模式（confirm_every / review / auto）。
+	// Run 启动时把一次性从 DB 读取的会话配置缓存进 approvalModeCache，此闭包返回缓存；
+	// 未缓存（非 Run 场景/读取失败）回落 confirm_every（最安全）。
+	loadApprovalMode   func() string
+	approvalModeCache  string // 本 run 启动时从会话配置读取的审批模式缓存
+	approvalModeCached bool   // approvalModeCache 是否已由 Run 写入（未写入则回落 confirm_every）
+	// appendRecord 审批留痕回调：Run 注入绑定本轮 toolRecords 的 append；
+	// 在 RequestApproval 作出批准/拒绝决定后追加一条工具记录，仅留痕不影响拒绝回填语义。
+	appendRecord func(tools.Record)
 }
 
 // setRunCancel 记录当前 run 的取消源（Run 内赋值，runMu 已串行化，加锁兜底并发读）。
@@ -166,6 +182,125 @@ func (sess *agentSession) drainAsk() {
 	}
 }
 
+// drainApproval 排空审批投递通道中未消费的决定（取消竞态残留），防止污染下一轮审批。
+// 场景：用户投递批准/拒绝的同时取消（停止/会话释放），工具 select 可能抢到 ctx.Done()
+// 而非通道，已投递的决定残留；不排空会被下一轮审批当作当前决定消费。
+func (sess *agentSession) drainApproval() {
+	for {
+		select {
+		case <-sess.approveCh:
+		default:
+			return
+		}
+	}
+}
+
+var _ tools.Approver = (*agentSession)(nil)
+
+// RequestApproval 实现 tools.Approver：按会话审批模式决定是否需要真正向用户确认。
+// critical==true（破坏性命令/高风险 net 子命令，不可绕过）时无论何模式都会阻塞确认；
+// critical==false（覆盖已存在文件等常规危险操作）仅 confirm_every 模式阻塞，
+// review/auto 模式自动放行返回 nil。需要确认时抢占审批名额、发射 ai:tool-approval
+// 事件并阻塞等待 ApproveToolCall 投递决定。批准返回 nil，拒绝返回中文错误文本（经
+// wrappedTool 落成 tool_error 记录并回填模型继续推理），ctx 取消返回 ctx.Err()。
+// 批准/拒绝决定后会追加一条 tool_approval 记录留痕（经 appendRecord），不影响拒绝语义。
+//
+// 防御：真正需要确认但 sess.emit==nil（缺少事件通道，无法向用户发起审批）时，
+// 直接返回错误而非永久阻塞。
+func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary string, critical bool) error {
+	mode := "confirm_every"
+	if sess.loadApprovalMode != nil {
+		mode = sess.loadApprovalMode()
+	}
+	if mode != "confirm_every" && mode != "review" && mode != "auto" {
+		mode = "confirm_every"
+	}
+	// 常规危险操作（非不可绕过）在 review/auto 模式下自动放行，不阻塞
+	if !critical && (mode == "review" || mode == "auto") {
+		return nil
+	}
+	// 用户取消优先
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// 原子抢占审批名额：模型并行发多条危险工具时仅一条进入等待，其余报错
+	if err := sess.claimApproval(); err != nil {
+		return err
+	}
+	defer sess.clearApproval()
+
+	// 缺少事件通道时无法向用户发起审批：直接返回错误，避免永久阻塞
+	if sess.emit == nil {
+		return errors.New("无法发起审批（缺少事件通道），已取消本次操作")
+	}
+
+	// 本次审批 id 与 critical 随事件下发，供前端精确回调 ApproveToolCall
+	sess.approveMu.Lock()
+	curID := sess.pendingApprovalID
+	sess.approveMu.Unlock()
+	if b, err := json.Marshal(map[string]any{
+		"tool":        toolName,
+		"summary":     summary,
+		"approval_id": curID,
+		"critical":    critical,
+	}); err == nil {
+		sess.emit("ai:tool-approval", string(b))
+	}
+
+	select {
+	case approved := <-sess.approveCh:
+		// 审批留痕：批准/拒绝均追加一条 tool_approval 记录（即便拒绝，亦不改变回填语义）
+		sess.recordApproval(toolName, summary, approved)
+		if approved {
+			return nil
+		}
+		return fmt.Errorf("用户拒绝了本次操作（%s：%s）。请改用其他方式，或向用户说明后避开该操作。", toolName, summary)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// recordApproval 审批留痕：在批准/拒绝决定后追加一条 tool_approval 工具记录，
+// 仅用于审计留痕，不发射额外事件、不影响调用方（工具）的拒绝回填语义。
+// appendRecord 为 nil（非 Run 场景/测试）时静默跳过。
+func (sess *agentSession) recordApproval(toolName, summary string, approved bool) {
+	if sess.appendRecord == nil {
+		return
+	}
+	rec := tools.Record{
+		Action: "tool_approval",
+		Name:   toolName,
+		Args:   tools.TruncateRunes(summary, tools.MaxResultLen),
+	}
+	if approved {
+		rec.Result = "批准"
+	} else {
+		rec.Result = "已被用户拒绝"
+	}
+	sess.appendRecord(rec)
+}
+
+// claimApproval 原子抢占审批名额：已有审批在等待时返回错误（模型同条消息并行
+// 发多条危险工具时拒绝多余请求，避免多重阻塞导致整轮挂起）。
+func (sess *agentSession) claimApproval() error {
+	sess.approveMu.Lock()
+	defer sess.approveMu.Unlock()
+	if sess.approvePending {
+		return errors.New("已有操作正在等待审批，请先处理当前审批")
+	}
+	sess.approvePending = true
+	sess.approvalID++
+	sess.pendingApprovalID = sess.approvalID
+	return nil
+}
+
+// clearApproval 清除审批等待标记（RequestApproval 返回前 defer 调用，幂等）。
+func (sess *agentSession) clearApproval() {
+	sess.approveMu.Lock()
+	sess.approvePending = false
+	sess.approveMu.Unlock()
+}
+
 // NewAgentService 创建一个新的 AgentService 实例。
 func NewAgentService(deps Deps) *AgentService {
 	return &AgentService{deps: deps, sessions: make(map[uint]*agentSession)}
@@ -199,8 +334,12 @@ func (s *AgentService) getOrCreateSession(sessionID uint) *agentSession {
 		}
 	}
 	sess := &agentSession{
-		askCh:    make(chan string, 1),
-		lastSeen: time.Now(),
+		askCh:     make(chan string, 1),
+		approveCh: make(chan bool, 1),
+		lastSeen:  time.Now(),
+		// loadApprovalMode / approvalModeCache 由 Run 启动时一次性从会话配置注入
+		// （每次 run 读取一次并缓存，避免每次审批都查库）；非 Run 场景为 nil，
+		// RequestApproval 回落 confirm_every。测试可直接覆盖 loadApprovalMode 注入。
 	}
 	s.sessions[sessionID] = sess
 	return sess
@@ -232,6 +371,36 @@ func (s *AgentService) AnswerAskUser(sessionID uint, answer string) error {
 	}
 }
 
+// ApproveToolCall 投递用户对工作目录危险操作的审批决定，恢复同一轮 ReAct 循环：
+// 决定经通道同轮返回给正在阻塞等待的工具（write_file/run_command），继续完成原始请求。
+// 无等待中的审批、或 approval_id 与当前待审批 id 不一致时返回中文错误（防止前端串审）。
+func (s *AgentService) ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error {
+	s.mu.Lock()
+	sess, ok := s.sessions[sessionID]
+	s.mu.Unlock()
+	if !ok {
+		return errors.New("当前没有等待审批的操作（会话无进行中的 Agent 轮次）")
+	}
+	sess.approveMu.Lock()
+	if !sess.approvePending {
+		sess.approveMu.Unlock()
+		return errors.New("当前没有等待审批的操作")
+	}
+	if sess.pendingApprovalID != approvalID {
+		sess.approveMu.Unlock()
+		return errors.New("审批编号不匹配，可能已过期，请刷新后重试")
+	}
+	sess.approvePending = false // 投递前先清标记，防止重复投递
+	sess.approveMu.Unlock()
+	select {
+	case sess.approveCh <- approved:
+		return nil
+	default:
+		// 通道已满（极罕见：上一轮决定未消费），兜底拒绝
+		return errors.New("审批投递失败，请稍后重试")
+	}
+}
+
 // ReleaseSession 释放指定会话的 Agent 实例：取消等待中的 run 并删除注册表项。
 // 清空/删除会话、重建服务时调用，防止等待中的反问 run 悬挂占用资源。
 func (s *AgentService) ReleaseSession(sessionID uint) {
@@ -244,6 +413,7 @@ func (s *AgentService) ReleaseSession(sessionID uint) {
 	}
 	sess.cancelRun()
 	sess.drainAsk()
+	sess.drainApproval()
 }
 
 // ReleaseAll 释放全部会话的 Agent 实例（清空所有 AI 会话/工厂重置时调用）：
@@ -256,6 +426,7 @@ func (s *AgentService) ReleaseAll() {
 	for _, sess := range sessions {
 		sess.cancelRun()
 		sess.drainAsk()
+		sess.drainApproval()
 	}
 }
 
@@ -473,15 +644,36 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	sess := s.getOrCreateSession(req.SessionID)
 	sess.runMu.Lock()
 	defer sess.runMu.Unlock()
+	sess.emit = emit // 会话级事件发射：危险审批操作（ai:tool-approval）用；为 nil 则跳过发射
+
+	// 审批模式缓存：本 run 启动时一次性从会话配置读取，避免每次审批都查库。
+	// loadApprovalMode 返回缓存；未缓存（读取失败/未配置）回落 confirm_every（最安全）。
+	if s.deps.AI != nil {
+		if v := s.deps.AI.LoadSessionConfig(req.SessionID).ApprovalMode; v != "" {
+			sess.approvalModeCached = true
+			sess.approvalModeCache = v
+		}
+	}
+	sess.loadApprovalMode = func() string {
+		if sess.approvalModeCached {
+			return sess.approvalModeCache
+		}
+		return "confirm_every"
+	}
+
 	runCtx, runCancel := context.WithCancel(ctx)
 	sess.setRunCancel(runCancel)
 	defer func() {
 		// 清理会话级状态：清除反问等待标记、排空未消费的答案（取消竞态残留）、
-		// 取消本 run 的取消源（幂等）
+		// 排空未消费的审批决定、取消本 run 的取消源（幂等）
 		sess.askMu.Lock()
 		sess.askPending = false
 		sess.askMu.Unlock()
+		sess.approveMu.Lock()
+		sess.approvePending = false
+		sess.approveMu.Unlock()
 		sess.drainAsk()
+		sess.drainApproval()
 		sess.setRunCancel(nil)
 		runCancel()
 	}()
@@ -519,9 +711,12 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	//    collector/ctx 贯穿本轮：工具经 tools.WrapWithError 包装（失败回填模型不中断循环），
 	//    部分失败由工具经 ctx.AddPartial 登记，tool_result 之后统一 DrainPartials 发射；
 	//    AskWaiter 注入会话实例：ask_user 工具调用时阻塞等待用户回答（同轮续答）。
+	//    Approver 注入会话实例：write_file/run_command 危险操作时阻塞等待用户审批。
 	collector := &tools.Collector{}
 	var toolRecords []tools.Record
-	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger, AskWaiter: sess}
+	toolCtx := &tools.Context{Emit: emit, Records: &toolRecords, Collector: collector, Logger: s.deps.Logger, AskWaiter: sess, Approver: sess}
+	// 审批留痕绑定：本 run 的 RequestApproval 决定（批准/拒绝）追加进 toolRecords
+	sess.appendRecord = func(rec tools.Record) { toolRecords = append(toolRecords, rec) }
 	// 禁用工具集合转 map（黑名单语义：默认空 = 全部注册，被禁工具模型不可见）
 	disabledTools := make(map[string]bool, len(req.DisabledTools))
 	for _, name := range req.DisabledTools {

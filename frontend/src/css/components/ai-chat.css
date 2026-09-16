@@ -4762,7 +4762,7 @@
 }
 
 .ai-ask-input.error {
-    border-color: var(--error, #dc2626);
+    border-color: var(--error);
     animation: ai-ask-shake 0.4s ease;
 }
 
@@ -4791,6 +4791,168 @@
 
 .ai-ask-submit:active {
     transform: scale(0.97);
+}
+
+/* ── Agent 工具执行审批面板（ai:tool-approval） ── */
+/* 危险操作（写文件覆盖 / 命中黑名单命令等）时后端暂停 ReAct 循环并等待用户显式允许/拒绝，
+   面板外点击或按 ESC 不能取消（后端正阻塞等待决定），故不设关闭按钮。
+   z-index(60) 高于反问/计划面板(50)、低于业务浮层(100)与确认弹窗(10001)。 */
+.ai-approval-panel {
+    position: absolute;  /* 悬浮浮层：与反问面板同布局，覆盖在输入区上方 */
+    left: 0;
+    bottom: calc(100% + 8px); /* 悬浮于输入区正上方（消息列表区域） */
+    z-index: 60;
+    width: fit-content;
+    min-width: 300px;
+    max-width: 100%;
+    display: flex;            /* 纵向 flex：头部/描述/按钮固定 */
+    flex-direction: column;
+    padding: 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warning); /* 默认警示色强调"待审批" */
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); /* 悬浮阴影，浮层感 */
+    animation: ai-ask-panel-in 0.2s ease-out; /* 复用反问面板入场动画 */
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-approval-panel {
+        animation: none;
+    }
+}
+
+/* 高风险操作：整体警示配色，强调"无法绕过确认" */
+.ai-approval-panel.is-critical {
+    border-left-color: var(--error);
+}
+
+/* 面板头部：标题 + 工具名标签 */
+.ai-approval-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ai-approval-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
+    color: var(--text-primary);
+}
+
+.ai-approval-tool {
+    flex-shrink: 0;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    color: var(--accent-dark);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 6px;
+}
+
+/* 高风险提示条 */
+.ai-approval-critical {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--error-text);
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    border-radius: 8px;
+}
+
+/* 操作描述：保留后端换行，超高内部滚动 */
+.ai-approval-summary {
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-primary);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.ai-approval-summary::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ai-approval-summary::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ai-approval-summary::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+    min-height: 30px;
+}
+
+/* 按钮行：拒绝靠左、允许靠右（与 ask 输入行同间距） */
+.ai-approval-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.ai-approval-btn {
+    flex-shrink: 0;
+    padding: 6px 16px;
+    font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
+    font-family: inherit;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+.ai-approval-btn:hover {
+    filter: brightness(0.95);
+}
+
+.ai-approval-btn:active {
+    transform: scale(0.97);
+}
+
+.ai-approval-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* 允许：主色调实底（与 ask 提交按钮一致；critical 仍可允许，由用户明确决策）。
+   文字色用 color-mix 按 accent 推导深色，适应浅色 accent 主题，避免硬编码 #fff 对比不足。 */
+.ai-approval-btn.allow {
+    color: color-mix(in srgb, var(--accent) 35%, black);
+    background: var(--accent);
+}
+
+/* 高风险（critical）允许按钮：危险色实底强化警示，与普通场景的 accent 样式区分。
+   hover/active 沿用全局 brightness/scale，保持一致并与 deny 红色系统一。 */
+.ai-approval-panel.is-critical .ai-approval-btn.allow {
+    color: var(--error-text);
+    background: var(--error);
+}
+
+/* 拒绝：危险色调衬底 */
+.ai-approval-btn.deny {
+    color: var(--error-text);
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
 }
 
 /* ── 会话摘要生成状态条 ── */

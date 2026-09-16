@@ -1,0 +1,13 @@
+- [x] workspace 边界校验函数实现，越权路径被拒绝
+- [x] read_file 实现并注册，支持 rune 分页与越权拒绝
+- [x] write_file 实现并注册，自动建父目录，覆盖标记破坏性
+- [x] list_dir 实现并注册，递归深度受限
+- [x] run_command 基于 os/exec 裸命令执行，强制 cwd=workspace，禁止 shell 语法
+- [x] run_command 对不存在命令回填"环境无此命令"而非崩溃
+- [x] 命令黑名单定义完毕，覆盖删除/关机/格式化/联网拉取/提权类
+- [x] ApprovalWaiter 泛化接口 + agentSession 实现，含抢占互斥/等待投递/取消/排空
+- [x] wrappedTool 前置审批门，危险操作触发阻塞，拒绝回填不中断
+- [x] `ai:tool-approval` 事件 + `ApproveToolCall` 绑定 + 前端确认面板渲染
+- [x] approval_mode 三模式接线正确，auto 模式黑名单仍确认
+- [x] 所有新增工具/事件写入 TOOLS.md / EVENTS.md
+- [x] go build ./... 通过，相关单测全部 PASS

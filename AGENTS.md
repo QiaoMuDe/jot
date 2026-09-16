@@ -559,17 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：md 转换库切换独立库 doc2md（删除内嵌副本 + replace 指令）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | markitdown 库正式从项目内本地副本抽离为独立维护库 `gitee.com/MM-Q/doc2md` v1.0.0（包名仍为 `markitdown`，导出 API 与原用法完全兼容）。切换内容：① [internal/converter/converter.go](internal/converter/converter.go) import 由 `github.com/conductor-oss/markitdown` 改为 `gitee.com/MM-Q/doc2md`（别名 `markitdownlib` 保留，转换逻辑零改动）；② [go.mod](go.mod) 删除 `replace github.com/conductor-oss/markitdown v0.0.1 => ./internal/markitdown` 指令，`go get` 引入 doc2md v1.0.0 + `go mod tidy` 清理旧依赖（html-to-markdown/extrame/xls 等内嵌库专属间接依赖随之移除）；③ 整个 `internal/markitdown/` 目录删除（约 55 个文件，含独立 go.mod/cmd/testdata/golden/LICENSE）；④ [app.go](app.go) 4 处注释 markitdown→doc2md。 |
-| **实现要点（重要）** | ① **API 兼容零迁移**：`New`/`ConvertReader`/`StreamInfo`（Extension/Filename/LocalPath 同名字段）/`IsUnsupportedFormat`/`Result.Markdown` 一一对应，唯一使用方 converter.go 仅换 import；② **行为保持不变**：`officeExtensions` 支持范围（.docx/.xlsx/.xls/.pptx/.pdf/.epub）、60s 超时、panic 拦截、错误翻译全保留，不扩大支持范围（ZIP 已弃用约定、纯文本走二进制检测兜底）；③ **PDFium 修复已上游化**：原本地副本的 `Stdout/Stderr: io.Discard` 修复（防 wails GUI 构建无控制台句柄时 wazero 调 `GetFileType` 报错）已包含在 doc2md v1.0.0 的 converter_pdf_pdfium.go（L31-32），PDF 转换不受影响（已核实）；④ 验证：`go build ./...` + `go vet ./...` 通过 + 全项目 grep 无 conductor-oss 残留；纯 Go 依赖切换无需重跑 `wails build`，前端不受影响。 |
-| **涉及文件** | [internal/converter/converter.go](internal/converter/converter.go)（import 切换）、[go.mod](go.mod)（删 replace + 新依赖 `gitee.com/MM-Q/doc2md v1.0.0`）、[app.go](app.go)（4 处注释更新）、`internal/markitdown/`（整目录删除） |
-
----
-
-## 记忆点 2：AI 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
+## 记忆点 1：Agent 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -580,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
+## 记忆点 2：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -591,7 +581,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
+## 记忆点 3：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -603,7 +593,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）
+## 记忆点 4：AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -611,6 +601,19 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 | **审批模式存取（重要）** | 模型 [ai_session_config.go](internal/models/ai_session_config.go) 新增 GORM 列 `ApprovalMode`；[ai_service.go](internal/services/ai_service.go) `SessionConfig` 加字段、`SaveSessionConfig` **空值不覆写**（`ApprovalMode==""` 时保留库中原值，防加载态空字段把已有模式冲掉）、`LoadSessionConfig` 经 `approvalModeOrDefault` 兜底（空/非法回落默认 `confirm_every`）；新建默认配置也写入 `confirm_every`（非零字段首存语义）。前端 [ai-chat.js](frontend/src/js/ai-chat.js) 加载/保存同步该字段（`getSessionConfig` 读、`saveApprovalMode` 写）。**决策**：采用「默认值 + 空值不覆写 + 读兜底」三重保证，旧库无列/旧会话无值均安全回落到手动审批，待后续工具执行逻辑按此模式开关审批暂停。 |
 | **前端选择器（重要）** | [index.html](frontend/index.html) 顶栏新增「审批」按钮 + `.ai-approval-dropdown` 下拉浮层（结构：顶部说明行 + 三选项，每项「图标列 + 名称/描述 + 右侧激活对勾」）；[ai-chat.js](frontend/src/js/ai-chat.js) `initApprovalPicker`/`syncApprovalToggle`/`saveApprovalMode`——`syncModeToggle`→显隐（chat 隐藏）、外点/ESC 关闭（ESC 统一走全局 `handleKeyboardNavigation`）、**切换即 `saveApprovalMode` 持久化并调 `showNotification` 提示**（手动/自动 success、完全访问 warning——危险模式需醒目提醒）。**样式要点**（[ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-approval-*`）：`--warning` 警示色用于"完全访问"的图标与激活文本；激活项右侧绿色对勾；**激活态与悬停态几何高度严格一致**（对勾绝对定位不参与布局、描述 `nowrap`+省略号、图标抽为独立 `.ai-approval-icon` 列垂直居中于整条）；下拉容器 `gap: 2px` 避免激活/悬停背景块相连。 |
 | **涉及文件** | [internal/config/config.go](internal/config/config.go)（`DirWorkspace`/`WorkspaceDir`/`EnsureWorkspaceDir`）、[app.go](app.go)（启动创建 workspace）、[internal/models/ai_session_config.go](internal/models/ai_session_config.go)（`ApprovalMode` 列）、[internal/services/ai_service.go](internal/services/ai_service.go)（`approvalModeOrDefault`/存取兜底）、[frontend/index.html](frontend/index.html)（审批按钮+下拉）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`initApprovalPicker`/`syncApprovalToggle`/`saveApprovalMode`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-approval-*`） |
+
+---
+
+## 记忆点 5：AI 工作目录文件/命令工具 + 审批暂停/续跑（Approver + ai:tool-approval + ApproveToolCall + 三模式）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在记忆点 4 的基础上，正式落地 AI 在 `~/.jot/workspace/` 沙箱内的**文件操作 + 命令执行工具**与**审批暂停/续跑机制**，接入会话审批模式三档。新增四个内置工具：`read_file`（run 分页，offset/length 续读）、`write_file`（覆盖自动建父目录，覆盖已存在文件触发审批）、`list_dir`（WalkDir 递归深度受限）、`run_command`。`run_command` 采用 **os/exec 裸命令 + 参数数组**（刻意**不支持 shell 语法**——Windows 下规避 bash/pwsh 语法错位，也大幅降低越权逃逸面），`exec.CommandContext` 30s 超时，`exec.LookPath` 找不到命令回填「环境中没有命令」让模型按「报错自适应」改用已有命令或文件工具（**不禁止、不预判**）。 |
+| **文件工具边界（重要）** | [config.go](internal/config/config.go) 新增 `WorkspaceFilePath(root, p)`：`filepath.Abs` + `Clean` 归一化后前缀校验，落出返回中文错误「超出工作目录，仅允许操作 ~/.jot/workspace 内的文件」。三个文件工具经 `fsToolBase.resolvePath` 复用该校验（测试经 `workspaceRoot` 注入临时目录）。`run_command` 的 cwd 仅允许 workspace 内子目录或缺省。**不引入内核级沙箱**，Windows 桌面应用难以做强隔离，靠「文件工具路径校验 + run_command 裸命令白名单化 + 审批门」分层兜底（对齐业界"靠审批而非强沙箱"基线）。 |
+| **审批机制（重要）** | 泛化 ask_user 等待范式为 `tools.Approver` 接口（[context.go](internal/agent/tools/context.go)：`RequestApproval(ctx, toolName, summary, critical bool) error`）。`agentSession` 实现之（[agent.go](internal/agent/agent.go)：`approveCh`(cap1)/`approvePending`/`approveMu`/`approvalID`/`pendingApprovalID`/`emit`/`loadApprovalMode` + `claimApproval` 抢占互斥/`clearApproval`/`drainApproval` 排空）。危险操作会**阻塞 AI 流**并发 `ai:tool-approval` 事件（负载 `{tool,summary,approval_id,critical}`），前端弹确认面板，用户点「允许/拒绝」→ `window.go.main.App.ApproveToolCall(sessionID, approvalID, approved)` 投递决定解锁；**拒绝=工具返回错误文本经 wrappedTool 落成 tool_error 记入 toolRecords 并回填模型继续，不中断循环**。 |
+| **三模式门控（重要）** | `agentSession.RequestApproval` 先读 `loadApprovalMode`（懒读 `Deps.AI.LoadSessionConfig(sessionID).ApprovalMode`，nil/非法回落 `confirm_every`）。**`run_command` 每次执行都会请求审批**，`critical` 由 `CommandNeedsApproval(command, args.Args)` 决定：普通命令 `critical=false`，命中破坏性/高风险子命令 `critical=true`。门控规则：`critical=false`（普通命令/覆盖文件）在 `review`/`auto` 自动放行、仅 `confirm_every` 确认（即手动审批对每次命令执行都弹确认）；`critical=true`（命令黑名单命中）**任何模式都必须确认**（不可绕过的最后防线）。**net/install 类命令按子命令细分**（`CommandNeedsApproval(command, args)`）：破坏宿主系统的命令（`rm/del/rmdir/shutdown/reboot/mkfs/format/format-volume/dd/sudo/systemctl/reg/diskpart/taskkill/chmod/chown/cipher`）与解释器（`powershell/pwsh/cmd`）始终 critical；`curl/wget`（仅下载到文件类 flag 或携带 URL 才 critical）、`pip/pip3`（`install` 等）、`npm`（`install/add/init/run/exec` 等）、`go`（`install/run/get/mod/build`）、`git`（`clone/init/fetch/pull/reset/clean/checkout/switch/merge/...`）仅命中高风险子命令才 critical=true，`go version/git status/npm ls` 等只读操作在 review/auto 自动放行。**审查修复**：边界校验解析符号链接（`WorkspaceFilePath` 用 `EvalSymlinks` 解析最深已存在祖先，防 symlink/junction 逃逸）；`read_file` 改有界读取（`os.Open`+`bufio` 按 rune 只读所需片段，不再整读）；run_command 输出用 `limitedBuffer` 有界；list_dir WalkDir 逼近上限提前中断；审批决定追加 `tool_approval` 工具记录（`appendRecord`）。 |
+| **前端面板（重要）** | [index.html](frontend/index.html) 新增 `#aiToolApprovalPanel` 浮层；[ai-chat.js](frontend/src/js/ai-chat.js) 监听 `ai:tool-approval`（与 `ai:ask-user` 同守卫：isAgentFlow + 丢弃旧流 + activeSessionId 非空）→ `showApprovalPanel`（`APPROVAL_TOOL_LABEL` 工具中文名 + summary + 允许/拒绝；`critical` 加 `.is-critical` 警示条）；**无关闭按钮、不监听 ESC/外点**（后端正阻塞等待，必须显式选择）；禁止点「允许」→ `ApproveToolCall(...,true)`，点「拒绝」→ `(...,false)`，提交中禁用防重复，成功后收起面板并 `showNotification` 提示；在停止/stream-done/stream-error 均 `hideApprovalPanel` 清理。样式 [ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-approval-panel` 复用 ask 面板视觉语言、z-index 60（高于 ask/plan 50，低于业务浮层 100 与确认弹窗）。 |
+| **涉及文件** | [internal/config/config.go](internal/config/config.go)（`WorkspaceFilePath`）、[internal/agent/tools/fs_tools.go](internal/agent/tools/fs_tools.go)（read_file/write_file/list_dir + `fsToolBase`/`requestApproval`）、[internal/agent/tools/run_command.go](internal/agent/tools/run_command.go)（run_command + `IsDestructiveCommand`/黑名单）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（`Approver` 接口 + `Context.Approver` 字段）、[internal/agent/agent.go](internal/agent/agent.go)（`approveCh` 等字段 + `RequestApproval`/`claimApproval`/`clearApproval`/`drainApproval`/`ApproveToolCall` + Run 注入 `Approver: sess`）、[app.go](app.go)（绑定 `ApproveToolCall`）、[frontend/index.html](frontend/index.html)（`#aiToolApprovalPanel`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`showApprovalPanel`/`hideApprovalPanel`/`APPROVAL_TOOL_LABEL`/监听）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-approval-panel`）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（四工具登记）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md)（`ai:tool-approval` 协议） |
 
 ---
 

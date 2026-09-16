@@ -3,9 +3,11 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ~/.jot 下子目录名常量
@@ -47,4 +49,79 @@ func EnsureWorkspaceDir() error {
 		return err
 	}
 	return os.MkdirAll(dir, 0o755)
+}
+
+// WorkspaceFilePath 将相对/绝对路径解析为 workspace 内的绝对路径并校验边界：
+// 落出 workspace 返回错误；合法返回清理后的绝对路径。workspaceRoot 须为绝对路径
+// （如 WorkspaceDir() 返回值）。p 为相对路径时相对 workspaceRoot 解析；
+// p 为工作目录根目录本身同样视为合法（目录操作，如 list_dir）。
+//
+// 边界校验会解析符号链接：对「目标路径中最深的已存在祖先」做 EvalSymlinks，
+// 使指向 workspace 外的 symlink/junction（含新建文件落在符号链接目录内的场景）
+// 暴露真实位置，从而被拒绝放行（防止符号链接逃逸边界）。
+func WorkspaceFilePath(workspaceRoot, p string) (string, error) {
+	// 规范化根目录：Abs + Clean；根目录须为绝对路径，否则视为配置错误
+	rootClean, err := filepath.Abs(filepath.Clean(workspaceRoot))
+	if err != nil {
+		return "", fmt.Errorf("规范化工作目录根路径失败: %w", err)
+	}
+
+	// 解析目标路径：相对路径相对根目录拼接，绝对路径直接采用，均做 Clean
+	target := p
+	if !filepath.IsAbs(p) {
+		target = filepath.Join(rootClean, p)
+	}
+	cleaned := filepath.Clean(target)
+
+	// 符号链接兜底：对父目录 Dir(cleaned) 再做一次解析（覆盖目标文件本身经
+	// symlink 指向外部、而 EvalSymlinks 对不存在的目标会失败的场景）。
+	dirReal := resolveRealTarget(filepath.Dir(cleaned))
+	// 主解析：先尝试解析整个目标真实路径，失败则用父目录解析兜底，最终取
+	// 两者中较"深"（路径更长）的一个作为真实路径参与边界校验。
+	targetReal := resolveRealTarget(cleaned)
+	resolved := targetReal
+	if len([]rune(dirReal)) > len([]rune(targetReal)) {
+		resolved = dirReal
+	}
+
+	// 边界校验：resolved（真实路径）必须等于根目录，或以根目录 + 分隔符为前缀。
+	// 大小写比较用 EqualFold（Windows 大小写不敏感；类 Unix 平台两者等价），
+	// 前缀比较对二者统一 ToLower 后与分隔符一起判前缀，保证 Windows 大小写不敏感
+	// 且不会把兄弟目录（如 root2 或 root_2）误判为在 root 内。
+	if !strings.EqualFold(rootClean, resolved) &&
+		!strings.HasPrefix(strings.ToLower(resolved), strings.ToLower(rootClean)+string(filepath.Separator)) {
+		return "", errors.New("超出工作目录，仅允许操作 ~/.jot/workspace 内的文件")
+	}
+	return cleaned, nil
+}
+
+// resolveRealTarget 解析 path 的符号链接，返回"最深已存在祖先"的 EvalSymlinks
+// 真实路径，并拼接其后尚未创建（不存在）的路径段。path 或其祖先全不存在时
+// 返回原 cleaned 路径（无符号链接，原样参与前缀校验）。
+func resolveRealTarget(path string) string {
+	cleaned := filepath.Clean(path)
+	ancestor := cleaned
+	var missing []string
+	for {
+		if _, err := os.Lstat(ancestor); err == nil {
+			break
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			// 已到文件系统根，无法再向上（路径全部不存在且无符号链接）
+			return cleaned
+		}
+		missing = append([]string{filepath.Base(ancestor)}, missing...)
+		ancestor = parent
+	}
+	real, err := filepath.EvalSymlinks(ancestor)
+	if err != nil {
+		return cleaned
+	}
+	if len(missing) == 0 {
+		return real
+	}
+	// 在真实祖先后拼接尚未创建的路径段，得到完整真实路径
+	parts := append([]string{real}, missing...)
+	return filepath.Join(parts...)
 }
