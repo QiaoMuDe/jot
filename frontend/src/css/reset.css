@@ -8,6 +8,7 @@
 
 html {
     height: 100%;
+    overflow: hidden; /* 锁死整页滚动：body 级遗漏内容（如 Mermaid 错误元素）不得撑出视口外 */
     background-color: var(--bg);
     font-size: var(--font-size-base);
     transition: background-color var(--anim-duration-slow) ease-out;
@@ -16,6 +17,7 @@ html {
 body {
     margin: 0;
     height: 100%;
+    overflow: hidden;
     font-family: var(--font-family);
     font-size: 0.875rem;
     line-height: 1.6;

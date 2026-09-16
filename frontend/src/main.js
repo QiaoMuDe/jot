@@ -4592,6 +4592,9 @@ async function toggleMermaidView(btn) {
             } catch (err) {
                 console.warn('Mermaid render error:', err);
                 rendered.innerHTML = `<div class="mermaid-error">Mermaid 渲染失败：${err.message}</div>`;
+                // 清理 Mermaid 遗留在 body 中的炸弹错误元素（避免撑高页面导致整页可滚动）
+                const leftover = document.getElementById(id);
+                if (leftover) leftover.remove();
             }
         }
 
