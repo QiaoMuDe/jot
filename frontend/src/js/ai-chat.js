@@ -5699,11 +5699,16 @@ function showApprovalPanel(payload) {
     header.appendChild(tool);
     approvalPanelEl.appendChild(header);
 
-    // 高风险提示条（critical=true）
+    // 高风险提示条（critical=true）：带警示图标，强化"无法绕过"语义
     if (isCritical) {
         const critical = document.createElement('div');
         critical.className = 'ai-approval-critical';
-        critical.textContent = '高风险操作，无法绕过确认';
+        const warnIcon = document.createElement('span');
+        warnIcon.innerHTML = svgIcon('alert', 14);
+        const warnText = document.createElement('span');
+        warnText.textContent = '高风险操作，无法绕过确认';
+        critical.appendChild(warnIcon);
+        critical.appendChild(warnText);
         approvalPanelEl.appendChild(critical);
     }
 
@@ -7698,6 +7703,7 @@ function setToggleLocked(locked) {
     skillsBtn?.classList.toggle('is-locked', locked);
     addBtn?.classList.toggle('is-locked', locked);
     document.getElementById('aiChatAgentToolsBtn')?.classList.toggle('is-locked', locked);
+    document.getElementById('aiChatApprovalBtn')?.classList.toggle('is-locked', locked);
 
     // 会话侧栏：折叠 + 锁定
     const sidebar = document.querySelector('.ai-session-sidebar');
@@ -7733,6 +7739,7 @@ function setToggleLocked(locked) {
         closeSkillsDropdown();
         if (addDropdown) addDropdown.classList.remove('open');
         window.__closeAiChatAgentToolsList?.();
+        closeApprovalDropdown(); // 收起初次锁定可能已展开的审批浮层
     }
 }
 
@@ -7818,6 +7825,12 @@ function initApprovalPicker() {
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        // 回复期间与其它工具栏按钮一致：置灰锁定，点击时抖动 + 通知
+        if (isStreaming) {
+            shakeLockedToggle(btn);
+            window.showNotification?.('回复结束或停止再恢复使用', 'warning');
+            return;
+        }
         if (approvalDropdownExpanded) {
             closeApprovalDropdown();
         } else {

@@ -54,7 +54,7 @@ func EnsureWorkspaceDir() error {
 // WorkspaceFilePath 将相对/绝对路径解析为 workspace 内的绝对路径并校验边界：
 // 落出 workspace 返回错误；合法返回清理后的绝对路径。workspaceRoot 须为绝对路径
 // （如 WorkspaceDir() 返回值）。p 为相对路径时相对 workspaceRoot 解析；
-// p 为工作目录根目录本身同样视为合法（目录操作，如 list_dir）。
+// p 为工作目录根目录本身同样视为合法（目录操作，如 ls_dir）。
 //
 // 边界校验会解析符号链接：对「目标路径中最深的已存在祖先」做 EvalSymlinks，
 // 使指向 workspace 外的 symlink/junction（含新建文件落在符号链接目录内的场景）

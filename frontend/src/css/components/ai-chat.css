@@ -673,9 +673,11 @@
     color: var(--warning, #d97706);
 }
 
-/* 失败行强调：长调用链中突出（柔性浅红底 + 工具名着色），非 color-only（含 ✗ 图标与文案） */
+/* 失败行强调：长调用链中突出（危险色 tint 底 + 工具名着色），非 color-only（含 ✗ 图标与文案）。
+   背景不用 --error-bg（较亮主题下近白/白透粉、观感差），改为 --error 混入行底色自适应的
+   危险色调，深浅主题均清晰且不像"白的"。 */
 .ai-tool-status-item.is-error {
-    background: var(--error-bg);
+    background: color-mix(in srgb, var(--error) 10%, var(--hover-bg));
 }
 .ai-tool-status-item.is-error .ai-tool-status-name {
     color: var(--danger, #e5484d);
@@ -768,7 +770,7 @@
 }
 .ai-tool-summary-status.is-error {
     color: var(--danger, #e5484d);
-    background: var(--error-bg);
+    background: color-mix(in srgb, var(--error) 12%, transparent); /* 自适应危险色 tint，避免近白 */
 }
 .ai-tool-summary-status.is-warning {
     color: var(--warning, #d97706);
@@ -4857,7 +4859,9 @@
     border-radius: 6px;
 }
 
-/* 高风险提示条 */
+/* 高风险提示条：危险色实底 tint，杜绝纯白背景；深浅主题自适应。
+   背景用 error 混入面板底（card-bg）而非 --error-bg，避免较亮主题下呈近白；
+   同熔断给提示条也加左侧色条，加强"无法绕过"的警示语义。 */
 .ai-approval-critical {
     display: flex;
     align-items: center;
@@ -4865,10 +4869,17 @@
     padding: 6px 10px;
     margin-bottom: 10px;
     font-size: 12px;
+    font-weight: 600;
     color: var(--error-text);
-    background: var(--error-bg);
-    border: 1px solid var(--error-border);
+    background: color-mix(in srgb, var(--error) 12%, var(--card-bg));
+    border: 1px solid color-mix(in srgb, var(--error) 40%, var(--border));
+    border-left: 3px solid var(--error);
     border-radius: 8px;
+}
+
+.ai-approval-critical .ai-inline-icon {
+    flex-shrink: 0;
+    color: var(--error);
 }
 
 /* 操作描述：保留后端换行，超高内部滚动 */
@@ -4918,20 +4929,37 @@
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.15s;
+    transition:
+        opacity 0.15s,
+        transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), /* 弹性回弹 */
+        box-shadow 0.15s,
+        filter 0.15s;
 }
 
+/* 悬停：轻微上浮 + 阴影 + 整体变亮/变暗（随主题色），与其它功能按钮一致 */
 .ai-approval-btn:hover {
-    filter: brightness(0.95);
+    filter: brightness(0.92);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
 }
 
+/* 点击回弹：按下缩放，松手弹性复位 */
 .ai-approval-btn:active {
-    transform: scale(0.97);
+    transform: translateY(0) scale(0.97);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 .ai-approval-btn:disabled {
     opacity: 0.6;
     cursor: default;
+}
+
+/* 禁用态取消悬停/按压动效，避免误触发 */
+.ai-approval-btn:disabled:hover,
+.ai-approval-btn:disabled:active {
+    transform: none;
+    box-shadow: none;
+    filter: none;
 }
 
 /* 允许：主色调实底（与 ask 提交按钮一致；critical 仍可允许，由用户明确决策）。
@@ -4941,18 +4969,23 @@
     background: var(--accent);
 }
 
-/* 高风险（critical）允许按钮：危险色实底强化警示，与普通场景的 accent 样式区分。
-   hover/active 沿用全局 brightness/scale，保持一致并与 deny 红色系统一。 */
+/* 高风险（critical）允许按钮：危险色实底 + 白字强化警示。文字不用 --error-text：
+   该变量照 `浅底深字` 设计，实底 --error 上在深浅主题均对比不足（约 1.2~1.8:1）；
+   白字于各主题 --error（含最暗主题的近黑 error）对比度均达标。
+   hover/active 沿用全局 brightness/scale，并与 deny 红色系统一。 */
 .ai-approval-panel.is-critical .ai-approval-btn.allow {
-    color: var(--error-text);
+    color: #fff;
     background: var(--error);
 }
 
-/* 拒绝：危险色调衬底 */
+/* 拒绝：危险色实底 + 白字（与 critical 允许按钮一致）。原淡色衬底（--error-bg）在较亮
+   主题下与面板背景相近导致按钮不明显，改用实底 --error 各主题均清晰醒目；
+   文字不用 --error-text（浅底深字变量，实底上对比不足），白字对比度均达标。
+   hover/active 沿用全局 brightness/scale。 */
 .ai-approval-btn.deny {
-    color: var(--error-text);
-    background: var(--error-bg);
-    border: 1px solid var(--error-border);
+    color: #fff;
+    background: var(--error);
+    border: none;
 }
 
 /* ── 会话摘要生成状态条 ── */

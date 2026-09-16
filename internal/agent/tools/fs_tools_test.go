@@ -1,6 +1,6 @@
 package tools
 
-// 本文件覆盖工作目录文件工具（read_file / write_file / list_dir）的核心行为。
+// 本文件覆盖工作目录文件工具（read_file / write_file / ls_dir）的核心行为。
 // 测试通过 fsToolBase.workspaceRoot 注入临时目录，避免污染真实 ~/.jot/workspace。
 
 import (
@@ -11,15 +11,15 @@ import (
 	"testing"
 )
 
-// newTestReadFile / newTestWriteFile / newTestListDir 构造注入临时工作目录的测试实例。
+// newTestReadFile / newTestWriteFile / newTestLsDir 构造注入临时工作目录的测试实例。
 func newTestReadFile(dir string) *readFileTool {
 	return &readFileTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
 func newTestWriteFile(dir string) *writeFileTool {
 	return &writeFileTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
-func newTestListDir(dir string) *listDirTool {
-	return &listDirTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
+func newTestLsDir(dir string) *lsDirTool {
+	return &lsDirTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
 
 // TestWorkspaceFilePathUsedByRead 验证 read_file 的边界校验：相对路径合法读取，
@@ -197,8 +197,8 @@ func TestWriteFile(t *testing.T) {
 	})
 }
 
-// TestListDir 验证 list_dir 的目录结构列举与深度截断。
-func TestListDir(t *testing.T) {
+// TestLsDir 验证 ls_dir 的单层列表（像 ls）与按 path 钻取、越权拒绝。
+func TestLsDir(t *testing.T) {
 	dir := t.TempDir()
 	// 结构：a.txt, sub/b.txt, sub/deep/c.txt
 	mustWrite := func(p string) {
@@ -214,49 +214,42 @@ func TestListDir(t *testing.T) {
 	mustWrite("sub/b.txt")
 	mustWrite("sub/deep/c.txt")
 
-	t.Run("默认深度列出", func(t *testing.T) {
-		out, err := newTestListDir(dir).InvokableRun(context.Background(), `{}`)
+	t.Run("缺省列出根的直接内容（单层）", func(t *testing.T) {
+		out, err := newTestLsDir(dir).InvokableRun(context.Background(), `{}`)
 		if err != nil {
-			t.Fatalf("list_dir 失败: %v", err)
+			t.Fatalf("ls_dir 失败: %v", err)
 		}
 		if !strings.Contains(out, "文件: a.txt") {
 			t.Errorf("应包含文件 a.txt，实际:\n%s", out)
 		}
 		if !strings.Contains(out, "目录: sub") {
-			t.Errorf("应包含目录 sub 与文件 b.txt，实际:\n%s", out)
+			t.Errorf("应包含目录 sub，实际:\n%s", out)
 		}
-		if !strings.Contains(out, "文件: sub"+string(filepath.Separator)+"b.txt") {
-			t.Errorf("应包含 sub/b.txt，实际:\n%s", out)
-		}
-		// 默认深度 2：sub/deep/c.txt 不显示
-		if strings.Contains(out, "c.txt") {
-			t.Errorf("默认深度不应列出深层 c.txt，实际:\n%s", out)
+		// 单层语义：不列出 sub 及其子目录内的任何文件
+		if strings.Contains(out, "sub"+string(filepath.Separator)+"b.txt") || strings.Contains(out, "c.txt") {
+			t.Errorf("单层列表不应含深层文件，实际:\n%s", out)
 		}
 	})
 
-	t.Run("depth=3 展开深层", func(t *testing.T) {
-		out, err := newTestListDir(dir).InvokableRun(context.Background(), `{"depth":3}`)
+	t.Run("以子目录为 path 钻取", func(t *testing.T) {
+		out, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"sub"}`)
 		if err != nil {
-			t.Fatalf("list_dir 失败: %v", err)
+			t.Fatalf("ls_dir 失败: %v", err)
 		}
-		if !strings.Contains(out, "文件: sub"+string(filepath.Separator)+"deep"+string(filepath.Separator)+"c.txt") {
-			t.Errorf("depth=3 应列出 c.txt，实际:\n%s", out)
+		if !strings.Contains(out, "文件: b.txt") {
+			t.Errorf("path=sub 应列出 b.txt，实际:\n%s", out)
+		}
+		if !strings.Contains(out, "目录: deep") {
+			t.Errorf("path=sub 应列出子目录 deep，实际:\n%s", out)
+		}
+		if strings.Contains(out, "c.txt") {
+			t.Errorf("path=sub 单层不应列出 deep/c.txt，实际:\n%s", out)
 		}
 	})
 
 	t.Run("越权路径拒绝", func(t *testing.T) {
-		if _, err := newTestListDir(dir).InvokableRun(context.Background(), `{"path":"../secret"}`); err == nil {
+		if _, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"../secret"}`); err == nil {
 			t.Fatal("越权路径应报错")
-		}
-	})
-
-	t.Run("depth 上限截断", func(t *testing.T) {
-		out, err := newTestListDir(dir).InvokableRun(context.Background(), `{"depth":999}`)
-		if err != nil {
-			t.Fatalf("list_dir 失败: %v", err)
-		}
-		if !strings.Contains(out, "c.txt") {
-			t.Errorf("depth 超上限应按 5 展开，应列出 c.txt，实际:\n%s", out)
 		}
 	})
 }

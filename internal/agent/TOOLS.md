@@ -333,20 +333,14 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 - [tools/doc.go](internal/agent/tools/doc.go)：工具列表与导出构造器名（权威清单）
 - [registry.go](internal/agent/registry.go#L19-L31)：注册顺序与依赖注入
 
-新增/删除工具时仅需同步上述 Go 文档，**无需更新本文件**。
+新增/删除/改名工具时仅需同步上述 Go 文档（`tools/doc.go` 清单与构造器、`registry.go` 注册、`tools/meta.go` 模式标记），**无需更新本文件**。
 
-### 6.1 工作目录工具（read_file / write_file / list_dir / run_command）
+### 6.1 审批机制（跨工具通用规范）
 
-AI 助手工作目录（`~/.jot/workspace`）相关的四个文件/命令工具，实现于 `tools/fs_tools.go` 与 `tools/run_command.go`：
+对需用户确认的写/危险操作，工具通过共享的 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）请求审批，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，事件协议见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval`。
 
-| 工具 | 用途 | 安全约束 |
-|---|---|---|
-| `read_file` | 分页读取工作目录内文件（`offset`/`length`，按 rune 计，缺省 8000） | 仅允许工作目录内路径；`../` 逃逸、越界绝对路径一律拒绝 |
-| `write_file` | 创建 / 覆盖 / 追加写入文件（自动建父目录） | 同上路径边界；**覆盖已存在文件**（`append=false`）触发审批 `critical=false` |
-| `list_dir` | 递归列出工作目录结构（`depth` 缺省 2，上限 5） | 同上路径边界 |
-| `run_command` | 在工作目录内执行可执行命令（仅命令名 + 参数数组，**不支持 shell 语法**：管道/重定向/`&&`/`;`/通配符） | 同上路径边界（`cwd` 仅允许工作目录内子目录）；**每次执行都先请求审批**，`critical` 由是否命中破坏性命令（rm/dd/sudo/taskkill 等）或高风险 net 类子命令（`CommandNeedsApproval`，如 git clone、npm install、go install、curl -O 下载落盘等）决定，`critical=true` 时不可绕过 |
-
-**审批机制**：两处审批均由 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）承载，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，详见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval` 事件协议。
+- **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否**不可绕过**：`false` 可拒绝、`true` 必须强制确认）。
+- **判断标准**：是否触发审批、`critical` 取值，均由该工具自行定义并写在工具文件头注释与 `EVENTS.md` 中；本指南不在文件里逐工具罗列，避免与代码真相脱节。
 
 ---
 

@@ -4,9 +4,11 @@ package tools
 // 内执行可执行命令及其参数数组。它刻意不支持 shell 语法（管道/重定向/&&/;/
 // 通配符等）——需要复杂逻辑应先 write_file 编写脚本再用对应解释器执行。
 // cwd 仅允许工作目录内子目录或缺省（固定为工作目录根）；每次执行都先经
-// Context.Approver 请求审批，critical 由是否命中破坏性命令（破坏宿主系统）
-// / 高风险 net 类子命令（CommandNeedsApproval）决定——critical=true 时即使
-// auto/review 模式也必须确认，不可绕过。
+// Context.Approver 请求审批，critical（是否不可绕过、任何审批模式都必须确认）
+// 由 highRiskTokens 判定：命令基名或任一参数 token 命中高危关键字即 critical=true。
+//
+// 高危判定为"护栏"语义而非隔离：它是让用户对危险命令/脚本执行保留最后否决权，
+// 对抗性（改名、脚本包裹、python -c 等）可绕过；真正硬边界依赖 confirm_every 模式。
 
 import (
 	"context"
@@ -29,18 +31,49 @@ const runCommandTimeout = 30 * time.Second
 // 但进程继续运行至完成/超时，避免超大输出撑爆内存。
 const maxCommandOutputBytes = 256 * 1024
 
-// destructiveCmdPrefixes 破坏宿主系统的危险命令基名（命中即始终 critical=true，
-// 即使 auto 模式也强制确认，作为不可绕过的最后防线）。
-var destructiveCmdPrefixes = map[string]bool{
+// highRiskTokens 高危关键字集合（map 成员判定，O(1)）：命令基名或任一参数 token
+// 命中（大小写不敏感、整词相等）即判为 critical=true（任何审批模式都强制确认）。
+// 三类合一：
+//  1. 破坏宿主系统的危险命令；
+//  2. 可执行任意逻辑的 Shell / 脚本解释器（重开 shell 语义或跑任意代码）；
+//  3. 高危动词 / 网络下载工具（安装、删除、下载、执行、改仓库状态等）。
+//
+// 这是护栏而非隔离：对抗性可改名/脚本包裹绕过，真正硬边界靠 confirm_every 模式。
+var highRiskTokens = map[string]bool{
+	// 破坏宿主系统的危险命令（含磁盘/文件系统摧毁）
 	"rm": true, "del": true, "rmdir": true, "shutdown": true, "reboot": true,
 	"mkfs": true, "format": true, "dd": true, "sudo": true, "systemctl": true,
 	"reg": true, "diskpart": true, "taskkill": true, "chmod": true, "chown": true,
-	"cipher": true, "format-volume": true,
+	"fdisk": true, "parted": true, "cfdisk": true, "wipefs": true, "shred": true,
+	"mkfs.ext4": true, "mkfs.xfs": true, "mkfs.btrfs": true, "mkfs.fat": true,
+	// Linux 系统/权限管理
+	"halt": true, "poweroff": true, "init": true, "killall": true, "pkill": true,
+	"userdel": true, "usermod": true, "groupdel": true, "passwd": true, "chgrp": true,
+	// 可执行任意逻辑的 Shell / 脚本解释器（重开 shell 语义或跑任意代码）
+	"cmd": true, "powershell": true, "pwsh": true, "bash": true, "dash": true,
+	"zsh": true, "sh": true, "ksh": true, "csh": true, "fish": true,
+	"python": true, "python3": true, "py": true,
+	"node": true, "deno": true, "bun": true, "perl": true, "ruby": true, "php": true,
+	"lua": true, "luajit": true, "groovy": true, "tclsh": true, "Rscript": true,
+	"julia": true, "wscript": true, "cscript": true, "mshta": true, "expect": true,
+	// 网络下载工具（默认落盘/下载执行）
+	"curl": true, "wget": true,
+	// Windows 系统管理 / LOLBin
+	"certutil": true, "bitsadmin": true, "wmic": true, "bcdedit": true,
+	"vssadmin": true, "fsutil": true, "takeown": true, "icacls": true,
+	"cacls": true, "runas": true, "psexec": true,
+	// 高危动词 / 子命令（写、删、下载、执行、改仓库状态、自动确认等）
+	"install": true, "uninstall": true, "upgrade": true, "remove": true, "unlink": true,
+	"erase": true, "delete": true, "clone": true, "checkout": true, "reset": true,
+	"clean": true, "merge": true, "rebase": true, "push": true, "pull": true, "fetch": true,
+	"exec": true, "eval": true, "run": true, "download": true, "purge": true, "wipe": true,
+	"--force": true, "--hard": true, "--yes": true, "-y": true, "--assume-yes": true, "--upgrade": true,
 }
 
-// shellCmdPrefixes 可执行任意脚本的解释器（始终 critical=true）。
-var shellCmdPrefixes = map[string]bool{
-	"powershell": true, "pwsh": true, "cmd": true,
+// hasHighRiskToken 判断单个 token 是否命中高危集合（整词相等、大小写不敏感）。
+func hasHighRiskToken(token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	return highRiskTokens[token]
 }
 
 // commandBaseName 提取命令基名的规范化小写形式：取第一个空白分隔 token 作为
@@ -60,155 +93,33 @@ func commandBaseName(command string) string {
 	return base
 }
 
-// IsDestructiveCommand 判断命令是否命中"破坏宿主系统"的危险命令集合
-// （destructiveCmdPrefixes，始终 critical）。不含 net/install 类按子命令细分的逻辑，
-// 后者见 CommandNeedsApproval。
+// IsDestructiveCommand 判断命令基名是否命中高危集合。注意：参数中的高危子命令
+// 由 CommandNeedsApproval 兜底，此处只看命令本身，供只想查命令名的场景复用。
 func IsDestructiveCommand(command string) bool {
-	return destructiveCmdPrefixes[commandBaseName(command)]
+	return hasHighRiskToken(commandBaseName(command))
 }
 
-// CommandNeedsApproval 判断命令执行是否需要"不可绕过"的用户审批（critical=true）：
-// 命中破坏性命令 / 可执行任意脚本的解释器为 true；net/install 类命令按子命令细分
-// （见下文 *_NeedsApproval）；其余命令一律 false（仅在 confirm_every 模式确认）。
-func CommandNeedsApproval(command string, args []string) bool {
-	name := commandBaseName(command)
-	if name == "" {
-		return false
-	}
-	if destructiveCmdPrefixes[name] || shellCmdPrefixes[name] {
-		return true
-	}
-	switch name {
-	case "curl", "wget":
-		return netDownloadNeedsApproval(name, args)
-	case "pip", "pip3":
-		return pipNeedsApproval(args)
-	case "npm":
-		return npmNeedsApproval(args)
-	case "go":
-		return goNeedsApproval(args)
-	case "git":
-		return gitNeedsApproval(args)
-	}
-	return false
-}
-
-// netDownloadNeedsApproval 判断 curl/wget 是否属高风险下载（critical=true）。
-// 纯只读（HEAD/--version）放行；带了输出落盘类 flag 或携带 http(s) URL 且意图
-// 下载（非纯 HEAD 探测）视为风险。
-func netDownloadNeedsApproval(command string, args []string) bool {
-	if command == "wget" {
-		// wget 默认落盘：除纯 --version/--help 外一律视为风险
-		for _, a := range args {
-			if a == "--version" || a == "-V" || a == "--help" {
-				return false
-			}
-		}
-		return true
-	}
-	// curl
-	hasOutput, hasHead, hasURL := false, false, false
+// matchArgTokens 遍历参数并切分出 token，命中高危关键字即返回 true。
+// 参数内嵌空白（如 cmd 的 /c "del x"）也会被切词，避免拼接型参数漏网。
+func matchArgTokens(args []string) bool {
 	for _, a := range args {
-		switch a {
-		case "-o", "--output", "-O", "--output-document", "--remote-name", "-f", "--force":
-			hasOutput = true
-		case "-I", "--head":
-			hasHead = true
-		case "--version", "-V":
-			hasHead = true // 视作只读探测
-		}
-		if strings.HasPrefix(a, "http://") || strings.HasPrefix(a, "https://") {
-			hasURL = true
-		}
-	}
-	if hasOutput {
-		return true
-	}
-	if hasURL && !hasHead {
-		return true
-	}
-	return false
-}
-
-// pipNeedsApproval 判断 pip/pip3 子命令是否风险（install/uninstall/download/wheel/--upgrade）。
-// 只读子命令（list/show/--version/freeze）放行。
-func pipNeedsApproval(args []string) bool {
-	if len(args) == 0 {
-		return true
-	}
-	switch args[0] {
-	case "list", "show", "--version", "-V", "freeze", "check", "help":
-		return false
-	}
-	// install / download / wheel / uninstall / --upgrade 及默认 → true
-	return true
-}
-
-// npmNeedsApproval 判断 npm 子命令是否风险。install/add/init/run/exec/uninstall/
-// remove/ci/rebuild/link/--force 会安装或执行任意脚本 → true；
-// 只读（ls/view/--version/search/outdated）放行。
-func npmNeedsApproval(args []string) bool {
-	if len(args) == 0 {
-		return true
-	}
-	switch args[0] {
-	case "ls", "view", "--version", "-v", "search", "outdated", "ping", "help":
-		return false
-	}
-	return true
-}
-
-// goNeedsApproval 判断 go 子命令是否风险。install/run/get/build/test/mod 执行编译、
-// 联网下载或运行外部代码 → true；只读（version/list/env/fmt/vet/doc）放行。
-// go build 会执行外部代码编译，保守视为 true。
-func goNeedsApproval(args []string) bool {
-	if len(args) == 0 {
-		return true
-	}
-	switch args[0] {
-	case "version", "list", "env", "fmt", "vet", "doc", "help":
-		return false
-	}
-	// install/run/get/build/test/mod 及默认 → true
-	return true
-}
-
-// gitNeedsApproval 判断 git 子命令是否风险。会修改仓库状态的子命令
-// (clone/init/fetch/pull/push/reset/clean/checkout/switch/merge/rebase/cherry-pick/
-// apply/am/restore/revert/submodule/update 等) → true；
-// 只读（status/log/diff/v/--version/ls-files）放行；branch/tag/remote/config 按
-// 是否带只读 flag 细分。
-func gitNeedsApproval(args []string) bool {
-	if len(args) == 0 {
-		return true
-	}
-	sub := args[0]
-	switch sub {
-	case "status", "log", "diff", "show", "v", "--version", "--help", "ls-files", "rev-parse", "help":
-		return false
-	case "branch":
-		return !gitHasFlag(args[1:], "-l", "--list", "-a", "--all", "-r", "--remotes", "-vv", "-v")
-	case "tag":
-		return !gitHasFlag(args[1:], "-l", "--list")
-	case "remote":
-		return !gitHasFlag(args[1:], "-v", "show")
-	case "config":
-		return !gitHasFlag(args[1:], "--get", "-g", "--get-all", "--list", "--null")
-	}
-	// 其余子命令（含 clone/init/fetch/pull/push/reset/checkout/merge 等）→ true
-	return true
-}
-
-// gitHasFlag 判断 args 是否命中任一 flag（用于区分 git 只读/写子命令）。
-func gitHasFlag(args []string, flags ...string) bool {
-	for _, a := range args {
-		for _, f := range flags {
-			if a == f {
+		for _, f := range strings.Fields(a) {
+			if hasHighRiskToken(f) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// CommandNeedsApproval 判断命令执行是否需要"不可绕过"的用户审批（critical=true）：
+// 命令基名命中高危集合，或任一参数 token 命中高危集合（覆盖"基名无害、参数藏
+// 危险子命令"的绕过，如 git clone / pip install / python -m pip install）。
+func CommandNeedsApproval(command string, args []string) bool {
+	if hasHighRiskToken(commandBaseName(command)) {
+		return true
+	}
+	return matchArgTokens(args)
 }
 
 // runCommandTool 执行工作目录内命令的工具。
@@ -295,8 +206,8 @@ func (t *runCommandTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	}
 
 	// 审批检查点：每次命令执行都先请求审批，是否不可绕过由 CommandNeedsApproval
-	// （命中破坏性命令 / 高风险 net 类子命令）决定。
-	// critical=true=破坏宿主系统或高风险子命令，任何审批模式都必须确认（不可绕过）；
+	// （命令基名或任一参数 token 命中 highRiskTokens）决定。
+	// critical=true=破坏/解释器/高危子命令，任何审批模式都必须确认（不可绕过）；
 	// critical=false=普通命令，仅 confirm_every 模式确认，review/auto 自动放行。
 	summary := strings.TrimSpace(strings.Join(args.Args, " "))
 	if err := t.requestApproval(ctx, "run_command", "执行命令："+command+" "+summary, CommandNeedsApproval(command, args.Args)); err != nil {
