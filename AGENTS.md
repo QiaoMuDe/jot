@@ -559,18 +559,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 1：Agent 空对话欢迎区（时段问候打字机 + 入场过渡动画 + 位置上移；快捷指令卡片移除决策）
-
-| 记忆点 | 内容 |
-|--------|------|
-| **变更概览** | AI 助手空对话欢迎区（`#aiChatWelcome`）三处增强：① **时段问候**——打字机选词按当前小时加权：[ai-chat.js](frontend/src/js/ai-chat.js) 新增 `TIME_GREETINGS` 四个时段池（morning 5-11 / afternoon 11-18 / evening 18-23 / lateNight 23-5 点）+ `pickWelcomeMessage()` 统一选词入口（60% 概率选时段池、40% 选通用池），打字机初始选词与擦完重选都走它，语气贴合时段；② **入场过渡**——`showWelcome` 给欢迎容器加 `.entering` 播 `welcome-fade-up`（fade-in-up 0.35s ease-out），450ms 后 JS 移除 class，**不写 fill** 规避 WebView2 残留复合层（沿用 MCP 列表塌陷教训）；③ **位置上移**——[ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-chat-welcome` 底部 padding 16px→96px（数值越大越靠上，用户可调）。 |
-| **实现要点（重要）** | ① `MESSAGES` 通用池从 `startTypewriter` 局部常量提升为模块级 const（`pickWelcomeMessage` 引用它；首版留在函数内曾触发 ESLint no-undef，模块级声明须在使用点之前）；② 入场动画定时器用模块级 `welcomeEnterTimer` 管理（与 `typewriterTimer` 同模式）：`showWelcome` 开头 `clearTimeout`——`switchSession`/`loadSession` 对空会话无重入拦截，450ms 内连续两次 `showWelcome` 时旧 pending timeout 会把新加的 `.entering` 提前移除、截断第二次动画（代码审查确认的边界，仅视觉影响）；③ `@media (prefers-reduced-motion: reduce)` 禁用 `.entering` 动画（class-driven 动画约定）；④ 动画 to 态与元素自然态一致（opacity:1 / translateY:0），无 fill 也无闪烁；打字机光标 `cursor-blink` 作用于 `.ai-chat-welcome-text::after`，与容器动画不冲突。 |
-| **产品决策（重要）** | 快捷指令卡片（4 个精选技能 chip：翻译/内容摘要/文本润色/深度研究，点击 = 激活技能 + 填入示例 prompt 不自动发送）曾获批准并完整实现（`WELCOME_SUGGESTIONS` + `renderWelcomeChips` + index.html 挂载点 + `.ai-chat-welcome-chip` 胶囊样式），随后用户明确要求移除——已全部回退并 grep 验证零残留（`welcomeChips`/`WELCOME_SUGGESTIONS`/`renderWelcomeChips` 等标识符清零）。**后续不要主动再次提议此功能**；若用户重提，完整方案见 [.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md](.trae/documents/ai-welcome-suggestion-chips-and-time-greeting.md)。 |
-| **涉及文件** | [frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`TIME_GREETINGS`/`pickWelcomeMessage`/`MESSAGES` 提升模块级/`showWelcome` 入场动画块/`welcomeEnterTimer`）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-chat-welcome` padding 上移、`@keyframes welcome-fade-up`、`.ai-chat-welcome.entering`、reduced-motion 块） |
-
----
-
-## 记忆点 2：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
+## 记忆点 1：AI 悬停卡家族扩展（工具失败原因/召回笔记）+ 召回卡片 Content 预览截断双路径统一
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -581,7 +570,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 3：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
+## 记忆点 2：Agent 工具列表分组显示（AI 助手浮层 + 设置页统一四分组 + 组标签盲切 + 回弹圆角）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -593,7 +582,7 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 4：AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）
+## 记忆点 3：AI 代理执行基础设施（workspace 工作目录 + 会话审批模式 ApprovalMode + 前端审批选择器）
 
 | 记忆点 | 内容 |
 |--------|------|
@@ -604,16 +593,28 @@ Ctrl+F / Ctrl+K → 打开搜索弹窗
 
 ---
 
-## 记忆点 5：AI 工作目录文件/命令工具 + 审批暂停/续跑（Approver + ai:tool-approval + ApproveToolCall + 三模式）
+## 记忆点 4：AI 工作目录文件/命令工具 + 审批暂停/续跑（Approver + ai:tool-approval + ApproveToolCall + 三模式）
 
 | 记忆点 | 内容 |
 |--------|------|
-| **变更概览** | 在记忆点 4 的基础上，正式落地 AI 在 `~/.jot/workspace/` 沙箱内的**文件操作 + 命令执行工具**与**审批暂停/续跑机制**，接入会话审批模式。共五个工具，遵循**一文件一工具**（`tools/` 下 `fs_base.go` 共享基础 + `read_file.go`/`write_file.go`/`ls_dir.go`/`glob.go`/`run_command.go`）：`read_file`（rune 分页，offset/length 续读）、`write_file`（覆盖触发审批、自动建父目录）、`ls_dir`（**单层像 ls**，钻取以目录作 path 再调，用 `os.ReadDir` 非递归）、`glob`（通配符 `*`/`?`/`[abc]` 单层匹配，标准库 `path.Match`，不递归）、`run_command`。`run_command` 采用 **os/exec 裸命令 + 参数数组**（刻意**不支持 shell 语法**——规避 bash/pwsh 语法错位、降低越权逃逸面），`exec.CommandContext` 30s 超时，`exec.LookPath` 找不到命令回填「环境中没有命令」让模型按「报错自适应」改用已有命令或文件工具（**不禁止、不预判**）。 |
+| **变更概览** | 在记忆点 3 的基础上，正式落地 AI 在 `~/.jot/workspace/` 沙箱内的**文件操作 + 命令执行工具**与**审批暂停/续跑机制**，接入会话审批模式。共五个工具，遵循**一文件一工具**（`tools/` 下 `fs_base.go` 共享基础 + `read_file.go`/`write_file.go`/`ls_dir.go`/`glob.go`/`run_command.go`）：`read_file`（rune 分页，offset/length 续读）、`write_file`（覆盖触发审批、自动建父目录）、`ls_dir`（**单层像 ls**，钻取以目录作 path 再调，用 `os.ReadDir` 非递归）、`glob`（通配符 `*`/`?`/`[abc]` 单层匹配，标准库 `path.Match`，不递归）、`run_command`。`run_command` 采用 **os/exec 裸命令 + 参数数组**（刻意**不支持 shell 语法**——规避 bash/pwsh 语法错位、降低越权逃逸面），`exec.CommandContext` 30s 超时，`exec.LookPath` 找不到命令回填「环境中没有命令」让模型按「报错自适应」改用已有命令或文件工具（**不禁止、不预判**）。 |
 | **文件工具边界（重要）** | [config.go](internal/config/config.go) 新增 `WorkspaceFilePath(root, p)`：`filepath.Abs` + `Clean` 归一化后前缀校验，落出返回中文错误「超出工作目录，仅允许操作 ~/.jot/workspace 内的文件」。三个文件工具经 `fsToolBase.resolvePath` 复用该校验（测试经 `workspaceRoot` 注入临时目录）。`run_command` 的 cwd 仅允许 workspace 内子目录或缺省。**不引入内核级沙箱**，Windows 桌面应用难以做强隔离，靠「文件工具路径校验 + run_command 裸命令白名单化 + 审批门」分层兜底（对齐业界"靠审批而非强沙箱"基线）。 |
 | **审批机制（重要）** | 泛化 ask_user 等待范式为 `tools.Approver` 接口（[context.go](internal/agent/tools/context.go)：`RequestApproval(ctx, toolName, summary, critical bool) error`）。`agentSession` 实现之（[agent.go](internal/agent/agent.go)：`approveCh`(cap1)/`approvePending`/`approveMu`/`approvalID`/`pendingApprovalID`/`emit`/`loadApprovalMode` + `claimApproval` 抢占互斥/`clearApproval`/`drainApproval` 排空）。危险操作会**阻塞 AI 流**并发 `ai:tool-approval` 事件（负载 `{tool,summary,approval_id,critical}`），前端弹确认面板，用户点「允许/拒绝」→ `window.go.main.App.ApproveToolCall(sessionID, approvalID, approved)` 投递决定解锁；**拒绝=工具返回错误文本经 wrappedTool 落成 tool_error 记入 toolRecords 并回填模型继续，不中断循环**。 |
 | **三模式门控（重要）** | `agentSession.RequestApproval` 先读 `loadApprovalMode`（懒读 `Deps.AI.LoadSessionConfig(sessionID).ApprovalMode`，nil/非法回落 `confirm_every`）。**`run_command` 每次执行都会请求审批**，`critical` 由 `CommandNeedsApproval(command, args.Args)` 决定。门控规则：`critical=false`（普通命令/覆盖文件）在 `review`/`auto` 自动放行、仅 `confirm_every` 确认；`critical=true` **任何模式都必须确认**（不可绕过）。**critical 判定已简化为"两档一张集合"（不再按子命令逐个细分）**：`highRiskTokens`（`map[string]bool`，[run_command.go](internal/agent/tools/run_command.go)）——破坏宿主系统的命令（`rm/dd/sudo/mkfs.*/fdisk/systemctl/diskpart/...`）+ 脚本解释器（`python/node/bash/pwsh/cmd/lua/...` 整族，堵脚本包裹）+ Windows LOLBin（`certutil/bitsadmin/wmic/...`）+ 网络下载（`curl/wget`）+ 高危动词/flag（`install/uninstall/clone/push/reset/--force/-y/--upgrade/...`）。**判据**：命令基名命中**或**任一参数 token 命中（整词相等、大小写不敏感，**非子串**）→ critical=true；参数内嵌空白经 `strings.Fields` 切词兜底（覆盖"基名无害、参数藏危险子命令"，如 `git clone`/`pip install`/`python -m pip install`）。**此为护栏非隔离**：对抗性可改名/脚本包裹/`python -c` 绕过，硬边界靠 `confirm_every`（文件头已注明语义）。**requestApproval**（[fs_base.go](internal/agent/tools/fs_base.go)）：`ctx==nil`（测试裸工具）放行；`ctx!=nil` 但 `Approver==nil`（生产装配遗漏）→ 直接报错防静默跳过。**审查修复**：`WorkspaceFilePath` 用 `EvalSymlinks` 解析最深已存在祖先防 symlink/junction 逃逸（写/执行侧同样生效）；`read_file` 有界流式读取不再整读；`run_command` 输出 `limitedBuffer` 有界；glob/ls_dir 有界输出逼近上限提前中断并附「[结果超长]」提示；`wails dev` 尚未验证运行效果。 |
 | **前端面板（重要）** | [index.html](frontend/index.html) 新增 `#aiToolApprovalPanel` 浮层；[ai-chat.js](frontend/src/js/ai-chat.js) 监听 `ai:tool-approval`（与 `ai:ask-user` 同守卫：isAgentFlow + 丢弃旧流 + activeSessionId 非空）→ `showApprovalPanel`（`APPROVAL_TOOL_LABEL` 工具中文名 + summary + 允许/拒绝；`critical` 加 `.is-critical` 警示条）；**无关闭按钮、不监听 ESC/外点**（后端正阻塞等待，必须显式选择）；禁止点「允许」→ `ApproveToolCall(...,true)`，点「拒绝」→ `(...,false)`，提交中禁用防重复，成功后收起面板并 `showNotification` 提示；在停止/stream-done/stream-error 均 `hideApprovalPanel` 清理。**交互/配色细节**（[ai-chat.css](frontend/src/css/components/ai-chat.css) `.ai-approval-panel` 等）：允许(accent)/取消(error)按钮用**实底 + 白字**（各主题对比清晰），带 hover 上浮 + brightness(0.92)、点击回弹 `scale(0.97)` + 弹性复位、disabled 关闭动效；高风险`.is-critical`警示条不再近白，用 `color-mix(error 12%, card-bg)` tint + 左侧 error 色条 + 警示图标。**审批模式按钮流式锁定**：回复期间 `#aiChatApprovalBtn` 加 `is-locked` 置灰并收起浮层，点击抖动 + 通知「回复结束或停止再恢复使用」（与其它工具栏按钮统一）。工具调用失败态（实时+历史回放）背景用 `color-mix(error tint)` 而非 `--error-bg` 近白。 |
 | **涉及文件** | [internal/config/config.go](internal/config/config.go)（`WorkspaceFilePath` + `EvalSymlinks` 防逃逸）、[internal/agent/tools/fs_base.go](internal/agent/tools/fs_base.go)（`fsToolBase`/`requestApproval` fail-fast）、[internal/agent/tools/read_file.go](internal/agent/tools/read_file.go) / [write_file.go](internal/agent/tools/write_file.go) / [ls_dir.go](internal/agent/tools/ls_dir.go) / [glob.go](internal/agent/tools/glob.go) / [run_command.go](internal/agent/tools/run_command.go)（五个工具，一文件一工具；`IsDestructiveCommand`/`CommandNeedsApproval`/`highRiskTokens`）、[internal/agent/registry.go](internal/agent/registry.go)（注册）+ [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（工具清单）+ [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（构造器）、[fs_tools_test.go](internal/agent/tools/fs_tools_test.go) / [run_command_test.go](internal/agent/tools/run_command_test.go) / [glob_test.go](internal/agent/tools/glob_test.go)（测试）、[internal/agent/tools/context.go](internal/agent/tools/context.go)（`Approver` 接口 + `Context.Approver` 字段）、[internal/agent/agent.go](internal/agent/agent.go)（`approveCh` 等字段 + `RequestApproval`/`claimApproval`/`clearApproval`/`drainApproval`/`ApproveToolCall` + Run 注入 `Approver: sess`）、[app.go](app.go)（绑定 `ApproveToolCall`）、[frontend/index.html](frontend/index.html)（`#aiToolApprovalPanel`）、[frontend/src/js/ai-chat.js](frontend/src/js/ai-chat.js)（`showApprovalPanel`/`hideApprovalPanel`/`APPROVAL_TOOL_LABEL`/审批模式流式锁定）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（`.ai-approval-panel`/按钮/警示条）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具规范）、[internal/agent/EVENTS.md](internal/agent/EVENTS.md)（`ai:tool-approval` 协议） |
+
+---
+
+## 记忆点 5：文件工具家族扩展（grep/copy/move/delete/mkdir + 二进制检测统一 + os.Root 试点 + 审查修复）
+
+| 记忆点 | 内容 |
+|--------|------|
+| **变更概览** | 在记忆点 4 五个工具基础上扩展为**完整文件工具家族**（读→写→改→找→复制→移动→删除→建目录闭环），新增五工具遵循**一文件一工具**（[grep_file.go](internal/agent/tools/grep_file.go)/[copy_file.go](internal/agent/tools/copy_file.go)/[move_file.go](internal/agent/tools/move_file.go)/[delete_file.go](internal/agent/tools/delete_file.go)/[mkdir_dir.go](internal/agent/tools/mkdir_dir.go)）：`grep_file`（字符串+正则双模式、流式有界输出逼近上限提前中断、二进制跳过）、`copy_file`/`move_file`（go-kit `CopyEx`/`MoveEx`：临时文件+rename 原子、覆盖备份恢复、dest 为已存在目录自动追加源基名）、`delete_file`（非空目录必须 `recursive=true` 才递归、拒绝删除工作区根、`critical=true` 强制审批）、`mkdir_dir`（**默认仅建单级**，父目录不存在报错引导传 `recursive=true`；`MkdirAll` 递归、已存在目录幂等返回）。三工具统一接入二进制检测（go-kit `IsBinaryFile`/`IsBinaryFilePath`，前 8000 字节 NUL 检测）——`read_file` 跳过、`edit_file` 审批前拒绝、`grep_file` 换库删除自实现。 |
+| **os.Root 试点（重要）** | `read_file`/`ls_dir`/`delete_file` 三工具切换为 Go 1.24+ `os.Root` 目录句柄（`openRootFor`：`os.OpenRoot` + `filepath.Rel`，基于 openat 消除 TOCTOU），与 `resolvePath`（`EvalSymlinks`）构成**双防线**。**Root 无 `ReadDir`/`WriteFile`**：`ls_dir` 经 `root.FS()` 适配器用 `fs.ReadDir`；Root 对 "." 的 `Remove`/`RemoveAll` 内置拒绝作根保护兜底。`copy_file`/`move_file` 因 go-kit 不认 Root 目录句柄**未切换**（全量切换净损失）；`grep_file` 保留 `resolvePath`（审查问题 5，用户选择不修，保持现状）。 |
+| **审查修复（重要）** | 全面代码审查（6 方面，2 子代理交叉验证）发现并修复 4 问题：① `checkSrcDestRelation`——源与目标相同、或目标位于源目录内部（目录自复制无限递归/磁盘暴涨）前置拦截（参数错误语义不触发审批）；因 go-kit `CopyEx` 顶层 `validatePathRelations` 传 `checkSubdir=false`、`copyDir` 兜底校验大小写敏感（存在 Windows 大小写变体绕过窗口），用 `pathEqualsFold` 大小写不敏感比较覆盖；② `relDisplayPath` 复制/移动反馈路径相对化（原绝对路径暴露机器目录结构）；③ 根保护比较改 `pathEqualsFold`（原大小写敏感，Windows 变体可绕过）；④ `ls_dir` 对文件路径先 `root.Stat` 判定，报「目标不是目录（不支持列出文件）」而非含糊路径错误。 |
+| **审批分级（重要）** | 危险操作按风险分级：`copy_file` 覆盖（`overwrite=true`）→ `critical=false` 常规审批、新建不审批；`move_file` **始终**审批（移动必移除源，结构性变更，`critical=false`）；`delete_file` 强制 `critical=true`（任何审批模式不可绕过）；`mkdir_dir`/`write_file` 新建不审批。`requestApproval` 保持 `ctx==nil`（测试裸工具）放行、`Approver==nil` fail-fast。 |
+| **涉及文件** | [internal/agent/tools/fs_base.go](internal/agent/tools/fs_base.go)（`openRootFor`/`pathEqualsFold`/`checkSrcDestRelation`/`relDisplayPath`）、[internal/agent/tools/grep_file.go](internal/agent/tools/grep_file.go) / [copy_file.go](internal/agent/tools/copy_file.go) / [move_file.go](internal/agent/tools/move_file.go) / [delete_file.go](internal/agent/tools/delete_file.go) / [mkdir_dir.go](internal/agent/tools/mkdir_dir.go)（五新工具）、[internal/agent/tools/read_file.go](internal/agent/tools/read_file.go) / [ls_dir.go](internal/agent/tools/ls_dir.go) / [edit_file.go](internal/agent/tools/edit_file.go)（os.Root/二进制检测接入）、[internal/agent/registry.go](internal/agent/registry.go)（注册）+ [internal/agent/tools/meta.go](internal/agent/tools/meta.go)（工具清单）+ [internal/agent/tools/doc.go](internal/agent/tools/doc.go)（构造器）、[fs_operate_test.go](internal/agent/tools/fs_operate_test.go) / [grep_file_test.go](internal/agent/tools/grep_file_test.go) / [edit_file_test.go](internal/agent/tools/edit_file_test.go) / [fs_tools_test.go](internal/agent/tools/fs_tools_test.go)（测试）、[internal/agent/TOOLS.md](internal/agent/TOOLS.md)（工具规范） |
 
 ---
 

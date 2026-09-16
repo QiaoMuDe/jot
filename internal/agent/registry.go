@@ -201,8 +201,14 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"update_plan", tools.WrapWithError("update_plan", tools.NewUpdatePlan(p.ctx), p.ctx)},
 		{"read_file", tools.WrapWithError("read_file", tools.NewReadFile(p.ctx), p.ctx)},
 		{"write_file", tools.WrapWithError("write_file", tools.NewWriteFile(p.ctx), p.ctx)},
+		{"edit_file", tools.WrapWithError("edit_file", tools.NewEditFile(p.ctx), p.ctx)},
 		{"ls_dir", tools.WrapWithError("ls_dir", tools.NewLsDir(p.ctx), p.ctx)},
 		{"glob", tools.WrapWithError("glob", tools.NewGlob(p.ctx), p.ctx)},
+		{"grep_file", tools.WrapWithError("grep_file", tools.NewGrepFile(p.ctx), p.ctx)},
+		{"copy_file", tools.WrapWithError("copy_file", tools.NewCopyFile(p.ctx), p.ctx)},
+		{"move_file", tools.WrapWithError("move_file", tools.NewMoveFile(p.ctx), p.ctx)},
+		{"delete_file", tools.WrapWithError("delete_file", tools.NewDeleteFile(p.ctx), p.ctx)},
+		{"mkdir_dir", tools.WrapWithError("mkdir_dir", tools.NewMkdirDir(p.ctx), p.ctx)},
 		{"run_command", tools.WrapWithError("run_command", tools.NewRunCommand(p.ctx), p.ctx)},
 	}
 	filtered := make([]tool.BaseTool, 0, len(all))

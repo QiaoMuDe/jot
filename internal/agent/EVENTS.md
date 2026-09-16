@@ -16,7 +16,7 @@
 | `ai:stream-error` | 流错误 | `error` JSON、token 估算 | 展示错误态 |
 | `ai:tool-status` | 工具调用各阶段 | `tools.Record` JSON（`tool_start`/`tool_result`/`tool_error`/`tool_partial`） | 状态条 + 历史明细 |
 | `ai:ask-user` | 模型发起反问 | `{question, options, selection}` JSON | 弹出反问面板并阻塞等待 |
-| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / run_command 执行）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
+| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / edit_file 编辑 / run_command 执行）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
 | `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 | 空字符串 | 显示计划生成状态文案（轮换文案，重试不额外通知） |
 | `ai:plan-created` | `create_plan` 调用成功 / 预规划完成 | `{goal, steps}` JSON | 弹出计划面板 |
 | `ai:plan-updated` | `update_plan` 调用成功 / 结果兜底 | `{step_id, status, result, steps}` JSON | 刷新计划面板 |
@@ -70,7 +70,7 @@
 
 ## 5. 审批交互事件（`ai:tool-approval`）
 
-工作目录危险操作（`write_file` 覆盖已存在文件 / `run_command` **每次执行**）真正执行前，经 `Context.Approver`（`tools.Approver`）请求用户审批。父包 `agentSession`（[agent.go](internal/agent/agent.go) 的 `RequestApproval`）在抢占审批名额后发射此事件并**阻塞等待**用户决定，工具暂停执行、ReAct 循环挂起；决定经 `ApproveToolCall` 投递后同轮恢复（不落库、不新开一轮）。
+工作目录危险操作（`write_file` 覆盖已存在文件 / `edit_file` 编辑已存在文件 / `run_command` **每次执行**）真正执行前，经 `Context.Approver`（`tools.Approver`）请求用户审批。父包 `agentSession`（[agent.go](internal/agent/agent.go) 的 `RequestApproval`）在抢占审批名额后发射此事件并**阻塞等待**用户决定，工具暂停执行、ReAct 循环挂起；决定经 `ApproveToolCall` 投递后同轮恢复（不落库、不新开一轮）。
 
 负载为 JSON 字符串：
 
@@ -78,7 +78,7 @@
 {"tool": "write_file", "summary": "覆盖文件：a.txt", "approval_id": 1, "critical": false}
 ```
 
-- `tool`：请求审批的工具名（`write_file` / `run_command`）。
+- `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command`）。
 - `summary`：操作的中文摘要（如"覆盖文件：xxx"/"执行命令：rm -rf …"），供前端审批面板展示。
 - `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved)` **必须原样回传**，后端据此防串审（不一致报错）。
 - `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**（后端即使 `auto`/`review` 模式也会阻塞确认，作为最后防线）。

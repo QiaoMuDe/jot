@@ -57,6 +57,19 @@ func TestReadFileBasics(t *testing.T) {
 			t.Fatal("绝对路径越界应报错")
 		}
 	})
+	t.Run("二进制文件跳过", func(t *testing.T) {
+		// 含 NUL 字节的文件经 go-kit fs 判为二进制，读取应跳过并提示而非输出乱码
+		if err := os.WriteFile(filepath.Join(dir, "bin.dat"), []byte("PK\x00\x01\x02data"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, err := h.InvokableRun(context.Background(), `{"path":"bin.dat"}`)
+		if err != nil {
+			t.Fatalf("二进制文件读取失败: %v", err)
+		}
+		if !strings.Contains(out, "文件为二进制，已跳过读取") {
+			t.Errorf("二进制文件应返回跳过提示，实际: %q", out)
+		}
+	})
 }
 
 // TestReadFilePagination 验证 read_file 分页：offset+length 切片、未读完提示续读、
@@ -250,6 +263,82 @@ func TestLsDir(t *testing.T) {
 	t.Run("越权路径拒绝", func(t *testing.T) {
 		if _, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"../secret"}`); err == nil {
 			t.Fatal("越权路径应报错")
+		}
+	})
+}
+
+// TestReadFileLineNumbers 验证 read_file 的 line_numbers 输出：缺省无前缀、
+// line_numbers=true 带「行 N: 」全局行号前缀、与分页组合时起始行号正确。
+func TestReadFileLineNumbers(t *testing.T) {
+	dir := t.TempDir()
+	content := "第一行\n第二行\n第三行"
+	if err := os.WriteFile(filepath.Join(dir, "ln.txt"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := newTestReadFile(dir)
+
+	t.Run("缺省无行号前缀", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"path":"ln.txt"}`)
+		if err != nil {
+			t.Fatalf("读取失败: %v", err)
+		}
+		if strings.Contains(out, "行 1:") {
+			t.Errorf("缺省不应带行号前缀，实际: %q", out)
+		}
+	})
+	t.Run("line_numbers=true 带全局行号", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"path":"ln.txt","line_numbers":true}`)
+		if err != nil {
+			t.Fatalf("读取失败: %v", err)
+		}
+		if !strings.Contains(out, "行 1: 第一行") || !strings.Contains(out, "行 3: 第三行") {
+			t.Errorf("行号输出不符，实际:\n%s", out)
+		}
+	})
+	t.Run("分页组合起始行号正确（offset 落在行中间）", func(t *testing.T) {
+		// offset=2 跳过 "第一" 两个 rune，从第一行剩余 "行" 起读，起始行号应为 1
+		out, err := h.InvokableRun(context.Background(), `{"path":"ln.txt","offset":2,"length":10,"line_numbers":true}`)
+		if err != nil {
+			t.Fatalf("读取失败: %v", err)
+		}
+		if !strings.Contains(out, "行 1: 行") {
+			t.Errorf("起始行号应为 1，实际:\n%s", out)
+		}
+	})
+	t.Run("offset 跨行起始行号正确", func(t *testing.T) {
+		// offset=4 跳过 "第一行\n" 4 个 rune，从第 2 行起读，起始行号应为 2
+		out, err := h.InvokableRun(context.Background(), `{"path":"ln.txt","offset":4,"length":10,"line_numbers":true}`)
+		if err != nil {
+			t.Fatalf("读取失败: %v", err)
+		}
+		if !strings.Contains(out, "行 2: 第二行") {
+			t.Errorf("起始行号应为 2，实际:\n%s", out)
+		}
+	})
+	t.Run("结尾换行文件行号与续读一致", func(t *testing.T) {
+		// 文件以 \n 结尾：全读时 splitNoteLines 剔除末尾空行，只编号真实内容行；
+		// 从 offset=4（跳过 "a\nb\n"）续读时起始行号 3 与全读编号保持自洽
+		content := "a\nb\nc\n"
+		if err := os.WriteFile(filepath.Join(dir, "lnlf.txt"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		hh := newTestReadFile(dir)
+		full, err := hh.InvokableRun(context.Background(), `{"path":"lnlf.txt","line_numbers":true}`)
+		if err != nil {
+			t.Fatalf("全读失败: %v", err)
+		}
+		if !strings.Contains(full, "行 1: a") || !strings.Contains(full, "行 2: b") || !strings.Contains(full, "行 3: c") {
+			t.Errorf("全读行号不符，实际:\n%s", full)
+		}
+		if strings.Contains(full, "行 4:") {
+			t.Errorf("结尾空行不应编号，实际:\n%s", full)
+		}
+		next, err := hh.InvokableRun(context.Background(), `{"path":"lnlf.txt","offset":4,"length":10,"line_numbers":true}`)
+		if err != nil {
+			t.Fatalf("续读失败: %v", err)
+		}
+		if !strings.Contains(next, "行 3: c") {
+			t.Errorf("续读起始行号应为 3，实际:\n%s", next)
 		}
 	})
 }

@@ -2,14 +2,16 @@ package tools
 
 // 本文件实现 ls_dir 工具：像 ls 一样只列出工作目录（~/.jot/workspace）内某
 // 目录的**直接子项**（单层、不含递归）。要查看更深的内容，模型以该子目录作为
-// 新的 path 再次调用即可，逐步钻取。经 fsToolBase 做路径边界校验，输出按 rune
-// 上限有界缓冲（目录下条目极多时即在写入前提前截断），避免刷屏或内存放大。
+// 新的 path 再次调用即可，逐步钻取。经 fsToolBase 做路径边界校验并经 os.Root
+// 目录句柄列举（第二道防逃逸），输出按 rune 上限有界缓冲（目录下条目极多时即
+// 在写入前提前截断），避免刷屏或内存放大。
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -78,8 +80,27 @@ func (t *lsDirTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ 
 	if err != nil {
 		return "", err
 	}
+	root, rel, err := t.openRootFor(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("打开工作目录失败: %w", err)
+	}
+	defer func() { _ = root.Close() }()
 
-	entries, err := os.ReadDir(fullPath)
+	// 目标类型判定：只允许列目录；文件/其他类型给出明确提示（fs.ReadDir 对文件
+	// 报 ENOTDIR，统一文案含糊）
+	st, err := root.Stat(rel)
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", fmt.Errorf("列出目录失败: %w", err)
+	}
+	if !st.IsDir() {
+		return "", errors.New("ls_dir 目标不是目录（不支持列出文件），请传入目录路径")
+	}
+
+	// os.Root 无 ReadDir 方法，经 root.FS()（io/fs 适配器）列举，返回 []fs.DirEntry
+	entries, err := fs.ReadDir(root.FS(), rel)
 	if err != nil {
 		if ctx.Err() != nil {
 			return "", ctx.Err()
