@@ -729,8 +729,14 @@
     height: 6px;
     border-radius: 50%;
     background: var(--accent);
-    margin-right: 2px;
+    margin-right: 6px;
     animation: ai-os-agent-dot 1s ease-in-out infinite;
+}
+
+/* 主行执行中隐藏放大镜图标：脉动点即唯一 running 指示
+   （原与 is-active 的 ai-icon-pulse 放大镜动画重复冗余，用户确认仅保留脉动点） */
+.ai-tool-status-item.is-os-agent.is-active .ai-tool-status-icon {
+    display: none;
 }
 
 @keyframes ai-os-agent-dot {
