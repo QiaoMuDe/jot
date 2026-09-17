@@ -31,7 +31,7 @@ import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
 
 // AI 对话页面模块
-import { initAIChat, onAIChatViewActivated, resetAIChatState, toggleAiSearchModal } from './js/ai-chat.js';
+import { initAIChat, onAIChatViewActivated, resetAIChatState, toggleAiSearchModal, closeOtherToolbarDropdowns } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';
@@ -10056,6 +10056,7 @@ function initChatAgentTools() {
  * 仍复用同一份 agentToolsMeta/agentToolsDisabled/agentToolsChanges 全局状态与即时保存，改任一入口全局生效。
  */
 function renderChatAgentToolsList() {
+    closeOtherToolbarDropdowns('agent-tools'); // 打开前先关闭其他已展开的列表（互斥）
     // 取消挂起的关闭定时器并清掉 .closing，避免快速连点时关闭的同步清空把刚渲染的列表抹掉
     if (chatAgentToolsCloseTimer) {
         clearTimeout(chatAgentToolsCloseTimer);
@@ -10261,11 +10262,13 @@ function closeChatAgentToolsList() {
     }
     chatAgentToolsExpanded = false;
     reportAgentToolsChanges();
+    // 立即复位按钮态（箭头翻转回原位），与审批/技能/模型控件的复位时机一致；
+    // 无需等待收起动画，避免外点/ESC 关闭时箭头迟 180ms 才归位。
+    if (btn) {
+        btn.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    }
     if (!dropdown) {
-        if (btn) {
-            btn.classList.remove('open');
-            btn.setAttribute('aria-expanded', 'false');
-        }
         return Promise.resolve();
     }
     dropdown.classList.remove('open');
@@ -10275,10 +10278,6 @@ function closeChatAgentToolsList() {
             chatAgentToolsCloseTimer = null;
             dropdown.classList.remove('closing');
             dropdown.innerHTML = '';
-            if (btn) {
-                btn.classList.remove('open');
-                btn.setAttribute('aria-expanded', 'false');
-            }
             resolve();
         }, 180);
     });

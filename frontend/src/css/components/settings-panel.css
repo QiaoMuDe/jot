@@ -1680,7 +1680,7 @@
   color: var(--text-muted);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
   margin-top: 4px; /* 组标签与上一工具行间距 */
-  border-radius: 6px; /* 组标签（含 hover/active 背景与聚焦 outline）统一圆角 */
+  border-radius: 6px 6px 0 0; /* 上圆下方：底边分割线全宽直线；顶部圆角用于 hover/active 背景与聚焦 outline */
 }
 .agent-tools-mgr-group.first {
   margin-top: 0;

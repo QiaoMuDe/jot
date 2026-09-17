@@ -210,6 +210,7 @@ async function loadModelSelector(cfg) {
  * 打开下拉并填充模型列表
  */
 async function openModelDropdown() {
+    closeOtherToolbarDropdowns('model'); // 打开前先关闭其他已展开的列表（互斥）
     if (!modelDropdown) return;
     if (modelList.length === 0) {
         try {
@@ -224,6 +225,21 @@ async function openModelDropdown() {
     // 聚焦搜索框（仅在可见时）
     const search = modelDropdown.querySelector('.ai-model-search');
     if (search && search.offsetParent !== null) setTimeout(() => search.focus(), 50);
+}
+
+/**
+ * 输入框工具栏互斥：打开某个带列表/菜单的按钮前，先关闭其他已打开的列表。
+ * except —— 本次要保留(打开)的列表标识：'model' | 'skills' | 'approval' | 'agent-tools'。
+ * 其中 agent-tools 由 main.js 注册的 window 桥接关闭，避免跨模块循环依赖。
+ */
+export function closeOtherToolbarDropdowns(except) {
+    if (except !== 'model') {
+        const md = document.getElementById('aiChatModelDropdown');
+        if (md?.classList.contains('open')) { md.classList.remove('open'); clearModelSearch(); }
+    }
+    if (except !== 'skills') closeSkillsDropdown();
+    if (except !== 'approval') closeApprovalDropdown();
+    if (except !== 'agent-tools') window.__closeAiChatAgentToolsList?.();
 }
 
 function renderModelDropdown() {
@@ -601,6 +617,15 @@ function initModeTips() {
         tipMap.set(usageEl, usageTip);
         usageEl.addEventListener('mouseenter', () => scheduleShow(usageEl));
         usageEl.addEventListener('mouseleave', hide);
+    }
+
+    // 深度思考开关：同款悬停提示（说明开启不等于强制，取决于模型是否支持；不属 .ai-mode-btn，不受 is-locked 禁弹影响）
+    const deepThinkToggle = document.getElementById('aiChatSearchToggle');
+    const deepThinkTip = portal.querySelector('.ai-mode-tip[data-tip="deep-think"]');
+    if (deepThinkToggle && deepThinkTip) {
+        tipMap.set(deepThinkToggle, deepThinkTip);
+        deepThinkToggle.addEventListener('mouseenter', () => scheduleShow(deepThinkToggle));
+        deepThinkToggle.addEventListener('mouseleave', hide);
     }
 
     // 执行审批模式下拉选项：同款悬停提示（显示完整模式说明 + 边界语义）
@@ -1515,8 +1540,10 @@ function bindEvents() {
             if (skillsDropdown.classList.contains('open')) {
                 closeSkillsDropdown();
             } else {
+                closeOtherToolbarDropdowns('skills'); // 先关闭其他已打开的列表（互斥）
                 updateSkillsMenuActiveState();
                 skillsDropdown.classList.add('open');
+                skillsBtn.classList.add('open'); // 展开时按钮右端箭头翻转（与 Agent 工具/审批按钮一致）
                 skillsDropdown.scrollTop = 0;
             }
         });
@@ -3008,6 +3035,7 @@ function updateSkillsMenuActiveState() {
  */
 function closeSkillsDropdown() {
     if (!skillsDropdown || !skillsDropdown.classList.contains('open')) return;
+    skillsBtn?.classList.remove('open'); // 收起时箭头复位（与 Agent 工具/审批按钮一致）
     skillsDropdown.classList.add('closing');
     // 子项最大关闭时长 = 0.24s(延迟) + 0.1s(动画) = 0.34s，加一点余量
     const CLOSE_DURATION = 360;
@@ -8025,6 +8053,7 @@ function openApprovalDropdown() {
     const dropdown = document.getElementById('aiChatApprovalDropdown');
     const btn = document.getElementById('aiChatApprovalBtn');
     if (!dropdown) return;
+    closeOtherToolbarDropdowns('approval'); // 打开前先关闭其他已展开的列表（互斥）
     approvalDropdownExpanded = true;
     dropdown.classList.remove('closing');
     requestAnimationFrame(() => { if (approvalDropdownExpanded) dropdown.classList.add('open'); });

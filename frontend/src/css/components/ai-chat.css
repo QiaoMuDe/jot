@@ -1856,7 +1856,7 @@
     letter-spacing: 0.04em;
     color: var(--text-muted);
     border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
-    border-radius: 6px; /* 组标签（含 hover/active 背景与聚焦 outline）统一圆角 */
+    border-radius: 6px 6px 0 0; /* 上圆下方：底边分割线全宽直线；顶部圆角用于 hover/active 背景与聚焦 outline */
 }
 /* 可勾选分组（内置/MCP）标签整行可盲切全选/取消全选：hover/active 反馈提升可发现性 */
 .ai-chat-agent-tools-group.is-selectable {
@@ -2128,10 +2128,12 @@
 
 /* 头部说明行 */
 .ai-approval-header {
-    padding: 8px 12px 6px;
+    padding: 8px 12px 7px;
     font-size: 0.78rem;
+    font-weight: 600;
     color: var(--text-secondary);
     white-space: nowrap;
+    border-bottom: 1px solid var(--border);
 }
 
 /* 选项：整体行布局，图标列左对齐并垂直居中于整个条目（图标+描述块）；
@@ -3502,6 +3504,22 @@
 
 .ai-chat-toolbar-btn svg {
     flex-shrink: 0;
+}
+
+/* 打开列表类工具按钮（更多技能 / Agent 工具 / 执行审批）：右端 chevron 箭头展开时翻转 180°，收起复位 */
+.ai-chat-toolbar-btn svg:last-child {
+    transition: transform 0.18s ease;
+}
+.ai-chat-toolbar-btn.open svg:last-child {
+    transform: rotate(180deg);
+}
+
+/* 模型选择触发器：下拉展开时右端 chevron 翻转 180°，收起复位（经 :has() 由下拉 open 状态驱动） */
+.ai-chat-model-trigger svg:last-child {
+    transition: transform 0.18s ease;
+}
+.ai-chat-model-select:has(.ai-chat-model-dropdown.open) .ai-chat-model-trigger svg:last-child {
+    transform: rotate(180deg);
 }
 
 /* 工具栏按钮按下回弹：按下快速缩小（0.06s），松开经 spring 缓动弹回（与右键菜单反馈一致） */
@@ -4879,12 +4897,15 @@
     border-left-color: var(--error);
 }
 
-/* 面板头部：标题 + 工具名标签 */
+/* 面板头部：标题 + 工具名标签（显式给出下方分割线与加粗，自洽不依赖下拉头部的级联） */
 .ai-approval-header {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
+    padding: 8px 12px 7px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
 }
 
 .ai-approval-title {

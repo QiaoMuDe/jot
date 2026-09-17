@@ -320,12 +320,22 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 16. **导入/导出图片闭环 & 时间戳规则**：导出 `.md` + 同名 `.assets/` 目录相对引用（保留 uuid 原始文件名）；导入反向复制进 `~/.jot/images/` 改内部 URL（URL 跳过、`/images/` 幂等跳过）；回收站硬删联动清理不再被引用的孤儿图片。导入时间戳对齐文件 `ModTime()` 作同步基准 + SHA256 内容哈希兜底；**导入写库必须用 `CreateWithNotebookAt`/`UpdateWithTime`，禁普通 `Update`/`Save`（GORM 会刷 UpdatedAt 破坏基准）**。
 17. **AI System Prompt 三层结构**：`baseIdentity`(身份)/`baseNormsBoundaries`(规范+边界)/`baseSystemPrompt`(全三层)；技能激活仅跳过身份层，规范+边界始终注入；共享提示词末尾注入【环境信息】当前时间 +【长期记忆】段，注入置于尾部利于前缀缓存。时光同步：Chat/Agent 两模式共用 buildAIContextInstruction。
 18. **主题/外观一致性**：主题维护以 `frontend/src/css/theme-maintenance.md` 为权威；主题色三源（variables.css/criticalColors/main.go themeBG）必须对齐防启动闪色；`resolveTheme` 纯函数兜底（`hasOwnProperty.call` 防 `__proto__`/`constructor` 原型污染，无效回落 default）；`applyTheme` 保持纯 DOM 同步器、不落库（防覆盖其他设置）。
+19. **输入框工具下拉互斥约束**：AI 输入坞四个带下拉控件（模型选择/更多技能/Agent 工具/执行审批）由模块级 `closeOtherToolbarDropdowns(except)`（[ai-chat.js](frontend/src/js/ai-chat.js)）统一互斥——打开任一会先关闭其余三者；Agent 工具经 `window.__closeAiChatAgentToolsList` 桥接、main.js 单向 import，避免跨模块循环依赖。**互斥名单为硬编码：未来新增第 5 个输入框列表控件必须补进该函数并在其打开入口以 except 跳过自身，否则该新控件不参与互斥。**
 
 ## 七、临时记忆
 
 存放**近期动态**结论（最多 5 条，编号 5 最新、1 最旧），快速接续上次会话现场。稳定后升级合并进「长期记忆」。
 
-### 临时记忆 5（= 归档「记忆点 5」）
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | AI 助手输入框与工具栏交互打磨：① 工具列表分组分割线两端圆角改直角（分组标签 `border-radius: 6px 6px 0 0`，上圆下方，底边 `border-bottom` 变全宽直线，AI 浮层 `.ai-chat-agent-tools-group` 与设置页 `.agent-tools-mgr-group` 两处对称）；② 带下拉的工具栏按钮右侧补 chevron；③ chevron 随列表开合翻转 180°（`.ai-chat-toolbar-btn.open svg:last-child{transform:rotate(180deg);transition:.18s}`），模型触发器经 `:has(.ai-chat-model-dropdown.open)` 驱动，其余三按钮（更多技能/Agent 工具/执行审批）由各自 `.open` class 驱动；④ Agent 工具箭头复位时序统一（点击/外点/ESC 三路径均立即复位）。 |
+| **互斥开合（重要）** | 新增模块级 `closeOtherToolbarDropdowns(except)`（[ai-chat.js](frontend/src/js/ai-chat.js) 导出）：打开输入框任一列表时先关闭其余三者——模型/更多技能/执行审批（同模块直接调用）、Agent 工具经 `window.__closeAiChatAgentToolsList` 桥接（main.js 注册、main.js 单向 import，避免跨模块循环依赖）。四个打开入口各自传 `except` 跳过自身：模型 `openModelDropdown`、技能按钮 else 分支、审批 `openApprovalDropdown`、Agent 工具 `renderChatAgentToolsList`。**互斥名单为硬编码，未来新增第 5 个输入框列表控件必须补进该函数并在其打开入口传 except，否则不参与互斥（已固化进长期记忆 19）。** |
+| **深度思考悬停提示** | index.html 在 `#aiModeTipPortal` 新增 `data-tip="deep-think"` 悬停卡（标题「深度思考」，正文说明开启=发送 enable_thinking 请求、是否真正思考取决于模型支持、不支持时可能被忽略或报错），并移除 `#aiChatSearchToggle` 原生 `title` 防双重弹出；ai-chat.js `initModeTips`（仅调用一次）把该按钮注册进 tipMap（300ms 延迟、自动定位、随移开隐藏）。 |
+| **审批文案/样式** | 三模式下拉短描述与悬停提示统一为「命令执行」措辞并按真实门控对齐：confirm_every=每次执行命令需确认；review=常规自动、危险命令强制确认；auto=不经审批、危险仅留痕不提示（工具调用记录 `tool_auto_approval` 留痕）。审批浮窗头部「如何批准 Agent 的操作？」加 `border-bottom` 分割线 + `font-weight:600`（`.ai-approval-header`）；**确认面板头部同一 class 曾级联继承该分割线，已显式补在 [ai-chat.css](frontend/src/css/components/ai-chat.css) L4900-4909（内边距对齐 8px 12px 7px，几何零偏移），两处各自自洽、不再相互依赖。** |
+| **涉及文件** | [index.html](frontend/index.html)（chevron/模式描述×6/deepthink 卡）、[ai-chat.js](frontend/src/js/ai-chat.js)（closeOtherToolbarDropdowns/箭头开合/deepthink 绑定）、[main.js](frontend/src/main.js)（import 助手/Agent 工具接入/箭头立即复位）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（分组圆角/箭头 CSS/.ai-approval-header 分割线+加粗+确认面板显式化）、[settings-panel.css](frontend/src/css/components/settings-panel.css)（.agent-tools-mgr-group 圆角） |
+
+### 临时记忆 4
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 在记忆点 3/4 审批门控基础上细化三模式行为：**auto（完全访问）不再拦截高危（黑名单命中）操作**——`critical=true` 也自动放行，但写独立审计 `tool_auto_approval`（区别于普通 tool_approval）并发射 `ai:tool-status` 驱动前端渲染独立警示行。原「critical 任何模式都不可绕过」的语义已废除，auto 高危改由「留痕 + 前端警示」兜底而非阻塞。另含写入上限上调、高危判定增强、审批选择器前端细节。 |
@@ -335,7 +345,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **审查修复与测试** | 代码审查后修复：① 各文件「critical 不可绕过」过时注释与 auto 放行语义对齐（agent.go/context.go/run_command.go/TOOLS.md）；② 回补 auto_approval 前端过时注释（maxToolLongText 独立于 MAX_AI_INPUT_CHARS）；③ 补 `TestRequestApprovalModeGating`（[approval_test.go](internal/agent/approval_test.go)）断言 `ai:tool-status`(tool_auto_approval) 审计事件发射。验证 `go build/vet/test` + `npm run build` 全绿。 |
 | **涉及文件** | [agent.go](internal/agent/agent.go)（门控+recordAutoApproval）、[context.go](internal/agent/tools/context.go)（maxToolLongText）、[run_command.go](internal/agent/tools/run_command.go)（flag=value/.ps1）、[approval_test.go](internal/agent/approval_test.go)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)（.is-auto/.anchor-*）、[index.html](frontend/index.html)（审批选项描述/图标）、[TOOLS.md](internal/agent/TOOLS.md) |
 
-### 临时记忆 4（= 归档「记忆点 4」）
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 在记忆点 3 五工具基础上扩展为**完整文件工具家族**（读→写→改→找→复制→移动→删除→建目录闭环），新增五工具一文件一工具：`grep_file`（字符串+正则双模式、流式有界输出逼近上限提前中断、二进制跳过）、`copy_file`/`move_file`（go-kit `CopyEx`/`MoveEx`：临时文件+rename 原子、覆盖备份恢复、dest 为已存在目录自动追加源基名）、`delete_file`（非空目录必须 `recursive=true`、拒绝删工作区根、critical=true）、`mkdir_dir`（默认仅建单级，父目录不存在引导 `recursive=true`；MkdirAll 递归、已存在幂等）。统一二进制检测（go-kit `IsBinaryFile`，前 8000 字节 NUL）——read_file 跳过、edit_file 审批前拒绝、grep_file 换库删自实现。 |
@@ -344,7 +354,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **审批分级** | copy_file 覆盖（overwrite=true）→ critical=false 常规审批、新建不审批；move_file **始终**审批（必移除源，结构性变更，critical=false）；delete_file 强制 critical=true（auto 模式放行并留审计痕）；mkdir_dir/write_file 新建不审批。requestApproval 保持 ctx==nil 放行、Approver==nil fail-fast。 |
 | **涉及文件** | [fs_base.go](internal/agent/tools/fs_base.go)（openRootFor/pathEqualsFold/checkSrcDestRelation/relDisplayPath）、[grep_file.go](internal/agent/tools/grep_file.go)/[copy_file.go](internal/agent/tools/copy_file.go)/[move_file.go](internal/agent/tools/move_file.go)/[delete_file.go](internal/agent/tools/delete_file.go)/[mkdir_dir.go](internal/agent/tools/mkdir_dir.go)、[read_file.go](internal/agent/tools/read_file.go)/[ls_dir.go](internal/agent/tools/ls_dir.go)/[edit_file.go](internal/agent/tools/edit_file.go)（os.Root/二进制检测接入）、[registry.go](internal/agent/registry.go)/[meta.go](internal/agent/tools/meta.go)/[doc.go](internal/agent/tools/doc.go)、测试（fs_operate/grep_file/edit_file/fs_tools）、[TOOLS.md](internal/agent/TOOLS.md) |
 
-### 临时记忆 3（= 归档「记忆点 3」）
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 正式落地 AI 在 `~/.jot/workspace/` 沙箱内的**文件操作 + 命令执行工具**与**审批暂停/续跑机制**。共五工具一文件一工具（fs_base.go 共享 + read_file/write_file/ls_dir/glob/run_command）：read_file（rune 分页 offset/length 续读）、write_file（覆盖触发审批、自动建父目录）、ls_dir（单层像 ls，os.ReadDir 非递归）、glob（`*`/`?`/`[abc]` 单层，标准库 path.Match 不递归）、run_command。run_command 用 **os/exec 裸命令 + 参数数组**（不支持 shell 语法，规避语法错位/降低越权逃逸面），`exec.CommandContext` 30s 超时；`exec.LookPath` 找不到回填「环境中没有命令」让模型改自适应（不禁止、不预判）。 |
@@ -354,23 +364,13 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **前端面板** | index.html 新增 `#aiToolApprovalPanel`；ai-chat.js 监听 ai:tool-approval（与 ask-user 同守卫：isAgentFlow + 丢弃旧流 + activeSessionId 非空）→ showApprovalPanel（工具中文名 + summary + 允许/拒绝；critical 加 .is-critical 警示条）；**无关闭按钮、不监听 ESC/外点**（后端正阻塞等待，必须显式选择）；提交中禁用防重复，成功收起 + showNotification；停止/stream-done/stream-error 均 hideApprovalPanel。配色：允许(accent)/取消(error)按钮实底+白字、hover 上浮 + brightness(0.92)、点击回弹 scale(0.97)；警示条 color-mix(error 12%, card-bg) tint + 左侧 error 色条 + 图标。审批模式按钮流式锁定（is-locked 置灰 + 收起浮层）。 |
 | **涉及文件** | [config.go](internal/config/config.go)（WorkspaceFilePath/EvalSymlinks）、[fs_base.go](internal/agent/tools/fs_base.go)（fsToolBase/requestApproval fail-fast）、read_file/write_file/ls_dir/glob/run_command 五工具+IsDestructiveCommand/CommandNeedsApproval/highRiskTokens、[registry.go](internal/agent/registry.go)+[meta.go](internal/agent/tools/meta.go)+[doc.go](internal/agent/tools/doc.go)、测试（fs_tools/run_command/glob）、[context.go](internal/agent/tools/context.go)（Approver 接口+Context.Approver）、[agent.go](internal/agent/agent.go)（approveCh 等 + RequestApproval/claimApproval/clearApproval/drainApproval/ApproveToolCall + Run 注入 Approver: sess）、[app.go](app.go)（绑定 ApproveToolCall）、[index.html](frontend/index.html)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md) |
 
-### 临时记忆 2（= 归档「记忆点 2」）
+### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 为 AI 文件/命令工具奠基，纯增量（**未接执行逻辑**，approval_mode 仅落地为存储字段，运行行为零变化）。工作目录：config.go 新增 `DirWorkspace` + `WorkspaceDir()`（~/.jot/workspace/）+ `EnsureWorkspaceDir()`（app.go 启动调用，MkdirAll 幂等）——未来所有文件/命令工具的强制边界即此目录。审批字段 `approval_mode` 默认 confirm_every。前端审批选择器：AI 顶栏「审批」下拉，三选项手动 confirm_every / 自动 review / 完全访问 auto。 |
 | **审批模式存取** | ai_session_config.go 新增 `ApprovalMode` 列；ai_service.go SessionConfig 加字段、`SaveSessionConfig` **空值不覆写**（ApprovalMode=="" 保留库中原值，防加载态空字段冲掉）、`LoadSessionConfig` 经 approvalModeOrDefault 兜底（空/非法回落 confirm_every）；新建默认也写 confirm_every。前端 ai-chat.js 同步（getSessionConfig 读 / saveApprovalMode 写）。**决策**：默认值 + 空值不覆写 + 读兜底三重保证，旧库旧会话安全回落。 |
 | **前端选择器** | index.html 顶栏「审批」按钮 + .ai-approval-dropdown（顶部说明 + 三选项，每项图标列/名称描述/右侧激活对勾）；ai-chat.js initApprovalPicker/syncApprovalToggle/saveApprovalMode——syncModeToggle 显隐（chat 隐藏）、外点/ESC 关闭（ESC 走全局 handleKeyboardNavigation）、切换即持久化 + showNotification（手动/自动 success、完全访问 warning）。样式要点：--warning 警示色用于"完全访问"图标与激活文本；激活项右侧绿色对勾；激活/悬停几何高度严格一致（对勾绝对定位、描述 nowrap+省略、图标抽 .ai-approval-icon 列垂直居中）；下拉 gap:2px 防背景块相连。 |
 | **涉及文件** | [config.go](internal/config/config.go)（DirWorkspace/WorkspaceDir/EnsureWorkspaceDir）、[app.go](app.go)（启动创建 workspace）、[ai_session_config.go](internal/models/ai_session_config.go)（ApprovalMode 列）、[ai_service.go](internal/services/ai_service.go)（approvalModeOrDefault）、[index.html](frontend/index.html)、[ai-chat.js](frontend/src/js/ai-chat.js)、[ai-chat.css](frontend/src/css/components/ai-chat.css) |
-
-### 临时记忆 1（= 归档「记忆点 1」）
-| 记忆点 | 内容 |
-| --- | --- |
-| **变更概览** | AI 助手输入框工具浮层与设置页 Agent 工具面板统一为**四分组**（内置 → MCP 扩展 → 仅 Plan → 常驻），组标签支持**盲切**（内置/MCP 组整行点击=组内全选/取消全选），带弹性按压回弹与圆角。分组判定（PlanOnly>AlwaysOn/MCPServer）：PlanOnly→仅Plan、AlwaysOn→常驻、MCPServer→MCP扩展、否则内置。仅内置/MCP 可勾选可盲切；仅 Plan/常驻为锁演示组（置灰+禁用）。空组自动跳过；MCP 组内按 Name.localeCompare 排序（后端 pool map 遍历无序）。 |
-| **状态写入统一（重要）** | AI 浮层 `applyTool` 与设置页 `applyAgentTool` **合并**为模块级共享 `applyAgentTool(tool,enabled)`（[main.js](frontend/src/main.js)），作为 Agent 工具启停**唯一写入口**：同时维护 agentToolsDisabled 持久化集合与 agentToolsChanges 变更记录（去重+反向清空）。所有入口（浮层单行/组盲切/全选/设置页单行/设置页组盲切/toggleSelectAllTools）统一收敛，避免多份不同步复制代码。 |
-| **分组渲染与盲切** | [renderChatAgentToolsList](frontend/src/main.js) 与渲染单各自构造 groups 四元组，groups[1].tools.sort 前置于 MCP 排序。可勾选组标签 role="button"+tabIndex=0，click/Enter/空格触发 toggleGroup（tools.every(isEnabled) 判 allEnabled → 逐工具 applyAgentTool → 手动同步 rows checkbox → updateAgentToolsButtonText/updateSelectAllCheckboxState/saveSettings）。盲切手动设 checkbox.checked 不触发 change 事件、避免重复 update/save，靠组标签末尾手动同步。设置页用 firstGroupRendered 标记首个非空组加 .first 去顶距（display:flex 下 :first-child 永远命中 header，故用 JS 标记真实首组）。 |
-| **样式规范** | 组标签 .agent-tools-mgr-group（设置页）/ .ai-chat-agent-tools-group（浮层）：border-bottom hairline 35% 半透明（color-mix(var(--border) 35%, transparent)）、border-radius 6px、transform translateZ(0) GPU 合成防抖 + transition 0.18s cubic-bezier(0.34,1.56,0.64,1) 弹性回弹、:active 缩放（浮层 scale(0.97) / 设置页 scale(0.99)）。「按压缩小+弹性回弹」为项目统一交互范式。 |
-| **涉及文件** | [frontend/src/main.js](frontend/src/main.js)（renderChatAgentToolsList/renderAgentToolsMgrList/共享 applyAgentTool）、[frontend/src/css/components/ai-chat.css](frontend/src/css/components/ai-chat.css)（.ai-chat-agent-tools-group）、[frontend/src/css/components/settings-panel.css](frontend/src/css/components/settings-panel.css)（.agent-tools-mgr-group/.first/.is-selectable）、[internal/agent/types.go](internal/agent/types.go)（ToolMeta.MCPServer）、[app.go](app.go)（GetAgentTools 填充 MCPServer） |
-| 旧版 AGENTS.md 重构 | 历史版本已归档 `.trae/documents/AGENTS-archive-2026-09-17.md`，本报告迁移至「分析 + 长期/临时记忆 + 维护规范」新结构 |
 
 ## 九、初始静态分析关键结论
 

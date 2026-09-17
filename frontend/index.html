@@ -1249,7 +1249,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="ai-chat-search-toggle" id="aiChatSearchToggle" title="深度思考">
+                            <div class="ai-chat-search-toggle" id="aiChatSearchToggle">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.65 4.65 0 0 1 8.91 14"/></svg>
                                 <span>深度思考</span>
                                 <div class="ai-chat-toggle-switch"><div class="ai-chat-toggle-knob"></div></div>
@@ -1259,6 +1259,7 @@
                                 <button class="ai-chat-toolbar-btn" id="aiChatAgentToolsBtn" title="Agent 工具" aria-expanded="false" aria-controls="aiChatAgentToolsDropdown">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                                     <span>工具</span>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </button>
                                 <div class="ai-chat-agent-tools-dropdown" id="aiChatAgentToolsDropdown"></div>
                             </div>
@@ -1275,7 +1276,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>手动审批</span></div>
-                                            <div class="ai-approval-desc">每次操作都需你确认</div>
+                                            <div class="ai-approval-desc">每次执行命令都会弹出面板需你确认</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -1283,7 +1284,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9.5 10 2 2-2 2"/><path d="M13.5 14H15"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>自动审批</span></div>
-                                            <div class="ai-approval-desc">常规操作自动执行，高风险再询问你</div>
+                                            <div class="ai-approval-desc">常规命令自动执行，危险命令强制确认</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -1291,7 +1292,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>完全访问</span></div>
-                                            <div class="ai-approval-desc">不经审批直接运行，高风险仅提示</div>
+                                            <div class="ai-approval-desc">命令不经审批直接执行，危险命令仅留痕</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -2792,18 +2793,25 @@ console.log(greet("Jot"));
         <span class="ai-mode-tip-line"><em>当前：</em><span id="aiContextUsageTipDetail">—</span></span>
         <span class="ai-mode-tip-line">达到预算的 <span id="aiContextUsageTipTrigger">80%</span> 时自动压缩更早的历史（生成会话摘要）。</span>
     </div>
+    <!-- 深度思考开关的同款悬停提示（initModeTips 绑定显示，不再用原生 title） -->
+    <div class="ai-mode-tip" data-tip="deep-think">
+        <span class="ai-mode-tip-title">深度思考</span>
+        <span class="ai-mode-tip-line">开启后会向接口发送深度思考请求（enable_thinking），恳请模型进入思考。</span>
+        <span class="ai-mode-tip-line">是否真正深度思考取决于当前模型是否支持该能力，并非强制生效。</span>
+        <span class="ai-mode-tip-line">模型不支持时该请求可能被忽略，或返回错误提示；关闭则始终不开启思考。</span>
+    </div>
     <!-- 执行审批模式三选项的同款悬停提示（initModeTips 绑定下拉选项） -->
     <div class="ai-mode-tip" data-tip="approval-confirm_every">
         <span class="ai-mode-tip-title">手动审批</span>
-        <span class="ai-mode-tip-line">Agent 每次调用工具都会弹出审批面板，需你手动允许或拒绝，最安全。</span>
+        <span class="ai-mode-tip-line">Agent 每次执行命令都会弹出审批面板，需你手动允许或拒绝后才执行，最安全。</span>
     </div>
     <div class="ai-mode-tip" data-tip="approval-review">
         <span class="ai-mode-tip-title">自动审批</span>
-        <span class="ai-mode-tip-line">常规操作自动执行不打扰；命中高风险黑名单的命令仍会弹出面板请你确认。</span>
+        <span class="ai-mode-tip-line">常规命令自动执行不打扰；命中黑名单的危险命令仍会强制确认，无法绕过。</span>
     </div>
     <div class="ai-mode-tip" data-tip="approval-auto">
         <span class="ai-mode-tip-title">完全访问</span>
-        <span class="ai-mode-tip-line">所有操作自动执行，全程不打断；高风险命令仅发非阻塞提示并留痕，事后仍可查看。</span>
+        <span class="ai-mode-tip-line">所有命令自动执行、全程不打断；危险命令不弹提示，仅在工具调用记录中写审计留痕，事后可查看。</span>
     </div>
     <!-- AI 消息统计卡（消息列表悬停触发，initModeTips 委托填充） -->
     <div class="ai-mode-tip compact" data-tip="ai-msg-stats">
