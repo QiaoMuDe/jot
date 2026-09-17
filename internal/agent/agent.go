@@ -754,7 +754,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	for _, name := range req.DisabledTools {
 		disabledTools[name] = true
 	}
-	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx}, disabledTools, req.PlanMode)
+	toolList := buildTools(BuildParams{deps: s.deps, req: req, ctx: toolCtx, runCtx: runCtx, chatModel: chatModel}, disabledTools, req.PlanMode)
 
 	// 加载 MCP 工具（从数据库读取服务器配置，建立连接，获取工具）
 	mcpTools := loadMCPTools(runCtx, s.deps, toolCtx, disabledTools)

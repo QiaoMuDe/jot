@@ -719,9 +719,48 @@
     50% { opacity: 0.4; }
 }
 
+/* ── os_agent 子 Agent 分组 ── */
+
+/* 主行执行中：左侧脉动点（纯 CSS，无 JS 定时器），指示内层子步骤正在执行；tool_result 到达状态转 ok 后自动停止 */
+.ai-tool-status-item.is-os-agent.is-active::before {
+    content: '';
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 2px;
+    animation: ai-os-agent-dot 1s ease-in-out infinite;
+}
+
+@keyframes ai-os-agent-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.65); }
+}
+
+/* 内层子步骤：缩进 + 左侧引导线 + 弱化色（浅/深主题均走 CSS 变量，不写死色值） */
+.ai-tool-status-item.is-substep {
+    margin-left: 14px;
+    padding: 2px 8px 2px 10px;
+    border-left: 2px solid var(--border);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: color-mix(in srgb, var(--hover-bg) 45%, transparent);
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+.ai-tool-status-item.is-substep .ai-tool-status-name {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+.ai-tool-status-item.is-substep .ai-tool-status-time {
+    font-size: 0.68rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ai-tool-status-item.is-active .ai-tool-status-icon,
-    .thinking-summary.is-thinking .ai-inline-icon {
+    .thinking-summary.is-thinking .ai-inline-icon,
+    .ai-tool-status-item.is-os-agent.is-active::before {
         animation: none;
     }
 }

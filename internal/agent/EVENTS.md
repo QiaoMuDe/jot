@@ -49,6 +49,18 @@
 
 父包逻辑见 [agent.go](internal/agent/agent.go)（`emitToolStart` / `emitToolResult`，注意 `emitToolResult` 会检查"最近一条同名记录是否为 `tool_error`"，失败态不会被 result 覆盖）与 [context.go](internal/agent/tools/context.go)（`DrainPartials` 统一以 `tool_partial` 发射）。
 
+### 3.1 子 Agent 内层步骤转发（os_agent）
+
+文件/命令工具（read_file / write_file / edit_file / ls_dir / glob / grep_file / copy_file / move_file / delete_file / mkdir_dir / run_command）已封装为 `os_agent` 子 Agent（[subagent_os.go](internal/agent/subagent_os.go)，通用机制见 [subagent.go](internal/agent/subagent.go)），父层仅注册 os_agent 一个委托工具。内层每步工具调用以 `ai:tool-status` 事件**实时转发**（`tool_start` / `tool_result` / `tool_error` / `tool_partial` 语义与父层一致），写入父层同一 `toolRecords` 切片，顺序相邻：
+
+```
+os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent tool_result
+```
+
+- 前端以「os_agent start → 内层记录 → os_agent result」为分组边界（状态条 / 历史明细按此顺序渲染）。
+- 内层流式正文与思考链**不转发**：子 Agent 只把最后一条非工具正文作为结果，经 os_agent `tool_result` 透传给父层。
+- 内层工具审批语义与父层一致：同一会话 `Approver`（`agentSession.RequestApproval`），危险操作照常发射 `ai:tool-approval`（见 §5）阻塞确认，前端审批面板零改动。
+
 ---
 
 ## 4. 反问交互事件（`ai:ask-user`）

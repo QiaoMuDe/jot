@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/tool"
 
 	"jot/internal/agent/tools"
@@ -14,11 +15,14 @@ import (
 	"gitee.com/MM-Q/fastlog"
 )
 
-// BuildParams 构建工具所需的装配上下文：父包 Deps、本轮 Request 与工具执行上下文。
+// BuildParams 构建工具所需的装配上下文：父包 Deps、本轮 Request、工具执行上下文，
+// 以及子 Agent 委托工具（os_agent）所需的 run 上下文与会话 ChatModel 客户端。
 type BuildParams struct {
-	deps Deps
-	req  Request
-	ctx  *tools.Context
+	deps      Deps
+	req       Request
+	ctx       *tools.Context
+	runCtx    context.Context   // 子 Agent 构造用 run 上下文（Run 内派生的可取消 runCtx）
+	chatModel *openai.ChatModel // 子 Agent 内层复用同一会话 ChatModel；nil 时跳过子 Agent 装配
 }
 
 // planOnlyTools 仅在 Plan 模式下注册的工具名集合（Agent 模式跳过）。
@@ -199,17 +203,13 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"ask_user", tools.WrapWithError("ask_user", tools.NewAskUser(p.ctx), p.ctx)},
 		{"create_plan", tools.WrapWithError("create_plan", tools.NewCreatePlan(p.ctx), p.ctx)},
 		{"update_plan", tools.WrapWithError("update_plan", tools.NewUpdatePlan(p.ctx), p.ctx)},
-		{"read_file", tools.WrapWithError("read_file", tools.NewReadFile(p.ctx), p.ctx)},
-		{"write_file", tools.WrapWithError("write_file", tools.NewWriteFile(p.ctx), p.ctx)},
-		{"edit_file", tools.WrapWithError("edit_file", tools.NewEditFile(p.ctx), p.ctx)},
-		{"ls_dir", tools.WrapWithError("ls_dir", tools.NewLsDir(p.ctx), p.ctx)},
-		{"glob", tools.WrapWithError("glob", tools.NewGlob(p.ctx), p.ctx)},
-		{"grep_file", tools.WrapWithError("grep_file", tools.NewGrepFile(p.ctx), p.ctx)},
-		{"copy_file", tools.WrapWithError("copy_file", tools.NewCopyFile(p.ctx), p.ctx)},
-		{"move_file", tools.WrapWithError("move_file", tools.NewMoveFile(p.ctx), p.ctx)},
-		{"delete_file", tools.WrapWithError("delete_file", tools.NewDeleteFile(p.ctx), p.ctx)},
-		{"mkdir_dir", tools.WrapWithError("mkdir_dir", tools.NewMkdirDir(p.ctx), p.ctx)},
-		{"run_command", tools.WrapWithError("run_command", tools.NewRunCommand(p.ctx), p.ctx)},
+	}
+	// os_agent 子 Agent 委托工具：文件/命令工具（read_file 等 11 个）已封装为子 Agent，
+	// 内层装配见 subagent_os.go 的 buildOSSubAgent。chatModel 为 nil 或构造失败时返回 nil
+	// （已内部记 Warn），跳过注册、不破坏其余工具装配；正常时用 WrapWithError 包装
+	// （与其余工具一致：失败发射 tool_error 事件、记录并回填模型继续推理，含 panic 防护）。
+	if oa := buildOSSubAgent(p.runCtx, p.chatModel, p.ctx, disabled); oa != nil {
+		all = append(all, namedTool{"os_agent", tools.WrapWithError("os_agent", oa, p.ctx)})
 	}
 	filtered := make([]tool.BaseTool, 0, len(all))
 	for _, n := range all {

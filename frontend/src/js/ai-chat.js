@@ -3574,6 +3574,7 @@ async function startStreaming(userText, userMsgID) {
     let nextToolId = 1;            // 逐调用记录自增 id（running 行实时计时定位）
     let toolStatusTimer = null;    // running 行实时计时（单一定时器，防止 per-row timer 泄漏）
     let streamToolRecords = [];    // 本轮流的原始工具调用记录（落库 tool_calls，历史回放）
+    let osAgentStack = [];         // os_agent 分组栈（会话级实例，与 toolRecords 同生命周期，语义见模块级 osAgentGroup*）
 
     /** 创建折叠摘要条（懒创建，插入到正文 contentDiv 上方），header 点击展开/收起明细 */
     const ensureToolSummary = () => {
@@ -3667,7 +3668,11 @@ async function startStreaming(userText, userMsgID) {
         if (payload.action === 'tool_start') {
             clearStreamedText(); // 清除模型本轮决策输出的中间文本，最终正文单独累积
             const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
-            toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: 'running', action_text: payload.action_text || '执行', result: '', startAt: Date.now(), endAt: 0 });
+            const rec = { id: nextToolId++, name: trName, seqName: seq, status: 'running', action_text: payload.action_text || '执行', result: '', startAt: Date.now(), endAt: 0 };
+            // os_agent 分组：主行开组入栈；组内其它工具事件标记为缩进子步骤
+            if (trName === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(osAgentStack, payload, rec); }
+            else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
+            toolRecords.push(rec);
         } else if (payload.action === 'tool_result' || payload.action === 'tool_error' || payload.action === 'tool_partial') {
             // 收口该名最近一个仍在执行（running）的记录为其终态
             let closed = false;
@@ -3693,10 +3698,14 @@ async function startStreaming(userText, userMsgID) {
                 }
                 if (!autoClosed) {
                     const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
-                    const st = payload.action === 'tool_error' ? 'error' : (payload.action === 'tool_partial' ? 'partial' : 'ok');
-                    toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: st, action_text: '', result: payload.result != null ? String(payload.result) : '', startAt: 0, endAt: 0 });
+                    const rec = { id: nextToolId++, name: trName, seqName: seq, status: payload.action === 'tool_error' ? 'error' : (payload.action === 'tool_partial' ? 'partial' : 'ok'), action_text: '', result: payload.result != null ? String(payload.result) : '', startAt: 0, endAt: 0 };
+                    if (trName === 'os_agent') { rec.isAgentGroup = true; }
+                    else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
+                    toolRecords.push(rec);
                 }
             }
+            // os_agent 终态事件：按 call_id / 顺序关组（子步骤记录收口不改变栈）
+            if (trName === 'os_agent') { osAgentGroupClose(osAgentStack, payload); }
         } else if (payload.action === 'tool_auto_approval') {
             // 完全访问自动放行高风险命令：升级同名最近 running 记录为 auto 警示行
             // （含完整命令），避免与 tool_start/tool_result 双行重复展示；无 running
@@ -3716,8 +3725,12 @@ async function startStreaming(userText, userMsgID) {
             }
             if (!upgraded) {
                 const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
-                toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: 'auto', action_text: autoCmd, result: autoRes, startAt: Date.now(), endAt: Date.now() });
+                const rec = { id: nextToolId++, name: trName, seqName: seq, status: 'auto', action_text: autoCmd, result: autoRes, startAt: Date.now(), endAt: Date.now() };
+                if (trName === 'os_agent') { rec.isAgentGroup = true; }
+                else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
+                toolRecords.push(rec);
             }
+            // 升级 running 记录时其 isAgentGroup/substep 标记已在 tool_start 时设置，无需改动
         }
         ensureToolSummary();
         refreshToolStatus();
@@ -5942,20 +5955,60 @@ function setAskInputWaiting(waiting) {
  * 渲染规则：失败 / 部分失败逐条独立显示（各带自己的原因，不再合并吞并）；成功按工具聚合「名 ×N」；
  * header 徽标计数由记录重算，恒等于可见行数，杜绝「标称失败但看不到」的计数不一致。 */
 
-/** 原始事件数组（tool_start / tool_result / tool_error / tool_partial）→ 逐调用记录（历史回放用） */
+/**
+ * ── os_agent 子 Agent 分组栈（实时 / 历史回放共用逻辑） ──
+ * 父层 Agent 仅暴露 os_agent 一个委托工具，内层 11 个文件/命令工具的调用事件与
+ * os_agent 的 start/result 在原始事件数组中顺序相邻：
+ *   os_agent tool_start → 内层 read_file start/result → … → os_agent tool_result
+ * 栈元素 { callId, rec }：os_agent 的 tool_result 优先按 call_id 配对（同一轮父模型
+ * 可能多次调用 os_agent，不同 call_id），无 call_id 时按顺序关栈顶。
+ * 实时路径在会话作用域持有一个栈实例，回放路径在 buildToolRecords 内局部建栈，
+ * 两路径共用本组函数维护，保证分组语义一致（所见即所存）。
+ */
+
+/** 开组：os_agent tool_start 时入栈（callId 可为空，空时退化为顺序关组） */
+function osAgentGroupOpen(stack, ev, rec) {
+    stack.push({ callId: ev && ev.call_id, rec: rec });
+}
+
+/** 关组：os_agent tool_result/error/partial 时按 call_id 配对移除；无 call_id 按顺序关栈顶。
+    返回是否成功关掉一组（调用方无需关心，仅保持栈一致）。 */
+function osAgentGroupClose(stack, ev) {
+    var callId = ev && ev.call_id;
+    if (callId != null) {
+        for (var i = stack.length - 1; i >= 0; i--) {
+            if (stack[i].callId === callId) { stack.splice(i, 1); return true; }
+        }
+        return false; // call_id 无匹配（start 缺失/乱序）：不臆断关闭其它组
+    }
+    if (stack.length) { stack.pop(); return true; }
+    return false;
+}
+
+/** 当前是否处于某 os_agent 组内（栈非空） */
+function osAgentGroupActive(stack) {
+    return stack.length > 0;
+}
+
+/** 原始事件数组（tool_start / tool_result / tool_error / tool_partial）→ 逐调用记录（历史回放用）
+    记录附加分组字段：isAgentGroup（os_agent 主行）/ substep（组内层子步骤） */
 function buildToolRecords(raw) {
     var records = [];
     if (!Array.isArray(raw)) return records;
     var seqByName = {};
     var pending = []; // 未配对 start 栈（顺序）
+    var agentStack = []; // os_agent 分组栈（本函数局部，与实时路径共用 osAgentGroup* 语义）
     for (var i = 0; i < raw.length; i++) {
         var ev = raw[i];
         if (!ev || !ev.name) continue;
         var name = ev.name;
         if (ev.action === 'tool_start') {
             var seq = (seqByName[name] = (seqByName[name] || 0) + 1);
-            records.push({ name: name, seqName: seq, status: 'running', action_text: ev.action_text || '执行', result: '' });
-            pending.push(records[records.length - 1]);
+            var rec = { name: name, seqName: seq, status: 'running', action_text: ev.action_text || '执行', result: '' };
+            if (name === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(agentStack, ev, rec); }
+            else if (osAgentGroupActive(agentStack)) { rec.substep = true; }
+            records.push(rec);
+            pending.push(rec);
         } else if (ev.action === 'tool_result' || ev.action === 'tool_error' || ev.action === 'tool_partial') {
             var matched = null;
             for (var j = pending.length - 1; j >= 0; j--) {
@@ -5977,9 +6030,14 @@ function buildToolRecords(raw) {
                 }
                 if (!autoClosed) {
                     var seq2 = (seqByName[name] = (seqByName[name] || 0) + 1);
-                    records.push({ name: name, seqName: seq2, status: status, action_text: '', result: res });
+                    var rec2 = { name: name, seqName: seq2, status: status, action_text: '', result: res };
+                    if (name === 'os_agent') { rec2.isAgentGroup = true; }
+                    else if (osAgentGroupActive(agentStack)) { rec2.substep = true; }
+                    records.push(rec2);
                 }
             }
+            // os_agent 终态事件：按 call_id / 顺序关组（子步骤记录收口不改变栈）
+            if (name === 'os_agent') { osAgentGroupClose(agentStack, ev); }
         } else if (ev.action === 'tool_auto_approval') {
             // 完全访问自动放行高风险命令：升级同名最近 pending start 为 auto 警示行
             // （含完整命令），避免与 tool_start/tool_result 双行重复展示；无 start
@@ -6000,7 +6058,10 @@ function buildToolRecords(raw) {
                 upgraded.result = autoRes;
             } else {
                 var seq3 = (seqByName[name] = (seqByName[name] || 0) + 1);
-                records.push({ name: name, seqName: seq3, status: 'auto', action_text: autoCmd, result: autoRes });
+                var rec3 = { name: name, seqName: seq3, status: 'auto', action_text: autoCmd, result: autoRes };
+                if (name === 'os_agent') { rec3.isAgentGroup = true; }
+                else if (osAgentGroupActive(agentStack)) { rec3.substep = true; }
+                records.push(rec3);
             }
         }
     }
@@ -6080,6 +6141,9 @@ function buildToolStatusRows(listEl, records, isLive) {
         }
         var item = document.createElement('div');
         item.className = 'ai-tool-status-item ' + cls;
+        // os_agent 分组标记：主行（is-os-agent）+ 内层子步骤（is-substep，缩进/引导线/弱化样式见 ai-chat.css）
+        if (rec.isAgentGroup) item.classList.add('is-os-agent');
+        if (rec.substep) item.classList.add('is-substep');
         // 失败/部分失败：完整原因挂行 dataset 供同款悬停卡读取（替代原生 title）
         if (hasReason) {
             item.dataset.tipText = rec.result;
@@ -6130,6 +6194,15 @@ function buildToolStatusRows(listEl, records, isLive) {
         item.appendChild(textEl);
         item.appendChild(timeEl);
         return item;
+    }
+
+    // os_agent 分组存在时：保持原始顺序逐条渲染（主行 + 缩进子步骤相邻可见，成功不聚合），
+    // 保证「os_agent start → 内层子步骤 → os_agent result」的组内顺序不被打散；
+    // 普通工具流维持原有分组聚合行为。
+    var hasAgentGroup = records.some(function(r) { return r.isAgentGroup || r.substep; });
+    if (hasAgentGroup) {
+        records.forEach(function(r) { listEl.appendChild(itemEl(r)); });
+        return;
     }
 
     // 顺序：执行中（实时顶格）→ 失败/部分失败（逐条置前）→ 成功（聚合置后）

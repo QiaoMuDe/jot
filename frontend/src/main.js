@@ -31,7 +31,7 @@ import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
 
 // AI 对话页面模块
-import { initAIChat, onAIChatViewActivated, resetAIChatState, toggleAiSearchModal, closeOtherToolbarDropdowns } from './js/ai-chat.js';
+import { closeOtherToolbarDropdowns, initAIChat, onAIChatViewActivated, resetAIChatState, toggleAiSearchModal } from './js/ai-chat.js';
 import { initCalendarView } from './js/calendar.js';
 // 启动器网格模块
 import { initLauncher } from './js/launcher.js';

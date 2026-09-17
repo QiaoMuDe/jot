@@ -30,16 +30,7 @@ func BuiltinTools() []ToolMeta {
 		{Name: "ask_user", Label: "向用户发起澄清提问（1-3 个问题，单选/多选）", AlwaysOn: true},
 		{Name: "create_plan", Label: "制定执行计划（拆解目标为步骤列表）", PlanOnly: true},
 		{Name: "update_plan", Label: "更新执行计划（标记步骤完成/跳过/新增）", PlanOnly: true},
-		{Name: "read_file", Label: "读取工作目录内的文件（支持分页续读）"},
-		{Name: "write_file", Label: "在工作目录内创建/覆盖/追加写入文件"},
-		{Name: "edit_file", Label: "精准编辑工作目录内的文件（片段替换/行级替换）"},
-		{Name: "ls_dir", Label: "列出某目录的直接内容（单层，像 ls）"},
-		{Name: "glob", Label: "按通配符模式查找工作目录内的文件路径"},
-		{Name: "grep_file", Label: "在工作目录内按内容搜索匹配行（类似 grep）"},
-		{Name: "copy_file", Label: "复制工作目录内的文件/目录到目标位置（类似 cp）"},
-		{Name: "move_file", Label: "移动工作目录内的文件/目录到目标位置（类似 mv）"},
-		{Name: "delete_file", Label: "删除工作目录内的文件/目录（类似 rm，需强制审批）"},
-		{Name: "mkdir_dir", Label: "在工作目录内递归创建目录（类似 mkdir -p）"},
-		{Name: "run_command", Label: "在工作目录内执行系统命令（不支持 shell 语法）"},
+		// os_agent：文件/命令工具（read_file 等 11 个）已封装为内层子 Agent，父层只注册此委托工具
+		{Name: "os_agent", Label: "操作系统任务（工作区文件读写与命令执行）"},
 	}
 }
