@@ -79,11 +79,10 @@ var _ tools.ActionTextProvider = (*delegatedAgentTool)(nil)
 // newDelegatedAgentTool 通用子 Agent 构造器：
 //   - chatModel 为 nil（未配置 AI）→ 记 Warn 日志并返回 nil（buildTools 过滤循环跳过该工具）。
 //   - 白名单 cfg.toolNames 各从 toolConstructors 取构造器 + tools.WrapWithError 包装（与 registry.go 原写法一致）。
-//   - disabled 参数当前不改变内层白名单（保留供将来扩展）。
 //   - adk.NewChatModelAgent 构造失败记 Warn 日志返回 nil。
 //
 // 返回的 delegatedAgentTool 带 innerTools 字段供测试断言内层白名单。
-func newDelegatedAgentTool(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, disabled map[string]bool, cfg subAgentConfig) *delegatedAgentTool {
+func newDelegatedAgentTool(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, cfg subAgentConfig) *delegatedAgentTool {
 	logWarn := func(msg string, fields ...fastlog.Field) {
 		if innerCtx != nil && innerCtx.Logger != nil {
 			innerCtx.Logger.Warnw(msg, fields...)

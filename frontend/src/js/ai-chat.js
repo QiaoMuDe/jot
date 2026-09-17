@@ -3574,7 +3574,7 @@ async function startStreaming(userText, userMsgID) {
     let nextToolId = 1;            // 逐调用记录自增 id（running 行实时计时定位）
     let toolStatusTimer = null;    // running 行实时计时（单一定时器，防止 per-row timer 泄漏）
     let streamToolRecords = [];    // 本轮流的原始工具调用记录（落库 tool_calls，历史回放）
-    let osAgentStack = [];         // os_agent 分组栈（会话级实例，与 toolRecords 同生命周期，语义见模块级 osAgentGroup*）
+    let osAgentStack = [];         // os_agent 分组栈（流级实例：随 startStreaming 每次重建，与 toolRecords 同生命周期，语义见模块级 osAgentGroup*）
 
     /** 创建折叠摘要条（懒创建，插入到正文 contentDiv 上方），header 点击展开/收起明细 */
     const ensureToolSummary = () => {
@@ -5962,7 +5962,7 @@ function setAskInputWaiting(waiting) {
  *   os_agent tool_start → 内层 read_file start/result → … → os_agent tool_result
  * 栈元素 { callId, rec }：os_agent 的 tool_result 优先按 call_id 配对（同一轮父模型
  * 可能多次调用 os_agent，不同 call_id），无 call_id 时按顺序关栈顶。
- * 实时路径在会话作用域持有一个栈实例，回放路径在 buildToolRecords 内局部建栈，
+ * 实时路径在流作用域（startStreaming 内）持有一个栈实例，回放路径在 buildToolRecords 内局部建栈，
  * 两路径共用本组函数维护，保证分组语义一致（所见即所存）。
  */
 

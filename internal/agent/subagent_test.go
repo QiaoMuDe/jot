@@ -62,7 +62,7 @@ func newTestInnerCtx() (*tools.Context, *[]tools.Record, *[]string) {
 // TestBuildOSSubAgentNilChatModel chatModel 为 nil 时构造返回 nil（buildTools 过滤循环跳过）。
 func TestBuildOSSubAgentNilChatModel(t *testing.T) {
 	innerCtx := &tools.Context{}
-	if oa := buildOSSubAgent(context.Background(), nil, innerCtx, nil); oa != nil {
+	if oa := buildOSSubAgent(context.Background(), nil, innerCtx); oa != nil {
 		t.Errorf("chatModel 为 nil 时应返回 nil，实际返回 %#v", oa)
 	}
 }
@@ -70,7 +70,7 @@ func TestBuildOSSubAgentNilChatModel(t *testing.T) {
 // TestBuildOSSubAgentInnerTools 内层白名单恰好 11 个，名称集合与 osSubAgentToolNames 一致。
 func TestBuildOSSubAgentInnerTools(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -97,7 +97,7 @@ func TestBuildOSSubAgentInnerTools(t *testing.T) {
 func TestBuildOSSubAgentApproverShared(t *testing.T) {
 	approver := &fakeApprover{}
 	innerCtx := &tools.Context{Approver: approver}
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -143,7 +143,7 @@ func TestBuildToolsDisabledOSAgent(t *testing.T) {
 // TestOSAgentInvokableRunEmptyRequest request 为空 / 参数非法时报中文错误。
 func TestOSAgentInvokableRunEmptyRequest(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -162,13 +162,13 @@ func TestOSAgentInvokableRunEmptyRequest(t *testing.T) {
 // os_agent start → 内层 read_file start/result → os_agent result，记录与事件均按序发射。
 func TestOSAgentEventForwarding(t *testing.T) {
 	innerCtx, records, emitted := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
 	// 用 fake 内层 Agent 替换：预设事件流 = assistant(调 read_file) → tool(read_file 结果) → assistant(最终文本)
 	oa.agent = &fakeAgent{
-		name: "os-agent",
+		name: "os_agent",
 		desc: "test",
 		events: []*adk.AgentEvent{
 			adk.EventFromMessage(schema.AssistantMessage("", []schema.ToolCall{{
@@ -247,12 +247,12 @@ func toolNamesOf(t *testing.T, toolList []tool.BaseTool) map[string]bool {
 // 不跨轮错配（对应前端 osAgentGroupClose 按 call_id 配对的输入契约）。
 func TestOSAgentTwoCallsForwarding(t *testing.T) {
 	innerCtx, records, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
 	oa.agent = &fakeAgent{
-		name: "os-agent",
+		name: "os_agent",
 		desc: "test",
 		events: []*adk.AgentEvent{
 			adk.EventFromMessage(schema.AssistantMessage("", []schema.ToolCall{{
@@ -307,5 +307,77 @@ func TestOSAgentTwoCallsForwarding(t *testing.T) {
 			t.Errorf("记录[%d] 应为 %s(%s, callID=%s)，实际 %s(%s, callID=%s)",
 				i, want[i].action, want[i].name, want[i].callID, rec.Action, rec.Name, rec.CallID)
 		}
+	}
+}
+
+// TestOSAgentEventForwardingStreaming 内层事件流为流式（真实运行 EnableStreaming 的必经路径）时，
+// 转发逻辑与顺序与非流式一致：assistant 流式合并 ToolCall、tool 流式合并结果、
+// finalContent 取最后一条非工具正文。覆盖 subagent.go 中 mv.IsStreaming 分支
+// （consumeAssistantStream/consumeToolStream + startedByCallID 配对）。
+func TestOSAgentEventForwardingStreaming(t *testing.T) {
+	innerCtx, records, emitted := newTestInnerCtx()
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	if oa == nil {
+		t.Fatal("chatModel 非 nil 时应构造成功")
+	}
+	oa.agent = &fakeAgent{
+		name: "os_agent",
+		desc: "test",
+		events: []*adk.AgentEvent{
+			// assistant 流式：单个 chunk 携带 read_file 工具调用
+			adk.EventFromMessage(nil, schema.StreamReaderFromArray([]*schema.Message{
+				schema.AssistantMessage("", []schema.ToolCall{{
+					ID:       "inner_1",
+					Function: schema.FunctionCall{Name: "read_file", Arguments: `{"path":"a.txt"}`},
+				}}),
+			}), schema.Assistant, ""),
+			// tool 流式：单个 chunk 携带 read_file 结果
+			adk.EventFromMessage(nil, schema.StreamReaderFromArray([]*schema.Message{
+				schema.ToolMessage("内容A", "inner_1", schema.WithToolName("read_file")),
+			}), schema.Tool, "read_file"),
+			// assistant 流式：最终正文
+			adk.EventFromMessage(nil, schema.StreamReaderFromArray([]*schema.Message{
+				schema.AssistantMessage("完成A", nil),
+			}), schema.Assistant, ""),
+		},
+	}
+
+	// 父层 os_agent start(call_os1) → 内层流式 read_file → os_agent result(call_os1)
+	emitToolStart(innerCtx.Emit, innerCtx.Records, schema.ToolCall{
+		ID:       "call_os1",
+		Function: schema.FunctionCall{Name: "os_agent", Arguments: `{"request":"任务A"}`},
+	}, nil)
+	out, err := oa.InvokableRun(context.Background(), `{"request":"任务A"}`)
+	if err != nil {
+		t.Fatalf("InvokableRun 失败: %v", err)
+	}
+	if out != "完成A" {
+		t.Errorf("最终文本应为内层最后一条正文，实际 %q", out)
+	}
+	emitToolResult(innerCtx.Emit, innerCtx.Records, "os_agent", "call_os1", out)
+
+	// 断言记录顺序与 call_id 配对（与 TestOSAgentEventForwarding 非流式场景一致）
+	want := []struct {
+		action string
+		name   string
+		callID string
+	}{
+		{"tool_start", "os_agent", "call_os1"},
+		{"tool_start", "read_file", "inner_1"},
+		{"tool_result", "read_file", "inner_1"},
+		{"tool_result", "os_agent", "call_os1"},
+	}
+	if len(*records) != len(want) {
+		t.Fatalf("toolRecords 应为 %d 条，实际 %d 条: %+v", len(want), len(*records), *records)
+	}
+	for i, rec := range *records {
+		if rec.Action != want[i].action || rec.Name != want[i].name || rec.CallID != want[i].callID {
+			t.Errorf("记录[%d] 应为 %s(%s, callID=%s)，实际 %s(%s, callID=%s)",
+				i, want[i].action, want[i].name, want[i].callID, rec.Action, rec.Name, rec.CallID)
+		}
+	}
+	// 事件发射（ai:tool-status）数量与记录一致
+	if len(*emitted) != len(want) {
+		t.Fatalf("emitted 应为 %d 条，实际 %d 条: %v", len(want), len(*emitted), *emitted)
 	}
 }

@@ -28,12 +28,12 @@ const osSubAgentInstruction = `你是操作系统任务执行子 Agent，负责�
 边界：
 - 仅允许操作 ~/.jot/workspace/ 工作区内的路径（路径合法性由各工具自行校验，越界会被拒绝）。
 - 文件与命令之外的诉求（笔记读写、联网搜索、向用户提问等）不要自行处理，在最终回复中说明「该诉求由主 Agent 处理」。
-- 危险操作（如 run_command 命中黑名单）会请求用户确认；被拒绝时请改用其他方式完成，或向用户说明原因后避开该操作。
+- 危险操作（如 run_command 命中黑名单）可能触发用户确认（取决于当前审批模式）；若被拒绝请改用其他方式完成，或向用户说明原因后避开该操作。
 
-任务完成时给出结构化摘要：做了什么、关键结果、遗留问题。`
+任务完成时给出简洁的结构化摘要（控制篇幅）：做了什么、关键结果、遗留问题。`
 
 // osSubAgentToolNames 内层白名单：11 个文件/命令工具（即原先直接注册在父层的文件工具家族）。
-// 顺序即注册顺序。disabled 参数当前不改变此白名单（旧禁用名静默忽略，符合 spec），保留供将来扩展。
+// 顺序即注册顺序。
 var osSubAgentToolNames = []string{
 	"read_file", "write_file", "edit_file", "ls_dir", "glob", "grep_file",
 	"copy_file", "move_file", "delete_file", "mkdir_dir", "run_command",
@@ -53,6 +53,6 @@ var osAgentConfig = subAgentConfig{
 }
 
 // buildOSSubAgent 构造 os_agent 委托工具（registry.go 装配入口；chatModel 为 nil 或构造失败返回 nil）。
-func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, disabled map[string]bool) *delegatedAgentTool {
-	return newDelegatedAgentTool(runCtx, chatModel, innerCtx, disabled, osAgentConfig)
+func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context) *delegatedAgentTool {
+	return newDelegatedAgentTool(runCtx, chatModel, innerCtx, osAgentConfig)
 }
