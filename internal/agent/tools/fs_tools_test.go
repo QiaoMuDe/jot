@@ -265,6 +265,29 @@ func TestLsDir(t *testing.T) {
 			t.Fatal("越权路径应报错")
 		}
 	})
+
+	t.Run("detail=true 附大小与修改时间", func(t *testing.T) {
+		out, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"detail":true}`)
+		if err != nil {
+			t.Fatalf("ls_dir 失败: %v", err)
+		}
+		if !strings.Contains(out, "文件: a.txt  大小: 1 B  修改: ") {
+			t.Errorf("详情输出应含文件大小与修改时间前缀，实际:\n%s", out)
+		}
+		if !strings.Contains(out, "目录: sub  大小: -  修改: ") {
+			t.Errorf("目录详情输出大小应为 -，实际:\n%s", out)
+		}
+	})
+
+	t.Run("缺省 detail 不含大小与修改时间", func(t *testing.T) {
+		out, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"sub"}`)
+		if err != nil {
+			t.Fatalf("ls_dir 失败: %v", err)
+		}
+		if strings.Contains(out, "大小:") || strings.Contains(out, "修改:") {
+			t.Errorf("未指定 detail 不应出现大小/修改时间，实际:\n%s", out)
+		}
+	})
 }
 
 // TestReadFileLineNumbers 验证 read_file 的 line_numbers 输出：缺省无前缀、

@@ -4,7 +4,8 @@ package tools
 // 目录的**直接子项**（单层、不含递归）。要查看更深的内容，模型以该子目录作为
 // 新的 path 再次调用即可，逐步钻取。经 fsToolBase 做路径边界校验并经 os.Root
 // 目录句柄列举（第二道防逃逸），输出按 rune 上限有界缓冲（目录下条目极多时即
-// 在写入前提前截断），避免刷屏或内存放大。
+// 在写入前提前截断），避免刷屏或内存放大。detail=true 时每行额外附大小与修改
+// 时间（默认仅列名称，保持简洁并节省有界输出的 token 预算）。
 
 import (
 	"context"
@@ -24,6 +25,9 @@ const maxLsDirRunes = 20000
 
 // lsDirHeadroomRunes ls_dir 提前停止收集的剩余阈值。
 const lsDirHeadroomRunes = 2000
+
+// lsDirTimeFormat 详情模式下修改时间的显示格式（本地时间）。
+const lsDirTimeFormat = "2006-01-02 15:04:05"
 
 // lsDirTool 列出工作目录内某目录直接子项的工具。
 type lsDirTool struct {
@@ -51,11 +55,16 @@ func (t *lsDirTool) ActionText(argumentsInJSON string) string {
 func (t *lsDirTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "ls_dir",
-		Desc: "像 ls 一样列出一个目录的直接内容（单层，目录与文件各一行）；不带 path 时列出工作目录根，要钻取更深请以目标子目录作为 path 再次调用。",
+		Desc: "像 ls 一样列出一个目录的直接内容（单层，目录与文件各一行）；不带 path 时列出工作目录根，要钻取更深请以目标子目录作为 path 再次调用。detail=true 时每行额外附大小与修改时间。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"path": {
 				Type:     schema.String,
 				Desc:     "要列出的目录路径，缺省为工作目录根；相对 ~/.jot/workspace 或为其内绝对路径",
+				Required: false,
+			},
+			"detail": {
+				Type:     schema.Boolean,
+				Desc:     "是否输出详情（每行附大小与修改时间），缺省 false 仅列名称",
 				Required: false,
 			},
 		}),
@@ -63,14 +72,16 @@ func (t *lsDirTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 }
 
 // InvokableRun 执行目录列举：边界校验 → os.ReadDir 读取直接子项 → 按
-// "目录: 名称" / "文件: 名称" 逐行输出，超长截断。只列当前层，不递归。
+// "目录: 名称" / "文件: 名称" 逐行输出，detail=true 时每行附"大小: x / 修改:
+// 时间"（目录大小无意义显示 -，Info 失败降级为 ?）；超长截断。只列当前层。
 func (t *lsDirTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	// 用户取消检查
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
 	var args struct {
-		Path string `json:"path"`
+		Path   string `json:"path"`
+		Detail bool   `json:"detail"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 ls_dir 参数失败: %w", err)
@@ -116,6 +127,18 @@ func (t *lsDirTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ 
 			typeName = "目录"
 		}
 		line := typeName + ": " + d.Name()
+		if args.Detail {
+			// 大小/修改时间取自 d.Info()（纯标准库）；目录大小无意义显示 "-"，
+			// 个别条目 Info 失败（如权限）降级为 "?"，不中断整个列举。
+			sizeStr, modStr := "-", "?"
+			if info, err := d.Info(); err == nil {
+				if !d.IsDir() {
+					sizeStr = formatSize(info.Size())
+				}
+				modStr = info.ModTime().Format(lsDirTimeFormat)
+			}
+			line += "  大小: " + sizeStr + "  修改: " + modStr
+		}
 		if remaining := maxLsDirRunes - cumRunes; remaining < lsDirHeadroomRunes {
 			return b.String() + "\n[目录内容过多，已提前停止列举]", nil
 		}
