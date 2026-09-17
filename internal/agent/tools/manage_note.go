@@ -70,18 +70,7 @@ func normalizeNoteFileExt(raw string) (string, error) {
 	return "." + s, nil
 }
 
-// isManageNoteWriteAction 判断 action 是否为写操作（须用户确认后才执行）。
-// create 视为用户明确要求的创建指令不强制确认；读操作 list/view 无需确认。
-func isManageNoteWriteAction(action string) bool {
-	switch action {
-	case "update", "edit", "pin", "move", "add_tag", "remove_tag":
-		return true
-	default:
-		return false
-	}
-}
-
-// manageNoteActionCN 返回 action 的中文文案（供强制确认引导提示使用），未知 action 回退"操作"。
+// manageNoteActionCN 返回 action 的中文文案（供审批摘要使用），未知 action 回退"操作"。
 func manageNoteActionCN(action string) string {
 	switch action {
 	case "update":
@@ -99,6 +88,82 @@ func manageNoteActionCN(action string) string {
 	default:
 		return "操作"
 	}
+}
+
+// manageNoteApprovalSummary 构建写操作的审批摘要：以 manageNoteActionCN 的动作文案为
+// 前缀，附目标详情（单条显示笔记编号与变更内容、批量显示笔记数量与目标笔记本/标签）。
+// noteIDs 为已解析的有效笔记编号（调用方保证非空）；notebookID/tagID 为目标笔记本/标签，
+// title/find/replace 用于 update/edit 的变更内容展示，便于用户判断改了什么。
+func manageNoteApprovalSummary(action string, noteIDs []uint, notebookID, tagID float64, title, find, replace string) string {
+	// 单条操作：附笔记编号与目标详情
+	if len(noteIDs) == 1 {
+		id := noteIDs[0]
+		switch action {
+		case "update":
+			if t := strings.TrimSpace(title); t != "" {
+				return fmt.Sprintf("更新笔记 #%d 的标题为「%s」", id, t)
+			}
+			return fmt.Sprintf("更新笔记 #%d 的标题/扩展名", id)
+		case "edit":
+			if f := strings.TrimSpace(find); f != "" {
+				return fmt.Sprintf("编辑笔记 #%d 的正文（查找「%s」→ 替换「%s」）", id, summaryTruncate(f, 30), summaryTruncate(replace, 30))
+			}
+			return fmt.Sprintf("编辑笔记 #%d 的正文", id)
+		case "pin":
+			return fmt.Sprintf("置顶或取消置顶笔记 #%d", id)
+		case "move":
+			if notebookID > 0 {
+				return fmt.Sprintf("移动笔记 #%d 到笔记本 #%d", id, uint(notebookID))
+			}
+			return fmt.Sprintf("移动笔记 #%d", id)
+		case "add_tag":
+			if tagID > 0 {
+				return fmt.Sprintf("给笔记 #%d 添加标签 #%d", id, uint(tagID))
+			}
+			return fmt.Sprintf("给笔记 #%d 添加标签", id)
+		case "remove_tag":
+			if tagID > 0 {
+				return fmt.Sprintf("从笔记 #%d 移除标签 #%d", id, uint(tagID))
+			}
+			return fmt.Sprintf("从笔记 #%d 移除标签", id)
+		}
+	}
+	// 批量操作：move / add_tag / remove_tag 支持批量，附笔记数量与目标详情；
+	// update / edit / pin 批量场景后续校验会报错，此处仅展示数量
+	if len(noteIDs) > 1 {
+		n := len(noteIDs)
+		switch action {
+		case "move":
+			if notebookID > 0 {
+				return fmt.Sprintf("批量移动 %d 篇笔记到笔记本 #%d", n, uint(notebookID))
+			}
+			return fmt.Sprintf("批量移动 %d 篇笔记", n)
+		case "add_tag":
+			if tagID > 0 {
+				return fmt.Sprintf("批量给 %d 篇笔记添加标签 #%d", n, uint(tagID))
+			}
+			return fmt.Sprintf("批量给 %d 篇笔记添加标签", n)
+		case "remove_tag":
+			if tagID > 0 {
+				return fmt.Sprintf("批量从 %d 篇笔记移除标签 #%d", n, uint(tagID))
+			}
+			return fmt.Sprintf("批量从 %d 篇笔记移除标签", n)
+		default:
+			return fmt.Sprintf("%s（%d 篇笔记）", manageNoteActionCN(action), n)
+		}
+	}
+	// noteIDs 理论上非空（调用方前置校验保证），此处兜底返回动作基础文案
+	return manageNoteActionCN(action) + "（笔记）"
+}
+
+// summaryTruncate 截断审批摘要片段到 maxRunes 个 rune（超长追加省略号），
+// 防止 edit 的长 find/replace 正文撑爆审批弹窗展示。
+func summaryTruncate(s string, maxRunes int) string {
+	r := []rune(s)
+	if len(r) <= maxRunes {
+		return s
+	}
+	return string(r[:maxRunes]) + "…"
 }
 
 // resolveNoteIDs 从 ids 数组中提取有效笔记 ID：过滤 <= 0 的无效值，返回去重后的 []uint。
@@ -163,7 +228,7 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_note",
-		Desc: "管理用户笔记库（写/管理工具）。当用户要求创建笔记、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。浏览/搜索笔记库、查看笔记全文请使用 browse_notes（读取工具）；与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 browse_notes 的 view 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag 支持批量操作。强制确认：update / edit / pin / move / add_tag / remove_tag 均属写操作，执行前必须先向用户确认修改意图——在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户提问，用户明确同意后再携带 confirm=true 调用本工具；未携带 confirm=true 时工具会拒绝执行并提示先确认（create 为用户明确要求的创建指令，无需确认）。笔记的编号 id 来自 browse_notes 的 list 返回值中的 [数字]。",
+		Desc: "管理用户笔记库（写/管理工具）。当用户要求创建笔记、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。浏览/搜索笔记库、查看笔记全文请使用 browse_notes（读取工具）；与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 browse_notes 的 view 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag 支持批量操作。写操作（update / edit / pin / move / add_tag / remove_tag）将按当前审批模式弹出确认面板，用户批准后才执行；create 为用户明确要求的创建指令，无需确认。笔记的编号 id 来自 browse_notes 的 list 返回值中的 [数字]。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -238,11 +303,6 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 				Desc:     "标签编号（正整数，manage_tag 列表中的 [数字] 即为 id），action=add_tag / remove_tag 时必填",
 				Required: false,
 			},
-			"confirm": {
-				Type:     schema.Boolean,
-				Desc:     "用户确认标记：update / edit / pin / move / add_tag / remove_tag 等写操作执行前必须先向用户确认修改意图，用户明确同意后传 true 才执行；缺省 false 时工具会拒绝执行并引导先确认",
-				Required: false,
-			},
 		}),
 	}, nil
 }
@@ -264,7 +324,6 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		TagIDs     []float64 `json:"tag_ids"`
 		IDs        []float64 `json:"ids"`
 		TagID      float64   `json:"tag_id"`
-		Confirm    bool      `json:"confirm"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 manage_note 参数失败: %w", err)
@@ -281,18 +340,31 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		return "", ctx.Err()
 	}
 
-	// 写操作强制确认：update / edit / pin / move / add_tag / remove_tag 均须携带
-	// confirm=true（用户已明确同意）才执行；缺省 false 时拒绝执行并引导先向用户确认。
-	// 返回正常结果（nil error）而非 error，避免被包装器记为 tool_error 失败态。
-	if !args.Confirm && isManageNoteWriteAction(args.Action) {
-		if m.ctx != nil && m.ctx.Logger != nil {
-			m.ctx.Logger.Debugw("Agent manage_note 写操作待确认",
-				fastlog.String("action", args.Action))
+	// 写操作审批：update / edit / pin / move / add_tag / remove_tag 在分发前经
+	// Approver 按当前审批模式请求用户批准（create 与读操作不审批直接分发）。
+	// 审批前先做写操作基本参数校验，避免无效请求（缺 ids/目标）弹出无意义审批窗。
+	// critical 分级：edit 恒为高危；move / add_tag / remove_tag 批量（多篇笔记）
+	// 为高危、单条为常规；update / pin 为常规。
+	switch args.Action {
+	case "update", "edit", "pin", "move", "add_tag", "remove_tag":
+		noteIDs := resolveNoteIDs(args.IDs)
+		if len(noteIDs) == 0 {
+			return "", fmt.Errorf("manage_note %s 缺少有效的 ids", args.Action)
 		}
-		return "该操作需要用户确认：manage_note 的 " + manageNoteActionCN(args.Action) +
-			" 属于写操作，执行前必须先征得用户同意。" +
-			"请在回复正文中说明要执行的具体操作与影响，并调用 ask_user 工具向用户确认；" +
-			"用户明确同意后，携带 confirm=true 重新调用本工具即可执行。", nil
+		if args.Action == "move" && args.NotebookID <= 0 {
+			return "", errors.New("manage_note move 缺少有效的 notebook_id")
+		}
+		if (args.Action == "add_tag" || args.Action == "remove_tag") && args.TagID <= 0 {
+			return "", fmt.Errorf("manage_note %s 缺少有效的 tag_id", args.Action)
+		}
+		critical := args.Action == "edit"
+		if args.Action == "move" || args.Action == "add_tag" || args.Action == "remove_tag" {
+			critical = len(noteIDs) > 1
+		}
+		summary := manageNoteApprovalSummary(args.Action, noteIDs, args.NotebookID, args.TagID, args.Title, args.Find, args.Replace)
+		if err := m.requestApproval(ctx, summary, critical); err != nil {
+			return "", err
+		}
 	}
 
 	if m.ctx != nil && m.ctx.Logger != nil {
@@ -319,6 +391,23 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		return m.removeTag(args.IDs, args.TagID)
 	}
 	return "", fmt.Errorf("manage_note 未知 action: %s", args.Action)
+}
+
+// requestApproval 通过 Context.Approver 请求用户审批；拒绝时返回拒绝错误文本，
+// 调用方不执行写操作。critical 表示是否为不可绕过的危险操作（批量结构性变更等），
+// 透传给审批实现。
+//
+// ctx 为空（测试/独立调用的裸工具、无审批机制）时视为放行；但 ctx 非空而
+// Approver 未注入（已装配工具上下文却缺审批器）属于生产装配遗漏——审批会被
+// 静默跳过，导致写操作未确认即执行，因此此时直接报错而非放行。
+func (m *manageNoteTool) requestApproval(ctx context.Context, summary string, critical bool) error {
+	if m.ctx == nil {
+		return nil
+	}
+	if m.ctx.Approver == nil {
+		return errors.New("manage_note 需要审批确认，但当前未配置审批机制")
+	}
+	return m.ctx.Approver.RequestApproval(ctx, "manage_note", summary, critical)
 }
 
 // createNote 创建笔记：title / content 必填（trim 后非空）；file_ext 缺省 ".md"（不强制校验格式）；

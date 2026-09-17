@@ -9,10 +9,13 @@ package tools
 // http/https 公网地址；② CheckRedirect 对每个重定向目标逐跳 isPrivateHost 校验；
 // ③ DialContext 在拨号前解析出全部 IP 逐个校验并直连已校验 IP（DNS rebinding 防护）。
 // 三层防护的共享实现见 ssrf.go（与 read_url 共用 newGuardedHTTPClient）。
+// 所有请求（含 GET）执行前经 Approver 审批门控：GET 为常规操作（critical=false），
+// POST/PUT/DELETE/PATCH 为高危写操作（critical=true）。
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,7 +91,7 @@ func (h *httpRequestTool) ActionText(argumentsInJSON string) string {
 func (h *httpRequestTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "http_request",
-		Desc: "调用 HTTP API 并返回原始响应（状态行、关键响应头与响应体）。当需要调用第三方 REST API（如查询天气/翻译/汇率等开放接口）、发送 POST/PUT 请求、或需要自定义请求头与原始响应体时调用；若只是阅读网页正文请改用 read_url。注意：仅支持 http/https 公网地址；4xx/5xx 也会原样返回，请依据状态码推理。",
+		Desc: "调用 HTTP API 并返回原始响应（状态行、关键响应头与响应体）。当需要调用第三方 REST API（如查询天气/翻译/汇率等开放接口）、发送 POST/PUT 请求、或需要自定义请求头与原始响应体时调用；若只是阅读网页正文请改用 read_url。注意：仅支持 http/https 公网地址；4xx/5xx 也会原样返回，请依据状态码推理。所有请求按当前审批模式门控：GET 为常规操作，写方法（POST/PUT/DELETE/PATCH）为高危需确认。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
@@ -159,7 +162,19 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 		}
 	}
 
-	// 4. 构造请求：GET 或 body 为空时不携带请求体（GET 的 body 被忽略）
+	// 4. 审批门控：参数校验（method 白名单 / body 长度 / URL 公网）通过后，
+	// 所有请求执行前请求用户批准——GET 为常规操作（critical=false），
+	// POST/PUT/DELETE/PATCH 为高危外部写操作（critical=true）。
+	critical := method != http.MethodGet
+	summary := fmt.Sprintf("发送 %s 请求到 %s", method, TruncateRunes(target, 60))
+	if critical && args.Body != "" {
+		summary += fmt.Sprintf("，请求体：%s", TruncateRunes(args.Body, 100))
+	}
+	if err := h.requestApproval(ctx, summary, critical); err != nil {
+		return "", err
+	}
+
+	// 5. 构造请求：GET 或 body 为空时不携带请求体（GET 的 body 被忽略）
 	var bodyReader io.Reader
 	if method != http.MethodGet && args.Body != "" {
 		bodyReader = strings.NewReader(args.Body)
@@ -169,7 +184,7 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 		return "", fmt.Errorf("构造请求失败: %w", err)
 	}
 
-	// 5. 应用自定义请求头：Host 由 net/http 依据 URL 管理，跳过避免冲突
+	// 6. 应用自定义请求头：Host 由 net/http 依据 URL 管理，跳过避免冲突
 	for k, v := range args.Headers {
 		if strings.EqualFold(k, "Host") {
 			continue
@@ -186,7 +201,7 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 		req.Header.Set("User-Agent", browserUserAgent)
 	}
 
-	// 6. 发送请求：用户取消时原样返回取消错误（外层不误报工具失败）
+	// 7. 发送请求：用户取消时原样返回取消错误（外层不误报工具失败）
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
@@ -197,7 +212,7 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// 7. 读取响应体（限 1MB，防止超大响应撑爆内存）
+	// 8. 读取响应体（限 1MB，防止超大响应撑爆内存）
 	body, err := io.ReadAll(io.LimitReader(resp.Body, httpMaxBodyBytes))
 	if err != nil {
 		if ctx.Err() != nil {
@@ -206,7 +221,7 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 		return "", fmt.Errorf("读取响应失败: %w", err)
 	}
 
-	// 8. 组织输出：状态行 + 最终地址（重定向时） + 关键响应头 + 响应体
+	// 9. 组织输出：状态行 + 最终地址（重定向时） + 关键响应头 + 响应体
 	// （二进制省略、文本按设置截断）
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", resp.Proto, resp.Status)
@@ -254,6 +269,19 @@ func (h *httpRequestTool) invoke(ctx context.Context, client *http.Client, args 
 // DNS 校验，仅供测试访问 httptest 本机服务器。
 func (h *httpRequestTool) buildClient(guardDial bool) *http.Client {
 	return newGuardedHTTPClient(httpTimeout, guardDial)
+}
+
+// requestApproval 请求用户批准 HTTP 请求执行：ctx 为 nil（裸工具/单测）直接放行；
+// Approver 未注入（生产装配遗漏）时 fail-fast 报错，避免静默放行外部写请求；
+// 否则按当前审批模式门控（GET 常规 critical=false；写方法高危 critical=true）。
+func (h *httpRequestTool) requestApproval(ctx context.Context, summary string, critical bool) error {
+	if h.ctx == nil {
+		return nil
+	}
+	if h.ctx.Approver == nil {
+		return errors.New("http_request 需要审批确认，但当前未配置审批机制")
+	}
+	return h.ctx.Approver.RequestApproval(ctx, "http_request", summary, critical)
 }
 
 // NewHTTP 创建 HTTP API 调用工具。

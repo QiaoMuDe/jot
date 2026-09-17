@@ -344,7 +344,25 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 对需用户确认的写/危险操作，工具通过共享的 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）请求审批，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，事件协议见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval`。
 
 - **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否命中黑名单：`false` 仅 confirm_every 模式确认；`true` 在 confirm_every/review 模式强制确认、auto 模式自动放行并留审计痕）。
+- **笔记管理工具写操作**：`manage_note` / `manage_notebook` / `manage_tag` / `manage_todo` 的写操作（**create 免确认**）同样经 `Context.Approver` 按当前审批模式（confirm_every / review / auto）弹出确认面板，批准后执行、拒绝时返回错误文本。其中 `manage_note` 另有 critical 分级：`edit` 恒为高危（critical=true）；`move` / `add_tag` / `remove_tag` 批量（多篇笔记，ids>1）为高危；`update` / `pin` 为常规（critical=false）；其余三个工具的写操作 critical=false。`http_request` 所有请求（含 GET）均接入门控：GET 为常规（critical=false），POST/PUT/DELETE/PATCH 为高危（critical=true）。`manage_memory` 豁免，不接入审批。
 - **判断标准**：是否触发审批、`critical` 取值，均由该工具自行定义并写在工具文件头注释与 `EVENTS.md` 中；本指南不在文件里逐工具罗列，避免与代码真相脱节。
+
+#### 如何给工具接入审批（步骤）
+
+1. **新增 `requestApproval` 帮助方法**（与 `manage_note` 同款模板，见 [manage_note.go](internal/agent/tools/manage_note.go#L403-L411)）：`ctx == nil`（裸工具/单测）直接放行；`ctx.Approver == nil`（生产装配遗漏）fail-fast 报错「<工具名> 需要审批确认，但当前未配置审批机制」，避免静默放行；否则调 `ctx.Approver.RequestApproval(ctx, "<工具名>", summary, critical)`。
+2. **在参数校验之后、写/危险操作执行前调用**：先完成方法/动作白名单、必填参数、长度、URL 等校验，再请求审批（先校验后审批，避免无效请求弹出无意义审批窗、摘要显示残缺值）。
+3. **构造可判断的摘要**：`方法/动作 + 目标 + 变更内容`，长内容用 `TruncateRunes` 截断（如 URL 60 rune、请求体 100 rune），让用户在审批面板能判断批准对象。
+4. **判定 `critical`**：破坏性/批量/不可撤销/外部副作用操作（如 edit 正文、批量 move、外部写请求）为 `true`；轻量修改（如 update 标题、toggle 待办）为 `false`；create 类创建指令豁免不接入。
+5. **审批失败即中止**：`requestApproval` 返回错误（拒绝/取消）时直接 `return "", err`，经 `WrapWithError` 回填模型继续推理；不要吞掉错误继续执行。
+
+#### 测试要求（接入审批的工具必测）
+
+复用同包 `mockApprover`（固定批准，[fs_tools_test.go](internal/agent/tools/fs_tools_test.go)）与 `rejectApprover`（固定拒绝，[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)），至少覆盖：
+
+- **批准放行**：`critical` 断言（如 GET=false / POST=true）、摘要含预期内容、写操作真实执行（落库/请求发出）。
+- **拒绝不落库**：返回拒绝错误、目标状态未变更、请求未发出。
+- **Approver 缺失 fail-fast**：`ctx` 非 nil 但 `Approver == nil` → 返回「未配置审批机制」错误。
+- **裸工具放行**：`ctx == nil` → 不报错、正常执行（既有无审批测试形态不受影响）。
 
 ---
 

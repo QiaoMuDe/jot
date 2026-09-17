@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -242,4 +243,122 @@ func TestHTTPRequestTruncation(t *testing.T) {
 	if strings.Contains(out, strings.Repeat("好", 10001)) {
 		t.Error("输出不应包含超过 10000 字符的正文")
 	}
+}
+
+// TestHTTPRequestApproval 验证 http_request 的审批门控：所有请求（含 GET）执行前
+// 经 Approver 审批——GET 为常规操作（critical=false），POST/PUT/DELETE/PATCH 为
+// 高危写操作（critical=true）；Approver 未注入时 fail-fast 报错；裸工具（ctx=nil）放行。
+func TestHTTPRequestApproval(t *testing.T) {
+	// 计数服务端：统计实际到达的请求数，用于断言拒绝路径未触网
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+
+	// newApprovalHTTPTool 构造带 Approver 的 http_request 工具（skipURLGuard 放行本机地址）
+	newApprovalHTTPTool := func(approver Approver) *httpRequestTool {
+		return &httpRequestTool{ctx: &Context{Approver: approver}, skipURLGuard: true}
+	}
+
+	t.Run("GET 批准放行", func(t *testing.T) {
+		hits = 0
+		mock := &mockApprover{}
+		h := newApprovalHTTPTool(mock)
+		out, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL})
+		if err != nil {
+			t.Fatalf("GET 请求失败: %v", err)
+		}
+		if !strings.Contains(out, "ok") {
+			t.Errorf("输出应包含响应体，实际:\n%s", out)
+		}
+		if mock.gotCritical {
+			t.Error("GET 应为常规操作（critical=false）")
+		}
+		if !strings.Contains(mock.gotSum, "GET") || !strings.Contains(mock.gotSum, srv.URL) {
+			t.Errorf("审批摘要应含 GET 与 URL，实际: %q", mock.gotSum)
+		}
+		if mock.gotTool != "http_request" {
+			t.Errorf("审批工具名 = %q, want http_request", mock.gotTool)
+		}
+		if hits != 1 {
+			t.Errorf("批准后请求应发出，hits = %d, want 1", hits)
+		}
+	})
+
+	t.Run("GET 拒绝", func(t *testing.T) {
+		hits = 0
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		h := newApprovalHTTPTool(rej)
+		_, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL})
+		if err == nil || !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Fatalf("GET 应返回拒绝错误，实际: %v", err)
+		}
+		if rej.gotSum == "" {
+			t.Error("审批器应被调用并记录摘要")
+		}
+		if hits != 0 {
+			t.Errorf("拒绝后请求不应发出，hits = %d, want 0", hits)
+		}
+	})
+
+	t.Run("POST critical=true", func(t *testing.T) {
+		hits = 0
+		mock := &mockApprover{}
+		h := newApprovalHTTPTool(mock)
+		if _, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL, Method: "POST", Body: `{"a":1}`}); err != nil {
+			t.Fatalf("POST 请求失败: %v", err)
+		}
+		if !mock.gotCritical {
+			t.Error("POST 应为高危写操作（critical=true）")
+		}
+		if !strings.Contains(mock.gotSum, "POST") {
+			t.Errorf("审批摘要应含 POST，实际: %q", mock.gotSum)
+		}
+		if !strings.Contains(mock.gotSum, "请求体") {
+			t.Errorf("带 body 的写请求摘要应含请求体，实际: %q", mock.gotSum)
+		}
+		if hits != 1 {
+			t.Errorf("批准后请求应发出，hits = %d, want 1", hits)
+		}
+	})
+
+	t.Run("POST 拒绝", func(t *testing.T) {
+		hits = 0
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		h := newApprovalHTTPTool(rej)
+		_, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL, Method: "POST"})
+		if err == nil || !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Fatalf("POST 应返回拒绝错误，实际: %v", err)
+		}
+		if hits != 0 {
+			t.Errorf("拒绝后请求不应发出，hits = %d, want 0", hits)
+		}
+	})
+
+	t.Run("Approver 缺失 fail-fast", func(t *testing.T) {
+		h := &httpRequestTool{ctx: &Context{}, skipURLGuard: true}
+		_, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL, Method: "POST"})
+		if err == nil || !strings.Contains(err.Error(), "未配置审批机制") {
+			t.Fatalf("Approver 缺失应 fail-fast 报错，实际: %v", err)
+		}
+	})
+
+	t.Run("裸工具放行", func(t *testing.T) {
+		hits = 0
+		h := &httpRequestTool{skipURLGuard: true} // ctx 为 nil，审批直接放行
+		out, err := h.invoke(ctx, h.buildClient(false), httpRequestArgs{URL: srv.URL})
+		if err != nil {
+			t.Fatalf("裸工具 GET 请求失败: %v", err)
+		}
+		if !strings.Contains(out, "ok") {
+			t.Errorf("输出应包含响应体，实际:\n%s", out)
+		}
+		if hits != 1 {
+			t.Errorf("裸工具请求应发出，hits = %d, want 1", hits)
+		}
+	})
 }

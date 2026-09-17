@@ -2277,10 +2277,13 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"2. 调用前先在正文中写出问题（正文即问句），调用后等待用户回答。\n" +
 			"3. 收到回答后继续完成原始请求，不要重复提问。\n")
 
-		// Agent 模式专用约束：写操作强制确认规范
-		instruction.WriteString("\n\n【工具使用规范 - 写操作强制确认】\n" +
-			"1. manage_note 的写操作（update/edit/pin/move/add_tag/remove_tag）执行前必须通过 ask_user 确认，用户同意后携带 confirm=true 执行。create 无需确认。\n" +
-			"2. 用户拒绝或撤回时不执行。\n")
+		// Agent 模式专用约束：写操作审批机制（代码强制，替代旧的 ask_user + confirm 引导）
+		// 管理工具的写操作已接入系统审批门控（confirm_every 全确认 / review 常规放行+高危确认 / auto 全放行留痕），
+		// 由后端按当前审批模式自动弹出确认面板，模型无需（也不能）携带 confirm 参数。
+		instruction.WriteString("\n\n【工具使用规范 - 写操作审批机制】\n" +
+			"1. manage_note / manage_notebook / manage_tag / manage_todo 的写操作（update/edit/pin/move/add_tag/remove_tag、rename、toggle 等）执行前由系统审批机制按当前审批模式自动确认，无需（也无法）携带 confirm 参数。\n" +
+			"2. create 类动作为用户明确要求的创建指令，不触发审批。\n" +
+			"3. 审批被拒绝时不得绕过或重复硬执行，应调整方案、向用户说明，或调用 ask_user 征询用户意图后重试。\n")
 
 		// Agent 模式专用约束：长期记忆主动维护规范
 		// 引导模型主动持久化用户偏好/事实/约定（manage_memory 工具的 AlwaysOn 保证其始终可用），

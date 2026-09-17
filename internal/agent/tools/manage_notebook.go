@@ -34,6 +34,22 @@ type manageNotebookTool struct {
 // 编译期断言：确保 manageNotebookTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageNotebookTool)(nil)
 
+// requestApproval 通过 Context.Approver 请求用户审批；拒绝时返回拒绝错误文本，
+// 调用方不执行写操作。critical 表示是否为不可绕过的危险操作，透传给审批实现。
+//
+// ctx 为空（测试/独立调用的裸工具、无审批机制）时视为放行；但 ctx 非空而
+// Approver 未注入（已装配工具上下文却缺审批器）属于生产装配遗漏——审批会被
+// 静默跳过，导致写操作未确认即执行，因此此时直接报错而非放行。
+func (m *manageNotebookTool) requestApproval(ctx context.Context, summary string, critical bool) error {
+	if m.ctx == nil {
+		return nil
+	}
+	if m.ctx.Approver == nil {
+		return errors.New("manage_notebook 需要审批确认，但当前未配置审批机制")
+	}
+	return m.ctx.Approver.RequestApproval(ctx, "manage_notebook", summary, critical)
+}
+
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
 // 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
 func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
@@ -59,7 +75,7 @@ func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
 func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_notebook",
-		Desc: "管理笔记本（笔记本是笔记的容器，用于组织分类笔记）。当用户要求创建笔记本、重命名笔记本或查看笔记本列表时调用。边界：manage_notebook 管理笔记本本身（创建/重命名/列出），manage_note 的 move 动作将笔记移动到目标笔记本；用户要新建/重命名文件夹用 manage_notebook，要移动笔记到文件夹用 manage_note（action=move）。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename。",
+		Desc: "管理笔记本（笔记本是笔记的容器，用于组织分类笔记）。当用户要求创建笔记本、重命名笔记本或查看笔记本列表时调用。边界：manage_notebook 管理笔记本本身（创建/重命名/列出），manage_note 的 move 动作将笔记移动到目标笔记本；用户要新建/重命名文件夹用 manage_notebook，要移动笔记到文件夹用 manage_note（action=move）。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename。写操作（rename）将按当前审批模式弹出确认面板，用户批准后才执行。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -144,6 +160,7 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 		}
 		return fmt.Sprintf("已创建笔记本 #%d：%s", nb.ID, nb.Name), nil
 	case "rename":
+		// 先参数校验，再审批，再执行：避免无效参数（id<=0、name 为空）先弹出无意义审批窗
 		if args.ID <= 0 {
 			return "", errors.New("manage_notebook 重命名笔记本缺少有效的 id")
 		}
@@ -152,6 +169,10 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 			return "", errors.New("manage_notebook 重命名笔记本缺少 name")
 		}
 		if err := validateTextLen("name", name, maxToolShortText); err != nil {
+			return "", err
+		}
+		// 写操作审批：参数校验通过后请求用户确认（create/list 豁免，按当前审批模式门控）
+		if err := m.requestApproval(ctx, fmt.Sprintf("重命名笔记本 #%d 为「%s」", int(args.ID), name), false); err != nil {
 			return "", err
 		}
 		nb, err := m.notebook.Update(uint(args.ID), name)

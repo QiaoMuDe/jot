@@ -37,6 +37,22 @@ type manageTodoTool struct {
 // 编译期断言：确保 manageTodoTool 实现了 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageTodoTool)(nil)
 
+// requestApproval 通过 Context.Approver 请求用户审批；拒绝时返回拒绝错误文本，
+// 调用方不执行写操作。critical 表示是否为不可绕过的危险操作，透传给审批实现。
+//
+// ctx 为空（测试/独立调用的裸工具、无审批机制）时视为放行；但 ctx 非空而
+// Approver 未注入（已装配工具上下文却缺审批器）属于生产装配遗漏——审批会被
+// 静默跳过，导致写操作未确认即执行，因此此时直接报错而非放行。
+func (m *manageTodoTool) requestApproval(ctx context.Context, summary string, critical bool) error {
+	if m.ctx == nil {
+		return nil
+	}
+	if m.ctx.Approver == nil {
+		return errors.New("manage_todo 需要审批确认，但当前未配置审批机制")
+	}
+	return m.ctx.Approver.RequestApproval(ctx, "manage_todo", summary, critical)
+}
+
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
 // 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
 func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
@@ -64,7 +80,7 @@ func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
 func (m *manageTodoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_todo",
-		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办或修改待办文本时调用。边界：待办（todo）用于管理任务清单，笔记（note）用于管理知识内容；用户要记待办/任务用 manage_todo，要记笔记/知识点用 manage_note。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update。",
+		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办或修改待办文本时调用。边界：待办（todo）用于管理任务清单，笔记（note）用于管理知识内容；用户要记待办/任务用 manage_todo，要记笔记/知识点用 manage_note。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update。写操作（toggle/update）将按当前审批模式弹出确认面板，用户批准后才执行。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -159,8 +175,13 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	case "list":
 		return m.listTodos(args.Status, int(args.Page), int(args.PageSize), args.Keyword)
 	case "toggle":
+		// 先参数校验，再审批，再执行：避免无效 id（<=0）先弹出无意义审批窗
 		if args.ID <= 0 {
 			return "", errors.New("manage_todo 勾选待办缺少有效的 id")
+		}
+		// 写操作审批：参数校验通过后请求用户确认（create/list 豁免，按当前审批模式门控）
+		if err := m.requestApproval(ctx, fmt.Sprintf("勾选/取消勾选待办 #%d", int(args.ID)), false); err != nil {
+			return "", err
 		}
 		t, err := m.todo.Toggle(uint(args.ID))
 		if err != nil {
@@ -171,6 +192,7 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		}
 		return fmt.Sprintf("待办 #%d：%s 已恢复为未完成", t.ID, t.Text), nil
 	case "update":
+		// 先参数校验，再审批，再执行：避免无效参数（id<=0、text 为空）先弹出无意义审批窗
 		if args.ID <= 0 {
 			return "", errors.New("manage_todo 更新待办缺少有效的 id")
 		}
@@ -179,6 +201,10 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 			return "", errors.New("manage_todo 更新待办缺少 text")
 		}
 		if err := validateTextLen("text", text, maxToolShortText); err != nil {
+			return "", err
+		}
+		// 写操作审批：参数校验通过后请求用户确认（create/list 豁免，按当前审批模式门控）
+		if err := m.requestApproval(ctx, fmt.Sprintf("修改待办 #%d 的文本", int(args.ID)), false); err != nil {
 			return "", err
 		}
 		t, err := m.todo.Update(uint(args.ID), text)

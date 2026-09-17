@@ -94,11 +94,13 @@ type AskWaiter interface {
 	WaitForAnswer(ctx context.Context) (string, error)
 }
 
-// Approver 工作目录工具（write_file/run_command）的审批拦截器：由父包 agentSession
-// 注入，供危险操作在真正执行前请求用户批准。critical=true 表示命令黑名单命中：
+// Approver 工作目录工具（write_file/run_command）以及 manage_note / manage_notebook /
+// manage_tag / manage_todo 等笔记管理工具写操作及 http_request 请求（GET 常规、写方法高危）
+// 的审批拦截器：由父包 agentSession 注入，供危险/写操作在真正执行前请求用户批准。critical=true 表示高危操作
+// （命令黑名单命中 / manage_note 的 edit 与批量 move、add_tag、remove_tag）：
 // confirm_every / review 模式强制确认；auto（完全访问）模式不阻塞、自动放行并写入
-// tool_auto_approval 审计留痕。critical=false 表示常规危险操作（如覆盖已存在文件），
-// 仅 confirm_every 模式需要确认，review/auto 模式自动放行。
+// tool_auto_approval 审计留痕。critical=false 表示常规危险/写操作（如覆盖已存在文件、
+// 更新笔记标题/置顶、勾选待办等），仅 confirm_every 模式需要确认，review/auto 模式自动放行。
 type Approver interface {
 	// RequestApproval 请求用户审批并阻塞等待决定；返回 nil=批准，
 	// 非 nil 错误文本=被拒绝（工具直接返回该错误，供回填模型）；
@@ -132,9 +134,11 @@ type Context struct {
 	AskWaiter AskWaiter // 非 nil 时 ask_user 工具阻塞等待用户回答（同轮续答）
 	PlanState *Plan     // 规划工具状态：create_plan 写入、update_plan 更新、GenModelInputFunc 读取注入
 
-	// Approver 工作目录工具（write_file/run_command 等）的审批钩子，非 nil 时
-	// 危险操作（覆盖已存在文件 / 命中命令黑名单）在真正执行前需取得用户批准。
-	// critical=true（黑名单命中）即使 auto/review 模式也必须确认，不可绕过。
+	// Approver 工作目录工具（write_file/run_command）及 manage_note / manage_notebook /
+	// manage_tag / manage_todo 等笔记管理工具写操作及 http_request 请求（GET 常规、写方法高危）
+	// 的审批钩子，非 nil 时危险/写操作在真正执行前需取得用户批准（create 豁免）。
+	// critical=true（黑名单命中 / manage_note 高危写操作）在 confirm_every/review 模式
+	// 强制确认；auto 模式自动放行并写入 tool_auto_approval 审计留痕。
 	Approver Approver
 
 	// SkippedPlanUpdate 标记上一轮是否执行了工具但未调用 update_plan，

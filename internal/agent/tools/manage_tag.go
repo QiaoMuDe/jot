@@ -35,6 +35,22 @@ type manageTagTool struct {
 // 编译期断言：确保实现 tool.InvokableTool。
 var _ tool.InvokableTool = (*manageTagTool)(nil)
 
+// requestApproval 通过 Context.Approver 请求用户审批；拒绝时返回拒绝错误文本，
+// 调用方不执行写操作。critical 表示是否为不可绕过的危险操作，透传给审批实现。
+//
+// ctx 为空（测试/独立调用的裸工具、无审批机制）时视为放行；但 ctx 非空而
+// Approver 未注入（已装配工具上下文却缺审批器）属于生产装配遗漏——审批会被
+// 静默跳过，导致写操作未确认即执行，因此此时直接报错而非放行。
+func (m *manageTagTool) requestApproval(ctx context.Context, summary string, critical bool) error {
+	if m.ctx == nil {
+		return nil
+	}
+	if m.ctx.Approver == nil {
+		return errors.New("manage_tag 需要审批确认，但当前未配置审批机制")
+	}
+	return m.ctx.Approver.RequestApproval(ctx, "manage_tag", summary, critical)
+}
+
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）：
 // 按 action 参数映射动作文案，解析失败回退空串（前端回退"执行"）。
 func (m *manageTagTool) ActionText(argumentsInJSON string) string {
@@ -63,7 +79,7 @@ var tagColorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 func (m *manageTagTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_tag",
-		Desc: "管理标签（标签是笔记的附属属性，用于分类筛选笔记）。当用户要求创建标签、查看标签列表或更新标签时调用。边界：manage_tag 管理标签本身（创建/重命名/改色），manage_note 的 add_tag/remove_tag 动作管理笔记与标签的关联；给笔记打标签用 manage_note（action=add_tag），管理标签定义用本工具。通过 action 参数区分动作：create=创建标签（需提供 name 标签名称，可提供 color 颜色，格式 #RRGGBB，缺省 #3b82f6）；list=列出全部标签（无额外参数）；update=更新标签（需提供 id 标签编号，可提供 name 新名称或 color 新颜色，至少其一）。返回标签列表或操作结果，列表中的编号 [数字] 可用于后续笔记标签操作或 update。",
+		Desc: "管理标签（标签是笔记的附属属性，用于分类筛选笔记）。当用户要求创建标签、查看标签列表或更新标签时调用。边界：manage_tag 管理标签本身（创建/重命名/改色），manage_note 的 add_tag/remove_tag 动作管理笔记与标签的关联；给笔记打标签用 manage_note（action=add_tag），管理标签定义用本工具。通过 action 参数区分动作：create=创建标签（需提供 name 标签名称，可提供 color 颜色，格式 #RRGGBB，缺省 #3b82f6）；list=列出全部标签（无额外参数）；update=更新标签（需提供 id 标签编号，可提供 name 新名称或 color 新颜色，至少其一）。返回标签列表或操作结果，列表中的编号 [数字] 可用于后续笔记标签操作或 update。写操作（update）将按当前审批模式弹出确认面板，用户批准后才执行。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -103,6 +119,11 @@ func (m *manageTagTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	}
 	args.Action = strings.TrimSpace(args.Action)
 
+	// 用户取消检查：父包事件循环随 ctx 终止，工具直接返回 ctx.Err()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	if m.ctx != nil && m.ctx.Logger != nil {
 		m.ctx.Logger.Debugw("Agent manage_tag 调用",
 			fastlog.String("action", args.Action),
@@ -117,7 +138,23 @@ func (m *manageTagTool) InvokableRun(ctx context.Context, argumentsInJSON string
 	case "list":
 		return m.listTags(ctx)
 	case "update":
-		return m.updateTag(ctx, args.ID, args.Name, args.Color)
+		// 先参数校验，再审批，再执行：避免无效参数（id<=0、name/color 全空、color 非法）先弹出无意义审批窗
+		if args.ID <= 0 {
+			return "", errors.New("manage_tag 更新标签缺少有效的 id")
+		}
+		name := strings.TrimSpace(args.Name)
+		color := strings.TrimSpace(args.Color)
+		if name == "" && color == "" {
+			return "", errors.New("manage_tag 更新标签需至少提供 name 或 color")
+		}
+		if color != "" && !tagColorPattern.MatchString(color) {
+			return "", fmt.Errorf("manage_tag 参数非法 color: %s（应为 #RRGGBB 格式）", color)
+		}
+		// 写操作审批：参数校验通过后请求用户确认（create/list 豁免，按当前审批模式门控）
+		if err := m.requestApproval(ctx, fmt.Sprintf("更新标签 #%d（名称/颜色）", int(args.ID)), false); err != nil {
+			return "", err
+		}
+		return m.updateTag(ctx, args.ID, name, color)
 	}
 	return "", fmt.Errorf("manage_tag 未知 action: %s", args.Action)
 }
