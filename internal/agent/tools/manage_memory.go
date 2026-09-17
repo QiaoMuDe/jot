@@ -73,7 +73,7 @@ func (m *memoryTool) ActionText(argumentsInJSON string) string {
 func (m *memoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_memory",
-		Desc: "管理长期记忆（跨会话持久记忆，用于保存用户偏好、重要事实、约定等需要在后续对话中长期记住的信息）。当用户明确要求记住某信息、询问你记得/保存了什么，或需要删除/修改一条此前保存的记忆时调用；当任务只需本条会话的一次性信息、或信息来源可从本地笔记/待办等既有数据读取时不要调用（会污染长期记忆）。通过 action 参数区分动作：create=新增记忆（需提供 summary 简短描述，用于注入；可提供 content 详情，均可为空）；update=更新记忆（需提供 id 记忆编号，可提供新 summary 或 content，至少其一）；delete=删除记忆（需提供 ids 记忆编号列表，可一次删除多条）；get=查询单条记忆详情（需提供 id 记忆编号）；list=列出全部记忆（无额外参数，返回每条记忆的编号/描述/详情摘要）。",
+		Desc: "管理长期记忆（跨会话持久记忆，用于保存用户偏好、重要事实、约定等需要长期记的信息）。当用户明确要求记住某信息、询问你记得/保存了什么，需要删除/修改一条此前保存的记忆，或发现需要跨会话固化的用户偏好/事实时调用；避免仅因任务用得到就保存琐碎、一次性、可随时从本地笔记/待办/网页重新获取的信息（会污染长期记忆）。通过 action 参数区分动作：create=新增记忆（需提供 summary 简短描述，用于注入；可提供 content 详情，均可为空）；update=更新记忆（需提供 id 记忆编号，可提供新 summary 或 content，至少其一）；delete=删除记忆（需提供 ids 记忆编号列表，可一次删除多条）；get=查询单条记忆详情（需提供 id 记忆编号）；list=列出全部记忆（无额外参数，返回每条记忆的编号/描述/详情摘要）。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

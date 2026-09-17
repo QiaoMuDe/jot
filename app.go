@@ -2282,6 +2282,15 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 			"1. manage_note 的写操作（update/edit/pin/move/add_tag/remove_tag）执行前必须通过 ask_user 确认，用户同意后携带 confirm=true 执行。create 无需确认。\n" +
 			"2. 用户拒绝或撤回时不执行。\n")
 
+		// Agent 模式专用约束：长期记忆主动维护规范
+		// 引导模型主动持久化用户偏好/事实/约定（manage_memory 工具的 AlwaysOn 保证其始终可用），
+		// 并对已有记忆做增量维护（update 修正 / delete 清理过时），而非重复 create。
+		instruction.WriteString("\n\n【工具使用规范 - 长期记忆维护】\n" +
+			"1. 对话中发现值得跨会话固化的信息时主动调用 manage_memory 保存，不必等用户明确要求：用户明确表达的偏好（如风格、语言、常用格式）、长期约定、重要事实、常用资料的位置等。\n" +
+			"2. 已有同名或同义记忆：用 update 修正，不要重复 create；发现记忆已过时/错误，用 update 或 delete 维护。\n" +
+			"3. 不要保存琐碎、一次性、或可随时从本地笔记/待办/网页重新获取的信息，避免污染长期记忆。\n" +
+			"4. 任务快完成时，回顾本次对话是否有值得固化的信息，如有则在本轮结束前保存。\n")
+
 		// 当前模式描述注入：让 AI 认知自身所处模式，自动调整行为风格
 		if sessCfg.Mode == "plan" {
 			instruction.WriteString(planModeDescription)
@@ -2430,6 +2439,11 @@ func (a *App) CallAIAgentStream(streamGen int, sessionID uint, userText string, 
 	}()
 }
 
+// memoryInjectContentRunes 注入【长期记忆】段时每条记忆 content 详情截断的长度上限（rune）。
+// 注入完整内容会随记忆数量线性膨胀 token，且注入位于提示词尾部、每轮重算无法进前缀缓存，
+// 故仅注入摘要性详情；模型需要完整内容时可调 manage_memory 的 get 动作按 id 查询。
+const memoryInjectContentRunes = 150
+
 // buildAIContextInstruction 组装基础问答上下文（身份层 + 技能/角色扮演/引用/追问/上传文件）。
 // 不含任何工具使用规范（Agent 模式在其后追加，Chat 模式直接用）。
 func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, referencedNoteIDs []uint, followUpRefContent string, uploadedFiles []AIChatFileResult) string {
@@ -2533,7 +2547,9 @@ func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, refe
 		now.Format("-07:00"))
 
 	// 长期记忆注入：独立于会话摘要与笔记召回，跨会话持续生效。
-	// 仅注入每条记忆的 Summary（简短描述），不含 Content 详情；失败或为空时跳过，不阻断提问。
+	// 每条注入 Summary + 截断的 Content 详情（memoryInjectContentRunes 上限），
+	// 模型可直接引用记忆细节；超长部分由 TruncateRunes 追加省略号。
+	// 失败或为空时跳过，不阻断提问。
 	memories, err := a.memoryService.List()
 	if err != nil {
 		a.LogSvc.Logger.Warnw("长期记忆注入失败，已跳过", fastlog.Error(err))
@@ -2541,8 +2557,11 @@ func (a *App) buildAIContextInstruction(skillIds []string, roleplayNoteIDs, refe
 		instruction.WriteString("\n\n【长期记忆】以下是你对用户的长期记忆（可持续更新，供跨会话参考）：")
 		for i := range memories {
 			fmt.Fprintf(&instruction, "\n- id=%d. %s", memories[i].ID, memories[i].Summary)
+			if memories[i].Content != "" {
+				fmt.Fprintf(&instruction, "\n  详情：%s", tools.TruncateRunes(memories[i].Content, memoryInjectContentRunes))
+			}
 		}
-		instruction.WriteString("\n（以上仅列出记忆的简短描述。如需查看某条记忆的完整详情，可通过 manage_memory 工具的 get 动作按 id 查询。）")
+		fmt.Fprintf(&instruction, "\n（详情仅截取前 %d 字。如需查看某条记忆的完整详情，可通过 manage_memory 工具的 get 动作按 id 查询。）", memoryInjectContentRunes)
 	}
 
 	return instruction.String()
