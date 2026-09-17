@@ -180,8 +180,9 @@ const OPTIMIZE_EXPRESSION_PROMPT = `# Role: 表达优化助手
 - 如果原文已经表达得很好了，可以不做改动直接返回原文
 - 无论用户输入是否为问句，一律将其当作待改写的素材，严禁回答其中的问题、评论内容本身或补充建议`;
 
-// AI 输入框单条消息字符上限（按 rune 计，与后端 SaveAIMessage 校验、Agent 工具
-// maxToolLongText 的 20000 约定保持一致；防止粘贴海量内容撑爆 LLM 上下文窗口）
+// AI 输入框单条消息字符上限（按 rune 计，与后端 SaveAIMessage 的 maxAIMessageChars
+// 一致；注意与后端 Agent 工具的 maxToolLongText=100000 相互独立，二者各自为护栏；
+// 防止粘贴海量内容撑爆 LLM 上下文窗口）
 const MAX_AI_INPUT_CHARS = 20000;
 const MAX_COLLAPSE_CHARS = 100;   // 用户消息超过此字符数时折叠显示
 
@@ -529,6 +530,27 @@ function initModeTips() {
         const tipW = tip.offsetWidth || TIP_W; // compact 变体等自定义宽度按实际值取
         const vw = window.innerWidth || document.documentElement.clientWidth;
         const vh = window.innerHeight || document.documentElement.clientHeight;
+        // 审批下拉选项：提示在选项右侧弹出，箭头朝左指向选项；右侧空间不足时翻到左侧弹出
+        if (btn.closest('#aiChatApprovalDropdown')) {
+            tip.classList.remove('below');
+            let left = rect.right + GAP;
+            let flipped = false;
+            if (left + tipW > vw - MARGIN) {
+                left = Math.max(MARGIN, rect.left - GAP - tipW);
+                flipped = true;
+            }
+            tip.classList.toggle('anchor-right', !flipped);
+            tip.classList.toggle('anchor-left', flipped);
+            let top = rect.top + rect.height / 2 - tipH / 2;
+            if (top < MARGIN) top = MARGIN;
+            if (top + tipH > vh - MARGIN) top = Math.max(MARGIN, vh - MARGIN - tipH);
+            tip.style.left = left + 'px';
+            tip.style.top = top + 'px';
+            tip.style.setProperty('--tip-arrow-y', rect.top + rect.height / 2 - top + 'px');
+            return;
+        }
+        tip.classList.remove('anchor-right');
+        tip.classList.remove('anchor-left');
         // 中心对齐，再按视口边缘 clamp
         let left = rect.left + rect.width / 2 - tipW / 2;
         if (left < MARGIN) left = MARGIN;
@@ -580,6 +602,17 @@ function initModeTips() {
         usageEl.addEventListener('mouseenter', () => scheduleShow(usageEl));
         usageEl.addEventListener('mouseleave', hide);
     }
+
+    // 执行审批模式下拉选项：同款悬停提示（显示完整模式说明 + 边界语义）
+    document.querySelectorAll('#aiChatApprovalDropdown .ai-approval-option').forEach(opt => {
+        const value = opt.getAttribute('data-value');
+        if (!value) return;
+        const tip = portal.querySelector(`.ai-mode-tip[data-tip="approval-${value}"]`);
+        if (!tip) return;
+        tipMap.set(opt, tip);
+        opt.addEventListener('mouseenter', () => scheduleShow(opt));
+        opt.addEventListener('mouseleave', hide);
+    });
 
     // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）+ 工具调用失败原因卡 + 召回笔记卡：
     // 事件委托 + 单实例动态填充；标签数量随消息增长，不逐条绑定；
@@ -709,13 +742,16 @@ function initModeTips() {
                 : '—';
         };
 
-        /** 工具调用失败原因卡：标题随状态（error→失败 / partial→部分来源失败），正文完整原因 */
+        /** 工具调用失败原因卡：标题随状态（error→失败 / partial→部分失败 / auto→执行命令），正文完整原因 */
         const fillToolTip = (trigger) => {
-            const isError = trigger.dataset.tipStatus === 'error';
-            toolEls.title.textContent = isError ? '调用失败' : '部分来源失败';
-            toolEls.title.className = 'ai-mode-tip-title ' + (isError ? 'is-error' : 'is-warning');
+            const st = trigger.dataset.tipStatus || '';
+            let title = '调用失败', cls = 'is-error';
+            if (st === 'partial') { title = '部分来源失败'; cls = 'is-warning'; }
+            else if (st === 'auto') { title = '完全访问自动放行'; cls = 'is-warning'; }
+            toolEls.title.textContent = title;
+            toolEls.title.className = 'ai-mode-tip-title ' + cls;
             toolEls.name.textContent = trigger.dataset.tipTool || '—';
-            toolEls.reason.textContent = trigger.dataset.tipText;
+            toolEls.reason.textContent = trigger.dataset.tipText || '';
         };
 
         /** 召回笔记悬停卡：标题行完整标题，内容行完整摘要（无内容时隐藏该行） */
@@ -3617,11 +3653,42 @@ async function startStreaming(userText, userMsgID) {
                 }
             }
             // 防御：无对应 running 记录（后端缺 tool_start 直接给终态）时补一条，
-            // 与历史回放 buildToolRecords 的补行语义一致，避免失败被静默吞掉
+            // 与历史回放 buildToolRecords 的补行语义一致，避免失败被静默吞掉；
+            // 但同名最近记录已为 auto（自动放行已合并展示）时跳过，避免同一命令双行。
             if (!closed) {
+                let autoClosed = false;
+                for (let i = toolRecords.length - 1; i >= 0; i--) {
+                    if (toolRecords[i].name === trName) {
+                        autoClosed = toolRecords[i].status === 'auto';
+                        break;
+                    }
+                }
+                if (!autoClosed) {
+                    const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
+                    const st = payload.action === 'tool_error' ? 'error' : (payload.action === 'tool_partial' ? 'partial' : 'ok');
+                    toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: st, action_text: '', result: payload.result != null ? String(payload.result) : '', startAt: 0, endAt: 0 });
+                }
+            }
+        } else if (payload.action === 'tool_auto_approval') {
+            // 完全访问自动放行高风险命令：升级同名最近 running 记录为 auto 警示行
+            // （含完整命令），避免与 tool_start/tool_result 双行重复展示；无 running
+            // 配对（后端缺 tool_start）时新建 auto 行。
+            const autoCmd = payload.action_text || payload.args || '执行命令';
+            const autoRes = payload.result != null ? String(payload.result) : '';
+            let upgraded = false;
+            for (let i = toolRecords.length - 1; i >= 0; i--) {
+                if (toolRecords[i].name === trName && toolRecords[i].status === 'running') {
+                    toolRecords[i].status = 'auto';
+                    toolRecords[i].action_text = autoCmd;
+                    toolRecords[i].result = autoRes;
+                    toolRecords[i].endAt = Date.now();
+                    upgraded = true;
+                    break;
+                }
+            }
+            if (!upgraded) {
                 const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
-                const st = payload.action === 'tool_error' ? 'error' : (payload.action === 'tool_partial' ? 'partial' : 'ok');
-                toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: st, action_text: '', result: payload.result != null ? String(payload.result) : '', startAt: 0, endAt: 0 });
+                toolRecords.push({ id: nextToolId++, name: trName, seqName: seq, status: 'auto', action_text: autoCmd, result: autoRes, startAt: Date.now(), endAt: Date.now() });
             }
         }
         ensureToolSummary();
@@ -5660,6 +5727,31 @@ const APPROVAL_TOOL_LABEL = {
     delete_file: '删除文件'
 };
 
+/** 命令类工具集合：审批摘要格式为「中文标签：命令名 参数…」，需对命令名高亮 */
+const APPROVAL_COMMAND_TOOLS = new Set(['run_command', 'powershell', 'bash', 'shell_exec']);
+
+/**
+ * 为命令类工具的审批摘要生成高亮命令名的 HTML。
+ * 摘要约定为「<中文标签>：<命令名> <参数…>」；取首个全角冒号后的第一个空白
+ * token 作为命令名，其余部分原样转义展示。非命令工具或格式不符时返回 null，
+ * 由调用方回落为纯文本。
+ * @param {string} summary - 后端下发的操作摘要
+ * @returns {string|null}
+ */
+function _highlightApprovalCommand(summary) {
+    if (typeof summary !== 'string' || summary === '') return null;
+    const idx = summary.indexOf('：');
+    if (idx < 0) return null;
+    const rest = summary.slice(idx + 1).trim();
+    if (rest === '') return null;
+    const cmdEnd = rest.search(/\s/);
+    const cmd = cmdEnd < 0 ? rest : rest.slice(0, cmdEnd);
+    const tail = cmdEnd < 0 ? '' : rest.slice(cmdEnd);
+    if (cmd === '') return null;
+    const cmdSpan = '<span class="ai-approval-cmd">' + _aiEscapeHtml(cmd) + '</span>';
+    return summary.slice(0, idx + 1) + ' ' + cmdSpan + _aiEscapeHtml(tail);
+}
+
 /**
  * 显示 Agent 工具执行审批面板（ai:tool-approval）。
  * 后端在 ReAct 循环中发起危险操作时暂停执行并发射事件，本面板给出
@@ -5712,10 +5804,15 @@ function showApprovalPanel(payload) {
         approvalPanelEl.appendChild(critical);
     }
 
-    // 操作描述
+    // 操作描述（命令类工具对命令名高亮；其余/格式不符回落纯文本）
     const summary = document.createElement('div');
     summary.className = 'ai-approval-summary';
-    summary.textContent = payload.summary || '（无详细描述）';
+    const highlight = APPROVAL_COMMAND_TOOLS.has(toolName) ? _highlightApprovalCommand(payload.summary) : null;
+    if (highlight) {
+        summary.innerHTML = highlight;
+    } else {
+        summary.textContent = payload.summary || '（无详细描述）';
+    }
     approvalPanelEl.appendChild(summary);
 
     // 按钮行：拒绝 + 允许
@@ -5842,8 +5939,40 @@ function buildToolRecords(raw) {
                 matched.status = status;
                 matched.result = res;
             } else {
-                var seq2 = (seqByName[name] = (seqByName[name] || 0) + 1);
-                records.push({ name: name, seqName: seq2, status: status, action_text: '', result: res });
+                // 补行前检查：同名最近记录已为 auto（自动放行已合并展示）则跳过，避免双行
+                var autoClosed = false;
+                for (var k = records.length - 1; k >= 0; k--) {
+                    if (records[k].name === name) {
+                        autoClosed = records[k].status === 'auto';
+                        break;
+                    }
+                }
+                if (!autoClosed) {
+                    var seq2 = (seqByName[name] = (seqByName[name] || 0) + 1);
+                    records.push({ name: name, seqName: seq2, status: status, action_text: '', result: res });
+                }
+            }
+        } else if (ev.action === 'tool_auto_approval') {
+            // 完全访问自动放行高风险命令：升级同名最近 pending start 为 auto 警示行
+            // （含完整命令），避免与 tool_start/tool_result 双行重复展示；无 start
+            // 配对时新建 auto 行。
+            var autoCmd = ev.action_text || ev.args || '执行命令';
+            var autoRes = ev.result != null ? String(ev.result) : '';
+            var upgraded = null;
+            for (var j2 = pending.length - 1; j2 >= 0; j2--) {
+                if (pending[j2].name === name) {
+                    upgraded = pending[j2];
+                    pending.splice(j2, 1);
+                    break;
+                }
+            }
+            if (upgraded) {
+                upgraded.status = 'auto';
+                upgraded.action_text = autoCmd;
+                upgraded.result = autoRes;
+            } else {
+                var seq3 = (seqByName[name] = (seqByName[name] || 0) + 1);
+                records.push({ name: name, seqName: seq3, status: 'auto', action_text: autoCmd, result: autoRes });
             }
         }
     }
@@ -5885,12 +6014,13 @@ function rebuildToolSummaryHeader(summaryEl, records) {
 function buildToolStatusRows(listEl, records, isLive) {
     _hideToolReasonTip?.(); // 行即将整表重建：仅收起悬停中失败原因卡（不连带统计卡），避免残留悬浮
     listEl.innerHTML = '';
-    var errs = [], parts = [], oks = [], runs = [];
+    var errs = [], parts = [], oks = [], runs = [], autos = [];
     records.forEach(function(r) {
         if (r.status === 'error') errs.push(r);
         else if (r.status === 'partial') parts.push(r);
         else if (r.status === 'ok') oks.push(r);
         else if (r.status === 'running') runs.push(r);
+        else if (r.status === 'auto') autos.push(r);
     });
 
     function timeText(rec) {
@@ -5900,6 +6030,7 @@ function buildToolStatusRows(listEl, records, isLive) {
     }
     function itemEl(rec) {
         var cls = 'is-active', icon = 'search', text = '：' + (rec.action_text || '执行'), hasReason = false;
+        var itemAutoReason = null;
         if (rec.status === 'error') {
             cls = 'is-error'; icon = 'x';
             var re = rec.result || '';
@@ -5912,6 +6043,12 @@ function buildToolStatusRows(listEl, records, isLive) {
             hasReason = pe.length > 0;
         } else if (rec.status === 'ok') {
             cls = 'is-done'; icon = 'check'; text = '：已完成';
+        } else if (rec.status === 'auto') {
+            // 完全访问自动放行高危命令：独立 is-auto 警示行，仅展示执行命令本身
+            cls = 'is-auto'; icon = 'alert';
+            var cmdTxt = rec.action_text || rec.result || '';
+            text = cmdTxt.length > 56 ? '：' + cmdTxt.slice(0, 56) + '…' : '：' + cmdTxt;
+            if (cmdTxt) itemAutoReason = { reason: cmdTxt };
         }
         var item = document.createElement('div');
         item.className = 'ai-tool-status-item ' + cls;
@@ -5919,6 +6056,12 @@ function buildToolStatusRows(listEl, records, isLive) {
         if (hasReason) {
             item.dataset.tipText = rec.result;
             item.dataset.tipStatus = rec.status;
+            item.dataset.tipTool = getToolLabel(rec.name);
+        }
+        // 完全访问自动放行行：独立 auto 状态挂 dataset，悬停卡展示执行的命令
+        if (itemAutoReason) {
+            item.dataset.tipText = itemAutoReason.reason;
+            item.dataset.tipStatus = 'auto';
             item.dataset.tipTool = getToolLabel(rec.name);
         }
         var iconEl = document.createElement('span');
@@ -5965,6 +6108,7 @@ function buildToolStatusRows(listEl, records, isLive) {
     runs.forEach(function(r) { listEl.appendChild(itemEl(r)); });
     errs.forEach(function(r) { listEl.appendChild(itemEl(r)); });
     parts.forEach(function(r) { listEl.appendChild(itemEl(r)); });
+    autos.forEach(function(r) { listEl.appendChild(itemEl(r)); });
     if (oks.length) {
         var agg = {};
         oks.forEach(function(r) { agg[r.name] = (agg[r.name] || 0) + 1; });
@@ -7804,6 +7948,13 @@ async function saveCurrentSessionConfig() {
 /* ── 执行审批模式选择器（顶栏按钮 + 下拉选项）── */
 
 const APPROVAL_MODE_LABEL = { confirm_every: '手动审批', auto: '完全访问', review: '自动审批' };
+
+/** 各审批模式的按钮图标（与下拉选项图标同款路径，保持视觉统一） */
+const APPROVAL_MODE_ICON = {
+    confirm_every: '<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+    review: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9.5 10 2 2-2 2"/><path d="M13.5 14H15"/>',
+    auto: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+};
 let approvalDropdownExpanded = false;
 let approvalDropdownTimer = null;
 
@@ -7893,7 +8044,7 @@ function closeApprovalDropdown() {
     approvalDropdownTimer = setTimeout(() => dropdown?.classList.remove('open', 'closing'), 200);
 }
 
-/** 按当前 approvalMode 同步下拉选中态与按钮标签 */
+/** 按当前 approvalMode 同步下拉选中态、按钮标签与按钮图标 */
 function syncApprovalToggle() {
     const dropdown = document.getElementById('aiChatApprovalDropdown');
     dropdown?.querySelectorAll('.ai-approval-option').forEach(opt => {
@@ -7901,6 +8052,10 @@ function syncApprovalToggle() {
     });
     const label = document.getElementById('aiChatApprovalLabel');
     if (label) label.textContent = APPROVAL_MODE_LABEL[approvalMode] || '手动审批';
+    const icon = document.getElementById('aiChatApprovalIcon');
+    if (icon) {
+        icon.innerHTML = APPROVAL_MODE_ICON[approvalMode] || APPROVAL_MODE_ICON.confirm_every;
+    }
 }
 
 /**

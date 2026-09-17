@@ -198,12 +198,14 @@ func (sess *agentSession) drainApproval() {
 var _ tools.Approver = (*agentSession)(nil)
 
 // RequestApproval 实现 tools.Approver：按会话审批模式决定是否需要真正向用户确认。
-// critical==true（破坏性命令/高风险 net 子命令，不可绕过）时无论何模式都会阻塞确认；
-// critical==false（覆盖已存在文件等常规危险操作）仅 confirm_every 模式阻塞，
-// review/auto 模式自动放行返回 nil。需要确认时抢占审批名额、发射 ai:tool-approval
-// 事件并阻塞等待 ApproveToolCall 投递决定。批准返回 nil，拒绝返回中文错误文本（经
-// wrappedTool 落成 tool_error 记录并回填模型继续推理），ctx 取消返回 ctx.Err()。
-// 批准/拒绝决定后会追加一条 tool_approval 记录留痕（经 appendRecord），不影响拒绝语义。
+// critical==true（命令黑名单命中）时 confirm_every / review 模式阻塞确认；
+// auto（完全访问）模式不阻塞，自动放行并写 tool_auto_approval 审计留痕（见
+// recordAutoApproval）。critical==false（覆盖已存在文件等常规危险操作）仅
+// confirm_every 模式阻塞，review/auto 模式自动放行返回 nil。需要确认时抢占审批
+// 名额、发射 ai:tool-approval 事件并阻塞等待 ApproveToolCall 投递决定。批准返回 nil，
+// 拒绝返回中文错误文本（经 wrappedTool 落成 tool_error 记录并回填模型继续推理），
+// ctx 取消返回 ctx.Err()。批准/拒绝决定后会追加一条 tool_approval 记录留痕（经
+// appendRecord），不影响拒绝语义。
 //
 // 防御：真正需要确认但 sess.emit==nil（缺少事件通道，无法向用户发起审批）时，
 // 直接返回错误而非永久阻塞。
@@ -215,8 +217,17 @@ func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary
 	if mode != "confirm_every" && mode != "review" && mode != "auto" {
 		mode = "confirm_every"
 	}
-	// 常规危险操作（非不可绕过）在 review/auto 模式下自动放行，不阻塞
-	if !critical && (mode == "review" || mode == "auto") {
+	// 决定是否发起阻塞式审批确认：
+	//   confirm_every               → 一律阻塞；
+	//   review + critical=true      → 黑名单命令仍阻塞确认（不可绕过的最后防线）；
+	//   其余（普通命令在 review/auto，以及 auto 模式下的所有命令）→ 自动放行。
+	needConfirm := mode == "confirm_every" || (critical && mode == "review")
+	if !needConfirm {
+		// 完全访问模式自动放行黑名单命令：不打断、不弹提示，写入详细留痕记录，
+		// 明确标注这是"未经人工确认的高风险命令自动放行"，供事后审计。
+		if critical && mode == "auto" {
+			sess.recordAutoApproval(toolName, summary)
+		}
 		return nil
 	}
 	// 用户取消优先
@@ -278,6 +289,27 @@ func (sess *agentSession) recordApproval(toolName, summary string, approved bool
 		rec.Result = "已被用户拒绝"
 	}
 	sess.appendRecord(rec)
+}
+
+// recordAutoApproval 完全访问模式下自动放行高风险（黑名单命中）操作时的详细留痕。
+// 与普通审批留痕（tool_approval）区分：用独立 action=tool_auto_approval，
+// 并明确标注"未经人工确认、完全访问自动放行的高风险命令"，供事后审计可追溯。
+// 双写：appendRecord 落库审计记录 + emit ai:tool-status 事件驱动前端渲染该条独立高亮行。
+func (sess *agentSession) recordAutoApproval(toolName, summary string) {
+	rec := tools.Record{
+		Action:     "tool_auto_approval",
+		Name:       toolName,
+		ActionText: summary,
+		Args:       tools.TruncateRunes(summary, tools.MaxResultLen),
+		Result:     "完全访问模式自动放行（高危命令，未经人工确认）",
+	}
+	if sess.appendRecord != nil {
+		sess.appendRecord(rec)
+	}
+	if sess.emit != nil {
+		b, _ := json.Marshal(rec)
+		sess.emit("ai:tool-status", string(b))
+	}
 }
 
 // claimApproval 原子抢占审批名额：已有审批在等待时返回错误（模型同条消息并行

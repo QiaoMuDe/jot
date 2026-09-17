@@ -24,9 +24,9 @@ const MaxResultLen = 500
 
 // 文本字段长度上限：防止模型传入超长文本浪费 token 或触发 DB 字段越界报错。
 const (
-	maxToolShortText = 500   // 短文本字段上限：标题/名称/关键字/搜索词/URL/问句/颜色等
-	maxToolFindLen   = 2000  // edit 片段替换 find 原文片段上限
-	maxToolLongText  = 20000 // 正文级字段上限：content / replace
+	maxToolShortText = 500    // 短文本字段上限：标题/名称/关键字/搜索词/URL/问句/颜色等
+	maxToolFindLen   = 2000   // edit 片段替换 find 原文片段上限
+	maxToolLongText  = 100000 // 正文级字段上限：content / replace
 )
 
 // validateTextLen 校验文本字段长度（按 rune 计），超长返回描述性错误供回填模型。
@@ -95,9 +95,10 @@ type AskWaiter interface {
 }
 
 // Approver 工作目录工具（write_file/run_command）的审批拦截器：由父包 agentSession
-// 注入，供危险操作在真正执行前请求用户批准。critical=true 表示命令黑名单命中
-// （即使 auto 模式也必须确认，作为不可绕过的最后防线）；critical=false 表示常规
-// 危险操作（如覆盖已存在文件），仅 confirm_every 模式需要确认，review/auto 模式自动放行。
+// 注入，供危险操作在真正执行前请求用户批准。critical=true 表示命令黑名单命中：
+// confirm_every / review 模式强制确认；auto（完全访问）模式不阻塞、自动放行并写入
+// tool_auto_approval 审计留痕。critical=false 表示常规危险操作（如覆盖已存在文件），
+// 仅 confirm_every 模式需要确认，review/auto 模式自动放行。
 type Approver interface {
 	// RequestApproval 请求用户审批并阻塞等待决定；返回 nil=批准，
 	// 非 nil 错误文本=被拒绝（工具直接返回该错误，供回填模型）；

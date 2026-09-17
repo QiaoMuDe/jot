@@ -339,7 +339,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 对需用户确认的写/危险操作，工具通过共享的 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）请求审批，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，事件协议见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval`。
 
-- **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否**不可绕过**：`false` 可拒绝、`true` 必须强制确认）。
+- **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否命中黑名单：`false` 仅 confirm_every 模式确认；`true` 在 confirm_every/review 模式强制确认、auto 模式自动放行并留审计痕）。
 - **判断标准**：是否触发审批、`critical` 取值，均由该工具自行定义并写在工具文件头注释与 `EVENTS.md` 中；本指南不在文件里逐工具罗列，避免与代码真相脱节。
 
 ---

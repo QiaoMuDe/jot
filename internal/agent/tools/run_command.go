@@ -4,8 +4,9 @@ package tools
 // 内执行可执行命令及其参数数组。它刻意不支持 shell 语法（管道/重定向/&&/;/
 // 通配符等）——需要复杂逻辑应先 write_file 编写脚本再用对应解释器执行。
 // cwd 仅允许工作目录内子目录或缺省（固定为工作目录根）；每次执行都先经
-// Context.Approver 请求审批，critical（是否不可绕过、任何审批模式都必须确认）
-// 由 highRiskTokens 判定：命令基名或任一参数 token 命中高危关键字即 critical=true。
+// Context.Approver 请求审批，critical（是否命中黑名单：confirm_every / review 模式
+// 必须确认，auto 模式自动放行并留审计痕）由 highRiskTokens 判定：命令基名或任一
+// 参数 token 命中高危关键字即 critical=true。
 //
 // 高危判定为"护栏"语义而非隔离：它是让用户对危险命令/脚本执行保留最后否决权，
 // 对抗性（改名、脚本包裹、python -c 等）可绕过；真正硬边界依赖 confirm_every 模式。
@@ -90,6 +91,7 @@ func commandBaseName(command string) string {
 	base = strings.TrimSuffix(base, ".exe")
 	base = strings.TrimSuffix(base, ".bat")
 	base = strings.TrimSuffix(base, ".cmd")
+	base = strings.TrimSuffix(base, ".ps1")
 	return base
 }
 
@@ -100,11 +102,17 @@ func IsDestructiveCommand(command string) bool {
 }
 
 // matchArgTokens 遍历参数并切分出 token，命中高危关键字即返回 true。
-// 参数内嵌空白（如 cmd 的 /c "del x"）也会被切词，避免拼接型参数漏网。
+// 参数内嵌空白（如 cmd 的 /c "del x"）也会被切词，避免拼接型参数漏网；
+// 对 "flag=value" 形式（如 --force=x）额外拆出 "=" 前的 flag 单独命中检查，
+// 避免带值参数绕过 --force / --yes 等整词黑名单。
 func matchArgTokens(args []string) bool {
 	for _, a := range args {
 		for _, f := range strings.Fields(a) {
 			if hasHighRiskToken(f) {
+				return true
+			}
+			// --flag=value：拆出 "=" 前的 flag（如 --force、--yes）再查一次
+			if i := strings.IndexByte(f, '='); i > 0 && hasHighRiskToken(f[:i]) {
 				return true
 			}
 		}
@@ -205,10 +213,10 @@ func (t *runCommandTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		}
 	}
 
-	// 审批检查点：每次命令执行都先请求审批，是否不可绕过由 CommandNeedsApproval
+	// 审批检查点：每次命令执行都先请求审批，是否命中黑名单由 CommandNeedsApproval
 	// （命令基名或任一参数 token 命中 highRiskTokens）决定。
-	// critical=true=破坏/解释器/高危子命令，任何审批模式都必须确认（不可绕过）；
-	// critical=false=普通命令，仅 confirm_every 模式确认，review/auto 自动放行。
+	// critical=true=破坏/解释器/高危子命令，confirm_every / review 模式必须确认，
+	// auto 模式自动放行并留审计痕；critical=false=普通命令，仅 confirm_every 模式确认。
 	summary := strings.TrimSpace(strings.Join(args.Args, " "))
 	if err := t.requestApproval(ctx, "run_command", "执行命令："+command+" "+summary, CommandNeedsApproval(command, args.Args)); err != nil {
 		return "", err

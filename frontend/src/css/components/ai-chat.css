@@ -673,6 +673,20 @@
     color: var(--warning, #d97706);
 }
 
+/* 完全访问自动放行高危命令：警示强调行（warning 色 tint 底 + 图标/文本着色），突出"未经人工确认"的高风险 */
+.ai-tool-status-item.is-auto {
+    background: color-mix(in srgb, var(--warning) 12%, var(--hover-bg));
+}
+.ai-tool-status-item.is-auto .ai-tool-status-icon {
+    color: var(--warning, #d97706);
+}
+.ai-tool-status-item.is-auto .ai-tool-status-text {
+    color: var(--warning, #d97706);
+}
+.ai-tool-status-item.is-auto .ai-tool-status-name {
+    color: var(--warning, #d97706);
+}
+
 /* 失败行强调：长调用链中突出（危险色 tint 底 + 工具名着色），非 color-only（含 ✗ 图标与文案）。
    背景不用 --error-bg（较亮主题下近白/白透粉、观感差），改为 --error 混入行底色自适应的
    危险色调，深浅主题均清晰且不像"白的"。 */
@@ -1497,6 +1511,42 @@
     margin-top: 0;
     margin-bottom: -1px;
     border-bottom-color: var(--card-bg);
+}
+
+/* 右侧弹出（审批模式下拉选项）：箭头朝左，垂直居中指向触发元素 */
+.ai-mode-tip.anchor-right::before,
+.ai-mode-tip.anchor-right::after {
+    top: auto;
+    left: auto;
+    right: 100%;
+    top: var(--tip-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-right-color: var(--border);
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+}
+.ai-mode-tip.anchor-right::after {
+    margin-top: 0;
+    margin-right: -1px;
+    border-right-color: var(--card-bg);
+}
+
+/* 左侧弹出（审批下拉选项右侧空间不足时）：箭头朝右，垂直居中指向触发元素 */
+.ai-mode-tip.anchor-left::before,
+.ai-mode-tip.anchor-left::after {
+    top: auto;
+    left: 100%;
+    right: auto;
+    top: var(--tip-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-left-color: var(--border);
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+}
+.ai-mode-tip.anchor-left::after {
+    margin-top: 0;
+    margin-left: -1px;
+    border-left-color: var(--card-bg);
 }
 
 .ai-mode-tip-title {
@@ -4912,6 +4962,19 @@
     background: var(--scrollbar-thumb);
     border-radius: 3px;
     min-height: 30px;
+}
+
+/* 命令名高亮（命令类工具）：以主题强调色着色，自动适配各主题（仅字体颜色，无背景） */
+.ai-approval-summary .ai-approval-cmd {
+    display: inline-block;
+    padding: 0 2px;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent-dark);
+    white-space: nowrap;
+    vertical-align: baseline;
+    letter-spacing: 0.2px;
 }
 
 /* 按钮行：拒绝靠左、允许靠右（与 ask 输入行同间距） */

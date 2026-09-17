@@ -272,7 +272,8 @@ func TestDrainApprovalRemovesStale(t *testing.T) {
 
 // TestRequestApprovalModeGating 验证审批模式门控：
 // review/auto + critical=false 直接放行（不阻塞）；confirm_every + critical=false 会阻塞；
-// critical=true 无论何模式都会阻塞；非法模式按 confirm_every 处理（阻塞）。
+// critical=true：confirm_every / review 阻塞，auto（完全访问）自动放行且仅留痕；
+// 非法模式按 confirm_every 处理（阻塞）。
 // 通过可注入的 loadApprovalMode 驱动。
 func TestRequestApprovalModeGating(t *testing.T) {
 	svc := NewAgentService(Deps{})
@@ -309,8 +310,9 @@ func TestRequestApprovalModeGating(t *testing.T) {
 	unlock()
 	wg.Wait()
 
-	// critical=true：无论何模式都会阻塞确认（不可绕过的最后防线）
-	for _, mode := range []string{"review", "auto", "confirm_every"} {
+	// critical=true：confirm_every / review 阻塞确认（不可绕过的最后防线）；
+	// auto（完全访问）不再阻塞，改为自动放行并发非阻塞告警事件。
+	for _, mode := range []string{"review", "confirm_every"} {
 		sess.loadApprovalMode = func() string { return mode }
 		wg.Add(1)
 		go func() {
@@ -320,6 +322,40 @@ func TestRequestApprovalModeGating(t *testing.T) {
 		waitApprovalPending(t, sess)
 		unlock()
 		wg.Wait()
+	}
+
+	// auto + critical=true：不阻塞直接放行；发射 ai:tool-status(tool_auto_approval)
+	// 审计事件，并追加一条 tool_auto_approval 留痕记录（明确"未经人工确认自动放行"）。
+	sess.loadApprovalMode = func() string { return "auto" }
+	statusCh := make(chan string, 1)
+	sess.emit = func(event, data string) {
+		if event == "ai:tool-status" {
+			statusCh <- data
+		}
+	}
+	var records []tools.Record
+	sess.appendRecord = func(rec tools.Record) { records = append(records, rec) }
+	if err := sess.RequestApproval(ctx, "run_command", "rm -rf", true); err != nil {
+		t.Fatalf("auto + critical=true 应自动放行，got %v", err)
+	}
+	// 应发射 ai:tool-status 的 tool_auto_approval 审计事件
+	select {
+	case data := <-statusCh:
+		if !strings.Contains(data, "tool_auto_approval") {
+			t.Fatalf("自动放行应发射 tool_auto_approval 审计事件，got：%s", data)
+		}
+	default:
+		t.Fatal("auto 自动放行应发射 tool_auto_approval 审计事件")
+	}
+	// 应追加一条 tool_auto_approval 的详细留痕记录（明确未经人工确认放行）
+	if len(records) != 1 {
+		t.Fatalf("auto 自动放行应写入 1 条留痕记录，got %d", len(records))
+	}
+	if records[0].Action != "tool_auto_approval" {
+		t.Fatalf("留痕记录 action 不符：%+v", records[0])
+	}
+	if !strings.Contains(records[0].Result, "自动放行") {
+		t.Fatalf("留痕记录未标注自动放行：%+v", records[0])
 	}
 
 	// 非法模式：按 confirm_every 处理（critical=false 仍会阻塞）

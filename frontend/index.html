@@ -1265,7 +1265,7 @@
                             <!-- 执行审批模式（仅 Agent/Plan 模式显示，与工具按钮显隐一致） -->
                             <div class="ai-chat-approval-wrap" id="aiChatApprovalWrap">
                                 <button class="ai-chat-toolbar-btn ai-chat-approval-btn" id="aiChatApprovalBtn" title="执行审批模式" aria-expanded="false" aria-controls="aiChatApprovalDropdown">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+                                    <svg id="aiChatApprovalIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
                                     <span id="aiChatApprovalLabel">手动审批</span>
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </button>
@@ -1275,7 +1275,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>手动审批</span></div>
-                                            <div class="ai-approval-desc">重要操作由你确认</div>
+                                            <div class="ai-approval-desc">每次操作都需你确认</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -1283,7 +1283,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9.5 10 2 2-2 2"/><path d="M13.5 14H15"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>自动审批</span></div>
-                                            <div class="ai-approval-desc">由 AI 审核，必要时再询问你</div>
+                                            <div class="ai-approval-desc">常规操作自动执行，高风险再询问你</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -1291,7 +1291,7 @@
                                         <div class="ai-approval-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                                         <div class="ai-approval-body">
                                             <div class="ai-approval-name"><span>完全访问</span></div>
-                                            <div class="ai-approval-desc">不经审批，直接在本机运行</div>
+                                            <div class="ai-approval-desc">不经审批直接运行，高风险仅提示</div>
                                         </div>
                                         <svg class="ai-approval-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
@@ -2791,6 +2791,19 @@ console.log(greet("Jot"));
         <span class="ai-mode-tip-title">历史对话压缩进度</span>
         <span class="ai-mode-tip-line"><em>当前：</em><span id="aiContextUsageTipDetail">—</span></span>
         <span class="ai-mode-tip-line">达到预算的 <span id="aiContextUsageTipTrigger">80%</span> 时自动压缩更早的历史（生成会话摘要）。</span>
+    </div>
+    <!-- 执行审批模式三选项的同款悬停提示（initModeTips 绑定下拉选项） -->
+    <div class="ai-mode-tip" data-tip="approval-confirm_every">
+        <span class="ai-mode-tip-title">手动审批</span>
+        <span class="ai-mode-tip-line">Agent 每次调用工具都会弹出审批面板，需你手动允许或拒绝，最安全。</span>
+    </div>
+    <div class="ai-mode-tip" data-tip="approval-review">
+        <span class="ai-mode-tip-title">自动审批</span>
+        <span class="ai-mode-tip-line">常规操作自动执行不打扰；命中高风险黑名单的命令仍会弹出面板请你确认。</span>
+    </div>
+    <div class="ai-mode-tip" data-tip="approval-auto">
+        <span class="ai-mode-tip-title">完全访问</span>
+        <span class="ai-mode-tip-line">所有操作自动执行，全程不打断；高风险命令仅发非阻塞提示并留痕，事后仍可查看。</span>
     </div>
     <!-- AI 消息统计卡（消息列表悬停触发，initModeTips 委托填充） -->
     <div class="ai-mode-tip compact" data-tip="ai-msg-stats">
