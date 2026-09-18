@@ -364,6 +364,15 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [manage_approval_test.go](internal/agent/tools/manage_approval_test.go) 新增 4 个测试函数共 13 子用例：每 action 审批 critical=true 断言 / 拒绝不落库（rejectApprover 显式 err）/ 批准真实落库、note 批量 deleted_at 置位、notebook 迁默认本 + with_notes 进回收站 + id=1 保护（断言 Approver 未被调用）、clear 仅清已完成返回条数且未完成不受影响。`go build/vet/test` + gofmt 全绿；纯后端改动，需 `wails build` 出新二进制生效。 |
 | **涉及文件** | [manage_todo.go](internal/agent/tools/manage_todo.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[manage_notebook.go](internal/agent/tools/manage_notebook.go)、[manage_note.go](internal/agent/tools/manage_note.go)（action 分发/Info/ActionText/审批摘要）、[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)、[meta.go](internal/agent/tools/meta.go)（4 处 Label 补「删除」）、[TOOLS.md](internal/agent/TOOLS.md)（§6.1 审批分级段）、[EVENTS.md](internal/agent/EVENTS.md)（§5 各工具审批分级） |
 
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | `ChunkContent` 切块两处性能优化（**零行为变化**，不触发存量向量重新嵌入）：① 超限判定由 O(n²) 重复 Join 改 O(1) 累积计数器；② `runeLen` 由 `len([]rune)`（分配切片）改 `utf8.RuneCountInString`（零分配）。用户先经 /plan 评审后批准实现。 |
+| **实现（重要）** | [chunk.go](internal/services/chunk.go) `ChunkContent` 新增闭包 `addLine(line)` 统一维护 `curRunes` 计数器（append 前非首行 +1 换行符、再 +runeLen(line)），语义恒等于 `runeLen(strings.Join(cur, "\n"))`；5 个 append 点（代码块内/围栏开启/标题/空行/正文）全部改走 addLine；两处超限判断 `runeLen(strings.Join(cur,"\n"))>maxRunes` 改为 `curRunes>maxRunes`；`flush()` 重置为 `cur, curRunes = nil, 0`。`runeLen` 实现逐字改 `utf8.RuneCountInString` + import `unicode/utf8`。 |
+| **回归测试** | [chunk_test.go](internal/services/chunk_test.go) 新增 `TestChunkMixedLongInput`：大输入（顶层超长段落 + 代码围栏 + 500 段多空行聚合）断言无 panic、每块 ≤600（**须放顶层无标题，避免叠加硬切补链固有超限**）、无空块、关键内容不丢失。测试注释明确覆盖 addLine 4 个 append 点（围栏开启/代码块内/空行/正文），标题点由现有 TestChunkHeadings 覆盖。 |
+| **经验教训** | `splitWithHeading` 硬切后每段经 `prependChain` 补**真实标题链**，链长未计入 budget，叠加长前缀会使块轻微超 maxRunes（如 613>600）——这是**既有行为**（本次未改 splitWithHeading），非计数器引入；测试断言每块 ≤maxRunes 时，硬切输入必须放顶层（空标题链栈）才能严格成立。 |
+| **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)｜验证 `gofmt` 无输出 + `go build/vet ./internal/services/` 无告警 + 切块用例与全量 services 回归全绿；纯后端改动，需 `wails build` 出新二进制生效 |
+
 ## 九、初始静态分析关键结论
 
 > 以下为本轮首次静态分析的核心认知，非变更记录，供快速回忆项目全貌。

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ChunkMeta 笔记元数据，用于在每个分块前注入前缀以提升检索命中率
@@ -155,16 +156,26 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 
 	var chunks []string
 	var cur []string   // 当前块原始行
+	var curRunes int   // 当前块累积 rune 数（含行间换行符），恒等于 runeLen(strings.Join(cur, "\n"))
 	var stack []string // 当前所属标题链栈（多级，如 ["# 大标题", "## 目录"]）
 	inCode := false    // 是否处于围栏代码块内
 	// tableHeader 当前 markdown 表格的表头行；表头与数据行常被切到不同块，
 	// 记录后在 flush 时给含数据行的块补上表头，让"列名语义"进入每个表格行块的嵌入
 	tableHeader := ""
 
+	// addLine 向当前块追加一行并同步维护 curRunes 计数（与 Join 结果的 rune 数严格等价）
+	addLine := func(line string) {
+		if len(cur) > 0 {
+			curRunes++ // 行间分隔换行符占 1 rune
+		}
+		cur = append(cur, line)
+		curRunes += runeLen(line)
+	}
+
 	// flush 将当前累积行合并为一块；纯标题块（空节）丢弃；超长硬切；块首补父级标题链
 	flush := func() {
 		text := strings.TrimSpace(strings.Join(cur, "\n"))
-		cur = nil
+		cur, curRunes = nil, 0
 		if text == "" {
 			return
 		}
@@ -194,27 +205,27 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 		switch {
 		case inCode:
 			// 代码块内：空行/伪标题不切块，原样累积（超限留待最终 flush 硬切，保证代码块完整性）
-			cur = append(cur, line)
+			addLine(line)
 			if isCodeFence(trimmed) {
 				inCode = false
 			}
 		case isCodeFence(trimmed):
 			// 围栏代码块开启：进入代码模式，开启行保留
 			inCode = true
-			cur = append(cur, line)
+			addLine(line)
 		case headingLevel(trimmed) > 0:
 			// 标题行：结束当前块，更新标题链栈，以标题开启新块
 			flush()
 			stack = pushHeadingStack(stack, trimmed)
-			cur = append(cur, line)
+			addLine(line)
 		case trimmed == "":
 			// 段落聚合：空行作为段落分隔保留在块内，不触发切块
 			// 块首空行跳过（避免块首留空行）；累积后超限才落块
 			if len(cur) == 0 {
 				continue
 			}
-			cur = append(cur, line)
-			if runeLen(strings.Join(cur, "\n")) > maxRunes {
+			addLine(line)
+			if curRunes > maxRunes {
 				flush()
 			}
 		default:
@@ -222,9 +233,9 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 			if isTableRowLine(trimmed) && i+1 < len(lines) && isTableSeparatorLine(strings.TrimSpace(lines[i+1])) {
 				tableHeader = trimmed
 			}
-			cur = append(cur, line)
+			addLine(line)
 			// 当前块已超限则立即落块，避免单块无限膨胀
-			if runeLen(strings.Join(cur, "\n")) > maxRunes {
+			if curRunes > maxRunes {
 				flush()
 			}
 		}
@@ -314,7 +325,7 @@ func splitWithHeading(text string, maxRunes int, stack []string, prefix string) 
 
 // runeLen 返回字符串的 rune 数量（Unicode 安全）
 func runeLen(s string) int {
-	return len([]rune(s))
+	return utf8.RuneCountInString(s)
 }
 
 // hardSplit 将超长文本按 maxRunes 个 rune 硬切为多段，不会切断多字节字符

@@ -2,6 +2,7 @@ package services
 
 import (
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -317,6 +318,48 @@ func TestChunkParagraphAggregationSplit(t *testing.T) {
 	for i, c := range chunks {
 		if runeLen(c) > 500 {
 			t.Errorf("第 %d 块长度 %d 超过上限 500", i, runeLen(c))
+		}
+	}
+}
+
+// TestChunkMixedLongInput 验证混合大输入（超长段落+代码围栏+多空行段落聚合）走
+// curRunes 计数器路径无 panic、每块不超限、关键内容不丢失：
+// 覆盖 addLine 的 4 个 append 点（围栏开启/代码块内/空行/正文）与多次超限 flush，
+// 标题 append 点由现有 TestChunkHeadings 等覆盖，防止计数器与 Join 计算结果漂移导致输出变化或越界
+func TestChunkMixedLongInput(t *testing.T) {
+	var b strings.Builder
+	// 顶层超长段落（远超单块上限，硬切时标题链栈为空 → 块长严格受限；无标题以免叠加硬切补链固有超限）
+	b.WriteString(strings.Repeat("这是一段超过单块上限的超长正文内容，用于验证计数器路径的多次超限 flush。", 40)) // ≈1400 字
+	b.WriteString("\n\n")
+	// 代码围栏（代码块内空行/伪标题不切块，超限留待 flush 硬切）
+	b.WriteString("```go\n")
+	for i := 0; i < 50; i++ {
+		b.WriteString("    x := " + strconv.Itoa(i) + " // 保留缩进\n")
+	}
+	b.WriteString("```\n\n")
+	// 多空行段落聚合（空行分支 + 正文分支的累积超限切块），总量 1000+ 行
+	for i := 0; i < 500; i++ {
+		b.WriteString("聚合段落" + strconv.Itoa(i) + "：这是用于段落聚合与超限切块的多行文本。\n\n")
+	}
+	content := b.String()
+
+	chunks := ChunkContent(content, 600, ChunkMeta{Title: "混合输入", Tags: []string{"测试"}, CreatedAt: time.Now()})
+	if len(chunks) < 10 {
+		t.Fatalf("大型混合输入期望至少 10 块，实际 %d 块", len(chunks))
+	}
+	for i, c := range chunks {
+		if runeLen(c) > 600 {
+			t.Errorf("第 %d 块长度 %d 超过上限 600", i, runeLen(c))
+		}
+		if c == "" {
+			t.Errorf("第 %d 块为空块", i)
+		}
+	}
+	// 关键内容不丢失：围栏代码末行与最后一段文本应出现在某块中
+	joined := strings.Join(chunks, "")
+	for _, marker := range []string{"x := 49", "聚合段落499"} {
+		if !strings.Contains(joined, marker) {
+			t.Errorf("混合输入丢失关键内容 %q", marker)
 		}
 	}
 }
