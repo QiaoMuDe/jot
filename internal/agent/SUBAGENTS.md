@@ -96,12 +96,12 @@ var osAgentConfig = subAgentConfig{
 
 ```go
 // buildOSSubAgent 构造 os_agent 委托工具（registry.go 装配入口；chatModel 为 nil 或构造失败返回 nil）。
-func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, disabled map[string]bool) *delegatedAgentTool {
-    return newDelegatedAgentTool(runCtx, chatModel, innerCtx, disabled, osAgentConfig)
+func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context) *delegatedAgentTool {
+    return newDelegatedAgentTool(runCtx, chatModel, innerCtx, osAgentConfig)
 }
 ```
 
-构造器签名统一为 `(runCtx, chatModel, innerCtx, disabled) -> *delegatedAgentTool`；`disabled` 参数当前不改变内层白名单（旧禁用名静默忽略，保留供将来扩展）。
+构造器签名统一为 `(runCtx, chatModel, innerCtx) -> *delegatedAgentTool`；内层白名单固定取自 subAgentConfig.toolNames，不随调用方传入变动（旧禁用名静默忽略，`disabled` 已从构造器签名移除）。
 
 ### 第 6 步：登记白名单工具构造器（如缺）
 
@@ -201,7 +201,7 @@ go test ./internal/agent/...   # 含 subagent_test.go 的事件转发/装配用�
 - [ ] 提示词含角色 / 边界（范围外回告主 Agent）/ 审批说明 / 收尾摘要四段？
 - [ ] 白名单只含本域工具且全部已在 `toolConstructors` 登记？
 - [ ] `subAgentConfig` 各字段齐备，`infoDesc` 说清"何时调用"？
-- [ ] 构造器签名统一 `(runCtx, chatModel, innerCtx, disabled) -> *delegatedAgentTool`？
+- [ ] 构造器签名统一 `(runCtx, chatModel, innerCtx) -> *delegatedAgentTool`？
 - [ ] `buildTools` 注册了且用 `WrapWithError` 包装、nil 跳过不破坏其余装配？
 - [ ] `meta.go` 的 `BuiltinTools()` 登记了展示文案（含 PlanOnly/AlwaysOn 标记核对）？
 - [ ] 未修改 `subagent.go` 通用机制（或已同步测试）？
