@@ -11,10 +11,10 @@
 //     NewCreatePlan / NewUpdatePlan），
 //     由父包 agent 的 registry.go 统一装配与注册。
 //   - os_agent 为委托工具（实例实现于 agent/subagent_os.go，通用机制见 agent/subagent.go）：把 read_file / write_file / edit_file /
-//     ls_dir / glob / grep_file / copy_file / move_file / delete_file / mkdir_dir / run_command
-//     这 11 个文件/命令工具封装为内层子 Agent，父层仅注册 os_agent 一个入口，内层工具构造器
+//     ls_dir / glob / grep_file / copy_file / move_file / delete_file / mkdir_dir / run_command / transfer_file
+//     这 12 个文件/命令工具封装为内层子 Agent，父层仅注册 os_agent 一个入口，内层工具构造器
 //     （NewReadFile / NewWriteFile / NewEditFile / NewLsDir / NewGlob / NewGrepFile /
-//     NewCopyFile / NewMoveFile / NewDeleteFile / NewMkdirDir / NewRunCommand）由 buildOSSubAgent 装配。
+//     NewCopyFile / NewMoveFile / NewDeleteFile / NewMkdirDir / NewRunCommand / NewTransferFile）由 buildOSSubAgent 装配。
 //   - 共享上下文类型（EmitFn / Record / Collector / Context / WrapWithError）定义于
 //     context.go：工具通过注入的 Context 发射事件、登记调用记录、收集结构化结果
 //     （搜索来源 / 召回卡片）与日志，通过 WrapWithError 统一包装失败行为。

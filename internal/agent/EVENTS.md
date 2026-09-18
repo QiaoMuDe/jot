@@ -16,7 +16,7 @@
 | `ai:stream-error` | 流错误 | `error` JSON、token 估算 | 展示错误态 |
 | `ai:tool-status` | 工具调用各阶段 | `tools.Record` JSON（`tool_start`/`tool_result`/`tool_error`/`tool_partial`） | 状态条 + 历史明细 |
 | `ai:ask-user` | 模型发起反问 | `{question, options, selection}` JSON | 弹出反问面板并阻塞等待 |
-| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / edit_file 编辑 / run_command 执行）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
+| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / edit_file 编辑 / run_command 执行 / transfer_file 下载到桌面或覆盖上传 / delete_file 删除）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
 | `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 | 空字符串 | 显示计划生成状态文案（轮换文案，重试不额外通知） |
 | `ai:plan-created` | `create_plan` 调用成功 / 预规划完成 | `{goal, steps}` JSON | 弹出计划面板 |
 | `ai:plan-updated` | `update_plan` 调用成功 / 结果兜底 | `{step_id, status, result, steps}` JSON | 刷新计划面板 |
@@ -90,14 +90,21 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 {"tool": "write_file", "summary": "覆盖文件：a.txt", "approval_id": 1, "critical": false}
 ```
 
-- `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command`）。
+- `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command` / `transfer_file` / `delete_file` 等，分级见下方「各工具审批分级」）。
 - `summary`：操作的中文摘要（如"覆盖文件：xxx"/"执行命令：rm -rf …"），供前端审批面板展示。
 - `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved)` **必须原样回传**，后端据此防串审（不一致报错）。
-- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**（后端即使 `auto`/`review` 模式也会阻塞确认，作为最后防线）。
+- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中 / transfer_file 下载到桌面等外部副作用写入时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**；`review` 模式下后端强制阻塞确认（不可绕过的最后防线），`auto` 模式自动放行但写 `tool_auto_approval` 审计留痕（门控实现见 [agent.go](internal/agent/agent.go) `RequestApproval`）。
 
 **审批模式门控**（由后端依据会话配置 `approval_mode` 决定，事件仅在真正需要阻塞时才发射）：
 - `confirm_every`：`critical` 任意 → 都需阻塞确认。
-- `review` / `auto`：`critical=true` → 仍阻塞确认；`critical=false`（覆盖已存在文件等常规危险操作）→ 自动放行，不发射事件。
+- `review`：`critical=true` → 强制阻塞确认（不可绕过）；`critical=false`（覆盖已存在文件等常规危险操作）→ 自动放行，不发射事件。
+- `auto`：一律自动放行，不发射事件；`critical=true` 额外写 `tool_auto_approval` 审计留痕（`recordAutoApproval`）。
+
+**各工具审批分级**（critical 取值以各工具文件头注释与 `requestApproval` 调用为权威）：
+- `run_command`：命中高危命令黑名单 `critical=true`，否则 `false`。
+- `delete_file`：删除操作一律 `critical=true`。
+- `write_file` / `edit_file` / `copy_file` / `move_file`：覆盖已存在目标时请求审批 `critical=false`（纯新增免审批）。
+- `transfer_file`：download（写用户桌面 = 工作区之外的外部副作用）一律请求审批 `critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_file——纯新增免审批、覆盖已存在目标请求审批 `critical=false`。
 
 **回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error`）：
 - `approved=true`：批准，工具返回 nil 继续执行，循环恢复。
@@ -105,7 +112,7 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 - 无等待中的审批 / `approval_id` 不匹配 → 返回中文错误，前端应提示并刷新（不重复投递）。
 - 会话在审批等待期间被停止/释放 → ctx 取消，工具以 `ctx.Err()` 返回，循环随终止。
 
-事件在请求"真正阻塞确认"时发射；`review`/`auto` 且 `critical=false` 自动放行时不发射。并行危险操作（模型同轮多条）仅一条发射并阻塞，其余直接返回错误（防整轮挂起）。前端在切换会话 / 清空会话 / 停止 / `stream-done` / `stream-error` 时应隐藏审批面板并清理本会话的待回传 `approval_id`。
+事件在请求"真正阻塞确认"时发射；`review` 且 `critical=false` 自动放行不发射，`auto` 模式全部自动放行不发射（其中 `critical=true` 写 `tool_auto_approval` 审计痕）。并行危险操作（模型同轮多条）仅一条发射并阻塞，其余直接返回错误（防整轮挂起）。前端在切换会话 / 清空会话 / 停止 / `stream-done` / `stream-error` 时应隐藏审批面板并清理本会话的待回传 `approval_id`。
 
 ---
 

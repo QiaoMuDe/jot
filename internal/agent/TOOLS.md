@@ -339,7 +339,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 
 ### 6.1 审批机制（跨工具通用规范）
 
-> 文件/命令工具（read_file 等 11 个）已封装为 `os_agent` 子 Agent（委托工具，见 [subagent_os.go](internal/agent/subagent_os.go)）：内层工具审批语义沿用父层——同一会话 `Approver`（`agentSession.RequestApproval`），危险操作照常发射 `ai:tool-approval` 阻塞确认，前端审批面板零改动；内层每步工具调用以 `ai:tool-status` 实时转发（事件说明见 [EVENTS.md](internal/agent/EVENTS.md) §3.1）。
+> 文件/命令工具（read_file 等 12 个）已封装为 `os_agent` 子 Agent（委托工具，见 [subagent_os.go](internal/agent/subagent_os.go)）：内层工具审批语义沿用父层——同一会话 `Approver`（`agentSession.RequestApproval`），危险操作照常发射 `ai:tool-approval` 阻塞确认，前端审批面板零改动；内层每步工具调用以 `ai:tool-status` 实时转发（事件说明见 [EVENTS.md](internal/agent/EVENTS.md) §3.1）。
 
 对需用户确认的写/危险操作，工具通过共享的 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）请求审批，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，事件协议见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval`。
 

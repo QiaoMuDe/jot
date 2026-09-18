@@ -55,15 +55,20 @@ func EnsureWorkspaceDir() error {
 // 落出 workspace 返回错误；合法返回清理后的绝对路径。workspaceRoot 须为绝对路径
 // （如 WorkspaceDir() 返回值）。p 为相对路径时相对 workspaceRoot 解析；
 // p 为工作目录根目录本身同样视为合法（目录操作，如 ls_dir）。
-//
-// 边界校验会解析符号链接：对「目标路径中最深的已存在祖先」做 EvalSymlinks，
-// 使指向 workspace 外的 symlink/junction（含新建文件落在符号链接目录内的场景）
-// 暴露真实位置，从而被拒绝放行（防止符号链接逃逸边界）。
 func WorkspaceFilePath(workspaceRoot, p string) (string, error) {
+	return SandboxFilePath(workspaceRoot, p, "~/.jot/workspace")
+}
+
+// SandboxFilePath 通用沙箱路径底座（由 WorkspaceFilePath 泛化而来）：把相对/绝对
+// 路径解析为指定沙箱根（workspace / 用户桌面等）内的绝对路径并校验边界。边界校验
+// 会解析符号链接：对「目标路径中最深的已存在祖先」做 EvalSymlinks，使指向沙箱外的
+// symlink/junction（含新建文件落在符号链接目录内的场景）暴露真实位置，从而被拒绝
+// 放行（防止符号链接逃逸边界）。label 用于报错文案中标识沙箱边界（如 "~/.jot/workspace"）。
+func SandboxFilePath(sandboxRoot, p, label string) (string, error) {
 	// 规范化根目录：Abs + Clean；根目录须为绝对路径，否则视为配置错误
-	rootClean, err := filepath.Abs(filepath.Clean(workspaceRoot))
+	rootClean, err := filepath.Abs(filepath.Clean(sandboxRoot))
 	if err != nil {
-		return "", fmt.Errorf("规范化工作目录根路径失败: %w", err)
+		return "", fmt.Errorf("规范化沙箱根路径失败: %w", err)
 	}
 
 	// 解析目标路径：相对路径相对根目录拼接，绝对路径直接采用，均做 Clean
@@ -90,7 +95,7 @@ func WorkspaceFilePath(workspaceRoot, p string) (string, error) {
 	// 且不会把兄弟目录（如 root2 或 root_2）误判为在 root 内。
 	if !strings.EqualFold(rootClean, resolved) &&
 		!strings.HasPrefix(strings.ToLower(resolved), strings.ToLower(rootClean)+string(filepath.Separator)) {
-		return "", errors.New("超出工作目录，仅允许操作 ~/.jot/workspace 内的文件；请使用相对工作区的路径（如 notes/a.md）或 ~/.jot/workspace/ 开头的路径")
+		return "", errors.New("超出 " + label + " 边界，仅允许操作 " + label + " 内的文件；请使用相对路径（如 notes/a.md）或以 " + label + "/ 开头的路径")
 	}
 	return cleaned, nil
 }

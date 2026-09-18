@@ -49,17 +49,18 @@ type subAgentConfig struct {
 // toolConstructors 全工具构造器注册表：子 Agent 白名单按工具名取构造器。
 // 新增工具需在此登记才能被子 Agent 白名单引用；一工具一构造器（与 tools 包规范一致）。
 var toolConstructors = map[string]func(ctx *tools.Context) tool.InvokableTool{
-	"read_file":   tools.NewReadFile,
-	"write_file":  tools.NewWriteFile,
-	"edit_file":   tools.NewEditFile,
-	"ls_dir":      tools.NewLsDir,
-	"glob":        tools.NewGlob,
-	"grep_file":   tools.NewGrepFile,
-	"copy_file":   tools.NewCopyFile,
-	"move_file":   tools.NewMoveFile,
-	"delete_file": tools.NewDeleteFile,
-	"mkdir_dir":   tools.NewMkdirDir,
-	"run_command": tools.NewRunCommand,
+	"read_file":     tools.NewReadFile,
+	"write_file":    tools.NewWriteFile,
+	"edit_file":     tools.NewEditFile,
+	"ls_dir":        tools.NewLsDir,
+	"glob":          tools.NewGlob,
+	"grep_file":     tools.NewGrepFile,
+	"copy_file":     tools.NewCopyFile,
+	"move_file":     tools.NewMoveFile,
+	"delete_file":   tools.NewDeleteFile,
+	"mkdir_dir":     tools.NewMkdirDir,
+	"run_command":   tools.NewRunCommand,
+	"transfer_file": tools.NewTransferFile,
 }
 
 // delegatedAgentTool 通用子 Agent 委托工具：父层只见一个委托工具，内层为独立 ChatModelAgent。
