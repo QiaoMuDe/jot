@@ -1,11 +1,12 @@
 package tools
 
 // 本文件实现 manage_note 笔记库管理工具：模型在 ReAct 循环中调用它创建笔记、列出/搜索笔记、
-// 查看笔记全文、更新标题/扩展名、编辑正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签，
+// 查看笔记全文、更新标题/扩展名、编辑正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签、
+// 删除笔记进回收站，
 // 底层复用 services.NoteService（Create / CreateWithNotebook / Search / GetNoteContent / Update /
-// TogglePin / MoveToNotebook）与 services.TagService（AddTagToNote / RemoveTagFromNote），
+// TogglePin / MoveToNotebook / Delete）与 services.TagService（AddTagToNote / RemoveTagFromNote），
 // 不感知父包 agent 的事件循环细节。
-// 一个工具通过 action 参数区分九个动作：
+// 一个工具通过 action 参数区分十个动作：
 //   - create：创建笔记（title / content 必填；file_ext 可选、缺省 .md；notebook_id 可选
 //     指定创建到哪个笔记本，未指定时归入默认笔记本 id=1；tag_ids 可选给新笔记打标签）；
 //   - list：列出/搜索笔记（keyword 按标题/内容模糊过滤；tag_ids 多标签 AND 过滤；
@@ -28,9 +29,11 @@ package tools
 //     输出；line_start 大于笔记总行数时为末尾追加语义）；
 //   - pin：置顶/取消置顶笔记（ids 笔记编号数组必填，切换置顶状态）；
 //   - move：移动笔记到目标笔记本（ids 笔记编号数组必填，notebook_id 必填目标笔记本，支持批量）；
-//   - add_tag / remove_tag：给笔记添加/移除标签（ids 笔记编号数组必填，tag_id 必填、正整数，支持批量）。
+//   - add_tag / remove_tag：给笔记添加/移除标签（ids 笔记编号数组必填，tag_id 必填、正整数，支持批量）；
+//   - delete：删除笔记进回收站（ids 笔记编号数组必填，支持单条/批量；软删，恢复由用户在回收站页面自行操作）。
 // 与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题，
-// manage_note 用于结构化操作笔记库。本工具不包含删除类动作（spec 明确不暴露）。
+// manage_note 用于结构化操作笔记库。delete 为软删进回收站，Agent 不提供恢复动作
+// （用户在回收站页面自行恢复）。
 // move/add_tag/remove_tag 支持批量操作：单条时传 ids=[id]，批量时传 ids=[id1,id2,...]。
 
 import (
@@ -85,6 +88,8 @@ func manageNoteActionCN(action string) string {
 		return "添加标签"
 	case "remove_tag":
 		return "移除标签"
+	case "delete":
+		return "删除笔记（移入回收站）"
 	default:
 		return "操作"
 	}
@@ -126,9 +131,11 @@ func manageNoteApprovalSummary(action string, noteIDs []uint, notebookID, tagID 
 				return fmt.Sprintf("从笔记 #%d 移除标签 #%d", id, uint(tagID))
 			}
 			return fmt.Sprintf("从笔记 #%d 移除标签", id)
+		case "delete":
+			return fmt.Sprintf("删除笔记 #%d（移入回收站）", id)
 		}
 	}
-	// 批量操作：move / add_tag / remove_tag 支持批量，附笔记数量与目标详情；
+	// 批量操作：move / add_tag / remove_tag / delete 支持批量，附笔记数量与目标详情；
 	// update / edit / pin 批量场景后续校验会报错，此处仅展示数量
 	if len(noteIDs) > 1 {
 		n := len(noteIDs)
@@ -148,6 +155,8 @@ func manageNoteApprovalSummary(action string, noteIDs []uint, notebookID, tagID 
 				return fmt.Sprintf("批量从 %d 篇笔记移除标签 #%d", n, uint(tagID))
 			}
 			return fmt.Sprintf("批量从 %d 篇笔记移除标签", n)
+		case "delete":
+			return fmt.Sprintf("批量删除 %d 篇笔记（移入回收站）", n)
 		default:
 			return fmt.Sprintf("%s（%d 篇笔记）", manageNoteActionCN(action), n)
 		}
@@ -219,6 +228,8 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 		return "添加标签"
 	case "remove_tag":
 		return "移除标签"
+	case "delete":
+		return "删除笔记（移入回收站）"
 	default:
 		return "执行"
 	}
@@ -228,12 +239,12 @@ func (m *manageNoteTool) ActionText(argumentsInJSON string) string {
 func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_note",
-		Desc: "管理用户笔记库（写/管理工具）。当用户要求创建笔记、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签时调用。浏览/搜索笔记库、查看笔记全文请使用 browse_notes（读取工具）；与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 browse_notes 的 view 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag 支持批量操作。写操作（update / edit / pin / move / add_tag / remove_tag）将按当前审批模式弹出确认面板，用户批准后才执行；create 为用户明确要求的创建指令，无需确认。笔记的编号 id 来自 browse_notes 的 list 返回值中的 [数字]。",
+		Desc: "管理用户笔记库（写/管理工具）。当用户要求创建笔记、更新笔记标题或扩展名、编辑笔记正文、置顶/取消置顶、移动笔记本、给笔记打标签或移除标签、删除笔记进回收站时调用。浏览/搜索笔记库、查看笔记全文请使用 browse_notes（读取工具）；与 recall_notes 的边界：recall_notes 用于语义召回笔记片段回答知识类问题。通过 action 参数区分动作：create=创建笔记（需提供 title 标题与 content 内容，可提供 file_ext 文件后缀（缺省 .md）、notebook_id 目标笔记本（未指定时归入默认笔记本）、tag_ids 标签编号列表）；update=更新笔记标题/扩展名（需提供 ids 笔记编号数组与 title 新标题、file_ext 新扩展名至少其一，只改元数据不碰正文）；edit=编辑笔记正文（需提供 ids 笔记编号数组；两种方式互斥：①片段替换提供 find 要替换的原文片段与 replace 新文本，find 优先精确匹配，若因空白/换行/缩进差异未命中会自动做空白归一化匹配兜底（标点、文字仍须一致），删除片段时 replace 传空字符串，count 可指定第几次出现（缺省 1），replace_all=true 时替换全部出现（与 count 互斥，二者不可同时使用）；②行级替换提供 line_start 起始行号（必填）与 line_end 结束行号（缺省等于 line_start），将该区间整行替换为 replace（空字符串即删除这些行），行号必须来自 browse_notes 的 view 的 line_numbers=true 输出；line_start 大于笔记总行数时为末尾追加语义，replace 即为追加内容；只需修改几个字或一句话用片段替换，需要修改连续多行、整段重写、或无法用简短片段定位时用行级替换）；pin=置顶/取消置顶笔记（需提供 ids 笔记编号数组）；move=移动笔记到目标笔记本（需提供 ids 笔记编号数组与 notebook_id 目标笔记本，支持批量移动）；add_tag=给笔记添加标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量添加）；remove_tag=从笔记移除标签（需提供 ids 笔记编号数组与 tag_id 标签编号，支持批量移除）；delete=删除笔记进回收站（需提供 ids 笔记编号数组，支持单条/批量软删，删除后可在回收站页面恢复，本工具不提供恢复动作）。批量操作说明：单条操作时传 ids=[id]，批量操作时传 ids=[id1,id2,...]；update/edit/pin 只支持单条操作（ids 长度须为 1），move/add_tag/remove_tag/delete 支持批量操作。写操作（update / edit / pin / move / add_tag / remove_tag / delete）将按当前审批模式弹出确认面板，用户批准后才执行；create 为用户明确要求的创建指令，无需确认。笔记的编号 id 来自 browse_notes 的 list 返回值中的 [数字]。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
-				Desc:     "要执行的动作：create=创建笔记；update=更新标题/扩展名；edit=编辑正文；pin=置顶/取消置顶；move=移动笔记到目标笔记本；add_tag=给笔记添加标签；remove_tag=从笔记移除标签",
-				Enum:     []string{"create", "update", "edit", "pin", "move", "add_tag", "remove_tag"},
+				Desc:     "要执行的动作：create=创建笔记；update=更新标题/扩展名；edit=编辑正文；pin=置顶/取消置顶；move=移动笔记到目标笔记本；add_tag=给笔记添加标签；remove_tag=从笔记移除标签；delete=删除笔记进回收站",
+				Enum:     []string{"create", "update", "edit", "pin", "move", "add_tag", "remove_tag", "delete"},
 				Required: true,
 			},
 			"title": {
@@ -295,7 +306,7 @@ func (m *manageNoteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			"ids": {
 				Type:     schema.Array,
 				ElemInfo: &schema.ParameterInfo{Type: schema.Number},
-				Desc:     "笔记编号数组（正整数列表，列表中的 [数字] 即为 id）；单条操作时传 [id]，批量操作时传 [id1,id2,...]；action=update / edit / pin / move / add_tag / remove_tag 时必填",
+				Desc:     "笔记编号数组（正整数列表，列表中的 [数字] 即为 id）；单条操作时传 [id]，批量操作时传 [id1,id2,...]；action=update / edit / pin / move / add_tag / remove_tag / delete 时必填",
 				Required: false,
 			},
 			"tag_id": {
@@ -330,7 +341,7 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	}
 	args.Action = strings.TrimSpace(args.Action)
 	switch args.Action {
-	case "create", "update", "edit", "pin", "move", "add_tag", "remove_tag":
+	case "create", "update", "edit", "pin", "move", "add_tag", "remove_tag", "delete":
 	default:
 		return "", fmt.Errorf("manage_note 参数缺少/非法 action: %s", args.Action)
 	}
@@ -340,13 +351,13 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		return "", ctx.Err()
 	}
 
-	// 写操作审批：update / edit / pin / move / add_tag / remove_tag 在分发前经
+	// 写操作审批：update / edit / pin / move / add_tag / remove_tag / delete 在分发前经
 	// Approver 按当前审批模式请求用户批准（create 与读操作不审批直接分发）。
 	// 审批前先做写操作基本参数校验，避免无效请求（缺 ids/目标）弹出无意义审批窗。
-	// critical 分级：edit 恒为高危；move / add_tag / remove_tag 批量（多篇笔记）
-	// 为高危、单条为常规；update / pin 为常规。
+	// critical 分级：edit / delete 恒为高危（删除进回收站属破坏性操作，一律高危）；
+	// move / add_tag / remove_tag 批量（多篇笔记）为高危、单条为常规；update / pin 为常规。
 	switch args.Action {
-	case "update", "edit", "pin", "move", "add_tag", "remove_tag":
+	case "update", "edit", "pin", "move", "add_tag", "remove_tag", "delete":
 		noteIDs := resolveNoteIDs(args.IDs)
 		if len(noteIDs) == 0 {
 			return "", fmt.Errorf("manage_note %s 缺少有效的 ids", args.Action)
@@ -357,7 +368,7 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		if (args.Action == "add_tag" || args.Action == "remove_tag") && args.TagID <= 0 {
 			return "", fmt.Errorf("manage_note %s 缺少有效的 tag_id", args.Action)
 		}
-		critical := args.Action == "edit"
+		critical := args.Action == "edit" || args.Action == "delete"
 		if args.Action == "move" || args.Action == "add_tag" || args.Action == "remove_tag" {
 			critical = len(noteIDs) > 1
 		}
@@ -389,6 +400,8 @@ func (m *manageNoteTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		return m.addTag(args.IDs, args.TagID)
 	case "remove_tag":
 		return m.removeTag(args.IDs, args.TagID)
+	case "delete":
+		return m.deleteNote(args.IDs)
 	}
 	return "", fmt.Errorf("manage_note 未知 action: %s", args.Action)
 }
@@ -1094,6 +1107,31 @@ func (m *manageNoteTool) removeTag(ids []float64, tagID float64) (string, error)
 		return "", err
 	}
 	return fmt.Sprintf("已从笔记 #%d 移除标签 #%d", noteIDs[0], uint(tagID)), nil
+}
+
+// deleteNote 删除笔记进回收站：ids 必填，支持单条 [id] 或批量 [id1,id2,...] 操作，
+// 逐条调 NoteService.Delete 软删（deleted_at 置位，回收站页面可见）；
+// 恢复不由本工具提供，用户在回收站页面自行操作。
+func (m *manageNoteTool) deleteNote(ids []float64) (string, error) {
+	noteIDs := resolveNoteIDs(ids)
+	if len(noteIDs) == 0 {
+		return "", errors.New("manage_note 删除笔记缺少有效的 ids")
+	}
+	// 逐条软删，任一条失败即中断；错误附「已删除 N/M 篇」进度，便于模型向用户准确汇报
+	// （已删除的保留在回收站；对已软删笔记重复 Delete 会报 note not found，不可整批盲目重试，
+	// 应对剩余未删除的笔记单独重试）
+	for i, id := range noteIDs {
+		if err := m.note.Delete(id); err != nil {
+			if i > 0 {
+				return "", fmt.Errorf("已删除 %d/%d 篇笔记后失败: %w（剩余笔记未处理，可单独重试删除）", i, len(noteIDs), err)
+			}
+			return "", err
+		}
+	}
+	if len(noteIDs) == 1 {
+		return fmt.Sprintf("已删除笔记 #%d（已移入回收站，可在回收站页面恢复）", noteIDs[0]), nil
+	}
+	return fmt.Sprintf("已删除 %d 篇笔记（已移入回收站，可在回收站页面恢复）", len(noteIDs)), nil
 }
 
 // NewManageNote 创建笔记库管理工具。

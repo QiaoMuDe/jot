@@ -105,6 +105,7 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 - `delete_file`：删除操作一律 `critical=true`。
 - `write_file` / `edit_file` / `copy_file` / `move_file`：覆盖已存在目标时请求审批 `critical=false`（纯新增免审批）。
 - `transfer_file`：download（写用户桌面 = 工作区之外的外部副作用）一律请求审批 `critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_file——纯新增免审批、覆盖已存在目标请求审批 `critical=false`。
+- `manage_note` / `manage_notebook` / `manage_tag` / `manage_todo`：写操作接入门控（create 免审批），删除类 action 一律 `critical=true`——`manage_note.delete`（软删进回收站，恢复由用户在回收站页面自行操作）、`manage_notebook.delete`（可选 `with_notes`，默认 false 其下笔记迁入默认笔记本、true 连同笔记移入回收站）、`manage_tag.delete`、`manage_todo.delete` / `clear`（硬删，审批摘要注明「不可恢复」）；其余写操作分级以各工具文件头注释为权威（如 `manage_note.edit` 恒 `critical=true`、批量 `move` / `add_tag` / `remove_tag` 为 `critical=true`、`update` / `pin` 等为 `critical=false`）。
 
 **回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error`）：
 - `approved=true`：批准，工具返回 nil 继续执行，循环恢复。

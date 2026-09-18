@@ -330,23 +330,13 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | 将 11 个文件/命令工具（read_file/write_file/edit_file/ls_dir/glob/grep_file/copy_file/move_file/delete_file/mkdir_dir/run_command）整体封装为**子 Agent 委托工具 `os_agent`**：父层只注册 os_agent 一个工具（每轮省 11 份工具描述 standing cost、降低选择错误率），内层为独立 ChatModelAgent（复用同一会话 *openai.ChatModel，`MaxIterations=20`）。所有子 Agent 逻辑与定义集中 [subagent.go](internal/agent/subagent.go)（委托工具/内层构造/内层系统提示词/事件转发；后续笔记子 Agent 等在此文件扩展）。 |
-| **装配与禁用** | [registry.go](internal/agent/registry.go) `buildTools` 删除 11 个文件工具条目、新增 os_agent（`BuildParams` 加 `runCtx`/`chatModel` 字段；chatModel nil 或构造失败返回 nil 跳过注册、内部记 Warn 不破坏其余装配）；os_agent 用 `tools.WrapWithError` 包装（tool_error 事件/记录/panic 防护与其余工具一致）；受 `ai_agent_tools_disabled` 过滤、非 PlanOnly。**旧禁用名单中的文件工具名（如 `["run_command"]`）不匹配任何工具静默忽略**，前端下次保存设置自然清理。内层白名单固定 11 工具（disabled 参数暂不改变白名单，保留扩展位）。 |
-| **内层事件转发（重要）** | os_agent `InvokableRun` 内建内层 Runner（EnableStreaming）消费事件：内层工具调用经 `emitToolStart`/`emitToolResult`/`DrainPartials` **写入父层同一 toolRecords 切片**并实时发射 `ai:tool-status`（内层独立 toolByName 映射，ActionText 照常）；**内层流式正文/思考链不转发**（noopEmit + thinking=false），仅回传内层最后一条非工具正文作为工具结果（空则兜底「（子 Agent 未返回文本结果）」）。记录顺序 = os_agent start → 内层 start/result/error → os_agent result，构成前端分组边界；审批（ai:tool-approval）与反问（ai:ask-user）经同一会话 Approver/AskWaiter 照常工作，前端审批面板零改动。 |
-| **前端渲染** | [ai-chat.js](frontend/src/js/ai-chat.js) 新增模块级 `osAgentGroupOpen/Close/Active`（call_id 配对关组、无 call_id 按顺序关栈顶、无匹配不臆断关闭）；实时（会话级栈）与回放（buildToolRecords 局部栈）共用同一组函数与渲染函数族；记录打 `isAgentGroup`（主行）/`substep`（内层）标记，`buildToolStatusRows` 检测到分组时降级为**按原始顺序逐条渲染**（保证组内顺序不被打散，普通流维持原聚合行为）；[ai-chat.css](frontend/src/css/components/ai-chat.css) 新增 `.is-os-agent`（running 时左侧脉动点动画，`prefers-reduced-motion` 禁用）与 `.is-substep`（缩进+左侧引导线+color-mix 弱化背景+`--text-muted`，全主题 CSS 变量自适应）。设置页与 AI 助手下拉经 `GetAgentTools()` 自动收敛为单条 os_agent（组/勾选/计数逻辑零改动）。 |
-| **测试与验证** | [subagent_test.go](internal/agent/subagent_test.go) 覆盖：内层白名单恰 11、chatModel nil 跳过、os_agent 禁用过滤（其余工具正常）、Approver 指针共享、InvokableRun 参数错误分支、**事件转发顺序**（fakeAgent 实现 adk.Agent 预设事件流 → 断言 toolRecords 与 ai:tool-status 顺序 = os_agent start → read_file start/result → os_agent result）。`go build/vet/test` + `npm run build` 全绿（typed nil interface 装箱陷阱已规避）。 |
-| **涉及文件** | 新增 [subagent.go](internal/agent/subagent.go)+[subagent_test.go](internal/agent/subagent_test.go)；[registry.go](internal/agent/registry.go)（BuildParams/buildTools）、[agent.go](internal/agent/agent.go)（Run 传 runCtx/chatModel）、[meta.go](internal/agent/tools/meta.go)（清单收敛为单条）、[doc.go](internal/agent/tools/doc.go)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md)（§3.1 内层转发段）、[ai-chat.js](frontend/src/js/ai-chat.js)（osAgentGroup*/分组降级渲染）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（.is-os-agent/.is-substep） |
-
-### 临时记忆 2
-| 记忆点 | 内容 |
-| --- | --- |
 | **变更概览** | os_agent 架构演进（**取代原 5 号 os_agent 初始实现描述**）：从「集中式 subagent.go」拆分为**通用机制（subagent.go）+ 域实例（subagent_os.go）**两文件结构；新增 [SUBAGENTS.md](internal/agent/SUBAGENTS.md) 子 Agent 开发与维护指南（与 TOOLS.md/EVENTS.md 并列）；全面审查修复 4 个问题（fastlog 占位符 / doc.go 引用 / 命名统一 / checklist 同步）。 |
 | **架构拆分（重要）** | [subagent.go](internal/agent/subagent.go) 只保留通用机制——`subAgentConfig` 配置结构（name/description/instruction/toolNames/maxIterations/actionPrefix/infoDesc/requestDesc）、`toolConstructors` 构造器注册表（11 文件工具）、`delegatedAgentTool` 基类（agent/innerTools/ctx/cfg）、`newDelegatedAgentTool` 工厂（chatModel nil 或构造失败记 Warn 返回 nil）、`InvokableRun` 事件转发循环；[subagent_os.go](internal/agent/subagent_os.go) 为 os_agent 实例（osSubAgentMaxIterations=20 / osSubAgentInstruction / osSubAgentToolNames / osAgentConfig / buildOSSubAgent），是**「新增域子 Agent」样板**。**新增子 Agent 开发规范（已固化长期记忆 20）**：每 Agent 一个文件（subagent_<域>.go），只定义提示词常量+白名单+配置+一个构造器（调 newDelegatedAgentTool），无需改通用机制；registry.go buildTools 注册委托工具（WrapWithError 包装、受 ai_agent_tools_disabled 过滤、chatModel nil 跳过、非 PlanOnly）。 |
 | **审查修复（4 问题全修复）** | ①（major）`newDelegatedAgentTool` 三处 logWarn 带 `%s`/`%q` 占位符——fastlog `Warnw` 的 msg **原样输出不解析占位符**（源码级确认 logger.go L275 `entry.Message = msg` + formatter 直写），已改为纯文本 msg + `fastlog.String("tool",…)`/`fastlog.Error(err)` 结构化字段；②（minor）[tools/doc.go](internal/agent/tools/doc.go) 引用改「实例实现于 agent/subagent_os.go，通用机制见 agent/subagent.go」；③（minor）内层 ChatModelAgent 名统一 os_agent（重构前 "os-agent"，grep 确认无外部依赖，subagent_os.go 补注释记录统一命名决策）；④（minor）[checklist.md](.trae/specs/add-agent-os-subagent/checklist.md) 标注「旧禁用残留清理逻辑已按用户决策删除，旧禁用名由后端静默忽略，该项验收不适用」。 |
 | **文档** | 新增 [SUBAGENTS.md](internal/agent/SUBAGENTS.md)（子 Agent 开发与维护指南：架构概览 / 8 步新增流程 / 通用机制要点 / 红线约束 / 维护与自查清单 / 测试与前端渲染），AGENTS.md 维护规范第 9 条并入引用（EVENTS.md/TOOLS.md/SUBAGENTS.md 三件套）。 |
 | **涉及文件** | [subagent.go](internal/agent/subagent.go)（通用机制）、[subagent_os.go](internal/agent/subagent_os.go)（实例/样板）、[registry.go](internal/agent/registry.go)（buildTools 注释）、[subagent_test.go](internal/agent/subagent_test.go)（8 用例兼容）、[doc.go](internal/agent/tools/doc.go)（引用修正）、[SUBAGENTS.md](internal/agent/SUBAGENTS.md)（新增）、[AGENTS.md](AGENTS.md)（记忆点 20 + 维护规范 9）、[checklist.md](.trae/specs/add-agent-os-subagent/checklist.md)（标注）｜验证 gofmt + `go build/vet/test` 全绿 |
 
-### 临时记忆 3
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | os_agent 文件/命令工具支持 `~` 短路径解析（方案B）+ 越界报错自纠提示（方案C），解决模型首跳路径报错：根因是模型照抄工具描述/提示词里的 `~/.jot/workspace` 记法而解析层不展开 `~`（被拼成 `<workspace>/~/.jot/workspace/...` 字面量嵌套目录，读报不存在、写悄悄建出名为 `~` 的垃圾目录），或猜错家目录绝对路径触发越界拒绝。用户拍板不向上下文注入绝对路径（不做方案A）。 |
@@ -356,7 +346,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [fs_tools_test.go](internal/agent/tools/fs_tools_test.go) 新增 `TestResolvePathTildeExpansion`（完整形式命中 / `~/其它目录` 与 `~` 单独越界拒绝）+ `TestExpandTilde`（5 形态映射）；[glob_test.go](internal/agent/tools/glob_test.go) 新增 `TestGlobTildePrefix`（正斜杠完整形式/子目录/单独形式/反斜杠变体/其它 ~ 报错 5 子用例）。`go build/vet/test` + gofmt 全绿。纯后端改动，需 `wails build` 出新二进制生效。 |
 | **涉及文件** | [fs_base.go](internal/agent/tools/fs_base.go)、[glob.go](internal/agent/tools/glob.go)、[config.go](internal/config/config.go)、11 工具参数描述（read_file/write_file/edit_file/delete_file/copy_file/move_file/mkdir_dir/ls_dir/grep_file/run_command/glob）、[subagent_os.go](internal/agent/subagent_os.go)、[fs_tools_test.go](internal/agent/tools/fs_tools_test.go)、[glob_test.go](internal/agent/tools/glob_test.go) |
 
-### 临时记忆 4
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 新增 `transfer_file` 工具：工作区（~/.jot/workspace）↔ 用户桌面（~/Desktop）双向复制文件/目录（`direction`=download/upload 必填 + `overwrite` 可选），是唯一允许触碰工作目录之外的文件工具；仅注册进 os_agent 内层白名单（11→12）与 toolConstructors（[subagent.go](internal/agent/subagent.go)），不注册全局。复制复用 go-kit `fs.CopyEx`（临时文件+rename 原子性、覆盖备份恢复、目录递归）；目标端为已存在目录时自动追加源基名（`fsFinalTarget` 对齐 copy_file 智能路径语义）。 |
@@ -364,6 +354,15 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **审批分级** | download（写桌面=工作目录之外的外部副作用）一律 `requestApproval critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_file——纯新增免审批、覆盖已存在目标审批 critical=false。审批在参数校验与覆盖判定之后、复制执行之前（先校验后审批）。[EVENTS.md](internal/agent/EVENTS.md) §5 同步修正门控矛盾（原「auto: critical=true 仍阻塞确认」与 agent.go 实现的「auto 放行+tool_auto_approval 留痕」相反）并新增「各工具审批分级」段；[TOOLS.md](internal/agent/TOOLS.md)/[SUBAGENTS.md](internal/agent/SUBAGENTS.md) 同步。 |
 | **测试与验证** | [transfer_file_test.go](internal/agent/tools/transfer_file_test.go) 14 子用例：download 审批 critical=true/覆盖判定/目录递归/拒绝不落盘/嵌套目录落盘/整目录替换、upload 免审批/覆盖 critical=false、双端 ../ 越界、参数校验、裸工具（ctx nil）放行、Approver 缺失 fail-fast、`~` 前缀双端端到端。坑：`rejectApprover` 拒绝场景必须显式 `err: errors.New(...)`（默认 nil=放行）；沙箱内 httptest 监听端口被拦截（`not a socket`），跑全量测试需 `dangerouslyDisableSandbox`。`go build/vet/test` + gofmt 全绿，需 `wails build` 出新二进制生效。 |
 | **涉及文件** | 新增 [transfer_file.go](internal/agent/tools/transfer_file.go)+[transfer_file_test.go](internal/agent/tools/transfer_file_test.go)；[fs_base.go](internal/agent/tools/fs_base.go)（desktopDir/deskRoot/resolvePathIn）、[config.go](internal/config/config.go)（SandboxFilePath）、[subagent.go](internal/agent/subagent.go)（toolConstructors）、[subagent_os.go](internal/agent/subagent_os.go)（白名单 12/提示词）、[EVENTS.md](internal/agent/EVENTS.md)、[TOOLS.md](internal/agent/TOOLS.md)、[SUBAGENTS.md](internal/agent/SUBAGENTS.md) |
+
+### 临时记忆 4
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 四个管理工具（manage_todo/manage_tag/manage_notebook/manage_note）新增删除类 action，删除一律 `critical=true` 高危审批（用户拍板：删除必须审批而非常规审批）；恢复不提供（用户自行到回收站页面操作）。spec 见 `.trae/specs/add-manage-tools-delete-actions/`。 |
+| **action 明细** | manage_todo：`delete`（id 单条硬删）+ `clear`（清空已完成待办，返回清理条数），摘要注明「不可恢复」；manage_tag：`delete`（仅删标签，笔记不受影响）；manage_notebook：`delete`（id + `with_notes` 可选默认 false——false 其下笔记迁默认笔记本 id=1，true 连同笔记移入回收站）；manage_note：`delete`（ids 复用 resolveNoteIDs 单条/批量，软删进回收站）。**不接入** TodoService.DeleteUnfinished / DeleteAll 与 NotebookService.ResetAll（全量清空属数据管理页职责）。 |
+| **审批与校验顺序** | 全部对齐「审批前先做基本参数校验」约定：tag/notebook 先校验 id 有效性再 requestApproval(critical=true)；notebook id=1 先返回「默认笔记本不可删除」且不触发审批窗；note delete 单条/批量均 critical=true 不分级。ActionText 五组动作文案（删除待办/清空已完成待办/删除标签/删除笔记本/删除笔记（移入回收站））与 Info() schema enum 同步齐备。 |
+| **测试与验证** | [manage_approval_test.go](internal/agent/tools/manage_approval_test.go) 新增 4 个测试函数共 13 子用例：每 action 审批 critical=true 断言 / 拒绝不落库（rejectApprover 显式 err）/ 批准真实落库、note 批量 deleted_at 置位、notebook 迁默认本 + with_notes 进回收站 + id=1 保护（断言 Approver 未被调用）、clear 仅清已完成返回条数且未完成不受影响。`go build/vet/test` + gofmt 全绿；纯后端改动，需 `wails build` 出新二进制生效。 |
+| **涉及文件** | [manage_todo.go](internal/agent/tools/manage_todo.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[manage_notebook.go](internal/agent/tools/manage_notebook.go)、[manage_note.go](internal/agent/tools/manage_note.go)（action 分发/Info/ActionText/审批摘要）、[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)、[meta.go](internal/agent/tools/meta.go)（4 处 Label 补「删除」）、[TOOLS.md](internal/agent/TOOLS.md)（§6.1 审批分级段）、[EVENTS.md](internal/agent/EVENTS.md)（§5 各工具审批分级） |
 
 ## 九、初始静态分析关键结论
 

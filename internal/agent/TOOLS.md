@@ -18,7 +18,7 @@ internal/agent/                    父包（Agent 对话链路）
 └── tools/                         工具子包（每文件一个工具，完整清单见 §6）
     ├── context.go                 共享上下文：Context / Record / Collector / WrapWithError
     ├── browse_notes.go             只读读工具（list 搜索 / view 读全文，ActionText 参考）
-    ├── manage_note.go             写/管理工具参考（create/update/edit/pin/move/tags）
+    ├── manage_note.go             写/管理工具参考（create/update/edit/pin/move/tags/delete）
     ├── plan.go                    规划工具实现（create_plan / update_plan）
     └── doc.go                     子包说明文档（工具清单，需同步维护）
 
@@ -344,7 +344,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 对需用户确认的写/危险操作，工具通过共享的 `Context.Approver`（`tools.Approver`，见 [context.go](internal/agent/tools/context.go)）请求审批，由父包 `agentSession`（[agent.go](internal/agent/agent.go)）实现，事件协议见 [EVENTS.md](internal/agent/EVENTS.md) 的 `ai:tool-approval`。
 
 - **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否命中黑名单：`false` 仅 confirm_every 模式确认；`true` 在 confirm_every/review 模式强制确认、auto 模式自动放行并留审计痕）。
-- **笔记管理工具写操作**：`manage_note` / `manage_notebook` / `manage_tag` / `manage_todo` 的写操作（**create 免确认**）同样经 `Context.Approver` 按当前审批模式（confirm_every / review / auto）弹出确认面板，批准后执行、拒绝时返回错误文本。其中 `manage_note` 另有 critical 分级：`edit` 恒为高危（critical=true）；`move` / `add_tag` / `remove_tag` 批量（多篇笔记，ids>1）为高危；`update` / `pin` 为常规（critical=false）；其余三个工具的写操作 critical=false。`http_request` 所有请求（含 GET）均接入门控：GET 为常规（critical=false），POST/PUT/DELETE/PATCH 为高危（critical=true）。`manage_memory` 豁免，不接入审批。
+- **笔记管理工具写操作**：`manage_note` / `manage_notebook` / `manage_tag` / `manage_todo` 的写操作（**create 免确认**）同样经 `Context.Approver` 按当前审批模式（confirm_every / review / auto）弹出确认面板，批准后执行、拒绝时返回错误文本。其中删除类 action 恒为高危（critical=true）：`manage_note.delete`（软删进回收站，`ids` 支持单条/批量，恢复由用户在回收站页面自行操作）、`manage_notebook.delete`（可选 `with_notes`，默认 false 其下笔记迁入默认笔记本、true 连同笔记移入回收站）、`manage_tag.delete`（仅删标签，笔记不受影响）、`manage_todo.delete`（单条硬删）/ `clear`（清空已完成待办，硬删），manage_todo 审批摘要注明「不可恢复」。`manage_note` 其余分级：`edit` 恒为高危（critical=true）；`move` / `add_tag` / `remove_tag` 批量（多篇笔记，ids>1）为高危；`update` / `pin` 为常规（critical=false）；其余写操作 critical=false。后端全量清空能力（TodoService.DeleteUnfinished / TodoService.DeleteAll / NotebookService.ResetAll）不接入（属数据管理页职责）。`http_request` 所有请求（含 GET）均接入门控：GET 为常规（critical=false），POST/PUT/DELETE/PATCH 为高危（critical=true）。`manage_memory` 豁免，不接入审批。
 - **判断标准**：是否触发审批、`critical` 取值，均由该工具自行定义并写在工具文件头注释与 `EVENTS.md` 中；本指南不在文件里逐工具罗列，避免与代码真相脱节。
 
 #### 如何给工具接入审批（步骤）

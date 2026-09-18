@@ -1,16 +1,19 @@
 package tools
 
 // 本文件实现 manage_todo 待办管理工具：模型在 ReAct 循环中调用它创建待办、
-// 列出待办、勾选（完成/取消完成）待办或修改待办文本，底层复用 services.TodoService
-// （Create / ListPaged / Search / Toggle / Update），不感知父包 agent 的事件循环细节。
-// 一个工具通过 action 参数区分四个动作：
+// 列出待办、勾选（完成/取消完成）待办、修改待办文本或删除待办，底层复用 services.TodoService
+// （Create / ListPaged / Search / Toggle / Update / Delete / DeleteCompleted），
+// 不感知父包 agent 的事件循环细节。
+// 一个工具通过 action 参数区分六个动作：
 //   - create：创建待办（text 必填）；
 //   - list：列出待办（status 过滤，缺省 active=未完成，done=已完成，all=全部；
 //     keyword 按内容关键字过滤），
 //     支持分页（page 页码从 1 开始，pageSize 每页条数，缺省 10、上限 50），
 //     返回"共 n 条、第 x/y 页"，列表只展示当前页条目；当页未展示完时提示可翻页；
 //   - toggle：勾选待办（id 必填、正整数，来自列表中的 [数字] 编号，切换完成/未完成）；
-//   - update：修改待办文本（id 必填、正整数，text 必填）。
+//   - update：修改待办文本（id 必填、正整数，text 必填）；
+//   - delete：删除单条待办（id 必填、正整数，硬删不可恢复）；
+//   - clear：清空全部已完成待办（硬删不可恢复，返回清理条数，未完成待办不受影响）。
 
 import (
 	"context"
@@ -71,6 +74,10 @@ func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
 		return "更新待办状态"
 	case "update":
 		return "修改待办文本"
+	case "delete":
+		return "删除待办"
+	case "clear":
+		return "清空已完成待办"
 	default:
 		return "执行"
 	}
@@ -80,12 +87,12 @@ func (m *manageTodoTool) ActionText(argumentsInJSON string) string {
 func (m *manageTodoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_todo",
-		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办或修改待办文本时调用。边界：待办（todo）用于管理任务清单，笔记（note）用于管理知识内容；用户要记待办/任务用 manage_todo，要记笔记/知识点用 manage_note。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update。写操作（toggle/update）将按当前审批模式弹出确认面板，用户批准后才执行。",
+		Desc: "管理待办事项。当用户要求创建待办、查看待办列表、勾选（完成/取消完成）待办、修改待办文本或删除待办时调用。边界：待办（todo）用于管理任务清单，笔记（note）用于管理知识内容；用户要记待办/任务用 manage_todo，要记笔记/知识点用 manage_note。通过 action 参数区分动作：create=创建待办（需提供 text 待办内容）；list=列出待办（可用 status 过滤：active=未完成，缺省值；done=已完成；all=全部；可用 keyword 按待办内容关键字过滤，定位特定待办时优先用 keyword 而非翻页；待办较多时可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；toggle=勾选待办（切换完成/未完成状态，需提供 id 待办编号，列表中的 [数字] 即为 id）；update=修改待办文本（需提供 id 待办编号与 text 新内容）；delete=删除单条待办（需提供 id 待办编号，硬删不可恢复）；clear=清空全部已完成待办（硬删不可恢复，返回清理条数，未完成待办不受影响）。返回待办列表或操作结果，列表中的编号 [数字] 可用于后续 toggle/update/delete。写操作（toggle/update）将按当前审批模式弹出确认面板，用户批准后才执行；删除类动作（delete/clear）属不可恢复的高危操作，同样需按审批模式确认。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
-				Desc:     "要执行的动作：create=创建待办；list=列出待办；toggle=勾选（切换完成/未完成）待办；update=修改待办文本",
-				Enum:     []string{"create", "list", "toggle", "update"},
+				Desc:     "要执行的动作：create=创建待办；list=列出待办；toggle=勾选（切换完成/未完成）待办；update=修改待办文本；delete=删除单条待办；clear=清空全部已完成待办",
+				Enum:     []string{"create", "list", "toggle", "update", "delete", "clear"},
 				Required: true,
 			},
 			"text": {
@@ -106,7 +113,7 @@ func (m *manageTodoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"id": {
 				Type:     schema.Number,
-				Desc:     "待办编号（正整数，列表中的 [数字] 即为 id），action=toggle / update 时必填",
+				Desc:     "待办编号（正整数，列表中的 [数字] 即为 id），action=toggle / update / delete 时必填",
 				Required: false,
 			},
 			"page": {
@@ -139,7 +146,7 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	}
 	args.Action = strings.TrimSpace(args.Action)
 	switch args.Action {
-	case "create", "list", "toggle", "update":
+	case "create", "list", "toggle", "update", "delete", "clear":
 	default:
 		return "", fmt.Errorf("manage_todo 参数缺少/非法 action: %s", args.Action)
 	}
@@ -212,6 +219,37 @@ func (m *manageTodoTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 			return "", err
 		}
 		return fmt.Sprintf("已更新待办 #%d：%s", t.ID, t.Text), nil
+	case "delete":
+		// 先参数校验，再审批，再执行：避免无效 id（<=0）先弹出无意义审批窗
+		if args.ID <= 0 {
+			return "", errors.New("manage_todo 删除待办缺少有效的 id")
+		}
+		// 非整数 id（如 1.5）直接报错而非静默截断，与删除动作的「正整数」参数约定一致
+		if float64(uint(args.ID)) != args.ID {
+			return "", errors.New("manage_todo 删除待办的 id 须为正整数")
+		}
+		// 删除为高危写操作（硬删不可恢复）：critical=true，审批摘要注明不可恢复
+		if err := m.requestApproval(ctx, fmt.Sprintf("删除待办 #%d（不可恢复）", int(args.ID)), true); err != nil {
+			return "", err
+		}
+		if err := m.todo.Delete(uint(args.ID)); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("已删除待办 #%d", int(args.ID)), nil
+	case "clear":
+		// 清空为高危写操作（硬删不可恢复）：critical=true，审批摘要注明不可恢复；
+		// 仅清已完成待办，未完成待办不受影响（DeleteCompleted 语义）
+		if err := m.requestApproval(ctx, "清空全部已完成待办（不可恢复）", true); err != nil {
+			return "", err
+		}
+		n, err := m.todo.DeleteCompleted()
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return "当前没有已完成的待办，无需清理", nil
+		}
+		return fmt.Sprintf("已清理 %d 条已完成待办", n), nil
 	}
 	return "", fmt.Errorf("manage_todo 未知 action: %s", args.Action)
 }

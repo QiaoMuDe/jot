@@ -578,3 +578,489 @@ func TestManageTodoApproval(t *testing.T) {
 		}
 	})
 }
+
+// TestManageNoteDeleteAction 覆盖 manage_note delete 动作：审批参数（critical=true）、
+// 拒绝不落库、批准后软删落库（deleted_at 置位，回收站可查）与批量删除。
+func TestManageNoteDeleteAction(t *testing.T) {
+	// 批准放行：单条 delete 经 Approver 批准后软删，deleted_at 置位（Unscoped 可查）
+	t.Run("批准放行（单条软删）", func(t *testing.T) {
+		m, db := newManageNoteApprovalTool(t)
+		id := seedApprovalNote(t, db, "待删笔记", "内容")
+		mock := &mockApprover{}
+		m.ctx = &Context{Approver: mock}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"delete","ids":[`+strconv.Itoa(int(id))+`]}`)
+		if err != nil {
+			t.Fatalf("批准后删除失败: %v", err)
+		}
+		if !strings.Contains(out, "已删除") || !strings.Contains(out, "回收站") {
+			t.Errorf("返回应含删除与回收站文案，实际: %q", out)
+		}
+		// 普通查询不可见（软删），Unscoped 查询可见且 deleted_at 置位
+		if err := db.First(&models.Note{}, id).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Errorf("软删后普通查询应不可见，实际错误: %v", err)
+		}
+		var n models.Note
+		if err := db.Unscoped().First(&n, id).Error; err != nil {
+			t.Fatalf("Unscoped 读取笔记失败: %v", err)
+		}
+		if !n.DeletedAt.Valid {
+			t.Error("批准后 deleted_at 应置位（回收站可见）")
+		}
+		if mock.gotTool != "manage_note" {
+			t.Errorf("审批 toolName = %q, want manage_note", mock.gotTool)
+		}
+		if !mock.gotCritical {
+			t.Error("delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "删除笔记 #"+strconv.Itoa(int(id))) {
+			t.Errorf("审批摘要应含删除动作与笔记编号，实际: %q", mock.gotSum)
+		}
+	})
+
+	// 批准放行：批量 delete 一次删两篇，全部 deleted_at 置位，摘要注明批量
+	t.Run("批准放行（批量软删）", func(t *testing.T) {
+		m, db := newManageNoteApprovalTool(t)
+		idA := seedApprovalNote(t, db, "A", "a")
+		idB := seedApprovalNote(t, db, "B", "b")
+		mock := &mockApprover{}
+		m.ctx = &Context{Approver: mock}
+
+		args := `{"action":"delete","ids":[` + strconv.Itoa(int(idA)) + `,` + strconv.Itoa(int(idB)) + `]}`
+		out, err := m.InvokableRun(context.Background(), args)
+		if err != nil {
+			t.Fatalf("批准后批量删除失败: %v", err)
+		}
+		if !strings.Contains(out, "2 篇") {
+			t.Errorf("返回应含删除条数，实际: %q", out)
+		}
+		if !mock.gotCritical {
+			t.Error("批量 delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "批量删除 2 篇") {
+			t.Errorf("审批摘要应含批量删除条数，实际: %q", mock.gotSum)
+		}
+		for _, id := range []uint{idA, idB} {
+			var n models.Note
+			if err := db.Unscoped().First(&n, id).Error; err != nil {
+				t.Fatalf("Unscoped 读取笔记失败: %v", err)
+			}
+			if !n.DeletedAt.Valid {
+				t.Errorf("笔记 #%d 的 deleted_at 应置位", id)
+			}
+		}
+	})
+
+	// 拒绝：Approver 返回错误时工具返回该错误，且笔记不落库（deleted_at 不置位）
+	t.Run("拒绝不落库（delete）", func(t *testing.T) {
+		m, db := newManageNoteApprovalTool(t)
+		id := seedApprovalNote(t, db, "保留笔记", "内容")
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		m.ctx = &Context{Approver: rej}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"delete","ids":[`+strconv.Itoa(int(id))+`]}`)
+		if err == nil {
+			t.Fatal("拒绝后应返回错误")
+		}
+		if !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Errorf("错误应为审批拒绝错误，实际: %v", err)
+		}
+		var n models.Note
+		if err := db.Unscoped().First(&n, id).Error; err != nil {
+			t.Fatalf("Unscoped 读取笔记失败: %v", err)
+		}
+		if n.DeletedAt.Valid {
+			t.Error("拒绝后 deleted_at 不应置位")
+		}
+	})
+}
+
+// TestManageNotebookDeleteAction 覆盖 manage_notebook delete 动作：审批参数（critical=true）、
+// 拒绝不落库、温和删除（其下笔记迁默认笔记本 id=1）、连带删除（with_notes=true 进回收站）
+// 与默认笔记本保护（id=1 报错且不触发审批）。
+func TestManageNotebookDeleteAction(t *testing.T) {
+	// 批准放行（温和删除）：笔记本软删，其下笔记 notebook_id 迁为默认笔记本 1
+	t.Run("批准放行（笔记迁默认笔记本）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewNotebookService(db, logger)
+		// 种子：默认笔记本（id=1）+ 待删笔记本 + 其下笔记
+		if err := db.Create(&models.Notebook{Name: "默认笔记本"}).Error; err != nil {
+			t.Fatalf("创建默认笔记本失败: %v", err)
+		}
+		nb := models.Notebook{Name: "待删本"}
+		if err := db.Create(&nb).Error; err != nil {
+			t.Fatalf("创建笔记本失败: %v", err)
+		}
+		note := models.Note{Title: "归属笔记", Content: "内容", NotebookID: nb.ID}
+		if err := db.Create(&note).Error; err != nil {
+			t.Fatalf("创建笔记失败: %v", err)
+		}
+		mock := &mockApprover{}
+		m := &manageNotebookTool{notebook: svc, ctx: &Context{Approver: mock}}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(nb.ID))+`}`)
+		if err != nil {
+			t.Fatalf("批准后删除笔记本失败: %v", err)
+		}
+		if !strings.Contains(out, "已删除笔记本") {
+			t.Errorf("返回应含已删除文案，实际: %q", out)
+		}
+		// 笔记本软删（deleted_at 置位）
+		var gotNb models.Notebook
+		if err := db.Unscoped().First(&gotNb, nb.ID).Error; err != nil {
+			t.Fatalf("Unscoped 读取笔记本失败: %v", err)
+		}
+		if !gotNb.DeletedAt.Valid {
+			t.Error("批准后笔记本应软删（deleted_at 置位）")
+		}
+		// 笔记本身未删，notebook_id 迁为默认笔记本 1
+		var gotNote models.Note
+		if err := db.First(&gotNote, note.ID).Error; err != nil {
+			t.Fatalf("读取笔记失败: %v", err)
+		}
+		if gotNote.NotebookID != 1 {
+			t.Errorf("笔记 notebook_id = %d, want 1（默认笔记本）", gotNote.NotebookID)
+		}
+		if mock.gotTool != "manage_notebook" {
+			t.Errorf("审批 toolName = %q, want manage_notebook", mock.gotTool)
+		}
+		if !mock.gotCritical {
+			t.Error("delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "迁入默认笔记本") {
+			t.Errorf("审批摘要应注明笔记去向，实际: %q", mock.gotSum)
+		}
+	})
+
+	// 批准放行（连带删除）：with_notes=true 时笔记本软删，其下笔记移入回收站
+	t.Run("批准放行（with_notes=true 进回收站）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewNotebookService(db, logger)
+		if err := db.Create(&models.Notebook{Name: "默认笔记本"}).Error; err != nil {
+			t.Fatalf("创建默认笔记本失败: %v", err)
+		}
+		nb := models.Notebook{Name: "待删本"}
+		if err := db.Create(&nb).Error; err != nil {
+			t.Fatalf("创建笔记本失败: %v", err)
+		}
+		note := models.Note{Title: "连带笔记", Content: "内容", NotebookID: nb.ID}
+		if err := db.Create(&note).Error; err != nil {
+			t.Fatalf("创建笔记失败: %v", err)
+		}
+		mock := &mockApprover{}
+		m := &manageNotebookTool{notebook: svc, ctx: &Context{Approver: mock}}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(nb.ID))+`,"with_notes":true}`)
+		if err != nil {
+			t.Fatalf("批准后连带删除失败: %v", err)
+		}
+		if !strings.Contains(out, "回收站") {
+			t.Errorf("返回应含回收站文案，实际: %q", out)
+		}
+		// 笔记本软删
+		var gotNb models.Notebook
+		if err := db.Unscoped().First(&gotNb, nb.ID).Error; err != nil {
+			t.Fatalf("Unscoped 读取笔记本失败: %v", err)
+		}
+		if !gotNb.DeletedAt.Valid {
+			t.Error("批准后笔记本应软删（deleted_at 置位）")
+		}
+		// 笔记移入回收站（deleted_at 置位）
+		var gotNote models.Note
+		if err := db.Unscoped().First(&gotNote, note.ID).Error; err != nil {
+			t.Fatalf("Unscoped 读取笔记失败: %v", err)
+		}
+		if !gotNote.DeletedAt.Valid {
+			t.Error("with_notes=true 后笔记应进回收站（deleted_at 置位）")
+		}
+		if !mock.gotCritical {
+			t.Error("delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "回收站") {
+			t.Errorf("审批摘要应注明笔记去向（回收站），实际: %q", mock.gotSum)
+		}
+	})
+
+	// 默认笔记本保护：id=1 删除直接报错，Approver 不被调用（不弹无效审批窗）
+	t.Run("默认笔记本保护（id=1）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewNotebookService(db, logger)
+		if err := db.Create(&models.Notebook{Name: "默认笔记本"}).Error; err != nil {
+			t.Fatalf("创建默认笔记本失败: %v", err)
+		}
+		mock := &mockApprover{}
+		m := &manageNotebookTool{notebook: svc, ctx: &Context{Approver: mock}}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"delete","id":1}`)
+		if err == nil {
+			t.Fatal("删除默认笔记本应报错")
+		}
+		if !strings.Contains(err.Error(), "默认笔记本不可删除") {
+			t.Errorf("错误应含默认笔记本不可删除，实际: %v", err)
+		}
+		if mock.gotTool != "" {
+			t.Errorf("默认笔记本删除不应触发审批，实际 toolName = %q", mock.gotTool)
+		}
+		// 默认笔记本不应被删除
+		var gotNb models.Notebook
+		if err := db.First(&gotNb, 1).Error; err != nil {
+			t.Fatalf("默认笔记本应仍然存在: %v", err)
+		}
+	})
+
+	// 拒绝：Approver 返回错误时工具返回该错误，且笔记本与笔记均不落库
+	t.Run("拒绝不落库（delete）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewNotebookService(db, logger)
+		if err := db.Create(&models.Notebook{Name: "默认笔记本"}).Error; err != nil {
+			t.Fatalf("创建默认笔记本失败: %v", err)
+		}
+		nb := models.Notebook{Name: "保留本"}
+		if err := db.Create(&nb).Error; err != nil {
+			t.Fatalf("创建笔记本失败: %v", err)
+		}
+		note := models.Note{Title: "归属笔记", Content: "内容", NotebookID: nb.ID}
+		if err := db.Create(&note).Error; err != nil {
+			t.Fatalf("创建笔记失败: %v", err)
+		}
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		m := &manageNotebookTool{notebook: svc, ctx: &Context{Approver: rej}}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(nb.ID))+`}`)
+		if err == nil {
+			t.Fatal("拒绝后应返回错误")
+		}
+		if !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Errorf("错误应为审批拒绝错误，实际: %v", err)
+		}
+		// 笔记本仍在（deleted_at 未置位）、笔记归属未变
+		var gotNb models.Notebook
+		if err := db.First(&gotNb, nb.ID).Error; err != nil {
+			t.Fatalf("读取笔记本失败: %v", err)
+		}
+		var gotNote models.Note
+		if err := db.First(&gotNote, note.ID).Error; err != nil {
+			t.Fatalf("读取笔记失败: %v", err)
+		}
+		if gotNote.NotebookID != nb.ID {
+			t.Errorf("拒绝后笔记 notebook_id 不应变更 = %d, want %d", gotNote.NotebookID, nb.ID)
+		}
+	})
+}
+
+// TestManageTagDeleteAction 覆盖 manage_tag delete 动作：审批参数（critical=true）、
+// 拒绝不落库、批准后真实删除（标签硬删，笔记内容不受影响）。
+func TestManageTagDeleteAction(t *testing.T) {
+	// 批准放行：delete 经 Approver 批准后真实删除标签（Tag 无软删字段，物理删除）
+	t.Run("批准放行（delete）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTagService(db, logger)
+		tag := models.Tag{Name: "待删标签"}
+		if err := db.Create(&tag).Error; err != nil {
+			t.Fatalf("创建标签失败: %v", err)
+		}
+		mock := &mockApprover{}
+		m := &manageTagTool{tag: svc, ctx: &Context{Approver: mock}}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(tag.ID))+`}`)
+		if err != nil {
+			t.Fatalf("批准后删除标签失败: %v", err)
+		}
+		if !strings.Contains(out, "已删除标签") {
+			t.Errorf("返回应含已删除文案，实际: %q", out)
+		}
+		// 标签已删除（查询不可见）
+		if err := db.First(&models.Tag{}, tag.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Errorf("删除后查询标签应不可见，实际错误: %v", err)
+		}
+		if mock.gotTool != "manage_tag" {
+			t.Errorf("审批 toolName = %q, want manage_tag", mock.gotTool)
+		}
+		if !mock.gotCritical {
+			t.Error("delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "删除标签 #"+strconv.Itoa(int(tag.ID))) {
+			t.Errorf("审批摘要应含删除动作与标签编号，实际: %q", mock.gotSum)
+		}
+	})
+
+	// 拒绝：Approver 返回错误时工具返回该错误，且标签不落库
+	t.Run("拒绝不落库（delete）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTagService(db, logger)
+		tag := models.Tag{Name: "保留标签"}
+		if err := db.Create(&tag).Error; err != nil {
+			t.Fatalf("创建标签失败: %v", err)
+		}
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		m := &manageTagTool{tag: svc, ctx: &Context{Approver: rej}}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(tag.ID))+`}`)
+		if err == nil {
+			t.Fatal("拒绝后应返回错误")
+		}
+		if !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Errorf("错误应为审批拒绝错误，实际: %v", err)
+		}
+		var got models.Tag
+		if err := db.First(&got, tag.ID).Error; err != nil {
+			t.Fatalf("读取标签失败: %v", err)
+		}
+		if got.Name != "保留标签" {
+			t.Errorf("拒绝后标签不应被删除，实际名称 = %q", got.Name)
+		}
+	})
+}
+
+// TestManageTodoDeleteAndClearAction 覆盖 manage_todo delete / clear 动作：审批参数（critical=true、
+// 摘要注明不可恢复）、拒绝不落库、批准后硬删落库，clear 仅清已完成并返回清理条数。
+func TestManageTodoDeleteAndClearAction(t *testing.T) {
+	// 批准放行：delete 经 Approver 批准后硬删单条待办
+	t.Run("批准放行（delete 单条）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTodoService(db, logger)
+		todo := models.Todo{Text: "买牛奶"}
+		if err := db.Create(&todo).Error; err != nil {
+			t.Fatalf("创建待办失败: %v", err)
+		}
+		mock := &mockApprover{}
+		m := &manageTodoTool{todo: svc, ctx: &Context{Approver: mock}}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(todo.ID))+`}`)
+		if err != nil {
+			t.Fatalf("批准后删除待办失败: %v", err)
+		}
+		if !strings.Contains(out, "已删除待办") {
+			t.Errorf("返回应含已删除文案，实际: %q", out)
+		}
+		// 硬删：查询不可见
+		if err := db.First(&models.Todo{}, todo.ID).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Errorf("删除后查询待办应不可见，实际错误: %v", err)
+		}
+		if mock.gotTool != "manage_todo" {
+			t.Errorf("审批 toolName = %q, want manage_todo", mock.gotTool)
+		}
+		if !mock.gotCritical {
+			t.Error("delete 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "不可恢复") {
+			t.Errorf("审批摘要应注明不可恢复，实际: %q", mock.gotSum)
+		}
+	})
+
+	// 拒绝：Approver 返回错误时工具返回该错误，且待办不落库
+	t.Run("拒绝不落库（delete）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTodoService(db, logger)
+		todo := models.Todo{Text: "买牛奶"}
+		if err := db.Create(&todo).Error; err != nil {
+			t.Fatalf("创建待办失败: %v", err)
+		}
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		m := &manageTodoTool{todo: svc, ctx: &Context{Approver: rej}}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"delete","id":`+strconv.Itoa(int(todo.ID))+`}`)
+		if err == nil {
+			t.Fatal("拒绝后应返回错误")
+		}
+		if !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Errorf("错误应为审批拒绝错误，实际: %v", err)
+		}
+		var got models.Todo
+		if err := db.First(&got, todo.ID).Error; err != nil {
+			t.Fatalf("读取待办失败: %v", err)
+		}
+		if got.Text != "买牛奶" {
+			t.Errorf("拒绝后待办不应被删除，实际文本 = %q", got.Text)
+		}
+	})
+
+	// 批准放行：clear 仅清空已完成待办并返回清理条数，未完成待办不受影响
+	t.Run("批准放行（clear 仅清已完成）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTodoService(db, logger)
+		// 种子：2 条已完成 + 2 条未完成
+		for _, txt := range []string{"已完成A", "已完成B"} {
+			if err := db.Create(&models.Todo{Text: txt, Done: true}).Error; err != nil {
+				t.Fatalf("创建已完成待办失败: %v", err)
+			}
+		}
+		for _, txt := range []string{"未完成A", "未完成B"} {
+			if err := db.Create(&models.Todo{Text: txt, Done: false}).Error; err != nil {
+				t.Fatalf("创建未完成待办失败: %v", err)
+			}
+		}
+		mock := &mockApprover{}
+		m := &manageTodoTool{todo: svc, ctx: &Context{Approver: mock}}
+
+		out, err := m.InvokableRun(context.Background(), `{"action":"clear"}`)
+		if err != nil {
+			t.Fatalf("批准后清空失败: %v", err)
+		}
+		if !strings.Contains(out, "2") {
+			t.Errorf("返回应含清理条数 2，实际: %q", out)
+		}
+		// 已完成待办被硬删，未完成待办保留
+		var doneCnt, activeCnt int64
+		if err := db.Model(&models.Todo{}).Where("done = ?", true).Count(&doneCnt).Error; err != nil {
+			t.Fatalf("统计已完成待办失败: %v", err)
+		}
+		if err := db.Model(&models.Todo{}).Where("done = ?", false).Count(&activeCnt).Error; err != nil {
+			t.Fatalf("统计未完成待办失败: %v", err)
+		}
+		if doneCnt != 0 {
+			t.Errorf("清空后已完成待办数 = %d, want 0", doneCnt)
+		}
+		if activeCnt != 2 {
+			t.Errorf("清空后未完成待办数 = %d, want 2（不受影响）", activeCnt)
+		}
+		if mock.gotTool != "manage_todo" {
+			t.Errorf("审批 toolName = %q, want manage_todo", mock.gotTool)
+		}
+		if !mock.gotCritical {
+			t.Error("clear 审批 critical 应为 true")
+		}
+		if !strings.Contains(mock.gotSum, "不可恢复") {
+			t.Errorf("审批摘要应注明不可恢复，实际: %q", mock.gotSum)
+		}
+	})
+
+	// 拒绝：Approver 返回错误时工具返回该错误，已完成与未完成待办均保留
+	t.Run("拒绝不落库（clear）", func(t *testing.T) {
+		db := newApprovalTestDB(t)
+		logger := newApprovalTestLogger(t)
+		svc := services.NewTodoService(db, logger)
+		if err := db.Create(&models.Todo{Text: "已完成A", Done: true}).Error; err != nil {
+			t.Fatalf("创建已完成待办失败: %v", err)
+		}
+		if err := db.Create(&models.Todo{Text: "未完成A", Done: false}).Error; err != nil {
+			t.Fatalf("创建未完成待办失败: %v", err)
+		}
+		rej := &rejectApprover{err: errors.New("用户拒绝了操作")}
+		m := &manageTodoTool{todo: svc, ctx: &Context{Approver: rej}}
+
+		_, err := m.InvokableRun(context.Background(), `{"action":"clear"}`)
+		if err == nil {
+			t.Fatal("拒绝后应返回错误")
+		}
+		if !strings.Contains(err.Error(), "用户拒绝了操作") {
+			t.Errorf("错误应为审批拒绝错误，实际: %v", err)
+		}
+		var cnt int64
+		if err := db.Model(&models.Todo{}).Count(&cnt).Error; err != nil {
+			t.Fatalf("统计待办失败: %v", err)
+		}
+		if cnt != 2 {
+			t.Errorf("拒绝后待办总数 = %d, want 2（均保留）", cnt)
+		}
+	})
+}

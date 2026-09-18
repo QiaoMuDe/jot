@@ -1,13 +1,17 @@
 package tools
 
 // 本文件实现 manage_notebook 笔记本管理工具：模型在 ReAct 循环中调用它创建笔记本、
-// 重命名笔记本或列出笔记本，底层复用 services.NotebookService
-// （Create / Update / ListPaged / Search），不感知父包 agent 的事件循环细节。
-// 一个工具通过 action 参数区分三个动作：
+// 重命名笔记本、列出笔记本或删除笔记本，底层复用 services.NotebookService
+// （Create / Update / ListPaged / Search / Delete / DeleteWithNotes），
+// 不感知父包 agent 的事件循环细节。
+// 一个工具通过 action 参数区分四个动作：
 //   - create：创建笔记本（name 必填）；
 //   - rename：重命名笔记本（id 必填、正整数，来自列表中的 [数字] 编号，以及 name 新名称）；
 //   - list：列出笔记本（keyword 按名称关键字过滤；page 页码从 1 开始，pageSize 每页条数，
-//     缺省 10、上限 50），返回"共 n 个、第 x/y 页"，列表只展示当前页条目；当页未展示完时提示可翻页。
+//     缺省 10、上限 50），返回"共 n 个、第 x/y 页"，列表只展示当前页条目；当页未展示完时提示可翻页；
+//   - delete：删除笔记本（id 必填、正整数；with_notes 可选布尔、缺省 false：
+//     false=仅删除笔记本，其下笔记迁入默认笔记本（id=1）；true=连同其下笔记一起移入回收站；
+//     默认笔记本（id=1）不可删除）。
 
 import (
 	"context"
@@ -66,6 +70,8 @@ func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
 		return "重命名笔记本"
 	case "list":
 		return "列出笔记本"
+	case "delete":
+		return "删除笔记本"
 	default:
 		return "执行"
 	}
@@ -75,12 +81,12 @@ func (m *manageNotebookTool) ActionText(argumentsInJSON string) string {
 func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "manage_notebook",
-		Desc: "管理笔记本（笔记本是笔记的容器，用于组织分类笔记）。当用户要求创建笔记本、重命名笔记本或查看笔记本列表时调用。边界：manage_notebook 管理笔记本本身（创建/重命名/列出），manage_note 的 move 动作将笔记移动到目标笔记本；用户要新建/重命名文件夹用 manage_notebook，要移动笔记到文件夹用 manage_note（action=move）。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename。写操作（rename）将按当前审批模式弹出确认面板，用户批准后才执行。",
+		Desc: "管理笔记本（笔记本是笔记的容器，用于组织分类笔记）。当用户要求创建笔记本、重命名笔记本、查看笔记本列表或删除笔记本时调用。边界：manage_notebook 管理笔记本本身（创建/重命名/列出/删除），manage_note 的 move 动作将笔记移动到目标笔记本；用户要新建/重命名/删除文件夹用 manage_notebook，要移动笔记到文件夹用 manage_note（action=move）。通过 action 参数区分动作：create=创建笔记本（需提供 name 笔记本名称）；rename=重命名笔记本（需提供 id 笔记本编号，列表中的 [数字] 即为 id，以及 name 新名称）；list=列出笔记本（可用 keyword 按名称关键字过滤，定位特定笔记本时优先用 keyword 而非翻页；可用 page 页码与 pageSize 每页条数分页查看，pageSize 缺省 10、上限 50）；delete=删除笔记本（需提供 id 笔记本编号；可选 with_notes：缺省 false=仅删除笔记本，其下笔记自动迁入默认笔记本（id=1），数据零丢失；true=连同其下笔记一起移入回收站，可在回收站页面恢复；默认笔记本 id=1 不可删除）。返回笔记本列表或操作结果，列表中的编号 [数字] 可用于后续 rename/delete。写操作（rename）将按当前审批模式弹出确认面板，用户批准后才执行；delete 属高危操作，同样需按审批模式确认。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
-				Desc:     "要执行的动作：create=创建笔记本；rename=重命名笔记本；list=列出笔记本",
-				Enum:     []string{"create", "rename", "list"},
+				Desc:     "要执行的动作：create=创建笔记本；rename=重命名笔记本；list=列出笔记本；delete=删除笔记本",
+				Enum:     []string{"create", "rename", "list", "delete"},
 				Required: true,
 			},
 			"name": {
@@ -90,7 +96,12 @@ func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"id": {
 				Type:     schema.Number,
-				Desc:     "笔记本编号（正整数，列表中的 [数字] 即为 id），action=rename 时必填",
+				Desc:     "笔记本编号（正整数，列表中的 [数字] 即为 id），action=rename / delete 时必填",
+				Required: false,
+			},
+			"with_notes": {
+				Type:     schema.Boolean,
+				Desc:     "是否连同笔记一起删除，仅 action=delete 时使用：true=其下笔记移入回收站（可在回收站页面恢复）；缺省 false=其下笔记迁入默认笔记本（id=1）",
 				Required: false,
 			},
 			"keyword": {
@@ -112,22 +123,23 @@ func (m *manageNotebookTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	}, nil
 }
 
-// InvokableRun 执行工具：解析参数 → 校验 action → 按动作分发到 Create / Update / ListPaged。
+// InvokableRun 执行工具：解析参数 → 校验 action → 按动作分发到 Create / Update / ListPaged / Delete。
 func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	var args struct {
-		Action   string  `json:"action"`
-		Name     string  `json:"name"`
-		ID       float64 `json:"id"`
-		Keyword  string  `json:"keyword"`
-		Page     float64 `json:"page"`
-		PageSize float64 `json:"pageSize"`
+		Action    string  `json:"action"`
+		Name      string  `json:"name"`
+		ID        float64 `json:"id"`
+		WithNotes bool    `json:"with_notes"`
+		Keyword   string  `json:"keyword"`
+		Page      float64 `json:"page"`
+		PageSize  float64 `json:"pageSize"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
 		return "", fmt.Errorf("解析 manage_notebook 参数失败: %w", err)
 	}
 	args.Action = strings.TrimSpace(args.Action)
 	switch args.Action {
-	case "create", "rename", "list":
+	case "create", "rename", "list", "delete":
 	default:
 		return "", fmt.Errorf("manage_notebook 参数缺少/非法 action: %s", args.Action)
 	}
@@ -182,6 +194,37 @@ func (m *manageNotebookTool) InvokableRun(ctx context.Context, argumentsInJSON s
 		return fmt.Sprintf("已重命名笔记本 #%d 为：%s", nb.ID, nb.Name), nil
 	case "list":
 		return m.listNotebooks(int(args.Page), int(args.PageSize), args.Keyword)
+	case "delete":
+		// 先参数校验，再审批，再执行：避免无效参数（id<=0、默认笔记本）先弹出无意义审批窗；
+		// 默认笔记本（id=1）不可删除为既有约定，校验失败直接报错、不触发审批
+		if args.ID <= 0 {
+			return "", errors.New("manage_notebook 删除笔记本缺少有效的 id")
+		}
+		// 非整数 id（如 1.5）直接报错而非静默截断，避免绕过下方 id==1 的默认笔记本保护
+		if float64(uint(args.ID)) != args.ID {
+			return "", errors.New("manage_notebook 删除笔记本的 id 须为正整数")
+		}
+		if args.ID == 1 {
+			return "", errors.New("默认笔记本不可删除")
+		}
+		// 删除为高危写操作：critical=true；审批摘要注明其下笔记去向，便于用户确认影响范围
+		summary := fmt.Sprintf("删除笔记本 #%d（其下笔记迁入默认笔记本）", int(args.ID))
+		if args.WithNotes {
+			summary = fmt.Sprintf("删除笔记本 #%d（连同笔记移入回收站）", int(args.ID))
+		}
+		if err := m.requestApproval(ctx, summary, true); err != nil {
+			return "", err
+		}
+		if args.WithNotes {
+			if err := m.notebook.DeleteWithNotes(uint(args.ID)); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("已删除笔记本 #%d，其下笔记已移入回收站", int(args.ID)), nil
+		}
+		if err := m.notebook.Delete(uint(args.ID)); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("已删除笔记本 #%d，其下笔记已迁入默认笔记本", int(args.ID)), nil
 	}
 	return "", fmt.Errorf("manage_notebook 未知 action: %s", args.Action)
 }
