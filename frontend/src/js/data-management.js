@@ -541,6 +541,11 @@ let vectorIndexPickerTimer = null; // 选择区切换动画定时器（防止动
 let vectorIndexStatus = null; // 向量索引统计缓存（noteCount/chunkCount/sizeBytes），供「全部笔记」信息卡片使用
 let vectorIndexLastErrorMsg = ''; // 单篇失败即时提示去重：记录上一条错误信息
 let vectorIndexLastErrorAt = 0;   // 单篇失败即时提示去重：记录上一条错误时间
+let vectorIndexStartAt = 0;       // 嵌入任务开始时刻（Date.now() 毫秒），供已用/预计剩余时间前端估算
+let vectorIndexRemainMs = null;   // 最近一次估算的预计剩余毫秒数（null 表示暂不可估算，显示 --）
+let vectorIndexElapsedTimer = null; // 耗时文本 1s 刷新定时器（仅更新两个时间 span，主文案不重绘）
+let vectorIndexTimeReady = false; // 首次进度回调是否已到达（未到达时已用/剩余时间显示占位符，回调后开始真实更新）
+let vectorIndexLastTitle = '';    // 上次渲染的「当前处理笔记」标题，用于 marquee 去重（标题变化才重建，reset 时复位）
 
 /**
  * HTML 转义（用于列表标题渲染）
@@ -720,6 +725,11 @@ export function closeVectorIndexModal(force = false) {
         clearTimeout(vectorIndexPickerTimer);
         vectorIndexPickerTimer = null;
     }
+    // 取消耗时刷新定时器并复位时间估算，避免下次打开残留
+    clearVectorIndexElapsedTimer();
+    vectorIndexStartAt = 0;
+    vectorIndexRemainMs = null;
+    vectorIndexTimeReady = false;
     // 关闭时清理事件监听，防止泄漏
     cleanupVectorIndexEvents();
     vectorIndexSelected = new Set();
@@ -1236,6 +1246,19 @@ async function startVectorIndex() {
     vectorIndexRunning = true;
     setVectorIndexView('progress');
     resetVectorIndexProgressUI();
+    // 记录开始时刻并启动耗时刷新定时器（仅更新时间 span，主文案不重绘）
+    vectorIndexStartAt = Date.now();
+    vectorIndexRemainMs = null;
+    // 首次进度回调到达前时间显示占位符（已用 --:-- / 预计剩余 --），
+    // 首个 embedding 回调置 vectorIndexTimeReady=true 后才开始真实更新
+    vectorIndexTimeReady = false;
+    const stagePlaceholder = document.getElementById('vectorIndexProgressStage');
+    if (stagePlaceholder) {
+        ensureStageTimeSpans(stagePlaceholder, '准备中');
+        refreshVectorIndexElapsed();
+    }
+    clearVectorIndexElapsedTimer();
+    vectorIndexElapsedTimer = setInterval(refreshVectorIndexElapsed, 1000);
     const startBtn = document.getElementById('vectorIndexStartBtn');
     if (startBtn) startBtn.disabled = true;
 
@@ -1245,9 +1268,128 @@ async function startVectorIndex() {
     } catch (err) {
         console.error('开始嵌入失败:', err);
         vectorIndexRunning = false;
+        clearVectorIndexElapsedTimer();
+        vectorIndexStartAt = 0;
+        vectorIndexRemainMs = null;
+        vectorIndexTimeReady = false;
         if (startBtn) startBtn.disabled = false;
         showVectorIndexError({ error: err?.message || String(err) });
     }
+}
+
+/**
+ * 格式化耗时（毫秒 → mm:ss，超过 1 小时显示 h:mm:ss）
+ * @param {number} ms - 毫秒
+ * @returns {string} 格式化后的耗时文本
+ */
+function formatVectorIndexDuration(ms) {
+    const totalSec = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+/**
+ * 估算预计剩余毫秒数（前端 A1 估算，无后端耗时字段）
+ * 公式：elapsed / progress * (1 - progress)；进度未知或已完成时返回 null
+ * @param {number} done - 已完成篇数
+ * @param {number} total - 总篇数
+ * @param {boolean} isEmbedding - 是否处于 embedding 阶段（当前篇按处理到一半计）
+ * @returns {number|null}
+ */
+function computeVectorIndexRemainMs(done, total, isEmbedding) {
+    if (vectorIndexStartAt <= 0 || total <= 0) return null;
+    const progress = (isEmbedding ? done + 0.5 : done) / total;
+    if (progress <= 0 || progress >= 1) return null;
+    const elapsedMs = Date.now() - vectorIndexStartAt;
+    return Math.max(0, elapsedMs / progress * (1 - progress));
+}
+
+/**
+ * 确保 stage 元素为「主文案，已用 xx，预计剩余约 xx」一句话形态（三段 span 惰性构建，_built 标记防重复）。
+ * 视觉上是一句自然语言，DOM 仍分节点，便于 1s 定时器只更新两个时间 span 而不重绘整行
+ * @param {HTMLElement} stageEl - #vectorIndexProgressStage
+ * @param {string} main - 主文案（如「正在生成向量」）
+ */
+function ensureStageTimeSpans(stageEl, main) {
+    if (!stageEl._built) {
+        stageEl.innerHTML = '';
+        const mainSpan = document.createElement('span');
+        mainSpan.className = 'vector-index-stage-main';
+        const elapsedSpan = document.createElement('span');
+        elapsedSpan.className = 'vector-index-stage-time';
+        elapsedSpan.id = 'vectorIndexElapsedText';
+        const remainSpan = document.createElement('span');
+        remainSpan.className = 'vector-index-stage-time';
+        remainSpan.id = 'vectorIndexRemainText';
+        stageEl.append(mainSpan, '，', elapsedSpan, '，', remainSpan);
+        stageEl._built = true;
+    }
+    const mainSpan = stageEl.querySelector('.vector-index-stage-main');
+    if (mainSpan) mainSpan.textContent = main;
+}
+
+/**
+ * 耗时 1s 定时器回调：仅更新已用/剩余两个时间 span 的文本，主文案不重绘。
+ * 首次进度回调（vectorIndexTimeReady）到达前显示占位符，到达后才更新真实时间
+ */
+function refreshVectorIndexElapsed() {
+    if (vectorIndexStartAt <= 0) return;
+    const elapsedSpan = document.getElementById('vectorIndexElapsedText');
+    if (elapsedSpan) {
+        elapsedSpan.textContent = vectorIndexTimeReady
+            ? `已用 ${formatVectorIndexDuration(Date.now() - vectorIndexStartAt)}`
+            : '已用 --:--';
+    }
+    const remainSpan = document.getElementById('vectorIndexRemainText');
+    if (remainSpan) {
+        remainSpan.textContent = !vectorIndexTimeReady || vectorIndexRemainMs === null
+            ? '预计剩余 --'
+            : `预计剩余约 ${formatVectorIndexDuration(vectorIndexRemainMs)}`;
+    }
+}
+
+/**
+ * 清理耗时刷新定时器（完成/错误/关闭/新任务时调用，防止泄漏）
+ */
+function clearVectorIndexElapsedTimer() {
+    if (vectorIndexElapsedTimer) {
+        clearInterval(vectorIndexElapsedTimer);
+        vectorIndexElapsedTimer = null;
+    }
+}
+
+/**
+ * 当前标题字幕式横向滚动：标题超宽时复制两份无缝循环滚动，短标题保持静态
+ * @param {HTMLElement} el - #vectorIndexCurrentTitle
+ */
+function setupVectorIndexCurrentMarquee(el) {
+    // 先恢复纯文本形态（移除滚动类与内层结构），便于准确测量宽度
+    el.classList.remove('is-marquee');
+    el.style.removeProperty('--marquee-duration');
+    const title = el.textContent;
+    el.textContent = title;
+    // 等下一帧布局完成后再测量是否溢出
+    requestAnimationFrame(() => {
+        if (el.scrollWidth <= el.clientWidth + 2) return;
+        const contentWidth = el.scrollWidth; // 纯标题宽度（inner 构建前测量，避免双份内容污染时长估算）
+        // 复制两份标题实现无缝循环（第二份 aria-hidden，避免读屏重复）
+        const inner = document.createElement('span');
+        inner.className = 'vector-index-current-inner';
+        inner.appendChild(document.createTextNode(title));
+        const clone = document.createElement('span');
+        clone.setAttribute('aria-hidden', 'true');
+        clone.textContent = title;
+        inner.appendChild(clone);
+        el.innerHTML = '';
+        el.appendChild(inner);
+        el.classList.add('is-marquee');
+        // 滚动时长按内容宽度估算：单份宽度 / 50px/s，下限 6s
+        const dur = Math.max(6, contentWidth / 50);
+        el.style.setProperty('--marquee-duration', `${dur}s`);
+    });
 }
 
 /**
@@ -1259,6 +1401,11 @@ function resetVectorIndexProgressUI() {
         clearTimeout(vectorIndexChunkResetTimer);
         vectorIndexChunkResetTimer = null;
     }
+    // 清理耗时刷新定时器并复位时间估算（新任务重新计时）
+    clearVectorIndexElapsedTimer();
+    vectorIndexStartAt = 0;
+    vectorIndexRemainMs = null;
+    vectorIndexTimeReady = false;
     const fill = document.getElementById('vectorIndexProgressFill');
     const percent = document.getElementById('vectorIndexProgressPercent');
     const stage = document.getElementById('vectorIndexProgressStage');
@@ -1274,8 +1421,9 @@ function resetVectorIndexProgressUI() {
     if (current) current.style.display = '';
     if (fill) { fill.style.width = '0%'; fill.classList.remove('is-done'); }
     if (percent) percent.textContent = '0%';
-    if (stage) stage.textContent = '准备中…';
+    if (stage) { stage.textContent = '准备中…'; delete stage._built; } // 清除三段结构标记，下次 embedding 重建
     if (current) current.textContent = '';
+    vectorIndexLastTitle = ''; // 复位标题去重缓存，新任务首个标题正常重建
     if (summary) summary.style.display = 'none';
     if (error) error.style.display = 'none';
     if (chunkFill) chunkFill.style.width = '0%';
@@ -1304,12 +1452,29 @@ function updateVectorIndexProgress(payload) {
     const percentEl = document.getElementById('vectorIndexProgressPercent');
     if (percentEl) percentEl.textContent = percent + '%';
 
-    // 阶段文案映射
-    const stageMap = { embedding: '正在生成向量…', done: '嵌入完成', error: '处理失败，跳过' };
+    // 阶段文案映射（embedding 阶段融合「已用 / 预计剩余」时间，其余阶段仅主文案）
+    const stageMap = { embedding: '正在生成向量', done: '嵌入完成', error: '处理失败，跳过' };
     const stageEl = document.getElementById('vectorIndexProgressStage');
-    if (stageEl && p.stage) stageEl.textContent = stageMap[p.stage] || p.stage;
+    if (stageEl && p.stage) {
+        const main = stageMap[p.stage] || p.stage;
+        if (stage === 'embedding') {
+            vectorIndexTimeReady = true; // 首个进度回调到达，时间由占位符切换为真实更新
+            ensureStageTimeSpans(stageEl, main);
+            vectorIndexRemainMs = computeVectorIndexRemainMs(done, total, isEmbedding);
+            refreshVectorIndexElapsed(); // 立即刷新一次时间，避免等 1s 定时器
+        } else {
+            stageEl.textContent = main;
+            delete stageEl._built; // 离开 embedding，恢复纯文本形态
+            vectorIndexRemainMs = null;
+        }
+    }
     const currentEl = document.getElementById('vectorIndexCurrentTitle');
-    if (currentEl && p.title) currentEl.textContent = p.title;
+    // 标题变化才重建字幕（块级进度回调每块一次，标题未变时跳过避免重复构建 DOM + rAF）
+    if (currentEl && p.title && p.title !== vectorIndexLastTitle) {
+        vectorIndexLastTitle = p.title;
+        currentEl.textContent = p.title;
+        setupVectorIndexCurrentMarquee(currentEl);
+    }
 
     // 单篇处理失败：即时弹通知提示原因（同一错误 3 秒内去重，避免批量失败刷屏）
     if (stage === 'error' && p.error) {
@@ -1364,14 +1529,24 @@ async function showVectorIndexSummary(payload) {
     const success = Number(p.success) || 0;
     const failed = Number(p.failed) || 0;
     vectorIndexRunning = false;
+    // 停止耗时刷新定时器，取最终耗时并入摘要
+    clearVectorIndexElapsedTimer();
+    const elapsedText = vectorIndexStartAt > 0 ? formatVectorIndexDuration(Date.now() - vectorIndexStartAt) : '';
+    vectorIndexStartAt = 0;
+    vectorIndexRemainMs = null;
+    vectorIndexTimeReady = false;
 
     const summary = document.getElementById('vectorIndexSummary');
     if (summary) {
         summary.style.display = '';
-        summary.innerHTML = `嵌入完成：成功 <strong>${success}</strong> 篇 / 失败 <strong>${failed}</strong> 篇`;
+        // 成功/失败为零的项省略，节省长度（避免「成功 0 篇 / 失败 0 篇」冗余）
+        const resultParts = [];
+        if (success > 0) resultParts.push(`成功 <strong>${success}</strong> 篇`);
+        if (failed > 0) resultParts.push(`失败 <strong>${failed}</strong> 篇`);
+        summary.innerHTML = `嵌入完成${resultParts.length ? `：${resultParts.join(' / ')}` : ''}${elapsedText ? ` · 总耗时 ${elapsedText}` : ''}`;
     }
     const stage = document.getElementById('vectorIndexProgressStage');
-    if (stage) stage.textContent = '已完成';
+    if (stage) { stage.textContent = '已完成'; delete stage._built; }
     // 进度条切换为完成态（成功色 + 单次脉冲）
     const fill = document.getElementById('vectorIndexProgressFill');
     if (fill) fill.classList.add('is-done');
@@ -1391,13 +1566,18 @@ async function showVectorIndexSummary(payload) {
 function showVectorIndexError(payload) {
     const p = payload || {};
     vectorIndexRunning = false;
+    // 停止耗时刷新定时器并复位时间估算（任务终止，不再计时）
+    clearVectorIndexElapsedTimer();
+    vectorIndexStartAt = 0;
+    vectorIndexRemainMs = null;
+    vectorIndexTimeReady = false;
     const errorEl = document.getElementById('vectorIndexError');
     if (errorEl) {
         errorEl.style.display = '';
         errorEl.textContent = `嵌入失败：${p.error || '未知错误'}`;
     }
     const stage = document.getElementById('vectorIndexProgressStage');
-    if (stage) stage.textContent = '已中断';
+    if (stage) { stage.textContent = '已中断'; delete stage._built; }
 }
 
 /**

@@ -980,7 +980,6 @@
   font-size: 0.813rem;
   color: var(--text-primary);
   position: relative;
-  transition: background 0.12s ease;
 }
 
 /* hover / 勾选态：左缘 accent 指示条 */
@@ -994,9 +993,9 @@
   background: var(--accent);
   opacity: 0;
   transform: scaleY(0.4);
-  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+/* 悬停/勾选高亮即时切换：悬停态精确跟随鼠标，快速滑动无残留 */
 .vector-index-item:hover::before,
 .vector-index-item:has(input[type="checkbox"]:checked)::before {
   opacity: 1;
@@ -1118,6 +1117,11 @@
   animation: vectorIndexStripes 1.1s linear infinite;
 }
 
+/* 块级进度条过渡稍短（块级更新更频繁，更跟手），主进度条保持 0.25s */
+#vectorIndexChunkFill {
+  transition: width 0.2s ease;
+}
+
 @keyframes vectorIndexStripes {
   from { background-position: 0% 0; }
   to { background-position: 200% 0; }
@@ -1154,6 +1158,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* stage 融合时间：主文案继承默认色，已用/剩余时间弱化区分 */
+.vector-index-stage-time {
+  color: var(--text-muted);
+}
+
 .vector-index-current {
   font-size: 0.813rem;
   color: var(--text-secondary);
@@ -1168,6 +1177,30 @@
 .vector-index-current::before {
   content: '当前：';
   color: var(--text-muted);
+}
+
+/* 长标题字幕式横向滚动（仅 .is-marquee 时启用，短标题保持静态 ellipsis 截断） */
+.vector-index-current.is-marquee {
+  text-overflow: clip;
+}
+
+.vector-index-current-inner {
+  display: inline-block;
+  white-space: nowrap;
+  animation: vectorIndexMarquee var(--marquee-duration, 12s) linear infinite;
+  will-change: transform;
+}
+
+@keyframes vectorIndexMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* 减弱动态效果偏好：禁用字幕滚动动画，保持静态截断显示 */
+@media (prefers-reduced-motion: reduce) {
+  .vector-index-current-inner {
+    animation: none;
+  }
 }
 
 /* 完成摘要 */
