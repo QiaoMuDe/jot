@@ -26,6 +26,9 @@ import { createPresetBadge } from './js/preset-brand.js';
 // 数据管理模块
 import { backupToDir, cleanupOrphanImages, clearAISessions, clearCompletedTodos, deleteAllVectors, exportData, importData, loadDataStats, onVectorIndexCloseRequested, openDataDir, openLogDir, openVectorIndexModal, resetDatabase, restoreFromDir, vacuumDatabase } from './js/data-management.js';
 
+// 工作区管理器模块
+import { closeWorkspaceManager, openWorkspaceManager } from './js/workspace-manager.js';
+
 // 回收站页面模块
 import { loadTrashNotes } from './js/trash-page.js';
 // restoreAllNotes, emptyTrash 等函数通过 window 全局暴露（供 HTML 模板 onclick 调用）
@@ -629,6 +632,7 @@ const els = {
     cleanupOrphanImagesBtn: $('cleanupOrphanImagesBtn'),
     vectorIndexBtn: $('vectorIndexBtn'),
     deleteVectorsBtn: $('deleteVectorsBtn'),
+    aiWorkspaceBtn: $('aiWorkspaceBtn'),
     dataContent: $('dataContent'),
     dataNav: document.querySelector('.data-nav'),
     dataPanels: document.querySelector('.data-panels'),
@@ -6533,6 +6537,8 @@ function initEventListeners() {
     // AI 向量索引
     els.vectorIndexBtn?.addEventListener('click', openVectorIndexModal);
     els.deleteVectorsBtn?.addEventListener('click', deleteAllVectors);
+    // 工作区管理器（AI 对话页顶栏入口）
+    els.aiWorkspaceBtn?.addEventListener('click', openWorkspaceManager);
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');
@@ -6997,6 +7003,12 @@ async function handleKeyboardNavigation(e) {
         const viModal = document.getElementById('vectorIndexModal');
         if (viModal && viModal.style.display !== 'none') {
             onVectorIndexCloseRequested();
+            return;
+        }
+        // 工作区管理器打开时：直接关闭（其内部确认框的 ESC 由确认框自身处理，不会走到这里）
+        const wsModal = document.getElementById('workspaceModal');
+        if (wsModal && wsModal.style.display !== 'none') {
+            closeWorkspaceManager();
             return;
         }
         // 如果引用笔记选择器浮层打开，跳过全局 ESC 导航（由 ai-chat.js 处理关闭）

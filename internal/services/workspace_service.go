@@ -1,0 +1,408 @@
+package services
+
+// 本文件实现工作区管理器服务（WorkspaceService）：为用户提供对 AI 助手工作目录
+// （~/.jot/workspace）的浏览与文件管理能力——递归文件树浏览、上传文件/目录
+// （用户任意来源 → 工作区根，重名自动改名）、下载（工作区 → 桌面根同名相对
+// 路径，重名自动改名）、删除（根目录与目录非递归删除受保护）。
+// 所有进入工作区的路径一律经 config.WorkspaceFilePath 做 Clean + 符号链接解析 +
+// 边界校验，防 ../ 逃逸与 symlink/junction 逃逸；复制复用 go-kit fs 的 CopyEx
+// （目录递归复制、临时文件 + 原子重命名、失败自动回滚）。批次操作单项失败不中断，
+// 错误写入对应 WorkspaceTransferResult.Error 字段，由 app.go 绑定层统一记录日志，
+// 本层不依赖第三方日志库。
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	kitfs "gitee.com/MM-Q/go-kit/fs"
+
+	"jot/internal/config"
+)
+
+// WorkspaceFileEntry 工作区文件树节点
+type WorkspaceFileEntry struct {
+	Name     string // 显示名
+	RelPath  string // 相对工作区根路径（/ 分隔）
+	IsDir    bool
+	Size     int64                // 目录为 0
+	ModTime  int64                // unix 秒
+	Children []WorkspaceFileEntry // 目录才有
+}
+
+// WorkspaceTransferResult 单次上传/下载/删除结果
+type WorkspaceTransferResult struct {
+	Name   string // 原文件名/目录名
+	Target string // 实际写入/删除的相对路径（含自动改名后的新名）
+	Error  string // 失败原因，空表示成功
+}
+
+// WorkspaceService 工作区文件管理器服务：路径根支持测试注入，空值按默认解析
+// （工作区 = config.WorkspaceDir()，桌面 = os.UserHomeDir()/Desktop）。
+type WorkspaceService struct {
+	workspaceRoot string // 测试注入用，空则取 config.WorkspaceDir()
+	homeDir       string // 测试注入用，空则取 os.UserHomeDir()
+	desktopRoot   string // 测试注入用，空则取 homeDir + "Desktop"
+}
+
+// NewWorkspaceService 创建一个新的 WorkspaceService 实例
+func NewWorkspaceService() *WorkspaceService {
+	return &WorkspaceService{}
+}
+
+// ListWorkspaceFiles 递归收集工作区文件树：目录在前、名称升序；文件记录大小与
+// 修改时间（unix 秒），目录大小置 0；相对路径统一用 / 分隔。隐藏空目录：
+// 先递归构建再自底向上修剪，Children 为空（自身为空或子目录全被修剪）的目录
+// 不放进结果。工作区根不存在或为空时返回空列表。
+func (s *WorkspaceService) ListWorkspaceFiles() ([]WorkspaceFileEntry, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []WorkspaceFileEntry{}, nil
+		}
+		return nil, fmt.Errorf("读取工作区目录失败: %w", err)
+	}
+	// 递归构建一级条目（含空目录修剪），随后整体排序
+	tree, err := s.buildTree(root, entries, "")
+	if err != nil {
+		return nil, err
+	}
+	sortEntries(tree)
+	return tree, nil
+}
+
+// UploadFiles 批量上传用户选中的文件/目录到工作区根：目标取源路径基名，
+// 已存在时自动改名 name (1).ext、name (2).ext……（目录同样适用；无扩展名文件
+// 如 README 改名为 README (1)；以 ~/. 开头的隐藏文件保持原名再追加序号）。
+// 复制经 go-kit CopyEx（目录递归、原子性），目标路径经沙箱校验；单项失败
+// 不中断批次，错误写入对应结果 Error 字段，Target 填实际写入的相对工作区根
+// 的 / 分隔路径（含自动改名后的新名）。
+func (s *WorkspaceService) UploadFiles(paths []string) ([]WorkspaceTransferResult, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, fmt.Errorf("创建工作区目录失败: %w", err)
+	}
+	results := make([]WorkspaceTransferResult, 0, len(paths))
+	for _, p := range paths {
+		results = append(results, s.uploadOne(root, p))
+	}
+	return results, nil
+}
+
+// UploadDirectory 上传单个目录到工作区根（行为同 UploadFiles 单条目版本，
+// 源必须是目录）；返回单次结果与整体错误。
+func (s *WorkspaceService) UploadDirectory(dirPath string) (WorkspaceTransferResult, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return WorkspaceTransferResult{}, err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return WorkspaceTransferResult{}, fmt.Errorf("创建工作区目录失败: %w", err)
+	}
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return WorkspaceTransferResult{Name: filepath.Base(dirPath), Error: "源目录不存在：" + dirPath}, nil
+	}
+	if !info.IsDir() {
+		return WorkspaceTransferResult{Name: filepath.Base(dirPath), Error: "源不是目录：" + dirPath}, nil
+	}
+	return s.uploadOne(root, dirPath), nil
+}
+
+// DownloadFiles 批量下载工作区文件/目录到桌面根下同名相对路径（目录自动创建
+// 父目录）：源为工作区相对路径，经沙箱校验；桌面目标已存在时自动改名（逻辑同
+// 上传，针对最后一段基名）。源不存在时该条返回错误；单项失败不中断批次，
+// Target 填实际写入的相对桌面根的 / 分隔路径（含自动改名后的新名）。
+func (s *WorkspaceService) DownloadFiles(relPaths []string) ([]WorkspaceTransferResult, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return nil, err
+	}
+	desk, err := s.deskRoot()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]WorkspaceTransferResult, 0, len(relPaths))
+	for _, rel := range relPaths {
+		results = append(results, s.downloadOne(root, desk, rel))
+	}
+	return results, nil
+}
+
+// DeleteFiles 批量删除工作区文件/目录：relPaths 为工作区相对路径，经沙箱校验。
+// 拒绝删除工作区根目录本身（relPath 为空、. 或 /）；目录删除要求 recursive=true
+// （为 false 时该条返回错误不删除），文件直接删除。单项失败不中断批次，
+// Target 填被删除的相对工作区根的 / 分隔路径。
+func (s *WorkspaceService) DeleteFiles(relPaths []string, recursive bool) ([]WorkspaceTransferResult, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]WorkspaceTransferResult, 0, len(relPaths))
+	for _, rel := range relPaths {
+		results = append(results, s.deleteOne(root, rel, recursive))
+	}
+	return results, nil
+}
+
+// uploadOne 上传单个源路径到工作区根；错误写入结果 Error 字段而非中断。
+func (s *WorkspaceService) uploadOne(root, srcPath string) WorkspaceTransferResult {
+	name := filepath.Base(srcPath)
+	res := WorkspaceTransferResult{Name: name}
+	if name == "." || name == string(filepath.Separator) {
+		res.Error = "源路径无效：" + srcPath
+		return res
+	}
+	// 源存在性检查（源为用户任意位置，无需沙箱校验）
+	if _, err := os.Lstat(srcPath); err != nil {
+		if os.IsNotExist(err) {
+			res.Error = "源文件/目录不存在：" + srcPath
+		} else {
+			res.Error = fmt.Sprintf("检查源文件失败: %v", err)
+		}
+		return res
+	}
+	// 防止选择工作区自身或其子目录作为上传源（递归复制会无限膨胀沙箱），给出中文提示
+	if srcAbs, err := filepath.Abs(srcPath); err == nil {
+		if rel, err := filepath.Rel(root, srcAbs); err == nil {
+			// rel=="." 表示源即工作区根；rel 不以 ".." 开头表示位于工作区内
+			if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+				res.Error = "不能上传工作区自身或其子目录"
+				return res
+			}
+		}
+	}
+	// 目标取源基名，重名自动改名，并经沙箱校验
+	finalDst, err := config.WorkspaceFilePath(root, uniqueTarget(root, name))
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	if err := kitfs.CopyEx(srcPath, finalDst, false); err != nil {
+		res.Error = "上传失败: " + err.Error()
+		return res
+	}
+	res.Target = toSlashRel(root, finalDst)
+	return res
+}
+
+// downloadOne 下载单个工作区相对路径到桌面根同名相对位置；错误写入结果字段。
+func (s *WorkspaceService) downloadOne(root, desk, rel string) WorkspaceTransferResult {
+	name := filepath.Base(rel)
+	res := WorkspaceTransferResult{Name: name}
+	if name == "." || name == string(filepath.Separator) {
+		res.Error = "源路径无效：" + rel
+		return res
+	}
+	// 源解析 + 沙箱校验（防 ../ 逃逸与符号链接逃逸）
+	srcFull, err := config.WorkspaceFilePath(root, rel)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	if _, err := os.Lstat(srcFull); err != nil {
+		if os.IsNotExist(err) {
+			res.Error = "源文件/目录不存在：" + rel
+		} else {
+			res.Error = fmt.Sprintf("检查源文件失败: %v", err)
+		}
+		return res
+	}
+	// 目标 = 桌面根下同名相对路径；显式沙箱校验双保险：源端 WorkspaceFilePath 已保证
+	// rel 无逃逸，此处再以桌面为沙箱根校验一次，防止未来 rel 来源变化破坏传递性保证
+	dstFull, err := config.SandboxFilePath(desk, rel, "~/Desktop")
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	finalDst := uniqueTarget(filepath.Dir(dstFull), filepath.Base(dstFull))
+	if err := os.MkdirAll(filepath.Dir(finalDst), 0o755); err != nil {
+		res.Error = fmt.Sprintf("创建桌面目录失败: %v", err)
+		return res
+	}
+	if err := kitfs.CopyEx(srcFull, finalDst, false); err != nil {
+		res.Error = "下载失败: " + err.Error()
+		return res
+	}
+	res.Target = toSlashRel(desk, finalDst)
+	return res
+}
+
+// deleteOne 删除单个工作区相对路径；错误写入结果字段而非中断批次。
+func (s *WorkspaceService) deleteOne(root, rel string, recursive bool) WorkspaceTransferResult {
+	res := WorkspaceTransferResult{Name: filepath.Base(rel)}
+	// 根目录保护：relPath 为空、. 或 /（跨平台分隔符）均视为工作区根本身
+	cleaned := filepath.Clean(rel)
+	if rel == "" || cleaned == "." || cleaned == string(filepath.Separator) {
+		res.Error = "不允许删除工作区根目录"
+		return res
+	}
+	full, err := config.WorkspaceFilePath(root, rel)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	info, err := os.Lstat(full)
+	if err != nil {
+		if os.IsNotExist(err) {
+			res.Error = "源文件/目录不存在：" + rel
+		} else {
+			res.Error = fmt.Sprintf("检查源文件失败: %v", err)
+		}
+		return res
+	}
+	if info.IsDir() && !recursive {
+		res.Error = "目录删除需要 recursive=true"
+		return res
+	}
+	if info.IsDir() {
+		err = os.RemoveAll(full)
+	} else {
+		err = os.Remove(full)
+	}
+	if err != nil {
+		res.Error = "删除失败: " + err.Error()
+		return res
+	}
+	res.Target = toSlash(rel)
+	return res
+}
+
+// buildTree 递归构建 entries（某目录下的一级条目）对应的文件树，并自底向上
+// 修剪空目录：Children 为空（自身为空或子目录全被修剪）的目录不保留。
+// relBase 为当前目录相对工作区根的路径（根为 ""）。
+func (s *WorkspaceService) buildTree(root string, entries []os.DirEntry, relBase string) ([]WorkspaceFileEntry, error) {
+	children := make([]WorkspaceFileEntry, 0, len(entries))
+	for _, e := range entries {
+		childRel := filepath.Join(relBase, e.Name())
+		if e.IsDir() {
+			subEntries, err := os.ReadDir(filepath.Join(root, childRel))
+			if err != nil {
+				return nil, fmt.Errorf("读取目录 %s 失败: %w", toSlash(childRel), err)
+			}
+			sub, err := s.buildTree(root, subEntries, childRel)
+			if err != nil {
+				return nil, err
+			}
+			if len(sub) == 0 {
+				continue // 隐藏空目录（含子目录全被修剪的情况）
+			}
+			children = append(children, WorkspaceFileEntry{
+				Name:     e.Name(),
+				RelPath:  toSlash(childRel),
+				IsDir:    true,
+				ModTime:  dirEntryModTime(e),
+				Children: sub,
+			})
+			continue
+		}
+		children = append(children, WorkspaceFileEntry{
+			Name:    e.Name(),
+			RelPath: toSlash(childRel),
+			Size:    dirEntrySize(e),
+			ModTime: dirEntryModTime(e),
+		})
+	}
+	sortEntries(children)
+	return children, nil
+}
+
+// sortEntries 对同级条目排序：目录在前，同类型按名称升序。
+func sortEntries(entries []WorkspaceFileEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir // 目录在前
+		}
+		return entries[i].Name < entries[j].Name
+	})
+}
+
+// dirEntrySize 取目录条目大小（失败返回 0）。
+func dirEntrySize(e os.DirEntry) int64 {
+	info, err := e.Info()
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// dirEntryModTime 取目录条目修改时间（unix 秒，失败返回 0）。
+func dirEntryModTime(e os.DirEntry) int64 {
+	info, err := e.Info()
+	if err != nil {
+		return 0
+	}
+	return info.ModTime().Unix()
+}
+
+// uniqueTarget 在 dir 下为 name 生成不冲突的目标路径：目标不存在时原样返回；
+// 已存在时自动追加序号 name (1).ext、name (2).ext……（无扩展名文件如 README
+// 改名为 README (1)；以 ~/. 开头的隐藏文件视为无扩展名整体追加序号，如
+// .gitignore → .gitignore (1)，避免 filepath.Ext(".gitignore") 返回整个文件名
+// 导致 stem 为空）。
+func uniqueTarget(dir, name string) string {
+	full := filepath.Join(dir, name)
+	if _, err := os.Lstat(full); os.IsNotExist(err) {
+		return full
+	}
+	// 隐藏文件（以 . 或 ~ 开头）保持原名再追加序号，不拆分扩展名
+	ext := ""
+	if !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "~") {
+		ext = filepath.Ext(name)
+	}
+	stem := strings.TrimSuffix(name, ext)
+	for seq := 1; ; seq++ {
+		cand := filepath.Join(dir, fmt.Sprintf("%s (%d)%s", stem, seq, ext))
+		if _, err := os.Lstat(cand); os.IsNotExist(err) {
+			return cand
+		}
+	}
+}
+
+// toSlashRel 把 root 内绝对路径转为相对 root 的 / 分隔展示路径；失败时原样返回。
+func toSlashRel(root, fullPath string) string {
+	rel, err := filepath.Rel(root, fullPath)
+	if err != nil {
+		return fullPath
+	}
+	return toSlash(rel)
+}
+
+// toSlash 把路径分隔符统一转为 /（跨平台相对路径展示）。
+func toSlash(p string) string {
+	return strings.ReplaceAll(p, `\`, "/")
+}
+
+// wsRoot 返回工作区根路径：注入优先，否则取 config.WorkspaceDir()。
+func (s *WorkspaceService) wsRoot() (string, error) {
+	if s.workspaceRoot != "" {
+		return s.workspaceRoot, nil
+	}
+	return config.WorkspaceDir()
+}
+
+// deskRoot 返回用户桌面根路径：注入优先，否则取 homeDir + "Desktop"
+// （os.UserHomeDir() 读 USERPROFILE/HOME 环境变量；不做 OneDrive 重定向等特殊解析）。
+func (s *WorkspaceService) deskRoot() (string, error) {
+	if s.desktopRoot != "" {
+		return s.desktopRoot, nil
+	}
+	home := s.homeDir
+	if home == "" {
+		h, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("无法获取用户家目录: %w", err)
+		}
+		home = h
+	}
+	return filepath.Join(home, "Desktop"), nil
+}

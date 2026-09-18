@@ -182,6 +182,14 @@ export function DeleteTodo(arg1) {
   return window['go']['main']['App']['DeleteTodo'](arg1);
 }
 
+export function DeleteWorkspaceFiles(arg1, arg2) {
+  return window['go']['main']['App']['DeleteWorkspaceFiles'](arg1, arg2);
+}
+
+export function DownloadWorkspaceFiles(arg1) {
+  return window['go']['main']['App']['DownloadWorkspaceFiles'](arg1);
+}
+
 export function DuplicateNote(arg1) {
   return window['go']['main']['App']['DuplicateNote'](arg1);
 }
@@ -396,6 +404,10 @@ export function ListPasswordRecords(arg1, arg2) {
 
 export function ListTodos() {
   return window['go']['main']['App']['ListTodos']();
+}
+
+export function ListWorkspaceFiles() {
+  return window['go']['main']['App']['ListWorkspaceFiles']();
 }
 
 export function LoadAISessionMessages(arg1) {
@@ -644,6 +656,14 @@ export function UpdateTag(arg1, arg2, arg3) {
 
 export function UpdateTodo(arg1, arg2) {
   return window['go']['main']['App']['UpdateTodo'](arg1, arg2);
+}
+
+export function UploadDirectoryToWorkspace() {
+  return window['go']['main']['App']['UploadDirectoryToWorkspace']();
+}
+
+export function UploadFilesToWorkspace() {
+  return window['go']['main']['App']['UploadFilesToWorkspace']();
 }
 
 export function VacuumDatabase() {

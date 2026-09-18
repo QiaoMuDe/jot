@@ -93,6 +93,7 @@ type App struct {
 	statsService     *services.StatsService
 	memoryService    *services.MemoryService
 	mcpServerService *services.MCPServerService
+	wsService        *services.WorkspaceService
 	LogSvc           *services.LogService
 	aiStreamCancel   context.CancelFunc
 	aiEditorCancel   context.CancelFunc // 编辑器 AI 写作流式操作的取消源（独立于聊天流，避免误杀后台对话）
@@ -187,6 +188,7 @@ func NewApp() *App {
 		statsService:     statsService,
 		memoryService:    memoryService,
 		mcpServerService: services.NewMCPServerService(db),
+		wsService:        services.NewWorkspaceService(),
 		LogSvc:           logSvc,
 	}
 	// Agent 服务：复用 AI/向量/设置服务与向量嵌入连接配置，供 CallAIAgentStream 使用
@@ -4772,4 +4774,87 @@ func (a *App) reconnectDB(dbPath string) error {
 	a.rebuildServices(db)
 	a.LogSvc.Logger.Infow("reconnectDB 成功")
 	return nil
+}
+
+/* ===== 工作区管理器 ===== */
+
+// UploadFilesToWorkspace 弹出多选文件对话框，选择后复制到工作区根目录（重名自动改名）；取消返回空数组
+func (a *App) UploadFilesToWorkspace() ([]services.WorkspaceTransferResult, error) {
+	a.LogSvc.Logger.Debugw("UploadFilesToWorkspace")
+	paths, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:           "选择要上传的文件",
+		ShowHiddenFiles: false,
+	})
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UploadFilesToWorkspace 打开文件对话框失败", fastlog.Error(err))
+		return nil, fmt.Errorf("打开文件对话框失败: %w", err)
+	}
+	if len(paths) == 0 {
+		return []services.WorkspaceTransferResult{}, nil // 用户取消
+	}
+	results, err := a.wsService.UploadFiles(paths)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UploadFilesToWorkspace 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("UploadFilesToWorkspace 成功", fastlog.Int("count", len(results)))
+	return results, nil
+}
+
+// UploadDirectoryToWorkspace 弹出目录选择对话框，选择后递归复制到工作区根目录；取消返回零值
+func (a *App) UploadDirectoryToWorkspace() (services.WorkspaceTransferResult, error) {
+	a.LogSvc.Logger.Debugw("UploadDirectoryToWorkspace")
+	dirPath, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择要上传的目录",
+	})
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UploadDirectoryToWorkspace 打开目录对话框失败", fastlog.Error(err))
+		return services.WorkspaceTransferResult{}, fmt.Errorf("打开目录对话框失败: %w", err)
+	}
+	if dirPath == "" {
+		return services.WorkspaceTransferResult{}, nil // 用户取消
+	}
+	result, err := a.wsService.UploadDirectory(dirPath)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UploadDirectoryToWorkspace 失败", fastlog.Error(err))
+		return result, err
+	}
+	a.LogSvc.Logger.Infow("UploadDirectoryToWorkspace 成功", fastlog.String("target", result.Target))
+	return result, nil
+}
+
+// ListWorkspaceFiles 返回工作区文件树
+func (a *App) ListWorkspaceFiles() ([]services.WorkspaceFileEntry, error) {
+	a.LogSvc.Logger.Debugw("ListWorkspaceFiles")
+	entries, err := a.wsService.ListWorkspaceFiles()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("ListWorkspaceFiles 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("ListWorkspaceFiles 成功", fastlog.Int("count", len(entries)))
+	return entries, nil
+}
+
+// DownloadWorkspaceFiles 将选中的工作区相对路径内容复制到桌面同名相对路径
+func (a *App) DownloadWorkspaceFiles(relPaths []string) ([]services.WorkspaceTransferResult, error) {
+	a.LogSvc.Logger.Debugw("DownloadWorkspaceFiles", fastlog.Int("count", len(relPaths)))
+	results, err := a.wsService.DownloadFiles(relPaths)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("DownloadWorkspaceFiles 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("DownloadWorkspaceFiles 成功", fastlog.Int("count", len(results)))
+	return results, nil
+}
+
+// DeleteWorkspaceFiles 批量删除工作区内内容，目录需 recursive=true
+func (a *App) DeleteWorkspaceFiles(relPaths []string, recursive bool) ([]services.WorkspaceTransferResult, error) {
+	a.LogSvc.Logger.Debugw("DeleteWorkspaceFiles", fastlog.Int("count", len(relPaths)), fastlog.Bool("recursive", recursive))
+	results, err := a.wsService.DeleteFiles(relPaths, recursive)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("DeleteWorkspaceFiles 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("DeleteWorkspaceFiles 成功", fastlog.Int("count", len(results)))
+	return results, nil
 }

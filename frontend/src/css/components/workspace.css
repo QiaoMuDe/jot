@@ -1,0 +1,441 @@
+/* ==========================================================================
+   工作区管理器弹窗（AI Agent 沙箱文件空间）
+   结构：遮罩 + 面板（header / 顶部操作栏 / 文件树(滚动) / footer）
+   所有颜色一律走主题 CSS 变量，兼容 11 套主题
+   ========================================================================== */
+
+/* ---- 弹窗容器（居中，遮罩铺满） ---- */
+.workspace-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 遮罩：半透明 + 轻微模糊，点击关闭 */
+.workspace-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: workspaceFadeIn 0.18s ease-out forwards;
+}
+
+/* 面板：固定宽高，flex 纵向布局（header / 操作栏 / 树 / footer） */
+.workspace-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+  width: 560px;
+  max-width: 92vw;
+  height: 480px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: workspacePanelIn 0.26s var(--anim-easing-spring) forwards;
+}
+
+/* 开合动画：仅 transform/opacity，避免触发重排 */
+@keyframes workspaceFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes workspacePanelIn {
+  from { opacity: 0; transform: scale(0.96) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ---- 头部 ---- */
+.workspace-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 12px;
+  font-size: 0.938rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+/* 头部底部渐变细线（accent 向两侧淡出），与向量索引弹窗一致 */
+.workspace-header::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--divider) 38%, var(--divider) 62%, transparent);
+  opacity: 0.8;
+}
+
+.workspace-title {
+  margin: 0;
+  font-size: 0.938rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-title-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.workspace-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.workspace-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+  transform: rotate(90deg);
+}
+
+/* ---- 顶部操作栏（所有操作按钮统一在此） ---- */
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px 10px;
+  flex-shrink: 0;
+}
+
+.workspace-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 下载按钮：与上传按钮同款（btn-save 主题色），仅禁用态增加灰色背景色 */
+.workspace-toolbar .workspace-download-btn:disabled {
+  background: var(--hover-bg);
+  color: var(--text-muted);
+  border-color: var(--border);
+  opacity: 1;
+}
+
+/* 操作按钮禁用态：降透明度 + not-allowed */
+.workspace-toolbar .btn:disabled,
+.workspace-empty-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* 刷新图标按钮 */
+.workspace-refresh-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.workspace-refresh-btn:hover {
+  background: var(--border);
+  color: var(--accent);
+}
+
+.workspace-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 刷新中：图标旋转 */
+.workspace-refresh-btn.is-loading svg {
+  animation: workspaceRefreshSpin 0.8s linear infinite;
+}
+
+@keyframes workspaceRefreshSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 全选：操作栏右侧胶囊按钮，hover 上浮、勾选态主题色 */
+.workspace-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--hover-bg);
+  line-height: 1.2;
+  flex-shrink: 0;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.workspace-select-all:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+/* 勾选图标：未选中时弱化，勾选态点亮为主题色 */
+.workspace-select-all-check {
+  opacity: 0.35;
+  transition: opacity 150ms ease;
+}
+
+/* 勾选态：主题色浅底 + 描边 + 文字 + 图标点亮 */
+.workspace-select-all.is-checked {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+.workspace-select-all.is-checked .workspace-select-all-check {
+  opacity: 1;
+}
+
+/* 空树或操作进行中：降透明度禁用（:disabled 原生禁用不吞点击语义，事件内已忽略） */
+.workspace-select-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 已选计数 */
+.workspace-count {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  background: var(--hover-bg);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ---- 文件树 / 空状态（中部滚动区） ---- */
+.workspace-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 18px 12px;
+  overflow: hidden;
+}
+
+.workspace-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  padding: 4px 0;
+}
+
+.workspace-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 树节点行：紧凑 32px，hover 即时反馈（无过渡延迟） */
+.workspace-row {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  gap: 6px;
+  padding-right: 10px;
+  padding-left: calc(10px + var(--depth, 0) * 14px);
+  border-radius: var(--radius-sm);
+  cursor: default;
+  user-select: none;
+  overflow: hidden;
+}
+
+.workspace-row:hover {
+  background: var(--hover-bg);
+}
+
+/* 热区光标提示（无单击/双击判定，按位置分流）：
+   目录行左 1/3=选中（pointer 手型）、右 2/3=展开（alias 链接样式）；
+   文件行整行=选中（pointer） */
+.workspace-node.is-dir > .workspace-row.ws-cursor-select {
+  cursor: pointer;
+}
+
+.workspace-node.is-dir > .workspace-row.ws-cursor-expand {
+  cursor: alias;
+}
+
+.workspace-node:not(.is-dir) > .workspace-row {
+  cursor: pointer;
+}
+
+/* checkbox：原生即可，label 扩大点击区域 */
+.workspace-check {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.workspace-check input[type="checkbox"] {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 类型图标：目录=文件夹，文件=文档 */
+.workspace-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.workspace-node.is-dir > .workspace-row .workspace-icon {
+  color: var(--accent);
+}
+
+/* 名称：超宽省略号 */
+.workspace-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.813rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 大小 / 修改时间：右对齐弱化色 */
+.workspace-size,
+.workspace-mtime {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.workspace-size {
+  width: 72px;
+  text-align: right;
+}
+
+.workspace-mtime {
+  width: 118px;
+  text-align: right;
+}
+
+/* ---- 空状态 ---- */
+.workspace-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  padding: 24px;
+  text-align: center;
+}
+
+.workspace-empty-icon {
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.workspace-empty-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.workspace-empty-desc {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.workspace-empty-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- 底部状态栏：左侧工作区路径说明，右侧已选计数 ---- */
+.workspace-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px 12px;
+  border-top: 1px solid var(--divider);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.workspace-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-footer-left svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 减少动态效果：关闭全部动画 */
+@media (prefers-reduced-motion: reduce) {
+  .workspace-panel,
+  .workspace-overlay,
+  .workspace-close:hover,
+  .workspace-refresh-btn.is-loading svg {
+    animation: none !important;
+    transition: none !important;
+  }
+}

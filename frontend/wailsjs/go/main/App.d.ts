@@ -96,6 +96,10 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function DeleteTodo(arg1:number):Promise<void>;
 
+export function DeleteWorkspaceFiles(arg1:Array<string>,arg2:boolean):Promise<Array<services.WorkspaceTransferResult>>;
+
+export function DownloadWorkspaceFiles(arg1:Array<string>):Promise<Array<services.WorkspaceTransferResult>>;
+
 export function DuplicateNote(arg1:number):Promise<models.Note>;
 
 export function EmptyTrash():Promise<void>;
@@ -203,6 +207,8 @@ export function IndexNotesUnindexed():Promise<void>;
 export function ListPasswordRecords(arg1:number,arg2:number):Promise<services.PaginatedResult>;
 
 export function ListTodos():Promise<Array<models.Todo>>;
+
+export function ListWorkspaceFiles():Promise<Array<services.WorkspaceFileEntry>>;
 
 export function LoadAISessionMessages(arg1:number):Promise<Array<services.Message>>;
 
@@ -327,6 +333,10 @@ export function UpdateSessionContextTokens(arg1:number,arg2:number):Promise<void
 export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Tag>;
 
 export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
+
+export function UploadDirectoryToWorkspace():Promise<services.WorkspaceTransferResult>;
+
+export function UploadFilesToWorkspace():Promise<Array<services.WorkspaceTransferResult>>;
 
 export function VacuumDatabase():Promise<string>;
 

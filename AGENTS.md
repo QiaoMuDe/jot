@@ -330,22 +330,13 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | 四个管理工具（manage_todo/manage_tag/manage_notebook/manage_note）新增删除类 action，删除一律 `critical=true` 高危审批（用户拍板：删除必须审批而非常规审批）；恢复不提供（用户自行到回收站页面操作）。spec 见 `.trae/specs/add-manage-tools-delete-actions/`。 |
-| **action 明细** | manage_todo：`delete`（id 单条硬删）+ `clear`（清空已完成待办，返回清理条数），摘要注明「不可恢复」；manage_tag：`delete`（仅删标签，笔记不受影响）；manage_notebook：`delete`（id + `with_notes` 可选默认 false——false 其下笔记迁默认笔记本 id=1，true 连同笔记移入回收站）；manage_note：`delete`（ids 复用 resolveNoteIDs 单条/批量，软删进回收站）。**不接入** TodoService.DeleteUnfinished / DeleteAll 与 NotebookService.ResetAll（全量清空属数据管理页职责）。 |
-| **审批与校验顺序** | 全部对齐「审批前先做基本参数校验」约定：tag/notebook 先校验 id 有效性再 requestApproval(critical=true)；notebook id=1 先返回「默认笔记本不可删除」且不触发审批窗；note delete 单条/批量均 critical=true 不分级。ActionText 五组动作文案（删除待办/清空已完成待办/删除标签/删除笔记本/删除笔记（移入回收站））与 Info() schema enum 同步齐备。 |
-| **测试与验证** | [manage_approval_test.go](internal/agent/tools/manage_approval_test.go) 新增 4 个测试函数共 13 子用例：每 action 审批 critical=true 断言 / 拒绝不落库（rejectApprover 显式 err）/ 批准真实落库、note 批量 deleted_at 置位、notebook 迁默认本 + with_notes 进回收站 + id=1 保护（断言 Approver 未被调用）、clear 仅清已完成返回条数且未完成不受影响。`go build/vet/test` + gofmt 全绿；纯后端改动，需 `wails build` 出新二进制生效。 |
-| **涉及文件** | [manage_todo.go](internal/agent/tools/manage_todo.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[manage_notebook.go](internal/agent/tools/manage_notebook.go)、[manage_note.go](internal/agent/tools/manage_note.go)（action 分发/Info/ActionText/审批摘要）、[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)、[meta.go](internal/agent/tools/meta.go)（4 处 Label 补「删除」）、[TOOLS.md](internal/agent/TOOLS.md)（§6.1 审批分级段）、[EVENTS.md](internal/agent/EVENTS.md)（§5 各工具审批分级） |
-
-### 临时记忆 2
-| 记忆点 | 内容 |
-| --- | --- |
 | **变更概览** | `ChunkContent` 切块两处性能优化（**零行为变化**，不触发存量向量重新嵌入）：① 超限判定由 O(n²) 重复 Join 改 O(1) 累积计数器；② `runeLen` 由 `len([]rune)`（分配切片）改 `utf8.RuneCountInString`（零分配）。用户先经 /plan 评审后批准实现。 |
 | **实现（重要）** | [chunk.go](internal/services/chunk.go) `ChunkContent` 新增闭包 `addLine(line)` 统一维护 `curRunes` 计数器（append 前非首行 +1 换行符、再 +runeLen(line)），语义恒等于 `runeLen(strings.Join(cur, "\n"))`；5 个 append 点（代码块内/围栏开启/标题/空行/正文）全部改走 addLine；两处超限判断 `runeLen(strings.Join(cur,"\n"))>maxRunes` 改为 `curRunes>maxRunes`；`flush()` 重置为 `cur, curRunes = nil, 0`。`runeLen` 实现逐字改 `utf8.RuneCountInString` + import `unicode/utf8`。 |
 | **回归测试** | [chunk_test.go](internal/services/chunk_test.go) 新增 `TestChunkMixedLongInput`：大输入（顶层超长段落 + 代码围栏 + 500 段多空行聚合）断言无 panic、每块 ≤600（**须放顶层无标题，避免叠加硬切补链固有超限**）、无空块、关键内容不丢失。测试注释明确覆盖 addLine 4 个 append 点（围栏开启/代码块内/空行/正文），标题点由现有 TestChunkHeadings 覆盖。 |
 | **经验教训** | `splitWithHeading` 硬切后每段经 `prependChain` 补**真实标题链**，链长未计入 budget，叠加长前缀会使块轻微超 maxRunes（如 613>600）——这是**既有行为**（本次未改 splitWithHeading），非计数器引入；测试断言每块 ≤maxRunes 时，硬切输入必须放顶层（空标题链栈）才能严格成立。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)｜验证 `gofmt` 无输出 + `go build/vet ./internal/services/` 无告警 + 切块用例与全量 services 回归全绿；纯后端改动，需 `wails build` 出新二进制生效 |
 
-### 临时记忆 3
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 向量嵌入切块大小可配置化：硬编码常量 `chunkMaxRunes=600`（同时充当「理想块大小+硬上限」）拆分为两个全局设置项 `ai_chunk_target_rumes`（target，默认 600，段落边界落刀点）与 `ai_chunk_max_rumes`（max，默认 1500，硬上限）。spec 见 `.trae/specs/add-chunk-size-settings/`。 |
@@ -354,7 +345,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [chunk_test.go](internal/services/chunk_test.go) 各调用点传原值（500→(500,500)、600→(600,600)、120→(120,120) 保持旧行为等价）；旧 `TestChunkDefaultMaxRunes`（500 默认值逻辑已删）重写为 `TestChunkClampDefensive`；新增 3 区间用例（整段保留/段落不切开/硬切 ≤max）。[types_test.go](internal/services/types_test.go)（新建）`TestSaveAllSettingsChunkClamp`（4 场景真实落库读回）+ `TestClampChunkSizes`（6 组表驱动）。[vector_service_test.go](internal/services/vector_service_test.go) `newVectorTestDB` 迁移 `models.Setting` 并播种 600/600 与测试写路径 `(600,600)` 对齐（classifyVectorNotes 走 chunkSizes 查库）。`gofmt` 无输出 + `go build ./...` + `go vet` 全绿 + `go test ./internal/services/ -count=1` → `ok jot/internal/services 1.554s`。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)、[vector_service.go](internal/services/vector_service.go)、[vector_service_test.go](internal/services/vector_service_test.go)、[types.go](internal/services/types.go)、[types_test.go](internal/services/types_test.go)（新增）、[db.go](internal/database/db.go)、[index.html](frontend/index.html)、[main.js](frontend/src/main.js)｜前端改动需 `npm run build`（+ `wails build` 出新二进制）生效 |
 
-### 临时记忆 4
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 切块硬切改**行边界优先**（方案①，唯一被核实的有意义优化，②③④⑤均核实为低价值/不应做）：旧 `hardSplit` 按 maxRunes 字符级硬切会劈开代码行/列表项/表格行；新逻辑优先在完整行边界落刀（保留结构语义），仅当单行本身超 maxRunes 才退化到字符级兜底。输出变化 → 存量向量判「需重新嵌入」一次（自愈路径）。 |
@@ -363,13 +354,21 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | `go build ./...` + `go vet` 无告警 + `go test ./internal/services/ -run 'Chunk'` 与全量 services 回归全绿。经验：测试直接依赖「字符级切形巧合」的断言（如表头补充用例）在行边界硬切后会失效，应改为验证行为本质而非切形。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)（hardSplit/hardSplitRunes）、[chunk_test.go](internal/services/chunk_test.go)｜纯后端改动，需 `wails build` 出新二进制生效 |
 
-### 临时记忆 5
+### 临时记忆 4
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 向量嵌入进度面板 UI 优化（多轮迭代）：耗时+预计剩余**前端 A1 估算**融合进 stage 文案且为**一句话形态**（「正在生成向量，已用 00:42，预计剩余约 01:30」，中文逗号连接而非 · 分段，DOM 仍分三个 span，1s 定时器只更新两个时间节点不重绘主文案）；**首次进度回调前时间显示占位符**（「准备中，已用 --:--，预计剩余 --」，首个 embedding 回调置 `vectorIndexTimeReady` 后才真实更新）；完成摘要按**零项省略**（成功/失败为 0 的项不显示，`/` 分隔仅两项都在时出现）；进度条块级过渡 0.2s；当前标题超宽时**字幕式横向滚动**（marquee 无缝循环，标题变化才重建，不超宽不滚动，reduced-motion 下禁用动画静态截断）。plan 见 `.trae/documents/plan-vector-index-progress-time-eta-marquee.md`。 |
 | **实现（重要）** | [data-management.js](frontend/src/js/data-management.js)：模块级 `vectorIndexStartAt`（开始时刻）/`vectorIndexRemainMs`（最近估算剩余）/`vectorIndexElapsedTimer`（1s 定时器）/`vectorIndexTimeReady`（首个进度回调标记）/`vectorIndexLastTitle`（marquee 标题去重缓存，reset 时复位）五变量；`computeVectorIndexRemainMs` 按 `eta = elapsed/progress × (1-progress)` 估算（embedding 阶段当前篇按 `(done+0.5)/total` 计，progress∈(0,1) 外返回 null）；`formatVectorIndexDuration`（mm:ss/h:mm:ss）；`ensureStageTimeSpans` 惰性构建「主文案，已用，预计剩余」三段 span（`_built` 标记防重复构建，恢复纯文本处 `delete el._built` 复位防 querySelector null）；`refreshVectorIndexElapsed` 仅更新两 span 的 textContent（`vectorIndexTimeReady=false` 时显示占位符）；`setupVectorIndexCurrentMarquee` 构建 inner 前缓存 `contentWidth=el.scrollWidth`，duration=`max(6, contentWidth/50)`，超宽才加 `.is-marquee`；定时器在 start 前置清理 + done/error/close/reset 统一 `clearVectorIndexElapsedTimer` 防泄漏；标题去重：`p.title !== vectorIndexLastTitle` 才重建字幕（块级回调每块一次，标题未变跳过）。 |
 | **样式** | [data-view.css](frontend/src/css/components/data-view.css)：`#vectorIndexChunkFill` 块级过渡 `width 0.2s ease`；`.vector-index-stage-time` 弱化色（text-muted）；`.vector-index-current.is-marquee` 去 ellipsis（text-overflow: clip）+ `.vector-index-current-inner`（inline-block nowrap）挂 `vectorIndexMarquee` 动画（`translateX(0→-50%)` 双份内容无缝循环，时长 `var(--marquee-duration, 12s)`，will-change: transform）；`@media (prefers-reduced-motion: reduce)` 下 `.vector-index-current-inner` animation:none 静态截断。 |
 | **验证** | `npm run build` 通过（仅既有 chunk 大小警告）；纯前端改动，需 `npm run build`（+ `wails build` 出新二进制）生效 |
+
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 新增**工作区管理器**：AI 聊天页顶栏（折叠侧栏与新建会话之间）文件夹图标按钮 → Modal 弹窗，用户以「先选后操作」范式浏览/上传/下载/删除工作区（~/.jot/workspace）文件。spec 见 `.trae/specs/add-workspace-manager/`。**操作按钮统一在 Modal 顶部操作栏**（上传文件/上传目录/下载到桌面/删除/刷新 + 已选 N 项），下载/删除未选中禁用；文件树 checkbox 多选、目录懒展开、空状态引导上传；用户手动操作**不触发 AI 审批门控**（操作者是用户本人，与约束 AI 的审批体系分离，transfer_file 工具不变）。 |
+| **后端（重要）** | 新增 [workspace_service.go](internal/services/workspace_service.go)：`WorkspaceService`（`NewWorkspaceService()` 构造，测试注入 workspaceRoot/homeDir/desktopRoot 空值默认解析）；`ListWorkspaceFiles`（递归树、目录在前名称升序、**隐藏空目录自底向上修剪**、相对路径 `/` 分隔）/`UploadFiles`/`UploadDirectory`（目标取基名、`uniqueTarget` 重名自动改名 `xxx (1).ext`，`.gitignore` 类隐藏文件不拆扩展名）/`DownloadFiles`（源沙箱校验 → 桌面根同名相对路径，目录 MkdirAll，重名自动改名）/`DeleteFiles`（拒绝根目录，目录需 `recursive=true`）；批次单项失败不中断写入 `Error` 字段；复用 go-kit CopyEx + config.WorkspaceFilePath 沙箱校验。app.go 新增 5 绑定：`UploadFilesToWorkspace`/`UploadDirectoryToWorkspace`（内嵌 OpenMultipleFilesDialog/OpenDirectoryDialog，取消返回空/零值）、`ListWorkspaceFiles`/`DownloadWorkspaceFiles`/`DeleteWorkspaceFiles(relPaths, recursive)` 直转 services；`wsService` 字段在 NewApp 初始化、不依赖 db。 |
+| **前端（重要）** | [workspace-manager.js](frontend/src/js/workspace-manager.js)（新建）：`workspaceLoadSeq` 代际竞态防护、`workspaceSelected` 选中集（目录仅选中自身不联动子级）、`workspaceExpanded` 懒展开集、busy 期间禁用操作按钮、刷新**保留选择**（渲染后恢复勾选并清理失效项）、删除走 `window.showConfirmDialog` 二次确认（含目录提示递归、传 recursive=true）、关闭复位全部状态、事件懒绑定一次常驻；main.js 顶栏按钮绑定 + ESC 收口进 `handleKeyboardNavigation`；[workspace.css](frontend/src/css/components/workspace.css)（新建，全量主题变量、开合缩放+淡入 150–300ms、`prefers-reduced-motion` 禁用、禁用态降透明度、删除按钮 danger 与下载分离）。 |
+| **验证** | [workspace_service_test.go](internal/services/workspace_service_test.go) 7 组 13 子场景（改名/排序与空目录隐藏/目录递归 roundtrip/根保护/`../`+symlink 逃逸/批次不中断）全绿；`go build/vet` 全绿 + `npm run build` 通过 + `wails generate module` 生成 5 绑定且与前端调用名一致。注意：`go test ./internal/...` 中 `TestRequestApprovalRejectsParallel` 为 agent 包**既有并发时序缺陷**（本次 0 改动，偶发超时、单跑通过，根因 `approvePending` 投递前清除窗口可被并发二次 claim），与本功能无关。需 `wails build` 出新二进制生效。 |
 
 ## 九、初始静态分析关键结论
 
