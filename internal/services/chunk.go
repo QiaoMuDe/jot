@@ -148,7 +148,8 @@ func hasTableDataRow(text, header string) bool {
 //
 // targetRunes 为理想块大小（段落边界优先落刀点），maxRunes 为单块硬上限（仅单个不可分语义单元真超才硬切）。
 // 防御性钳制：targetRunes > maxRunes 时降级为 maxRunes；maxRunes < 1 时置 1；targetRunes < 1 时置 1。
-// 返回的每块长度（含元数据前缀+标题链）不超过 maxRunes
+// 返回的每块长度（含元数据前缀）尽量不超过 maxRunes；
+// 超限硬切补链时标题链长度未计入预算，深层嵌套/长前缀场景可能轻微超出 maxRunes
 func ChunkContent(content string, targetRunes, maxRunes int, meta ChunkMeta) []string {
 	if targetRunes > maxRunes {
 		targetRunes = maxRunes
@@ -384,7 +385,8 @@ func hardSplitRunes(s string, maxRunes int) []string {
 		if end > len(runes) {
 			end = len(runes)
 		}
-		out = append(out, strings.TrimSpace(string(runes[i:end])))
+		// 仅去尾部空白，保留前导缩进（单行超限兜底可能切到代码行，须保护缩进语义）
+		out = append(out, strings.TrimRight(string(runes[i:end]), " \t"))
 	}
 	// 剔除硬切可能产生的空块
 	filtered := out[:0]

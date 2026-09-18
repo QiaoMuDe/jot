@@ -58,6 +58,22 @@ func (s *VectorService) chunkSizes() (target, max int) {
 	return clampChunkSizes(target, max)
 }
 
+// buildChunkMeta 由笔记构造分块元数据（标签排序保证确定性），
+// 供写路径 IndexNotes 与状态比对 classifyVectorNotes 共用，以代码强制固化「口径一致」，
+// 避免标签顺序/时间格式两处漂移导致内容未变却误判"需重新嵌入"
+func buildChunkMeta(note models.Note) ChunkMeta {
+	tagNames := make([]string, 0, len(note.Tags))
+	for _, tag := range note.Tags {
+		tagNames = append(tagNames, tag.Name)
+	}
+	sort.Strings(tagNames)
+	return ChunkMeta{
+		Title:     note.Title,
+		Tags:      tagNames,
+		CreatedAt: note.CreatedAt,
+	}
+}
+
 // adjacentBlocks 向量召回时命中块前后各补充的相邻块数
 // 轻量父块上下文：命中小块后顺带返回其相邻块，近似"子块检索 + 父块上下文"效果
 const adjacentBlocks = 1
@@ -198,19 +214,8 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 			return success, failed, ctx.Err()
 		}
 
-		// 构造分块元数据前缀（标题/标签/创建时间），提升每块检索命中率
-		tagNames := make([]string, 0, len(note.Tags))
-		for _, tag := range note.Tags {
-			tagNames = append(tagNames, tag.Name)
-		}
-		// 标签排序保证确定性：与 classifyVectorNotes 状态比对口径一致，
-		// 避免 GORM Preload 顺序变化导致内容未变却误判"需重新嵌入"
-		sort.Strings(tagNames)
-		meta := ChunkMeta{
-			Title:     note.Title,
-			Tags:      tagNames,
-			CreatedAt: note.CreatedAt,
-		}
+		// 构造分块元数据（共用 buildChunkMeta，与状态比对口径一致）
+		meta := buildChunkMeta(note)
 
 		// 切块：target 为段落边界理想落刀点，max 为单块硬上限（均含元数据前缀）；正文为空或切不出块时跳过本篇
 		chunks := ChunkContent(note.Content, chunkTarget, chunkMax, meta)
@@ -435,17 +440,8 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context, currentModel st
 				status.StaleIDs = append(status.StaleIDs, note.ID)
 				continue
 			}
-			// 与 IndexNotes 一致的标签排序，保证切块口径确定
-			tagNames := make([]string, 0, len(note.Tags))
-			for _, tag := range note.Tags {
-				tagNames = append(tagNames, tag.Name)
-			}
-			sort.Strings(tagNames)
-			meta := ChunkMeta{
-				Title:     note.Title,
-				Tags:      tagNames,
-				CreatedAt: note.CreatedAt,
-			}
+			// 与 IndexNotes 共用 buildChunkMeta，保证切块口径确定
+			meta := buildChunkMeta(note)
 			current := ChunkContent(note.Content, chunkTarget, chunkMax, meta)
 			if chunksEqual(current, byNote[note.ID]) {
 				status.UpToDateIDs = append(status.UpToDateIDs, note.ID)
