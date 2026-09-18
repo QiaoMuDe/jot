@@ -330,32 +330,13 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | os_agent 架构演进（**取代原 5 号 os_agent 初始实现描述**）：从「集中式 subagent.go」拆分为**通用机制（subagent.go）+ 域实例（subagent_os.go）**两文件结构；新增 [SUBAGENTS.md](internal/agent/SUBAGENTS.md) 子 Agent 开发与维护指南（与 TOOLS.md/EVENTS.md 并列）；全面审查修复 4 个问题（fastlog 占位符 / doc.go 引用 / 命名统一 / checklist 同步）。 |
-| **架构拆分（重要）** | [subagent.go](internal/agent/subagent.go) 只保留通用机制——`subAgentConfig` 配置结构（name/description/instruction/toolNames/maxIterations/actionPrefix/infoDesc/requestDesc）、`toolConstructors` 构造器注册表（11 文件工具）、`delegatedAgentTool` 基类（agent/innerTools/ctx/cfg）、`newDelegatedAgentTool` 工厂（chatModel nil 或构造失败记 Warn 返回 nil）、`InvokableRun` 事件转发循环；[subagent_os.go](internal/agent/subagent_os.go) 为 os_agent 实例（osSubAgentMaxIterations=20 / osSubAgentInstruction / osSubAgentToolNames / osAgentConfig / buildOSSubAgent），是**「新增域子 Agent」样板**。**新增子 Agent 开发规范（已固化长期记忆 20）**：每 Agent 一个文件（subagent_<域>.go），只定义提示词常量+白名单+配置+一个构造器（调 newDelegatedAgentTool），无需改通用机制；registry.go buildTools 注册委托工具（WrapWithError 包装、受 ai_agent_tools_disabled 过滤、chatModel nil 跳过、非 PlanOnly）。 |
-| **审查修复（4 问题全修复）** | ①（major）`newDelegatedAgentTool` 三处 logWarn 带 `%s`/`%q` 占位符——fastlog `Warnw` 的 msg **原样输出不解析占位符**（源码级确认 logger.go L275 `entry.Message = msg` + formatter 直写），已改为纯文本 msg + `fastlog.String("tool",…)`/`fastlog.Error(err)` 结构化字段；②（minor）[tools/doc.go](internal/agent/tools/doc.go) 引用改「实例实现于 agent/subagent_os.go，通用机制见 agent/subagent.go」；③（minor）内层 ChatModelAgent 名统一 os_agent（重构前 "os-agent"，grep 确认无外部依赖，subagent_os.go 补注释记录统一命名决策）；④（minor）[checklist.md](.trae/specs/add-agent-os-subagent/checklist.md) 标注「旧禁用残留清理逻辑已按用户决策删除，旧禁用名由后端静默忽略，该项验收不适用」。 |
-| **文档** | 新增 [SUBAGENTS.md](internal/agent/SUBAGENTS.md)（子 Agent 开发与维护指南：架构概览 / 8 步新增流程 / 通用机制要点 / 红线约束 / 维护与自查清单 / 测试与前端渲染），AGENTS.md 维护规范第 9 条并入引用（EVENTS.md/TOOLS.md/SUBAGENTS.md 三件套）。 |
-| **涉及文件** | [subagent.go](internal/agent/subagent.go)（通用机制）、[subagent_os.go](internal/agent/subagent_os.go)（实例/样板）、[registry.go](internal/agent/registry.go)（buildTools 注释）、[subagent_test.go](internal/agent/subagent_test.go)（8 用例兼容）、[doc.go](internal/agent/tools/doc.go)（引用修正）、[SUBAGENTS.md](internal/agent/SUBAGENTS.md)（新增）、[AGENTS.md](AGENTS.md)（记忆点 20 + 维护规范 9）、[checklist.md](.trae/specs/add-agent-os-subagent/checklist.md)（标注）｜验证 gofmt + `go build/vet/test` 全绿 |
-
-### 临时记忆 2
-| 记忆点 | 内容 |
-| --- | --- |
-| **变更概览** | os_agent 文件/命令工具支持 `~` 短路径解析（方案B）+ 越界报错自纠提示（方案C），解决模型首跳路径报错：根因是模型照抄工具描述/提示词里的 `~/.jot/workspace` 记法而解析层不展开 `~`（被拼成 `<workspace>/~/.jot/workspace/...` 字面量嵌套目录，读报不存在、写悄悄建出名为 `~` 的垃圾目录），或猜错家目录绝对路径触发越界拒绝。用户拍板不向上下文注入绝对路径（不做方案A）。 |
-| **~ 展开（重要）** | [fs_base.go](internal/agent/tools/fs_base.go) `fsToolBase` 新增 `homeDir` 测试注入字段 + `expandTilde` helper：仅前导 `~`、`~/`、`~\` 三种形式展开为用户家目录，路径中间 `~` 原样保留；home 获取失败 fail-fast 不静默降级。`resolvePath` 先展开再走 `config.WorkspaceFilePath` 全套 Clean+边界+symlink 校验，`~/其它目录` 照样拒绝。11 工具全部经该咽喉点，一处覆盖（含 run_command cwd）。 |
-| **glob 前缀剥离 + 文案（重要）** | [glob.go](internal/agent/tools/glob.go) 新增 `stripTildeWorkspacePrefix`：pattern 经 toSlash 统一分隔符后剥掉字面前缀 `~/.jot/workspace/`（恰为 `~/.jot/workspace` 视为 `*`），其余 `~` 开头明确报错（原先静默按相对模式匹配为空误导模型）；不依赖真实 home、保持 pattern 相对形式参与 path.Match。12 处工具参数描述统一为「相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可」；[subagent_os.go](internal/agent/subagent_os.go) 内层提示词边界段补路径写法说明。 |
-| **方案C 报错提示** | [config.go](internal/config/config.go) 越界报错追加自纠提示：「请使用相对工作区的路径（如 notes/a.md）或 ~/.jot/workspace/ 开头的路径」；config_test 只断言 err 非 nil 不断言文本，无回归。 |
-| **测试与验证** | [fs_tools_test.go](internal/agent/tools/fs_tools_test.go) 新增 `TestResolvePathTildeExpansion`（完整形式命中 / `~/其它目录` 与 `~` 单独越界拒绝）+ `TestExpandTilde`（5 形态映射）；[glob_test.go](internal/agent/tools/glob_test.go) 新增 `TestGlobTildePrefix`（正斜杠完整形式/子目录/单独形式/反斜杠变体/其它 ~ 报错 5 子用例）。`go build/vet/test` + gofmt 全绿。纯后端改动，需 `wails build` 出新二进制生效。 |
-| **涉及文件** | [fs_base.go](internal/agent/tools/fs_base.go)、[glob.go](internal/agent/tools/glob.go)、[config.go](internal/config/config.go)、11 工具参数描述（read_file/write_file/edit_file/delete_file/copy_file/move_file/mkdir_dir/ls_dir/grep_file/run_command/glob）、[subagent_os.go](internal/agent/subagent_os.go)、[fs_tools_test.go](internal/agent/tools/fs_tools_test.go)、[glob_test.go](internal/agent/tools/glob_test.go) |
-
-### 临时记忆 3
-| 记忆点 | 内容 |
-| --- | --- |
 | **变更概览** | 新增 `transfer_file` 工具：工作区（~/.jot/workspace）↔ 用户桌面（~/Desktop）双向复制文件/目录（`direction`=download/upload 必填 + `overwrite` 可选），是唯一允许触碰工作目录之外的文件工具；仅注册进 os_agent 内层白名单（11→12）与 toolConstructors（[subagent.go](internal/agent/subagent.go)），不注册全局。复制复用 go-kit `fs.CopyEx`（临时文件+rename 原子性、覆盖备份恢复、目录递归）；目标端为已存在目录时自动追加源基名（`fsFinalTarget` 对齐 copy_file 智能路径语义）。 |
 | **路径解析（重要）** | [fs_base.go](internal/agent/tools/fs_base.go) 新增 `desktopDir` 注入字段 + `deskRoot()`（home+Desktop 拼接，不做 OneDrive 重定向）+ `resolvePathIn(root,p,label)`；[config.go](internal/config/config.go) 新增 `SandboxFilePath(root,p,label)` 通用沙箱底座（由 WorkspaceFilePath 泛化）。**目标端归一化（审查时发现并修复的实现缺陷）**：源端解析后先 `filepath.Rel(srcRoot, srcFull)` 归一化为相对路径再解析目标端——否则 `~` 形式/源端内绝对路径直接拿原始 p 在目标端解析必然越界报错，与工具描述「也支持 ~ 开头路径或源端内绝对路径」不符。 |
 | **审批分级** | download（写桌面=工作目录之外的外部副作用）一律 `requestApproval critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_file——纯新增免审批、覆盖已存在目标审批 critical=false。审批在参数校验与覆盖判定之后、复制执行之前（先校验后审批）。[EVENTS.md](internal/agent/EVENTS.md) §5 同步修正门控矛盾（原「auto: critical=true 仍阻塞确认」与 agent.go 实现的「auto 放行+tool_auto_approval 留痕」相反）并新增「各工具审批分级」段；[TOOLS.md](internal/agent/TOOLS.md)/[SUBAGENTS.md](internal/agent/SUBAGENTS.md) 同步。 |
 | **测试与验证** | [transfer_file_test.go](internal/agent/tools/transfer_file_test.go) 14 子用例：download 审批 critical=true/覆盖判定/目录递归/拒绝不落盘/嵌套目录落盘/整目录替换、upload 免审批/覆盖 critical=false、双端 ../ 越界、参数校验、裸工具（ctx nil）放行、Approver 缺失 fail-fast、`~` 前缀双端端到端。坑：`rejectApprover` 拒绝场景必须显式 `err: errors.New(...)`（默认 nil=放行）；沙箱内 httptest 监听端口被拦截（`not a socket`），跑全量测试需 `dangerouslyDisableSandbox`。`go build/vet/test` + gofmt 全绿，需 `wails build` 出新二进制生效。 |
 | **涉及文件** | 新增 [transfer_file.go](internal/agent/tools/transfer_file.go)+[transfer_file_test.go](internal/agent/tools/transfer_file_test.go)；[fs_base.go](internal/agent/tools/fs_base.go)（desktopDir/deskRoot/resolvePathIn）、[config.go](internal/config/config.go)（SandboxFilePath）、[subagent.go](internal/agent/subagent.go)（toolConstructors）、[subagent_os.go](internal/agent/subagent_os.go)（白名单 12/提示词）、[EVENTS.md](internal/agent/EVENTS.md)、[TOOLS.md](internal/agent/TOOLS.md)、[SUBAGENTS.md](internal/agent/SUBAGENTS.md) |
 
-### 临时记忆 4
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 四个管理工具（manage_todo/manage_tag/manage_notebook/manage_note）新增删除类 action，删除一律 `critical=true` 高危审批（用户拍板：删除必须审批而非常规审批）；恢复不提供（用户自行到回收站页面操作）。spec 见 `.trae/specs/add-manage-tools-delete-actions/`。 |
@@ -364,7 +345,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [manage_approval_test.go](internal/agent/tools/manage_approval_test.go) 新增 4 个测试函数共 13 子用例：每 action 审批 critical=true 断言 / 拒绝不落库（rejectApprover 显式 err）/ 批准真实落库、note 批量 deleted_at 置位、notebook 迁默认本 + with_notes 进回收站 + id=1 保护（断言 Approver 未被调用）、clear 仅清已完成返回条数且未完成不受影响。`go build/vet/test` + gofmt 全绿；纯后端改动，需 `wails build` 出新二进制生效。 |
 | **涉及文件** | [manage_todo.go](internal/agent/tools/manage_todo.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[manage_notebook.go](internal/agent/tools/manage_notebook.go)、[manage_note.go](internal/agent/tools/manage_note.go)（action 分发/Info/ActionText/审批摘要）、[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)、[meta.go](internal/agent/tools/meta.go)（4 处 Label 补「删除」）、[TOOLS.md](internal/agent/TOOLS.md)（§6.1 审批分级段）、[EVENTS.md](internal/agent/EVENTS.md)（§5 各工具审批分级） |
 
-### 临时记忆 5
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | `ChunkContent` 切块两处性能优化（**零行为变化**，不触发存量向量重新嵌入）：① 超限判定由 O(n²) 重复 Join 改 O(1) 累积计数器；② `runeLen` 由 `len([]rune)`（分配切片）改 `utf8.RuneCountInString`（零分配）。用户先经 /plan 评审后批准实现。 |
@@ -372,6 +353,24 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **回归测试** | [chunk_test.go](internal/services/chunk_test.go) 新增 `TestChunkMixedLongInput`：大输入（顶层超长段落 + 代码围栏 + 500 段多空行聚合）断言无 panic、每块 ≤600（**须放顶层无标题，避免叠加硬切补链固有超限**）、无空块、关键内容不丢失。测试注释明确覆盖 addLine 4 个 append 点（围栏开启/代码块内/空行/正文），标题点由现有 TestChunkHeadings 覆盖。 |
 | **经验教训** | `splitWithHeading` 硬切后每段经 `prependChain` 补**真实标题链**，链长未计入 budget，叠加长前缀会使块轻微超 maxRunes（如 613>600）——这是**既有行为**（本次未改 splitWithHeading），非计数器引入；测试断言每块 ≤maxRunes 时，硬切输入必须放顶层（空标题链栈）才能严格成立。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)｜验证 `gofmt` 无输出 + `go build/vet ./internal/services/` 无告警 + 切块用例与全量 services 回归全绿；纯后端改动，需 `wails build` 出新二进制生效 |
+
+### 临时记忆 4
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 向量嵌入切块大小可配置化：硬编码常量 `chunkMaxRunes=600`（同时充当「理想块大小+硬上限」）拆分为两个全局设置项 `ai_chunk_target_rumes`（target，默认 600，段落边界落刀点）与 `ai_chunk_max_rumes`（max，默认 1500，硬上限）。spec 见 `.trae/specs/add-chunk-size-settings/`。 |
+| **实现（重要）** | [chunk.go](internal/services/chunk.go) 签名改 `func ChunkContent(content string, targetRunes, maxRunes int, meta ChunkMeta) []string`，防御钳制三条（target>max 降级为 max / max<1 置 1 / target<1 置 1）替代旧 `maxRunes<=0→500` 逻辑；**空行分支 target 落刀**（`curRunes >= targetRunes` flush），正文行保持 `curRunes > maxRunes` 兜底，flush 内硬切预算用 maxRunes。**口径一致（关键约束）**：写路径 `IndexNotes` 与状态比对 `classifyVectorNotes` 共用 `VectorService.chunkSizes()`（[vector_service.go](internal/services/vector_service.go) 新增私有方法，查 settings 表两 key，错误回退默认并 Warnw），与 [types.go](internal/services/types.go) `SaveAllSettings`/`GetAllSettings` 共用 `clampChunkSizes(target,max)` helper（先钳 max∈[100,10000] 再钳 target∈[1,max]）——设置页展示 ↔ 落库 ↔ 运行切块三处口径一致，避免内容未变误判「需重新嵌入」。 |
+| **设置项链路** | [db.go](internal/database/db.go) `InitDefaultSettings` 追加两 key 种子（600/1500）；[types.go](internal/services/types.go) `SettingsConfig` 新增 `AIChunkTargetRunes`/`AIChunkMaxRunes` 两 int 字段 + sets map 两键 + clamp；[index.html](frontend/index.html)「向量嵌入连接」分组新增两个 number 控件（min=1/min=100）；[main.js](frontend/src/main.js) `els` 注册 + `loadSettings` 回显（?? 600/1500）+ `saveSettings` 提交 + 两自保存 change 监听（target<1→600、max<100→1500 且 >10000→10000）。 |
+| **测试与验证** | [chunk_test.go](internal/services/chunk_test.go) 各调用点传原值（500→(500,500)、600→(600,600)、120→(120,120) 保持旧行为等价）；旧 `TestChunkDefaultMaxRunes`（500 默认值逻辑已删）重写为 `TestChunkClampDefensive`；新增 3 区间用例（整段保留/段落不切开/硬切 ≤max）。[types_test.go](internal/services/types_test.go)（新建）`TestSaveAllSettingsChunkClamp`（4 场景真实落库读回）+ `TestClampChunkSizes`（6 组表驱动）。[vector_service_test.go](internal/services/vector_service_test.go) `newVectorTestDB` 迁移 `models.Setting` 并播种 600/600 与测试写路径 `(600,600)` 对齐（classifyVectorNotes 走 chunkSizes 查库）。`gofmt` 无输出 + `go build ./...` + `go vet` 全绿 + `go test ./internal/services/ -count=1` → `ok jot/internal/services 1.554s`。 |
+| **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)、[vector_service.go](internal/services/vector_service.go)、[vector_service_test.go](internal/services/vector_service_test.go)、[types.go](internal/services/types.go)、[types_test.go](internal/services/types_test.go)（新增）、[db.go](internal/database/db.go)、[index.html](frontend/index.html)、[main.js](frontend/src/main.js)｜前端改动需 `npm run build`（+ `wails build` 出新二进制）生效 |
+
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 切块硬切改**行边界优先**（方案①，唯一被核实的有意义优化，②③④⑤均核实为低价值/不应做）：旧 `hardSplit` 按 maxRunes 字符级硬切会劈开代码行/列表项/表格行；新逻辑优先在完整行边界落刀（保留结构语义），仅当单行本身超 maxRunes 才退化到字符级兜底。输出变化 → 存量向量判「需重新嵌入」一次（自愈路径）。 |
+| **实现（重要）** | [chunk.go](internal/services/chunk.go) `hardSplit(s, maxRunes)` 重写：`strings.Split` 按行扫描 + `cur/curRunes` 累积（行间换行占 1 rune），累加将超限即在行边界前落刀；单行超限先 flush 已累积、该行走新增 `hardSplitRunes`（原字符级逻辑抽离，不切断多字节字符）兜底；flush 内 TrimSpace + 空块过滤保留。`splitWithHeading` 调用点不变（仍传 maxRunes 预算）。 |
+| **测试适配（重要）** | [chunk_test.go](internal/services/chunk_test.go) `TestChunkTableHeaderCarry` 由 max=120 硬切路径（依赖旧字符级切形巧合）改为 max=2000 整块落袋路径——验证真正要测的**正常补表头**行为（含数据行块首带表头、普通段落块不带），与新硬切无冲突；新增 `TestChunkHardSplitPreservesLines`：30 行代码块 + max=200 强制硬切，断言每行 Marker（`customLineN := computeValue();`）整行完整未被切断。 |
+| **测试与验证** | `go build ./...` + `go vet` 无告警 + `go test ./internal/services/ -run 'Chunk'` 与全量 services 回归全绿。经验：测试直接依赖「字符级切形巧合」的断言（如表头补充用例）在行边界硬切后会失效，应改为验证行为本质而非切形。 |
+| **涉及文件** | [chunk.go](internal/services/chunk.go)（hardSplit/hardSplitRunes）、[chunk_test.go](internal/services/chunk_test.go)｜纯后端改动，需 `wails build` 出新二进制生效 |
 
 ## 九、初始静态分析关键结论
 

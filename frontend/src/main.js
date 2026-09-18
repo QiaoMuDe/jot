@@ -743,6 +743,8 @@ const els = {
     aiEmbedPresetDropdown: $('aiEmbedPresetDropdown'),
     aiEmbedPresetLabel: $('aiEmbedPresetLabel'),
     presetModalTestBtn: $('presetModalTestBtn'),
+    aiChunkTargetRunesInput: $('aiChunkTargetRunesInput'),
+    aiChunkMaxRunesInput: $('aiChunkMaxRunesInput'),
 };
 
 /**
@@ -2708,6 +2710,38 @@ async function initAISettings() {
             }
             await saveSettings();
             nm.show('召回条数已保存（' + val + ' 条/次）', 'success');
+        });
+    }
+
+    // ── 向量切块理想块大小保存 ──
+    const chunkTargetInput = document.getElementById('aiChunkTargetRunesInput');
+    if (chunkTargetInput) {
+        chunkTargetInput.addEventListener('change', async () => {
+            let val = parseInt(chunkTargetInput.value);
+            if (isNaN(val) || val < 1) {
+                val = 600;
+                chunkTargetInput.value = 600;
+            }
+            await saveSettings();
+            nm.show('理想块大小已保存（' + val + ' rune）', 'success');
+        });
+    }
+
+    // ── 向量切块最大块大小保存 ──
+    const chunkMaxInput = document.getElementById('aiChunkMaxRunesInput');
+    if (chunkMaxInput) {
+        chunkMaxInput.addEventListener('change', async () => {
+            let val = parseInt(chunkMaxInput.value);
+            if (isNaN(val) || val < 100) {
+                val = 1500;
+                chunkMaxInput.value = 1500;
+            }
+            if (val > 10000) {
+                val = 10000;
+                chunkMaxInput.value = 10000;
+            }
+            await saveSettings();
+            nm.show('最大块大小已保存（' + val + ' rune）', 'success');
         });
     }
 
@@ -11781,6 +11815,10 @@ async function loadSettings() {
         const cardRecallLimit = document.getElementById('aiSettingCardRecallLimit');
         if (cardRecallLimit) cardRecallLimit.value = cfg.ai_card_recall_limit;
 
+        // --- AI: 向量切块大小 ---
+        if (els.aiChunkTargetRunesInput) els.aiChunkTargetRunesInput.value = cfg.ai_chunk_target_rumes ?? 600;
+        if (els.aiChunkMaxRunesInput) els.aiChunkMaxRunesInput.value = cfg.ai_chunk_max_rumes ?? 1500;
+
         const largeFilePreviewThreshold = document.getElementById('aiLargeFilePreviewThreshold');
         if (largeFilePreviewThreshold) largeFilePreviewThreshold.value = cfg.ai_large_file_preview_threshold;
 
@@ -11876,6 +11914,8 @@ async function saveSettings() {
             })(),
             ai_thinking_enabled: document.getElementById('aiSettingSearchToggle')?.classList.contains('active') || false,
             ai_card_recall_limit: parseInt(document.getElementById('aiSettingCardRecallLimit')?.value) || 5,
+            ai_chunk_target_rumes: Number(els.aiChunkTargetRunesInput?.value) || 600,
+            ai_chunk_max_rumes: Number(els.aiChunkMaxRunesInput?.value) || 1500,
             ai_context_token_budget: (parseInt(document.getElementById('aiSummaryTokenBudget')?.value) || AI_BUDGET_DEFAULT_K) * AI_K_TOKENS,
             ai_context_summary_trigger_ratio: parseFloat(document.getElementById('aiSummaryTriggerRatio')?.value) || AI_RATIO_DEFAULT,
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,

@@ -1106,6 +1106,8 @@ export namespace services {
 	    ai_embed_base_url: string;
 	    ai_embed_api_key: string;
 	    ai_embed_model: string;
+	    ai_chunk_target_rumes: number;
+	    ai_chunk_max_rumes: number;
 	    ai_thinking_enabled: boolean;
 	    ai_card_recall_limit: number;
 	    max_file_size: number;
@@ -1141,6 +1143,8 @@ export namespace services {
 	        this.ai_embed_base_url = source["ai_embed_base_url"];
 	        this.ai_embed_api_key = source["ai_embed_api_key"];
 	        this.ai_embed_model = source["ai_embed_model"];
+	        this.ai_chunk_target_rumes = source["ai_chunk_target_rumes"];
+	        this.ai_chunk_max_rumes = source["ai_chunk_max_rumes"];
 	        this.ai_thinking_enabled = source["ai_thinking_enabled"];
 	        this.ai_card_recall_limit = source["ai_card_recall_limit"];
 	        this.max_file_size = source["max_file_size"];

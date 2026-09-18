@@ -66,20 +66,24 @@ type SlashNoteResult struct {
 
 // SettingsConfig 设置页全部配置项的统一结构体
 type SettingsConfig struct {
-	Theme                       string `json:"theme"`
-	FontFamily                  string `json:"font_family"`
-	FontSize                    int    `json:"font_size"`
-	CodeHighlightTheme          string `json:"code_highlight_theme"`
-	NoteOpenFullscreen          bool   `json:"note_open_fullscreen"`
-	SortOrder                   string `json:"sort_order"`
-	PageSize                    int    `json:"page_size"`
-	CMSyntaxHighlight           bool   `json:"cm_syntax_highlight"`
-	AIBaseURL                   string `json:"ai_base_url"`
-	AIAPIKey                    string `json:"ai_api_key"`
-	AIModel                     string `json:"ai_model"`
-	AIEmbedBaseURL              string `json:"ai_embed_base_url"`
-	AIEmbedAPIKey               string `json:"ai_embed_api_key"`
-	AIEmbedModel                string `json:"ai_embed_model"`
+	Theme              string `json:"theme"`
+	FontFamily         string `json:"font_family"`
+	FontSize           int    `json:"font_size"`
+	CodeHighlightTheme string `json:"code_highlight_theme"`
+	NoteOpenFullscreen bool   `json:"note_open_fullscreen"`
+	SortOrder          string `json:"sort_order"`
+	PageSize           int    `json:"page_size"`
+	CMSyntaxHighlight  bool   `json:"cm_syntax_highlight"`
+	AIBaseURL          string `json:"ai_base_url"`
+	AIAPIKey           string `json:"ai_api_key"`
+	AIModel            string `json:"ai_model"`
+	AIEmbedBaseURL     string `json:"ai_embed_base_url"`
+	AIEmbedAPIKey      string `json:"ai_embed_api_key"`
+	AIEmbedModel       string `json:"ai_embed_model"`
+	// AIChunkTargetRunes 向量切块理想块大小（rune）：段落边界优先在此落刀
+	AIChunkTargetRunes int `json:"ai_chunk_target_rumes"`
+	// AIChunkMaxRunes 向量切块单块硬上限（rune）：仅单个不可分语义单元超过才硬切
+	AIChunkMaxRunes             int    `json:"ai_chunk_max_rumes"`
 	AIThinkingEnabled           bool   `json:"ai_thinking_enabled"`
 	AICardRecallLimit           int    `json:"ai_card_recall_limit"`
 	MaxFileSize                 int    `json:"max_file_size"`
@@ -101,6 +105,11 @@ type SettingsConfig struct {
 
 // GetAllSettings 从 SettingService 读取全部设置项
 func (s *SettingService) GetAllSettings() SettingsConfig {
+	// 向量切块区间：读取后统一 clamp（缺失 key 由 parseIntSetting 兜底默认值），保证与写路径口径一致
+	chunkTarget, chunkMax := clampChunkSizes(
+		parseIntSetting(s.Get("ai_chunk_target_rumes"), 600),
+		parseIntSetting(s.Get("ai_chunk_max_rumes"), 1500),
+	)
 	cfg := SettingsConfig{
 		Theme:                        s.Get("theme"),
 		FontFamily:                   s.Get("font_family"),
@@ -116,6 +125,8 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		AIEmbedBaseURL:               s.Get("ai_embed_base_url"),
 		AIEmbedAPIKey:                s.Get("ai_embed_api_key"),
 		AIEmbedModel:                 s.Get("ai_embed_model"),
+		AIChunkTargetRunes:           chunkTarget,
+		AIChunkMaxRunes:              chunkMax,
 		AIThinkingEnabled:            parseBoolSetting(s.Get("ai_thinking_enabled")),
 		AICardRecallLimit:            parseIntSetting(s.Get("ai_card_recall_limit"), 5),
 		MaxFileSize:                  parseIntSetting(s.Get("max_file_size"), 1),
@@ -178,6 +189,9 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.AIAgentMaxIterations > 500 {
 		cfg.AIAgentMaxIterations = 500
 	}
+	// 向量切块区间：先钳 max（硬上限 [100, 10000]），再钳 target（理想落刀点 [1, max]），
+	// 与运行路径 chunkSizes 共用同一 clampChunkSizes，保证设置页与切块口径一致
+	cfg.AIChunkTargetRunes, cfg.AIChunkMaxRunes = clampChunkSizes(cfg.AIChunkTargetRunes, cfg.AIChunkMaxRunes)
 	cfg.AIContextTokenBudget = clampContextTokenBudget(cfg.AIContextTokenBudget)
 	cfg.AIContextSummaryTriggerRatio = clampSummaryTriggerRatio(cfg.AIContextSummaryTriggerRatio)
 
@@ -211,6 +225,8 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_embed_base_url":                cfg.AIEmbedBaseURL,
 		"ai_embed_api_key":                 cfg.AIEmbedAPIKey,
 		"ai_embed_model":                   cfg.AIEmbedModel,
+		"ai_chunk_target_rumes":            strconv.Itoa(cfg.AIChunkTargetRunes),
+		"ai_chunk_max_rumes":               strconv.Itoa(cfg.AIChunkMaxRunes),
 		"ai_thinking_enabled":              strconv.FormatBool(cfg.AIThinkingEnabled),
 		"ai_card_recall_limit":             strconv.Itoa(cfg.AICardRecallLimit),
 		"max_file_size":                    strconv.Itoa(cfg.MaxFileSize),
@@ -281,4 +297,21 @@ func clampSummaryTriggerRatio(r float64) float64 {
 		return MaxSummaryTriggerRatio
 	}
 	return r
+}
+
+// clampChunkSizes 钳制向量切块区间参数：先钳 max 到 [100, 10000]，再钳 target 到 [1, max]（保证 max>=target）。
+// SaveAllSettings 与运行路径 VectorService.chunkSizes 共用，保证设置页展示与切块取值口径一致；
+// 越界直接夹取至合法区间（不重置默认值），与 spec「不拒绝保存」一致。
+func clampChunkSizes(target, max int) (int, int) {
+	if max < 100 {
+		max = 100
+	} else if max > 10000 {
+		max = 10000
+	}
+	if target < 1 {
+		target = 1
+	} else if target > max {
+		target = max
+	}
+	return target, max
 }

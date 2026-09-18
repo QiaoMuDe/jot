@@ -571,6 +571,22 @@
                             <button id="aiEmbedFetchModelsBtn" class="btn btn-sm btn-save" style="margin-left:auto;white-space:nowrap;flex-shrink:0;width:52px;">获取</button>
                         </div>
                     </div>
+                    <!-- 理想块大小 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">理想块大小</span>
+                        <span class="font-setting-desc">单个语义块的目标大小，段落边界优先在此落刀（rune）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiChunkTargetRunesInput" class="settings-input" value="600" min="1" style="width:80px;" />
+                        </div>
+                    </div>
+                    <!-- 最大块大小 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">最大块大小</span>
+                        <span class="font-setting-desc">单块硬上限，仅超大段落才会触达（rune）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiChunkMaxRunesInput" class="settings-input" value="1500" min="100" style="width:80px;" />
+                        </div>
+                    </div>
 
                     <!-- 对话增强 -->
                     <div class="ai-group-header" style="margin-top:20px;">

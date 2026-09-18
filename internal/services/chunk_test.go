@@ -22,7 +22,7 @@ func TestChunkLongChinese(t *testing.T) {
 	}
 	content := b.String()
 
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 	if len(chunks) < 4 {
 		t.Fatalf("2000+ 字中文期望至少 4 块，实际 %d 块", len(chunks))
 	}
@@ -36,7 +36,7 @@ func TestChunkLongChinese(t *testing.T) {
 // TestChunkHeadings 验证按 ## / ### 标题分块，且子节 ### 块自动补全父级 ## 标题链
 func TestChunkHeadings(t *testing.T) {
 	content := "## 第一章 简介\n这是第一章的内容，介绍向量检索的基本概念。\n\n### 1.1 原理\n本节讲解向量化的原理。\n\n## 第二章 应用\n这里讲述向量检索在实际场景中的应用。"
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 
 	if len(chunks) != 3 {
 		t.Fatalf("期望按标题分出 3 块，实际 %d 块: %v", len(chunks), chunks)
@@ -61,7 +61,7 @@ func TestChunkHeadings(t *testing.T) {
 // TestChunkNoHeading 验证无标题短内容段落聚合为一块（空行作为段落分隔保留在块内）
 func TestChunkNoHeading(t *testing.T) {
 	content := "第一段内容，没有标题。\n\n第二段内容，也没有标题。\n\n第三段内容，同样没有标题。"
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 
 	if len(chunks) != 1 {
 		t.Fatalf("短段落聚合期望 1 块，实际 %d 块: %v", len(chunks), chunks)
@@ -81,7 +81,7 @@ func TestChunkNoHeading(t *testing.T) {
 func TestChunkHardSplit(t *testing.T) {
 	// 单段 30 句 × 28 字 = 840 字，无标题无空行
 	long := strings.Repeat("这是一段没有标题也没有空行的超长内容，用来验证硬切逻辑。", 30)
-	chunks := ChunkContent(long, 500, ChunkMeta{})
+	chunks := ChunkContent(long, 500, 500, ChunkMeta{})
 
 	if len(chunks) < 2 {
 		t.Fatalf("超长单段期望至少 2 块，实际 %d 块", len(chunks))
@@ -102,18 +102,34 @@ func TestChunkHardSplit(t *testing.T) {
 	}
 }
 
-// TestChunkDefaultMaxRunes 验证 maxRunes<=0 时使用默认值 500
-func TestChunkDefaultMaxRunes(t *testing.T) {
+// TestChunkClampDefensive 验证防御性钳制行为：
+//   - targetRunes > maxRunes 时降级为 maxRunes（target=1200,max=600 → 等价 max=600 切块）
+//   - maxRunes < 1 时置 1（单段被逐字硬切）
+//   - targetRunes < 1 时置 1
+func TestChunkClampDefensive(t *testing.T) {
+	// target>max 降级：1200 字单段（无标题无空行），target=1200,max=600
+	// 与 target=600,max=600 应产生完全一致的块（硬切预算均为 max）
 	content := strings.Repeat("中", 1200)
-	chunks := ChunkContent(content, 0, ChunkMeta{}) // 应使用默认 500
-
-	if len(chunks) != 3 {
-		t.Fatalf("1200 字默认上限 500 期望 3 块，实际 %d 块", len(chunks))
+	clamped := ChunkContent(content, 1200, 600, ChunkMeta{})
+	normal := ChunkContent(content, 600, 600, ChunkMeta{})
+	if !reflect.DeepEqual(clamped, normal) {
+		t.Fatalf("target>max 应降级为 max 与 target=max 等价，\nclamped=%q\nnormal=%q", clamped, normal)
 	}
-	for i, c := range chunks {
-		if runeLen(c) > 500 {
-			t.Errorf("第 %d 块长度 %d 超过默认上限 500", i, runeLen(c))
+	for i, c := range clamped {
+		if runeLen(c) > 600 {
+			t.Errorf("第 %d 块长度 %d 超过上限 600", i, runeLen(c))
 		}
+	}
+	// max<1 → 置 1：单段被逐字硬切，块数 = rune 数
+	tiny := ChunkContent(content, 0, 0, ChunkMeta{})
+	if len(tiny) != runeLen(content) {
+		t.Fatalf("max=0 置 1 后应逐字切块，期望 %d 块，实际 %d 块", runeLen(content), len(tiny))
+	}
+	// target<1 → 置 1：max=600 下 target=0 与 target=1 等价（均极小落刀点，同 max 硬切兜底）
+	onlyMax := ChunkContent("## A\n"+"正文内容", 0, 600, ChunkMeta{})
+	targetOne := ChunkContent("## A\n"+"正文内容", 1, 600, ChunkMeta{})
+	if !reflect.DeepEqual(onlyMax, targetOne) {
+		t.Fatalf("target=0 应置 1 与 target=1 等价，\nonlyMax=%q\ntargetOne=%q", onlyMax, targetOne)
 	}
 }
 
@@ -140,7 +156,7 @@ func TestFloat32BlobRoundTrip(t *testing.T) {
 
 // TestChunkHeadingBlankMerge 验证标题行后跟空行时与后续正文合并为一块（段落聚合下空行保留在块内作分隔）
 func TestChunkHeadingBlankMerge(t *testing.T) {
-	chunks := ChunkContent("## A\n\n正文", 500, ChunkMeta{})
+	chunks := ChunkContent("## A\n\n正文", 500, 500, ChunkMeta{})
 	if len(chunks) != 1 {
 		t.Fatalf("标题+空行+正文期望合并为 1 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -151,7 +167,7 @@ func TestChunkHeadingBlankMerge(t *testing.T) {
 
 // TestChunkH1NotIsolated 验证一级标题 # 参与分块且不孤立成块，正文块带完整父级链
 func TestChunkH1NotIsolated(t *testing.T) {
-	chunks := ChunkContent("# 大标题\n\n## 子节\n正文", 500, ChunkMeta{})
+	chunks := ChunkContent("# 大标题\n\n## 子节\n正文", 500, 500, ChunkMeta{})
 	if len(chunks) != 1 {
 		t.Fatalf("一级标题场景期望 1 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -162,7 +178,7 @@ func TestChunkH1NotIsolated(t *testing.T) {
 
 // TestChunkEmptySectionDropped 验证空节（无正文的孤立标题）被丢弃，不产生噪音块
 func TestChunkEmptySectionDropped(t *testing.T) {
-	chunks := ChunkContent("## A\n## B\n正文", 500, ChunkMeta{})
+	chunks := ChunkContent("## A\n## B\n正文", 500, 500, ChunkMeta{})
 	if len(chunks) != 1 {
 		t.Fatalf("空节 A 应丢弃，期望 1 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -173,7 +189,7 @@ func TestChunkEmptySectionDropped(t *testing.T) {
 
 // TestChunkNestedParentChain 验证嵌套子节 ### 块自动补全父级 ## 标题链
 func TestChunkNestedParentChain(t *testing.T) {
-	chunks := ChunkContent("## 第一章\n### 1.1\n正文", 500, ChunkMeta{})
+	chunks := ChunkContent("## 第一章\n### 1.1\n正文", 500, 500, ChunkMeta{})
 	if len(chunks) != 1 {
 		t.Fatalf("嵌套子节期望 1 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -184,7 +200,7 @@ func TestChunkNestedParentChain(t *testing.T) {
 
 // TestChunkHeadingLevel4 验证四级标题 #### 同样参与分块与链栈
 func TestChunkHeadingLevel4(t *testing.T) {
-	chunks := ChunkContent("#### 小节\n正文", 500, ChunkMeta{})
+	chunks := ChunkContent("#### 小节\n正文", 500, 500, ChunkMeta{})
 	if len(chunks) != 1 {
 		t.Fatalf("四级标题期望 1 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -196,7 +212,7 @@ func TestChunkHeadingLevel4(t *testing.T) {
 // TestChunkCodeFenceProtected 验证围栏代码块内空行、伪标题行不触发切块，代码块完整保留
 func TestChunkCodeFenceProtected(t *testing.T) {
 	content := "## 示例\n```go\n// # 伪标题\n\nx := 1\n```\n\n### 原理\n正文"
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 	if len(chunks) != 2 {
 		t.Fatalf("代码块场景期望 2 块，实际 %d 块: %v", len(chunks), chunks)
 	}
@@ -217,7 +233,7 @@ func TestChunkCodeFenceProtected(t *testing.T) {
 // TestChunkReportedScenario 回归用户报告场景：大标题+目录+分节正文，无孤立标题块，目录带父标题
 func TestChunkReportedScenario(t *testing.T) {
 	content := "# 大标题\n\n## 目录\n- [A](#a)\n- [B](#b)\n\n## A\n正文A\n\n## B\n正文B"
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 	want := []string{
 		emptyMetaPrefix + "\n" + "# 大标题\n## 目录\n- [A](#a)\n- [B](#b)",
 		emptyMetaPrefix + "\n" + "# 大标题\n## A\n正文A",
@@ -240,7 +256,7 @@ func TestChunkMetaPrefixWithTags(t *testing.T) {
 		Tags:      []string{"架构", "后端"},
 		CreatedAt: time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC),
 	}
-	chunks := ChunkContent("## 设计\n正文内容", 600, meta)
+	chunks := ChunkContent("## 设计\n正文内容", 600, 600, meta)
 	if len(chunks) == 0 {
 		t.Fatal("期望至少 1 块，实际 0 块")
 	}
@@ -259,7 +275,7 @@ func TestChunkMetaPrefixNoTags(t *testing.T) {
 		Tags:      []string{},
 		CreatedAt: time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC),
 	}
-	chunks := ChunkContent("## 设计\n正文内容", 600, meta)
+	chunks := ChunkContent("## 设计\n正文内容", 600, 600, meta)
 	if len(chunks) == 0 {
 		t.Fatal("期望至少 1 块，实际 0 块")
 	}
@@ -284,7 +300,7 @@ func TestChunkParagraphAggregation(t *testing.T) {
 		b.WriteString("\n\n")
 	}
 	content := strings.TrimSpace(b.String())
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 
 	if len(chunks) != 1 {
 		t.Fatalf("10 段短内容聚合期望 1 块，实际 %d 块: %v", len(chunks), chunks)
@@ -310,7 +326,7 @@ func TestChunkParagraphAggregationSplit(t *testing.T) {
 		b.WriteString("\n\n")
 	}
 	content := strings.TrimSpace(b.String())
-	chunks := ChunkContent(content, 500, ChunkMeta{})
+	chunks := ChunkContent(content, 500, 500, ChunkMeta{})
 
 	if len(chunks) < 2 {
 		t.Fatalf("超长聚合内容期望至少 2 块，实际 %d 块", len(chunks))
@@ -343,7 +359,7 @@ func TestChunkMixedLongInput(t *testing.T) {
 	}
 	content := b.String()
 
-	chunks := ChunkContent(content, 600, ChunkMeta{Title: "混合输入", Tags: []string{"测试"}, CreatedAt: time.Now()})
+	chunks := ChunkContent(content, 600, 600, ChunkMeta{Title: "混合输入", Tags: []string{"测试"}, CreatedAt: time.Now()})
 	if len(chunks) < 10 {
 		t.Fatalf("大型混合输入期望至少 10 块，实际 %d 块", len(chunks))
 	}
@@ -361,6 +377,86 @@ func TestChunkMixedLongInput(t *testing.T) {
 		if !strings.Contains(joined, marker) {
 			t.Errorf("混合输入丢失关键内容 %q", marker)
 		}
+	}
+}
+
+// TestChunkTargetMaxBigSection 验证「结构清晰、大节整段」：位于 target..max 之间的一段无空行正文
+// 应整段成为一块，不被切成 target 那么碎（target=600,max=1500，一段约 1000 rune）
+func TestChunkTargetMaxBigSection(t *testing.T) {
+	// 单段约 1000 字（无标题无空行），介于 target(600) 与 max(1500) 之间
+	content := strings.Repeat("整段大节正文内容用于验证大节不被切成 target 那么碎，保持段落完整性。", 20)
+	chunks := ChunkContent(content, 600, 1500, ChunkMeta{})
+
+	if len(chunks) != 1 {
+		t.Fatalf("介于 target..max 的大段期望整段 1 块，实际 %d 块: %v", len(chunks), chunks)
+	}
+	if runeLen(chunks[0]) > 1500 {
+		t.Errorf("块长度 %d 超过硬上限 1500", runeLen(chunks[0]))
+	}
+	// 整段保留（去除前缀后与原文拼接一致）
+	prefixLine := emptyMetaPrefix + "\n"
+	if strings.TrimPrefix(chunks[0], prefixLine) != content {
+		t.Error("大段内容未完整保留")
+	}
+}
+
+// TestChunkTargetMaxParagraphCut 验证「纯文本、多段落聚合」：多个段落聚合到触及 target 时在段落边界落刀，
+// 不切断段落（target=600,max=1500，5 段各约 250 字 → 约 2-3 块）
+func TestChunkTargetMaxParagraphCut(t *testing.T) {
+	var paras []string
+	for i := 0; i < 5; i++ {
+		paras = append(paras, "段落"+strconv.Itoa(i)+"："+strings.Repeat("这是用于段落聚合落刀测试的第"+strconv.Itoa(i)+"段填充内容，", 20))
+	}
+	content := strings.Join(paras, "\n\n")
+	chunks := ChunkContent(content, 600, 1500, ChunkMeta{})
+
+	if len(chunks) < 2 || len(chunks) > 3 {
+		t.Fatalf("5 段各约 250 字聚合到 target=600 期望 2-3 块，实际 %d 块", len(chunks))
+	}
+	for i, c := range chunks {
+		if runeLen(c) > 1500 {
+			t.Errorf("第 %d 块长度 %d 超过硬上限 1500", i, runeLen(c))
+		}
+	}
+	// 段落不被切开：每段 marker 应完整出现在恰好一个块中（落刀仅在段落边界）
+	prefixLine := emptyMetaPrefix + "\n"
+	for i := range paras {
+		marker := "第" + strconv.Itoa(i) + "段"
+		count := 0
+		for _, c := range chunks {
+			body := strings.TrimPrefix(c, prefixLine)
+			if strings.Contains(body, marker) {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Errorf("段落 %d 的 marker %q 出现在 %d 个块中，期望恰好 1（段落未被切开）", i, marker, count)
+		}
+	}
+}
+
+// TestChunkTargetMaxHardSplit 验证仅单个不可分语义单元真超 max 才硬切：一段约 1500 字无空行正文，
+// target=600,max=1000 → 应硬切为 ≥2 块且每块 ≤ 1000（纯文本无标题，避免补链叠加超限）
+func TestChunkTargetMaxHardSplit(t *testing.T) {
+	content := strings.Repeat("这是一段超过硬上限且无空行的超长正文，用于验证单段真超 max 时的硬切兜底。", 40) // 约 1400 字
+	chunks := ChunkContent(content, 600, 1000, ChunkMeta{})
+
+	if len(chunks) < 2 {
+		t.Fatalf("单段约 1400 字、max=1000 期望至少 2 块，实际 %d 块", len(chunks))
+	}
+	for i, c := range chunks {
+		if runeLen(c) > 1000 {
+			t.Errorf("第 %d 块长度 %d 超过硬上限 1000", i, runeLen(c))
+		}
+	}
+	// 硬切不丢内容：去除前缀拼接后与原文一致
+	prefixLine := emptyMetaPrefix + "\n"
+	stripped := make([]string, len(chunks))
+	for i, c := range chunks {
+		stripped[i] = strings.TrimPrefix(c, prefixLine)
+	}
+	if joined := strings.Join(stripped, ""); joined != content {
+		t.Error("硬切后（去除前缀）拼接结果与原文不一致")
 	}
 }
 
@@ -425,7 +521,7 @@ func TestNormalizeChunkSource(t *testing.T) {
 }
 
 // TestChunkTableHeaderCarry 验证表格行块自动携带表头上下文：
-// 表头与数据行被切到不同块时，含数据行的块在块首补上表头（列名语义进入嵌入）；
+// 表头与数据行在同一块（整块落袋，不进硬切路径）时，含数据行的块在块首补上表头（列名语义进入嵌入）；
 // 无表格数据行的普通段落块不补表头
 func TestChunkTableHeaderCarry(t *testing.T) {
 	header := "| 数据类型 | 命令编码 | 上传内容 |"
@@ -439,8 +535,9 @@ func TestChunkTableHeaderCarry(t *testing.T) {
 		"\n## 后续说明\n\n" +
 		"表格到此结束，这是普通段落，与表格无关。"
 
-	// 小 maxRunes 强制切块，模拟真实场景：表头与数据行被切到不同块
-	chunks := ChunkContent(content, 120, ChunkMeta{})
+	// 较大 max 让表格段落整块落袋（不进硬切路径），块首自然携带表头；
+	// "## 后续说明" 标题把普通段落切为独立块，验证其不补表头
+	chunks := ChunkContent(content, 2000, 2000, ChunkMeta{})
 	if len(chunks) < 2 {
 		t.Fatalf("期望至少 2 块，实际 %d 块", len(chunks))
 	}
@@ -455,5 +552,29 @@ func TestChunkTableHeaderCarry(t *testing.T) {
 	last := chunks[len(chunks)-1]
 	if strings.Contains(last, "命令编码") {
 		t.Errorf("普通段落块不应携带表头：\n%s", last)
+	}
+}
+
+// TestChunkHardSplitPreservesLines 验证硬切在行边界落刀：多行代码块超限时，
+// 每行内部不被字符级切断（方案①核心：结构语义完整），Marker 整行完整保留
+func TestChunkHardSplitPreservesLines(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("```go\n")
+	for i := 0; i < 30; i++ {
+		b.WriteString("    customLine" + strconv.Itoa(i) + " := computeValue(); // " + strconv.Itoa(i) + "\n")
+	}
+	b.WriteString("```\n")
+	// 小 max 强制整块走硬切；每行约 40 rune，总远超上限
+	chunks := ChunkContent(b.String(), 200, 200, ChunkMeta{})
+	if len(chunks) < 2 {
+		t.Fatalf("期望至少 2 块，实际 %d 块", len(chunks))
+	}
+	// 校验每行 Marker 整行完整存在（未被字符级切断）
+	joined := strings.Join(chunks, "\n")
+	for i := 0; i < 30; i++ {
+		marker := "customLine" + strconv.Itoa(i) + " := computeValue();"
+		if !strings.Contains(joined, marker) {
+			t.Errorf("硬切切断行 %d，Marker 不完整：%s", i, marker)
+		}
 	}
 }

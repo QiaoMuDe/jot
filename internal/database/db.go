@@ -229,6 +229,10 @@ func InitDefaultSettings(db *gorm.DB) error {
 		{Key: "ai_context_token_budget", Value: "131072"},
 		// 摘要压缩触发比例（无前端 UI，tail 达预算该比例时触发，调小便于测试）
 		{Key: "ai_context_summary_trigger_ratio", Value: "0.8"},
+		// 向量切块理想块大小（target，rune）：段落边界优先在此落刀，默认 600
+		{Key: "ai_chunk_target_rumes", Value: "600"},
+		// 向量切块单块硬上限（max，rune）：仅单个不可分语义单元超过才硬切，默认 1500
+		{Key: "ai_chunk_max_rumes", Value: "1500"},
 	}
 
 	var toInsert []models.Setting

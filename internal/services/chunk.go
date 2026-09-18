@@ -140,16 +140,24 @@ func hasTableDataRow(text, header string) bool {
 // ChunkContent 将笔记内容按 Markdown 结构切块，并为每个块补充所属标题链（结构感知切片）
 // 规则（对齐 LangChain MarkdownHeaderTextSplitter / LlamaIndex header_stack 语义）：
 //   - 标题级别 1-6 级（# ~ ######），标题行作为"节的开始标记"开启新块
-//   - 段落聚合：空行不触发切块，作为段落分隔保留在块内，多段落累积直到接近 maxRunes 才落块
+//   - 段落聚合：空行不触发切块，作为段落分隔保留在块内；多段落累积到触及 targetRunes 时在段落边界落刀
 //   - 空节（无正文的孤立标题）直接丢弃，不产生噪音块；标题保留在链栈中作为后续子节父级指引
 //   - 块首补全所属标题链：块首非标题补完整链，块首已是标题仅补更高级父级
 //   - ``` / ~~~ 围栏代码块保护：块内空行、伪标题行不触发切块
 //   - 单块超过 maxRunes 时按 rune 硬切，硬切非首段同样补链
 //
-// 返回的每块长度（含元数据前缀+标题链）不超过 maxRunes；maxRunes<=0 时使用默认值 500
-func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
-	if maxRunes <= 0 {
-		maxRunes = 500
+// targetRunes 为理想块大小（段落边界优先落刀点），maxRunes 为单块硬上限（仅单个不可分语义单元真超才硬切）。
+// 防御性钳制：targetRunes > maxRunes 时降级为 maxRunes；maxRunes < 1 时置 1；targetRunes < 1 时置 1。
+// 返回的每块长度（含元数据前缀+标题链）不超过 maxRunes
+func ChunkContent(content string, targetRunes, maxRunes int, meta ChunkMeta) []string {
+	if targetRunes > maxRunes {
+		targetRunes = maxRunes
+	}
+	if maxRunes < 1 {
+		maxRunes = 1
+	}
+	if targetRunes < 1 {
+		targetRunes = 1
 	}
 	// 归一化源文本：压缩非代码围栏行的连续空白（表格填充空格/行尾空白），提升嵌入质量
 	content = normalizeChunkSource(content)
@@ -219,13 +227,13 @@ func ChunkContent(content string, maxRunes int, meta ChunkMeta) []string {
 			stack = pushHeadingStack(stack, trimmed)
 			addLine(line)
 		case trimmed == "":
-			// 段落聚合：空行作为段落分隔保留在块内，不触发切块
-			// 块首空行跳过（避免块首留空行）；累积后超限才落块
+			// 段落聚合：空行作为段落分隔保留在块内，不切断段落；
+			// 块首空行跳过（避免块首留空行）；段落累积到触及 targetRunes 时在段落边界落刀
 			if len(cur) == 0 {
 				continue
 			}
 			addLine(line)
-			if curRunes > maxRunes {
+			if curRunes >= targetRunes {
 				flush()
 			}
 		default:
@@ -328,8 +336,47 @@ func runeLen(s string) int {
 	return utf8.RuneCountInString(s)
 }
 
-// hardSplit 将超长文本按 maxRunes 个 rune 硬切为多段，不会切断多字节字符
+// hardSplit 将超长文本切分为多段：优先在行边界落刀（保留代码/列表/表格行的完整语义），
+// 仅当单行本身超过 maxRunes 时才退化到字符级硬切（不切断多字节字符）。
 func hardSplit(s string, maxRunes int) []string {
+	lines := strings.Split(s, "\n")
+	var out []string
+	var cur []string
+	curRunes := 0
+	flush := func() {
+		if len(cur) == 0 {
+			return
+		}
+		t := strings.TrimSpace(strings.Join(cur, "\n"))
+		if t != "" {
+			out = append(out, t)
+		}
+		cur, curRunes = nil, 0
+	}
+	for _, ln := range lines {
+		lnRunes := runeLen(ln)
+		if lnRunes > maxRunes {
+			// 单行本身超限：先落袋已累积（整行边界），再对该行退化到字符级硬切
+			flush()
+			out = append(out, hardSplitRunes(ln, maxRunes)...)
+			continue
+		}
+		// 累加该行（含行间换行符）将超限 → 在行边界前落刀
+		if curRunes > 0 && curRunes+1+lnRunes > maxRunes {
+			flush()
+		}
+		if len(cur) > 0 {
+			curRunes++ // 行间分隔换行符占 1 rune
+		}
+		cur = append(cur, ln)
+		curRunes += lnRunes
+	}
+	flush()
+	return out
+}
+
+// hardSplitRunes 将单行超长文本按 maxRunes 个 rune 硬切为多段（字符级兜底），不会切断多字节字符
+func hardSplitRunes(s string, maxRunes int) []string {
 	runes := []rune(s)
 	var out []string
 	for i := 0; i < len(runes); i += maxRunes {

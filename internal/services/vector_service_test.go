@@ -12,7 +12,9 @@ import (
 	"jot/internal/models"
 )
 
-// newVectorTestDB 打开内存 SQLite（单连接）并迁移 Note/Tag/NoteVector（含 note_tags 关联表）
+// newVectorTestDB 打开内存 SQLite（单连接）并迁移 Note/Tag/NoteVector（含 note_tags 关联表）；
+// 同时迁移 Setting 表并播种向量切块区间 600/600，保证写路径（indexNoteForTest 直接用 600/600）
+// 与状态比对（classifyVectorNotes 走 chunkSizes 查库）口径一致
 func newVectorTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -24,8 +26,14 @@ func newVectorTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("获取 sql.DB 失败: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1) // 内存库必须单连接，否则各连接库相互独立
-	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.NoteVector{}); err != nil {
+	if err := db.AutoMigrate(&models.Note{}, &models.Tag{}, &models.NoteVector{}, &models.Setting{}); err != nil {
 		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	if err := db.Create(&[]models.Setting{
+		{Key: "ai_chunk_target_rumes", Value: "600"},
+		{Key: "ai_chunk_max_rumes", Value: "600"},
+	}).Error; err != nil {
+		t.Fatalf("插入切块设置失败: %v", err)
 	}
 	return db
 }
@@ -37,7 +45,7 @@ func newVectorTestService(t *testing.T, db *gorm.DB) *VectorService {
 	return NewVectorService(db, logger)
 }
 
-// indexNoteForTest 按生产 IndexNotes 同一切块口径（标签排序 + ChunkContent 600）为笔记写入向量记录（默认模型 test-embed）
+// indexNoteForTest 按生产 IndexNotes 同一切块口径（标签排序 + ChunkContent 600/600）为笔记写入向量记录（默认模型 test-embed）
 func indexNoteForTest(t *testing.T, db *gorm.DB, note models.Note) {
 	t.Helper()
 	indexNoteWithModelForTest(t, db, note, "test-embed")
@@ -52,7 +60,7 @@ func indexNoteWithModelForTest(t *testing.T, db *gorm.DB, note models.Note, mode
 	}
 	sort.Strings(names)
 	meta := ChunkMeta{Title: note.Title, Tags: names, CreatedAt: note.CreatedAt}
-	chunks := ChunkContent(note.Content, 600, meta)
+	chunks := ChunkContent(note.Content, 600, 600, meta)
 	rows := make([]models.NoteVector, 0, len(chunks))
 	for i, c := range chunks {
 		rows = append(rows, models.NoteVector{

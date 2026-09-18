@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -29,6 +30,34 @@ func NewVectorService(db *gorm.DB, logger *fastlog.Logger) *VectorService {
 	return &VectorService{db: db, logger: logger}
 }
 
+// chunkSizes 从 settings 表读取向量切块区间参数（写路径 IndexNotes 与状态比对 classifyVectorNotes
+// 共用同一份取值，保证口径一致，避免内容未变却误判"需重新嵌入"）；
+// 缺失/非法值回退默认值 600/1500，再统一 clamp（先 max 到 [100,10000]，再 target 到 [1,max]），
+// clamp 与 SaveAllSettings 共用 clampChunkSizes，保证设置页展示与切块取值口径一致
+func (s *VectorService) chunkSizes() (target, max int) {
+	target, max = 600, 1500
+	var rows []models.Setting
+	if err := s.db.Model(&models.Setting{}).
+		Where("key IN ?", []string{"ai_chunk_target_rumes", "ai_chunk_max_rumes"}).
+		Find(&rows).Error; err != nil {
+		s.logger.Warnw("VectorService.chunkSizes 读取切块设置失败，回退默认值", fastlog.Error(err))
+		return clampChunkSizes(target, max)
+	}
+	for _, r := range rows {
+		switch r.Key {
+		case "ai_chunk_target_rumes":
+			if v, err := strconv.Atoi(r.Value); err == nil {
+				target = v
+			}
+		case "ai_chunk_max_rumes":
+			if v, err := strconv.Atoi(r.Value); err == nil {
+				max = v
+			}
+		}
+	}
+	return clampChunkSizes(target, max)
+}
+
 // adjacentBlocks 向量召回时命中块前后各补充的相邻块数
 // 轻量父块上下文：命中小块后顺带返回其相邻块，近似"子块检索 + 父块上下文"效果
 const adjacentBlocks = 1
@@ -40,10 +69,6 @@ const chunkCandidateMultiplier = 5
 
 // maxChunksPerNote 每个命中笔记最多保留的命中块数，防止单篇笔记命中块过多挤占其他笔记的卡片槽位
 const maxChunksPerNote = 4
-
-// chunkMaxRunes 笔记切块单块 rune 上限（IndexNotes 写路径与 classifyVectorNotes 状态比对共用，
-// 两处必须一致，否则内容未变也会被判为"需重新嵌入"）
-const chunkMaxRunes = 600
 
 // ===== GSE 中文分词器（懒加载，EMBED 嵌入式词典） =====
 
@@ -163,6 +188,10 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 	}
 
 	total := len(notes)
+
+	// 切块区间参数：写路径与 classifyVectorNotes 状态比对共用同一份取值（chunkSizes），
+	// 循环外取一次避免逐篇重复查库
+	chunkTarget, chunkMax := s.chunkSizes()
 	for i, note := range notes {
 		// 调用方取消时提前终止，返回已处理结果
 		if ctx.Err() != nil {
@@ -183,8 +212,8 @@ func (s *VectorService) IndexNotes(ctx context.Context, embedClient *einocli.Cli
 			CreatedAt: note.CreatedAt,
 		}
 
-		// 切块：单块上限 600 rune（含元数据前缀）；正文为空或切不出块时跳过本篇
-		chunks := ChunkContent(note.Content, chunkMaxRunes, meta)
+		// 切块：target 为段落边界理想落刀点，max 为单块硬上限（均含元数据前缀）；正文为空或切不出块时跳过本篇
+		chunks := ChunkContent(note.Content, chunkTarget, chunkMax, meta)
 		if len(chunks) == 0 {
 			continue
 		}
@@ -338,7 +367,8 @@ type vectorNoteStatus struct {
 //
 // currentModel 为空时不启用模型维度，保持纯内容比对行为（兼容未配置嵌入模型的场景）
 //
-// 复用 IndexNotes 同一套 ChunkContent 切块口径（maxRunes=600）；标签名排序保证与写路径一致，
+// 复用 IndexNotes 同一套 ChunkContent 切块口径（chunkSizes 读同一份 target/max 配置值）；
+// 标签名排序保证与写路径一致，
 // 存量旧块若因标签顺序不同被误判为需重新嵌入，重新嵌入一次后即稳定（自愈）
 func (s *VectorService) classifyVectorNotes(ctx context.Context, currentModel string) (*vectorNoteStatus, error) {
 	status := &vectorNoteStatus{}
@@ -397,6 +427,8 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context, currentModel st
 			s.logger.Errorw("VectorService.classifyVectorNotes 查询笔记内容失败", fastlog.Error(err))
 			return nil, fmt.Errorf("查询笔记内容失败: %w", err)
 		}
+		// 与 IndexNotes 同一套切块口径：循环外取一次 chunkSizes（读同一份配置，保证写路径与状态比对一致）
+		chunkTarget, chunkMax := s.chunkSizes()
 		for _, note := range notes {
 			// 模型不匹配：笔记向量中没有当前配置模型的记录（换模型后旧模型笔记需重新嵌入）
 			if currentModel != "" && !modelSetByNote[note.ID][currentModel] {
@@ -414,7 +446,7 @@ func (s *VectorService) classifyVectorNotes(ctx context.Context, currentModel st
 				Tags:      tagNames,
 				CreatedAt: note.CreatedAt,
 			}
-			current := ChunkContent(note.Content, chunkMaxRunes, meta)
+			current := ChunkContent(note.Content, chunkTarget, chunkMax, meta)
 			if chunksEqual(current, byNote[note.ID]) {
 				status.UpToDateIDs = append(status.UpToDateIDs, note.ID)
 			} else {
