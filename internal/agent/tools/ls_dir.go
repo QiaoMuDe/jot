@@ -121,6 +121,13 @@ func (t *lsDirTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ 
 
 	var b strings.Builder
 	cumRunes := 0
+	// 首行输出当前所在目录的相对路径（如 "当前目录: a/b"），为模型提供路径锚点，
+	// 便于正确拼接后续相对路径（替代 pwd 诉求）；根目录显示 "."（filepath.Rel 惯例）。
+	if rel := t.relDisplayPath(fullPath); rel != "" {
+		header := "当前目录: " + rel
+		b.WriteString(header)
+		cumRunes = len([]rune(header))
+	}
 	for _, d := range entries { // os.ReadDir 已按文件名升序
 		typeName := "文件"
 		if d.IsDir() {

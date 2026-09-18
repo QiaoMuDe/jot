@@ -238,6 +238,10 @@ func TestLsDir(t *testing.T) {
 		if !strings.Contains(out, "目录: sub") {
 			t.Errorf("应包含目录 sub，实际:\n%s", out)
 		}
+		// 首行路径锚点：根目录显示 "."
+		if !strings.Contains(out, "当前目录: .") {
+			t.Errorf("根目录应显示当前目录锚点 当前目录: .，实际:\n%s", out)
+		}
 		// 单层语义：不列出 sub 及其子目录内的任何文件
 		if strings.Contains(out, "sub"+string(filepath.Separator)+"b.txt") || strings.Contains(out, "c.txt") {
 			t.Errorf("单层列表不应含深层文件，实际:\n%s", out)
@@ -254,6 +258,10 @@ func TestLsDir(t *testing.T) {
 		}
 		if !strings.Contains(out, "目录: deep") {
 			t.Errorf("path=sub 应列出子目录 deep，实际:\n%s", out)
+		}
+		// 首行路径锚点：path=sub 显示 "sub"
+		if !strings.Contains(out, "当前目录: sub") {
+			t.Errorf("path=sub 应显示当前目录锚点 当前目录: sub，实际:\n%s", out)
 		}
 		if strings.Contains(out, "c.txt") {
 			t.Errorf("path=sub 单层不应列出 deep/c.txt，实际:\n%s", out)

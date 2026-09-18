@@ -11,6 +11,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -90,6 +91,23 @@ func TestBuildOSSubAgentInnerTools(t *testing.T) {
 		if !names[want] {
 			t.Errorf("内层白名单缺少工具 %q", want)
 		}
+	}
+}
+
+// TestBuildOSSubAgentPlatformNoteInjected 平台片段已注入内层提示词（osSubAgentInstruction 初始化时）。
+func TestBuildOSSubAgentPlatformNoteInjected(t *testing.T) {
+	innerCtx, _, _ := newTestInnerCtx()
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	if oa == nil {
+		t.Fatal("chatModel 非 nil 时应构造成功")
+	}
+	wantNote := "当前平台: " + runtime.GOOS
+	if !strings.Contains(oa.cfg.instruction, wantNote) {
+		t.Errorf("内层提示词应包含平台片段 %q，实际:\n%s", wantNote, oa.cfg.instruction)
+	}
+	// osSubAgentInstruction 在初始化时即已注入平台片段（非纯原始提示词）
+	if !strings.Contains(osSubAgentInstruction, wantNote) {
+		t.Errorf("osSubAgentInstruction 应已注入平台片段 %q", wantNote)
 	}
 }
 
