@@ -171,7 +171,7 @@ func (t *runCommandTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"cwd": {
 				Type:     schema.String,
-				Desc:     "命令工作目录（工作目录内子目录或省略，缺省为工作目录根）；超出工作目录将被拒绝",
+				Desc:     "命令工作目录（工作区内子目录或省略，缺省为工作目录根；支持相对工作区的路径与 ~/.jot/workspace/ 开头路径）；超出工作目录将被拒绝",
 				Required: false,
 			},
 		}),

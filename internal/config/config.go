@@ -90,7 +90,7 @@ func WorkspaceFilePath(workspaceRoot, p string) (string, error) {
 	// 且不会把兄弟目录（如 root2 或 root_2）误判为在 root 内。
 	if !strings.EqualFold(rootClean, resolved) &&
 		!strings.HasPrefix(strings.ToLower(resolved), strings.ToLower(rootClean)+string(filepath.Separator)) {
-		return "", errors.New("超出工作目录，仅允许操作 ~/.jot/workspace 内的文件")
+		return "", errors.New("超出工作目录，仅允许操作 ~/.jot/workspace 内的文件；请使用相对工作区的路径（如 notes/a.md）或 ~/.jot/workspace/ 开头的路径")
 	}
 	return cleaned, nil
 }

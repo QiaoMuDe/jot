@@ -8,6 +8,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,10 +17,11 @@ import (
 	"jot/internal/config"
 )
 
-// fsToolBase 文件工具共享基础：持有执行上下文与可注入的工作目录根（测试用）。
+// fsToolBase 文件工具共享基础：持有执行上下文与可注入的工作目录根/家目录（测试用）。
 type fsToolBase struct {
 	ctx           *Context
 	workspaceRoot string // 测试注入用，空则取 config.WorkspaceDir()
+	homeDir       string // 测试注入用，空则取 os.UserHomeDir()（供 expandTilde 展开 ~ 前缀）
 }
 
 // fsFinalTarget 计算复制/移动的最终目标路径：dest 为已存在目录时自动追加源基名
@@ -123,12 +125,41 @@ func (b *fsToolBase) openRootFor(fullPath string) (*os.Root, string, error) {
 }
 
 // resolvePath 把用户传入路径解析为工作目录内的绝对路径并做边界校验。
+// 支持三种写法：相对工作区的路径、以 ~ 开头的路径（前导 ~ 展开为用户家目录，
+// 如 ~/.jot/workspace/foo）、或工作区内绝对路径；展开后仍走 WorkspaceFilePath
+// 的 Clean + 边界校验 + 符号链接解析，~/ 其它目录照样越界拒绝。
 func (b *fsToolBase) resolvePath(p string) (string, error) {
 	root, err := b.wsRoot()
 	if err != nil {
 		return "", err
 	}
-	return config.WorkspaceFilePath(root, p)
+	expanded, err := b.expandTilde(p)
+	if err != nil {
+		return "", err
+	}
+	return config.WorkspaceFilePath(root, expanded)
+}
+
+// expandTilde 把路径的前导 ~ 展开为用户家目录：仅处理 p 为 "~" 或以 "~/"、
+// "~\\" 开头三种形式；路径中间的 ~（如 notes/~foo.md）不展开、原样返回。
+// 家目录优先取注入值（测试用），否则取 os.UserHomeDir()；获取失败 fail-fast
+// 报错而非静默降级，避免 "~/..." 被当作相对路径解析出迷惑结果。
+func (b *fsToolBase) expandTilde(p string) (string, error) {
+	if p != "~" && !strings.HasPrefix(p, "~/") && !strings.HasPrefix(p, `~\`) {
+		return p, nil
+	}
+	home := b.homeDir
+	if home == "" {
+		h, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("无法获取用户家目录，请改用相对工作区的路径: %w", err)
+		}
+		home = h
+	}
+	if p == "~" {
+		return home, nil
+	}
+	return filepath.Join(home, p[2:]), nil
 }
 
 // requestApproval 通过 Context.Approver 请求用户审批；拒绝时返回拒绝错误文本，

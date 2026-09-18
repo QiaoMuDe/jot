@@ -71,7 +71,7 @@ func (t *globTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"pattern": {
 				Type:     schema.String,
-				Desc:     "通配符模式，相对 ~/.jot/workspace；如 *.md、scripts/*.md；不允许绝对路径或包含 .. 逃逸段",
+				Desc:     "通配符模式，相对 ~/.jot/workspace；如 *.md、scripts/*.md、~/.jot/workspace/*.md；不允许绝对路径或包含 .. 逃逸段",
 				Required: true,
 			},
 		}),
@@ -96,6 +96,12 @@ func (t *globTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ .
 		return "", errors.New("glob 参数缺少 pattern")
 	}
 	if err := validateTextLen("pattern", pattern, maxToolShortText); err != nil {
+		return "", err
+	}
+	// 剥离 ~/.jot/workspace/ 前缀（含反斜杠变体，toSlash 已统一），使模型照抄
+	// 工具描述记法的模式可用；其余 ~ 开头模式明确报错而非静默匹配为空。
+	pattern, err := stripTildeWorkspacePrefix(pattern)
+	if err != nil {
 		return "", err
 	}
 	if err := validateGlobPattern(pattern); err != nil {
@@ -174,6 +180,31 @@ func NewGlob(ctx *Context) tool.InvokableTool {
 // toSlash 统一路径分隔符为正斜杠，便于模式匹配与跨平台测试。
 func toSlash(p string) string {
 	return strings.ReplaceAll(p, "\\", "/")
+}
+
+// globTildeWorkspacePrefix glob 模式中可剥离的工作区前缀（正斜杠形式，调用前
+// pattern 已由 toSlash 统一分隔符）。
+const globTildeWorkspacePrefix = "~/.jot/workspace/"
+
+// stripTildeWorkspacePrefix 把以 ~/.jot/workspace/ 开头的 glob 模式剥为相对工作
+// 区的模式（如 ~/.jot/workspace/scripts/*.md → scripts/*.md）；恰为
+// ~/.jot/workspace（或带尾分隔符）时视为 "*"（列出根下条目）；其余以 ~ 开头的
+// 模式明确报错——工具只允许工作区内路径，静默按相对模式处理会匹配为空、误导模型。
+// 采用字面前缀剥离而非真实 ~ 展开：pattern 须保持相对形式参与 path.Match，
+// 且生产环境工作区根固定为 ~/.jot/workspace，二者等价。
+func stripTildeWorkspacePrefix(pattern string) (string, error) {
+	switch {
+	case strings.HasPrefix(pattern, globTildeWorkspacePrefix):
+		if rest := strings.TrimPrefix(pattern, globTildeWorkspacePrefix); rest != "" {
+			return rest, nil
+		}
+		return "*", nil
+	case pattern == strings.TrimSuffix(globTildeWorkspacePrefix, "/"):
+		return "*", nil
+	case strings.HasPrefix(pattern, "~"):
+		return "", errors.New("glob pattern 须相对 ~/.jot/workspace，或以 ~/.jot/workspace/ 开头")
+	}
+	return pattern, nil
 }
 
 // validateGlobPattern 校验 glob 模式：拒绝绝对路径与 .. 逃逸段，确保模式始终

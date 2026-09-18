@@ -330,21 +330,12 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | AI 助手输入框与工具栏交互打磨：① 工具列表分组分割线两端圆角改直角（分组标签 `border-radius: 6px 6px 0 0`，上圆下方，底边 `border-bottom` 变全宽直线，AI 浮层 `.ai-chat-agent-tools-group` 与设置页 `.agent-tools-mgr-group` 两处对称）；② 带下拉的工具栏按钮右侧补 chevron；③ chevron 随列表开合翻转 180°（`.ai-chat-toolbar-btn.open svg:last-child{transform:rotate(180deg);transition:.18s}`），模型触发器经 `:has(.ai-chat-model-dropdown.open)` 驱动，其余三按钮（更多技能/Agent 工具/执行审批）由各自 `.open` class 驱动；④ Agent 工具箭头复位时序统一（点击/外点/ESC 三路径均立即复位）。 |
-| **互斥开合（重要）** | 新增模块级 `closeOtherToolbarDropdowns(except)`（[ai-chat.js](frontend/src/js/ai-chat.js) 导出）：打开输入框任一列表时先关闭其余三者——模型/更多技能/执行审批（同模块直接调用）、Agent 工具经 `window.__closeAiChatAgentToolsList` 桥接（main.js 注册、main.js 单向 import，避免跨模块循环依赖）。四个打开入口各自传 `except` 跳过自身：模型 `openModelDropdown`、技能按钮 else 分支、审批 `openApprovalDropdown`、Agent 工具 `renderChatAgentToolsList`。**互斥名单为硬编码，未来新增第 5 个输入框列表控件必须补进该函数并在其打开入口传 except，否则不参与互斥（已固化进长期记忆 19）。** |
-| **深度思考悬停提示** | index.html 在 `#aiModeTipPortal` 新增 `data-tip="deep-think"` 悬停卡（标题「深度思考」，正文说明开启=发送 enable_thinking 请求、是否真正思考取决于模型支持、不支持时可能被忽略或报错），并移除 `#aiChatSearchToggle` 原生 `title` 防双重弹出；ai-chat.js `initModeTips`（仅调用一次）把该按钮注册进 tipMap（300ms 延迟、自动定位、随移开隐藏）。 |
-| **审批文案/样式** | 三模式下拉短描述与悬停提示统一为「命令执行」措辞并按真实门控对齐：confirm_every=每次执行命令需确认；review=常规自动、危险命令强制确认；auto=不经审批、危险仅留痕不提示（工具调用记录 `tool_auto_approval` 留痕）。审批浮窗头部「如何批准 Agent 的操作？」加 `border-bottom` 分割线 + `font-weight:600`（`.ai-approval-header`）；**确认面板头部同一 class 曾级联继承该分割线，已显式补在 [ai-chat.css](frontend/src/css/components/ai-chat.css) L4900-4909（内边距对齐 8px 12px 7px，几何零偏移），两处各自自洽、不再相互依赖。** |
-| **涉及文件** | [index.html](frontend/index.html)（chevron/模式描述×6/deepthink 卡）、[ai-chat.js](frontend/src/js/ai-chat.js)（closeOtherToolbarDropdowns/箭头开合/deepthink 绑定）、[main.js](frontend/src/main.js)（import 助手/Agent 工具接入/箭头立即复位）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（分组圆角/箭头 CSS/.ai-approval-header 分割线+加粗+确认面板显式化）、[settings-panel.css](frontend/src/css/components/settings-panel.css)（.agent-tools-mgr-group 圆角） |
-
-### 临时记忆 2
-| 记忆点 | 内容 |
-| --- | --- |
 | **变更概览** | 长期记忆机制优化第一波（提示词规范 + 注入格式）：① Agent 模式在 [app.go](app.go) `CallAIAgentStream` 新增【工具使用规范 - 长期记忆维护】段（第四个规范段）——发现值得跨会话固化的信息（用户偏好/长期约定/重要事实/常用资料位置）时主动调用 manage_memory 保存、不必等用户明确要求；已有同名或同义记忆用 update 修正、不重复 create；避免琐碎/一次性/可重取信息；任务收尾前回顾本轮是否有值得固化的信息。② [manage_memory.go](internal/agent/tools/manage_memory.go) 工具描述放宽：原「当任务只需本条会话的一次性信息时不要调用（会污染长期记忆）」改为「避免仅因任务用得到就保存琐碎、一次性、可随时从本地笔记/待办/网页重新获取的信息（会污染长期记忆）」，并补充「发现需要跨会话固化的用户偏好/事实时调用」。 |
 | **记忆注入格式（重要）** | [app.go](app.go) `buildAIContextInstruction` 长期记忆注入从「仅 Summary」升级为「Summary + 截断详情」：每条输出 `- id=N. summary` + 非空 content 输出 `详情：<截断>`（常量 `memoryInjectContentRunes=150` rune，超长由 `tools.TruncateRunes` 自动追加省略号）；全量注入不设条数上限、维持 created_at 倒序（用户拍板）；尾部提示改为「详情仅截取前 150 字，可用 manage_memory 的 get 动作按 id 查完整版」。Chat/Agent 两模式共用此路径。 |
 | **后续规划（未做）** | 已与用户讨论未实施：机制二（关键词触发记忆生成——用户消息命中关键词表则回复结束后异步提炼记忆）、机制三（历史对话摘要压缩时顺带提炼记忆，挂接 `truncateAIMessages`/`CompactSessionSummary`）；曾讨论「最近 N 条短 content + 注入总量上限」分级方案，用户拍板改为全量 + 单条截断 150 字。 |
 | **涉及文件** | [app.go](app.go)（【工具使用规范 - 长期记忆维护】段、`memoryInjectContentRunes` 常量、注入循环）、[manage_memory.go](internal/agent/tools/manage_memory.go)（工具描述） |
 
-### 临时记忆 3
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 将 11 个文件/命令工具（read_file/write_file/edit_file/ls_dir/glob/grep_file/copy_file/move_file/delete_file/mkdir_dir/run_command）整体封装为**子 Agent 委托工具 `os_agent`**：父层只注册 os_agent 一个工具（每轮省 11 份工具描述 standing cost、降低选择错误率），内层为独立 ChatModelAgent（复用同一会话 *openai.ChatModel，`MaxIterations=20`）。所有子 Agent 逻辑与定义集中 [subagent.go](internal/agent/subagent.go)（委托工具/内层构造/内层系统提示词/事件转发；后续笔记子 Agent 等在此文件扩展）。 |
@@ -354,7 +345,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [subagent_test.go](internal/agent/subagent_test.go) 覆盖：内层白名单恰 11、chatModel nil 跳过、os_agent 禁用过滤（其余工具正常）、Approver 指针共享、InvokableRun 参数错误分支、**事件转发顺序**（fakeAgent 实现 adk.Agent 预设事件流 → 断言 toolRecords 与 ai:tool-status 顺序 = os_agent start → read_file start/result → os_agent result）。`go build/vet/test` + `npm run build` 全绿（typed nil interface 装箱陷阱已规避）。 |
 | **涉及文件** | 新增 [subagent.go](internal/agent/subagent.go)+[subagent_test.go](internal/agent/subagent_test.go)；[registry.go](internal/agent/registry.go)（BuildParams/buildTools）、[agent.go](internal/agent/agent.go)（Run 传 runCtx/chatModel）、[meta.go](internal/agent/tools/meta.go)（清单收敛为单条）、[doc.go](internal/agent/tools/doc.go)、[TOOLS.md](internal/agent/TOOLS.md)、[EVENTS.md](internal/agent/EVENTS.md)（§3.1 内层转发段）、[ai-chat.js](frontend/src/js/ai-chat.js)（osAgentGroup*/分组降级渲染）、[ai-chat.css](frontend/src/css/components/ai-chat.css)（.is-os-agent/.is-substep） |
 
-### 临时记忆 4
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | os_agent 架构演进（**取代原 5 号 os_agent 初始实现描述**）：从「集中式 subagent.go」拆分为**通用机制（subagent.go）+ 域实例（subagent_os.go）**两文件结构；新增 [SUBAGENTS.md](internal/agent/SUBAGENTS.md) 子 Agent 开发与维护指南（与 TOOLS.md/EVENTS.md 并列）；全面审查修复 4 个问题（fastlog 占位符 / doc.go 引用 / 命名统一 / checklist 同步）。 |
@@ -366,12 +357,12 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 5
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | Agent 审批机制从「仅命令执行」扩展为**代码强制覆盖全部写操作**（依赖代码而非模型自觉）：manage_note/manage_notebook/manage_tag/manage_todo 四工具写操作接入 `RequestApproval` 门控（create 豁免）、http_request 全方法门控（GET critical=false、非 GET critical=true）、移除旧 confirm 参数依赖；配套 [app.go](app.go) 提示词段更新、[index.html](frontend/index.html) 前端审批文案扩展为「命令+笔记写操作」、[TOOLS.md](internal/agent/TOOLS.md) 新增工具审批接入指南。 |
-| **笔记写操作审批（重要）** | [manage_note.go](internal/agent/tools/manage_note.go) 等四工具（manage_notebook/manage_tag/manage_todo）写分支改为「**先校验→再审批→再执行**」：审批在参数有效性校验之后；`requestApproval` 帮助方法统一模式（ctx nil 放行 / Approver nil fail-fast / 否则调 `Context.Approver.RequestApproval(ctx, "<工具名>", summary, critical)`）；审批摘要 `manageNoteApprovalSummary` 含动作+目标+变更内容，长内容 `TruncateRunes` 截断（find→replace 30 rune）；**critical 分级**：破坏性/批量/不可撤销/外部副作用=true（删除笔记、remove_tag 批量、move 因必然移除源=true），轻量修改=false（rename/update/toggle），create 类豁免；manage_memory 有意豁免。 |
-| **http_request 门控（重要）** | [http_request.go](internal/agent/tools/http_request.go) 所有方法（含 GET）执行前请求批准：**GET 常规（critical=false）**——confirm_every 确认、review/auto 自动放行；**POST/PUT/DELETE/PATCH 高危（critical=true）**——confirm_every/review 强制确认、auto 放行留痕。审批在 URL 校验后、构造请求前；摘要 `发送 <method> 请求到 <URL(60 rune)>`，非 GET 附 body 截断 100 rune。 |
-| **提示词与前端** | [app.go](app.go)【工具使用规范 - 写操作强制确认】段改【写操作审批机制】：移除 confirm=true 引导、新增「被拒绝不得绕过，可 ask_user 征询后重试」；[index.html](frontend/index.html) 审批模式下拉描述与悬停提示从「命令执行」措辞扩展为「命令+笔记写操作」（confirm_every=每次执行命令或写操作需确认；review=常规自动、危险操作强制确认；auto=不经审批、危险仅留痕）。 |
-| **文档与测试** | [TOOLS.md](internal/agent/TOOLS.md) §6.1 追加「如何给工具接入审批（步骤）」5 步（requestApproval 模板/先校验后审批/可判断摘要/critical 判定/失败即中止）+「测试要求」4 类必测（批准放行含 critical 断言/拒绝不落库/Approver 缺失 fail-fast/裸工具放行）；测试双件套 [fs_tools_test.go](internal/agent/tools/fs_tools_test.go)（mockApprover 固定批准）+ [manage_approval_test.go](internal/agent/tools/manage_approval_test.go)（rejectApprover 固定拒绝、14 用例：拒绝不落库×3、manage_todo update、remove_tag 批量 true、单条 move false、db.First 错误断言）；http_request 新增 [http_request_test.go](internal/agent/tools/http_request_test.go) `TestHTTPRequestApproval` 6 子用例（GET critical=false+摘要、GET 拒绝 hits=0、POST critical=true+摘要含请求体、POST 拒绝 hits=0、Approver 缺失 fail-fast、裸工具放行）。 |
-| **涉及文件** | [manage_note.go](internal/agent/tools/manage_note.go)、[manage_notebook.go](internal/agent/tools/manage_notebook.go)、[manage_tag.go](internal/agent/tools/manage_tag.go)、[manage_todo.go](internal/agent/tools/manage_todo.go)（写操作审批）、[http_request.go](internal/agent/tools/http_request.go)（全方法门控）、[context.go](internal/agent/tools/context.go)（Approver 接口）、[manage_approval_test.go](internal/agent/tools/manage_approval_test.go)、[http_request_test.go](internal/agent/tools/http_request_test.go)、[app.go](app.go)（提示词段）、[index.html](frontend/index.html)（审批描述）、[TOOLS.md](internal/agent/TOOLS.md)（§6.1 接入指南） |
+| **变更概览** | os_agent 文件/命令工具支持 `~` 短路径解析（方案B）+ 越界报错自纠提示（方案C），解决模型首跳路径报错：根因是模型照抄工具描述/提示词里的 `~/.jot/workspace` 记法而解析层不展开 `~`（被拼成 `<workspace>/~/.jot/workspace/...` 字面量嵌套目录，读报不存在、写悄悄建出名为 `~` 的垃圾目录），或猜错家目录绝对路径触发越界拒绝。用户拍板不向上下文注入绝对路径（不做方案A）。 |
+| **~ 展开（重要）** | [fs_base.go](internal/agent/tools/fs_base.go) `fsToolBase` 新增 `homeDir` 测试注入字段 + `expandTilde` helper：仅前导 `~`、`~/`、`~\` 三种形式展开为用户家目录，路径中间 `~` 原样保留；home 获取失败 fail-fast 不静默降级。`resolvePath` 先展开再走 `config.WorkspaceFilePath` 全套 Clean+边界+symlink 校验，`~/其它目录` 照样拒绝。11 工具全部经该咽喉点，一处覆盖（含 run_command cwd）。 |
+| **glob 前缀剥离 + 文案（重要）** | [glob.go](internal/agent/tools/glob.go) 新增 `stripTildeWorkspacePrefix`：pattern 经 toSlash 统一分隔符后剥掉字面前缀 `~/.jot/workspace/`（恰为 `~/.jot/workspace` 视为 `*`），其余 `~` 开头明确报错（原先静默按相对模式匹配为空误导模型）；不依赖真实 home、保持 pattern 相对形式参与 path.Match。12 处工具参数描述统一为「相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可」；[subagent_os.go](internal/agent/subagent_os.go) 内层提示词边界段补路径写法说明。 |
+| **方案C 报错提示** | [config.go](internal/config/config.go) 越界报错追加自纠提示：「请使用相对工作区的路径（如 notes/a.md）或 ~/.jot/workspace/ 开头的路径」；config_test 只断言 err 非 nil 不断言文本，无回归。 |
+| **测试与验证** | [fs_tools_test.go](internal/agent/tools/fs_tools_test.go) 新增 `TestResolvePathTildeExpansion`（完整形式命中 / `~/其它目录` 与 `~` 单独越界拒绝）+ `TestExpandTilde`（5 形态映射）；[glob_test.go](internal/agent/tools/glob_test.go) 新增 `TestGlobTildePrefix`（正斜杠完整形式/子目录/单独形式/反斜杠变体/其它 ~ 报错 5 子用例）。`go build/vet/test` + gofmt 全绿。纯后端改动，需 `wails build` 出新二进制生效。 |
+| **涉及文件** | [fs_base.go](internal/agent/tools/fs_base.go)、[glob.go](internal/agent/tools/glob.go)、[config.go](internal/config/config.go)、11 工具参数描述（read_file/write_file/edit_file/delete_file/copy_file/move_file/mkdir_dir/ls_dir/grep_file/run_command/glob）、[subagent_os.go](internal/agent/subagent_os.go)、[fs_tools_test.go](internal/agent/tools/fs_tools_test.go)、[glob_test.go](internal/agent/tools/glob_test.go) |
 
 ## 九、初始静态分析关键结论
 

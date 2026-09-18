@@ -55,12 +55,12 @@ func (t *copyFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"source": {
 				Type:     schema.String,
-				Desc:     "源文件/目录路径，相对 ~/.jot/workspace 或为其内绝对路径",
+				Desc:     "源文件/目录路径；相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可",
 				Required: true,
 			},
 			"dest": {
 				Type:     schema.String,
-				Desc:     "目标路径，相对 ~/.jot/workspace 或为其内绝对路径；为已存在目录时自动追加源文件名",
+				Desc:     "目标路径；相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可；为已存在目录时自动追加源文件名",
 				Required: true,
 			},
 			"overwrite": {

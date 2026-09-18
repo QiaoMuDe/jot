@@ -163,3 +163,61 @@ func TestGlobBoundaryAndEmpty(t *testing.T) {
 		}
 	})
 }
+
+// TestGlobTildePrefix 验证 ~/.jot/workspace/ 前缀模式剥离：完整形式命中、单独
+// 出现视为 *、反斜杠变体经 toSlash 归一、其余 ~ 开头模式明确报错。
+func TestGlobTildePrefix(t *testing.T) {
+	dir := newTestWorkspace(t)
+	h := newTestGlob(dir)
+
+	t.Run("~/.jot/workspace/*.md 命中根层", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"pattern":"~/.jot/workspace/*.md"}`)
+		if err != nil {
+			t.Fatalf("glob 失败: %v", err)
+		}
+		for _, want := range []string{"root.md", "x.md"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("应有 %q，实际: %.200s", want, out)
+			}
+		}
+		if strings.Contains(out, "scripts/note.md") {
+			t.Errorf("不应跨层命中，实际: %.200s", out)
+		}
+	})
+
+	t.Run("~/.jot/workspace/scripts/*.md 命中子目录", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"pattern":"~/.jot/workspace/scripts/*.md"}`)
+		if err != nil {
+			t.Fatalf("glob 失败: %v", err)
+		}
+		if !strings.Contains(out, "scripts/note.md") {
+			t.Errorf("应命中 scripts/note.md，实际: %.200s", out)
+		}
+	})
+
+	t.Run("~/.jot/workspace 单独视为 *", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"pattern":"~/.jot/workspace"}`)
+		if err != nil {
+			t.Fatalf("glob 失败: %v", err)
+		}
+		if !strings.Contains(out, "root.md") || !strings.Contains(out, "sub") {
+			t.Errorf("应列出根下条目，实际: %.200s", out)
+		}
+	})
+
+	t.Run("反斜杠变体经 toSlash 归一", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"pattern":`+jsonQuote(`~\.jot\workspace\*.md`)+`}`)
+		if err != nil {
+			t.Fatalf("glob 失败: %v", err)
+		}
+		if !strings.Contains(out, "root.md") {
+			t.Errorf("反斜杠变体应命中根层 .md，实际: %.200s", out)
+		}
+	})
+
+	t.Run("其它 ~ 开头模式报错", func(t *testing.T) {
+		if _, err := h.InvokableRun(context.Background(), `{"pattern":"~/foo/*.md"}`); err == nil {
+			t.Error("~/foo/*.md 应报错")
+		}
+	})
+}

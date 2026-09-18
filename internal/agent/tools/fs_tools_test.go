@@ -370,3 +370,67 @@ func TestReadFileLineNumbers(t *testing.T) {
 func jsonQuote(s string) string {
 	return `"` + strings.ReplaceAll(s, `\`, `\\`) + `"`
 }
+
+// TestResolvePathTildeExpansion 验证 ~ 前缀路径展开：~/.jot/workspace/... 形式
+// 可直接命中工作区内文件，~/ 其它目录与 ~ 单独越界拒绝。
+func TestResolvePathTildeExpansion(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".jot", "workspace")
+	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "tilde ok"
+	if err := os.WriteFile(filepath.Join(root, "sub", "a.txt"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := &readFileTool{fsToolBase: fsToolBase{workspaceRoot: root, homeDir: home}}
+
+	t.Run("~/.jot/workspace/ 完整形式命中", func(t *testing.T) {
+		out, err := h.InvokableRun(context.Background(), `{"path":"~/.jot/workspace/sub/a.txt"}`)
+		if err != nil {
+			t.Fatalf("读取失败: %v", err)
+		}
+		if out != content {
+			t.Errorf("读取内容 = %q, want %q", out, content)
+		}
+	})
+
+	t.Run("~/ 其它子目录越界拒绝", func(t *testing.T) {
+		if _, err := h.InvokableRun(context.Background(), `{"path":"~/other.txt"}`); err == nil {
+			t.Error("~/other.txt 越界应报错")
+		}
+	})
+
+	t.Run("~ 单独越界拒绝", func(t *testing.T) {
+		if _, err := h.InvokableRun(context.Background(), `{"path":"~"}`); err == nil {
+			t.Error("~ 单独越界应报错")
+		}
+	})
+}
+
+// TestExpandTilde 验证 expandTilde 的展开规则：仅前导 ~（~、~/、~\）展开为家
+// 目录，路径中间的 ~ 与普通相对路径原样保留。
+func TestExpandTilde(t *testing.T) {
+	home := t.TempDir()
+	b := fsToolBase{homeDir: home}
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"~", home},
+		{"~/.jot/workspace/foo.txt", filepath.Join(home, ".jot", "workspace", "foo.txt")},
+		{"~\\.jot\\workspace\\a.txt", filepath.Join(home, ".jot\\workspace\\a.txt")},
+		{"notes/~x.txt", "notes/~x.txt"},
+		{"sub/a.txt", "sub/a.txt"},
+	}
+	for _, c := range cases {
+		got, err := b.expandTilde(c.in)
+		if err != nil {
+			t.Fatalf("expandTilde(%q) 意外错误: %v", c.in, err)
+		}
+		if got != c.want {
+			t.Errorf("expandTilde(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

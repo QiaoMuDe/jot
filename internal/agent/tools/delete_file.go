@@ -53,7 +53,7 @@ func (t *deleteFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"path": {
 				Type:     schema.String,
-				Desc:     "要删除的文件/目录路径，相对 ~/.jot/workspace 或为其内绝对路径",
+				Desc:     "要删除的文件/目录路径；相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可",
 				Required: true,
 			},
 			"recursive": {

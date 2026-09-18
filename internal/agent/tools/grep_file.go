@@ -78,7 +78,7 @@ func (t *grepFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"path": {
 				Type:     schema.String,
-				Desc:     "要搜索的文件或目录路径，相对 ~/.jot/workspace 或为其内绝对路径；指向文件则单文件搜索，指向目录则递归搜索",
+				Desc:     "要搜索的文件或目录路径；相对 ~/.jot/workspace 的路径、~/.jot/workspace/ 开头路径或其内绝对路径均可；指向文件则单文件搜索，指向目录则递归搜索",
 				Required: true,
 			},
 			"pattern": {
