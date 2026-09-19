@@ -1703,14 +1703,16 @@
     animation: ai-toggle-shake 0.4s ease;
 }
 
-/* AI 回复期间侧栏按钮锁定（折叠/新建/清空） */
+/* AI 回复期间侧栏按钮锁定（折叠/新建/清空/工作区） */
 #aiSidebarToggle.is-locked,
+#aiWorkspaceBtn.is-locked,
 #aiSessionNewBtn.is-locked,
 #aiChatClearBtn.is-locked {
     opacity: 0.45;
     cursor: not-allowed;
 }
 #aiSidebarToggle.is-shaking,
+#aiWorkspaceBtn.is-shaking,
 #aiSessionNewBtn.is-shaking,
 #aiChatClearBtn.is-shaking {
     animation: ai-toggle-shake 0.4s ease;

@@ -6538,7 +6538,18 @@ function initEventListeners() {
     els.vectorIndexBtn?.addEventListener('click', openVectorIndexModal);
     els.deleteVectorsBtn?.addEventListener('click', deleteAllVectors);
     // 工作区管理器（AI 对话页顶栏入口）
-    els.aiWorkspaceBtn?.addEventListener('click', openWorkspaceManager);
+    els.aiWorkspaceBtn?.addEventListener('click', (e) => {
+        // 回复期间锁定：抖动提示且不打开（与侧栏/新建会话按钮锁定行为一致）
+        if (els.aiWorkspaceBtn.classList.contains('is-locked')) {
+            els.aiWorkspaceBtn.classList.remove('is-shaking');
+            void els.aiWorkspaceBtn.offsetWidth;
+            els.aiWorkspaceBtn.classList.add('is-shaking');
+            els.aiWorkspaceBtn.addEventListener('animationend', () => els.aiWorkspaceBtn.classList.remove('is-shaking'), { once: true });
+            window.showNotification?.('回复进行中，暂时无法打开工作区管理器', 'warning');
+            return;
+        }
+        openWorkspaceManager();
+    });
 
     els.mdRefBackBtn.addEventListener('click', () => {
         switchView('grid');

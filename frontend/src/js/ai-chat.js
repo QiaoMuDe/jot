@@ -7989,6 +7989,7 @@ function setToggleLocked(locked) {
     _preStreamSidebarExpanded = locked ? _preStreamSidebarExpanded : null;
 
     sidebarToggleBtn?.classList.toggle('is-locked', locked);
+    document.getElementById('aiWorkspaceBtn')?.classList.toggle('is-locked', locked);
     sessionNewBtnEl?.classList.toggle('is-locked', locked);
     clearBtnEl?.classList.toggle('is-locked', locked);
     if (aiSearchBtnEl) aiSearchBtnEl.disabled = locked;
