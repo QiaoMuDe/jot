@@ -110,6 +110,10 @@ export function CreateAISession() {
   return window['go']['main']['App']['CreateAISession']();
 }
 
+export function CreateDirectory(arg1, arg2) {
+  return window['go']['main']['App']['CreateDirectory'](arg1, arg2);
+}
+
 export function CreateNote(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateNote'](arg1, arg2, arg3, arg4);
 }
@@ -656,10 +660,6 @@ export function UpdateTag(arg1, arg2, arg3) {
 
 export function UpdateTodo(arg1, arg2) {
   return window['go']['main']['App']['UpdateTodo'](arg1, arg2);
-}
-
-export function UploadDirectoryToWorkspace() {
-  return window['go']['main']['App']['UploadDirectoryToWorkspace']();
 }
 
 export function UploadFilesToWorkspace() {

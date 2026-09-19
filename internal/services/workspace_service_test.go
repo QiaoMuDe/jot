@@ -2,7 +2,7 @@ package services
 
 // 本文件覆盖工作区管理器（WorkspaceService）的单元测试：
 //  1. 上传重名自动改名（文件/目录/无扩展名/隐藏文件保持原名）；
-//  2. 文件树结构与排序与空目录隐藏（自底向上修剪）；
+//  2. 文件树结构与排序与空目录保留显示；
 //  3. 目录递归上传/下载/删除（roundtrip，含下载重名自动改名）；
 //  4. 工作区根目录删除被拒（空、.、/）；
 //  5. ../ 逃逸路径被拒（删除与下载源）；
@@ -116,12 +116,12 @@ func TestWorkspaceUploadAutoRename(t *testing.T) {
 		mustWrite(t, filepath.Join(ws, "dir", "old.txt"), "old")
 		src := filepath.Join(t.TempDir(), "dir")
 		mustWrite(t, filepath.Join(src, "sub", "new.txt"), "new")
-		res, err := svc.UploadDirectory(src)
-		if err != nil {
-			t.Fatalf("上传目录失败: %v", err)
+		resArr, err := svc.UploadPathsToWorkspace([]string{src}, "") // 生产路径：拖拽上传目录到根
+		if err != nil || len(resArr) != 1 {
+			t.Fatalf("上传目录失败: err=%v res=%+v", err, resArr)
 		}
-		if res.Error != "" || res.Target != "dir (1)" {
-			t.Fatalf("上传结果不符: %+v", res)
+		if resArr[0].Error != "" || resArr[0].Target != "dir (1)" {
+			t.Fatalf("上传结果不符: %+v", resArr[0])
 		}
 		if got := readFile(t, filepath.Join(ws, "dir (1)", "sub", "new.txt")); got != "new" {
 			t.Errorf("改名目录内容 = %q, want new", got)
@@ -167,7 +167,7 @@ func TestWorkspaceUploadAutoRename(t *testing.T) {
 }
 
 // TestWorkspaceListTree 文件树：目录在前、名称升序、/ 分隔相对路径、文件大小与
-// 修改时间、空目录隐藏（自底向上修剪，含"子目录全被修剪"的父目录）。
+// 修改时间、空目录保留显示（新建空文件夹应立即可见）。
 func TestWorkspaceListTree(t *testing.T) {
 	svc, ws, _ := setupWorkspaceService(t)
 	mustWrite(t, filepath.Join(ws, "b.txt"), "bb")
@@ -183,17 +183,27 @@ func TestWorkspaceListTree(t *testing.T) {
 		t.Fatalf("列表失败: %v", err)
 	}
 
-	// 顶层排序：目录在前（dir），文件按名升序（a.txt, b.txt）；dir2/empty 被修剪
+	// 顶层排序：目录在前（dir/empty/dir2，按名升序），文件按名升序（a.txt, b.txt）
 	var topRel []string
 	for _, e := range tree {
 		topRel = append(topRel, e.RelPath)
 	}
-	wantTop := []string{"dir", "a.txt", "b.txt"}
+	wantTop := []string{"dir", "dir2", "empty", "a.txt", "b.txt"}
 	if strings.Join(topRel, ",") != strings.Join(wantTop, ",") {
 		t.Errorf("顶层条目 = %v, want %v", topRel, wantTop)
 	}
-	if findEntry(tree, "empty") != nil || findEntry(tree, "dir2") != nil {
-		t.Error("空目录（含子目录全被修剪的 dir2）不应出现在结果中")
+	// 空目录保留显示：empty 以 Children:[] 出现，dir2 仍是目录且其子 empty 同样保留
+	empty := findEntry(tree, "empty")
+	if empty == nil || !empty.IsDir || len(empty.Children) != 0 {
+		t.Errorf("顶层空目录 empty 应保留显示且 Children 为空: %+v", empty)
+	}
+	dir2 := findEntry(tree, "dir2")
+	if dir2 == nil || len(dir2.Children) != 1 || dir2.Children[0].Name != "empty" {
+		t.Errorf("dir2 应保留并含空子目录 empty: %+v", dir2)
+	}
+	emptyNested := findEntry(tree, "dir2/empty")
+	if emptyNested == nil || len(emptyNested.Children) != 0 {
+		t.Errorf("嵌套空目录 dir2/empty 应保留显示: %+v", emptyNested)
 	}
 
 	// 子目录内容与排序、/ 分隔相对路径
@@ -228,13 +238,13 @@ func TestWorkspaceDirectoryRoundtrip(t *testing.T) {
 	mustWrite(t, filepath.Join(srcDir, "a.txt"), "A")
 	mustWrite(t, filepath.Join(srcDir, "sub", "b.txt"), "B")
 
-	// 上传目录（递归）
-	res, err := svc.UploadDirectory(srcDir)
-	if err != nil {
-		t.Fatalf("上传目录失败: %v", err)
+	// 上传目录（递归，走生产路径：拖拽上传目录到根）
+	resArr, err := svc.UploadPathsToWorkspace([]string{srcDir}, "")
+	if err != nil || len(resArr) != 1 || resArr[0].Error != "" {
+		t.Fatalf("上传目录失败: err=%v res=%+v", err, resArr)
 	}
-	if res.Error != "" || res.Target != "srcDir" {
-		t.Fatalf("上传结果不符: %+v", res)
+	if resArr[0].Target != "srcDir" {
+		t.Fatalf("上传结果不符: %+v", resArr[0])
 	}
 	if got := readFile(t, filepath.Join(ws, "srcDir", "a.txt")); got != "A" {
 		t.Errorf("工作区 srcDir/a.txt = %q, want A", got)
@@ -561,5 +571,93 @@ func TestWorkspaceDragUploadSourceInsideWorkspace(t *testing.T) {
 	}
 	if len(res) != 1 || res[0].Error == "" {
 		t.Fatalf("工作区内源应被单项拒绝，但未拒绝: %+v", res)
+	}
+}
+
+// TestWorkspaceCreateDirectoryBasic 新建目录：父目录为根的 rel 正确、目录真实落盘。
+func TestWorkspaceCreateDirectoryBasic(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+
+	rel, err := svc.CreateDirectory("", "sub")
+	if err != nil {
+		t.Fatalf("在根新建目录失败: %v", err)
+	}
+	if rel != "sub" {
+		t.Errorf("返回 rel = %q, want sub", rel)
+	}
+	info, err := os.Stat(filepath.Join(ws, "sub"))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("工作区下未创建目录 sub: %v", err)
+	}
+}
+
+// TestWorkspaceCreateDirectoryInSub 父目录为嵌套相对路径，成功在其内新建并返回相对路径。
+func TestWorkspaceCreateDirectoryInSub(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	mustMkdir(t, filepath.Join(ws, "a"))
+	mustMkdir(t, filepath.Join(ws, "a", "b"))
+
+	rel, err := svc.CreateDirectory("a/b", "c")
+	if err != nil {
+		t.Fatalf("在嵌套目录新建失败: %v", err)
+	}
+	if rel != "a/b/c" {
+		t.Errorf("返回 rel = %q, want a/b/c", rel)
+	}
+	info, err := os.Stat(filepath.Join(ws, "a", "b", "c"))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("嵌套目录未创建: %v", err)
+	}
+}
+
+// TestWorkspaceCreateDirectoryConflict 重名（同名文件或目录已存在）直接报错，不自动改名。
+func TestWorkspaceCreateDirectoryConflict(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	mustMkdir(t, filepath.Join(ws, "existed"))
+
+	if _, err := svc.CreateDirectory("", "existed"); err == nil {
+		t.Error("重名目录应报错，但未报错")
+	}
+	mustWrite(t, filepath.Join(ws, "file"), "F")
+	if _, err := svc.CreateDirectory("", "file"); err == nil {
+		t.Error("与同名文件冲突应报错，但未报错")
+	}
+}
+
+// TestWorkspaceCreateDirectoryInvalidParent 父目录不存在/不是目录、非法目录名（.、..、含分隔符）。
+func TestWorkspaceCreateDirectoryInvalidParent(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+
+	if _, err := svc.CreateDirectory("nope", "x"); err == nil {
+		t.Error("父目录不存在应报错，但未报错")
+	}
+	mustWrite(t, filepath.Join(ws, "f"), "F")
+	if _, err := svc.CreateDirectory("f", "x"); err == nil {
+		t.Error("父目录是文件应报错，但未报错")
+	}
+	if _, err := svc.CreateDirectory("", "."); err == nil {
+		t.Error("目录名 . 应报错，但未报错")
+	}
+	if _, err := svc.CreateDirectory("", ".."); err == nil {
+		t.Error("目录名 .. 应报错，但未报错")
+	}
+	if _, err := svc.CreateDirectory("", "a/b"); err == nil {
+		t.Error("目录名含分隔符应报错，但未报错")
+	}
+	// Windows 非法字符 / 尾部点与空格
+	for _, bad := range []string{"a:b", "a|b", "a?b", "a*b", "a\"b", "a<b", "a>b", "a/b", "a. ", "a "} {
+		if _, err := svc.CreateDirectory("", bad); err == nil {
+			t.Errorf("目录名 %q 应报错，但未报错", bad)
+		}
+	}
+}
+
+// TestWorkspaceCreateDirectoryEscape 目标含 ../ 逃逸串应被沙箱拒绝。
+func TestWorkspaceCreateDirectoryEscape(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	mustMkdir(t, filepath.Join(ws, "keep"))
+
+	if _, err := svc.CreateDirectory("keep/../..", "x"); err == nil {
+		t.Error("父目录含 ../ 逃逸应报错，但未报错")
 	}
 }

@@ -4801,28 +4801,6 @@ func (a *App) UploadFilesToWorkspace() ([]services.WorkspaceTransferResult, erro
 	return results, nil
 }
 
-// UploadDirectoryToWorkspace 弹出目录选择对话框，选择后递归复制到工作区根目录；取消返回零值
-func (a *App) UploadDirectoryToWorkspace() (services.WorkspaceTransferResult, error) {
-	a.LogSvc.Logger.Debugw("UploadDirectoryToWorkspace")
-	dirPath, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择要上传的目录",
-	})
-	if err != nil {
-		a.LogSvc.Logger.Errorw("UploadDirectoryToWorkspace 打开目录对话框失败", fastlog.Error(err))
-		return services.WorkspaceTransferResult{}, fmt.Errorf("打开目录对话框失败: %w", err)
-	}
-	if dirPath == "" {
-		return services.WorkspaceTransferResult{}, nil // 用户取消
-	}
-	result, err := a.wsService.UploadDirectory(dirPath)
-	if err != nil {
-		a.LogSvc.Logger.Errorw("UploadDirectoryToWorkspace 失败", fastlog.Error(err))
-		return result, err
-	}
-	a.LogSvc.Logger.Infow("UploadDirectoryToWorkspace 成功", fastlog.String("target", result.Target))
-	return result, nil
-}
-
 // UploadPathsToWorkspace 拖拽上传文件/目录到工作区指定相对目录（targetRel 空=根目录）
 func (a *App) UploadPathsToWorkspace(paths []string, targetRel string) ([]services.WorkspaceTransferResult, error) {
 	a.LogSvc.Logger.Debugw("UploadPathsToWorkspace", fastlog.Int("count", len(paths)), fastlog.String("target", targetRel))
@@ -4833,6 +4811,18 @@ func (a *App) UploadPathsToWorkspace(paths []string, targetRel string) ([]servic
 	}
 	a.LogSvc.Logger.Infow("UploadPathsToWorkspace 成功", fastlog.Int("count", len(results)))
 	return results, nil
+}
+
+// CreateDirectory 在工作区指定相对目录下新建子目录（targetRel 空=根目录）；成功返回新目录相对路径
+func (a *App) CreateDirectory(targetRel, name string) (string, error) {
+	a.LogSvc.Logger.Debugw("CreateDirectory", fastlog.String("parent", targetRel), fastlog.String("name", name))
+	rel, err := a.wsService.CreateDirectory(targetRel, name)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("CreateDirectory 失败", fastlog.Error(err))
+		return "", err
+	}
+	a.LogSvc.Logger.Infow("CreateDirectory 成功", fastlog.String("target", rel))
+	return rel, nil
 }
 
 // ListWorkspaceFiles 返回工作区文件树

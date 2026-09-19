@@ -53,9 +53,9 @@ func NewWorkspaceService() *WorkspaceService {
 }
 
 // ListWorkspaceFiles 递归收集工作区文件树：目录在前、名称升序；文件记录大小与
-// 修改时间（unix 秒），目录大小置 0；相对路径统一用 / 分隔。隐藏空目录：
-// 先递归构建再自底向上修剪，Children 为空（自身为空或子目录全被修剪）的目录
-// 不放进结果。工作区根不存在或为空时返回空列表。
+// 修改时间（unix 秒），目录大小置 0；相对路径统一用 / 分隔。空目录保留显示
+// （以 Children 为空数组表示，新建空文件夹应立即可见）。工作区根不存在或为空时
+// 返回空列表。
 func (s *WorkspaceService) ListWorkspaceFiles() ([]WorkspaceFileEntry, error) {
 	root, err := s.wsRoot()
 	if err != nil {
@@ -68,7 +68,7 @@ func (s *WorkspaceService) ListWorkspaceFiles() ([]WorkspaceFileEntry, error) {
 		}
 		return nil, fmt.Errorf("读取工作区目录失败: %w", err)
 	}
-	// 递归构建一级条目（含空目录修剪），随后整体排序
+	// 递归构建一级条目（空目录保留显示），随后整体排序
 	tree, err := s.buildTree(root, entries, "")
 	if err != nil {
 		return nil, err
@@ -134,24 +134,57 @@ func (s *WorkspaceService) UploadPathsToWorkspace(paths []string, targetRel stri
 	return results, nil
 }
 
-// UploadDirectory 上传单个目录到工作区根（行为同 UploadFiles 单条目版本，
-// 源必须是目录）；返回单次结果与整体错误。
-func (s *WorkspaceService) UploadDirectory(dirPath string) (WorkspaceTransferResult, error) {
+// CreateDirectory 在工作区指定相对目录下新建子目录：targetRel 为父目录（/ 分隔，
+// 空串或 "/" 表示根目录）。先经 config.WorkspaceFilePath 沙箱校验父目录（防 ../ 与
+// symlink 逃逸）并确认其存在且为目录；name 仅允许单层目录名（不得含路径分隔符、
+// 不能为空或 . / ..）。重名直接报错（创建场景需要明确反馈，不复用自动改名）。
+// 成功返回新目录的相对工作区根的 / 分隔路径，失败返回错误（一次性操作无需批次结构）。
+func (s *WorkspaceService) CreateDirectory(targetRel, name string) (string, error) {
 	root, err := s.wsRoot()
 	if err != nil {
-		return WorkspaceTransferResult{}, err
+		return "", err
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
-		return WorkspaceTransferResult{}, fmt.Errorf("创建工作区目录失败: %w", err)
+		return "", fmt.Errorf("创建工作区目录失败: %w", err)
 	}
-	info, err := os.Stat(dirPath)
-	if err != nil {
-		return WorkspaceTransferResult{Name: filepath.Base(dirPath), Error: "源目录不存在：" + dirPath}, nil
+	// 目录名校验：不能为空、不能是 . 或 ..、不得包含路径分隔符（只允许单层目录名）
+	if name == "" || name == "." || name == ".." {
+		return "", fmt.Errorf("目录名无效：%q", name)
 	}
-	if !info.IsDir() {
-		return WorkspaceTransferResult{Name: filepath.Base(dirPath), Error: "源不是目录：" + dirPath}, nil
+	if strings.ContainsAny(name, `/\`) {
+		return "", fmt.Errorf("目录名不能包含路径分隔符：%q", name)
 	}
-	return s.uploadOne(root, root, dirPath), nil
+	// Windows 文件系统非法字符/尾部点与空格（mkdir 会失败，提前给出中文提示）
+	if strings.ContainsAny(name, `<>:"|?*`) {
+		return "", fmt.Errorf("目录名包含非法字符（< > : \" | ? *）：%q", name)
+	}
+	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return "", fmt.Errorf("目录名不能以点或空格结尾：%q", name)
+	}
+	// 解析父目录：空串或 "/" 视为根，否则沙箱校验后确认是已存在目录
+	parent := root
+	if targetRel != "" && targetRel != "/" {
+		parent, err = config.WorkspaceFilePath(root, filepath.FromSlash(targetRel))
+		if err != nil {
+			return "", err
+		}
+		info, statErr := os.Stat(parent)
+		if statErr != nil {
+			return "", fmt.Errorf("目标目录不存在：%s", targetRel)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("目标不是目录：%s", targetRel)
+		}
+	}
+	// 重名直接报错（创建重点明确反馈，不复用自动改名）
+	newFull := filepath.Join(parent, name)
+	if _, err := os.Lstat(newFull); err == nil {
+		return "", fmt.Errorf("同名文件或目录已存在：%s", name)
+	}
+	if err := os.Mkdir(newFull, 0o755); err != nil {
+		return "", fmt.Errorf("创建目录失败: %v", err)
+	}
+	return toSlashRel(root, newFull), nil
 }
 
 // DownloadFiles 批量下载工作区文件/目录到桌面根下同名相对路径（目录自动创建
@@ -314,8 +347,8 @@ func (s *WorkspaceService) deleteOne(root, rel string, recursive bool) Workspace
 	return res
 }
 
-// buildTree 递归构建 entries（某目录下的一级条目）对应的文件树，并自底向上
-// 修剪空目录：Children 为空（自身为空或子目录全被修剪）的目录不保留。
+// buildTree 递归构建 entries（某目录下的一级条目）对应的文件树。空目录保留显示
+// （以 Children 为空数组表示），便于用户看到新建的空文件夹。
 // relBase 为当前目录相对工作区根的路径（根为 ""）。
 func (s *WorkspaceService) buildTree(root string, entries []os.DirEntry, relBase string) ([]WorkspaceFileEntry, error) {
 	children := make([]WorkspaceFileEntry, 0, len(entries))
@@ -330,15 +363,12 @@ func (s *WorkspaceService) buildTree(root string, entries []os.DirEntry, relBase
 			if err != nil {
 				return nil, err
 			}
-			if len(sub) == 0 {
-				continue // 隐藏空目录（含子目录全被修剪的情况）
-			}
 			children = append(children, WorkspaceFileEntry{
 				Name:     e.Name(),
 				RelPath:  toSlash(childRel),
 				IsDir:    true,
 				ModTime:  dirEntryModTime(e),
-				Children: sub,
+				Children: sub, // 空目录以 Children:[] 保留显示（新建空文件夹必须可见）
 			})
 			continue
 		}

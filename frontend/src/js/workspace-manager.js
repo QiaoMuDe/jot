@@ -22,18 +22,17 @@ let workspaceBusy = false;
 let workspaceDeleting = false;
 /** 懒绑定标记：弹窗内部事件只绑定一次（与 vectorIndexModal 范式一致，常驻监听无残留） */
 let workspaceBound = false;
+/** 新建文件夹输入条开关状态：true=已展开，false=已关闭（toggle 用，避免依赖 isConnected 竞态） */
+let workspaceNewDirOpen = false;
+/** 失焦自动关闭定时器句柄：可被手动关闭/重开时取消，防止残留定时器误关重开后的输入条 */
+let workspaceNewDirAutoCloseTimer = null;
 /** 拖拽上传目标：null=根目录；非空=最后悬停的目录 RelPath（悬停亮起即目标） */
 let workspaceDropTargetRel = null;
 /** 面板内拖拽进出计数（防子元素 dragleave 误触发隐藏遮罩，参考 _aiDragCounter 范式） */
 let workspaceDropCount = 0;
 
-/** 上传类按钮的静态文案（busy 恢复用） */
-const WS_UPLOAD_LABELS = {
-    workspaceUploadFilesBtn: '上传文件',
-    workspaceUploadDirBtn: '上传目录',
-    workspaceEmptyUploadFilesBtn: '上传文件',
-    workspaceEmptyUploadDirBtn: '上传目录',
-};
+/** 上传类按钮 id（busy 时遍历禁用；当前仅余单个「上传」提示按钮） */
+const WS_UPLOAD_LABELS = ['workspaceUploadBtn'];
 
 /** 内联 SVG 图标（lucide 风格，禁止 emoji 当图标） */
 const WS_ICONS = {
@@ -336,12 +335,24 @@ function updateWorkspaceToolbar() {
  */
 function setWorkspaceBusy(busy, activeId) {
     workspaceBusy = busy;
-    // 上传类按钮（顶部两个 + 空状态两个）统一禁用；触发者显示「上传中…」
-    Object.keys(WS_UPLOAD_LABELS).forEach(id => {
+    // 上传类按钮统一禁用；触发者用 title 提示「上传中…」+ icon 脉冲（不写回文本）
+    WS_UPLOAD_LABELS.forEach(id => {
         const btn = ws$(id);
         if (!btn) return;
         btn.disabled = busy;
-        btn.textContent = busy && id === activeId ? '上传中…' : WS_UPLOAD_LABELS[id];
+        if (busy && id === activeId) {
+            if (btn.dataset.prevTitle === undefined) btn.dataset.prevTitle = btn.title || '';
+            btn.title = '上传中…';
+            btn.classList.add('is-loading');
+        } else {
+            // 恢复：仅当此前设置过才还原 + 清理缓存；未设置过（非上传触发的 busy）
+            // 则保持按钮原有 title 不变，避免外部调用清空 HTML 预设的悬停提示
+            btn.classList.remove('is-loading');
+            if (btn.dataset.prevTitle !== undefined) {
+                btn.title = btn.dataset.prevTitle;
+                delete btn.dataset.prevTitle;
+            }
+        }
     });
     const refreshBtn = ws$('workspaceRefreshBtn');
     if (refreshBtn) {
@@ -406,7 +417,7 @@ async function refreshWorkspace() {
  */
 async function uploadWorkspaceFiles() {
     if (workspaceBusy) return;
-    setWorkspaceBusy(true, 'workspaceUploadFilesBtn');
+    setWorkspaceBusy(true, 'workspaceUploadBtn');
     try {
         let results = [];
         try {
@@ -422,34 +433,6 @@ async function uploadWorkspaceFiles() {
         const errors = results.filter(r => r.Error);
         if (okCount > 0) window.showNotification?.(`成功上传 ${okCount} 个文件到工作区`, 'success');
         errors.forEach(r => window.showNotification?.(`${r.Name || '文件'} 上传失败：${r.Error}`, 'error'));
-        await loadWorkspaceTree();
-    } finally {
-        setWorkspaceBusy(false, null);
-    }
-}
-
-/**
- * 上传目录到工作区：调 UploadDirectoryToWorkspace（目录选择对话框，取消返回空/零值）
- * 完成后通知结果并刷新（刷新保留选择）
- */
-async function uploadWorkspaceDirectory() {
-    if (workspaceBusy) return;
-    setWorkspaceBusy(true, 'workspaceUploadDirBtn');
-    try {
-        let res = null;
-        try {
-            res = await window.go.main.App.UploadDirectoryToWorkspace();
-        } catch (err) {
-            window.showNotification?.(`上传目录失败：${err?.message || err}`, 'error');
-            return;
-        }
-        // 取消对话框 → 空/零值（Name 与 Error 均为空），不通知不刷新
-        if (!res || (!res.Name && !res.Error && !res.Target)) return;
-        if (res.Error) {
-            window.showNotification?.(`目录${res.Name ? `「${res.Name}」` : ''}上传失败：${res.Error}`, 'error');
-            return;
-        }
-        window.showNotification?.(`成功上传目录${res.Name ? `「${res.Name}」` : ''}到工作区`, 'success');
         await loadWorkspaceTree();
     } finally {
         setWorkspaceBusy(false, null);
@@ -613,7 +596,10 @@ window.handleWorkspaceDrop = async function (paths, clientX, clientY) {
     clearWorkspaceDropHover();
     ws$('workspaceTree')?.classList.remove('ws-drag-active');
     if (!Array.isArray(paths) || paths.length === 0) return;
-    if (workspaceBusy) return;
+    if (workspaceBusy) {
+        window.showNotification?.('当前有操作进行中，请稍候再拖拽上传', 'info');
+        return;
+    }
     setWorkspaceBusy(true, null);
     try {
         let results = [];
@@ -640,22 +626,132 @@ window.handleWorkspaceDrop = async function (paths, clientX, clientY) {
 
 /* ============ 懒绑定事件 ============ */
 
+/** 解析「新建文件夹」的父目录：单个选中目录→其内，其余情况→根目录 */
+function resolveWorkspaceCreateParent() {
+    if (workspaceSelected.size === 1) {
+        const only = [...workspaceSelected][0];
+        const node = ws$('workspaceTree')?.querySelector(`.workspace-node.is-dir[data-rel="${CSS.escape(only)}"]`);
+        if (node) return only;
+    }
+    return '';
+}
+
 /**
- * 懒绑定弹窗内部交互事件（打开时首次调用，只绑定一次）
- * 事件均挂在常驻 DOM 上（遮罩/按钮/树容器委托），关闭无需解绑，无残留监听器
+ * 「新建文件夹」按钮点击切换：首次点击展开内联输入条，再次点击关闭。
+ * 基于显式状态 workspaceNewDirOpen 判定，关闭/展开均幂等，避免 isConnected 竞态导致的闪烁。
  */
+function toggleWorkspaceNewDirInput() {
+    if (workspaceNewDirOpen) { closeWorkspaceNewDirInput(); return; }
+    showWorkspaceNewDirInput();
+}
+
+/** 关闭新建文件夹输入条：移除 DOM 并复位状态（幂等，可重复调用） */
+function closeWorkspaceNewDirInput() {
+    workspaceNewDirOpen = false;
+    // 取消挂起的失焦自动关闭定时器：防止在「先关后重开」（如创建失败重开输入条）场景下
+    // 残留定时器把重开后的输入条再次关闭
+    if (workspaceNewDirAutoCloseTimer) {
+        clearTimeout(workspaceNewDirAutoCloseTimer);
+        workspaceNewDirAutoCloseTimer = null;
+    }
+    ws$('workspaceNewDirBar')?.remove();
+}
+
+/**
+ * 显示「新建文件夹」内联输入条：Enter 确认、Esc 取消；失焦取消但允许点击条内确定/取消
+ * （focusout 判定 relatedTarget 是否仍在条内，避免 blur→click 竞态误触取消）。
+ * 确认或回车创建后即关闭本输入条。
+ */
+function showWorkspaceNewDirInput() {
+    const parentRel = resolveWorkspaceCreateParent();
+    const modal = ws$('workspaceModal');
+    let bar = ws$('workspaceNewDirBar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'workspace-newdir-bar';
+        bar.id = 'workspaceNewDirBar';
+        bar.innerHTML = '<span class="workspace-newdir-tag">新建文件夹</span>'
+            + '<input class="workspace-newdir-input" type="text" maxlength="120" placeholder="输入文件夹名">'
+            + '<button class="btn btn-save btn-sm workspace-newdir-ok">确定</button>'
+            + '<button class="btn btn-sm workspace-newdir-cancel">取消</button>';
+        modal?.querySelector('.workspace-toolbar')?.insertAdjacentElement('afterend', bar);
+        const input = bar.querySelector('.workspace-newdir-input');
+        const ok = bar.querySelector('.workspace-newdir-ok');
+        const cancel = bar.querySelector('.workspace-newdir-cancel');
+        const finish = (commit) => {
+            if (commit) {
+                const name = input.value.trim();
+                if (name) {
+                    closeWorkspaceNewDirInput(); // 确认/回车创建后立即关闭输入条（并取消挂起的自动关闭）
+                    // 创建失败不重开输入条（错误通知已在 createWorkspaceDirectory 内部发出）
+                    createWorkspaceDirectory(parentRel, name).catch(() => {});
+                } else {
+                    input.focus();
+                }
+                return;
+            }
+            closeWorkspaceNewDirInput();
+        };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); });
+        ok.addEventListener('click', () => finish(true));
+        cancel.addEventListener('click', () => finish(false));
+        bar.addEventListener('focusout', (e) => {
+            const t = e.relatedTarget;
+            // 焦点仍在输入条内，或移向「新建文件夹」按钮/其内部 → 不自动关闭。
+            // 移向按钮本职是切换（交予 click/toggle 处理）；若在此延迟关闭，
+            // 长按按钮松手时 click 又会走 toggle 重新打开，造成"关闭后又闪开"。
+            if (bar.contains(t) || (t?.closest && t.closest('#workspaceNewDirBtn'))) return;
+            // 先取消旧定时器再挂新句柄，确保任一时刻至多一个自动关闭在途
+            if (workspaceNewDirAutoCloseTimer) clearTimeout(workspaceNewDirAutoCloseTimer);
+            workspaceNewDirAutoCloseTimer = setTimeout(() => {
+                workspaceNewDirAutoCloseTimer = null;
+                closeWorkspaceNewDirInput();
+            }, 120);
+        });
+    }
+    workspaceNewDirOpen = true;
+    const input = bar.querySelector('.workspace-newdir-input');
+    input.value = '';
+    input.focus();
+}
+
+/** 创建工作区目录：调用后端 CreateDirectory 后通知、展开父目录祖先链并刷新保留选择 */
+async function createWorkspaceDirectory(parentRel, name) {
+    if (workspaceBusy) { showWorkspaceNewDirInput(); return; }
+    setWorkspaceBusy(true, 'workspaceNewDirBtn');
+    const bar = ws$('workspaceNewDirBar');
+    try {
+        let rel;
+        try {
+            rel = await window.go.main.App.CreateDirectory(parentRel, name);
+        } catch (err) {
+            window.showNotification?.(`新建文件夹失败：${err?.message || err}`, 'error');
+            throw err; // 失败向上抛，由调用方.finish 的 .catch 重开输入条并保留输入
+        }
+        window.showNotification?.(`已新建文件夹「${name}」`, 'success');
+        // 展开父目录祖先链后刷新：后端 ListWorkspaceFiles 现会保留空目录，故新建即见。
+        expandWorkspaceTargetChain(parentRel);
+        await loadWorkspaceTree();
+    } finally {
+        setWorkspaceBusy(false, null);
+    }
+}
+
+/** 懒绑定弹窗内部交互事件（打开时首次调用，只绑定一次）
+ * 事件均挂在常驻 DOM 上（遮罩/按钮/树容器委托），关闭无需解绑，无残留监听器 */
 function bindWorkspaceEvents() {
     if (workspaceBound) return;
     workspaceBound = true;
     ws$('workspaceClose')?.addEventListener('click', closeWorkspaceManager);
     ws$('workspaceOverlay')?.addEventListener('click', closeWorkspaceManager);
-    ws$('workspaceUploadFilesBtn')?.addEventListener('click', uploadWorkspaceFiles);
-    ws$('workspaceUploadDirBtn')?.addEventListener('click', uploadWorkspaceDirectory);
+    ws$('workspaceUploadBtn')?.addEventListener('click', uploadWorkspaceFiles);
     ws$('workspaceDownloadBtn')?.addEventListener('click', downloadWorkspaceFiles);
     ws$('workspaceDeleteBtn')?.addEventListener('click', deleteWorkspaceFiles);
     ws$('workspaceRefreshBtn')?.addEventListener('click', refreshWorkspace);
-    ws$('workspaceEmptyUploadFilesBtn')?.addEventListener('click', uploadWorkspaceFiles);
-    ws$('workspaceEmptyUploadDirBtn')?.addEventListener('click', uploadWorkspaceDirectory);
+    ws$('workspaceNewDirBtn')?.addEventListener('click', toggleWorkspaceNewDirInput);
+    // 阻止新建按钮抢占焦点：输入框不失焦 → focusout 不触发自动关闭，toggle 完全由 click 控制，
+    // 从根上消除「长按按钮→松手 click 重开」的闪烁竞态（原依赖 relatedTarget 判定不可靠）。
+    ws$('workspaceNewDirBtn')?.addEventListener('mousedown', (e) => e.preventDefault());
     const treeEl = ws$('workspaceTree');
     treeEl?.addEventListener('click', onWorkspaceTreeClick);
     treeEl?.addEventListener('mousemove', onWorkspaceTreeMove);
@@ -696,6 +792,7 @@ export async function openWorkspaceManager() {
     workspaceExpanded = new Set();
     workspaceTreeData = null;
     workspaceDeleting = false;
+    closeWorkspaceNewDirInput(); // 新建输入条复位：移除 DOM 并取消挂起的自动关闭定时器
     setWorkspaceBusy(false, null);
     updateWorkspaceToolbar();
     resetWorkspaceDropState();
@@ -718,5 +815,6 @@ export function closeWorkspaceManager() {
     workspaceTreeData = null;
     workspaceDeleting = false;
     setWorkspaceBusy(false, null);
+    closeWorkspaceNewDirInput(); // 清理新建输入条残留（含状态复位），下次打开不复现
     resetWorkspaceDropState();
 }

@@ -60,6 +60,8 @@ export function CountUnfinishedTodos():Promise<number>;
 
 export function CreateAISession():Promise<number>;
 
+export function CreateDirectory(arg1:string,arg2:string):Promise<string>;
+
 export function CreateNote(arg1:string,arg2:string,arg3:string,arg4:number):Promise<models.Note>;
 
 export function CreateNotebook(arg1:string):Promise<models.Notebook>;
@@ -333,8 +335,6 @@ export function UpdateSessionContextTokens(arg1:number,arg2:number):Promise<void
 export function UpdateTag(arg1:number,arg2:string,arg3:string):Promise<models.Tag>;
 
 export function UpdateTodo(arg1:number,arg2:string):Promise<models.Todo>;
-
-export function UploadDirectoryToWorkspace():Promise<services.WorkspaceTransferResult>;
 
 export function UploadFilesToWorkspace():Promise<Array<services.WorkspaceTransferResult>>;
 
