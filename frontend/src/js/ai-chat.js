@@ -5765,7 +5765,10 @@ const APPROVAL_TOOL_LABEL = {
     bash: 'Bash 命令',
     shell_exec: '执行命令',
     mkdir: '创建目录',
-    delete_file: '删除文件'
+    copy_item: '复制项',
+    move_item: '移动项',
+    delete_item: '删除项',
+    transfer_item: '传输项'
 };
 
 /** 命令类工具集合：审批摘要格式为「中文标签：命令名 参数…」，需对命令名高亮 */
@@ -5957,7 +5960,7 @@ function setAskInputWaiting(waiting) {
 
 /**
  * ── os_agent 子 Agent 分组栈（实时 / 历史回放共用逻辑） ──
- * 父层 Agent 仅暴露 os_agent 一个委托工具，内层 11 个文件/命令工具的调用事件与
+ * 父层 Agent 仅暴露 os_agent 一个委托工具，内层 13 个文件/命令工具的调用事件与
  * os_agent 的 start/result 在原始事件数组中顺序相邻：
  *   os_agent tool_start → 内层 read_file start/result → … → os_agent tool_result
  * 栈元素 { callId, rec }：os_agent 的 tool_result 优先按 call_id 配对（同一轮父模型

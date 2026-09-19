@@ -1,6 +1,6 @@
 package tools
 
-// 本文件覆盖复制/移动工具（copy_file / move_file）的核心行为。
+// 本文件覆盖复制/移动工具（copy_item / move_item）的核心行为。
 // 测试通过 fsToolBase.workspaceRoot 注入临时目录，避免污染真实 ~/.jot/workspace。
 
 import (
@@ -13,25 +13,25 @@ import (
 	"testing"
 )
 
-// newTestCopyFile / newTestMoveFile / newTestDeleteFile 构造注入临时工作目录的测试实例。
-func newTestCopyFile(dir string) *copyFileTool {
-	return &copyFileTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
+// newTestCopyItem / newTestMoveItem / newTestDeleteItem 构造注入临时工作目录的测试实例。
+func newTestCopyItem(dir string) *copyItemTool {
+	return &copyItemTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
-func newTestMoveFile(dir string) *moveFileTool {
-	return &moveFileTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
+func newTestMoveItem(dir string) *moveItemTool {
+	return &moveItemTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
-func newTestDeleteFile(dir string) *deleteFileTool {
-	return &deleteFileTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
+func newTestDeleteItem(dir string) *deleteItemTool {
+	return &deleteItemTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
 func newTestMkdirDir(dir string) *mkdirDirTool {
 	return &mkdirDirTool{fsToolBase: fsToolBase{workspaceRoot: dir}}
 }
 
-// TestCopyFile 验证复制：新建复制、复制到已存在目录（自动追加文件名）、
+// TestCopyItem 验证复制：新建复制、复制到已存在目录（自动追加文件名）、
 // 缺省拒绝覆盖、overwrite=true 覆盖并审批、源不存在、路径逃逸、目录递归复制。
-func TestCopyFile(t *testing.T) {
+func TestCopyItem(t *testing.T) {
 	dir := t.TempDir()
-	h := newTestCopyFile(dir)
+	h := newTestCopyItem(dir)
 
 	t.Run("复制文件到新位置", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
@@ -79,16 +79,16 @@ func TestCopyFile(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "new")
 		writeTestFile(t, dir, "b.txt", "old")
 		mock := &mockApprover{}
-		hc := newTestCopyFile(dir)
+		hc := newTestCopyItem(dir)
 		hc.ctx = &Context{Approver: mock}
 		if _, err := hc.InvokableRun(context.Background(), `{"source":"a.txt","dest":"b.txt","overwrite":true}`); err != nil {
 			t.Fatalf("覆盖复制失败: %v", err)
 		}
-		if mock.gotTool != "copy_file" {
+		if mock.gotTool != "copy_item" {
 			t.Errorf("覆盖复制应触发审批，实际 toolName = %q", mock.gotTool)
 		}
 		if mock.gotCritical {
-			t.Error("copy_file 审批 critical 应为 false")
+			t.Error("copy_item 审批 critical 应为 false")
 		}
 		if got := readTestFile(t, dir, "b.txt"); got != "new" {
 			t.Errorf("覆盖后目标内容 = %q", got)
@@ -98,7 +98,7 @@ func TestCopyFile(t *testing.T) {
 	t.Run("新建复制不触发审批", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
 		mock := &mockApprover{}
-		hc := newTestCopyFile(dir)
+		hc := newTestCopyItem(dir)
 		hc.ctx = &Context{Approver: mock}
 		if _, err := hc.InvokableRun(context.Background(), `{"source":"a.txt","dest":"c.txt"}`); err != nil {
 			t.Fatalf("新建复制失败: %v", err)
@@ -180,12 +180,12 @@ func TestCopyFile(t *testing.T) {
 	})
 }
 
-// TestMoveFile 验证移动：移动到新位置（源消失）、移动到已存在目录（自动追加
+// TestMoveItem 验证移动：移动到新位置（源消失）、移动到已存在目录（自动追加
 // 文件名）、缺省拒绝覆盖、overwrite=true 覆盖、源不存在、路径逃逸、目录移动、
 // 无论是否覆盖始终触发审批。
-func TestMoveFile(t *testing.T) {
+func TestMoveItem(t *testing.T) {
 	dir := t.TempDir()
-	h := newTestMoveFile(dir)
+	h := newTestMoveItem(dir)
 
 	t.Run("移动文件到新位置", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
@@ -256,16 +256,16 @@ func TestMoveFile(t *testing.T) {
 	t.Run("移动始终触发审批（含目标不存在）", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
 		mock := &mockApprover{}
-		hc := newTestMoveFile(dir)
+		hc := newTestMoveItem(dir)
 		hc.ctx = &Context{Approver: mock}
 		if _, err := hc.InvokableRun(context.Background(), `{"source":"a.txt","dest":"c.txt"}`); err != nil {
 			t.Fatalf("移动失败: %v", err)
 		}
-		if mock.gotTool != "move_file" {
+		if mock.gotTool != "move_item" {
 			t.Errorf("移动应始终触发审批，实际 toolName = %q", mock.gotTool)
 		}
 		if mock.gotCritical {
-			t.Error("move_file 审批 critical 应为 false")
+			t.Error("move_item 审批 critical 应为 false")
 		}
 	})
 
@@ -320,11 +320,11 @@ func TestMoveFile(t *testing.T) {
 	})
 }
 
-// TestDeleteFile 验证删除：删除文件、删除不存在、目录需 recursive 才递归删除、
+// TestDeleteItem 验证删除：删除文件、删除不存在、目录需 recursive 才递归删除、
 // 空目录缺省可删、递归删除、逃逸拒绝、拒绝删工作区根、强制审批 critical=true。
-func TestDeleteFile(t *testing.T) {
+func TestDeleteItem(t *testing.T) {
 	dir := t.TempDir()
-	h := newTestDeleteFile(dir)
+	h := newTestDeleteItem(dir)
 
 	t.Run("删除文件", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
@@ -406,7 +406,7 @@ func TestDeleteFile(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			t.Skip("仅 Windows 大小写不敏感文件系统")
 		}
-		hc := newTestDeleteFile(strings.ToUpper(dir))
+		hc := newTestDeleteItem(strings.ToUpper(dir))
 		_, err := hc.InvokableRun(context.Background(), `{"path":`+strconv.Quote(strings.ToLower(dir))+`,"recursive":true}`)
 		if err == nil {
 			t.Fatal("大小写变体的工作区根应被拒绝删除")
@@ -419,16 +419,16 @@ func TestDeleteFile(t *testing.T) {
 	t.Run("删除触发强制审批 critical=true", func(t *testing.T) {
 		writeTestFile(t, dir, "a.txt", "hello")
 		mock := &mockApprover{}
-		hc := newTestDeleteFile(dir)
+		hc := newTestDeleteItem(dir)
 		hc.ctx = &Context{Approver: mock}
 		if _, err := hc.InvokableRun(context.Background(), `{"path":"a.txt"}`); err != nil {
 			t.Fatalf("删除失败: %v", err)
 		}
-		if mock.gotTool != "delete_file" {
+		if mock.gotTool != "delete_item" {
 			t.Errorf("删除应触发审批，实际 toolName = %q", mock.gotTool)
 		}
 		if !mock.gotCritical {
-			t.Error("delete_file 审批 critical 应为 true（不可绕过）")
+			t.Error("delete_item 审批 critical 应为 true（不可绕过）")
 		}
 	})
 

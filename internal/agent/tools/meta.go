@@ -30,7 +30,7 @@ func BuiltinTools() []ToolMeta {
 		{Name: "ask_user", Label: "向用户发起澄清提问（1-3 个问题，单选/多选）", AlwaysOn: true},
 		{Name: "create_plan", Label: "制定执行计划（拆解目标为步骤列表）", PlanOnly: true},
 		{Name: "update_plan", Label: "更新执行计划（标记步骤完成/跳过/新增）", PlanOnly: true},
-		// os_agent：文件/命令工具（read_file 等 11 个）已封装为内层子 Agent，父层只注册此委托工具
+		// os_agent：文件/命令工具（read_file 等 13 个）已封装为内层子 Agent，父层只注册此委托工具
 		{Name: "os_agent", Label: "操作系统任务（工作区文件读写与命令执行）"},
 	}
 }

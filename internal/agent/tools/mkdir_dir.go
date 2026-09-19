@@ -2,12 +2,12 @@ package tools
 
 // 本文件实现 mkdir_dir 工具：在工作目录（~/.jot/workspace）内创建目录。
 // 默认仅创建单级目录（父目录必须已存在，os.Root.Mkdir；对齐 ls_dir/glob/
-// delete_file 的默认单层语义），recursive=true 时才递归创建完整层级
+// delete_item 的默认单层语义），recursive=true 时才递归创建完整层级
 // （类似 mkdir -p，os.Root.MkdirAll 幂等：已存在目录直接成功）。经 fsToolBase
 // 做路径边界校验（resolvePath 第一道防线 + os.Root 第二道防线，基于目录句柄，
 // 杜绝 ../ 逃逸与符号链接逃逸）。
 // 建目录是纯增量非破坏性操作，不触发审批（对齐 write_file 新建文件不审批）；
-// 与 write_file/copy_file/move_file 的隐式自动建父目录互补，提供显式的目录
+// 与 write_file/copy_item/move_item 的隐式自动建父目录互补，提供显式的目录
 // 结构规划入口。
 
 import (

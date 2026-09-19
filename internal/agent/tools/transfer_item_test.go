@@ -1,8 +1,8 @@
 package tools
 
-// 本文件覆盖 transfer_file 工具的单元测试：
+// 本文件覆盖 transfer_item 工具的单元测试：
 //  1. download 一律审批且 critical=true（纯新增与覆盖）、批准后落盘桌面；
-//  2. upload 对齐 copy_file（纯新增免审批、覆盖审批 critical=false）；
+//  2. upload 对齐 copy_item（纯新增免审批、覆盖审批 critical=false）；
 //  3. 覆盖判定（overwrite=false 拒绝 / true 放行）与目录递归；
 //  4. 双端边界校验（../ 逃逸拒绝）与参数校验；
 //  5. 裸工具（ctx nil）放行 / Approver 缺失 fail-fast；
@@ -17,10 +17,10 @@ import (
 	"testing"
 )
 
-// setupTransfer 构造测试用 transfer_file：注入工作目录根/家目录/桌面目录（桌面=
+// setupTransfer 构造测试用 transfer_item：注入工作目录根/家目录/桌面目录（桌面=
 // home/Desktop），并创建两端目录。approver 为 nil 时用无审批器的 Context（覆盖
 // 裸工具与 fail-fast 场景）。
-func setupTransfer(t *testing.T, approver Approver) (*transferFileTool, *mockApprover, string, string) {
+func setupTransfer(t *testing.T, approver Approver) (*transferItemTool, *mockApprover, string, string) {
 	t.Helper()
 	home := t.TempDir()
 	ws := filepath.Join(home, ".jot", "workspace")
@@ -32,7 +32,7 @@ func setupTransfer(t *testing.T, approver Approver) (*transferFileTool, *mockApp
 		t.Fatal(err)
 	}
 	ap := &mockApprover{}
-	h := &transferFileTool{fsToolBase: fsToolBase{
+	h := &transferItemTool{fsToolBase: fsToolBase{
 		ctx:           &Context{Approver: approverOrMock(approver, ap)},
 		workspaceRoot: ws,
 		homeDir:       home,
@@ -57,9 +57,9 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 }
 
-// TestTransferFileDownload 验证下载：一律审批（critical=true）、批准后落盘桌面、
+// TestTransferItemDownload 验证下载：一律审批（critical=true）、批准后落盘桌面、
 // 覆盖判定与摘要标记、目录递归、拒绝不落盘。
-func TestTransferFileDownload(t *testing.T) {
+func TestTransferItemDownload(t *testing.T) {
 	t.Run("新文件审批 critical=true 并落盘", func(t *testing.T) {
 		h, ap, ws, desk := setupTransfer(t, nil)
 		mustWrite(t, filepath.Join(ws, "out.txt"), "hello")
@@ -74,7 +74,7 @@ func TestTransferFileDownload(t *testing.T) {
 		if err != nil || string(got) != "hello" {
 			t.Errorf("桌面文件内容 = %q, err = %v, want hello", got, err)
 		}
-		if ap.gotTool != "transfer_file" || !ap.gotCritical {
+		if ap.gotTool != "transfer_item" || !ap.gotCritical {
 			t.Errorf("download 应审批且 critical=true, got tool=%q critical=%v", ap.gotTool, ap.gotCritical)
 		}
 		if !strings.Contains(ap.gotSum, "下载到桌面") || !strings.Contains(ap.gotSum, "out.txt") {
@@ -186,8 +186,8 @@ func TestTransferFileDownload(t *testing.T) {
 	})
 }
 
-// TestTransferFileUpload 验证上传：纯新增免审批、覆盖审批 critical=false、落盘工作区。
-func TestTransferFileUpload(t *testing.T) {
+// TestTransferItemUpload 验证上传：纯新增免审批、覆盖审批 critical=false、落盘工作区。
+func TestTransferItemUpload(t *testing.T) {
 	t.Run("新文件免审批并落盘", func(t *testing.T) {
 		h, ap, ws, desk := setupTransfer(t, nil)
 		mustWrite(t, filepath.Join(desk, "in.txt"), "data")
@@ -226,8 +226,8 @@ func TestTransferFileUpload(t *testing.T) {
 	})
 }
 
-// TestTransferFileBoundary 验证双端边界校验与参数校验。
-func TestTransferFileBoundary(t *testing.T) {
+// TestTransferItemBoundary 验证双端边界校验与参数校验。
+func TestTransferItemBoundary(t *testing.T) {
 	t.Run("download 源端 ../ 越界拒绝", func(t *testing.T) {
 		h, _, _, _ := setupTransfer(t, nil)
 		if _, err := h.InvokableRun(context.Background(), `{"direction":"download","path":"../escape.txt"}`); err == nil {
@@ -289,8 +289,8 @@ func TestTransferFileBoundary(t *testing.T) {
 	})
 }
 
-// TestTransferFileApprovalHooks 验证裸工具放行与 Approver 缺失 fail-fast。
-func TestTransferFileApprovalHooks(t *testing.T) {
+// TestTransferItemApprovalHooks 验证裸工具放行与 Approver 缺失 fail-fast。
+func TestTransferItemApprovalHooks(t *testing.T) {
 	t.Run("裸工具（ctx nil）放行", func(t *testing.T) {
 		home := t.TempDir()
 		ws := filepath.Join(home, ".jot", "workspace")
@@ -299,7 +299,7 @@ func TestTransferFileApprovalHooks(t *testing.T) {
 			t.Fatal(err)
 		}
 		mustWrite(t, filepath.Join(ws, "out.txt"), "hello")
-		h := &transferFileTool{fsToolBase: fsToolBase{workspaceRoot: ws, homeDir: home, desktopDir: desk}}
+		h := &transferItemTool{fsToolBase: fsToolBase{workspaceRoot: ws, homeDir: home, desktopDir: desk}}
 		if _, err := h.InvokableRun(context.Background(), `{"direction":"download","path":"out.txt"}`); err != nil {
 			t.Fatalf("裸工具下载应放行: %v", err)
 		}
@@ -316,7 +316,7 @@ func TestTransferFileApprovalHooks(t *testing.T) {
 			t.Fatal(err)
 		}
 		mustWrite(t, filepath.Join(ws, "out.txt"), "hello")
-		h := &transferFileTool{fsToolBase: fsToolBase{
+		h := &transferItemTool{fsToolBase: fsToolBase{
 			ctx:           &Context{},
 			workspaceRoot: ws,
 			homeDir:       home,

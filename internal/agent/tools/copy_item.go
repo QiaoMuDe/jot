@@ -1,6 +1,6 @@
 package tools
 
-// 本文件实现 copy_file 工具：复制 AI 助手工作目录（~/.jot/workspace）内的文件
+// 本文件实现 copy_item 工具：复制 AI 助手工作目录（~/.jot/workspace）内的文件
 // 或目录到目标位置（类似 cp），复用 go-kit fs 的 CopyEx（原子性：临时文件 +
 // os.Rename；覆盖时先备份原文件，失败自动恢复）。经 fsToolBase 做路径边界校验
 // （source 与 dest 都必须在工作目录内，越权一律拒绝）。
@@ -25,32 +25,32 @@ import (
 	kitfs "gitee.com/MM-Q/go-kit/fs"
 )
 
-// copyFileTool 复制工作目录内文件/目录的工具。
-type copyFileTool struct {
+// copyItemTool 复制工作目录内文件/目录的工具。
+type copyItemTool struct {
 	fsToolBase
 }
 
-var _ tool.InvokableTool = (*copyFileTool)(nil)
-var _ ActionTextProvider = (*copyFileTool)(nil)
+var _ tool.InvokableTool = (*copyItemTool)(nil)
+var _ ActionTextProvider = (*copyItemTool)(nil)
 
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）。
-func (t *copyFileTool) ActionText(argumentsInJSON string) string {
+func (t *copyItemTool) ActionText(argumentsInJSON string) string {
 	var args struct {
 		Source string `json:"source"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "复制文件"
+		return "复制项"
 	}
 	if s := strings.TrimSpace(args.Source); s != "" {
-		return "复制文件：" + TruncateRunes(s, 30)
+		return "复制项：" + TruncateRunes(s, 30)
 	}
-	return "复制文件"
+	return "复制项"
 }
 
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
-func (t *copyFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+func (t *copyItemTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: "copy_file",
+		Name: "copy_item",
 		Desc: "在工作目录内复制文件或目录到目标位置（类似 cp）。source 为源路径、dest 为目标路径；dest 为已存在目录时自动追加源文件名（如源 a.txt 复制到已存在的 dir/ 即生成 dir/a.txt）。目标不存在时直接复制（不触发审批）；目标已存在时缺省拒绝，overwrite=true 才允许覆盖（会被审批机制检查）。复制目录时递归复制全部内容。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"source": {
@@ -74,7 +74,7 @@ func (t *copyFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun 执行复制：参数校验 → 边界校验 → 源存在性检查 → 覆盖判定与审批 →
 // go-kit CopyEx 执行（智能路径：dest 为已存在目录时自动追加源文件名）。
-func (t *copyFileTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
+func (t *copyItemTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	// 用户取消检查
 	if ctx.Err() != nil {
 		return "", ctx.Err()
@@ -85,15 +85,15 @@ func (t *copyFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 		Overwrite bool   `json:"overwrite"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "", fmt.Errorf("解析 copy_file 参数失败: %w", err)
+		return "", fmt.Errorf("解析 copy_item 参数失败: %w", err)
 	}
 	src := strings.TrimSpace(args.Source)
 	if src == "" {
-		return "", errors.New("copy_file 参数缺少 source")
+		return "", errors.New("copy_item 参数缺少 source")
 	}
 	dst := strings.TrimSpace(args.Dest)
 	if dst == "" {
-		return "", errors.New("copy_file 参数缺少 dest")
+		return "", errors.New("copy_item 参数缺少 dest")
 	}
 	if err := validateTextLen("source", src, maxToolShortText); err != nil {
 		return "", err
@@ -114,7 +114,7 @@ func (t *copyFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	// 源存在性检查：复制对象不存在是参数错误，无需审批
 	if _, err := os.Lstat(srcFull); err != nil {
 		if os.IsNotExist(err) {
-			return "", errors.New("copy_file 源文件/目录不存在")
+			return "", errors.New("copy_item 源文件/目录不存在")
 		}
 		return "", fmt.Errorf("检查源文件失败: %w", err)
 	}
@@ -129,16 +129,16 @@ func (t *copyFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	// 对子目录自复制的兜底校验大小写敏感，Windows 大小写变体路径可绕过），前置
 	// 拦截（参数错误语义，不触发审批）
 	if err := checkSrcDestRelation(srcFull, finalDst); err != nil {
-		return "", fmt.Errorf("copy_file %w", err)
+		return "", fmt.Errorf("copy_item %w", err)
 	}
 	if destExists && !args.Overwrite {
-		return "", errors.New("copy_file 目标已存在，未设置 overwrite=true 时拒绝覆盖（覆盖请显式传 overwrite=true）")
+		return "", errors.New("copy_item 目标已存在，未设置 overwrite=true 时拒绝覆盖（覆盖请显式传 overwrite=true）")
 	}
 
 	// 审批检查点：仅覆盖已存在目标时触发（目标不存在为纯新增，对齐 write_file）；
 	// 未被拒绝（Approver 未注入/批准）则继续执行
 	if destExists {
-		if err := t.requestApproval(ctx, "copy_file", "复制文件并覆盖："+src+" → "+dst, false); err != nil {
+		if err := t.requestApproval(ctx, "copy_item", "复制项并覆盖："+src+" → "+dst, false); err != nil {
 			return "", err
 		}
 	}
@@ -149,7 +149,7 @@ func (t *copyFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	return "已复制：" + src + " → " + t.relDisplayPath(finalDst), nil
 }
 
-// NewCopyFile 创建 copy_file 工具。
-func NewCopyFile(ctx *Context) tool.InvokableTool {
-	return &copyFileTool{fsToolBase: fsToolBase{ctx: ctx}}
+// NewCopyItem 创建 copy_item 工具。
+func NewCopyItem(ctx *Context) tool.InvokableTool {
+	return &copyItemTool{fsToolBase: fsToolBase{ctx: ctx}}
 }

@@ -204,7 +204,7 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 		{"create_plan", tools.WrapWithError("create_plan", tools.NewCreatePlan(p.ctx), p.ctx)},
 		{"update_plan", tools.WrapWithError("update_plan", tools.NewUpdatePlan(p.ctx), p.ctx)},
 	}
-	// os_agent 子 Agent 委托工具：文件/命令工具（read_file 等 11 个）已封装为子 Agent，
+	// os_agent 子 Agent 委托工具：文件/命令工具（read_file 等 13 个）已封装为子 Agent，
 	// 内层装配见 subagent_os.go 的 buildOSSubAgent。chatModel 为 nil 或构造失败时返回 nil
 	// （已内部记 Warn），跳过注册、不破坏其余工具装配；正常时用 WrapWithError 包装
 	// （与其余工具一致：失败发射 tool_error 事件、记录并回填模型继续推理，含 panic 防护）。

@@ -1,6 +1,6 @@
 package tools
 
-// 本文件实现 delete_file 工具：删除 AI 助手工作目录（~/.jot/workspace）内的文件
+// 本文件实现 delete_item 工具：删除 AI 助手工作目录（~/.jot/workspace）内的文件
 // 或目录（类似 rm），复用 os.Root 的 Remove / RemoveAll（基于目录句柄，杜绝
 // ../ 逃逸与符号链接逃逸）。经 fsToolBase 做路径边界校验（resolvePath 第一道
 // 防线 + os.Root 第二道防线），并额外拒绝删除工作区根目录本身
@@ -23,32 +23,32 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-// deleteFileTool 删除工作目录内文件/目录的工具。
-type deleteFileTool struct {
+// deleteItemTool 删除工作目录内文件/目录的工具。
+type deleteItemTool struct {
 	fsToolBase
 }
 
-var _ tool.InvokableTool = (*deleteFileTool)(nil)
-var _ ActionTextProvider = (*deleteFileTool)(nil)
+var _ tool.InvokableTool = (*deleteItemTool)(nil)
+var _ ActionTextProvider = (*deleteItemTool)(nil)
 
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）。
-func (t *deleteFileTool) ActionText(argumentsInJSON string) string {
+func (t *deleteItemTool) ActionText(argumentsInJSON string) string {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "删除文件"
+		return "删除项"
 	}
 	if p := strings.TrimSpace(args.Path); p != "" {
-		return "删除文件：" + TruncateRunes(p, 30)
+		return "删除项：" + TruncateRunes(p, 30)
 	}
-	return "删除文件"
+	return "删除项"
 }
 
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
-func (t *deleteFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+func (t *deleteItemTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: "delete_file",
+		Name: "delete_item",
 		Desc: "删除工作目录内的文件或目录（类似 rm）。path 为文件时直接删除；path 为目录时必须显式传 recursive=true 才递归删除（缺省只允许删除文件或空目录）。删除不可恢复，执行前需强制审批确认（不可绕过）。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"path": {
@@ -67,7 +67,7 @@ func (t *deleteFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun 执行删除：参数校验 → 边界校验 → 拒绝删工作区根 → 存在性检查 →
 // 目录递归判定 → 强制审批（critical）→ os.Remove/os.RemoveAll。
-func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
+func (t *deleteItemTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	// 用户取消检查
 	if ctx.Err() != nil {
 		return "", ctx.Err()
@@ -77,11 +77,11 @@ func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		Recursive bool   `json:"recursive"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "", fmt.Errorf("解析 delete_file 参数失败: %w", err)
+		return "", fmt.Errorf("解析 delete_item 参数失败: %w", err)
 	}
 	path := strings.TrimSpace(args.Path)
 	if path == "" {
-		return "", errors.New("delete_file 参数缺少 path")
+		return "", errors.New("delete_item 参数缺少 path")
 	}
 	if err := validateTextLen("path", path, maxToolShortText); err != nil {
 		return "", err
@@ -99,7 +99,7 @@ func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 		return "", err
 	}
 	if pathEqualsFold(fullPath, root) {
-		return "", errors.New("delete_file 拒绝删除工作区根目录，如需清空请逐个删除内部文件/目录")
+		return "", errors.New("delete_item 拒绝删除工作区根目录，如需清空请逐个删除内部文件/目录")
 	}
 
 	// 打开 os.Root 目录句柄（第二道防逃逸），后续存在性检查/删除均走 Root 相对路径
@@ -113,7 +113,7 @@ func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	stat, err := h.Lstat(rel)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", errors.New("delete_file 目标文件/目录不存在")
+			return "", errors.New("delete_item 目标文件/目录不存在")
 		}
 		return "", fmt.Errorf("检查目标文件失败: %w", err)
 	}
@@ -127,13 +127,13 @@ func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 			return "", fmt.Errorf("检查目录内容失败: %w", err)
 		}
 		if len(entries) > 0 {
-			return "", errors.New("delete_file 目标是非空目录，未设置 recursive=true 时拒绝删除（目录递归删除需显式确认）")
+			return "", errors.New("delete_item 目标是非空目录，未设置 recursive=true 时拒绝删除（目录递归删除需显式确认）")
 		}
 	}
 
 	// 强制审批检查点：删除不可恢复，critical=true（任何审批模式都必须确认）；
 	// 未被拒绝（Approver 未注入/批准）则继续执行
-	if err := t.requestApproval(ctx, "delete_file", "删除文件："+path, true); err != nil {
+	if err := t.requestApproval(ctx, "delete_item", "删除项："+path, true); err != nil {
 		return "", err
 	}
 
@@ -148,7 +148,7 @@ func (t *deleteFileTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	return "已删除：" + path, nil
 }
 
-// NewDeleteFile 创建 delete_file 工具。
-func NewDeleteFile(ctx *Context) tool.InvokableTool {
-	return &deleteFileTool{fsToolBase: fsToolBase{ctx: ctx}}
+// NewDeleteItem 创建 delete_item 工具。
+func NewDeleteItem(ctx *Context) tool.InvokableTool {
+	return &deleteItemTool{fsToolBase: fsToolBase{ctx: ctx}}
 }

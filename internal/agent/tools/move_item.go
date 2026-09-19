@@ -1,6 +1,6 @@
 package tools
 
-// 本文件实现 move_file 工具：移动 AI 助手工作目录（~/.jot/workspace）内的文件
+// 本文件实现 move_item 工具：移动 AI 助手工作目录（~/.jot/workspace）内的文件
 // 或目录到目标位置（类似 mv），复用 go-kit fs 的 MoveEx（优先 os.Rename 原子
 // 操作，失败降级为复制+删除，支持跨文件系统）。经 fsToolBase 做路径边界校验
 // （source 与 dest 都必须在工作目录内，越权一律拒绝）。
@@ -24,32 +24,32 @@ import (
 	kitfs "gitee.com/MM-Q/go-kit/fs"
 )
 
-// moveFileTool 移动工作目录内文件/目录的工具。
-type moveFileTool struct {
+// moveItemTool 移动工作目录内文件/目录的工具。
+type moveItemTool struct {
 	fsToolBase
 }
 
-var _ tool.InvokableTool = (*moveFileTool)(nil)
-var _ ActionTextProvider = (*moveFileTool)(nil)
+var _ tool.InvokableTool = (*moveItemTool)(nil)
+var _ ActionTextProvider = (*moveItemTool)(nil)
 
 // ActionText 提供 tool_start 动作文案（实现 ActionTextProvider）。
-func (t *moveFileTool) ActionText(argumentsInJSON string) string {
+func (t *moveItemTool) ActionText(argumentsInJSON string) string {
 	var args struct {
 		Source string `json:"source"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "移动文件"
+		return "移动项"
 	}
 	if s := strings.TrimSpace(args.Source); s != "" {
-		return "移动文件：" + TruncateRunes(s, 30)
+		return "移动项：" + TruncateRunes(s, 30)
 	}
-	return "移动文件"
+	return "移动项"
 }
 
 // Info 返回工具元信息（名称、描述、参数 JSON Schema）。
-func (t *moveFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+func (t *moveItemTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: "move_file",
+		Name: "move_item",
 		Desc: "在工作目录内移动文件或目录到目标位置（类似 mv）。source 为源路径、dest 为目标路径；dest 为已存在目录时自动追加源文件名（如源 a.txt 移动到已存在的 dir/ 即变为 dir/a.txt）。移动会移除源文件/目录，执行前需审批（常规审批可取消）。目标已存在时缺省拒绝，overwrite=true 才允许覆盖。移动目录时递归移动全部内容。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"source": {
@@ -73,7 +73,7 @@ func (t *moveFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun 执行移动：参数校验 → 边界校验 → 源存在性检查 → 覆盖判定 →
 // 审批检查 → go-kit MoveEx 执行（智能路径：dest 为已存在目录时自动追加源文件名）。
-func (t *moveFileTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
+func (t *moveItemTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
 	// 用户取消检查
 	if ctx.Err() != nil {
 		return "", ctx.Err()
@@ -84,15 +84,15 @@ func (t *moveFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 		Overwrite bool   `json:"overwrite"`
 	}
 	if err := json.Unmarshal([]byte(argumentsInJSON), &args); err != nil {
-		return "", fmt.Errorf("解析 move_file 参数失败: %w", err)
+		return "", fmt.Errorf("解析 move_item 参数失败: %w", err)
 	}
 	src := strings.TrimSpace(args.Source)
 	if src == "" {
-		return "", errors.New("move_file 参数缺少 source")
+		return "", errors.New("move_item 参数缺少 source")
 	}
 	dst := strings.TrimSpace(args.Dest)
 	if dst == "" {
-		return "", errors.New("move_file 参数缺少 dest")
+		return "", errors.New("move_item 参数缺少 dest")
 	}
 	if err := validateTextLen("source", src, maxToolShortText); err != nil {
 		return "", err
@@ -113,7 +113,7 @@ func (t *moveFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	// 源存在性检查：移动对象不存在是参数错误，无需审批
 	if _, err := os.Lstat(srcFull); err != nil {
 		if os.IsNotExist(err) {
-			return "", errors.New("move_file 源文件/目录不存在")
+			return "", errors.New("move_item 源文件/目录不存在")
 		}
 		return "", fmt.Errorf("检查源文件失败: %w", err)
 	}
@@ -127,15 +127,15 @@ func (t *moveFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	// 源-目标关系校验：源与目标相同、或目录移动到自身子目录（MoveEx 虽有兜底但
 	// 大小写敏感，Windows 大小写变体路径可绕过），前置拦截（参数错误语义，不触发审批）
 	if err := checkSrcDestRelation(srcFull, finalDst); err != nil {
-		return "", fmt.Errorf("move_file %w", err)
+		return "", fmt.Errorf("move_item %w", err)
 	}
 	if destExists && !args.Overwrite {
-		return "", errors.New("move_file 目标已存在，未设置 overwrite=true 时拒绝覆盖（覆盖请显式传 overwrite=true）")
+		return "", errors.New("move_item 目标已存在，未设置 overwrite=true 时拒绝覆盖（覆盖请显式传 overwrite=true）")
 	}
 
 	// 审批检查点：移动必然移除源文件/目录，属结构性变更，始终需取得用户批准；
 	// 未被拒绝（Approver 未注入/批准）则继续执行
-	if err := t.requestApproval(ctx, "move_file", "移动文件："+src+" → "+dst, false); err != nil {
+	if err := t.requestApproval(ctx, "move_item", "移动项："+src+" → "+dst, false); err != nil {
 		return "", err
 	}
 
@@ -145,7 +145,7 @@ func (t *moveFileTool) InvokableRun(ctx context.Context, argumentsInJSON string,
 	return "已移动：" + src + " → " + t.relDisplayPath(finalDst), nil
 }
 
-// NewMoveFile 创建 move_file 工具。
-func NewMoveFile(ctx *Context) tool.InvokableTool {
-	return &moveFileTool{fsToolBase: fsToolBase{ctx: ctx}}
+// NewMoveItem 创建 move_item 工具。
+func NewMoveItem(ctx *Context) tool.InvokableTool {
+	return &moveItemTool{fsToolBase: fsToolBase{ctx: ctx}}
 }

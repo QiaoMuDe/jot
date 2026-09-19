@@ -22,7 +22,7 @@ type fsToolBase struct {
 	ctx           *Context
 	workspaceRoot string // 测试注入用，空则取 config.WorkspaceDir()
 	homeDir       string // 测试注入用，空则取 os.UserHomeDir()（供 expandTilde 展开 ~ 前缀）
-	desktopDir    string // 测试注入用，空则取 home + "Desktop"（供 transfer_file 桌面端解析）
+	desktopDir    string // 测试注入用，空则取 home + "Desktop"（供 transfer_item 桌面端解析）
 }
 
 // fsFinalTarget 计算复制/移动的最终目标路径：dest 为已存在目录时自动追加源基名

@@ -16,7 +16,7 @@
 | `ai:stream-error` | 流错误 | `error` JSON、token 估算 | 展示错误态 |
 | `ai:tool-status` | 工具调用各阶段 | `tools.Record` JSON（`tool_start`/`tool_result`/`tool_error`/`tool_partial`） | 状态条 + 历史明细 |
 | `ai:ask-user` | 模型发起反问 | `{question, options, selection}` JSON | 弹出反问面板并阻塞等待 |
-| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / edit_file 编辑 / run_command 执行 / transfer_file 下载到桌面或覆盖上传 / delete_file 删除）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
+| `ai:tool-approval` | 工作目录危险操作（write_file 覆盖 / edit_file 编辑 / run_command 执行 / transfer_item 下载到桌面或覆盖上传 / delete_item 删除）请求审批 | `{tool, summary, approval_id, critical}` JSON | 弹出审批面板并阻塞等待（回调 `ApproveToolCall`） |
 | `ai:plan-generating` | Plan 模式预规划 LLM 调用期间 | 空字符串 | 显示计划生成状态文案（轮换文案，重试不额外通知） |
 | `ai:plan-created` | `create_plan` 调用成功 / 预规划完成 | `{goal, steps}` JSON | 弹出计划面板 |
 | `ai:plan-updated` | `update_plan` 调用成功 / 结果兜底 | `{step_id, status, result, steps}` JSON | 刷新计划面板 |
@@ -51,7 +51,7 @@
 
 ### 3.1 子 Agent 内层步骤转发（os_agent）
 
-文件/命令工具（read_file / write_file / edit_file / ls_dir / glob / grep_file / copy_file / move_file / delete_file / mkdir_dir / run_command）已封装为 `os_agent` 子 Agent（[subagent_os.go](internal/agent/subagent_os.go)，通用机制见 [subagent.go](internal/agent/subagent.go)），父层仅注册 os_agent 一个委托工具。内层每步工具调用以 `ai:tool-status` 事件**实时转发**（`tool_start` / `tool_result` / `tool_error` / `tool_partial` 语义与父层一致），写入父层同一 `toolRecords` 切片，顺序相邻：
+文件/命令工具（read_file / write_file / edit_file / ls_dir / glob / grep_file / copy_item / move_item / delete_item / mkdir_dir / run_command）已封装为 `os_agent` 子 Agent（[subagent_os.go](internal/agent/subagent_os.go)，通用机制见 [subagent.go](internal/agent/subagent.go)），父层仅注册 os_agent 一个委托工具。内层每步工具调用以 `ai:tool-status` 事件**实时转发**（`tool_start` / `tool_result` / `tool_error` / `tool_partial` 语义与父层一致），写入父层同一 `toolRecords` 切片，顺序相邻：
 
 ```
 os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent tool_result
@@ -90,10 +90,10 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 {"tool": "write_file", "summary": "覆盖文件：a.txt", "approval_id": 1, "critical": false}
 ```
 
-- `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command` / `transfer_file` / `delete_file` 等，分级见下方「各工具审批分级」）。
+- `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command` / `transfer_item` / `delete_item` 等，分级见下方「各工具审批分级」）。
 - `summary`：操作的中文摘要（如"覆盖文件：xxx"/"执行命令：rm -rf …"），供前端审批面板展示。
 - `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved)` **必须原样回传**，后端据此防串审（不一致报错）。
-- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中 / transfer_file 下载到桌面等外部副作用写入时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**；`review` 模式下后端强制阻塞确认（不可绕过的最后防线），`auto` 模式自动放行但写 `tool_auto_approval` 审计留痕（门控实现见 [agent.go](internal/agent/agent.go) `RequestApproval`）。
+- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中 / transfer_item 下载到桌面等外部副作用写入时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**；`review` 模式下后端强制阻塞确认（不可绕过的最后防线），`auto` 模式自动放行但写 `tool_auto_approval` 审计留痕（门控实现见 [agent.go](internal/agent/agent.go) `RequestApproval`）。
 
 **审批模式门控**（由后端依据会话配置 `approval_mode` 决定，事件仅在真正需要阻塞时才发射）：
 - `confirm_every`：`critical` 任意 → 都需阻塞确认。
@@ -102,9 +102,9 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 
 **各工具审批分级**（critical 取值以各工具文件头注释与 `requestApproval` 调用为权威）：
 - `run_command`：命中高危命令黑名单 `critical=true`，否则 `false`。
-- `delete_file`：删除操作一律 `critical=true`。
-- `write_file` / `edit_file` / `copy_file` / `move_file`：覆盖已存在目标时请求审批 `critical=false`（纯新增免审批）。
-- `transfer_file`：download（写用户桌面 = 工作区之外的外部副作用）一律请求审批 `critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_file——纯新增免审批、覆盖已存在目标请求审批 `critical=false`。
+- `delete_item`：删除操作一律 `critical=true`。
+- `write_file` / `edit_file` / `copy_item` / `move_item`：覆盖已存在目标时请求审批 `critical=false`（纯新增免审批）。
+- `transfer_item`：download（写用户桌面 = 工作区之外的外部副作用）一律请求审批 `critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_item——纯新增免审批、覆盖已存在目标请求审批 `critical=false`。
 - `manage_note` / `manage_notebook` / `manage_tag` / `manage_todo`：写操作接入门控（create 免审批），删除类 action 一律 `critical=true`——`manage_note.delete`（软删进回收站，恢复由用户在回收站页面自行操作）、`manage_notebook.delete`（可选 `with_notes`，默认 false 其下笔记迁入默认笔记本、true 连同笔记移入回收站）、`manage_tag.delete`、`manage_todo.delete` / `clear`（硬删，审批摘要注明「不可恢复」）；其余写操作分级以各工具文件头注释为权威（如 `manage_note.edit` 恒 `critical=true`、批量 `move` / `add_tag` / `remove_tag` 为 `critical=true`、`update` / `pin` 等为 `critical=false`）。
 
 **回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error`）：

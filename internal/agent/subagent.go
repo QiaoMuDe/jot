@@ -55,13 +55,13 @@ var toolConstructors = map[string]func(ctx *tools.Context) tool.InvokableTool{
 	"ls_dir":        tools.NewLsDir,
 	"glob":          tools.NewGlob,
 	"grep_file":     tools.NewGrepFile,
-	"copy_file":     tools.NewCopyFile,
-	"move_file":     tools.NewMoveFile,
-	"delete_file":   tools.NewDeleteFile,
+	"copy_item":     tools.NewCopyItem,
+	"move_item":     tools.NewMoveItem,
+	"delete_item":   tools.NewDeleteItem,
 	"mkdir_dir":     tools.NewMkdirDir,
 	"run_command":   tools.NewRunCommand,
 	"run_python":    tools.NewRunPython,
-	"transfer_file": tools.NewTransferFile,
+	"transfer_item": tools.NewTransferItem,
 }
 
 // delegatedAgentTool 通用子 Agent 委托工具：父层只见一个委托工具，内层为独立 ChatModelAgent。
