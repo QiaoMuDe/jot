@@ -3439,12 +3439,14 @@ async function startStreaming(userText, userMsgID) {
     let hasReceivedChunk = false;
     let recallCards = null;
 
-    // 新一轮输出开始：收起 Agent 反问面板/计划面板、清除反问等待状态
-    //（提交回答后由 AnswerAskUser 触达此处，防御性重置）
+    // 新一轮输出开始：清空上一轮计划缓存并收起 Agent 反问面板/计划面板/审批面板，
+    // 清除反问等待状态（提交回答后由 AnswerAskUser 触达此处，防御性重置）。
+    // 顺序：必须先清缓存再收起——hideAskPanel / hideApprovalPanel 内含「恢复计划面板」逻辑，
+    // 若 streamPlanData 仍是上一轮的（如停止后未清），会把旧计划重新显示出来。
+    streamPlanData = null;
     hideAskPanel();
     hidePlanPanel();
     hideApprovalPanel();
-    streamPlanData = null; // 清空上一轮计划缓存（新轮 plan-created 到达时会重新赋值）
 
     const streamingEl = document.createElement('div');
     streamingEl.className = 'ai-msg ai-msg-assistant';
@@ -5738,15 +5740,23 @@ function showAskPanel(questions) {
 }
 
 /**
- * 隐藏并清空 Agent 反问面板
+ * 收起并清空 Agent 反问面板本体（不触碰计划面板）。
+ * 供两处复用：① hideAskPanel（反问结束后需恢复计划面板）；
+ * ② showApprovalPanel（紧接着要收起计划面板，若走 hideAskPanel 会先重建计划卡再销毁，纯属无用 DOM 操作）。
  */
-function hideAskPanel() {
+function collapseAskPanel() {
     if (!askPanelEl) return;
     askPanelEl.innerHTML = '';
     askPanelEl.style.display = 'none';
     // 面板收起（回答提交/取消本轮/结束）时恢复输入框可用态
     setAskInputWaiting(false);
-    // 反问结束后恢复计划面板（如仍在流式中且有计划数据）
+}
+
+/**
+ * 隐藏并清空 Agent 反问面板；反问结束后恢复计划面板（如仍在流式中且有计划数据）
+ */
+function hideAskPanel() {
+    collapseAskPanel();
     if (streamPlanData && isStreaming) {
         showPlanPanel(streamPlanData);
     }
@@ -5838,7 +5848,8 @@ function _highlightApprovalCommand(summary) {
  */
 function showApprovalPanel(payload) {
     if (!approvalPanelEl) return;
-    hideAskPanel(); // 审批期间临时收起反问面板，避免两个浮层重叠
+    collapseAskPanel(); // 审批期间临时收起反问面板（用不带恢复的版本：紧接着就要收起计划面板，
+                        // 若走 hideAskPanel 会先重建计划卡再被 hidePlanPanel 销毁，纯属无用 DOM 操作）
     hidePlanPanel(); // 审批期间临时收起计划面板，避免两个浮层重叠
 
     const toolName = payload.tool || '未知工具';
@@ -5949,14 +5960,20 @@ function showApprovalPanel(payload) {
 }
 
 /**
- * 收起工具执行审批面板。
+ * 隐藏并清空 Agent 工具审批面板。
  * 面板应在审批提交成功、流结束/报错/停止时被主动隐藏（防御性调用）。
+ * 审批结束后恢复计划面板：Plan 模式执行中被审批打断时，计划进度需在审批关闭后重新可见
+ * （与 hideAskPanel 对称）。流已结束/出错时 isStreaming 已为 false，守卫不成立故不会误恢复。
  */
 function hideApprovalPanel() {
     if (!approvalPanelEl) return;
     approvalPanelEl.innerHTML = '';
     approvalPanelEl.classList.remove('is-critical');
     approvalPanelEl.style.display = 'none';
+    // 审批结束后恢复计划面板（如仍在流式中且有计划数据）
+    if (streamPlanData && isStreaming) {
+        showPlanPanel(streamPlanData);
+    }
 }
 
 /**
