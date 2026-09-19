@@ -1,0 +1,30 @@
+- [x] `db.go` 种子：`ai_agent_max_iterations` = `"100"`，且新增 `ai_sub_agent_max_iterations` = `"50"`
+- [x] `types.go` `SettingsConfig` 含 `AISubAgentMaxIterations int` 且 json tag 为 `ai_sub_agent_max_iterations`
+- [x] `types.go` `GetAllSettings` 默认值：主 Agent 100、子 Agent 50（与种子值一致）
+- [x] `types.go` `SaveAllSettings` clamp：主 Agent `<1→100` / `>500→500`；子 Agent `<1→50` / `>200→200`
+- [x] `types.go` `SaveAllSettings` sets map 含 `ai_sub_agent_max_iterations` 写入（漏写会导致保存静默丢失）
+- [x] `agent.go` `DefaultMaxIterations` = 100 且注释已同步（含 `Run` 内读取处的行内注释）
+- [x] `subagent_os.go` 常量改名为 `osSubAgentDefaultMaxIterations` = 50，且**代码与权威文档无** `osSubAgentMaxIterations` 残留引用（仅 spec 文档与 AGENTS.md 临时记忆中作为「改名说明」出现，属预期）
+- [x] `buildOSSubAgent` 接收 `setting *services.SettingService`，且**拷贝** `osAgentConfig` 后再覆盖 `maxIterations`（未直接修改包级 var）
+- [x] `subAgentMaxIterations` 读取函数：nil/非数字/`<1` 回退 50，`>200` 取 200
+- [x] `registry.go` 调用点已传 `p.deps.Setting`
+- [x] `subagent_test.go` 全部 `buildOSSubAgent` 调用点参数个数正确（8 处，编译通过）
+- [x] `index.html` 主 Agent 输入框 `value="100"`、`max="500"`
+- [x] `index.html` 新增子 Agent 输入框：`id="aiSubAgentMaxIterations"`、`min="1"`、`max="200"`、`value="50"`，样式复用既有 class（无新增 CSS）
+- [x] `main.js` `loadSettings()` 回显两个设置项，未保存时分别显示 100 / 50
+- [x] `main.js` `saveSettings()` 收集两个设置项，缺省分别回落 100 / 50
+- [x] `main.js` change 监听：主 Agent `<1→100`、`>500→500`；子 Agent `<1→50`、`>200→200`；提示文案与相邻项同风格
+- [x] `SUBAGENTS.md` 已同步常量改名与「上限由设置项提供」的说明，并同步 3 处构造器签名示例（§2/§7/§5.3）
+- [x] `AGENTS.md` 长期记忆 20 的 `MaxIterations=20` 表述已更新为设置项口径
+- [x] `AGENTS.md` 临时记忆条目数为 5，且新条目在末尾（编号 5），文件引用均为项目相对路径
+- [x] `go build ./...` 与 `go vet ./...` 通过
+- [x] `go test ./internal/agent/... ./internal/services/...` 全绿
+- [x] `golangci-lint run ./...` 输出 0 issues
+- [x] `npm run build` 通过（仅既有 chunk 体积警告）
+- [x] 静态一致性：`GetAllSettings` 默认值（100/50）与 `db.go` 种子值完全一致
+- [x] 静态一致性：无任何代码把子 Agent 上限写死为 20（`osAgentConfig.maxIterations` = `osSubAgentDefaultMaxIterations`）
+- [x] 静态一致性：`git status` 改动文件全部属本功能范围，无越界改动
+- [x] 行为验证（代码路径确认）：`buildTools` 在每次 `Run` 内装配 `buildOSSubAgent` 并读取设置 → 修改后**无需重启**，下一条 AI 消息即生效
+- [x] 行为验证（代码路径确认）：设置页回显/收集/校验三处齐全 → 可改并持久化；全新库取种子 100/50，存量库因种子增量插入不被覆盖
+
+> 备注：需 `wails build` 出新二进制后，方可在应用内做端到端的界面点击验证。

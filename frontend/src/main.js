@@ -2986,17 +2986,37 @@ async function initAISettings() {
         agentMaxIterations.addEventListener('change', async () => {
             const val = parseInt(agentMaxIterations.value);
             if (isNaN(val) || val < 1) {
-                agentMaxIterations.value = 20;
-                nm.show('Agent 运行上限必须大于 0，已重置为 20', 'warning');
+                agentMaxIterations.value = 100;
+                nm.show('Agent 运行上限必须大于 0，已重置为 100', 'warning');
                 return;
             }
-            if (val > 100) {
-                agentMaxIterations.value = 100;
-                nm.show('Agent 运行上限不能超过 100，已重置为 100', 'warning');
+            if (val > 500) {
+                agentMaxIterations.value = 500;
+                nm.show('Agent 运行上限不能超过 500，已重置为 500', 'warning');
                 return;
             }
             await saveSettings();
             nm.show('Agent 运行上限已保存', 'success');
+        });
+    }
+
+    // ── 子 Agent 最大运行次数保存 ──
+    const subAgentMaxIterations = document.getElementById('aiSubAgentMaxIterations');
+    if (subAgentMaxIterations) {
+        subAgentMaxIterations.addEventListener('change', async () => {
+            const val = parseInt(subAgentMaxIterations.value);
+            if (isNaN(val) || val < 1) {
+                subAgentMaxIterations.value = 50;
+                nm.show('子 Agent 运行上限必须大于 0，已重置为 50', 'warning');
+                return;
+            }
+            if (val > 200) {
+                subAgentMaxIterations.value = 200;
+                nm.show('子 Agent 运行上限不能超过 200，已重置为 200', 'warning');
+                return;
+            }
+            await saveSettings();
+            nm.show('子 Agent 运行上限已保存', 'success');
         });
     }
 
@@ -11870,7 +11890,10 @@ async function loadSettings() {
         if (maxFileSize) maxFileSize.value = cfg.max_file_size;
 
         const agentMaxIterations = document.getElementById('aiAgentMaxIterations');
-        if (agentMaxIterations) agentMaxIterations.value = cfg.ai_agent_max_iterations || 20;
+        if (agentMaxIterations) agentMaxIterations.value = cfg.ai_agent_max_iterations || 100;
+
+        const subAgentMaxIterations = document.getElementById('aiSubAgentMaxIterations');
+        if (subAgentMaxIterations) subAgentMaxIterations.value = cfg.ai_sub_agent_max_iterations || 50;
 
         const aiSummaryTokenBudget = document.getElementById('aiSummaryTokenBudget');
         if (aiSummaryTokenBudget) aiSummaryTokenBudget.value = (cfg.ai_context_token_budget || AI_BUDGET_DEFAULT_K * AI_K_TOKENS) / AI_K_TOKENS;
@@ -11964,7 +11987,8 @@ async function saveSettings() {
             ai_context_summary_trigger_ratio: parseFloat(document.getElementById('aiSummaryTriggerRatio')?.value) || AI_RATIO_DEFAULT,
             ai_large_file_preview_threshold: parseInt(document.getElementById('aiLargeFilePreviewThreshold')?.value) || 10000,
             max_file_size: parseInt(document.getElementById('maxFileSize')?.value) || 1,
-            ai_agent_max_iterations: parseInt(document.getElementById('aiAgentMaxIterations')?.value) || 20,
+            ai_agent_max_iterations: parseInt(document.getElementById('aiAgentMaxIterations')?.value) || 100,
+            ai_sub_agent_max_iterations: parseInt(document.getElementById('aiSubAgentMaxIterations')?.value) || 50,
             ai_agent_tools_disabled: JSON.stringify(agentToolsDisabled || []),
             trash_cleanup_retention_days: parseInt(document.getElementById('trashCleanupRetentionDays')?.value) || 30,
             log_level: els.logLevelControl ? parseInt(els.logLevelControl.querySelector('.segmented-btn.active')?.dataset?.value || '1') : 1,

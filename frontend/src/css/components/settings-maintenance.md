@@ -27,6 +27,7 @@
 | `frontend/src/main.js` | `els` 注册 + `loadSettings()` 回显 + `saveSettings()` 收集 + 可选 `change` 自动保存 |
 
 > 样式：新控件复用现有 class（`.ai-setting-item`/`.toggle-switch`/`.settings-input`/`.theme-select`，见 [settings-panel.css](settings-panel.css)），**无需改 CSS**；只有全新控件形态才需要动样式文件。
+> 例外：标签文案过长需放宽 `.ai-setting-label` 的固定列宽（详见第三节第 3 步的「标签文案宽度上限」）。
 
 ## 三、新增一个设置项
 
@@ -83,6 +84,10 @@ toggle 模板（输入框/下拉参照同分区现有控件）：
 </div>
 ```
 
+- **标签文案宽度上限（易踩坑）**：`.ai-setting-label` 是**固定列宽**（`width: 136px`，见 [settings-panel.css](settings-panel.css)），且为 `nowrap + flex-shrink: 0`。文案超出时**不会撑开盒子，而是直接溢出盒子**，与右侧描述粘连——因为描述是从标签盒子右边界 + `gap: 12px` 处起排，而不是紧跟文字末尾。
+- 估算规则（`font-size: 0.813rem`）：中文 ≈ 13px/字、英文 ≈ 7px/字符。即**纯中文标签 ≤ 10 字**；中英混合需满足总宽 ≤ 136px（例：`SubAgent 运行上限` ≈ 110px，通过；`SubAgent 最大运行次数上限` 会溢出）。
+- 超长时二选一：① 精简文案（首选，零风险）；② 同步放宽 `.ai-setting-label` 的 `width`（**影响全页所有设置项**的标签列与描述可用宽度，描述是 `flex: 1` + `nowrap + ellipsis`，过窄会触发省略号）。
+
 ### 4. `frontend/src/main.js` — 三至四处
 
 ④ `els` 对象注册元素引用：`myFeatureEnabledToggle: $('myFeatureEnabledToggle'),`
@@ -131,6 +136,7 @@ els.myFeatureEnabledToggle.addEventListener('change', async () => {
 - [ ] `types.go` 三处缺一不可——漏读取映射 → 前端永远拿到零值；漏写入映射 → 保存静默丢失（`SaveAllSettings` 不报错）；
 - [ ] `GetAllSettings` 默认值 = 种子值（两处独立定义）；
 - [ ] json tag 与 key 完全一致；
+- [ ] 标签文案宽度 ≤ `.ai-setting-label` 固定列宽（136px，纯中文 ≤ 10 字）——超出会溢出并与右侧描述粘连（见第三节第 3 步）；
 - [ ] 存量用户默认值不随种子变化，需迁移时在 `InitDefaultSettings`/迁移区单独处理；
 - [ ] CM6 类设置的 4 处调用点透传；
 - [ ] 删除时 `orphanSettingKeys` 追加清理存量键。

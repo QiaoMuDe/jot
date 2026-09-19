@@ -965,7 +965,10 @@
   font-size: 0.813rem;
   font-weight: 500;
   color: var(--text-secondary);
-  width: 112px;
+  /* 固定列宽：需容纳最长的标签「SubAgent 运行上限」并留余量（原 112px 放不下，
+     会与右侧描述粘连）。不可缩小——标签为 nowrap + flex-shrink: 0，内容超出时
+     不会撑开盒子而是直接溢出，描述从本盒子右边界 + gap 处起排。 */
+  width: 136px;
   white-space: nowrap;
   flex-shrink: 0;
 }

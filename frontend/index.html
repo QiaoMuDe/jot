@@ -648,7 +648,15 @@
                         <span class="ai-setting-label">Agent 运行上限</span>
                         <span class="font-setting-desc">限制 Agent 模式单轮对话的最大工具调用轮次（次）</span>
                         <div class="ai-setting-control" style="flex:none;margin-left:auto;">
-                            <input type="number" id="aiAgentMaxIterations" class="settings-input" value="20" min="1" max="500" style="width:80px;" />
+                            <input type="number" id="aiAgentMaxIterations" class="settings-input" value="100" min="1" max="500" style="width:80px;" />
+                        </div>
+                    </div>
+                    <!-- SubAgent 最大运行次数 -->
+                    <div class="ai-setting-item">
+                        <span class="ai-setting-label">SubAgent 运行上限</span>
+                        <span class="font-setting-desc">限制子 Agent（os_agent）单次委托的最大工具调用轮次（次）</span>
+                        <div class="ai-setting-control" style="flex:none;margin-left:auto;">
+                            <input type="number" id="aiSubAgentMaxIterations" class="settings-input" value="50" min="1" max="200" style="width:80px;" />
                         </div>
                     </div>
 

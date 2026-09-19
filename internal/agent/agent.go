@@ -41,8 +41,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用）。
-const DefaultMaxIterations = 20
+// DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用；默认值已由 20 上调为 100）。
+const DefaultMaxIterations = 100
 
 // maxPlanRetries 计划生成阶段最大重试次数（解析/校验失败时自动重试）。
 const maxPlanRetries = 3
@@ -651,7 +651,7 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		emit = func(string, string) {}
 	}
 
-	// 读取配置的最大迭代次数（默认 20），防止 ReAct 循环死循环
+	// 读取配置的最大迭代次数（未配置时回退 DefaultMaxIterations=100），防止 ReAct 循环死循环
 	maxIterations := DefaultMaxIterations
 	if s.deps.Setting != nil {
 		if n, err := strconv.Atoi(s.deps.Setting.Get("ai_agent_max_iterations")); err == nil && n > 0 {

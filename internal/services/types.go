@@ -90,6 +90,7 @@ type SettingsConfig struct {
 	AILargeFilePreviewThreshold int    `json:"ai_large_file_preview_threshold"`
 	AIAgentToolsDisabled        string `json:"ai_agent_tools_disabled"`
 	AIAgentMaxIterations        int    `json:"ai_agent_max_iterations"`
+	AISubAgentMaxIterations     int    `json:"ai_sub_agent_max_iterations"`
 	TrashCleanupRetentionDays   int    `json:"trash_cleanup_retention_days"`
 	LogLevel                    int    `json:"log_level"`
 	ScreenLockEnabled           bool   `json:"screen_lock_enabled"`
@@ -132,7 +133,8 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		MaxFileSize:                  parseIntSetting(s.Get("max_file_size"), 1),
 		AILargeFilePreviewThreshold:  parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
 		AIAgentToolsDisabled:         s.Get("ai_agent_tools_disabled"),
-		AIAgentMaxIterations:         parseIntSetting(s.Get("ai_agent_max_iterations"), 20),
+		AIAgentMaxIterations:         parseIntSetting(s.Get("ai_agent_max_iterations"), 100),
+		AISubAgentMaxIterations:      parseIntSetting(s.Get("ai_sub_agent_max_iterations"), 50),
 		TrashCleanupRetentionDays:    parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 		LogLevel:                     parseIntSetting(s.Get("log_level"), 1),
 		ScreenLockEnabled:            parseBoolSetting(s.Get("screen_lock_enabled")),
@@ -185,9 +187,14 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		cfg.LogLevel = 5
 	}
 	if cfg.AIAgentMaxIterations < 1 {
-		cfg.AIAgentMaxIterations = 20
+		cfg.AIAgentMaxIterations = 100
 	} else if cfg.AIAgentMaxIterations > 500 {
 		cfg.AIAgentMaxIterations = 500
+	}
+	if cfg.AISubAgentMaxIterations < 1 {
+		cfg.AISubAgentMaxIterations = 50
+	} else if cfg.AISubAgentMaxIterations > 200 {
+		cfg.AISubAgentMaxIterations = 200
 	}
 	// 向量切块区间：先钳 max（硬上限 [100, 10000]），再钳 target（理想落刀点 [1, max]），
 	// 与运行路径 chunkSizes 共用同一 clampChunkSizes，保证设置页与切块口径一致
@@ -233,6 +240,7 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 		"ai_large_file_preview_threshold":  strconv.Itoa(cfg.AILargeFilePreviewThreshold),
 		"ai_agent_tools_disabled":          cfg.AIAgentToolsDisabled,
 		"ai_agent_max_iterations":          strconv.Itoa(cfg.AIAgentMaxIterations),
+		"ai_sub_agent_max_iterations":      strconv.Itoa(cfg.AISubAgentMaxIterations),
 		"trash_cleanup_retention_days":     strconv.Itoa(cfg.TrashCleanupRetentionDays),
 		"log_level":                        strconv.Itoa(cfg.LogLevel),
 		"screen_lock_enabled":              strconv.FormatBool(cfg.ScreenLockEnabled),

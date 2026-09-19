@@ -63,7 +63,7 @@ func newTestInnerCtx() (*tools.Context, *[]tools.Record, *[]string) {
 // TestBuildOSSubAgentNilChatModel chatModel 为 nil 时构造返回 nil（buildTools 过滤循环跳过）。
 func TestBuildOSSubAgentNilChatModel(t *testing.T) {
 	innerCtx := &tools.Context{}
-	if oa := buildOSSubAgent(context.Background(), nil, innerCtx); oa != nil {
+	if oa := buildOSSubAgent(context.Background(), nil, innerCtx, nil); oa != nil {
 		t.Errorf("chatModel 为 nil 时应返回 nil，实际返回 %#v", oa)
 	}
 }
@@ -71,7 +71,7 @@ func TestBuildOSSubAgentNilChatModel(t *testing.T) {
 // TestBuildOSSubAgentInnerTools 内层白名单恰好 13 个，名称集合与 osSubAgentToolNames 一致。
 func TestBuildOSSubAgentInnerTools(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -97,7 +97,7 @@ func TestBuildOSSubAgentInnerTools(t *testing.T) {
 // TestBuildOSSubAgentPlatformNoteInjected 平台片段已注入内层提示词（osSubAgentInstruction 初始化时）。
 func TestBuildOSSubAgentPlatformNoteInjected(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -115,7 +115,7 @@ func TestBuildOSSubAgentPlatformNoteInjected(t *testing.T) {
 func TestBuildOSSubAgentApproverShared(t *testing.T) {
 	approver := &fakeApprover{}
 	innerCtx := &tools.Context{Approver: approver}
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -161,7 +161,7 @@ func TestBuildToolsDisabledOSAgent(t *testing.T) {
 // TestOSAgentInvokableRunEmptyRequest request 为空 / 参数非法时报中文错误。
 func TestOSAgentInvokableRunEmptyRequest(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -180,7 +180,7 @@ func TestOSAgentInvokableRunEmptyRequest(t *testing.T) {
 // os_agent start → 内层 read_file start/result → os_agent result，记录与事件均按序发射。
 func TestOSAgentEventForwarding(t *testing.T) {
 	innerCtx, records, emitted := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -265,7 +265,7 @@ func toolNamesOf(t *testing.T, toolList []tool.BaseTool) map[string]bool {
 // 不跨轮错配（对应前端 osAgentGroupClose 按 call_id 配对的输入契约）。
 func TestOSAgentTwoCallsForwarding(t *testing.T) {
 	innerCtx, records, _ := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}
@@ -334,7 +334,7 @@ func TestOSAgentTwoCallsForwarding(t *testing.T) {
 // （consumeAssistantStream/consumeToolStream + startedByCallID 配对）。
 func TestOSAgentEventForwardingStreaming(t *testing.T) {
 	innerCtx, records, emitted := newTestInnerCtx()
-	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
+	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, nil)
 	if oa == nil {
 		t.Fatal("chatModel 非 nil 时应构造成功")
 	}

@@ -208,7 +208,7 @@ func buildTools(p BuildParams, disabled map[string]bool, planMode bool) []tool.B
 	// 内层装配见 subagent_os.go 的 buildOSSubAgent。chatModel 为 nil 或构造失败时返回 nil
 	// （已内部记 Warn），跳过注册、不破坏其余工具装配；正常时用 WrapWithError 包装
 	// （与其余工具一致：失败发射 tool_error 事件、记录并回填模型继续推理，含 panic 防护）。
-	if oa := buildOSSubAgent(p.runCtx, p.chatModel, p.ctx); oa != nil {
+	if oa := buildOSSubAgent(p.runCtx, p.chatModel, p.ctx, p.deps.Setting); oa != nil {
 		all = append(all, namedTool{"os_agent", tools.WrapWithError("os_agent", oa, p.ctx)})
 	}
 	filtered := make([]tool.BaseTool, 0, len(all))

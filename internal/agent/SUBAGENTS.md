@@ -80,7 +80,7 @@ var osAgentConfig = subAgentConfig{
     description:   "…内层 Agent 描述…",
     instruction:   osSubAgentInstruction,
     toolNames:     osSubAgentToolNames,
-    maxIterations: osSubAgentMaxIterations,
+    maxIterations: osSubAgentDefaultMaxIterations,
     actionPrefix:  "执行操作系统任务：",
     infoDesc:      "…Info().Desc：何时调用 / 做什么…",
     requestDesc:   "…request 参数含义…",
@@ -91,18 +91,21 @@ var osAgentConfig = subAgentConfig{
 
 - `name` 同时是**委托工具名**与**内层 ChatModelAgent 名**（snake_case，全局唯一）。
 - `infoDesc` 是模型选择委托工具的唯一依据：写清"何时调用 / 何时不要调用 / request 参数含义"，不要写实现细节。
-- `maxIterations` 独立于父层，内层循环不消耗父层迭代次数（防死循环，os_agent 取 20）。
+- `maxIterations` 独立于父层，内层循环不消耗父层迭代次数（防死循环）。os_agent 的上限由设置项 `ai_sub_agent_max_iterations` 提供（默认 50、范围 1–200），装配时经 `subAgentMaxIterations(setting)` 读取，未配置/非法时回退常量 `osSubAgentDefaultMaxIterations`。
 
 ### 第 5 步：定义构造器
 
 ```go
 // buildOSSubAgent 构造 os_agent 委托工具（registry.go 装配入口；chatModel 为 nil 或构造失败返回 nil）。
-func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context) *delegatedAgentTool {
-    return newDelegatedAgentTool(runCtx, chatModel, innerCtx, osAgentConfig)
+// 迭代上限从设置项 ai_sub_agent_max_iterations 读取（拷贝 osAgentConfig 后覆盖 maxIterations，不改包级共享配置）。
+func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, setting *services.SettingService) *delegatedAgentTool {
+    cfg := osAgentConfig
+    cfg.maxIterations = subAgentMaxIterations(setting)
+    return newDelegatedAgentTool(runCtx, chatModel, innerCtx, cfg)
 }
 ```
 
-构造器签名统一为 `(runCtx, chatModel, innerCtx) -> *delegatedAgentTool`；内层白名单固定取自 subAgentConfig.toolNames，不随调用方传入变动（旧禁用名静默忽略，`disabled` 已从构造器签名移除）。
+构造器签名统一为 `(runCtx, chatModel, innerCtx, setting) -> *delegatedAgentTool`（第 4 参为设置服务，供装配时读取迭代上限等运行时配置）；内层白名单固定取自 subAgentConfig.toolNames，不随调用方传入变动（旧禁用名静默忽略，`disabled` 已从构造器签名移除）。
 
 ### 第 6 步：登记白名单工具构造器（如缺）
 
@@ -113,7 +116,7 @@ func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerC
 参照 os_agent 的注册写法（[registry.go](internal/agent/registry.go#L207-L213)）：
 
 ```go
-if oa := buildOSSubAgent(p.runCtx, p.chatModel, p.ctx, disabled); oa != nil {
+if oa := buildOSSubAgent(p.runCtx, p.chatModel, p.ctx, p.deps.Setting); oa != nil {
     all = append(all, namedTool{"os_agent", tools.WrapWithError("os_agent", oa, p.ctx)})
 }
 ```
@@ -145,7 +148,7 @@ go test ./internal/agent/...   # 含 subagent_test.go 的事件转发/装配用�
 | `description` | 内层 ChatModelAgent Description |
 | `instruction` | 内层系统提示词（角色 + 边界 + 审批说明 + 结果摘要要求） |
 | `toolNames` | 内层白名单（按名从 `toolConstructors` 取构造器，顺序即注册顺序） |
-| `maxIterations` | 内层 ReAct 循环最大迭代次数（防死循环，独立于父层） |
+| `maxIterations` | 内层 ReAct 循环最大迭代次数（防死循环，独立于父层；os_agent 由设置项 `ai_sub_agent_max_iterations` 提供，装配时读取） |
 | `actionPrefix` | `ActionText` 动作文案前缀（`tool_start` 展示） |
 | `infoDesc` | `Info().Desc`（何时调用 / 做什么） |
 | `requestDesc` | `Info()` request 参数描述 |
@@ -202,7 +205,7 @@ go test ./internal/agent/...   # 含 subagent_test.go 的事件转发/装配用�
 - [ ] 提示词含角色 / 边界（范围外回告主 Agent）/ 审批说明 / 收尾摘要四段？
 - [ ] 白名单只含本域工具且全部已在 `toolConstructors` 登记？
 - [ ] `subAgentConfig` 各字段齐备，`infoDesc` 说清"何时调用"？
-- [ ] 构造器签名统一 `(runCtx, chatModel, innerCtx) -> *delegatedAgentTool`？
+- [ ] 构造器签名统一 `(runCtx, chatModel, innerCtx, setting) -> *delegatedAgentTool`（第 4 参传设置服务，用于读取迭代上限等运行时配置）？
 - [ ] `buildTools` 注册了且用 `WrapWithError` 包装、nil 跳过不破坏其余装配？
 - [ ] `meta.go` 的 `BuiltinTools()` 登记了展示文案（含 PlanOnly/AlwaysOn 标记核对）？
 - [ ] 未修改 `subagent.go` 通用机制（或已同步测试）？
