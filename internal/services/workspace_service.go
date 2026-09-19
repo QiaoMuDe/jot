@@ -93,7 +93,43 @@ func (s *WorkspaceService) UploadFiles(paths []string) ([]WorkspaceTransferResul
 	}
 	results := make([]WorkspaceTransferResult, 0, len(paths))
 	for _, p := range paths {
-		results = append(results, s.uploadOne(root, p))
+		results = append(results, s.uploadOne(root, root, p))
+	}
+	return results, nil
+}
+
+// UploadPathsToWorkspace 拖拽上传文件/目录到工作区指定相对目录：paths 为拖拽传入
+// 的绝对路径（文件/目录混合均可，源为用户任意位置无需沙箱校验），targetRel 为
+// 工作区相对路径（/ 分隔），空串或 "/" 表示根目录。targetRel 非空时先经
+// config.WorkspaceFilePath 做沙箱校验（防 ../ 逃逸与 symlink 逃逸），并确认目标
+// 目录存在且为目录，不合法直接整体返回错误（不逐条处理）。之后逐条复用
+// uploadOne 全部既有逻辑（重名自动改名 / 单项失败不中断批次 / CopyEx 原子复制）。
+func (s *WorkspaceService) UploadPathsToWorkspace(paths []string, targetRel string) ([]WorkspaceTransferResult, error) {
+	root, err := s.wsRoot()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, fmt.Errorf("创建工作区目录失败: %w", err)
+	}
+	// 解析目标目录：空串或 "/" 视为根目录，否则沙箱校验后确认是已存在目录
+	targetDir := root
+	if targetRel != "" && targetRel != "/" {
+		targetDir, err = config.WorkspaceFilePath(root, filepath.FromSlash(targetRel))
+		if err != nil {
+			return nil, err
+		}
+		info, statErr := os.Stat(targetDir)
+		if statErr != nil || !info.IsDir() {
+			if statErr != nil {
+				return nil, fmt.Errorf("拖拽目标目录不存在：%s", targetRel)
+			}
+			return nil, fmt.Errorf("拖拽目标不是目录：%s", targetRel)
+		}
+	}
+	results := make([]WorkspaceTransferResult, 0, len(paths))
+	for _, p := range paths {
+		results = append(results, s.uploadOne(root, targetDir, p))
 	}
 	return results, nil
 }
@@ -115,7 +151,7 @@ func (s *WorkspaceService) UploadDirectory(dirPath string) (WorkspaceTransferRes
 	if !info.IsDir() {
 		return WorkspaceTransferResult{Name: filepath.Base(dirPath), Error: "源不是目录：" + dirPath}, nil
 	}
-	return s.uploadOne(root, dirPath), nil
+	return s.uploadOne(root, root, dirPath), nil
 }
 
 // DownloadFiles 批量下载工作区文件/目录到桌面根下同名相对路径（目录自动创建
@@ -154,8 +190,9 @@ func (s *WorkspaceService) DeleteFiles(relPaths []string, recursive bool) ([]Wor
 	return results, nil
 }
 
-// uploadOne 上传单个源路径到工作区根；错误写入结果 Error 字段而非中断。
-func (s *WorkspaceService) uploadOne(root, srcPath string) WorkspaceTransferResult {
+// uploadOne 上传单个源路径到工作区 targetDir（根目录场景下调用方传 targetDir=root）；
+// 错误写入结果 Error 字段而非中断批次。
+func (s *WorkspaceService) uploadOne(root, targetDir, srcPath string) WorkspaceTransferResult {
 	name := filepath.Base(srcPath)
 	res := WorkspaceTransferResult{Name: name}
 	if name == "." || name == string(filepath.Separator) {
@@ -181,8 +218,8 @@ func (s *WorkspaceService) uploadOne(root, srcPath string) WorkspaceTransferResu
 			}
 		}
 	}
-	// 目标取源基名，重名自动改名，并经沙箱校验
-	finalDst, err := config.WorkspaceFilePath(root, uniqueTarget(root, name))
+	// 目标取源基名落在 targetDir 下，重名自动改名，并经沙箱校验
+	finalDst, err := config.WorkspaceFilePath(targetDir, uniqueTarget(targetDir, name))
 	if err != nil {
 		res.Error = err.Error()
 		return res

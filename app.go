@@ -4823,6 +4823,18 @@ func (a *App) UploadDirectoryToWorkspace() (services.WorkspaceTransferResult, er
 	return result, nil
 }
 
+// UploadPathsToWorkspace 拖拽上传文件/目录到工作区指定相对目录（targetRel 空=根目录）
+func (a *App) UploadPathsToWorkspace(paths []string, targetRel string) ([]services.WorkspaceTransferResult, error) {
+	a.LogSvc.Logger.Debugw("UploadPathsToWorkspace", fastlog.Int("count", len(paths)), fastlog.String("target", targetRel))
+	results, err := a.wsService.UploadPathsToWorkspace(paths, targetRel)
+	if err != nil {
+		a.LogSvc.Logger.Errorw("UploadPathsToWorkspace 失败", fastlog.Error(err))
+		return nil, err
+	}
+	a.LogSvc.Logger.Infow("UploadPathsToWorkspace 成功", fastlog.Int("count", len(results)))
+	return results, nil
+}
+
 // ListWorkspaceFiles 返回工作区文件树
 func (a *App) ListWorkspaceFiles() ([]services.WorkspaceFileEntry, error) {
 	a.LogSvc.Logger.Debugw("ListWorkspaceFiles")

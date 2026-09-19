@@ -22,6 +22,10 @@ let workspaceBusy = false;
 let workspaceDeleting = false;
 /** 懒绑定标记：弹窗内部事件只绑定一次（与 vectorIndexModal 范式一致，常驻监听无残留） */
 let workspaceBound = false;
+/** 拖拽上传目标：null=根目录；非空=最后悬停的目录 RelPath（悬停亮起即目标） */
+let workspaceDropTargetRel = null;
+/** 面板内拖拽进出计数（防子元素 dragleave 误触发隐藏遮罩，参考 _aiDragCounter 范式） */
+let workspaceDropCount = 0;
 
 /** 上传类按钮的静态文案（busy 恢复用） */
 const WS_UPLOAD_LABELS = {
@@ -60,12 +64,12 @@ function formatWorkspaceSize(bytes) {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-/** unix 秒 → 「YYYY-MM-DD HH:mm」 */
+/** unix 秒 → 「YYYY-MM-DD HH:mm:ss」 */
 function formatWorkspaceTime(unixSec) {
     if (!unixSec) return '';
     const d = new Date(unixSec * 1000);
     const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 /* ============ 文件树渲染 ============ */
@@ -522,6 +526,118 @@ async function deleteWorkspaceFiles() {
     }
 }
 
+/* ============ 拖拽上传（方案 A：悬停目录行即目标，无遮罩不遮挡树） ============ */
+
+/** 清理全部目录行拖拽高亮 */
+function clearWorkspaceDropHover() {
+    const treeEl = ws$('workspaceTree');
+    if (treeEl) treeEl.querySelectorAll('.workspace-row.ws-drop-target').forEach(el => el.classList.remove('ws-drop-target'));
+}
+
+/** 解析拖拽当前悬停的目录 RelPath（命中目录行返回 rel，否则 null 表示根目录） */
+function resolveWorkspaceDropTarget(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const node = el?.closest('.workspace-node.is-dir');
+    return node ? (node.dataset.rel || null) : null;
+}
+
+/** 更新拖拽目标：仅在 rel 变化时更新行级高亮（dragover 高频触发，防抖避免无谓 DOM 操作） */
+function updateWorkspaceDropTarget(rel) {
+    const treeEl = ws$('workspaceTree');
+    // 拖拽中始终给树容器加高亮边框（根目录目标时同样可见，不遮挡内容）
+    treeEl?.classList.add('ws-drag-active');
+    if (rel === workspaceDropTargetRel) return;
+    workspaceDropTargetRel = rel;
+    clearWorkspaceDropHover();
+    if (rel) {
+        const row = treeEl?.querySelector(`.workspace-node.is-dir[data-rel="${CSS.escape(rel)}"] .workspace-row`);
+        if (row) row.classList.add('ws-drop-target');
+    }
+}
+
+/** 面板 dragenter：仅文件拖拽进入拖拽态，并记录悬停目标 */
+function onWorkspaceDragEnter(e) {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    workspaceDropCount++;
+    updateWorkspaceDropTarget(resolveWorkspaceDropTarget(e.clientX, e.clientY));
+}
+
+/** 面板 dragover：须 preventDefault 否则 drop 不触发；更新悬停目标（防抖） */
+function onWorkspaceDragOver(e) {
+    e.preventDefault();
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    updateWorkspaceDropTarget(resolveWorkspaceDropTarget(e.clientX, e.clientY));
+}
+
+/** 面板 dragleave：计数递减，归零退出拖拽态并清理高亮 */
+function onWorkspaceDragLeave(e) {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    if (e.relatedTarget?.closest?.('#workspaceModal')) return; // 面板内元素间移动不退出
+    workspaceDropCount--;
+    if (workspaceDropCount <= 0) {
+        workspaceDropCount = 0;
+        resetWorkspaceDropState();
+    }
+}
+
+/** 面板 drop（真实文件由 main.js OnFileDrop 处理）：仅复位视觉，保留悬停目标供 handleWorkspaceDrop 消费（规避 OnFileDrop 坐标在 DPI 缩放下的偏移） */
+function onWorkspaceDrop(e) {
+    e.preventDefault();
+    workspaceDropCount = 0;
+    clearWorkspaceDropHover();
+    ws$('workspaceTree')?.classList.remove('ws-drag-active');
+}
+
+/** 将目标 rel 的祖先链全部加入展开集（a/b/c → 展开 a、a/b、a/b/c），上传后用户能直接看到 */
+function expandWorkspaceTargetChain(rel) {
+    if (!rel) return;
+    workspaceExpanded.add(rel);
+    const parts = rel.split('/');
+    for (let i = 1; i < parts.length; i++) {
+        workspaceExpanded.add(parts.slice(0, i).join('/'));
+    }
+}
+
+/**
+ * 面板拖拽上传入口（由 main.js OnFileDrop 回调调用）：
+ * 优先用 dragover 最后一刻的悬停目标 workspaceDropTargetRel（所见即目标，DOM 本身
+ * 用的是浏览器视口 CSS 像素，不受 DPI 缩放影响）；仅当其为空时才用 OnFileDrop 的释放
+ * 坐标实时解析兜底（规避 Windows 高 DPI 下物理像素偏移）。消费后即清空，避免残留。
+ * 完成后通知结果、展开目标目录祖先链并刷新（刷新保留选择）。
+ */
+window.handleWorkspaceDrop = async function (paths, clientX, clientY) {
+    workspaceDropCount = 0;
+    // 优先悬停目标；其为空时坐标兜底；均无则上传到根目录
+    const targetRel = workspaceDropTargetRel ?? resolveWorkspaceDropTarget(clientX, clientY) ?? '';
+    workspaceDropTargetRel = null;
+    clearWorkspaceDropHover();
+    ws$('workspaceTree')?.classList.remove('ws-drag-active');
+    if (!Array.isArray(paths) || paths.length === 0) return;
+    if (workspaceBusy) return;
+    setWorkspaceBusy(true, null);
+    try {
+        let results = [];
+        try {
+            results = await window.go.main.App.UploadPathsToWorkspace(paths, targetRel);
+        } catch (err) {
+            window.showNotification?.(`拖拽上传失败：${err?.message || err}`, 'error');
+            return;
+        }
+        if (!Array.isArray(results)) results = [];
+        const okCount = results.filter(r => !r.Error).length;
+        const errors = results.filter(r => r.Error);
+        if (okCount > 0) {
+            window.showNotification?.(`成功上传 ${okCount} 项${targetRel ? `到「${targetRel}」` : '到工作区'}`, 'success');
+        }
+        errors.forEach(r => window.showNotification?.(`${r.Name || '文件'} 上传失败：${r.Error}`, 'error'));
+        // 目标目录祖先链全部展开，刷新后用户能直接看到新上传内容
+        expandWorkspaceTargetChain(targetRel);
+        await loadWorkspaceTree();
+    } finally {
+        setWorkspaceBusy(false, null);
+    }
+};
+
 /* ============ 懒绑定事件 ============ */
 
 /**
@@ -545,6 +661,20 @@ function bindWorkspaceEvents() {
     treeEl?.addEventListener('mousemove', onWorkspaceTreeMove);
     treeEl?.addEventListener('change', onWorkspaceTreeChange);
     ws$('workspaceSelectAll')?.addEventListener('click', onWorkspaceSelectAllClick);
+    // 面板拖拽上传（不拦截冒泡，由 main.js/ai-chat.js 依赖面板打开守卫屏蔽其他拖拽）
+    const wsModalEl = ws$('workspaceModal');
+    wsModalEl?.addEventListener('dragenter', onWorkspaceDragEnter);
+    wsModalEl?.addEventListener('dragover', onWorkspaceDragOver);
+    wsModalEl?.addEventListener('dragleave', onWorkspaceDragLeave);
+    wsModalEl?.addEventListener('drop', onWorkspaceDrop);
+}
+
+/** 复位拖拽上传相关状态（打开/关闭/刷新共用） */
+function resetWorkspaceDropState() {
+    workspaceDropTargetRel = null;
+    workspaceDropCount = 0;
+    clearWorkspaceDropHover();
+    ws$('workspaceTree')?.classList.remove('ws-drag-active');
 }
 
 /* ============ 对外接口 ============ */
@@ -568,6 +698,7 @@ export async function openWorkspaceManager() {
     workspaceDeleting = false;
     setWorkspaceBusy(false, null);
     updateWorkspaceToolbar();
+    resetWorkspaceDropState();
     // 清空上次残留的树内容，避免显示闪现
     const treeEl = ws$('workspaceTree');
     if (treeEl) treeEl.innerHTML = '';
@@ -587,4 +718,5 @@ export function closeWorkspaceManager() {
     workspaceTreeData = null;
     workspaceDeleting = false;
     setWorkspaceBusy(false, null);
+    resetWorkspaceDropState();
 }

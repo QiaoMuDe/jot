@@ -666,6 +666,10 @@ export function UploadFilesToWorkspace() {
   return window['go']['main']['App']['UploadFilesToWorkspace']();
 }
 
+export function UploadPathsToWorkspace(arg1, arg2) {
+  return window['go']['main']['App']['UploadPathsToWorkspace'](arg1, arg2);
+}
+
 export function VacuumDatabase() {
   return window['go']['main']['App']['VacuumDatabase']();
 }

@@ -9117,6 +9117,10 @@ function initFileDrop() {
         e.preventDefault();
         if (!e.dataTransfer.types.includes('Files')) return;
 
+        // 工作区管理器面板打开时，不操作全局拖拽遮罩（由面板自行处理）
+        const wsModalEl = document.getElementById('workspaceModal');
+        if (wsModalEl && wsModalEl.style.display !== 'none') return;
+
         // AI 流式回复期间不显示全局拖拽遮罩（文件上传被禁用）
         if (window.__aiStreaming) return;
 
@@ -9156,6 +9160,10 @@ function initFileDrop() {
     document.addEventListener('dragleave', (e) => {
         e.preventDefault();
 
+        // 工作区管理器面板打开时跳过全局拖拽状态管理（由面板自行处理）
+        const wsModalEl = document.getElementById('workspaceModal');
+        if (wsModalEl && wsModalEl.style.display !== 'none') return;
+
         // AI 流式回复期间不操作全局拖拽遮罩
         if (window.__aiStreaming) return;
 
@@ -9180,6 +9188,10 @@ function initFileDrop() {
     // HTML5 drop 仅重置遮罩，不处理文件（由 OnFileDrop 接手）
     document.addEventListener('drop', (e) => {
         e.preventDefault();
+
+        // 工作区管理器面板打开时跳过全局拖拽状态管理（由面板自行处理）
+        const wsModalEl = document.getElementById('workspaceModal');
+        if (wsModalEl && wsModalEl.style.display !== 'none') return;
 
         // AI 流式回复期间不操作全局拖拽遮罩
         if (window.__aiStreaming) return;
@@ -9215,6 +9227,15 @@ function initFileDrop() {
             const cmEl = document.querySelector('.cm-editor');
             if (cmEl) cmEl.classList.remove('dragover');
             if (!paths || paths.length === 0) return;
+
+            // 工作区管理器面板打开时，屏蔽一切其他拖拽功能，仅路由到面板拖拽上传
+            const wsModalEl = document.getElementById('workspaceModal');
+            if (wsModalEl && wsModalEl.style.display !== 'none') {
+                if (typeof window.handleWorkspaceDrop === 'function') {
+                    await window.handleWorkspaceDrop(paths, x, y);
+                }
+                return;
+            }
 
             // 判断释放位置是否在 AI 聊天内容区
             const target = document.elementFromPoint(x, y);

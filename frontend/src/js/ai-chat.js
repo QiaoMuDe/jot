@@ -7757,11 +7757,19 @@ function renderFileChips() {
 function initAiChatFileDrop() {
     if (!aiChatContent || !aiChatDropOverlay) return;
 
+    // 工作区管理器面板是否打开：打开时本次拖拽由面板接管，AI 聊天不参与
+    const isWorkspaceModalOpen = () => {
+        const m = document.getElementById('workspaceModal');
+        return !!(m && m.style.display !== 'none');
+    };
+
     // ── 拖拽进入：显示遮罩 ──
     aiChatContent.addEventListener('dragenter', (e) => {
         e.preventDefault();
         // AI 正在回复时不显示拖拽遮罩
         if (isStreaming) return;
+        // 工作区管理器面板打开时由面板接管
+        if (isWorkspaceModalOpen()) return;
         if (!e.dataTransfer.types.includes('Files')) return;
         _aiDragCounter++;
         if (_aiDragCounter === 1) {
@@ -7783,6 +7791,8 @@ function initAiChatFileDrop() {
         e.preventDefault();
         // AI 正在回复时跳过拖拽状态管理（无遮罩可关闭）
         if (isStreaming) return;
+        // 工作区管理器面板打开时跳过（无遮罩可关闭）
+        if (isWorkspaceModalOpen()) return;
         _aiDragCounter--;
         if (_aiDragCounter <= 0) {
             _aiDragCounter = 0;
@@ -7799,6 +7809,8 @@ function initAiChatFileDrop() {
     // ── 拖拽释放：隐藏遮罩（实际文件由 OnFileDrop 处理） ──
     aiChatContent.addEventListener('drop', (e) => {
         e.preventDefault();
+        // 工作区管理器面板打开时跳过（无遮罩可关闭）
+        if (isWorkspaceModalOpen()) return;
         // AI 正在回复时跳过拖拽状态管理（无遮罩可关闭）
         if (isStreaming) return;
         _aiDragCounter = 0;

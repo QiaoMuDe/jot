@@ -323,20 +323,13 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 19. **输入框工具下拉互斥约束**：AI 输入坞四个带下拉控件（模型选择/更多技能/Agent 工具/执行审批）由模块级 `closeOtherToolbarDropdowns(except)`（[ai-chat.js](frontend/src/js/ai-chat.js)）统一互斥——打开任一会先关闭其余三者；Agent 工具经 `window.__closeAiChatAgentToolsList` 桥接、main.js 单向 import，避免跨模块循环依赖。**互斥名单为硬编码：未来新增第 5 个输入框列表控件必须补进该函数并在其打开入口以 except 跳过自身，否则该新控件不参与互斥。**
 20. **子 Agent 机制（os_agent）**：文件/命令 11 工具（read_file/write_file/edit_file/ls_dir/glob/grep_file/copy_file/move_file/delete_file/mkdir_dir/run_command）封装为 os_agent 委托工具，**通用机制集中在 [subagent.go](internal/agent/subagent.go)**：delegatedAgentTool 基类 + newDelegatedAgentTool 工厂 + toolConstructors 构造器注册表 + 事件转发循环（InvokableRun），os_agent = 通用工厂 + 一份 subAgentConfig 配置（osAgentConfig，含提示词/白名单/前缀/描述）；**新增子 Agent 开发规范：每 Agent 一个文件（如 [subagent_os.go](internal/agent/subagent_os.go) 样板、subagent_note.go）只定义提示词常量 + 白名单 + subAgentConfig 配置 + 一个构造器（调 newDelegatedAgentTool），无需改通用机制，再在 registry.go buildTools 注册对应委托工具**；父层 buildTools 仅注册 os_agent（`tools.WrapWithError` 包装、受 ai_agent_tools_disabled 过滤、非 PlanOnly、旧禁用名静默忽略）；内层独立 `adk.NewChatModelAgent` 复用同一会话 ChatModel 客户端、`MaxIterations=20`、白名单恰 11 工具；内层每步工具调用经 `emitToolStart/emitToolResult` 写入父层同一 toolRecords 并发射 `ai:tool-status`（顺序 = os_agent start → 内层记录 → os_agent result 构成前端分组边界），内层流式正文/思考链不转发（noopEmit）；内层复用同一会话 Approver/AskWaiter，审批弹窗照常；前端实时与回放共用 `osAgentGroup*` 栈函数 + isAgentGroup/substep 标记 + `hasAgentGroup` 降级逐条渲染 + `.is-os-agent`/`.is-substep` 样式。
 
+21. **Wails 文件拖拽上传范式**（工作区/编辑器/AI 聊天共用）：`EnableFileDrop` 开启 OS 级拖拽，拖入文件被统一拦截，经 `window.runtime.OnFileDrop(x,y,paths)` **单点路由**（paths 为绝对路径数组 + 释放坐标）；前端 DOM 层 dragenter/dragover/dragleave/drop 只做视觉（遮罩/高亮）不处理文件，**真实文件一律走 OnFileDrop**。目标目录判定**优先用 dragover 最后一刻的悬停状态**（DOM 用浏览器视口 CSS 像素，不受 DPI 影响），`OnFileDrop` 的 (x,y) 在 Windows 高 DPI 下可能为物理像素导致 `elementFromPoint` 偏移，仅作空值兜底；**DOM drop 与 OnFileDrop 触发顺序不定，禁止在 DOM drop 处理器里清空跨回调目标状态**（会因竞态把目标丢回根）。多拖拽并存时用「面板前置路由 + document 拖拽守卫」屏蔽（真文件在 OnFileDrop 最前面按 `#workspaceModal` 显示态 return），**勿 stopPropagation**（会破坏全局 `_dragCounter` 进出平衡致遮罩残留）；拖拽可见性用**无遮罩方案**（全屏遮罩挡树难以定位）——树容器边框高亮 + 目录行级高亮。
+
 ## 七、临时记忆
 
 存放**近期动态**结论（最多 5 条，编号 5 最新、1 最旧），快速接续上次会话现场。稳定后升级合并进「长期记忆」。
 
 ### 临时记忆 1
-| 记忆点 | 内容 |
-| --- | --- |
-| **变更概览** | `ChunkContent` 切块两处性能优化（**零行为变化**，不触发存量向量重新嵌入）：① 超限判定由 O(n²) 重复 Join 改 O(1) 累积计数器；② `runeLen` 由 `len([]rune)`（分配切片）改 `utf8.RuneCountInString`（零分配）。用户先经 /plan 评审后批准实现。 |
-| **实现（重要）** | [chunk.go](internal/services/chunk.go) `ChunkContent` 新增闭包 `addLine(line)` 统一维护 `curRunes` 计数器（append 前非首行 +1 换行符、再 +runeLen(line)），语义恒等于 `runeLen(strings.Join(cur, "\n"))`；5 个 append 点（代码块内/围栏开启/标题/空行/正文）全部改走 addLine；两处超限判断 `runeLen(strings.Join(cur,"\n"))>maxRunes` 改为 `curRunes>maxRunes`；`flush()` 重置为 `cur, curRunes = nil, 0`。`runeLen` 实现逐字改 `utf8.RuneCountInString` + import `unicode/utf8`。 |
-| **回归测试** | [chunk_test.go](internal/services/chunk_test.go) 新增 `TestChunkMixedLongInput`：大输入（顶层超长段落 + 代码围栏 + 500 段多空行聚合）断言无 panic、每块 ≤600（**须放顶层无标题，避免叠加硬切补链固有超限**）、无空块、关键内容不丢失。测试注释明确覆盖 addLine 4 个 append 点（围栏开启/代码块内/空行/正文），标题点由现有 TestChunkHeadings 覆盖。 |
-| **经验教训** | `splitWithHeading` 硬切后每段经 `prependChain` 补**真实标题链**，链长未计入 budget，叠加长前缀会使块轻微超 maxRunes（如 613>600）——这是**既有行为**（本次未改 splitWithHeading），非计数器引入；测试断言每块 ≤maxRunes 时，硬切输入必须放顶层（空标题链栈）才能严格成立。 |
-| **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)｜验证 `gofmt` 无输出 + `go build/vet ./internal/services/` 无告警 + 切块用例与全量 services 回归全绿；纯后端改动，需 `wails build` 出新二进制生效 |
-
-### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 向量嵌入切块大小可配置化：硬编码常量 `chunkMaxRunes=600`（同时充当「理想块大小+硬上限」）拆分为两个全局设置项 `ai_chunk_target_rumes`（target，默认 600，段落边界落刀点）与 `ai_chunk_max_rumes`（max，默认 1500，硬上限）。spec 见 `.trae/specs/add-chunk-size-settings/`。 |
@@ -345,7 +338,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | [chunk_test.go](internal/services/chunk_test.go) 各调用点传原值（500→(500,500)、600→(600,600)、120→(120,120) 保持旧行为等价）；旧 `TestChunkDefaultMaxRunes`（500 默认值逻辑已删）重写为 `TestChunkClampDefensive`；新增 3 区间用例（整段保留/段落不切开/硬切 ≤max）。[types_test.go](internal/services/types_test.go)（新建）`TestSaveAllSettingsChunkClamp`（4 场景真实落库读回）+ `TestClampChunkSizes`（6 组表驱动）。[vector_service_test.go](internal/services/vector_service_test.go) `newVectorTestDB` 迁移 `models.Setting` 并播种 600/600 与测试写路径 `(600,600)` 对齐（classifyVectorNotes 走 chunkSizes 查库）。`gofmt` 无输出 + `go build ./...` + `go vet` 全绿 + `go test ./internal/services/ -count=1` → `ok jot/internal/services 1.554s`。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)、[chunk_test.go](internal/services/chunk_test.go)、[vector_service.go](internal/services/vector_service.go)、[vector_service_test.go](internal/services/vector_service_test.go)、[types.go](internal/services/types.go)、[types_test.go](internal/services/types_test.go)（新增）、[db.go](internal/database/db.go)、[index.html](frontend/index.html)、[main.js](frontend/src/main.js)｜前端改动需 `npm run build`（+ `wails build` 出新二进制）生效 |
 
-### 临时记忆 3
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 切块硬切改**行边界优先**（方案①，唯一被核实的有意义优化，②③④⑤均核实为低价值/不应做）：旧 `hardSplit` 按 maxRunes 字符级硬切会劈开代码行/列表项/表格行；新逻辑优先在完整行边界落刀（保留结构语义），仅当单行本身超 maxRunes 才退化到字符级兜底。输出变化 → 存量向量判「需重新嵌入」一次（自愈路径）。 |
@@ -354,7 +347,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试与验证** | `go build ./...` + `go vet` 无告警 + `go test ./internal/services/ -run 'Chunk'` 与全量 services 回归全绿。经验：测试直接依赖「字符级切形巧合」的断言（如表头补充用例）在行边界硬切后会失效，应改为验证行为本质而非切形。 |
 | **涉及文件** | [chunk.go](internal/services/chunk.go)（hardSplit/hardSplitRunes）、[chunk_test.go](internal/services/chunk_test.go)｜纯后端改动，需 `wails build` 出新二进制生效 |
 
-### 临时记忆 4
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 向量嵌入进度面板 UI 优化（多轮迭代）：耗时+预计剩余**前端 A1 估算**融合进 stage 文案且为**一句话形态**（「正在生成向量，已用 00:42，预计剩余约 01:30」，中文逗号连接而非 · 分段，DOM 仍分三个 span，1s 定时器只更新两个时间节点不重绘主文案）；**首次进度回调前时间显示占位符**（「准备中，已用 --:--，预计剩余 --」，首个 embedding 回调置 `vectorIndexTimeReady` 后才真实更新）；完成摘要按**零项省略**（成功/失败为 0 的项不显示，`/` 分隔仅两项都在时出现）；进度条块级过渡 0.2s；当前标题超宽时**字幕式横向滚动**（marquee 无缝循环，标题变化才重建，不超宽不滚动，reduced-motion 下禁用动画静态截断）。plan 见 `.trae/documents/plan-vector-index-progress-time-eta-marquee.md`。 |
@@ -362,13 +355,20 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **样式** | [data-view.css](frontend/src/css/components/data-view.css)：`#vectorIndexChunkFill` 块级过渡 `width 0.2s ease`；`.vector-index-stage-time` 弱化色（text-muted）；`.vector-index-current.is-marquee` 去 ellipsis（text-overflow: clip）+ `.vector-index-current-inner`（inline-block nowrap）挂 `vectorIndexMarquee` 动画（`translateX(0→-50%)` 双份内容无缝循环，时长 `var(--marquee-duration, 12s)`，will-change: transform）；`@media (prefers-reduced-motion: reduce)` 下 `.vector-index-current-inner` animation:none 静态截断。 |
 | **验证** | `npm run build` 通过（仅既有 chunk 大小警告）；纯前端改动，需 `npm run build`（+ `wails build` 出新二进制）生效 |
 
-### 临时记忆 5
+### 临时记忆 4
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 新增**工作区管理器**：AI 聊天页顶栏（折叠侧栏与新建会话之间）文件夹图标按钮 → Modal 弹窗，用户以「先选后操作」范式浏览/上传/下载/删除工作区（~/.jot/workspace）文件。spec 见 `.trae/specs/add-workspace-manager/`。**操作按钮统一在 Modal 顶部操作栏**（上传文件/上传目录/下载到桌面/删除/刷新 + 已选 N 项），下载/删除未选中禁用；文件树 checkbox 多选、目录懒展开、空状态引导上传；用户手动操作**不触发 AI 审批门控**（操作者是用户本人，与约束 AI 的审批体系分离，transfer_file 工具不变）。 |
 | **后端（重要）** | 新增 [workspace_service.go](internal/services/workspace_service.go)：`WorkspaceService`（`NewWorkspaceService()` 构造，测试注入 workspaceRoot/homeDir/desktopRoot 空值默认解析）；`ListWorkspaceFiles`（递归树、目录在前名称升序、**隐藏空目录自底向上修剪**、相对路径 `/` 分隔）/`UploadFiles`/`UploadDirectory`（目标取基名、`uniqueTarget` 重名自动改名 `xxx (1).ext`，`.gitignore` 类隐藏文件不拆扩展名）/`DownloadFiles`（源沙箱校验 → 桌面根同名相对路径，目录 MkdirAll，重名自动改名）/`DeleteFiles`（拒绝根目录，目录需 `recursive=true`）；批次单项失败不中断写入 `Error` 字段；复用 go-kit CopyEx + config.WorkspaceFilePath 沙箱校验。app.go 新增 5 绑定：`UploadFilesToWorkspace`/`UploadDirectoryToWorkspace`（内嵌 OpenMultipleFilesDialog/OpenDirectoryDialog，取消返回空/零值）、`ListWorkspaceFiles`/`DownloadWorkspaceFiles`/`DeleteWorkspaceFiles(relPaths, recursive)` 直转 services；`wsService` 字段在 NewApp 初始化、不依赖 db。 |
 | **前端（重要）** | [workspace-manager.js](frontend/src/js/workspace-manager.js)（新建）：`workspaceLoadSeq` 代际竞态防护、`workspaceSelected` 选中集（目录仅选中自身不联动子级）、`workspaceExpanded` 懒展开集、busy 期间禁用操作按钮、刷新**保留选择**（渲染后恢复勾选并清理失效项）、删除走 `window.showConfirmDialog` 二次确认（含目录提示递归、传 recursive=true）、关闭复位全部状态、事件懒绑定一次常驻；main.js 顶栏按钮绑定 + ESC 收口进 `handleKeyboardNavigation`；[workspace.css](frontend/src/css/components/workspace.css)（新建，全量主题变量、开合缩放+淡入 150–300ms、`prefers-reduced-motion` 禁用、禁用态降透明度、删除按钮 danger 与下载分离）。 |
 | **验证** | [workspace_service_test.go](internal/services/workspace_service_test.go) 7 组 13 子场景（改名/排序与空目录隐藏/目录递归 roundtrip/根保护/`../`+symlink 逃逸/批次不中断）全绿；`go build/vet` 全绿 + `npm run build` 通过 + `wails generate module` 生成 5 绑定且与前端调用名一致。注意：`go test ./internal/...` 中 `TestRequestApprovalRejectsParallel` 为 agent 包**既有并发时序缺陷**（本次 0 改动，偶发超时、单跑通过，根因 `approvePending` 投递前清除窗口可被并发二次 claim），与本功能无关。需 `wails build` 出新二进制生效。 |
+
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 工作区管理器新增**拖拽上传文件/目录**（方案A：拖拽悬停目录行即目标；真文件走 Wails OnFileDrop）。后端 [workspace_service.go](internal/services/workspace_service.go) `uploadOne(root,srcPath)` 重构为 `uploadOne(root,targetDir,srcPath)` 支持目标目录（`uniqueTarget(targetDir,name)`+CopyEx+沙箱）；新增 `UploadPathsToWorkspace(paths []string, targetRel string)`：targetRel 空串或 `/`=根目录，非空经 `config.WorkspaceFilePath` 沙箱校验 + `os.Stat` 确认已存在目录后整体校验、不合法整体报错；app.go 新增同名绑定。前端：`#workspaceTree` 拖拽边框高亮（`.ws-drag-active`）+ 目录行级高亮（`.ws-drop-target`），**无全屏遮罩**（遮罩挡树难定位目录）；[workspace-manager.js](frontend/src/js/workspace-manager.js) 新增面板 dragenter/dragover/dragleave/drop 监听（防抖更新 `workspaceDropTargetRel`）+ `window.handleWorkspaceDrop` + `expandWorkspaceTargetChain`（目标祖先链展开）+ 开关复位；[main.js](frontend/src/main.js) OnFileDrop **最前**加面板路由（面板显示态屏蔽一切其他拖拽）+ document dragenter/dragleave/drop 面板守卫；[ai-chat.js](frontend/src/js/ai-chat.js) 四处理器同款守卫。 |
+| **实现（重要）** | 目标判定优先级 = **dragover 最后一刻悬停目标优先 + OnFileDrop 坐标 (x,y) 兜底**（修复 Windows 高 DPI 下物理像素致 `elementFromPoint` 偏移 -- 悬停高亮可见但落根目录的 bug）；DOM drop 事件**不再清空** `workspaceDropTargetRel`（保留供 handleWorkspaceDrop 消费后置空，规避 DOM drop 与 OnFileDrop 触发顺序不定竞态）。后端测试补 7 用例覆盖子目录/递归/根等价/`../`逃逸/目标为文件/归一化(`a/../b`、尾斜杠)/源在工作区内。另：时间列加秒 `formatWorkspaceTime` 输出 `HH:mm:ss` + `.workspace-mtime` 宽 118→160px（tabular-nums 防秒跳动抖动）. |
+| **验证** | `go vet/build` + `go test ./internal/services/ -run 'Workspace'` 全绿；`npm run build` 通过；`wails generate module` 生成新绑定 `UploadPathsToWorkspace` 且前端调用名一致。需 `wails build` 出新二进制生效。 |
 
 ## 九、初始静态分析关键结论
 

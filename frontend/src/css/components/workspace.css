@@ -247,12 +247,19 @@
 
 /* ---- 文件树 / 空状态（中部滚动区） ---- */
 .workspace-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0 18px 12px;
   overflow: hidden;
+}
+
+/* 拖拽中树容器高亮边框：不遮挡内容，仅边框提示目标区域（目录行悬停另有行级高亮） */
+.workspace-tree.ws-drag-active {
+  border-color: var(--accent);
+  border-style: dashed;
 }
 
 .workspace-tree {
@@ -302,6 +309,13 @@
 
 .workspace-node:not(.is-dir) > .workspace-row {
   cursor: pointer;
+}
+
+/* 拖拽悬停目录行 = 上传目标：accent 高亮 + 左边界色条（优先级高于 .workspace-row:hover） */
+.workspace-node.is-dir > .workspace-row.ws-drop-target {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg));
+  box-shadow: inset 3px 0 0 var(--accent);
+  cursor: alias;
 }
 
 /* checkbox：原生即可，label 扩大点击区域 */
@@ -358,7 +372,7 @@
 }
 
 .workspace-mtime {
-  width: 118px;
+  width: 160px;
   text-align: right;
 }
 

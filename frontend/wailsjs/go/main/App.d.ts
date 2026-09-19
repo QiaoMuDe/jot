@@ -338,6 +338,8 @@ export function UploadDirectoryToWorkspace():Promise<services.WorkspaceTransferR
 
 export function UploadFilesToWorkspace():Promise<Array<services.WorkspaceTransferResult>>;
 
+export function UploadPathsToWorkspace(arg1:Array<string>,arg2:string):Promise<Array<services.WorkspaceTransferResult>>;
+
 export function VacuumDatabase():Promise<string>;
 
 export function ValidateVectorIndexConfig():Promise<main.CardRecallCheckResult>;

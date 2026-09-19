@@ -426,3 +426,140 @@ func TestWorkspaceBatchNonInterrupt(t *testing.T) {
 		t.Errorf("成功项内容 = %q, want dl", got)
 	}
 }
+
+// TestWorkspaceDragUploadToSubdir 拖拽上传文件到工作区子目录：目标目录重名自动改名。
+func TestWorkspaceDragUploadToSubdir(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	// 预建目标子目录 a/b
+	mustMkdir(t, filepath.Join(ws, "a", "b"))
+
+	// 拖入文件到 a/b
+	srcA := filepath.Join(t.TempDir(), "x.txt")
+	mustWrite(t, srcA, "X")
+	res, err := svc.UploadPathsToWorkspace([]string{srcA}, "a/b")
+	if err != nil {
+		t.Fatalf("拖拽上传子目录调用失败: %v", err)
+	}
+	if len(res) != 1 || res[0].Error != "" {
+		t.Fatalf("拖拽上传子目录结果不符: %+v", res)
+	}
+	if res[0].Target != "a/b/x.txt" {
+		t.Errorf("Target = %q, want a/b/x.txt", res[0].Target)
+	}
+	if got := readFile(t, filepath.Join(ws, "a", "b", "x.txt")); got != "X" {
+		t.Errorf("工作区 a/b/x.txt = %q, want X", got)
+	}
+
+	// 再次拖入同名 → 自动改名 a/b/x (1).txt
+	res2, err := svc.UploadPathsToWorkspace([]string{srcA}, "a/b")
+	if err != nil || len(res2) != 1 || res2[0].Error != "" {
+		t.Fatalf("二次拖拽上传失败: err=%v res=%+v", err, res2)
+	}
+	if res2[0].Target != "a/b/x (1).txt" {
+		t.Errorf("二次 Target = %q, want a/b/x (1).txt", res2[0].Target)
+	}
+}
+
+// TestWorkspaceDragUploadDirToSubdir 拖拽整个目录到工作区子目录：递归复制 roundtrip。
+func TestWorkspaceDragUploadDirToSubdir(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	mustMkdir(t, filepath.Join(ws, "dest"))
+	srcDir := filepath.Join(t.TempDir(), "pack")
+	mustWrite(t, filepath.Join(srcDir, "a.txt"), "A")
+	mustWrite(t, filepath.Join(srcDir, "sub", "b.txt"), "B")
+
+	res, err := svc.UploadPathsToWorkspace([]string{srcDir}, "dest")
+	if err != nil {
+		t.Fatalf("拖拽上传目录调用失败: %v", err)
+	}
+	if len(res) != 1 || res[0].Error != "" {
+		t.Fatalf("拖拽上传目录结果不符: %+v", res)
+	}
+	if res[0].Target != "dest/pack" {
+		t.Errorf("Target = %q, want dest/pack", res[0].Target)
+	}
+	if got := readFile(t, filepath.Join(ws, "dest", "pack", "sub", "b.txt")); got != "B" {
+		t.Errorf("工作区 dest/pack/sub/b.txt = %q, want B", got)
+	}
+}
+
+// TestWorkspaceDragUploadRoot 拖拽上传 targetRel 为空/"/" 时等价于根目录（与 UploadFiles 一致）。
+func TestWorkspaceDragUploadRoot(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	src := filepath.Join(t.TempDir(), "root.txt")
+	mustWrite(t, src, "R")
+	for _, rel := range []string{"", "/"} {
+		res, err := svc.UploadPathsToWorkspace([]string{src}, rel)
+		if err != nil || len(res) != 1 || res[0].Error != "" {
+			t.Fatalf("拖拽上传根目录(rel=%q)失败: err=%v res=%+v", rel, err, res)
+		}
+		if got := readFile(t, filepath.Join(ws, "root.txt")); got != "R" {
+			t.Errorf("根目录 root.txt = %q, want R", got)
+		}
+	}
+}
+
+// TestWorkspaceDragUploadTargetRejected 拖拽目标目录非法场景被整体拒绝：../ 逃逸、不存在。
+func TestWorkspaceDragUploadTargetRejected(t *testing.T) {
+	svc, _, _ := setupWorkspaceService(t)
+	src := filepath.Join(t.TempDir(), "f.txt")
+	mustWrite(t, src, "F")
+
+	// ../ 逃逸被拒（整体报错，非逐条）
+	for _, rel := range []string{"..", "../x", "a/../../x"} {
+		if _, err := svc.UploadPathsToWorkspace([]string{src}, rel); err == nil {
+			t.Errorf("targetRel=%q 应因逃逸被拒，但未报错", rel)
+		}
+	}
+	// 目标目录不存在被拒
+	if _, err := svc.UploadPathsToWorkspace([]string{src}, "nope/deep"); err == nil {
+		t.Error("不存在的目标目录应被拒，但未报错")
+	}
+}
+
+// TestWorkspaceDragUploadTargetIsFile 拖拽目标是已存在的文件：校验后因非目录整体报错。
+func TestWorkspaceDragUploadTargetIsFile(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	// 根下预放一个普通文件作为「目标目录」
+	mustWrite(t, filepath.Join(ws, "afile.txt"), "F")
+	src := filepath.Join(t.TempDir(), "f.txt")
+	mustWrite(t, src, "X")
+
+	if _, err := svc.UploadPathsToWorkspace([]string{src}, "afile.txt"); err == nil {
+		t.Error("目标指向已存在文件应被拒，但未报错")
+	}
+}
+
+// TestWorkspaceDragUploadTargetNormalize 目标 rel 含 . 夹层或尾斜杠时被归一化：
+// "a/../b" 与 "b/" 均等价并落到 "b"（SandboxFilePath 内部 Clean）。
+func TestWorkspaceDragUploadTargetNormalize(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	mustMkdir(t, filepath.Join(ws, "b"))
+	src := filepath.Join(t.TempDir(), "x.txt")
+	mustWrite(t, src, "X")
+
+	for _, rel := range []string{"a/../b", "b/"} {
+		res, err := svc.UploadPathsToWorkspace([]string{src}, rel)
+		if err != nil || len(res) != 1 || res[0].Error != "" {
+			t.Fatalf("拖拽上传到归一化目标(rel=%q)失败: err=%v res=%+v", rel, err, res)
+		}
+		if got := readFile(t, filepath.Join(ws, "b", "x.txt")); got != "X" {
+			t.Errorf("归一化目标 b/x.txt = %q, want X", got)
+		}
+	}
+}
+
+// TestWorkspaceDragUploadSourceInsideWorkspace 拖拽源位于工作区内被拒绝（防递归膨胀）。
+func TestWorkspaceDragUploadSourceInsideWorkspace(t *testing.T) {
+	svc, ws, _ := setupWorkspaceService(t)
+	insideSrc := filepath.Join(ws, "keep.txt")
+	mustWrite(t, insideSrc, "K")
+
+	res, err := svc.UploadPathsToWorkspace([]string{insideSrc}, "")
+	if err != nil {
+		t.Fatalf("调用不应整体报错: %v", err)
+	}
+	if len(res) != 1 || res[0].Error == "" {
+		t.Fatalf("工作区内源应被单项拒绝，但未拒绝: %+v", res)
+	}
+}
