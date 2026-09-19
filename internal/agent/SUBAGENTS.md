@@ -80,7 +80,7 @@ var osAgentConfig = subAgentConfig{
     description:   "…内层 Agent 描述…",
     instruction:   osSubAgentInstruction,
     toolNames:     osSubAgentToolNames,
-    maxIterations: osSubAgentDefaultMaxIterations,
+    maxIterations: config.AISubAgentMaxIterationsDefault,
     actionPrefix:  "执行操作系统任务：",
     infoDesc:      "…Info().Desc：何时调用 / 做什么…",
     requestDesc:   "…request 参数含义…",
@@ -91,7 +91,7 @@ var osAgentConfig = subAgentConfig{
 
 - `name` 同时是**委托工具名**与**内层 ChatModelAgent 名**（snake_case，全局唯一）。
 - `infoDesc` 是模型选择委托工具的唯一依据：写清"何时调用 / 何时不要调用 / request 参数含义"，不要写实现细节。
-- `maxIterations` 独立于父层，内层循环不消耗父层迭代次数（防死循环）。os_agent 的上限由设置项 `ai_sub_agent_max_iterations` 提供（默认 50、范围 1–200），装配时经 `subAgentMaxIterations(setting)` 读取，未配置/非法时回退常量 `osSubAgentDefaultMaxIterations`。
+- `maxIterations` 独立于父层，内层循环不消耗父层迭代次数（防死循环）。os_agent 的上限由设置项 `ai_sub_agent_max_iterations` 提供（默认 50、范围 1–200），装配时经 `iterationLimitFromSetting(setting, key, def, max)`（[agent.go](internal/agent/agent.go)）读取，未配置/非法时回退 `config.AISubAgentMaxIterationsDefault`；默认值与上限集中在 [config.go](internal/config/config.go) 常量，供种子初始化 / 设置页校验 / 运行时装配共用。
 
 ### 第 5 步：定义构造器
 
@@ -100,7 +100,8 @@ var osAgentConfig = subAgentConfig{
 // 迭代上限从设置项 ai_sub_agent_max_iterations 读取（拷贝 osAgentConfig 后覆盖 maxIterations，不改包级共享配置）。
 func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, setting *services.SettingService) *delegatedAgentTool {
     cfg := osAgentConfig
-    cfg.maxIterations = subAgentMaxIterations(setting)
+    cfg.maxIterations = iterationLimitFromSetting(setting, "ai_sub_agent_max_iterations",
+        config.AISubAgentMaxIterationsDefault, config.AISubAgentMaxIterationsMax)
     return newDelegatedAgentTool(runCtx, chatModel, innerCtx, cfg)
 }
 ```

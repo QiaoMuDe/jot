@@ -1,5 +1,6 @@
-// Package config 提供 Jot 应用在用户家目录下的统一根目录（~/.jot）路径解析。
-// 所有读写 ~/.jot 下文件的模块都应通过本包获取路径，避免硬编码散落各处。
+// Package config 提供 Jot 应用的家目录（~/.jot）路径解析，以及跨包共享的应用级常量
+// （如设置项默认值与取值范围）。所有读写 ~/.jot 下文件的模块都应通过本包获取路径，
+// 涉及迭代上限等共享数值的模块应引用本包常量，避免硬编码散落各处后相互漂移。
 package config
 
 import (
@@ -17,6 +18,16 @@ const (
 	DirImages    = "images"    // 图片目录
 	DirLogs      = "logs"      // 日志目录
 	DirWorkspace = "workspace" // AI 助手工作目录（文件/命令工具唯一可写根目录）
+)
+
+// AI ReAct 循环迭代上限：默认值与上限（供种子初始化、设置读写校验、运行时装配共用，
+// 避免同一数值在多处硬编码后相互漂移）。下限统一为「至少 1 轮」，见各 clamp 处。
+const (
+	AIAgentMaxIterationsDefault = 100 // 主 Agent 默认迭代上限
+	AIAgentMaxIterationsMax     = 500 // 上限（超过取上限）
+
+	AISubAgentMaxIterationsDefault = 50  // 子 Agent（os_agent）默认迭代上限
+	AISubAgentMaxIterationsMax     = 200 // 上限（超过取上限）
 )
 
 // JotHomeDir 返回应用根目录: ~/.jot

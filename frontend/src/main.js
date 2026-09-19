@@ -3000,23 +3000,23 @@ async function initAISettings() {
         });
     }
 
-    // ── 子 Agent 最大运行次数保存 ──
+    // ── SubAgent 最大运行次数保存 ──
     const subAgentMaxIterations = document.getElementById('aiSubAgentMaxIterations');
     if (subAgentMaxIterations) {
         subAgentMaxIterations.addEventListener('change', async () => {
             const val = parseInt(subAgentMaxIterations.value);
             if (isNaN(val) || val < 1) {
                 subAgentMaxIterations.value = 50;
-                nm.show('子 Agent 运行上限必须大于 0，已重置为 50', 'warning');
+                nm.show('SubAgent 运行上限必须大于 0，已重置为 50', 'warning');
                 return;
             }
             if (val > 200) {
                 subAgentMaxIterations.value = 200;
-                nm.show('子 Agent 运行上限不能超过 200，已重置为 200', 'warning');
+                nm.show('SubAgent 运行上限不能超过 200，已重置为 200', 'warning');
                 return;
             }
             await saveSettings();
-            nm.show('子 Agent 运行上限已保存', 'success');
+            nm.show('SubAgent 运行上限已保存', 'success');
         });
     }
 

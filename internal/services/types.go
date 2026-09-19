@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strconv"
+
+	"jot/internal/config"
 )
 
 // PaginatedResult 分页查询结果的通用结构
@@ -133,8 +135,8 @@ func (s *SettingService) GetAllSettings() SettingsConfig {
 		MaxFileSize:                  parseIntSetting(s.Get("max_file_size"), 1),
 		AILargeFilePreviewThreshold:  parseIntSetting(s.Get("ai_large_file_preview_threshold"), 10000),
 		AIAgentToolsDisabled:         s.Get("ai_agent_tools_disabled"),
-		AIAgentMaxIterations:         parseIntSetting(s.Get("ai_agent_max_iterations"), 100),
-		AISubAgentMaxIterations:      parseIntSetting(s.Get("ai_sub_agent_max_iterations"), 50),
+		AIAgentMaxIterations:         parseIntSetting(s.Get("ai_agent_max_iterations"), config.AIAgentMaxIterationsDefault),
+		AISubAgentMaxIterations:      parseIntSetting(s.Get("ai_sub_agent_max_iterations"), config.AISubAgentMaxIterationsDefault),
 		TrashCleanupRetentionDays:    parseIntSetting(s.Get("trash_cleanup_retention_days"), 30),
 		LogLevel:                     parseIntSetting(s.Get("log_level"), 1),
 		ScreenLockEnabled:            parseBoolSetting(s.Get("screen_lock_enabled")),
@@ -186,15 +188,16 @@ func (s *SettingService) SaveAllSettings(cfg SettingsConfig) error {
 	} else if cfg.LogLevel > 5 {
 		cfg.LogLevel = 5
 	}
+	// 迭代上限钳制：区间与默认值统一引用 config 常量，避免与种子初始化 / 运行时装配漂移
 	if cfg.AIAgentMaxIterations < 1 {
-		cfg.AIAgentMaxIterations = 100
-	} else if cfg.AIAgentMaxIterations > 500 {
-		cfg.AIAgentMaxIterations = 500
+		cfg.AIAgentMaxIterations = config.AIAgentMaxIterationsDefault
+	} else if cfg.AIAgentMaxIterations > config.AIAgentMaxIterationsMax {
+		cfg.AIAgentMaxIterations = config.AIAgentMaxIterationsMax
 	}
 	if cfg.AISubAgentMaxIterations < 1 {
-		cfg.AISubAgentMaxIterations = 50
-	} else if cfg.AISubAgentMaxIterations > 200 {
-		cfg.AISubAgentMaxIterations = 200
+		cfg.AISubAgentMaxIterations = config.AISubAgentMaxIterationsDefault
+	} else if cfg.AISubAgentMaxIterations > config.AISubAgentMaxIterationsMax {
+		cfg.AISubAgentMaxIterations = config.AISubAgentMaxIterationsMax
 	}
 	// 向量切块区间：先钳 max（硬上限 [100, 10000]），再钳 target（理想落刀点 [1, max]），
 	// 与运行路径 chunkSizes 共用同一 clampChunkSizes，保证设置页与切块口径一致

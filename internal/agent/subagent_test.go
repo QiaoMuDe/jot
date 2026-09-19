@@ -6,7 +6,9 @@ package agent
 //  3. 内层 Context 与父层同一指针（审批共享）；
 //  4. InvokableRun 参数错误分支；
 //  5. 核心：内层每步工具调用的事件转发顺序
-//     （os_agent start → 内层 start/result → os_agent result，记录与事件均按序）。
+//     （os_agent start → 内层 start/result → os_agent result，记录与事件均按序）；
+//  6. 迭代上限解析与读取：parseIterationLimit 钳制规则、iterationLimitFromSetting
+//     未注入设置时的回退、os_agent 装配从设置项读取上限（含缺键回退与超上限钳制）。
 
 import (
 	"context"
@@ -21,6 +23,12 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"jot/internal/agent/tools"
+	"jot/internal/config"
+	"jot/internal/models"
+	"jot/internal/services"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 // fakeApprover 测试用审批器 stub（实现 tools.Approver，断言注入同一指针）。
@@ -397,5 +405,86 @@ func TestOSAgentEventForwardingStreaming(t *testing.T) {
 	// 事件发射（ai:tool-status）数量与记录一致
 	if len(*emitted) != len(want) {
 		t.Fatalf("emitted 应为 %d 条，实际 %d 条: %v", len(want), len(*emitted), *emitted)
+	}
+}
+
+// TestParseIterationLimit 迭代上限解析表驱动：非数字/小于 1 回退默认值，
+// 超上限取上限，正常值（含上下边界）原样返回。
+func TestParseIterationLimit(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		def  int
+		max  int
+		want int
+	}{
+		{"正常值", "30", 100, 500, 30},
+		{"下限1", "1", 100, 500, 1},
+		{"空串回退", "", 100, 500, 100},
+		{"非数字回退", "abc", 100, 500, 100},
+		{"零回退", "0", 100, 500, 100},
+		{"负数回退", "-5", 100, 500, 100},
+		{"等于上限", "500", 100, 500, 500},
+		{"超上限取上限", "9999", 100, 500, 500},
+	}
+	for _, c := range cases {
+		if got := parseIterationLimit(c.raw, c.def, c.max); got != c.want {
+			t.Errorf("%s: parseIterationLimit(%q, %d, %d) = %d，期望 %d", c.name, c.raw, c.def, c.max, got, c.want)
+		}
+	}
+}
+
+// TestIterationLimitFromSettingNil 未注入 SettingService 时直接回退默认值（不 panic）。
+func TestIterationLimitFromSettingNil(t *testing.T) {
+	got := iterationLimitFromSetting(nil, "ai_agent_max_iterations",
+		config.AIAgentMaxIterationsDefault, config.AIAgentMaxIterationsMax)
+	if got != config.AIAgentMaxIterationsDefault {
+		t.Errorf("setting 为 nil 时应回退默认值 %d，实际 %d", config.AIAgentMaxIterationsDefault, got)
+	}
+}
+
+// TestSubAgentMaxIterationsFromSetting 内存 SQLite 下验证 os_agent 装配读取设置项：
+// 缺键回退默认值、已配置取配置值、超上限钳到 config.AISubAgentMaxIterationsMax。
+func TestSubAgentMaxIterationsFromSetting(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("打开内存数据库失败: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("获取 sql.DB 失败: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1) // 内存库必须单连接，否则各连接库相互独立
+	if err := db.AutoMigrate(&models.Setting{}); err != nil {
+		t.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	setting := services.NewSettingService(db)
+	innerCtx, _, _ := newTestInnerCtx()
+
+	// 缺键：回退 config 默认值
+	if oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, setting); oa == nil {
+		t.Fatal("chatModel 非 nil 时应构造成功")
+	} else if oa.cfg.maxIterations != config.AISubAgentMaxIterationsDefault {
+		t.Errorf("缺键时应回退默认值 %d，实际 %d", config.AISubAgentMaxIterationsDefault, oa.cfg.maxIterations)
+	}
+
+	// 已配置：取配置值
+	if err := setting.Set("ai_sub_agent_max_iterations", "77"); err != nil {
+		t.Fatalf("写入设置失败: %v", err)
+	}
+	if oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, setting); oa == nil {
+		t.Fatal("chatModel 非 nil 时应构造成功")
+	} else if oa.cfg.maxIterations != 77 {
+		t.Errorf("配置为 77 时应取 77，实际 %d", oa.cfg.maxIterations)
+	}
+
+	// 超上限：钳到 config.AISubAgentMaxIterationsMax
+	if err := setting.Set("ai_sub_agent_max_iterations", "9999"); err != nil {
+		t.Fatalf("写入设置失败: %v", err)
+	}
+	if oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx, setting); oa == nil {
+		t.Fatal("chatModel 非 nil 时应构造成功")
+	} else if oa.cfg.maxIterations != config.AISubAgentMaxIterationsMax {
+		t.Errorf("超上限时应钳到 %d，实际 %d", config.AISubAgentMaxIterationsMax, oa.cfg.maxIterations)
 	}
 }

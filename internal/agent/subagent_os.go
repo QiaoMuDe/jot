@@ -14,33 +14,13 @@ package agent
 import (
 	"context"
 	"runtime"
-	"strconv"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 
 	"jot/internal/agent/tools"
+	"jot/internal/config"
 	"jot/internal/services"
 )
-
-// osSubAgentDefaultMaxIterations 内层 os 子 Agent 的 ReAct 循环最大迭代次数默认值
-// （未配置 ai_sub_agent_max_iterations 时的回退值，防死循环）。
-const osSubAgentDefaultMaxIterations = 50
-
-// subAgentMaxIterations 读取子 Agent 迭代上限设置（key: ai_sub_agent_max_iterations）。
-// 未注入 SettingService、值缺失/非数字/小于 1 时回退默认值；超过上限取上限 200。
-func subAgentMaxIterations(setting *services.SettingService) int {
-	if setting == nil {
-		return osSubAgentDefaultMaxIterations
-	}
-	n, err := strconv.Atoi(setting.Get("ai_sub_agent_max_iterations"))
-	if err != nil || n < 1 {
-		return osSubAgentDefaultMaxIterations
-	}
-	if n > 200 {
-		return 200
-	}
-	return n
-}
 
 // osSubAgentInstruction 内层 os 子 Agent 的系统提示词: 角色 + 边界 + 审批说明 + 结果摘要要求。
 // 末尾拼接当前运行平台（runtime.GOOS）, 模型据此感知平台、避免照抄不可用命令
@@ -72,16 +52,18 @@ var osAgentConfig = subAgentConfig{
 	description:   "操作系统任务执行子 Agent: 在工作区内读写文件、查找内容、执行命令",
 	instruction:   osSubAgentInstruction,
 	toolNames:     osSubAgentToolNames,
-	maxIterations: osSubAgentDefaultMaxIterations,
+	maxIterations: config.AISubAgentMaxIterationsDefault,
 	actionPrefix:  "执行操作系统任务: ",
 	infoDesc:      "将文件与命令类任务委托给操作系统子 Agent 执行。当任务需要在工作区（~/.jot/workspace）内读写文件、查找内容、编辑、复制/移动/删除、创建目录、执行命令、运行 Python 代码/脚本, 或与用户桌面交换文件（下载/上传）时调用；内层子 Agent 会自主规划并调用 read_file/write_file/edit_file/ls_dir/glob/grep_file/copy_item/move_item/delete_item/mkdir_dir/run_command/run_python/transfer_item 完成。request 为完整任务描述（一句话说明目标、路径与约束）。仅处理工作区内的文件与命令诉求及与桌面的文件交换；笔记、网络等其它诉求请直接使用对应工具, 不要委托给本工具。",
 	requestDesc:   "要委托给操作系统子 Agent 执行的完整任务描述（目标、涉及路径、约束）",
 }
 
 // buildOSSubAgent 构造 os_agent 委托工具（registry.go 装配入口；chatModel 为 nil 或构造失败返回 nil）。
-// 迭代上限从设置项 ai_sub_agent_max_iterations 读取（拷贝配置后覆盖，避免修改包级共享配置）。
+// 迭代上限从设置项 ai_sub_agent_max_iterations 读取（拷贝配置后覆盖，避免修改包级共享配置），
+// 默认值与上限引用 config 常量，与种子初始化 / 设置页校验口径一致。
 func buildOSSubAgent(runCtx context.Context, chatModel *openai.ChatModel, innerCtx *tools.Context, setting *services.SettingService) *delegatedAgentTool {
 	cfg := osAgentConfig
-	cfg.maxIterations = subAgentMaxIterations(setting)
+	cfg.maxIterations = iterationLimitFromSetting(setting, "ai_sub_agent_max_iterations",
+		config.AISubAgentMaxIterationsDefault, config.AISubAgentMaxIterationsMax)
 	return newDelegatedAgentTool(runCtx, chatModel, innerCtx, cfg)
 }

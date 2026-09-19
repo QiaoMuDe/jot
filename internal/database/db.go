@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"jot/internal/config"
 	"jot/internal/models"
@@ -217,9 +218,9 @@ func InitDefaultSettings(db *gorm.DB) error {
 		// http_request 工具响应体截断上限（无前端 UI，仅初始化默认值，由 http_request 直接读取）
 		{Key: "ai_http_max_chars", Value: "10000"},
 		{Key: "ai_agent_tools_disabled", Value: ""},
-		{Key: "ai_agent_max_iterations", Value: "100"},
+		{Key: "ai_agent_max_iterations", Value: strconv.Itoa(config.AIAgentMaxIterationsDefault)},
 		// 子 Agent（os_agent）内层 ReAct 循环最大迭代次数
-		{Key: "ai_sub_agent_max_iterations", Value: "50"},
+		{Key: "ai_sub_agent_max_iterations", Value: strconv.Itoa(config.AISubAgentMaxIterationsDefault)},
 		{Key: "trash_cleanup_retention_days", Value: "30"},
 		{Key: "log_level", Value: "1"},
 		{Key: "screen_lock_enabled", Value: "false"},

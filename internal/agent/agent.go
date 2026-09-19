@@ -34,6 +34,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"jot/internal/agent/tools"
+	"jot/internal/config"
 	"jot/internal/mcpserver"
 	"jot/internal/services"
 
@@ -41,8 +42,27 @@ import (
 	"gorm.io/gorm"
 )
 
-// DefaultMaxIterations 限制 ReAct 循环最大迭代次数，防止死循环（未配置 ai_agent_max_iterations 时的默认值，供装配与日志引用；默认值已由 20 上调为 100）。
-const DefaultMaxIterations = 100
+// parseIterationLimit 解析设置项中的迭代上限字符串：非数字或小于 1 时回退 def，
+// 超过上限 max 时取 max（下限统一为「至少 1 轮」）。
+func parseIterationLimit(raw string, def, max int) int {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
+// iterationLimitFromSetting 从设置服务读取迭代上限（key 如 ai_agent_max_iterations），
+// setting 为 nil（未注入）时直接回退 def，保证装配与设置页口径一致。
+func iterationLimitFromSetting(setting *services.SettingService, key string, def, max int) int {
+	if setting == nil {
+		return def
+	}
+	return parseIterationLimit(setting.Get(key), def, max)
+}
 
 // maxPlanRetries 计划生成阶段最大重试次数（解析/校验失败时自动重试）。
 const maxPlanRetries = 3
@@ -651,13 +671,9 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 		emit = func(string, string) {}
 	}
 
-	// 读取配置的最大迭代次数（未配置时回退 DefaultMaxIterations=100），防止 ReAct 循环死循环
-	maxIterations := DefaultMaxIterations
-	if s.deps.Setting != nil {
-		if n, err := strconv.Atoi(s.deps.Setting.Get("ai_agent_max_iterations")); err == nil && n > 0 {
-			maxIterations = n
-		}
-	}
+	// 读取配置的最大迭代次数（未配置/非法时回退 config 默认值，超上限时钳到上限），防止 ReAct 循环死循环
+	maxIterations := iterationLimitFromSetting(s.deps.Setting, "ai_agent_max_iterations",
+		config.AIAgentMaxIterationsDefault, config.AIAgentMaxIterationsMax)
 
 	// 深度研究技能：临时提升迭代次数至200（若当前设置小于200）
 	for _, skillID := range req.SkillIDs {
