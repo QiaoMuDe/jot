@@ -370,6 +370,10 @@ export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
+export function GetWorkspaceDir() {
+  return window['go']['main']['App']['GetWorkspaceDir']();
+}
+
 export function ImportDatabaseWithDialog() {
   return window['go']['main']['App']['ImportDatabaseWithDialog']();
 }
@@ -440,6 +444,10 @@ export function OpenLogDir() {
 
 export function OpenProjectURL(arg1) {
   return window['go']['main']['App']['OpenProjectURL'](arg1);
+}
+
+export function OpenWorkspaceDir() {
+  return window['go']['main']['App']['OpenWorkspaceDir']();
 }
 
 export function ParseMCPServersImport(arg1) {

@@ -3744,6 +3744,33 @@ func (a *App) OpenLogDir() error {
 	return nil
 }
 
+// GetWorkspaceDir 返回工作区目录的绝对路径（AI 助手沙箱目录 ~/.jot/workspace），供前端状态栏展示
+func (a *App) GetWorkspaceDir() (string, error) {
+	a.LogSvc.Logger.Debugw("GetWorkspaceDir")
+	dir, err := config.WorkspaceDir()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("GetWorkspaceDir 失败", fastlog.Error(err))
+		return "", err
+	}
+	return dir, nil
+}
+
+// OpenWorkspaceDir 在系统文件管理器中打开工作区目录
+func (a *App) OpenWorkspaceDir() error {
+	a.LogSvc.Logger.Debugw("OpenWorkspaceDir")
+	dir, err := config.WorkspaceDir()
+	if err != nil {
+		a.LogSvc.Logger.Errorw("OpenWorkspaceDir 失败", fastlog.Error(err))
+		return err
+	}
+	if err := openInFileManager(dir); err != nil {
+		a.LogSvc.Logger.Errorw("OpenWorkspaceDir 失败", fastlog.Error(err))
+		return err
+	}
+	a.LogSvc.Logger.Infow("OpenWorkspaceDir 成功")
+	return nil
+}
+
 // OpenProjectURL 在默认浏览器中打开项目地址
 func (a *App) OpenProjectURL(url string) string {
 	a.LogSvc.Logger.Debugw("OpenProjectURL", fastlog.String("url", url))

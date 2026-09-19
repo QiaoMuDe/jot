@@ -409,6 +409,49 @@ async function refreshWorkspace() {
     }
 }
 
+/**
+ * 获取工作区真实绝对路径并显示到状态栏（打开弹窗时调用一次）
+ * 后端绑定未生成或获取失败时静默保留默认展示，不打断弹窗打开流程
+ */
+async function loadWorkspaceDir() {
+    const link = ws$('workspacePathLink');
+    if (!link) return;
+    if (typeof window.go?.main?.App?.GetWorkspaceDir !== 'function') return;
+    try {
+        const dir = await window.go.main.App.GetWorkspaceDir();
+        // 响应到达时弹窗已关闭 → 丢弃（避免向隐藏 DOM 写入，重开会重新获取）
+        const modal = ws$('workspaceModal');
+        if (modal && modal.style.display === 'none') return;
+        if (typeof dir === 'string' && dir) {
+            link.textContent = dir;
+            link.title = `在系统文件管理器中打开工作区：${dir}`;
+        }
+    } catch (err) {
+        // 静默失败：保留默认展示，避免路径获取异常打断弹窗打开
+    }
+}
+
+/**
+ * 点击状态栏路径：在系统文件管理器中打开工作区目录
+ * 短暂防重复：点击后 500ms 内忽略连点，避免重复启动文件管理器开多个窗口
+ */
+async function openWorkspaceDirInExplorer() {
+    const link = ws$('workspacePathLink');
+    if (!link || link.dataset.opening === '1') return;
+    if (typeof window.go?.main?.App?.OpenWorkspaceDir !== 'function') {
+        window.showNotification?.('工作区后端绑定尚未生成，请重新构建应用后重试', 'warning');
+        return;
+    }
+    link.dataset.opening = '1';
+    try {
+        await window.go.main.App.OpenWorkspaceDir();
+    } catch (err) {
+        window.showNotification?.(`打开工作区失败：${err?.message || err}`, 'error');
+    } finally {
+        setTimeout(() => { delete link.dataset.opening; }, 500);
+    }
+}
+
 /* ============ 上传 / 下载 / 删除 ============ */
 
 /**
@@ -749,6 +792,7 @@ function bindWorkspaceEvents() {
     ws$('workspaceDeleteBtn')?.addEventListener('click', deleteWorkspaceFiles);
     ws$('workspaceRefreshBtn')?.addEventListener('click', refreshWorkspace);
     ws$('workspaceNewDirBtn')?.addEventListener('click', toggleWorkspaceNewDirInput);
+    ws$('workspacePathLink')?.addEventListener('click', openWorkspaceDirInExplorer);
     // 阻止新建按钮抢占焦点：输入框不失焦 → focusout 不触发自动关闭，toggle 完全由 click 控制，
     // 从根上消除「长按按钮→松手 click 重开」的闪烁竞态（原依赖 relatedTarget 判定不可靠）。
     ws$('workspaceNewDirBtn')?.addEventListener('mousedown', (e) => e.preventDefault());
@@ -787,6 +831,7 @@ export async function openWorkspaceManager() {
         return;
     }
     bindWorkspaceEvents();
+    loadWorkspaceDir(); // 获取真实路径显示到状态栏（静默失败保留默认展示）
     // 复位状态：清空选择/展开/树数据与 busy 态
     workspaceSelected = new Set();
     workspaceExpanded = new Set();

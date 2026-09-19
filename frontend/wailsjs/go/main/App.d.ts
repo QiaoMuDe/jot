@@ -190,6 +190,8 @@ export function GetVectorIndexStatus():Promise<main.VectorIndexStatus>;
 
 export function GetVersion():Promise<string>;
 
+export function GetWorkspaceDir():Promise<string>;
+
 export function ImportDatabaseWithDialog():Promise<services.ImportResult>;
 
 export function ImportFiles(arg1:Array<string>,arg2:number):Promise<Array<main.FileImportResult>>;
@@ -225,6 +227,8 @@ export function OpenDataDir():Promise<void>;
 export function OpenLogDir():Promise<void>;
 
 export function OpenProjectURL(arg1:string):Promise<string>;
+
+export function OpenWorkspaceDir():Promise<void>;
 
 export function ParseMCPServersImport(arg1:string):Promise<models.ParseMCPServersResult>;
 
