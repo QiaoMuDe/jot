@@ -14,8 +14,8 @@ export function AnswerAskUser(arg1, arg2) {
   return window['go']['main']['App']['AnswerAskUser'](arg1, arg2);
 }
 
-export function ApproveToolCall(arg1, arg2, arg3) {
-  return window['go']['main']['App']['ApproveToolCall'](arg1, arg2, arg3);
+export function ApproveToolCall(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ApproveToolCall'](arg1, arg2, arg3, arg4);
 }
 
 export function BackupToDir() {

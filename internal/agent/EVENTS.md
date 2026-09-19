@@ -92,10 +92,11 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 
 - `tool`：请求审批的工具名（`write_file` / `edit_file` / `run_command` / `transfer_item` / `delete_item` 等，分级见下方「各工具审批分级」）。
 - `summary`：操作的中文摘要（如"覆盖文件：xxx"/"执行命令：rm -rf …"），供前端审批面板展示。
-- `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved)` **必须原样回传**，后端据此防串审（不一致报错）。
-- `critical`：是否为不可绕过危险操作（破坏宿主系统的命令 / 高风险 net 类子命令命中 / transfer_item 下载到桌面等外部副作用写入时为 `true`）。`critical=true` 时前端审批面板**不应提供"忽略直接执行"语义**；`review` 模式下后端强制阻塞确认（不可绕过的最后防线），`auto` 模式自动放行但写 `tool_auto_approval` 审计留痕（门控实现见 [agent.go](internal/agent/agent.go) `RequestApproval`）。
+- `approval_id`：本次审批的唯一自增编号，前端回调 `ApproveToolCall(sessionID, approvalID, approved, allowRound)` **必须原样回传**，后端据此防串审（不一致报错）。
+- `critical`：是否为高危操作（破坏宿主系统的命令 / 高风险 net 类子命令命中 / transfer_item 下载到桌面等外部副作用写入时为 `true`）。`critical=true` 默认仍不可绕过；仅当用户显式点击审批面板的「允许本轮」时，本轮内后续操作（含高危）才自动放行——范围严格限定本轮，且高危操作逐条写 `tool_auto_approval` 审计留痕。`review` 模式下后端强制阻塞确认（不可绕过的最后防线），`auto` 模式自动放行但写 `tool_auto_approval` 审计留痕（门控实现见 [agent.go](internal/agent/agent.go) `RequestApproval`）。
 
 **审批模式门控**（由后端依据会话配置 `approval_mode` 决定，事件仅在真正需要阻塞时才发射）：
+- **本轮放行（瞬态，优先于三模式）**：用户在审批面板选择「允许本轮」后 `agentSession.allowRoundAll` 置位，本轮（= 一次 `Run`，即一条用户消息触发的完整 ReAct 循环，含 os_agent 子 Agent 内层所有工具调用）内后续操作**无论普通或高危一律自动放行、不发射事件、不占用审批名额**；其中 `critical=true` 逐条写 `tool_auto_approval` 审计留痕（来源文案「本轮已授权自动放行（高危操作，用户在审批面板选择了「允许本轮」）」）。该授权为内存态、不落库、不跨消息、不跨会话，由后端在 `Run` 结束时复位（正常结束 / 报错 / 停止 / 会话释放四条路径）。优先级最高：短路判定位于审批名额抢占（`claimApproval`）与 `needConfirm` 计算之前。
 - `confirm_every`：`critical` 任意 → 都需阻塞确认。
 - `review`：`critical=true` → 强制阻塞确认（不可绕过）；`critical=false`（覆盖已存在文件等常规危险操作）→ 自动放行，不发射事件。
 - `auto`：一律自动放行，不发射事件；`critical=true` 额外写 `tool_auto_approval` 审计留痕（`recordAutoApproval`）。
@@ -107,13 +108,14 @@ os_agent tool_start → 内层工具 tool_start / tool_result / ... → os_agent
 - `transfer_item`：download（写用户桌面 = 工作区之外的外部副作用）一律请求审批 `critical=true`（覆盖时摘要附「（覆盖）」）；upload 对齐 copy_item——纯新增免审批、覆盖已存在目标请求审批 `critical=false`。
 - `manage_note` / `manage_notebook` / `manage_tag` / `manage_todo`：写操作接入门控（create 免审批），删除类 action 一律 `critical=true`——`manage_note.delete`（软删进回收站，恢复由用户在回收站页面自行操作）、`manage_notebook.delete`（可选 `with_notes`，默认 false 其下笔记迁入默认笔记本、true 连同笔记移入回收站）、`manage_tag.delete`、`manage_todo.delete` / `clear`（硬删，审批摘要注明「不可恢复」）；其余写操作分级以各工具文件头注释为权威（如 `manage_note.edit` 恒 `critical=true`、批量 `move` / `add_tag` / `remove_tag` 为 `critical=true`、`update` / `pin` 等为 `critical=false`）。
 
-**回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error`）：
+**回调语义**（Wails 方法 `ApproveToolCall(sessionID uint, approvalID uint64, approved bool, allowRound bool) error`）：
 - `approved=true`：批准，工具返回 nil 继续执行，循环恢复。
 - `approved=false`：拒绝，工具以中文错误文本（"用户拒绝了本次操作…"）返回，经 `WrapWithError` 落成 `tool_error` 记录并回填模型继续推理（不中断循环）。
-- 无等待中的审批 / `approval_id` 不匹配 → 返回中文错误，前端应提示并刷新（不重复投递）。
+- `allowRound=true`（仅在 `approved=true` 时生效）：同时授权「本轮放行」（语义与范围见上方门控小节），后端随即置位 `allowRoundAll`，本轮内后续操作不再弹窗。
+- 时序：会话 / 等待中审批 / `approval_id` 三项校验**通过后，先置位本轮放行状态、再向通道投递决定**，保证当前工具返回后紧接着的下一个工具调用即可读到授权；校验失败（会话不存在 / 无等待中审批 / 编号不匹配）返回中文错误且**不置位**，前端应提示并刷新（不重复投递）。
 - 会话在审批等待期间被停止/释放 → ctx 取消，工具以 `ctx.Err()` 返回，循环随终止。
 
-事件在请求"真正阻塞确认"时发射；`review` 且 `critical=false` 自动放行不发射，`auto` 模式全部自动放行不发射（其中 `critical=true` 写 `tool_auto_approval` 审计痕）。并行危险操作（模型同轮多条）仅一条发射并阻塞，其余直接返回错误（防整轮挂起）。前端在切换会话 / 清空会话 / 停止 / `stream-done` / `stream-error` 时应隐藏审批面板并清理本会话的待回传 `approval_id`。
+事件在请求"真正阻塞确认"时发射；`review` 且 `critical=false` 自动放行不发射，`auto` 模式全部自动放行不发射（其中 `critical=true` 写 `tool_auto_approval` 审计痕）。并行危险操作（模型同轮多条）仅一条发射并阻塞，其余直接返回错误（防整轮挂起）。前端在切换会话 / 清空会话 / 停止 / `stream-done` / `stream-error` 时应隐藏审批面板并清理本会话的待回传 `approval_id`。**「本轮放行」授权由后端在 `Run` 结束时复位，前端无需清理授权状态**；审批面板新增「允许本轮」按钮（三按钮：拒绝 / 允许 / 允许本轮），其文案需明示授权范围——本轮内后续所有操作（含高风险）自动执行、不再询问。
 
 ---
 

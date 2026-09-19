@@ -37,7 +37,8 @@
 
 - `--bg` 为本次新增主题的权威背景色，是唯一需与 ②③ 两处同步计算的色值；
 - `--accent-rgb` 需给定 `r, g, b` 三个数（供 `--selection-bg` 等 `rgba()` 复用）；
-- `--tip-think` / `--tip-generate` 消息统计条占比色需按该主题单独取值。
+- `--tip-think` / `--tip-generate` 消息统计条占比色需按该主题单独取值；
+- `--approve-round` 为审批面板「允许本轮」按钮专属色，需与该主题的 `--accent`、`--error` 色相明显区分，**新增主题块必须定义该变量**，否则按钮无底色（`dracula` / `quiet-light` 因 accent 本身为紫而改用青色系）。
 
 ### 2. `frontend/src/js/theme-config.js` 补充 3 个映射（缺一不可）
 

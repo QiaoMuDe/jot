@@ -346,6 +346,7 @@ func (c *xxxTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 - **接入方式**：在工具的 `InvokableRun` 到达写/危险检查点时调用 `requestApproval`（`critical` 表示是否命中黑名单：`false` 仅 confirm_every 模式确认；`true` 在 confirm_every/review 模式强制确认、auto 模式自动放行并留审计痕）。
 - **笔记管理工具写操作**：`manage_note` / `manage_notebook` / `manage_tag` / `manage_todo` 的写操作（**create 免确认**）同样经 `Context.Approver` 按当前审批模式（confirm_every / review / auto）弹出确认面板，批准后执行、拒绝时返回错误文本。其中删除类 action 恒为高危（critical=true）：`manage_note.delete`（软删进回收站，`ids` 支持单条/批量，恢复由用户在回收站页面自行操作）、`manage_notebook.delete`（可选 `with_notes`，默认 false 其下笔记迁入默认笔记本、true 连同笔记移入回收站）、`manage_tag.delete`（仅删标签，笔记不受影响）、`manage_todo.delete`（单条硬删）/ `clear`（清空已完成待办，硬删），manage_todo 审批摘要注明「不可恢复」。`manage_note` 其余分级：`edit` 恒为高危（critical=true）；`move` / `add_tag` / `remove_tag` 批量（多篇笔记，ids>1）为高危；`update` / `pin` 为常规（critical=false）；其余写操作 critical=false。后端全量清空能力（TodoService.DeleteUnfinished / TodoService.DeleteAll / NotebookService.ResetAll）不接入（属数据管理页职责）。`http_request` 所有请求（含 GET）均接入门控：GET 为常规（critical=false），POST/PUT/DELETE/PATCH 为高危（critical=true）。`manage_memory` 豁免，不接入审批。
 - **判断标准**：是否触发审批、`critical` 取值，均由该工具自行定义并写在工具文件头注释与 `EVENTS.md` 中；本指南不在文件里逐工具罗列，避免与代码真相脱节。
+- **「本轮放行」对工具透明**：用户在审批面板选择「允许本轮」后，本轮（一次 `Run`）内后续审批由 `RequestApproval` 统一短路放行——工具侧**无需感知**该状态；接入流程与 `critical` 分级规则均不变（工具照常调用 `requestApproval`、照常按 `critical` 语义分级）。协议细节见 [EVENTS.md](internal/agent/EVENTS.md) §5。
 
 #### 如何给工具接入审批（步骤）
 

@@ -298,7 +298,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 2. **技术选型**：Go + Wails v2 2.12 + GORM 1.31 + SQLite（glebarez 纯 Go 驱动，modernc.org/sqlite v1.51 含 sqlite-vec）；前端纯原生 HTML/CSS/JS + Vite 3 + CM6；AI 用 eino + OpenAI 兼容端点。理由：单机轻量、无 CGO、跨平台、无外部服务依赖。
 3. **数据目录**：`~/.jot/` 下 data/backup/images/logs/mcp/workspace 六子目录；DB 默认 `~/.jot/data/jot.db`；AI 无边界执行沙箱即 workspace。
 4. **模块边界**：`models → services → database → app.go` 单向分层，无循环依赖；app.go 为 Wails 绑定层（95+ 方法）；前端经 window.go.main.App 调用。
-5. **审批门控公式**：`needConfirm := mode=="confirm_every" || (critical && mode=="review")`；三模式 confirm_every（每次确认）/review（常规自动+高危确认，不可绕过）/auto（全自动放行，高危额外 `tool_auto_approval` 审计留痕）。命令行工具用 os/exec 裸命令，不支持 shell 语法。
+5. **审批门控公式**：**先判本轮放行**（`agentSession.allowRoundAll`，一次 `Run` 结束复位），未授权再走 `needConfirm := mode=="confirm_every" || (critical && mode=="review")`；三模式 confirm_every（每次确认）/review（常规自动+高危确认，不可绕过）/auto（全自动放行，高危额外 `tool_auto_approval` 审计留痕）。本轮已授权时高危操作也放行，但逐条写 `tool_auto_approval` 审计留痕；`ApproveToolCall` 已扩展第 4 参 `allowRound`。命令行工具用 os/exec 裸命令，不支持 shell 语法。
 6. **工作区边界**：文件/命令工具仅允许操作 `~/.jot/workspace/`，`WorkspaceFilePath` 用 EvalSymlinks 解析防 symlink/junction 逃逸；危险命令判定走 `highRiskTokens` 黑名单（基名或参数整词命中，含 `--flag=value` 拆解）。
 7. **代码规范**：目录用复数（models/services）；前端 CSS/JS 模块化按 `js/`、`css/components/` 拆分；新增模型必须注册 `database/models.go` AllModels；一文件一工具（tools/ 下命名即文件名）；工具描述与实际实现一致（meta.go 反例教训）。
 8. **关键工程约定**：
@@ -334,19 +334,12 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 ### 临时记忆 1
 | 记忆点 | 内容 |
 | --- | --- |
-| **变更概览** | 工作区管理器新增**拖拽上传文件/目录**（方案A：拖拽悬停目录行即目标；真文件走 Wails OnFileDrop）。后端 [workspace_service.go](internal/services/workspace_service.go) `uploadOne(root,srcPath)` 重构为 `uploadOne(root,targetDir,srcPath)` 支持目标目录（`uniqueTarget(targetDir,name)`+CopyEx+沙箱）；新增 `UploadPathsToWorkspace(paths []string, targetRel string)`：targetRel 空串或 `/`=根目录，非空经 `config.WorkspaceFilePath` 沙箱校验 + `os.Stat` 确认已存在目录后整体校验、不合法整体报错；app.go 新增同名绑定。前端：`#workspaceTree` 拖拽边框高亮（`.ws-drag-active`）+ 目录行级高亮（`.ws-drop-target`），**无全屏遮罩**（遮罩挡树难定位目录）；[workspace-manager.js](frontend/src/js/workspace-manager.js) 新增面板 dragenter/dragover/dragleave/drop 监听（防抖更新 `workspaceDropTargetRel`）+ `window.handleWorkspaceDrop` + `expandWorkspaceTargetChain`（目标祖先链展开）+ 开关复位；[main.js](frontend/src/main.js) OnFileDrop **最前**加面板路由（面板显示态屏蔽一切其他拖拽）+ document dragenter/dragleave/drop 面板守卫；[ai-chat.js](frontend/src/js/ai-chat.js) 四处理器同款守卫。 |
-| **实现（重要）** | 目标判定优先级 = **dragover 最后一刻悬停目标优先 + OnFileDrop 坐标 (x,y) 兜底**（修复 Windows 高 DPI 下物理像素致 `elementFromPoint` 偏移 -- 悬停高亮可见但落根目录的 bug）；DOM drop 事件**不再清空** `workspaceDropTargetRel`（保留供 handleWorkspaceDrop 消费后置空，规避 DOM drop 与 OnFileDrop 触发顺序不定竞态）。后端测试补 7 用例覆盖子目录/递归/根等价/`../`逃逸/目标为文件/归一化(`a/../b`、尾斜杠)/源在工作区内。另：时间列加秒 `formatWorkspaceTime` 输出 `HH:mm:ss` + `.workspace-mtime` 宽 118→160px（tabular-nums 防秒跳动抖动）. |
-| **验证** | `go vet/build` + `go test ./internal/services/ -run 'Workspace'` 全绿；`npm run build` 通过；`wails generate module` 生成新绑定 `UploadPathsToWorkspace` 且前端调用名一致。需 `wails build` 出新二进制生效。 |
-
-### 临时记忆 2
-| 记忆点 | 内容 |
-| --- | --- |
 | **变更概览** | 工作区管理器交互迭代（多轮）：① **新建文件夹**（后端 [workspace_service.go](internal/services/workspace_service.go) `CreateDirectory(targetRel,name)`：沙箱校验 + name 校验（非空/非 `.`/`..`/含路径分隔符/Windows 非法字符 `<>:"\|?*`/尾部点空格）+ 重名报错，成功返回新目录 rel；前端顶栏「新建文件夹」图标按钮 → 内联输入条，选中单目录则建其内否则根，确认/回车即关闭，toggle 开合）；② **空目录保留显示**（`buildTree` 移除自底向上修剪改 `Children:[]` 表示，与新建文件夹自洽，测试 `TestWorkspaceListTree` 断言同步，前端撤销本地插入 workaround 恢复刷新）；③ **上传入口合并**（拖拽为主 + 顶栏单「上传」图标按钮兜底仅选文件，悬停提示「点击上传文件，或可以拖拽文件或目录到工作区。」，空态提示改「你可以拖拽或者上传目录供 Agent 读写操作」，删除 `UploadDirectory`/`UploadDirectoryToWorkspace` 死代码）；④ **工具栏图标化**（SVG stroke 图标 + `ws-icon-btn-accent/danger` 实底变体还原 btn-save/btn-danger 强调色，busy 不写回文本改 icon 脉冲 + title「上传中…」）。 |
 | **实现（重要）** | 新建输入条竞态修复（[workspace-manager.js](frontend/src/js/workspace-manager.js)）：显式状态 `workspaceNewDirOpen` 判定开合（幂等 close）；toggle 按钮 `mousedown preventDefault` 阻止抢占焦点 → 输入框不失焦即无 focusout 抢跑，根治「长按按钮松手 click 重开闪烁」；focusout 自动关闭改**可取消定时器** `workspaceNewDirAutoCloseTimer`（调度前 clearTimeout 旧句柄 + close 内 clearTimeout，防「先关后重开」残留定时器误关重开后的输入条——曾现「失败重开后输入条显示一下又自动关闭」bug，后按用户要求移除失败重开回填逻辑，仅保留定时器取消防御）。上传按钮 title 恢复逻辑：仅 busy 时设置过 title 才还原，避免外部 busy 调用清空预设提示。 |
 | **审查修复（P1/P2/P3）** | 全面审查后修复：P1 `buildTree`/`ListWorkspaceFiles` 过期注释同步「空目录保留显示」；P2 toggle mousedown preventDefault 根治；P3 删 `UploadDirectory`/`UploadDirectoryToWorkspace` 死代码（两测试改写走 `UploadPathsToWorkspace` 保目录复制覆盖）、`CreateDirectory` 补 Windows 非法字符校验、`handleWorkspaceDrop` busy 静默加「请稍候再拖拽上传」提示、`WS_UPLOAD_LABELS` 对象改数组。 |
 | **验证** | `go vet/build` + `go test ./internal/services/ -run 'Workspace'` 全绿（新增非法字符 10 组 + 空目录保留断言）；`npm run build` 通过（仅既有 chunk 警告）。需 `wails build` 出新二进制生效。 |
 
-### 临时记忆 3
+### 临时记忆 2
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 新增 **run_python Python 专用执行工具**（os_agent 内层白名单第 13 个工具）：执行 Python 代码字符串（code）或工作区内脚本（path），**自动探测环境可用解释器**（Windows: py→python→python3；UNIX: python3→python→py），LookPath + `--version` 冒烟验证（规避 Windows Store stub 命中 PATH 但弹商店），**探测结果进程级缓存**（只缓存成功、失败不缓存——安装/修复解释器后下次调用自动重新探测，无需重启）。每次执行恒 critical=true 强制审批（Python 可执行任意代码，token 黑名单无效，审批语义与 run_command 解释器类命令命中黑名单一致）。plan 见 `.trae/documents/plan-add-run-python-tool.md`。 |
@@ -354,7 +347,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **测试** | [run_python_test.go](internal/agent/tools/run_python_test.go)：参数校验/cwd 越界/path 越界（注入成功探测确保错误来自路径校验）/审批 4 子场景（批准 critical 恒 true、拒绝、Approver 缺失 fail-fast、裸工具放行）/探测失败统一友好文案/缓存 2 子场景（成功缓存只探测一次、失败不缓存重探）/真实执行（本机无解释器 t.Skip）含 `TestRunPythonExecuteArgsCwdTruncate`（args 透传、cwd 实际生效、输出超长截断）/`TestPythonApprovalSummary`（审批摘要含 code 主体、截断提示、动作文案仍取首行）。经验：探测失败友好文案必须收敛在 `resolvePython` 边界而非 `detectPython` 默认实现，否则测试 mock 自定义错误会透传到工具层破坏「友好错误」契约。 |
 | **验证** | `go build ./...` + `go vet` 无告警；`go test ./internal/...` 全绿（含 `-run 'Python|SubAgent'` 重点回归）。纯后端改动，需 `wails build` 出新二进制生效。 |
 
-### 临时记忆 4
+### 临时记忆 3
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 两批改动：① **工作区工具路径失败治理**（依据 tools_log 分析 50 次 tool_error 的根因）——路径解析与沙箱校验健壮性；② **os_agent 工具记录渲染与折叠**——前端逐行渲染 + 组内独立计数 + 子 Agent 折叠交互 + 悬停卡信息补全（动作/结果）。 |
@@ -362,7 +355,7 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **前端（重要）** | [ai-chat.js](frontend/src/js/ai-chat.js)：① `nextToolSeq(globalSeqMap, stack, name)` 统一计数——os_agent 主行走全局、子步骤走栈顶组内 seqMap（`osAgentGroupOpen` 加第 4 参 seqMap），子 Agent 内工具序号从 1 起、不与父层叠加；② `buildToolStatusRows` 改为**按原始顺序逐行渲染不聚合**（移除 `hasAgentGroup` 降级分支与 `aggItemEl` 聚合行；header 徽标计数含折叠组内记录，**不等于**可见行数）；③ os_agent 折叠：实时默认展开、回放与 stream-done 后默认折叠，点击主行经 `toggleOsAgentGroup(row)` **局部切换**该组子步骤 `is-collapsed` 与箭头 `is-expanded`（不整表重建，避免卡顿）；折叠态存模块级 `collapsedOsAgentMap`（WeakMap：listEl → 已折叠**记录下标** Set，随 DOM 回收防无界增长；用下标而非全局 rid，保证同一列表被重建后状态仍可恢复）；展开时批量「禁动画→单次 reflow→恢复」重放行入场动画；主行 `user-select: none` + 切换时 `removeAllRanges()` 防连击被解读为选词而选中整片记录；[ai-chat.css](frontend/src/css/components/ai-chat.css) 折叠箭头置于行末最右，对齐 `.ai-tool-summary-header-arrow` 的 14px / 0.2s 规格；④ **成功行信息补全 + 工具悬停卡**：ok 行不再固定显示「：已完成」，改用 `action_text`（动作文案，空则回退）；工具悬停卡（[index.html](frontend/index.html) `data-tip="tool-record"`，[ai-chat.js](frontend/src/js/ai-chat.js) `fillToolTip`）展示「标题（ok→执行结果 / error→调用失败 / partial→部分来源失败 / auto→完全访问自动放行）+ 工具 + 动作 + 正文（工具输出 / os_agent 子 Agent 摘要 / 报错原因）」四行，由 `dataset.tipText/tipAction/tipTool/tipStatus` 驱动、单实例 portal 按需填充；**弹卡条件 = 正文或动作非空**（结果可为空串，此时仅动作行有意义），空动作行与空正文行各自 `display:none`；`HOVER_DELAY` 全局统一 300→**800ms**（消息统计/召回/工具/模式按钮共用）。 |
 | **验证** | `go build/vet` + `go test ./internal/config/ ./internal/agent/tools/`（含 ls_dir 多层钻取、delete_item 多层非空目录拒绝、外来绝对路径拒绝用例）全绿；`golangci-lint run ./...` 0 issues；`npm run build` 通过（仅既有 chunk 警告）。需 `wails build` 出新二进制生效。 |
 
-### 临时记忆 5
+### 临时记忆 4
 | 记忆点 | 内容 |
 | --- | --- |
 | **变更概览** | 新增**SubAgent 运行上限**设置项：os_agent 内层 ReAct 循环上限从硬编码 20 改为可配置 `ai_sub_agent_max_iterations`（默认 50，范围 1–200）；同时把主 Agent `ai_agent_max_iterations` 默认值 20→100，并把三处口径（HTML max / 前端 change 校验 / 后端 clamp）统一到 1–500；迭代上限默认值与取值范围随后收敛到 `internal/config` 常量。spec 见 `.trae/specs/add-sub-agent-max-iterations-setting/`。 |
@@ -370,6 +363,14 @@ SelectTailByTokenBudget(预算默认128K，轮次对齐)
 | **前端** | [index.html](frontend/index.html)「Agent 运行上限」`value` 20→100，其下新增「SubAgent 运行上限」（`id="aiSubAgentMaxIterations"`、`min=1 max=200 value=50`，复用既有 class，无新增 CSS）——**标签用英文 `SubAgent` 而非「子Agent」**（中文过长会挤压设置项宽度）；[main.js](frontend/src/main.js) 三处（change 监听 / `loadSettings` 回显 / `saveSettings` 收集）——主 Agent 回退 100、上限校验由 100 放宽到 500，SubAgent 回退 50、校验 `<1→50`/`>200→200`，**change 校验的 3 条通知文案与标签口径一致（「SubAgent 运行上限…」）**。数字型设置项沿用相邻项的直接 `getElementById` 写法（不注册进 `els`）。 |
 | **设置页标签列宽** | [settings-panel.css](frontend/src/css/components/settings-panel.css) `.ai-setting-label` 固定列宽 `112px → 136px`（`nowrap` + `flex-shrink: 0`，文案超出会溢出粘连描述）：原 112px 放不下「SubAgent 运行上限」导致标签与描述粘连，加宽后中文标签上限约 10 字 / 中英混合总宽 ≤ 136px；约束与估算规则已记入 [settings-maintenance.md](frontend/src/css/components/settings-maintenance.md)。 |
 | **验证** | `go build/vet` + `go test ./internal/agent/... ./internal/services/...` 全绿；`golangci-lint run ./internal/agent/` 0 issues；`npm run build` 通过（仅既有 chunk 警告）；`wails generate module` 后 `frontend/wailsjs/go/models.ts` 已含新字段。需 `wails build` 出新二进制生效。 |
+
+### 临时记忆 5
+| 记忆点 | 内容 |
+| --- | --- |
+| **变更概览** | 新增**「本轮审批放行」**：审批面板新增第三个按钮「允许本轮」，一次授权使本轮（= 一次 `Run`，即一条用户消息触发的完整 ReAct 循环，含 os_agent 子 Agent 内层所有工具调用）内普通与高危操作均自动执行、不再弹窗。spec 见 `.trae/specs/add-round-approval-allow/`。 |
+| **后端（重要）** | [agent.go](internal/agent/agent.go)：`agentSession` 新增 `allowRoundAll atomic.Bool`（内存态，不落库、不跨消息、不跨会话）+ `resetRoundAllow()`；`RequestApproval` 开头短路（位于 `claimApproval` 与 `needConfirm` 计算之前，不占审批名额）→ `critical=true` 时调 `recordAutoApproval(toolName, summary, reason)` 写「本轮已授权自动放行（高危操作…）」留痕；门控公式改为「**先判本轮放行**，再走原公式 `needConfirm := mode=="confirm_every" || (critical && mode=="review")`」；决定通道 `approveCh` 由 `chan bool` 升级为 `chan approvalDecision{approved, allowRound}`；`ApproveToolCall` 增第 4 参 `allowRound`（校验失败不置位、**先置位后投递**，保证当前工具返回后紧接着的下一个工具调用即读到授权）；`recordApproval` 三态文案（批准 / 已被用户拒绝 / 已允许本轮操作（本轮后续操作自动放行））；`Run` 的 defer 中 `resetRoundAllow()` 复位（正常结束 / 报错 / 停止 / 会话释放四条路径）；os_agent 子 Agent 复用同一 Approver 自动继承，**工具侧零改动**。 |
+| **前端与主题** | [ai-chat.js](frontend/src/js/ai-chat.js)：审批面板新增 `.ai-approval-btn.round`「允许本轮」，按钮顺序为**允许本轮 → 拒绝 → 允许**（范围最大的按钮置于**行首最左**并留白分隔，降低误点），`title` 明示「本轮内后续所有操作（含高风险）自动执行，不再询问」，点击成功隐藏面板并 `warning` 通知「本轮已完全放行：后续操作将自动执行，不再询问」；高危提示条文案由「高风险操作，无法绕过确认」改为「高风险操作，请谨慎确认」；`disabledBy` 改为遍历全部 `.ai-approval-btn`。[ai-chat.css](frontend/src/css/components/ai-chat.css)：新增 `.ai-approval-btn.round`（专属色实底 + `margin-right` 留白）；**删除原 `.ai-approval-panel.is-critical .ai-approval-btn.allow` 红色覆盖规则**，使三按钮颜色在所有面板恒定（允许本轮=`--approve-round` / 允许=`--accent` / 拒绝=`--error`），仅凭颜色即可区分动作，高危警示由面板左侧红边与提示条承担；[variables.css](frontend/src/css/variables.css) 新增主题变量 `--approve-round`（12 个主题块 + `:root` 兜底共 13 处，`dracula`/`quiet-light` 用青色避开紫色 accent，`mono` 引入紫色为唯一彩色）。 |
+| **验证** | `gofmt` / `go build` / `go vet` / `go test ./internal/agent/...` / `golangci-lint`（0 issues）/ `npm run build` 全绿；`wails generate module` 已重生成 4 参绑定；需 `wails build` 出新二进制生效。 |
 
 ## 九、初始静态分析关键结论
 

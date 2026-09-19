@@ -12,7 +12,7 @@ export function AddTagToNote(arg1:number,arg2:number):Promise<void>;
 
 export function AnswerAskUser(arg1:number,arg2:string):Promise<void>;
 
-export function ApproveToolCall(arg1:number,arg2:number,arg3:boolean):Promise<void>;
+export function ApproveToolCall(arg1:number,arg2:number,arg3:boolean,arg4:boolean):Promise<void>;
 
 export function BackupToDir():Promise<string>;
 

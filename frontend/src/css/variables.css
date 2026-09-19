@@ -53,6 +53,9 @@
     /* 消息统计条占比色兜底（思考条/生成条；各主题具体取值在下方各主题块内维护） */
     --tip-think: #d97706;      /* 思考条 */
     --tip-generate: #16a34a;   /* 生成条 */
+
+    /* 「允许本轮」按钮专属色兜底（各主题具体取值在下方各主题块内维护） */
+    --approve-round: #7C6CF0;
 }
 
 /* ===== 默认主题（温暖极简） ===== */
@@ -116,6 +119,7 @@
     --info-bg: #eff6ff;
     --info-border: #bfdbfe;
     --info-text: #1e40af;
+    --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent 琥珀 / error 红） */
 
     /* 分层阴影 */
     --shadow-elevated: 0 2px 8px rgba(45, 42, 36, 0.08);
@@ -182,6 +186,7 @@
     --info-bg: #eff6ff;
     --info-border: #bfdbfe;
     --info-text: #1e40af;
+    --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent 蓝 / error 红） */
 
     /* 分层阴影 */
     --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -248,6 +253,7 @@
     --info-bg: rgba(96, 165, 250, 0.1);
     --info-border: rgba(96, 165, 250, 0.25);
     --info-text: #93c5fd;
+    --approve-round: #A78BFA; /* 本轮放行按钮色（亮紫，深色底避开 accent 琥珀 / error 红） */
 
     /* 分层阴影 */
     --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.20);
@@ -314,6 +320,7 @@
     --info-bg: #EFF6FF;
     --info-border: #D8DEE9;
     --info-text: #4C6F8C;
+    --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent 北极蓝 / error 红） */
 
     /* 分层阴影 */
     --shadow-elevated: 0 2px 8px rgba(46, 52, 64, 0.08);
@@ -380,6 +387,7 @@
     --info-bg: rgba(122, 162, 247, 0.1);
     --info-border: rgba(122, 162, 247, 0.25);
     --info-text: #A9B1D6;
+    --approve-round: #B69CFF; /* 本轮放行按钮色（最亮紫，深色底避开 accent 蓝 / error 粉红） */
 
     /* 分层阴影 */
     --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -444,6 +452,7 @@
     --info-bg: #EFF6FF;
     --info-border: #BFDBFE;
     --info-text: #1E40AF;
+    --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent 绿 / error 红） */
     --shadow-elevated: 0 2px 8px rgba(44, 74, 62, 0.06);
     --shadow-dropdown: 0 4px 16px rgba(44, 74, 62, 0.08);
     --shadow-modal: 0 8px 32px rgba(44, 74, 62, 0.12);
@@ -505,6 +514,7 @@
   --info-bg: #EFF6FF;
   --info-border: #BFDBFE;
   --info-text: #1E40AF;
+  --approve-round: #8B5CF6; /* 本轮放行按钮色（暖咖紫，避开 accent 暖粉 / error 洋红） */
   --shadow-elevated: 0 2px 8px rgba(76, 79, 105, 0.06);
   --shadow-dropdown: 0 4px 16px rgba(76, 79, 105, 0.08);
   --shadow-modal: 0 8px 32px rgba(76, 79, 105, 0.12);
@@ -566,6 +576,7 @@
   --info-bg: #F0F8F8;
   --info-border: #C5E0E0;
   --info-text: #2D6E70;
+  --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent 橙 / error 砖红） */
   --shadow-elevated: 0 2px 8px rgba(60, 56, 54, 0.06);
   --shadow-dropdown: 0 4px 16px rgba(60, 56, 54, 0.08);
   --shadow-modal: 0 8px 32px rgba(60, 56, 54, 0.12);
@@ -627,6 +638,7 @@
   --info-bg: rgba(139, 233, 253, 0.1);
   --info-border: rgba(139, 233, 253, 0.25);
   --info-text: #B8F2FD;
+  --approve-round: #22D3CE; /* 本轮放行按钮色（青，本主题 accent 已为紫，改用青色避开撞色） */
   --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.30);
   --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.35);
@@ -688,6 +700,7 @@
   --info-bg: rgba(124, 143, 200, 0.08);
   --info-border: rgba(124, 143, 200, 0.2);
   --info-text: #5A6DA8;
+  --approve-round: #0EA5A5; /* 本轮放行按钮色（青，本主题 accent 已为紫，改用青色避开撞色） */
   --shadow-elevated: 0 1px 4px rgba(139, 126, 200, 0.04);
   --shadow-dropdown: 0 4px 12px rgba(139, 126, 200, 0.06);
   --shadow-modal: 0 8px 28px rgba(139, 126, 200, 0.10);
@@ -749,6 +762,7 @@
   --info-bg: rgba(139, 123, 184, 0.08);
   --info-border: rgba(139, 123, 184, 0.2);
   --info-text: #6A5A94;
+  --approve-round: #7C6CF0; /* 本轮放行按钮色（紫，避开 accent / error 的暖红） */
   --shadow-elevated: 0 2px 8px rgba(58, 53, 50, 0.06);
   --shadow-dropdown: 0 4px 16px rgba(58, 53, 50, 0.08);
   --shadow-modal: 0 8px 32px rgba(58, 53, 50, 0.12);
@@ -813,6 +827,9 @@
   --info-bg: #F0F0F0;
   --info-border: #D0D0D0;
   --info-text: #1A1A1A;
+  /* 本轮放行按钮色（紫）：本主题 accent 与 error 同为近黑灰，灰度无法与「允许/拒绝」区分，
+     故该按钮特意引入本主题唯一彩色，保证三个按钮可辨 */
+  --approve-round: #7C6CF0;
 
   /* 分层阴影 */
   --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.06);

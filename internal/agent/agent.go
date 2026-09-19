@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -102,6 +103,13 @@ type AgentService struct {
 	sessions map[uint]*agentSession
 }
 
+// approvalDecision 一次审批的用户决定：approved 表示放行本次操作；
+// allowRound 表示同时授权本轮后续所有操作（普通与高危）自动放行。
+type approvalDecision struct {
+	approved   bool
+	allowRound bool
+}
+
 // agentSession 一个 AI 会话对应的 Agent 交互实例。
 // 说明：eino 的 ChatModelAgent 图/runner 与工具链按消息重建——系统提示词
 // （Instruction）逐消息组装（技能/引用/意图裁剪不同），因此会话级实例持有的是
@@ -121,12 +129,17 @@ type agentSession struct {
 	chatFP     string             // ChatModel 指纹（BaseURL/APIKey/Model/深度思考）
 	lastSeen   time.Time          // 最近使用时间（LRU 淘汰依据）
 
-	approveCh         chan bool            // 工具审批决定投递通道（容量 1，true=批准/false=拒绝）
-	approvePending    bool                 // 当前是否有审批在等待用户决定
-	approveMu         sync.Mutex           // 保护 approvePending / pendingApprovalID
-	approvalID        uint64               // 审批编号自增计数（每次审批分配唯一 id）
-	pendingApprovalID uint64               // 当前待处理审批的 id（ApproveToolCall 校验用）
-	emit              func(string, string) // 会话级事件发射函数（Run 注入，供 ai:tool-approval 用；为 nil 则跳过发射仅日志）
+	approveCh         chan approvalDecision // 工具审批决定投递通道（容量 1，携带放行/拒绝与本轮授权）
+	approvePending    bool                  // 当前是否有审批在等待用户决定
+	approveMu         sync.Mutex            // 保护 approvePending / pendingApprovalID
+	approvalID        uint64                // 审批编号自增计数（每次审批分配唯一 id）
+	pendingApprovalID uint64                // 当前待处理审批的 id（ApproveToolCall 校验用）
+	emit              func(string, string)  // 会话级事件发射函数（Run 注入，供 ai:tool-approval 用；为 nil 则跳过发射仅日志）
+	// allowRoundAll 本轮（一次 Run / 一条用户消息触发的完整 ReAct 循环，含 os_agent 子 Agent
+	// 内层所有工具调用）已授权完全放行：用户在审批面板选择「允许本轮」后置位，本轮内后续
+	// 普通与高危操作一律不再弹窗、直接执行（高危操作额外写 tool_auto_approval 审计留痕）。
+	// 由 ApproveToolCall 置位、Run 结束复位；内存态，不落库、不跨消息、不跨会话。
+	allowRoundAll atomic.Bool
 	// loadApprovalMode 返回当前会话的审批模式（confirm_every / review / auto）。
 	// Run 启动时把一次性从 DB 读取的会话配置缓存进 approvalModeCache，此闭包返回缓存；
 	// 未缓存（非 Run 场景/读取失败）回落 confirm_every（最安全）。
@@ -218,9 +231,12 @@ func (sess *agentSession) drainApproval() {
 var _ tools.Approver = (*agentSession)(nil)
 
 // RequestApproval 实现 tools.Approver：按会话审批模式决定是否需要真正向用户确认。
-// critical==true（命令黑名单命中）时 confirm_every / review 模式阻塞确认；
-// auto（完全访问）模式不阻塞，自动放行并写 tool_auto_approval 审计留痕（见
-// recordAutoApproval）。critical==false（覆盖已存在文件等常规危险操作）仅
+// 短路优先级最高：本轮已授权完全放行（用户此前在审批面板选择「允许本轮」）时一律
+// 直接放行，不弹窗、不占审批名额；其中 critical==true（命令黑名单命中）额外写一条
+// tool_auto_approval 审计留痕（见 recordAutoApproval）。
+// 否则按会话审批模式决定：critical==true（命令黑名单命中）时 confirm_every / review
+// 模式阻塞确认；auto（完全访问）模式不阻塞，自动放行并写 tool_auto_approval 审计留痕
+// （见 recordAutoApproval）。critical==false（覆盖已存在文件等常规危险操作）仅
 // confirm_every 模式阻塞，review/auto 模式自动放行返回 nil。需要确认时抢占审批
 // 名额、发射 ai:tool-approval 事件并阻塞等待 ApproveToolCall 投递决定。批准返回 nil，
 // 拒绝返回中文错误文本（经 wrappedTool 落成 tool_error 记录并回填模型继续推理），
@@ -230,6 +246,14 @@ var _ tools.Approver = (*agentSession)(nil)
 // 防御：真正需要确认但 sess.emit==nil（缺少事件通道，无法向用户发起审批）时，
 // 直接返回错误而非永久阻塞。
 func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary string, critical bool) error {
+	// 本轮放行短路：必须位于 claimApproval 与 needConfirm 计算之前，
+	// 即不占用审批名额、不破坏既有「并行危险操作仅一条进入等待」语义。
+	if sess.allowRoundAll.Load() {
+		if critical {
+			sess.recordAutoApproval(toolName, summary, "本轮已授权自动放行（高危操作，用户在审批面板选择了「允许本轮」）")
+		}
+		return nil
+	}
 	mode := "confirm_every"
 	if sess.loadApprovalMode != nil {
 		mode = sess.loadApprovalMode()
@@ -246,7 +270,7 @@ func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary
 		// 完全访问模式自动放行黑名单命令：不打断、不弹提示，写入详细留痕记录，
 		// 明确标注这是"未经人工确认的高风险命令自动放行"，供事后审计。
 		if critical && mode == "auto" {
-			sess.recordAutoApproval(toolName, summary)
+			sess.recordAutoApproval(toolName, summary, "完全访问模式自动放行（高危命令，未经人工确认）")
 		}
 		return nil
 	}
@@ -279,10 +303,10 @@ func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary
 	}
 
 	select {
-	case approved := <-sess.approveCh:
+	case decision := <-sess.approveCh:
 		// 审批留痕：批准/拒绝均追加一条 tool_approval 记录（即便拒绝，亦不改变回填语义）
-		sess.recordApproval(toolName, summary, approved)
-		if approved {
+		sess.recordApproval(toolName, summary, decision)
+		if decision.approved {
 			return nil
 		}
 		return fmt.Errorf("用户拒绝了本次操作（%s：%s）。请改用其他方式，或向用户说明后避开该操作。", toolName, summary)
@@ -291,10 +315,11 @@ func (sess *agentSession) RequestApproval(ctx context.Context, toolName, summary
 	}
 }
 
-// recordApproval 审批留痕：在批准/拒绝决定后追加一条 tool_approval 工具记录，
+// recordApproval 审批留痕：在用户作出决定后追加一条 tool_approval 工具记录，
 // 仅用于审计留痕，不发射额外事件、不影响调用方（工具）的拒绝回填语义。
+// 结果三态：本轮放行（用户选择「允许本轮」）/ 批准 / 已被用户拒绝。
 // appendRecord 为 nil（非 Run 场景/测试）时静默跳过。
-func (sess *agentSession) recordApproval(toolName, summary string, approved bool) {
+func (sess *agentSession) recordApproval(toolName, summary string, decision approvalDecision) {
 	if sess.appendRecord == nil {
 		return
 	}
@@ -303,25 +328,29 @@ func (sess *agentSession) recordApproval(toolName, summary string, approved bool
 		Name:   toolName,
 		Args:   tools.TruncateRunes(summary, tools.MaxResultLen),
 	}
-	if approved {
+	switch {
+	case decision.allowRound:
+		rec.Result = "已允许本轮操作（本轮后续操作自动放行）"
+	case decision.approved:
 		rec.Result = "批准"
-	} else {
+	default:
 		rec.Result = "已被用户拒绝"
 	}
 	sess.appendRecord(rec)
 }
 
-// recordAutoApproval 完全访问模式下自动放行高风险（黑名单命中）操作时的详细留痕。
+// recordAutoApproval 自动放行高风险（黑名单命中）操作时的详细留痕。
 // 与普通审批留痕（tool_approval）区分：用独立 action=tool_auto_approval，
-// 并明确标注"未经人工确认、完全访问自动放行的高风险命令"，供事后审计可追溯。
+// 并明确标注"未经人工确认即自动放行的高风险命令"，供事后审计可追溯。
+// reason 说明本次自动放行的来源，共两种：完全访问模式自动放行 / 本轮授权自动放行。
 // 双写：appendRecord 落库审计记录 + emit ai:tool-status 事件驱动前端渲染该条独立高亮行。
-func (sess *agentSession) recordAutoApproval(toolName, summary string) {
+func (sess *agentSession) recordAutoApproval(toolName, summary, reason string) {
 	rec := tools.Record{
 		Action:     "tool_auto_approval",
 		Name:       toolName,
 		ActionText: summary,
 		Args:       tools.TruncateRunes(summary, tools.MaxResultLen),
-		Result:     "完全访问模式自动放行（高危命令，未经人工确认）",
+		Result:     reason,
 	}
 	if sess.appendRecord != nil {
 		sess.appendRecord(rec)
@@ -351,6 +380,12 @@ func (sess *agentSession) clearApproval() {
 	sess.approveMu.Lock()
 	sess.approvePending = false
 	sess.approveMu.Unlock()
+}
+
+// resetRoundAllow 复位「本轮放行」授权（幂等）：Run 结束时调用，
+// 使用户在审批面板选择的「允许本轮」仅在本轮内有效，不跨消息、不跨会话。
+func (sess *agentSession) resetRoundAllow() {
+	sess.allowRoundAll.Store(false)
 }
 
 // NewAgentService 创建一个新的 AgentService 实例。
@@ -387,7 +422,7 @@ func (s *AgentService) getOrCreateSession(sessionID uint) *agentSession {
 	}
 	sess := &agentSession{
 		askCh:     make(chan string, 1),
-		approveCh: make(chan bool, 1),
+		approveCh: make(chan approvalDecision, 1),
 		lastSeen:  time.Now(),
 		// loadApprovalMode / approvalModeCache 由 Run 启动时一次性从会话配置注入
 		// （每次 run 读取一次并缓存，避免每次审批都查库）；非 Run 场景为 nil，
@@ -425,8 +460,16 @@ func (s *AgentService) AnswerAskUser(sessionID uint, answer string) error {
 
 // ApproveToolCall 投递用户对工作目录危险操作的审批决定，恢复同一轮 ReAct 循环：
 // 决定经通道同轮返回给正在阻塞等待的工具（write_file/run_command），继续完成原始请求。
-// 无等待中的审批、或 approval_id 与当前待审批 id 不一致时返回中文错误（防止前端串审）。
-func (s *AgentService) ApproveToolCall(sessionID uint, approvalID uint64, approved bool) error {
+// approved 为 true 时放行本次操作；allowRound 为 true 时同时授权「本轮放行」——
+// 即本轮（一次 Run / 一条用户消息触发的完整 ReAct 循环，含 os_agent 子 Agent 内层
+// 所有工具调用）内后续所有操作（普通与高危）一律自动放行，高危操作额外写
+// tool_auto_approval 审计留痕；本轮结束（Run 返回）即失效，不跨消息、不跨会话。
+// allowRound 仅在 approved 为 true 时生效（决定构造时已规范化，避免出现
+// 「拒绝本次却授权本轮」的矛盾决定）；投递失败（通道已满）时会回滚本次已置位的
+// 本轮授权，避免「返回错误但本轮已放开」。
+// 无等待中的审批、或 approval_id 与当前待审批 id 不一致时返回中文错误（防止前端串审），
+// 此时不会置位本轮放行状态。
+func (s *AgentService) ApproveToolCall(sessionID uint, approvalID uint64, approved bool, allowRound bool) error {
 	s.mu.Lock()
 	sess, ok := s.sessions[sessionID]
 	s.mu.Unlock()
@@ -444,11 +487,23 @@ func (s *AgentService) ApproveToolCall(sessionID uint, approvalID uint64, approv
 	}
 	sess.approvePending = false // 投递前先清标记，防止重复投递
 	sess.approveMu.Unlock()
+	// 规范化决定：allowRound 仅在批准时生效，避免「拒绝本次却授权本轮」的矛盾
+	// （recordApproval 以 allowRound 优先判定，会造成留痕与拒绝回填语义自相矛盾）。
+	decision := approvalDecision{approved: approved, allowRound: allowRound && approved}
+	// 先置位本轮放行、再投递决定：顺序不可颠倒，保证当前工具返回后紧接着的
+	// 下一个工具调用即可读到授权（否则可能被下一次审批抢先命中）。
+	if decision.allowRound {
+		sess.allowRoundAll.Store(true)
+	}
 	select {
-	case sess.approveCh <- approved:
+	case sess.approveCh <- decision:
 		return nil
 	default:
-		// 通道已满（极罕见：上一轮决定未消费），兜底拒绝
+		// 通道已满（极罕见：上一轮决定未消费），兜底拒绝。
+		// 回滚本次已置位的本轮授权，避免「返回错误但本轮已放开」的窗口。
+		if decision.allowRound {
+			sess.allowRoundAll.Store(false)
+		}
 		return errors.New("审批投递失败，请稍后重试")
 	}
 }
@@ -713,13 +768,15 @@ func (s *AgentService) Run(ctx context.Context, req Request, emit EmitFn) (Resul
 	sess.setRunCancel(runCancel)
 	defer func() {
 		// 清理会话级状态：清除反问等待标记、排空未消费的答案（取消竞态残留）、
-		// 排空未消费的审批决定、取消本 run 的取消源（幂等）
+		// 排空未消费的审批决定、复位「本轮放行」授权、取消本 run 的取消源（幂等）。
+		// 本轮授权随本轮结束失效：正常结束 / 报错 / 停止 / 会话释放四条路径均在此复位。
 		sess.askMu.Lock()
 		sess.askPending = false
 		sess.askMu.Unlock()
 		sess.approveMu.Lock()
 		sess.approvePending = false
 		sess.approveMu.Unlock()
+		sess.resetRoundAllow()
 		sess.drainAsk()
 		sess.drainApproval()
 		sess.setRunCancel(nil)

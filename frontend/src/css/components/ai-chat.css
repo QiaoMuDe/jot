@@ -1282,40 +1282,16 @@
 
 .ai-chat-composer:focus-within {
     border-color: var(--accent);
-    /* 4px 光环（accent 26%，清晰可见）+ 多层向外散发的柔光（光晕微降，突出光环层次） */
+    /* 聚焦反馈只保留「贴合轮廓的常规投影 + 4px accent 光环」：
+       原先额外的 3 层 accent 柔光（扩散 24~96px）会贴着输入坞圆角轮廓向下方大量溢色，
+       在输入坞下方形成类似"倒影"的观感（并因持续重绘在 WebView2 合成层上偶发残影），故移除；
+       呼吸动画（ai-composer-glow）即为驱动这些柔光的重绘来源，一并删除。
+       深度感沿用未聚焦态的三层投影，保证两态视觉连续。 */
     box-shadow:
         0 1px 2px var(--shadow-elevated),
         0 8px 24px -8px var(--shadow-dropdown),
         0 24px 60px -20px var(--shadow-modal),
-        0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent),
-        0 0 24px 8px color-mix(in srgb, var(--accent) 12%, transparent),
-        0 0 56px 24px color-mix(in srgb, var(--accent) 8%, transparent),
-        0 0 96px 40px color-mix(in srgb, var(--accent) 4%, transparent);
-    /* 光晕轻微"呼吸"，聚焦期间柔和脉动 */
-    animation: ai-composer-glow 2.6s ease-in-out infinite;
-}
-
-@keyframes ai-composer-glow {
-    0%, 100% {
-        box-shadow:
-            0 1px 2px var(--shadow-elevated),
-            0 8px 24px -8px var(--shadow-dropdown),
-            0 24px 60px -20px var(--shadow-modal),
-            0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent),
-            0 0 24px 8px color-mix(in srgb, var(--accent) 12%, transparent),
-            0 0 56px 24px color-mix(in srgb, var(--accent) 8%, transparent),
-            0 0 96px 40px color-mix(in srgb, var(--accent) 4%, transparent);
-    }
-    50% {
-        box-shadow:
-            0 1px 2px var(--shadow-elevated),
-            0 8px 24px -8px var(--shadow-dropdown),
-            0 24px 60px -20px var(--shadow-modal),
-            0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent),
-            0 0 32px 12px color-mix(in srgb, var(--accent) 16%, transparent),
-            0 0 72px 32px color-mix(in srgb, var(--accent) 10%, transparent),
-            0 0 120px 56px color-mix(in srgb, var(--accent) 5%, transparent);
-    }
+        0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
 /* ── 斜杠引用模式（.has-slash）：菜单弹出时仅让输入坞轻微上浮 ── */
@@ -2907,9 +2883,7 @@
 
 /* 减少动态效果偏好：禁用悬浮位移与按压缩放 */
 @media (prefers-reduced-motion: reduce) {
-    .ai-chat-composer:focus-within {
-        animation: none;
-    }
+    /* 聚焦态的呼吸柔光动画已移除，此处仅需停用边框流光 */
     .ai-chat-composer:focus-within::after {
         animation: none;
     }
@@ -4972,7 +4946,7 @@
     }
 }
 
-/* 高风险操作：整体警示配色，强调"无法绕过确认" */
+/* 高风险操作：整体警示配色，强调"需谨慎确认"（用户可经「允许本轮」显式放行，范围严格限定本轮） */
 .ai-approval-panel.is-critical {
     border-left-color: var(--error);
 }
@@ -5012,7 +4986,7 @@
 
 /* 高风险提示条：危险色实底 tint，杜绝纯白背景；深浅主题自适应。
    背景用 error 混入面板底（card-bg）而非 --error-bg，避免较亮主题下呈近白；
-   同熔断给提示条也加左侧色条，加强"无法绕过"的警示语义。 */
+   同熔断给提示条也加左侧色条，加强"需谨慎确认"的警示语义。 */
 .ai-approval-critical {
     display: flex;
     align-items: center;
@@ -5089,6 +5063,7 @@
     flex-shrink: 0;
     padding: 6px 16px;
     font-size: 13px; /* 整数像素：避免小数像素文字渲染发虚 */
+    font-weight: 600; /* 三个决策按钮（允许本轮/拒绝/允许）文字统一加粗，提升可读性与决策权重 */
     font-family: inherit;
     border: none;
     border-radius: 8px;
@@ -5126,23 +5101,17 @@
     filter: none;
 }
 
-/* 允许：主色调实底（与 ask 提交按钮一致；critical 仍可允许，由用户明确决策）。
+/* 允许：主色调实底（与 ask 提交按钮一致）。critical 面板下同样保持强调色、不改成危险红——
+   三按钮需**颜色恒定**才能仅凭颜色区分动作：允许本轮=--approve-round / 允许=--accent / 拒绝=--error；
+   若高危时把「允许」也变红，它会与「拒绝」同色而只能靠文字区分。
+   高危警示改由面板左侧红边（.is-critical 的 border-left-color）与「高风险操作，请谨慎确认」提示条承担。
    文字色用 color-mix 按 accent 推导深色，适应浅色 accent 主题，避免硬编码 #fff 对比不足。 */
 .ai-approval-btn.allow {
     color: color-mix(in srgb, var(--accent) 35%, black);
     background: var(--accent);
 }
 
-/* 高风险（critical）允许按钮：危险色实底 + 白字强化警示。文字不用 --error-text：
-   该变量照 `浅底深字` 设计，实底 --error 上在深浅主题均对比不足（约 1.2~1.8:1）；
-   白字于各主题 --error（含最暗主题的近黑 error）对比度均达标。
-   hover/active 沿用全局 brightness/scale，并与 deny 红色系统一。 */
-.ai-approval-panel.is-critical .ai-approval-btn.allow {
-    color: #fff;
-    background: var(--error);
-}
-
-/* 拒绝：危险色实底 + 白字（与 critical 允许按钮一致）。原淡色衬底（--error-bg）在较亮
+/* 拒绝：危险色实底 + 白字。原淡色衬底（--error-bg）在较亮
    主题下与面板背景相近导致按钮不明显，改用实底 --error 各主题均清晰醒目；
    文字不用 --error-text（浅底深字变量，实底上对比不足），白字对比度均达标。
    hover/active 沿用全局 brightness/scale。 */
@@ -5150,6 +5119,21 @@
     color: #fff;
     background: var(--error);
     border: none;
+}
+
+/* 允许本轮：范围最大的授权（本轮后续操作含高风险均自动放行），用专属色与「拒绝」(--error)、
+   「允许」(--accent) 三者色相互相拉开，避免误点最大范围操作。
+   颜色取自各主题块的 --approve-round（12 个系统主题 + :root 兜底均已覆盖，缺主题会导致按钮无底色）。
+   文字色沿用与 .allow 完全相同的对比度推导法（按自身底色混入 35% 黑），保证三段按钮观感一致；
+   hover/active/disabled 一律复用 .ai-approval-btn 基础规则，此处不重复定义动效。
+   三个按钮在所有面板（含高危 .is-critical）下颜色恒定，仅凭颜色即可区分动作范围与方向。
+   此处未加 1px 内描边强化：会压过 `.ai-approval-btn:hover` 的 box-shadow 从而破坏基础悬停阴影，
+   故省略，改用留白做视觉分隔。 */
+.ai-approval-btn.round {
+    background: var(--approve-round);
+    color: color-mix(in srgb, var(--approve-round) 35%, black);
+    /* 范围最大的按钮置于行首最左，与右侧「拒绝/允许」额外留白分隔，降低误点概率 */
+    margin-right: 6px;
 }
 
 /* ── 会话摘要生成状态条 ── */

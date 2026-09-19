@@ -5841,8 +5841,11 @@ function _highlightApprovalCommand(summary) {
 /**
  * 显示 Agent 工具执行审批面板（ai:tool-approval）。
  * 后端在 ReAct 循环中发起危险操作时暂停执行并发射事件，本面板给出
- * 工具名、操作描述与「允许/拒绝」按钮；用户决策后经 ApproveToolCall
- * 同轮回传解锁后端。面板展示期间不可通过关闭按钮/ESC/外点取消（后端正阻塞等待）。
+ * 工具名、操作描述与「拒绝 / 允许 / 允许本轮」三个按钮；用户决策后经
+ * ApproveToolCall(activeSessionId, approvalId, approved, allowRound) 同轮回传解锁后端：
+ * 第 3 参 approved 表示是否批准本次操作，第 4 参 allowRound 表示是否「本轮放行」
+ * （本轮 = 一次 Run 循环；置位后本轮内后续所有操作含高危均自动执行、不再弹窗，后端自动留痕）。
+ * 面板展示期间不可通过关闭按钮/ESC/外点取消（后端正阻塞等待）。
  * 若已有面板打开，再次调用会用新负载直接替换内容（同一时间仅一个待审批）。
  * @param {object} payload - { tool, summary, approval_id, critical }
  */
@@ -5861,7 +5864,7 @@ function showApprovalPanel(payload) {
     approvalPanelEl.classList.toggle('is-critical', isCritical);
     // 无障碍：面板为模态告知（各一种结果），声明 dialog 语义并来自动播报内容变化
     approvalPanelEl.setAttribute('role', 'alertdialog');
-    approvalPanelEl.setAttribute('aria-label', 'AI 请求执行操作，请允许或拒绝');
+    approvalPanelEl.setAttribute('aria-label', 'AI 请求执行操作，请允许、允许本轮或拒绝');
     approvalPanelEl.setAttribute('aria-live', 'assertive');
 
     // 头部：标题 + 工具名标签
@@ -5878,14 +5881,15 @@ function showApprovalPanel(payload) {
     header.appendChild(tool);
     approvalPanelEl.appendChild(header);
 
-    // 高风险提示条（critical=true）：带警示图标，强化"无法绕过"语义
+    // 高风险提示条（critical=true）：带警示图标，提示需谨慎确认
+    // （可经「允许本轮」放行本轮后续操作，故不再声称确认不可绕过，避免与能力矛盾）
     if (isCritical) {
         const critical = document.createElement('div');
         critical.className = 'ai-approval-critical';
         const warnIcon = document.createElement('span');
         warnIcon.innerHTML = svgIcon('alert', 14);
         const warnText = document.createElement('span');
-        warnText.textContent = '高风险操作，无法绕过确认';
+        warnText.textContent = '高风险操作，请谨慎确认';
         critical.appendChild(warnIcon);
         critical.appendChild(warnText);
         approvalPanelEl.appendChild(critical);
@@ -5902,16 +5906,19 @@ function showApprovalPanel(payload) {
     }
     approvalPanelEl.appendChild(summary);
 
-    // 按钮行：拒绝 + 允许
+    // 按钮行：允许本轮 + 拒绝 + 允许（范围最大的「允许本轮」置于行首最左，与右侧两个决策按钮留白分隔，降低误点概率）
     const actions = document.createElement('div');
     actions.className = 'ai-approval-actions';
 
     let submitting = false; // 防重复提交（快速双点击）
+    /**
+     * 互斥禁用三个审批按钮，保证同一时间只允许提交一次决策。
+     * @param {HTMLElement|null} btn - 被点击的按钮；传入 null 表示恢复全部按钮可用（提交失败重试）
+     */
     const disabledBy = (btn) => {
-        const denyBtn = actions.querySelector('.ai-approval-btn.deny');
-        const allowBtn = actions.querySelector('.ai-approval-btn.allow');
-        if (denyBtn) denyBtn.disabled = btn !== denyBtn;
-        if (allowBtn) allowBtn.disabled = btn !== allowBtn;
+        actions.querySelectorAll('.ai-approval-btn').forEach((el) => {
+            el.disabled = el !== btn;
+        });
     };
 
     const denyBtn = document.createElement('button');
@@ -5923,7 +5930,8 @@ function showApprovalPanel(payload) {
         submitting = true;
         disabledBy(denyBtn);
         try {
-            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, false);
+            // 第 4 参 allowRound=false：仅拒绝本次操作，不影响本轮后续审批
+            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, false, false);
             hideApprovalPanel();
             window.showNotification?.(`已拒绝该操作${isCritical ? '（高风险）' : ''}`, 'warning', 3000);
         } catch (e) {
@@ -5942,7 +5950,8 @@ function showApprovalPanel(payload) {
         submitting = true;
         disabledBy(allowBtn);
         try {
-            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, true);
+            // 第 4 参 allowRound=false：仅允许本次操作，后续操作仍会照常弹窗审批
+            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, true, false);
             hideApprovalPanel();
         } catch (e) {
             window.showNotification?.('审批提交失败: ' + (e.message || e), 'error', 5000);
@@ -5951,6 +5960,28 @@ function showApprovalPanel(payload) {
         }
     });
 
+    const roundBtn = document.createElement('button');
+    roundBtn.type = 'button';
+    roundBtn.className = 'ai-approval-btn round';
+    roundBtn.textContent = '允许本轮';
+    roundBtn.title = '本轮内后续所有操作（含高风险）自动执行，不再询问';
+    roundBtn.addEventListener('click', async () => {
+        if (submitting) return;
+        submitting = true;
+        disabledBy(roundBtn);
+        try {
+            // 第 3 参 approved=true（本次也放行）+ 第 4 参 allowRound=true（本轮后续操作自动放行）
+            await window.go.main.App.ApproveToolCall(activeSessionId, approvalId, true, true);
+            hideApprovalPanel();
+            window.showNotification?.('本轮已完全放行：后续操作将自动执行，不再询问', 'warning', 4000);
+        } catch (e) {
+            window.showNotification?.('审批提交失败: ' + (e.message || e), 'error', 5000);
+            submitting = false; // 保留面板，允许重试
+            disabledBy(null);
+        }
+    });
+
+    actions.appendChild(roundBtn);
     actions.appendChild(denyBtn);
     actions.appendChild(allowBtn);
     approvalPanelEl.appendChild(actions);
