@@ -24,7 +24,7 @@ let contextUsageTextEl = null;  // 百分比 + 上限文本
 let polishBtn = null;         // #aiChatPolishBtn
 let polishOriginalText = '';  // 优化表达原文快照（用于还原）
 let _hideMsgHoverTip = null;  // initModeTips 注入：收起全部悬停卡（resetAIChatState 用）
-let _hideToolReasonTip = null; // initModeTips 注入：仅收起工具原因卡（工具行重建用，不连带统计卡）
+let _hideToolTip = null;      // initModeTips 注入：仅收起工具悬停卡（工具行重建/折叠用，不连带统计卡）
 let isPolishOptimizing = false; // 正在优化中，供停止按钮和 catch 块判断取消状态
 let streamPlanData = null;    // 本轮流的执行计划（落库 plan，历史回放）
 let streamPlanCardEl = null;  // 实时计划卡片 DOM 引用（流式过程中动态更新）
@@ -533,7 +533,7 @@ function initModeTips() {
     const MARGIN = 8;   // tooltip 距视口边缘的安全边距
     const GAP = 9;      // tooltip 与按钮的间距
     const TIP_W = 248;  // 与 CSS 中 .ai-mode-tip 的 width 保持一致
-    const HOVER_DELAY = 300; // 悬停延迟：与消息统计卡一致，防止鼠标划过就显示
+    const HOVER_DELAY = 800; // 悬停延迟：全局统一（消息统计卡/召回卡/工具卡共用），防止鼠标划过就显示
 
     /**
      * 定位 tooltip：水平居中于按钮（中心对齐），视口左/右缘不足时向内偏移防溢出；
@@ -639,7 +639,7 @@ function initModeTips() {
         opt.addEventListener('mouseleave', hide);
     });
 
-    // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）+ 工具调用失败原因卡 + 召回笔记卡：
+    // ── 消息统计悬停卡（AI 耗时/token、用户 token/时间）+ 工具调用悬停卡（工具/动作/结果）+ 召回笔记卡：
     // 事件委托 + 单实例动态填充；标签数量随消息增长，不逐条绑定；
     // portal fixed 定位不随消息区滚动，滚动即隐藏
     const aiStatsTip = portal.querySelector('.ai-mode-tip[data-tip="ai-msg-stats"]');
@@ -670,6 +670,8 @@ function initModeTips() {
         const toolEls = {
             title: document.getElementById('aiToolTipTitle'),
             name: document.getElementById('aiToolTipName'),
+            actionRow: document.getElementById('aiToolTipActionRow'),
+            action: document.getElementById('aiToolTipAction'),
             reason: document.getElementById('aiToolTipReason'),
         };
         const recallEls = {
@@ -767,16 +769,26 @@ function initModeTips() {
                 : '—';
         };
 
-        /** 工具调用失败原因卡：标题随状态（error→失败 / partial→部分失败 / auto→执行命令），正文完整原因 */
+        /** 工具调用悬停卡：标题随状态（ok→执行结果 / error→失败 / partial→部分失败 / auto→执行命令）；
+            内容行 = 工具名 + 动作文案（做了什么，如「执行操作系统任务：…」，空则隐藏该行）+ 正文
+            （成功行的工具输出 / os_agent 子 Agent 摘要、失败行的报错原因、auto 行的执行命令） */
         const fillToolTip = (trigger) => {
             const st = trigger.dataset.tipStatus || '';
             let title = '调用失败', cls = 'is-error';
-            if (st === 'partial') { title = '部分来源失败'; cls = 'is-warning'; }
+            if (st === 'ok') { title = '执行结果'; cls = ''; } // 成功：中性 accent 色（.ai-mode-tip-title 默认色）
+            else if (st === 'partial') { title = '部分来源失败'; cls = 'is-warning'; }
             else if (st === 'auto') { title = '完全访问自动放行'; cls = 'is-warning'; }
             toolEls.title.textContent = title;
-            toolEls.title.className = 'ai-mode-tip-title ' + cls;
+            toolEls.title.className = ('ai-mode-tip-title ' + cls).trim(); // trim 防 ok 时尾随空格
             toolEls.name.textContent = trigger.dataset.tipTool || '—';
-            toolEls.reason.textContent = trigger.dataset.tipText || '';
+            // 动作文案：后端已截断（多数 30 字 / os_agent 40 字）；空值隐藏整行不留空标签
+            const act = trigger.dataset.tipAction || '';
+            toolEls.action.textContent = act;
+            toolEls.actionRow.style.display = act ? '' : 'none';
+            // 正文（结果 / 报错原因）：空值同样隐藏整行（结果可为空串的成功调用，此时仅动作行有意义）
+            const txt = trigger.dataset.tipText || '';
+            toolEls.reason.textContent = txt;
+            toolEls.reason.style.display = txt ? '' : 'none';
         };
 
         /** 召回笔记悬停卡：标题行完整标题，内容行完整摘要（无内容时隐藏该行） */
@@ -804,9 +816,10 @@ function initModeTips() {
                 }, HOVER_DELAY);
                 return;
             }
-            // 工具调用行：行 dataset 携带失败原因（无则不弹卡），不需要消息条目
+            // 工具调用行：行 dataset 携带悬停文本（失败原因 / 成功结果 / 动作 / auto 命令），
+            // 正文与动作均为空才不弹卡，不需要消息条目
             if (target.classList.contains('ai-tool-status-item')) {
-                if (!toolTip || !target.dataset.tipText) return;
+                if (!toolTip || (!target.dataset.tipText && !target.dataset.tipAction)) return;
                 hoverTimer = setTimeout(() => {
                     if (!target.isConnected) return; // 倒计时期间行被整表重建：放弃弹卡
                     fillToolTip(target); showMsgTip(target, toolTip);
@@ -833,8 +846,9 @@ function initModeTips() {
         });
         // 暴露给 resetAIChatState：DOM 清空时收起全部残留的悬停卡
         _hideMsgHoverTip = hideMsgTip;
-        // 暴露给 buildToolStatusRows：工具行重建时仅收起工具原因卡，不连带正在查看的统计卡
-        _hideToolReasonTip = () => { if (activeTipEl === toolTip) hideMsgTip(); };
+        // 暴露给 buildToolStatusRows / toggleOsAgentGroup：工具行重建或折叠时仅收起工具悬停卡，
+        // 不连带正在查看的消息统计卡
+        _hideToolTip = () => { if (activeTipEl === toolTip) hideMsgTip(); };
         // portal 为 fixed 定位：消息区滚动 / 窗口缩放时立即隐藏
         messagesEl.addEventListener('scroll', hideMsgTip, { passive: true });
         window.addEventListener('resize', hideMsgTip);
@@ -3610,13 +3624,20 @@ async function startStreaming(userText, userMsgID) {
             // 自然撑开：展开时取消高度上限，折叠时收起（无内部滚动、无截断）
             body.style.maxHeight = isOpen ? 'none' : '0';
         });
+        // os_agent 行折叠/展开：事件委托绑定在 list 上（列表内容反复重建，但 list 元素常驻，
+        // 故只需绑定一次）；局部切换该组子步骤显隐，不整表重建
+        list.addEventListener('click', function(e) {
+            const row = e.target.closest('.ai-tool-status-item.is-os-agent');
+            if (!row) return;
+            toggleOsAgentGroup(row);
+        });
         streamingEl.insertBefore(summary, contentDiv);
         toolSummaryEl = summary;
         return summary;
     };
 
     /** 用当前 toolRecords 更新折叠摘要（header + 明细），并维护 running 行实时计时（单一定时器）
-        明细渲染与历史回放共用模块级 updateToolSummary：失败/部分失败逐条独立、成功按名聚合 */
+        明细渲染与历史回放共用模块级 updateToolSummary：全部记录按原始顺序逐行渲染（不聚合） */
     const refreshToolStatus = () => {
         if (!toolSummaryEl) return;
         const hasRunning = updateToolSummary(toolSummaryEl, toolRecords, true);
@@ -3667,10 +3688,10 @@ async function startStreaming(userText, userMsgID) {
         const trName = payload.name || 'tool';
         if (payload.action === 'tool_start') {
             clearStreamedText(); // 清除模型本轮决策输出的中间文本，最终正文单独累积
-            const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
+            const seq = nextToolSeq(toolSeqMap, osAgentStack, trName);
             const rec = { id: nextToolId++, name: trName, seqName: seq, status: 'running', action_text: payload.action_text || '执行', result: '', startAt: Date.now(), endAt: 0 };
-            // os_agent 分组：主行开组入栈；组内其它工具事件标记为缩进子步骤
-            if (trName === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(osAgentStack, payload, rec); }
+            // os_agent 分组：主行开组入栈（附带组内独立计数 map）；组内其它工具事件标记为缩进子步骤
+            if (trName === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(osAgentStack, payload, rec, {}); }
             else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
             toolRecords.push(rec);
         } else if (payload.action === 'tool_result' || payload.action === 'tool_error' || payload.action === 'tool_partial') {
@@ -3697,7 +3718,7 @@ async function startStreaming(userText, userMsgID) {
                     }
                 }
                 if (!autoClosed) {
-                    const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
+                    const seq = nextToolSeq(toolSeqMap, osAgentStack, trName);
                     const rec = { id: nextToolId++, name: trName, seqName: seq, status: payload.action === 'tool_error' ? 'error' : (payload.action === 'tool_partial' ? 'partial' : 'ok'), action_text: '', result: payload.result != null ? String(payload.result) : '', startAt: 0, endAt: 0 };
                     if (trName === 'os_agent') { rec.isAgentGroup = true; }
                     else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
@@ -3724,7 +3745,7 @@ async function startStreaming(userText, userMsgID) {
                 }
             }
             if (!upgraded) {
-                const seq = (toolSeqMap[trName] = (toolSeqMap[trName] || 0) + 1);
+                const seq = nextToolSeq(toolSeqMap, osAgentStack, trName);
                 const rec = { id: nextToolId++, name: trName, seqName: seq, status: 'auto', action_text: autoCmd, result: autoRes, startAt: Date.now(), endAt: Date.now() };
                 if (trName === 'os_agent') { rec.isAgentGroup = true; }
                 else if (osAgentGroupActive(osAgentStack)) { rec.substep = true; }
@@ -3914,6 +3935,17 @@ async function startStreaming(userText, userMsgID) {
         if (streamGen !== myGen) return; // 属于旧流, 丢弃
         stopThinkingTimer(0); // 清理计时器, 摘要已在 chunk 中更新
         unsubs.forEach(fn => fn());
+        // 流结束：os_agent 组统一折叠（工作中保持展开便于观察进度，结束后收敛为折叠态，
+        // 与历史回放形态一致），并重渲染使组内子步骤行隐藏
+        if (toolSummaryEl) {
+            const stListEl = toolSummaryEl.querySelector('.ai-tool-status-list');
+            if (stListEl) {
+                const stCollapsed = collapsedSetFor(stListEl);
+                toolRecords.forEach((rec, idx) => { if (rec.isAgentGroup) stCollapsed.add(idx); });
+            }
+            if (toolStatusTimer) { clearInterval(toolStatusTimer); toolStatusTimer = null; }
+            updateToolSummary(toolSummaryEl, toolRecords, true);
+        }
         // 流结束：若工具折叠摘要仍展开（用户手动展开），统一收起，与历史回放折叠形态一致
         if (toolSummaryEl && toolSummaryEl.classList.contains('open')) {
             toolSummaryEl.classList.remove('open');
@@ -5955,23 +5987,37 @@ function setAskInputWaiting(waiting) {
 /**
  * ── Agent 工具调用记录统一渲染（实时 / 历史回放共用） ──
  * 数据模型：每条工具调用一个记录 {name, seqName, status: running|ok|error|partial, action_text, result, id?, startAt?, endAt?}。
- * 渲染规则：失败 / 部分失败逐条独立显示（各带自己的原因，不再合并吞并）；成功按工具聚合「名 ×N」；
- * header 徽标计数由记录重算，恒等于可见行数，杜绝「标称失败但看不到」的计数不一致。 */
+ * 渲染规则：全部记录按原始顺序逐行渲染（成功/失败/部分失败均独立成行，不聚合、不改序）；
+ * os_agent 组支持折叠/展开——实时默认展开、回放与流结束后默认折叠。 */
 
 /**
  * ── os_agent 子 Agent 分组栈（实时 / 历史回放共用逻辑） ──
  * 父层 Agent 仅暴露 os_agent 一个委托工具，内层 13 个文件/命令工具的调用事件与
  * os_agent 的 start/result 在原始事件数组中顺序相邻：
  *   os_agent tool_start → 内层 read_file start/result → … → os_agent tool_result
- * 栈元素 { callId, rec }：os_agent 的 tool_result 优先按 call_id 配对（同一轮父模型
+ * 栈元素 { callId, rec, seqMap }（seqMap 为组内独立计数：子步骤序号在组内从 1 起，
+ * 与全局/其它组隔离）：os_agent 的 tool_result 优先按 call_id 配对（同一轮父模型
  * 可能多次调用 os_agent，不同 call_id），无 call_id 时按顺序关栈顶。
  * 实时路径在流作用域（startStreaming 内）持有一个栈实例，回放路径在 buildToolRecords 内局部建栈，
  * 两路径共用本组函数维护，保证分组语义一致（所见即所存）。
  */
 
-/** 开组：os_agent tool_start 时入栈（callId 可为空，空时退化为顺序关组） */
-function osAgentGroupOpen(stack, ev, rec) {
-    stack.push({ callId: ev && ev.call_id, rec: rec });
+/** 开组：os_agent tool_start 时入栈（callId 可为空，空时退化为顺序关组）。
+    seqMap 为组内独立计数对象：子 Agent 内层子步骤的工具序号在组内从 1 计数，
+    与全局/其它组隔离，避免「OS Agent 内 run_command 10 次」显示成全局第 11~20 次。 */
+function osAgentGroupOpen(stack, ev, rec, seqMap) {
+    stack.push({ callId: ev && ev.call_id, rec: rec, seqMap: seqMap || null });
+}
+
+/** 计算下一条记录的调用序号。os_agent 主行始终走全局计数（它是父层委托工具）；
+ *  其余名称若处于 os_agent 组内，则用栈顶组内独立 seqMap（子 Agent 内单独计数，从 1 起）；
+ *  否则用全局 seqMap。实时与回放两条路径共用，保证计数语义一致（所见即所存）。 */
+function nextToolSeq(globalSeqMap, stack, name) {
+    if (name !== 'os_agent' && stack && stack.length && stack[stack.length - 1].seqMap) {
+        var m = stack[stack.length - 1].seqMap;
+        return (m[name] = (m[name] || 0) + 1);
+    }
+    return (globalSeqMap[name] = (globalSeqMap[name] || 0) + 1);
 }
 
 /** 关组：os_agent tool_result/error/partial 时按 call_id 配对移除；无 call_id 按顺序关栈顶。
@@ -5993,6 +6039,56 @@ function osAgentGroupActive(stack) {
     return stack.length > 0;
 }
 
+/** 折叠状态存储：按「明细列表元素」隔离，值为该列表内已折叠的 os_agent 记录下标集合。
+    用 WeakMap 而非模块级 Set 的原因：
+    1) 列表 DOM 销毁后条目自动回收，不随消息反复渲染无限增长；
+    2) key 为列表元素本身，同一列表被 innerHTML 重建（实时刷新）时状态仍可恢复；
+    3) 下标在「同一条消息的 records 数组」内稳定，不依赖全局递增序列。 */
+var collapsedOsAgentMap = new WeakMap();
+
+/** 取某明细列表的折叠下标集合（惰性创建）。 */
+function collapsedSetFor(listEl) {
+    var s = collapsedOsAgentMap.get(listEl);
+    if (!s) { s = new Set(); collapsedOsAgentMap.set(listEl, s); }
+    return s;
+}
+
+/** 局部切换某个 os_agent 组的折叠态：只改该组内子步骤行的显隐与主行箭头方向，
+    不做整表重建（全量重建会整块重绘、丢失过渡，点击时显得卡顿不丝滑）。
+    折叠态写入该行所属列表的 WeakMap 集合，供后续全量重建（实时新事件）恢复状态。 */
+function toggleOsAgentGroup(row) {
+    var listEl = row.parentElement;
+    if (!listEl) return;
+    var idx = parseInt(row.dataset.ridx, 10);
+    if (isNaN(idx)) return; // 防御：无下标的行不参与折叠（避免多个缺值行共享同一 NaN key）
+    // 折叠/展开属交互行为，清除浏览器可能已建立的文本选区：点击主行时若存在选区，
+    // 或连击被解读为选词，整片工具记录行会被高亮成"选中"态（视觉干扰）
+    var sel = window.getSelection && window.getSelection();
+    if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+    var collapsed = collapsedSetFor(listEl);
+    var collapse = !collapsed.has(idx);
+    if (collapse) collapsed.add(idx);
+    else collapsed.delete(idx);
+    _hideToolTip?.(); // 折叠会隐藏行，先收起可能残留的悬停卡（mouseleave 不触发）
+    row.classList.toggle('is-expanded', !collapse);
+    // 仅遍历本组区间：主行之后、下一个 os_agent 主行之前
+    var toAnimate = [];
+    var sib = row.nextElementSibling;
+    while (sib) {
+        if (sib.classList.contains('is-os-agent')) break;
+        if (sib.classList.contains('is-substep')) {
+            sib.classList.toggle('is-collapsed', collapse);
+            if (!collapse) { sib.style.animation = 'none'; toAnimate.push(sib); }
+        }
+        sib = sib.nextElementSibling;
+    }
+    if (toAnimate.length) {
+        // 单次强制 reflow 后统一恢复：批量重启入场动画（循环内逐行 reflow 代价高）
+        void row.offsetWidth;
+        toAnimate.forEach(function(el) { el.style.animation = ''; });
+    }
+}
+
 /** 原始事件数组（tool_start / tool_result / tool_error / tool_partial）→ 逐调用记录（历史回放用）
     记录附加分组字段：isAgentGroup（os_agent 主行）/ substep（组内层子步骤） */
 function buildToolRecords(raw) {
@@ -6006,9 +6102,9 @@ function buildToolRecords(raw) {
         if (!ev || !ev.name) continue;
         var name = ev.name;
         if (ev.action === 'tool_start') {
-            var seq = (seqByName[name] = (seqByName[name] || 0) + 1);
+            var seq = nextToolSeq(seqByName, agentStack, name);
             var rec = { name: name, seqName: seq, status: 'running', action_text: ev.action_text || '执行', result: '' };
-            if (name === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(agentStack, ev, rec); }
+            if (name === 'os_agent') { rec.isAgentGroup = true; osAgentGroupOpen(agentStack, ev, rec, {}); }
             else if (osAgentGroupActive(agentStack)) { rec.substep = true; }
             records.push(rec);
             pending.push(rec);
@@ -6032,7 +6128,7 @@ function buildToolRecords(raw) {
                     }
                 }
                 if (!autoClosed) {
-                    var seq2 = (seqByName[name] = (seqByName[name] || 0) + 1);
+                    var seq2 = nextToolSeq(seqByName, agentStack, name);
                     var rec2 = { name: name, seqName: seq2, status: status, action_text: '', result: res };
                     if (name === 'os_agent') { rec2.isAgentGroup = true; }
                     else if (osAgentGroupActive(agentStack)) { rec2.substep = true; }
@@ -6060,7 +6156,7 @@ function buildToolRecords(raw) {
                 upgraded.action_text = autoCmd;
                 upgraded.result = autoRes;
             } else {
-                var seq3 = (seqByName[name] = (seqByName[name] || 0) + 1);
+                var seq3 = nextToolSeq(seqByName, agentStack, name);
                 var rec3 = { name: name, seqName: seq3, status: 'auto', action_text: autoCmd, result: autoRes };
                 if (name === 'os_agent') { rec3.isAgentGroup = true; }
                 else if (osAgentGroupActive(agentStack)) { rec3.substep = true; }
@@ -6071,7 +6167,8 @@ function buildToolRecords(raw) {
     return records;
 }
 
-/** 折叠摘要条 header 文案/徽标：计数由记录重算（失败=可见❌行数，部分=可见⚠行数） */
+/** 折叠摘要条 header 文案/徽标：计数由记录重算（失败=记录中 ❌ 数，部分=记录中 ⚠ 数）。
+    注意：计数含折叠组内的记录，故**不等于**明细列表当前可见行数（折叠不应漏统计异常）。 */
 function rebuildToolSummaryHeader(summaryEl, records) {
     var header = summaryEl.querySelector('.ai-tool-summary-header');
     var textSpan = header.querySelector('.ai-tool-summary-header-text');
@@ -6101,40 +6198,38 @@ function rebuildToolSummaryHeader(summaryEl, records) {
     }
 }
 
-/** 逐记录渲染明细列表：失败的置前（逐条各自原因）、正常（成功）聚合置后、实时 running 置顶；
-    顺序即优先级（异常最优先可见），header 徽标计数与可见行一致。写入既有的 listEl */
+/** 逐记录渲染明细列表：按 records 原始顺序逐行渲染（成功/失败/部分失败均独立成行，
+    不聚合、不改序），os_agent 组内子步骤带 is-substep 缩进；
+    折叠态取自该列表的 collapsedOsAgentMap 下标集合。写入既有的 listEl */
 function buildToolStatusRows(listEl, records, isLive) {
-    _hideToolReasonTip?.(); // 行即将整表重建：仅收起悬停中失败原因卡（不连带统计卡），避免残留悬浮
+    _hideToolTip?.(); // 行即将整表重建：仅收起悬停中的工具卡（不连带统计卡），避免残留悬浮
     listEl.innerHTML = '';
-    var errs = [], parts = [], oks = [], runs = [], autos = [];
-    records.forEach(function(r) {
-        if (r.status === 'error') errs.push(r);
-        else if (r.status === 'partial') parts.push(r);
-        else if (r.status === 'ok') oks.push(r);
-        else if (r.status === 'running') runs.push(r);
-        else if (r.status === 'auto') autos.push(r);
-    });
 
     function timeText(rec) {
         if (!isLive || !rec.startAt) return '';
         var end = rec.endAt || Date.now();
         return ((end - rec.startAt) / 1000).toFixed(1) + 's';
     }
-    function itemEl(rec) {
-        var cls = 'is-active', icon = 'search', text = '：' + (rec.action_text || '执行'), hasReason = false;
+    /** 构建单条工具明细行。collapsed 表示当前行所属 os_agent 组是否折叠
+        （os_agent 主行据此决定箭头方向，子步骤行据此决定是否隐藏）；
+        idx 为该记录在 records 中的下标，落到 dataset.ridx 供折叠切换时定位。 */
+    function itemEl(rec, collapsed, idx) {
+        var cls = 'is-active', icon = 'search', text = '：' + (rec.action_text || '执行'), hasTip = false;
         var itemAutoReason = null;
         if (rec.status === 'error') {
             cls = 'is-error'; icon = 'x';
             var re = rec.result || '';
             text = '：失败' + (re ? '：' + (re.length > 40 ? re.slice(0, 40) + '…' : re) : '');
-            hasReason = re.length > 0;
         } else if (rec.status === 'partial') {
             cls = 'is-warning'; icon = 'alert';
             var pe = rec.result || '';
             text = '：部分来源失败' + (pe ? '：' + (pe.length > 40 ? pe.slice(0, 40) + '…' : pe) : '');
-            hasReason = pe.length > 0;
         } else if (rec.status === 'ok') {
-            cls = 'is-done'; icon = 'check'; text = '：已完成';
+            cls = 'is-done'; icon = 'check';
+            // 成功行展示动作文案（读哪个文件 / 跑什么命令 / 列哪个目录），
+            // 无文案时回退通用文案（历史「补行」记录只带 status/result，无 start 配对）
+            var okText = rec.action_text || '';
+            text = okText ? '：' + (okText.length > 56 ? okText.slice(0, 56) + '…' : okText) : '：已完成';
         } else if (rec.status === 'auto') {
             // 完全访问自动放行高危命令：独立 is-auto 警示行，仅展示执行命令本身
             cls = 'is-auto'; icon = 'alert';
@@ -6142,16 +6237,32 @@ function buildToolStatusRows(listEl, records, isLive) {
             text = cmdTxt.length > 56 ? '：' + cmdTxt.slice(0, 56) + '…' : '：' + cmdTxt;
             if (cmdTxt) itemAutoReason = { reason: cmdTxt };
         }
+        // 悬停卡触发条件：有结果正文**或**有动作文案。结束态终止记录的结果可能为空串，
+        // 此时动作文案仍能说明"做了什么"，故二者取或；running 不弹卡，auto 走上方
+        // itemAutoReason（其正文即命令），均不参与此处。
+        if (rec.status === 'error' || rec.status === 'partial' || rec.status === 'ok') {
+            hasTip = !!(rec.result || rec.action_text);
+        }
         var item = document.createElement('div');
         item.className = 'ai-tool-status-item ' + cls;
+        item.dataset.ridx = idx; // 记录下标（折叠状态索引，点击切换时读取）
         // os_agent 分组标记：主行（is-os-agent）+ 内层子步骤（is-substep，缩进/引导线/弱化样式见 ai-chat.css）
-        if (rec.isAgentGroup) item.classList.add('is-os-agent');
-        if (rec.substep) item.classList.add('is-substep');
-        // 失败/部分失败：完整原因挂行 dataset 供同款悬停卡读取（替代原生 title）
-        if (hasReason) {
+        if (rec.isAgentGroup) {
+            item.classList.add('is-os-agent');
+            // 折叠箭头方向：展开态旋转 90°（CSS 控制），折叠态为默认右向
+            if (!collapsed) item.classList.add('is-expanded');
+        }
+        // 子步骤：始终带 is-substep（缩进/弱化）；所在 os_agent 组折叠时额外带 is-collapsed 隐藏
+        if (rec.substep) {
+            item.classList.add('is-substep');
+            if (collapsed) item.classList.add('is-collapsed');
+        }
+        // 失败/部分失败原因、成功结果、动作文案：挂行 dataset 供悬停卡读取（替代原生 title）
+        if (hasTip) {
             item.dataset.tipText = rec.result;
             item.dataset.tipStatus = rec.status;
             item.dataset.tipTool = getToolLabel(rec.name);
+            item.dataset.tipAction = rec.action_text || ''; // auto 行走下方分支（其正文即命令），不设以免重复
         }
         // 完全访问自动放行行：独立 auto 状态挂 dataset，悬停卡展示执行的命令
         if (itemAutoReason) {
@@ -6176,49 +6287,27 @@ function buildToolStatusRows(listEl, records, isLive) {
         item.appendChild(nameEl);
         item.appendChild(textEl);
         item.appendChild(timeEl);
+        // os_agent 主行折叠箭头：置于行末最右，与工具摘要条 header 的箭头位置/样式一致
+        if (rec.isAgentGroup) {
+            var collapseIconEl = document.createElement('span');
+            collapseIconEl.className = 'ai-tool-collapse-icon';
+            collapseIconEl.innerHTML = CHEVRON_RIGHT_ICON;
+            item.appendChild(collapseIconEl);
+        }
         return item;
     }
-    function aggItemEl(name, count) {
-        var item = document.createElement('div');
-        item.className = 'ai-tool-status-item is-done';
-        var iconEl = document.createElement('span');
-        iconEl.className = 'ai-tool-status-icon';
-        iconEl.innerHTML = svgIcon('check');
-        var nameEl = document.createElement('span');
-        nameEl.className = 'ai-tool-status-name';
-        nameEl.textContent = getToolLabel(name) + ' ×' + count;
-        var textEl = document.createElement('span');
-        textEl.className = 'ai-tool-status-text';
-        textEl.textContent = '：已完成';
-        var timeEl = document.createElement('span');
-        timeEl.className = 'ai-tool-status-time';
-        item.appendChild(iconEl);
-        item.appendChild(nameEl);
-        item.appendChild(textEl);
-        item.appendChild(timeEl);
-        return item;
-    }
-
-    // os_agent 分组存在时：保持原始顺序逐条渲染（主行 + 缩进子步骤相邻可见，成功不聚合），
-    // 保证「os_agent start → 内层子步骤 → os_agent result」的组内顺序不被打散；
-    // 普通工具流维持原有分组聚合行为。
-    var hasAgentGroup = records.some(function(r) { return r.isAgentGroup || r.substep; });
-    if (hasAgentGroup) {
-        records.forEach(function(r) { listEl.appendChild(itemEl(r)); });
-        return;
-    }
-
-    // 顺序：执行中（实时顶格）→ 失败/部分失败（逐条置前）→ 成功（聚合置后）
-    runs.forEach(function(r) { listEl.appendChild(itemEl(r)); });
-    errs.forEach(function(r) { listEl.appendChild(itemEl(r)); });
-    parts.forEach(function(r) { listEl.appendChild(itemEl(r)); });
-    autos.forEach(function(r) { listEl.appendChild(itemEl(r)); });
-    if (oks.length) {
-        var agg = {};
-        oks.forEach(function(r) { agg[r.name] = (agg[r.name] || 0) + 1; });
-        var names = Object.keys(agg);
-        names.forEach(function(n) { listEl.appendChild(aggItemEl(n, agg[n])); });
-    }
+    // 统一渲染（实时 / 回放共用，有无子 Agent 均走同一逻辑）：
+    // 所有记录按原始顺序逐行渲染，成功/失败/部分失败均独立显示；
+    // os_agent 组内子步骤带 is-substep 缩进样式，与父层 os_agent 主行相邻可见。
+    // 折叠态推导：records 中 os_agent 主行之后、下一个 os_agent 主行之前的记录均属该组，
+    // 故顺序遍历时记录「当前组是否折叠」，子步骤据此加 is-collapsed 隐藏。
+    var collapsed = collapsedSetFor(listEl);
+    var groupCollapsed = false;
+    records.forEach(function(r, idx) {
+        // os_agent 主行先更新折叠态（决定自身箭头方向），其后子步骤沿用该组状态
+        if (r.isAgentGroup) groupCollapsed = collapsed.has(idx);
+        listEl.appendChild(itemEl(r, groupCollapsed, idx));
+    });
 }
 
 /** 根据记录更新折叠摘要条（header + 明细），返回是否仍有执行中记录 */
@@ -6232,7 +6321,7 @@ function updateToolSummary(summaryEl, records, isLive) {
 
 /**
  * 渲染 Agent 工具调用链（历史回放）。与实时流共用同一配套构建逻辑：
- * 失败/部分失败逐条独立展示（各自原因），成功按工具聚合，header 徽标计数与可见行一致。
+ * 全部记录按原始顺序逐行渲染（失败行自带原因，不聚合）；os_agent 组默认折叠。
  * toolCalls: 原始事件数组 [{ action: 'tool_start'|'tool_result'|'tool_error'|'tool_partial', name, args, result }]
  */
 function renderToolCalls(el, toolCalls) {
@@ -6278,8 +6367,20 @@ function renderToolCalls(el, toolCalls) {
         body.style.maxHeight = isOpen ? 'none' : '0';
     });
 
+    // 回放初始态：所有 os_agent 组默认折叠（只显示主行，点击展开查看组内子步骤明细）
+    var initCollapsed = collapsedSetFor(list);
+    records.forEach(function(r, idx) { if (r.isAgentGroup) initCollapsed.add(idx); });
+
     // 初始渲染 header 文案/徽标与明细（回放为终态，无 running）
     updateToolSummary(summary, records, false);
+
+    // os_agent 行折叠/展开：事件委托绑定在 list 上（列表内容反复重建，但 list 元素常驻）；
+    // 局部切换该组子步骤显隐，不整表重建（保留过渡动画，避免点击时整块重绘闪烁）
+    list.addEventListener('click', function(e) {
+        var row = e.target.closest('.ai-tool-status-item.is-os-agent');
+        if (!row) return;
+        toggleOsAgentGroup(row);
+    });
 
     // 固定于正文上方（thinking 之下），与流式折叠摘要条位置一致，所见即所存
     var contentAnchor = el.querySelector('.msg-content');

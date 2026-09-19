@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,7 +65,9 @@ func TestWorkspaceFilePath(t *testing.T) {
 		`\home\user\x.txt`,
 	}
 	for _, p := range rejected {
-		t.Run("拒绝_"+p, func(t *testing.T) {
+		// 子测试名清洗分隔符：路径含 "/" 会被 Go 测试输出按层级展开，替换为 "_" 保持可读
+		name := strings.NewReplacer("/", "_", `\`, "_").Replace(p)
+		t.Run("拒绝_"+name, func(t *testing.T) {
 			if _, err := WorkspaceFilePath(root, p); err == nil {
 				t.Errorf("WorkspaceFilePath(%q) 应返回越界错误", p)
 			}

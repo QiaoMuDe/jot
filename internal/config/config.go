@@ -77,7 +77,7 @@ func SandboxFilePath(sandboxRoot, p, label string) (string, error) {
 	// "文件不存在"，模型无法识别格式错误而反复重试。直接报出格式错误。
 	// 类 Unix 平台上 /home/... 是合法绝对路径（IsAbs=true），不受影响。
 	if (strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`)) && !filepath.IsAbs(p) {
-		return "", fmt.Errorf("路径格式无效（不是可识别的绝对路径）;请使用相对路径（如 notes/a.md）或以 %s/ 开头的路径", label)
+		return "", fmt.Errorf("路径格式无效（不是可识别的绝对路径）；请使用相对路径（如 notes/a.md）或以 %s/ 开头的路径", label)
 	}
 
 	// 解析目标路径：相对路径相对根目录拼接，绝对路径直接采用，均做 Clean

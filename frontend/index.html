@@ -2914,10 +2914,11 @@ console.log(greet("Jot"));
         <span class="ai-mode-tip-line" id="aiUserStatsTimeRow"><em>发送时间：</em><span class="tip-val" id="aiUserStatsTime">—</span></span>
         <span class="ai-mode-tip-line"><em>Token 消耗：</em><span class="tip-val" id="aiUserStatsTokens">—</span></span>
     </div>
-    <!-- 工具调用失败原因卡（工具明细行悬停触发，initModeTips 委托填充） -->
+    <!-- 工具调用悬停卡（工具明细行悬停触发，initModeTips 委托填充） -->
     <div class="ai-mode-tip wide" data-tip="tool-record">
         <span class="ai-mode-tip-title" id="aiToolTipTitle">调用失败</span>
         <span class="ai-mode-tip-line"><em>工具：</em><span class="tip-val" id="aiToolTipName">—</span></span>
+        <span class="ai-mode-tip-line" id="aiToolTipActionRow"><em>动作：</em><span id="aiToolTipAction">—</span></span>
         <span class="ai-mode-tip-line ai-tip-fulltext" id="aiToolTipReason">—</span>
     </div>
     <!-- 召回笔记悬停卡（笔记条目悬停触发，initModeTips 委托填充） -->

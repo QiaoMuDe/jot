@@ -763,9 +763,42 @@
     font-size: 0.68rem;
 }
 
+/* ── os_agent 组折叠/展开 ──
+   主行行末（最右）chevron 箭头（折叠态右向，展开态旋转 90° 向下），
+   位置与样式对齐工具摘要条 header 箭头（.ai-tool-summary-header-arrow）；
+   折叠时该组内子步骤行整体隐藏（is-collapsed 由 JS 按组折叠态逐行标注）。
+   主行是交互控件，禁用文本选择：否则连击会被浏览器解读为选词/选段，
+   把整片工具记录（含组内子步骤行）都选成高亮态。 */
+.ai-tool-status-item.is-os-agent {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.ai-tool-collapse-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+.ai-tool-collapse-icon svg {
+    width: 14px;
+    height: 14px;
+}
+.ai-tool-status-item.is-os-agent.is-expanded .ai-tool-collapse-icon {
+    transform: rotate(90deg);
+}
+.ai-tool-status-item.is-collapsed {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ai-tool-status-item.is-active .ai-tool-status-icon,
     .thinking-summary.is-thinking .ai-inline-icon,
+    .ai-tool-collapse-icon { transition: none; }
     .ai-tool-status-item.is-os-agent.is-active::before {
         animation: none;
     }
@@ -1624,7 +1657,7 @@
     width: 260px;
 }
 
-/* 加宽变体：正文展示整段预览文本的卡（工具失败原因/召回笔记），加宽减少行数 */
+/* 加宽变体：正文展示整段预览文本的卡（工具结果/失败原因、召回笔记），加宽减少行数 */
 .ai-mode-tip.wide {
     width: 340px;
 }
@@ -1636,8 +1669,8 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* ── 悬停卡完整正文：保留换行，完整展示预览文本（工具失败原因卡/召回笔记卡共用）。
-      Content 均为后端预览截断后的定长文本（召回 200 字 / 工具原因 500 字），无需前端截断 ── */
+/* ── 悬停卡完整正文：保留换行，完整展示预览文本（工具结果/失败原因卡、召回笔记卡共用）。
+      Content 均为后端预览截断后的定长文本（召回 200 字 / 工具结果与原因 500 字），无需前端截断 ── */
 .ai-tip-fulltext {
     white-space: pre-wrap;
     word-break: break-word;
