@@ -364,6 +364,22 @@ func TestDeleteItem(t *testing.T) {
 		}
 	})
 
+	t.Run("多层非空目录缺省拒绝递归删除", func(t *testing.T) {
+		// 回归：Windows 上 filepath.Rel 返回反斜杠 rel（如 m\n），os.Root.FS()
+		// 适配器仅接受 "/" 分隔，曾致"检查目录内容失败"而非引导 recursive
+		writeTestFile(t, dir, "m/n/x.txt", "x")
+		_, err := h.InvokableRun(context.Background(), `{"path":"m/n"}`)
+		if err == nil {
+			t.Fatal("多层非空目录未设 recursive 应报错")
+		}
+		if !strings.Contains(err.Error(), "recursive") {
+			t.Errorf("错误应引导 recursive，实际: %v", err)
+		}
+		if got := readTestFile(t, dir, "m/n/x.txt"); got != "x" {
+			t.Errorf("拒绝后多层目录内容应保留，实际: %q", got)
+		}
+	})
+
 	t.Run("空目录缺省可删", func(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(dir, "empty"), 0o755); err != nil {
 			t.Fatal(err)

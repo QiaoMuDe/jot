@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -121,8 +122,11 @@ func (t *deleteItemTool) InvokableRun(ctx context.Context, argumentsInJSON strin
 	// 目录递归判定：非空目录必须显式 recursive=true 才允许递归删除；
 	// 空目录无内容丢失风险，缺省直接允许删除（与"缺省只允许删文件/空目录"一致）
 	if stat.IsDir() && !args.Recursive {
-		// os.Root 无 ReadDir 方法，经 root.FS()（io/fs 适配器）列举
-		entries, err := fs.ReadDir(h.FS(), rel)
+		// os.Root 无 ReadDir 方法，经 root.FS()（io/fs 适配器）列举。
+		// 注意：适配器仅接受 "/" 分隔路径，filepath.Rel 在 Windows 上返回反斜杠
+		// 分隔的多层 rel（如 a\b），直接传入会报 invalid argument，须 ToSlash
+		// 统一分隔符（与 ls_dir 同根因，见 tools_log 50 次路径失败分析）。
+		entries, err := fs.ReadDir(h.FS(), filepath.ToSlash(rel))
 		if err != nil {
 			return "", fmt.Errorf("检查目录内容失败: %w", err)
 		}

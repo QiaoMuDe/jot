@@ -58,6 +58,10 @@ func TestWorkspaceFilePath(t *testing.T) {
 		"sub/../../escape.txt",
 		root + sep + ".." + sep + "outside.txt",
 		".." + sep + ".." + sep + "xxx",
+		// 外来/畸形绝对路径：Windows 上 filepath.IsAbs("/home/...") 为 false，
+		// 曾被当相对路径拼进沙箱根产生幽灵路径；现直接报格式错误
+		"/home/user/.jot/workspace/x.txt",
+		`\home\user\x.txt`,
 	}
 	for _, p := range rejected {
 		t.Run("拒绝_"+p, func(t *testing.T) {

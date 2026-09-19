@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -110,8 +111,10 @@ func (t *lsDirTool) InvokableRun(ctx context.Context, argumentsInJSON string, _ 
 		return "", errors.New("ls_dir 目标不是目录（不支持列出文件），请传入目录路径")
 	}
 
-	// os.Root 无 ReadDir 方法，经 root.FS()（io/fs 适配器）列举，返回 []fs.DirEntry
-	entries, err := fs.ReadDir(root.FS(), rel)
+	// os.Root 无 ReadDir 方法，经 root.FS()（io/fs 适配器）列举，返回 []fs.DirEntry。
+	// 注意：适配器仅接受 "/" 分隔路径，filepath.Rel 在 Windows 上返回反斜杠分隔的
+	// 多层 rel（如 a\b），直接传入会报 invalid argument，须 ToSlash 统一分隔符。
+	entries, err := fs.ReadDir(root.FS(), filepath.ToSlash(rel))
 	if err != nil {
 		if ctx.Err() != nil {
 			return "", ctx.Err()

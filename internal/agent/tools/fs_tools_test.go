@@ -268,6 +268,22 @@ func TestLsDir(t *testing.T) {
 		}
 	})
 
+	t.Run("多层子目录钻取", func(t *testing.T) {
+		// 回归：Windows 上 filepath.Rel 返回反斜杠 rel（如 sub\deep），os.Root.FS()
+		// 适配器仅接受 "/" 分隔，曾致 readdir invalid argument（见 tools_log 50 次路径失败）
+		out, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"sub/deep"}`)
+		if err != nil {
+			t.Fatalf("ls_dir 失败: %v", err)
+		}
+		if !strings.Contains(out, "文件: c.txt") {
+			t.Errorf("path=sub/deep 应列出 c.txt，实际:\n%s", out)
+		}
+		// 首行路径锚点：显示 "sub/deep"（relDisplayPath 输出 OS 原生分隔符）
+		if !strings.Contains(out, "当前目录: "+filepath.Join("sub", "deep")) {
+			t.Errorf("多层钻取应显示当前目录锚点 sub/deep，实际:\n%s", out)
+		}
+	})
+
 	t.Run("越权路径拒绝", func(t *testing.T) {
 		if _, err := newTestLsDir(dir).InvokableRun(context.Background(), `{"path":"../secret"}`); err == nil {
 			t.Fatal("越权路径应报错")
