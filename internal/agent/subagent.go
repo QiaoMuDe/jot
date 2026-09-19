@@ -60,6 +60,7 @@ var toolConstructors = map[string]func(ctx *tools.Context) tool.InvokableTool{
 	"delete_file":   tools.NewDeleteFile,
 	"mkdir_dir":     tools.NewMkdirDir,
 	"run_command":   tools.NewRunCommand,
+	"run_python":    tools.NewRunPython,
 	"transfer_file": tools.NewTransferFile,
 }
 

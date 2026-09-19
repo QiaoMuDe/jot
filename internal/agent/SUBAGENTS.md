@@ -64,6 +64,7 @@ frontend/src/css/components/ai-chat.css  .is-os-agent / .is-substep 样式
 var osSubAgentToolNames = []string{
     "read_file", "write_file", "edit_file", "ls_dir", "glob", "grep_file",
     "copy_file", "move_file", "delete_file", "mkdir_dir", "run_command",
+    "run_python", "transfer_file",
 }
 ```
 

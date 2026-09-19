@@ -1,7 +1,7 @@
 package agent
 
 // 本文件覆盖 os_agent 子 Agent 委托工具的单元测试：
-//  1. 内层白名单装配（12 个文件/命令工具）；
+//  1. 内层白名单装配（13 个文件/命令工具）；
 //  2. chatModel 为 nil / disabled 禁用时的装配跳过；
 //  3. 内层 Context 与父层同一指针（审批共享）；
 //  4. InvokableRun 参数错误分支；
@@ -68,7 +68,7 @@ func TestBuildOSSubAgentNilChatModel(t *testing.T) {
 	}
 }
 
-// TestBuildOSSubAgentInnerTools 内层白名单恰好 12 个，名称集合与 osSubAgentToolNames 一致。
+// TestBuildOSSubAgentInnerTools 内层白名单恰好 13 个，名称集合与 osSubAgentToolNames 一致。
 func TestBuildOSSubAgentInnerTools(t *testing.T) {
 	innerCtx, _, _ := newTestInnerCtx()
 	oa := buildOSSubAgent(context.Background(), &openai.ChatModel{}, innerCtx)
